@@ -259,6 +259,170 @@ create_multi_codec_laundering() {
     log "Created: $output (4 lossy encodings through 3 codecs - quality destroyed)"
 }
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ADDITIONAL TEST FILES FOR VARIETY
+# ══════════════════════════════════════════════════════════════════════════════
+
+# 10. Clean FLAC (true lossless)
+create_clean_flac() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/10_clean_lossless.flac"
+
+    log "Creating clean FLAC (true lossless)..."
+    ffmpeg -y -i "$source" -c:a flac "$output" 2>/dev/null
+    log "Created: $output"
+}
+
+# 11. Transcoded FLAC (MP3 128k source disguised as FLAC)
+create_transcode_flac() {
+    local source="$1"
+    local folder="$2"
+    local temp_128="$OUTPUT_DIR/.temp_flac_128.mp3"
+    local temp_wav="$OUTPUT_DIR/.temp_flac_decoded.wav"
+    local output="$folder/11_FAKE_flac_from_128k.flac"
+
+    log "Creating FAKE FLAC from 128kbps source..."
+    lame -b 128 -q 5 "$source" "$temp_128" 2>/dev/null
+    ffmpeg -y -i "$temp_128" "$temp_wav" 2>/dev/null
+    ffmpeg -y -i "$temp_wav" -c:a flac "$output" 2>/dev/null
+
+    rm -f "$temp_128" "$temp_wav"
+    log "Created: $output (FLAC from 128kbps - fake lossless)"
+}
+
+# 12. Clean 256kbps
+create_clean_256() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/12_clean_256kbps.mp3"
+
+    log "Creating clean 256kbps encode..."
+    lame -b 256 -q 0 "$source" "$output" 2>/dev/null
+    log "Created: $output"
+}
+
+# 13. Clean V2 VBR (~190kbps)
+create_clean_v2() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/13_clean_v2_vbr.mp3"
+
+    log "Creating clean V2 VBR encode..."
+    lame -V 2 -q 0 "$source" "$output" 2>/dev/null
+    log "Created: $output"
+}
+
+# 14. 160kbps upscaled to 320kbps
+create_transcode_160_to_320() {
+    local source="$1"
+    local folder="$2"
+    local temp_160="$OUTPUT_DIR/.temp_160.mp3"
+    local temp_wav="$OUTPUT_DIR/.temp_160_decoded.wav"
+    local output="$folder/14_FAKE_160_to_320.mp3"
+
+    log "Creating TRANSCODE: 160kbps → 320kbps..."
+    lame -b 160 -q 5 "$source" "$temp_160" 2>/dev/null
+    ffmpeg -y -i "$temp_160" "$temp_wav" 2>/dev/null
+    lame --preset insane "$temp_wav" "$output" 2>/dev/null
+
+    rm -f "$temp_160" "$temp_wav"
+    log "Created: $output"
+}
+
+# 15. WAV (true lossless)
+create_clean_wav() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/15_clean_lossless.wav"
+
+    log "Creating clean WAV (true lossless)..."
+    cp "$source" "$output"
+    log "Created: $output"
+}
+
+# 16. Fake WAV from low bitrate
+create_transcode_wav() {
+    local source="$1"
+    local folder="$2"
+    local temp_128="$OUTPUT_DIR/.temp_wav_128.mp3"
+    local output="$folder/16_FAKE_wav_from_128k.wav"
+
+    log "Creating FAKE WAV from 128kbps source..."
+    lame -b 128 -q 5 "$source" "$temp_128" 2>/dev/null
+    ffmpeg -y -i "$temp_128" "$output" 2>/dev/null
+
+    rm -f "$temp_128"
+    log "Created: $output (WAV from 128kbps - fake lossless)"
+}
+
+# 17. Clean 192kbps
+create_clean_192() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/17_clean_192kbps.mp3"
+
+    log "Creating clean 192kbps encode..."
+    lame -b 192 -q 0 "$source" "$output" 2>/dev/null
+    log "Created: $output"
+}
+
+# 18. Clean 128kbps (legitimate low bitrate)
+create_clean_128() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/18_clean_128kbps.mp3"
+
+    log "Creating clean 128kbps encode..."
+    lame -b 128 -q 0 "$source" "$output" 2>/dev/null
+    log "Created: $output"
+}
+
+# 19. FLAC from 320kbps (subtle damage)
+create_flac_from_320() {
+    local source="$1"
+    local folder="$2"
+    local temp_320="$OUTPUT_DIR/.temp_320.mp3"
+    local temp_wav="$OUTPUT_DIR/.temp_320_decoded.wav"
+    local output="$folder/19_SUSPECT_flac_from_320k.flac"
+
+    log "Creating SUSPECT FLAC from 320kbps source..."
+    lame --preset insane "$source" "$temp_320" 2>/dev/null
+    ffmpeg -y -i "$temp_320" "$temp_wav" 2>/dev/null
+    ffmpeg -y -i "$temp_wav" -c:a flac "$output" 2>/dev/null
+
+    rm -f "$temp_320" "$temp_wav"
+    log "Created: $output (FLAC from 320kbps - subtle damage)"
+}
+
+# 20. OGG Vorbis clean
+create_clean_ogg() {
+    local source="$1"
+    local folder="$2"
+    local output="$folder/20_clean_ogg_q6.ogg"
+
+    log "Creating clean OGG Vorbis Q6..."
+    ffmpeg -y -i "$source" -c:a libvorbis -q:a 6 "$output" 2>/dev/null
+    log "Created: $output"
+}
+
+# 21. AAC from low bitrate source
+create_transcode_aac() {
+    local source="$1"
+    local folder="$2"
+    local temp_128="$OUTPUT_DIR/.temp_aac_128.mp3"
+    local temp_wav="$OUTPUT_DIR/.temp_aac_decoded.wav"
+    local output="$folder/21_FAKE_aac_from_128k.m4a"
+
+    log "Creating FAKE AAC from 128kbps source..."
+    lame -b 128 -q 5 "$source" "$temp_128" 2>/dev/null
+    ffmpeg -y -i "$temp_128" "$temp_wav" 2>/dev/null
+    ffmpeg -y -i "$temp_wav" -c:a aac -b:a 256k "$output" 2>/dev/null
+
+    rm -f "$temp_128" "$temp_wav"
+    log "Created: $output"
+}
+
 main() {
     echo ""
     echo "╔════════════════════════════════════════════════════════════════════╗"
@@ -269,19 +433,32 @@ main() {
 
     check_deps
 
-    # Create output directory
+    # Create output directories (multiple folders for collection map demo)
     mkdir -p "$OUTPUT_DIR"
-    rm -f "$OUTPUT_DIR"/*.mp3  # Clean old files
+    mkdir -p "$OUTPUT_DIR/Album_Clean"
+    mkdir -p "$OUTPUT_DIR/Album_Mixed"
+    mkdir -p "$OUTPUT_DIR/Album_Suspect"
+    mkdir -p "$OUTPUT_DIR/Lossless_Collection"
+
+    # Clean old files
+    rm -f "$OUTPUT_DIR"/*.mp3 "$OUTPUT_DIR"/*.flac "$OUTPUT_DIR"/*.wav "$OUTPUT_DIR"/*.ogg "$OUTPUT_DIR"/*.m4a 2>/dev/null
+    rm -f "$OUTPUT_DIR/Album_Clean"/* 2>/dev/null
+    rm -f "$OUTPUT_DIR/Album_Mixed"/* 2>/dev/null
+    rm -f "$OUTPUT_DIR/Album_Suspect"/* 2>/dev/null
+    rm -f "$OUTPUT_DIR/Lossless_Collection"/* 2>/dev/null
 
     # Generate source material
     SOURCE_WAV="$OUTPUT_DIR/.source.wav"
     generate_source_wav "$SOURCE_WAV" 10
 
     echo ""
-    log "Creating test files..."
+    log "Creating test files in multiple folders..."
     echo ""
 
-    # Create all test scenarios
+    # ════════════════════════════════════════════════════════════════════
+    # ROOT FOLDER - Original 9 scenarios
+    # ════════════════════════════════════════════════════════════════════
+    log "📁 Creating files in root demo_files/..."
     create_clean_320 "$SOURCE_WAV"
     create_clean_v0 "$SOURCE_WAV"
     create_transcode_128_to_320 "$SOURCE_WAV"
@@ -292,30 +469,109 @@ main() {
     create_borderline_suspect "$SOURCE_WAV"
     create_multi_codec_laundering "$SOURCE_WAV"
 
+    # ════════════════════════════════════════════════════════════════════
+    # ALBUM_CLEAN - All legitimate encodes (should show all green)
+    # ════════════════════════════════════════════════════════════════════
+    echo ""
+    log "📁 Creating Album_Clean/ (all legitimate encodes)..."
+    create_clean_256 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Clean"
+    create_clean_v2 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Clean"
+    create_clean_192 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Clean"
+    create_clean_128 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Clean"
+    create_clean_ogg "$SOURCE_WAV" "$OUTPUT_DIR/Album_Clean"
+
+    # ════════════════════════════════════════════════════════════════════
+    # ALBUM_MIXED - Some good, some bad (mixed colors)
+    # ════════════════════════════════════════════════════════════════════
+    echo ""
+    log "📁 Creating Album_Mixed/ (mix of clean and transcoded)..."
+
+    # Clean files
+    lame --preset insane -q 0 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Mixed/track01_clean_320.mp3" 2>/dev/null
+    log "Created: Album_Mixed/track01_clean_320.mp3"
+
+    lame -V 0 -q 0 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Mixed/track02_clean_v0.mp3" 2>/dev/null
+    log "Created: Album_Mixed/track02_clean_v0.mp3"
+
+    # Transcoded files
+    TEMP_128="$OUTPUT_DIR/.temp_mix_128.mp3"
+    TEMP_WAV="$OUTPUT_DIR/.temp_mix_wav.wav"
+    lame -b 128 -q 5 "$SOURCE_WAV" "$TEMP_128" 2>/dev/null
+    ffmpeg -y -i "$TEMP_128" "$TEMP_WAV" 2>/dev/null
+    lame --preset insane "$TEMP_WAV" "$OUTPUT_DIR/Album_Mixed/track03_FAKE_320.mp3" 2>/dev/null
+    log "Created: Album_Mixed/track03_FAKE_320.mp3 (TRANSCODE)"
+
+    lame -b 256 "$TEMP_WAV" "$OUTPUT_DIR/Album_Mixed/track04_FAKE_256.mp3" 2>/dev/null
+    log "Created: Album_Mixed/track04_FAKE_256.mp3 (TRANSCODE)"
+    rm -f "$TEMP_128" "$TEMP_WAV"
+
+    # Clean again
+    lame -b 256 -q 0 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Mixed/track05_clean_256.mp3" 2>/dev/null
+    log "Created: Album_Mixed/track05_clean_256.mp3"
+
+    # ════════════════════════════════════════════════════════════════════
+    # ALBUM_SUSPECT - All transcoded (should show all red)
+    # ════════════════════════════════════════════════════════════════════
+    echo ""
+    log "📁 Creating Album_Suspect/ (all transcoded - fake collection)..."
+    create_transcode_160_to_320 "$SOURCE_WAV" "$OUTPUT_DIR/Album_Suspect"
+    create_transcode_flac "$SOURCE_WAV" "$OUTPUT_DIR/Album_Suspect"
+    create_transcode_wav "$SOURCE_WAV" "$OUTPUT_DIR/Album_Suspect"
+    create_transcode_aac "$SOURCE_WAV" "$OUTPUT_DIR/Album_Suspect"
+
+    # More transcodes
+    TEMP_96="$OUTPUT_DIR/.temp_96.mp3"
+    TEMP_WAV2="$OUTPUT_DIR/.temp_96_wav.wav"
+    lame -b 96 -q 7 "$SOURCE_WAV" "$TEMP_96" 2>/dev/null
+    ffmpeg -y -i "$TEMP_96" "$TEMP_WAV2" 2>/dev/null
+    lame --preset insane "$TEMP_WAV2" "$OUTPUT_DIR/Album_Suspect/sus_extreme_fake.mp3" 2>/dev/null
+    log "Created: Album_Suspect/sus_extreme_fake.mp3 (96kbps → 320kbps)"
+
+    ffmpeg -y -i "$TEMP_WAV2" -c:a flac "$OUTPUT_DIR/Album_Suspect/sus_flac_from_96k.flac" 2>/dev/null
+    log "Created: Album_Suspect/sus_flac_from_96k.flac (FLAC from 96kbps)"
+    rm -f "$TEMP_96" "$TEMP_WAV2"
+
+    # ════════════════════════════════════════════════════════════════════
+    # LOSSLESS_COLLECTION - FLAC and WAV files
+    # ════════════════════════════════════════════════════════════════════
+    echo ""
+    log "📁 Creating Lossless_Collection/ (FLAC/WAV test files)..."
+    create_clean_flac "$SOURCE_WAV" "$OUTPUT_DIR/Lossless_Collection"
+    create_clean_wav "$SOURCE_WAV" "$OUTPUT_DIR/Lossless_Collection"
+    create_flac_from_320 "$SOURCE_WAV" "$OUTPUT_DIR/Lossless_Collection"
+
+    # Additional lossless files
+    ffmpeg -y -i "$SOURCE_WAV" -c:a flac -compression_level 8 "$OUTPUT_DIR/Lossless_Collection/hq_flac_level8.flac" 2>/dev/null
+    log "Created: Lossless_Collection/hq_flac_level8.flac"
+
     # Cleanup
     rm -f "$SOURCE_WAV"
     rm -f "$OUTPUT_DIR"/.temp*
 
     echo ""
     echo "════════════════════════════════════════════════════════════════════"
-    log "All test files created in: $OUTPUT_DIR"
+    log "All test files created!"
     echo ""
-    echo "Test files created:"
+    echo "📊 File counts by folder:"
     echo ""
-    ls -la "$OUTPUT_DIR"/*.mp3 2>/dev/null | awk '{print "  " $NF}' | xargs -I {} basename {}
+    echo "  demo_files/              $(ls "$OUTPUT_DIR"/*.mp3 2>/dev/null | wc -l | tr -d ' ') files"
+    echo "  Album_Clean/             $(ls "$OUTPUT_DIR/Album_Clean"/* 2>/dev/null | wc -l | tr -d ' ') files"
+    echo "  Album_Mixed/             $(ls "$OUTPUT_DIR/Album_Mixed"/* 2>/dev/null | wc -l | tr -d ' ') files"
+    echo "  Album_Suspect/           $(ls "$OUTPUT_DIR/Album_Suspect"/* 2>/dev/null | wc -l | tr -d ' ') files"
+    echo "  Lossless_Collection/     $(ls "$OUTPUT_DIR/Lossless_Collection"/* 2>/dev/null | wc -l | tr -d ' ') files"
     echo ""
-    echo "Run Losselot GUI to analyze:"
+    TOTAL=$(find "$OUTPUT_DIR" -type f \( -name "*.mp3" -o -name "*.flac" -o -name "*.wav" -o -name "*.ogg" -o -name "*.m4a" \) | wc -l | tr -d ' ')
+    log "Total: $TOTAL audio files across 5 folders"
     echo ""
-    echo "  ./target/release/losselot --gui"
+    echo "Run Losselot to analyze:"
     echo ""
-    echo "Then select the demo_files folder when the file picker opens."
+    echo "  ./target/release/losselot $OUTPUT_DIR"
     echo ""
-    echo "The HTML report will open automatically showing:"
-    echo "  - Encoding chain timeline visualization"
-    echo "  - Spectral damage annotations"
-    echo "  - Re-encoding detection flags"
-    echo ""
-    echo "Or double-click the losselot binary to launch GUI mode directly."
+    echo "The Collection Quality Map will show:"
+    echo "  🟢 Album_Clean - all green bubbles (legitimate)"
+    echo "  🔴 Album_Suspect - all red bubbles (transcoded)"
+    echo "  🟡🔴🟢 Album_Mixed - mixed colors"
+    echo "  🟢🟡 Lossless_Collection - mostly clean with one suspect"
     echo ""
 }
 
