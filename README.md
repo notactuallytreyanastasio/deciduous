@@ -4,7 +4,7 @@
 
 Ever downloaded a FLAC or WAV and wondered if it's the real deal, or just an MP3 someone converted? Losselot tells you the truth in seconds.
 
-![Losselot Demo](docs/newest_demo.gif)
+![Losselot Demo](docs/demo.gif)
 
 ---
 
@@ -61,27 +61,11 @@ That's it. No installation, no terminal commands.
 
 ---
 
-## Encoding Chain Detection
-
-**Catch files that have been re-encoded multiple times.** Even if someone "upgraded" a 128kbps MP3 to 320kbps and then to FLAC, Losselot traces the damage back to its source.
-
-![Encoding Chain Panel](docs/d1.png)
-
-Losselot reconstructs the encoding history by scanning for encoder signatures (LAME, FFmpeg, Fraunhofer, etc.) and combining that with spectral analysis. When intermediate codecs don't leave signatures (like AAC or OGG), spectral damage still reveals the chain:
-
-![Encoding Chain Modal](docs/d4.png)
-
-Each lossy pass destroys quality permanently. The visualization shows exactly how many times a file has been through the lossy wringer - and estimates how much quality remains.
-
----
-
 ## Understanding the Report
-
-When Losselot finishes analyzing your files, it opens an interactive HTML report in your browser. Here's what you'll see:
 
 ### Overview Dashboard
 
-![Dashboard Overview](docs/d1.png)
+![Dashboard Overview](docs/basics.png)
 
 **At the top:**
 - **Summary cards** show how many files are Clean, Suspect, or Transcode at a glance
@@ -89,43 +73,30 @@ When Losselot finishes analyzing your files, it opens an interactive HTML report
 - **Score Distribution** bar chart shows every file ranked by how suspicious it is
 
 **The Spectral Waterfall:**
-This is where it gets interesting. Each row is one of your files. The columns show different frequency ranges:
+Each row is one of your files. The columns show different frequency ranges:
 - **Full** (20Hz-20kHz) - The whole audible spectrum
 - **Mid-High** (10-15kHz) - Usually healthy even in lossy files
 - **High** (15-20kHz) - Starts showing damage in lower bitrate MP3s
 - **Upper** (17-20kHz) - Where medium bitrate damage shows
 - **Ultrasonic** (20-22kHz) - The smoking gun for 320kbps detection
 
-**What to look for:** See those red/orange dots? Those mark where the frequency energy suddenly drops off. Real lossless audio has smooth gradients across all columns. Transcoded files have sharp cutoffs - that's the "scar" left by lossy compression.
-
-**Collection Quality Map:**
-
-![Collection Quality Map](docs/collection_heatmap.png)
-
-Below the waterfall, you'll see a bubble chart showing your library's health at a glance. Files appear as colored bubbles grouped within folder circles:
-- **Green bubbles** - Clean files (genuine lossless)
-- **Yellow bubbles** - Suspect files (worth investigating)
-- **Red bubbles** - Transcode files (fake lossless)
-
-The size of each folder circle reflects how many files it contains. Click any bubble to jump to that file's detailed analysis.
+**What to look for:** Red/orange dots mark where frequency energy suddenly drops off. Real lossless audio has smooth gradients. Transcoded files have sharp cutoffs - that's the "scar" left by lossy compression.
 
 ### Detailed File Analysis
 
 Click any file to see its full breakdown:
 
-![File Analysis](docs/d2.png)
+![File Analysis](docs/everything.png)
 
 **Frequency Response Curve:**
-This shows exactly where the audio cuts off. The pink shaded area is the frequency content. See how it drops sharply around 17-20kHz with a "-31dB DROP" annotation? That's the telltale sign of lossy compression. Real lossless files have a gentle, natural rolloff.
+Shows exactly where the audio cuts off. The pink shaded area is the frequency content. A sharp drop around 17-20kHz with a "-31dB DROP" annotation is the telltale sign of lossy compression. Real lossless files have a gentle, natural rolloff.
 
-The **"1x RE-ENCODED"** badge indicates this file has been through multiple encoding passes.
-
-**Frequency Band Energy:**
-Quick visual of energy in each frequency band as a waveform. The gradient shows energy distribution - green is healthy, red indicates problem areas at high frequencies.
+**Encoding Chain:**
+The visualization shows the file's journey through different encoders. Each lossy pass destroys quality permanently - you can't get quality back by re-encoding at a higher bitrate.
 
 **Spectrogram:**
 
-![Spectrogram](docs/spectrogram.png)
+![Spectrogram](docs/spectro.png)
 
 A time vs. frequency heatmap showing the audio's spectral content over the first ~15 seconds. Brighter colors = more energy. Look for:
 - **Horizontal cutoff lines** - Where frequencies suddenly stop (lossy compression damage)
@@ -134,7 +105,7 @@ A time vs. frequency heatmap showing the audio's spectral content over the first
 
 **Bitrate Timeline:**
 
-![Bitrate Timeline](docs/bitrate_tl.png)
+![Bitrate Timeline](docs/bitrate_timeline.png)
 
 Shows how bitrate varies over time for MP3 files. Useful for identifying:
 - **VBR vs CBR** - VBR files show bitrate fluctuations, CBR shows a flat line
@@ -143,76 +114,13 @@ Shows how bitrate varies over time for MP3 files. Useful for identifying:
 
 **Stereo Correlation:**
 
-![Stereo Correlation](docs/stereo_correlation.png)
+![Stereo Correlation](docs/stereo_correlate.png)
 
 Measures left/right channel similarity over time. The correlation value ranges from -1.0 to 1.0:
 - **1.0 (Mono)** - Identical channels, may indicate fake stereo or mono source
 - **0.7-0.95 (Normal Stereo)** - Typical for most music
 - **0.3-0.7 (Wide Stereo)** - Significant separation between channels
 - **< 0.3 (Very Wide/Phase Issues)** - Unusual, may indicate phase problems
-
-This helps identify mono files masquerading as stereo, or files with unusual stereo processing.
-
-**Analysis Details:**
-- **Verdict**: CLEAN, SUSPECT, or TRANSCODE
-- **Score**: 0-100% (higher = more likely to be fake)
-- **Bitrate**: The file's bitrate
-- **Encoder**: What created the file (LAME, FFmpeg, iTunes, etc.)
-
-**Spectral Analysis numbers:**
-- **Upper Drop**: How much energy is lost in high frequencies. Clean files: ~4-8 dB. Transcodes: 30+ dB.
-- **Ultrasonic Drop**: Energy loss above 20kHz. This catches 320kbps MP3 transcodes.
-
-### Encoding Chain Detection
-
-**This is new.** Losselot now detects when a file has been re-encoded multiple times - even if someone tried to "upgrade" it to a higher bitrate.
-
-![Encoding Chain](docs/d2.png)
-
-**The Encoding History Timeline:**
-At the bottom of the analysis panel, you'll see a visual chain showing the file's journey:
-
-```
-Original → ??? Lossy → ??? Lossy → LAME3.100
-          (Unknown)   (Additional    (Final encode
-                      encoding       320kbps)
-                      suspected)
-```
-
-**What this catches:**
-- Files encoded multiple times by LAME (shows `lame_reencoded_x2`, `lame_reencoded_x3`)
-- Files that went through different encoders (shows `encoding_chain(LAME → FFmpeg)`)
-- Files "laundered" through multiple formats (MP3 → AAC → OGG → MP3)
-- The exact number of lossy passes detected
-
-**Estimated Quality Retention:**
-The progress bar shows how much quality is theoretically left after multiple lossy passes. Each pass degrades the audio further - you can't get quality back by re-encoding at a higher bitrate.
-
-### Quick View Modal
-
-Click any row in the results table for a compact summary:
-
-![Quick View Modal](docs/d4.png)
-
-This modal shows the key stats at a glance:
-- Score, bitrate, encoder, and lowpass frequency
-- Any detected flags
-- The encoding chain visualization (when transcoding evidence exists)
-
-### Results Table
-
-![Results Table](docs/d3.png)
-
-Scroll down to see every file in a sortable table:
-- **Verdict** - Color-coded status (green/yellow/red)
-- **Score** - Suspicion percentage with visual bar
-- **Bitrate** - File's bitrate in kbps
-- **Spectral/Binary** - Breakdown of how the score was calculated
-- **Encoder** - What program made the file
-- **Flags** - All the problems detected (see flags table below)
-- **File** - The filename
-
-Click any row to open the quick view modal for that file.
 
 ---
 
@@ -252,10 +160,6 @@ Losselot tags files with specific flags to explain exactly what it found:
 | `lame_reencoded_x3` | LAME encoder signatures found 3 times (re-encoded twice) |
 | `ffmpeg_processed_x2` | FFmpeg processed this file multiple times |
 | `fraunhofer_reencoded_x2` | Fraunhofer encoder signatures found multiple times |
-| `encoder_gogo` | GOGO encoder detected |
-| `encoder_bladeenc` | BladeEnc encoder detected |
-| `encoder_shine` | Shine encoder detected |
-| `encoder_helix` | Helix/RealNetworks encoder detected |
 
 ### Binary Analysis Flags
 
@@ -279,8 +183,6 @@ The main use case is checking FLAC/WAV files, but it can also detect:
 
 ## How Detection Works
 
-Losselot uses three complementary methods to catch fake lossless files:
-
 ### 1. Spectral Analysis
 
 Looks at the actual frequency content of your audio. Lossy codecs like MP3 remove high frequencies to save space:
@@ -303,7 +205,7 @@ For MP3 files, Losselot reads the encoder metadata embedded in the file. The LAM
 
 ### 3. Re-encoding Detection
 
-**New in this version.** Losselot now scans for multiple encoder signatures in the file header:
+Losselot scans for multiple encoder signatures in the file header:
 
 - **LAME signatures**: Counts occurrences of LAME encoder tags
 - **FFmpeg/Lavf signatures**: Detects FFmpeg processing
@@ -311,37 +213,7 @@ For MP3 files, Losselot reads the encoder metadata embedded in the file. The LAM
 - **Other encoders**: GOGO, BladeEnc, Shine, Helix, iTunes
 - **Mixed chains**: Identifies when files pass through different encoders
 
-**Why this matters:** Each lossy encoding pass causes cumulative damage. A file encoded at 128kbps, then "upgraded" to 320kbps, then converted to FLAC still only has 128kbps worth of actual audio quality. The re-encoding detection catches this "laundering" even when the spectral damage is subtle.
-
-**How it works:**
-```
-Original WAV → MP3 128k (LAME) → WAV → MP3 320k (LAME)
-                  ↓                        ↓
-           LAME signature #1         LAME signature #2
-```
-
-When Losselot finds multiple encoder signatures, it knows the file has been re-encoded and flags it accordingly.
-
----
-
-## The Compression Journey Problem
-
-Here's a common scenario Losselot now catches:
-
-1. Someone downloads a 128kbps MP3
-2. They convert it to WAV (thinking this makes it "lossless")
-3. They encode it as 320kbps MP3 (thinking this "upgrades" the quality)
-4. They convert to FLAC (thinking this makes it "true lossless")
-
-**The result:** A FLAC file with 128kbps MP3 quality, but appearing to be lossless.
-
-**What Losselot sees:**
-- Spectral cutoff at ~16kHz (128kbps source)
-- Multiple encoder signatures in the chain
-- Dead ultrasonic band
-- Steep high-frequency rolloff
-
-**The verdict:** TRANSCODE with encoding chain visualization showing the file's journey.
+**Why this matters:** Each lossy encoding pass causes cumulative damage. A file encoded at 128kbps, then "upgraded" to 320kbps, then converted to FLAC still only has 128kbps worth of actual audio quality.
 
 ---
 
@@ -355,6 +227,9 @@ For power users who prefer the terminal:
 
 # Analyze a single file
 ./losselot suspicious-file.flac
+
+# Interactive web UI
+./losselot serve ~/Music/ --port 3000
 
 # Save report to specific location
 ./losselot -o report.html ~/Downloads/
