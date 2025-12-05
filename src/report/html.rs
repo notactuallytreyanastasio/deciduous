@@ -1326,6 +1326,26 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                     </div>
                 </div>
                 ` : ''}}
+                ${{file.binary_score > 0 || file.lowpass ? `
+                <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                    <div style="font-weight: 600; margin-bottom: 0.5rem;">Binary Analysis (MP3)</div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; font-size: 0.875rem;">
+                        <div style="color: var(--dim);">Encoder:</div>
+                        <div style="font-family: monospace;">${{file.encoder || 'Unknown'}}</div>
+                        ${{file.lowpass ? `
+                        <div style="color: var(--dim);">Lowpass Filter:</div>
+                        <div style="color: ${{file.lowpass < 19000 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.lowpass}} Hz</div>
+                        ` : ''}}
+                        <div style="color: var(--dim);">Binary Score:</div>
+                        <div style="color: ${{file.binary_score > 20 ? 'var(--transcode)' : 'var(--ok)'}}">${{file.binary_score}}%</div>
+                    </div>
+                    ${{file.lowpass && file.lowpass < 19000 ? `
+                    <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(239,68,68,0.1); border-radius: 4px; font-size: 0.8rem; color: var(--transcode);">
+                        ⚠️ Low lowpass frequency suggests this was transcoded from a lower bitrate source
+                    </div>
+                    ` : ''}}
+                </div>
+                ` : ''}}
                 ${{file.flags.length > 0 ? `
                 <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
                     <div style="font-weight: 600; margin-bottom: 0.5rem;">Flags</div>

@@ -129,16 +129,24 @@ The main use case is checking FLAC/WAV files, but it can also detect if an MP3 w
 
 ---
 
-## Why This Matters
+## How Detection Works
 
-When you buy or download "lossless" audio, you expect the real thing - the full quality from the original master. But sometimes what you get is just an MP3 that someone converted to FLAC. The problem? **Converting lossy to lossless doesn't bring back lost frequencies.** It's like photocopying a photocopy - the damage is permanent.
+Losselot uses two methods to catch fake lossless files:
 
-Losselot uses spectral analysis to detect this damage. It looks at the frequency content of your files and identifies the "scars" left by lossy compression:
+### Spectral Analysis
+Looks at the actual frequency content of your audio. Lossy codecs like MP3 remove high frequencies to save space:
 - 128kbps MP3 cuts off at ~16kHz
 - 192kbps MP3 cuts off at ~18kHz
 - 320kbps MP3 cuts off at ~20kHz
 
-Real lossless audio from a proper source has content all the way up to 22kHz and beyond. When that content is missing, you know something's wrong.
+Real lossless audio has content all the way up to 22kHz. When that content is missing, you know something's wrong. The "scars" from lossy compression are permanent - converting an MP3 to FLAC doesn't bring back lost frequencies.
+
+### Binary Analysis (MP3 files)
+For MP3 files, Losselot also reads the encoder metadata embedded in the file. The LAME encoder (used by most MP3 software) stores a "lowpass" value that reveals the original encoding settings.
+
+**The smoking gun:** A "320kbps" MP3 with a lowpass of 16kHz was definitely transcoded from a 128kbps source. The encoder honestly reports what frequencies it kept, even when someone re-encoded to a higher bitrate.
+
+In the results table, you'll see separate **SPECTRAL** and **BINARY** score columns. Both contribute to the final verdict.
 
 ---
 
