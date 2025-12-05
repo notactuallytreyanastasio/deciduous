@@ -6,10 +6,10 @@ Detect "lossless" audio files that were actually created from lossy sources.
 
 | Platform | Download |
 |----------|----------|
-| macOS Apple Silicon | [losselot-darwin-arm64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-darwin-arm64) |
-| macOS Intel | [losselot-darwin-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-darwin-amd64) |
-| Linux x86_64 | [losselot-linux-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-linux-amd64) |
-| Windows x86_64 | [losselot-windows-amd64.exe](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.1.0/losselot-windows-amd64.exe) |
+| macOS Apple Silicon | [losselot-darwin-arm64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.2.0/losselot-darwin-arm64) |
+| macOS Intel | [losselot-darwin-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.2.0/losselot-darwin-amd64) |
+| Linux x86_64 | [losselot-linux-amd64](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.2.0/losselot-linux-amd64) |
+| Windows x86_64 | [losselot-windows-amd64.exe](https://github.com/notactuallytreyanastasio/losselot/releases/download/v0.2.0/losselot-windows-amd64.exe) |
 
 **No dependencies** - just download, `chmod +x`, and run.
 
@@ -41,6 +41,15 @@ losselot -v myfile.flac
 
 # Generate HTML report
 losselot -o report.html ~/Music/
+```
+
+### GUI Mode
+
+**Double-click to run** - no terminal needed! When you double-click the binary from Finder/Explorer, Losselot automatically opens a file picker dialog. Select a folder or file and get an interactive HTML report that opens in your browser.
+
+```bash
+# Or launch GUI mode from terminal
+losselot --gui
 ```
 
 ## The Problem

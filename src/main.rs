@@ -3,7 +3,7 @@ use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use losselot::{AnalysisResult, Analyzer, Verdict};
 use rayon::prelude::*;
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
@@ -12,10 +12,9 @@ use walkdir::WalkDir;
 #[command(author, version, about = "Detect 'lossless' files that were created from lossy sources")]
 struct Args {
     /// File or directory to analyze (optional in GUI mode)
-    #[arg(required_unless_present = "gui")]
     path: Option<PathBuf>,
 
-    /// Launch GUI file picker
+    /// Launch GUI file picker (auto-enabled when double-clicked)
     #[arg(long)]
     gui: bool,
 
@@ -59,17 +58,34 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
+    // Auto-detect GUI mode: if no path provided AND no terminal attached (double-clicked)
+    let use_gui = args.gui || (args.path.is_none() && !std::io::stdin().is_terminal());
+
     // Handle GUI mode
-    let path = if args.gui {
+    let path = if use_gui {
         match pick_path_gui() {
             Some(p) => p,
             None => {
-                eprintln!("No file or folder selected.");
+                // Show message if launched via GUI with no selection
+                if !std::io::stderr().is_terminal() {
+                    rfd::MessageDialog::new()
+                        .set_title("Losselot")
+                        .set_description("No file or folder selected.")
+                        .set_level(rfd::MessageLevel::Info)
+                        .show();
+                } else {
+                    eprintln!("No file or folder selected.");
+                }
                 std::process::exit(0);
             }
         }
+    } else if let Some(p) = args.path.clone() {
+        p
     } else {
-        args.path.clone().unwrap()
+        // No path and running in terminal - show help
+        eprintln!("Usage: losselot <PATH> or losselot --gui");
+        eprintln!("Run 'losselot --help' for more options.");
+        std::process::exit(1);
     };
 
     // Set up thread pool
@@ -247,17 +263,23 @@ fn main() {
             eprintln!("\n\x1b[32mReport saved: {}\x1b[0m", output_path.display());
         }
 
-        // Prompt to open report
-        if !args.no_open && !args.quiet {
-            eprint!("\nOpen report in browser? [Y/n] ");
-            io::stderr().flush().ok();
+        // Open report
+        if !args.no_open {
+            if use_gui {
+                // In GUI mode, auto-open the report (no prompt)
+                let _ = open::that(output_path);
+            } else if !args.quiet {
+                // In terminal mode, ask first
+                eprint!("\nOpen report in browser? [Y/n] ");
+                io::stderr().flush().ok();
 
-            let mut input = String::new();
-            if io::stdin().read_line(&mut input).is_ok() {
-                let input = input.trim().to_lowercase();
-                if input.is_empty() || input == "y" || input == "yes" {
-                    if let Err(e) = open::that(output_path) {
-                        eprintln!("Failed to open report: {}", e);
+                let mut input = String::new();
+                if io::stdin().read_line(&mut input).is_ok() {
+                    let input = input.trim().to_lowercase();
+                    if input.is_empty() || input == "y" || input == "yes" {
+                        if let Err(e) = open::that(output_path) {
+                            eprintln!("Failed to open report: {}", e);
+                        }
                     }
                 }
             }
