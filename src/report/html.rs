@@ -24,60 +24,71 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         :root {{
-            --bg: #0d1117;
-            --card: #161b22;
-            --border: #30363d;
-            --text: #e6edf3;
-            --dim: #7d8590;
-            --ok: #3fb950;
-            --suspect: #d29922;
-            --transcode: #f85149;
-            --error: #6e7681;
-            --accent: #58a6ff;
+            --bg: #f5f5f7;
+            --card: #ffffff;
+            --border: #d2d2d7;
+            --text: #1d1d1f;
+            --dim: #86868b;
+            --ok: #34c759;
+            --suspect: #ff9f0a;
+            --transcode: #ff3b30;
+            --error: #8e8e93;
+            --accent: #007aff;
+            --shadow: 0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-hover: 0 4px 16px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.06);
         }}
         * {{ box-sizing: border-box; margin: 0; padding: 0; }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', Helvetica, Arial, sans-serif;
             background: var(--bg);
             color: var(--text);
             line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }}
-        .container {{ max-width: 1600px; margin: 0 auto; padding: 2rem; }}
+        .container {{ max-width: 1400px; margin: 0 auto; padding: 3rem 2rem; }}
 
         /* Header */
         .header {{
             display: flex;
             align-items: center;
             gap: 1rem;
-            margin-bottom: 2rem;
-            padding-bottom: 1rem;
+            margin-bottom: 2.5rem;
+            padding-bottom: 1.5rem;
             border-bottom: 1px solid var(--border);
         }}
         .logo {{
-            font-size: 2.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--accent), #a371f7);
+            font-size: 2.25rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #007aff 0%, #5856d6 50%, #af52de 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
         }}
-        .subtitle {{ color: var(--dim); font-size: 1rem; }}
+        .subtitle {{ color: var(--dim); font-size: 0.9375rem; font-weight: 400; letter-spacing: -0.01em; }}
 
         /* Stats Row */
         .stats {{
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 1rem;
-            margin-bottom: 2rem;
+            gap: 1.25rem;
+            margin-bottom: 2.5rem;
         }}
         .stat {{
             background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
+            border-radius: 16px;
+            padding: 1.75rem;
             text-align: center;
+            box-shadow: var(--shadow);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
         }}
-        .stat-value {{ font-size: 3rem; font-weight: 700; line-height: 1; }}
-        .stat-label {{ color: var(--dim); font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.5rem; }}
+        .stat:hover {{
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-hover);
+        }}
+        .stat-value {{ font-size: 2.75rem; font-weight: 600; line-height: 1; letter-spacing: -0.02em; }}
+        .stat-label {{ color: var(--dim); font-size: 0.8125rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.5rem; }}
         .stat.ok .stat-value {{ color: var(--ok); }}
         .stat.suspect .stat-value {{ color: var(--suspect); }}
         .stat.transcode .stat-value {{ color: var(--transcode); }}
@@ -85,21 +96,26 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         /* Charts Grid */
         .charts {{
             display: grid;
-            grid-template-columns: 350px 1fr;
+            grid-template-columns: 320px 1fr;
             gap: 1.5rem;
-            margin-bottom: 2rem;
+            margin-bottom: 2.5rem;
         }}
         .chart-card {{
             background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
+            border-radius: 16px;
+            padding: 1.75rem;
+            box-shadow: var(--shadow);
+            transition: box-shadow 0.2s ease;
+        }}
+        .chart-card:hover {{
+            box-shadow: var(--shadow-hover);
         }}
         .chart-title {{
-            font-size: 1rem;
+            font-size: 0.9375rem;
             font-weight: 600;
-            margin-bottom: 1rem;
-            color: var(--dim);
+            margin-bottom: 1.25rem;
+            color: var(--text);
+            letter-spacing: -0.01em;
         }}
         #donut-chart {{ display: flex; justify-content: center; }}
         #spectrum-chart {{ width: 100%; }}
@@ -109,51 +125,62 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             display: flex;
             justify-content: center;
             gap: 1.5rem;
-            margin-top: 1rem;
+            margin-top: 1.25rem;
             flex-wrap: wrap;
         }}
         .legend-item {{
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--dim);
         }}
         .legend-dot {{
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
         }}
 
         /* File Details Panel */
         .detail-panel {{
             background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            margin-bottom: 2rem;
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 2.5rem;
             display: none;
+            box-shadow: var(--shadow-hover);
         }}
-        .detail-panel.active {{ display: block; }}
+        .detail-panel.active {{ display: block; animation: slideIn 0.3s ease; }}
+        @keyframes slideIn {{
+            from {{ opacity: 0; transform: translateY(-10px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
         .detail-header {{
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
         }}
         .detail-filename {{
-            font-family: 'SF Mono', 'Fira Code', monospace;
-            font-size: 1.1rem;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+            font-size: 1rem;
+            font-weight: 500;
             color: var(--accent);
         }}
         .detail-close {{
-            background: none;
+            background: rgba(0,0,0,0.05);
             border: none;
             color: var(--dim);
             cursor: pointer;
-            font-size: 1.5rem;
-            padding: 0.5rem;
+            font-size: 1.25rem;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            transition: all 0.15s ease;
         }}
-        .detail-close:hover {{ color: var(--text); }}
+        .detail-close:hover {{ background: rgba(0,0,0,0.1); color: var(--text); }}
         .detail-grid {{
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -164,76 +191,79 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         /* Table */
         .table-container {{
             background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
+            border-radius: 16px;
             overflow: hidden;
+            box-shadow: var(--shadow);
         }}
         table {{
             width: 100%;
             border-collapse: collapse;
         }}
-        th, td {{ padding: 0.875rem 1rem; text-align: left; }}
+        th, td {{ padding: 1rem 1.25rem; text-align: left; }}
         th {{
-            background: rgba(255,255,255,0.03);
+            background: rgba(0,0,0,0.02);
             font-weight: 600;
-            font-size: 0.75rem;
+            font-size: 0.6875rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.06em;
             color: var(--dim);
             border-bottom: 1px solid var(--border);
         }}
-        tr {{ cursor: pointer; transition: background 0.15s; }}
-        tr:hover td {{ background: rgba(255,255,255,0.02); }}
-        tr.selected td {{ background: rgba(88,166,255,0.1); }}
-        td {{ border-bottom: 1px solid var(--border); }}
+        tr {{ cursor: pointer; transition: background 0.15s ease; }}
+        tr:hover td {{ background: rgba(0,122,255,0.04); }}
+        tr.selected td {{ background: rgba(0,122,255,0.08); }}
+        td {{ border-bottom: 1px solid rgba(0,0,0,0.06); }}
         tr:last-child td {{ border-bottom: none; }}
 
         .verdict {{
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.25rem 0.75rem;
-            border-radius: 20px;
-            font-size: 0.75rem;
+            gap: 0.375rem;
+            padding: 0.3125rem 0.625rem;
+            border-radius: 6px;
+            font-size: 0.6875rem;
             font-weight: 600;
             text-transform: uppercase;
+            letter-spacing: 0.02em;
         }}
-        .verdict.ok {{ background: rgba(63,185,80,0.15); color: var(--ok); }}
-        .verdict.suspect {{ background: rgba(210,153,34,0.15); color: var(--suspect); }}
-        .verdict.transcode {{ background: rgba(248,81,73,0.15); color: var(--transcode); }}
-        .verdict.error {{ background: rgba(110,118,129,0.15); color: var(--error); }}
+        .verdict.ok {{ background: rgba(52,199,89,0.12); color: #1d8348; }}
+        .verdict.suspect {{ background: rgba(255,159,10,0.12); color: #b36b00; }}
+        .verdict.transcode {{ background: rgba(255,59,48,0.12); color: #c9302c; }}
+        .verdict.error {{ background: rgba(142,142,147,0.12); color: var(--error); }}
 
-        .score-cell {{ display: flex; align-items: center; gap: 0.75rem; }}
+        .score-cell {{ display: flex; align-items: center; gap: 0.75rem; font-weight: 500; }}
         .score-bar {{
-            width: 80px;
-            height: 8px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 4px;
+            width: 70px;
+            height: 6px;
+            background: rgba(0,0,0,0.08);
+            border-radius: 3px;
             overflow: hidden;
         }}
-        .score-fill {{ height: 100%; border-radius: 4px; }}
-        .score-fill.low {{ background: var(--ok); }}
-        .score-fill.medium {{ background: var(--suspect); }}
-        .score-fill.high {{ background: var(--transcode); }}
+        .score-fill {{ height: 100%; border-radius: 3px; transition: width 0.3s ease; }}
+        .score-fill.low {{ background: linear-gradient(90deg, #34c759, #30d158); }}
+        .score-fill.medium {{ background: linear-gradient(90deg, #ff9f0a, #ffb340); }}
+        .score-fill.high {{ background: linear-gradient(90deg, #ff3b30, #ff6961); }}
 
-        .flags {{ display: flex; flex-wrap: wrap; gap: 0.25rem; }}
+        .flags {{ display: flex; flex-wrap: wrap; gap: 0.375rem; }}
         .flag {{
-            background: rgba(255,255,255,0.05);
-            padding: 0.2rem 0.5rem;
+            background: rgba(0,0,0,0.05);
+            padding: 0.25rem 0.5rem;
             border-radius: 4px;
-            font-size: 0.7rem;
-            font-family: 'SF Mono', monospace;
+            font-size: 0.6875rem;
+            font-family: 'SF Mono', 'Menlo', monospace;
             color: var(--dim);
+            font-weight: 500;
         }}
         .filepath {{
-            max-width: 250px;
+            max-width: 220px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-family: 'SF Mono', monospace;
-            font-size: 0.8rem;
+            font-family: 'SF Mono', 'Menlo', monospace;
+            font-size: 0.8125rem;
+            color: var(--dim);
         }}
-        .mono {{ font-family: 'SF Mono', monospace; font-size: 0.85rem; }}
+        .mono {{ font-family: 'SF Mono', 'Menlo', monospace; font-size: 0.8125rem; font-weight: 500; }}
         .dim {{ color: var(--dim); }}
 
         /* Spectrum bars */
@@ -244,30 +274,207 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         /* Tooltip */
         .tooltip {{
             position: absolute;
-            background: var(--card);
-            border: 1px solid var(--border);
+            background: #1d1d1f;
+            color: #ffffff;
             border-radius: 8px;
-            padding: 0.75rem 1rem;
-            font-size: 0.875rem;
+            padding: 0.625rem 0.875rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
             pointer-events: none;
             opacity: 0;
-            transition: opacity 0.15s;
+            transition: opacity 0.15s ease;
             z-index: 1000;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+            max-width: 300px;
         }}
         .tooltip.visible {{ opacity: 1; }}
+        .tooltip div {{ line-height: 1.4; }}
 
         /* Footer */
         .footer {{
-            margin-top: 2rem;
-            padding-top: 1rem;
+            margin-top: 3rem;
+            padding-top: 1.5rem;
             border-top: 1px solid var(--border);
             color: var(--dim);
-            font-size: 0.875rem;
+            font-size: 0.8125rem;
             text-align: center;
         }}
-        .footer a {{ color: var(--accent); text-decoration: none; }}
+        .footer a {{ color: var(--accent); text-decoration: none; font-weight: 500; }}
         .footer a:hover {{ text-decoration: underline; }}
+
+        /* Spectral Waterfall Section */
+        .waterfall-section {{
+            margin-bottom: 2.5rem;
+        }}
+        .waterfall-card {{
+            background: var(--card);
+            border-radius: 16px;
+            padding: 1.75rem;
+            box-shadow: var(--shadow);
+        }}
+        .waterfall-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.25rem;
+        }}
+        .waterfall-legend {{
+            display: flex;
+            align-items: center;
+            gap: 0.625rem;
+            font-size: 0.75rem;
+            color: var(--dim);
+            font-weight: 500;
+        }}
+        .gradient-bar {{
+            width: 140px;
+            height: 10px;
+            border-radius: 5px;
+            background: linear-gradient(to right, #e8f4fc, #b3d9f2, #7ec8e3, #5e9ece, #3d7ab5, #1e5799);
+        }}
+        #waterfall-chart {{
+            width: 100%;
+            overflow-x: auto;
+        }}
+        .waterfall-cell {{
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }}
+        .waterfall-cell:hover {{
+            stroke: var(--accent);
+            stroke-width: 2;
+        }}
+        .waterfall-cell.highlighted {{
+            stroke: var(--text);
+            stroke-width: 2;
+        }}
+        .freq-label {{
+            font-size: 0.6875rem;
+            fill: var(--dim);
+            font-weight: 500;
+        }}
+        .file-label {{
+            font-size: 0.6875rem;
+            fill: var(--dim);
+            cursor: pointer;
+            font-weight: 500;
+        }}
+        .file-label:hover {{
+            fill: var(--accent);
+        }}
+        .file-label.suspect {{
+            fill: #b36b00;
+        }}
+        .file-label.transcode {{
+            fill: #c9302c;
+        }}
+
+        /* Enhanced Detail Panel */
+        .detail-grid-enhanced {{
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 1.5rem;
+        }}
+        .spectrum-analyzer {{
+            background: linear-gradient(180deg, #fafbfc 0%, #f0f2f5 100%);
+            border-radius: 12px;
+            padding: 1.25rem;
+            position: relative;
+            border: 1px solid rgba(0,0,0,0.06);
+        }}
+        .spectrum-analyzer-label {{
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.625rem;
+            color: var(--dim);
+            letter-spacing: 0.12em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }}
+        #freq-response-curve {{
+            width: 100%;
+        }}
+        .freq-band-highlight {{
+            fill: rgba(255, 59, 48, 0.12);
+            stroke: var(--transcode);
+            stroke-width: 1;
+            stroke-dasharray: 4, 2;
+        }}
+        .freq-band-ok {{
+            fill: rgba(52, 199, 89, 0.08);
+        }}
+        .drop-annotation {{
+            font-size: 0.6875rem;
+            fill: #c9302c;
+            font-weight: 700;
+        }}
+        .curve-path {{
+            fill: none;
+            stroke-width: 2.5;
+            stroke-linecap: round;
+        }}
+        .curve-gradient {{
+            fill: url(#curveGradient);
+            opacity: 0.4;
+        }}
+        .freq-marker {{
+            stroke: rgba(0,0,0,0.15);
+            stroke-dasharray: 3, 3;
+            stroke-width: 1;
+        }}
+        .freq-marker-label {{
+            font-size: 0.625rem;
+            fill: var(--dim);
+            font-weight: 500;
+        }}
+
+        /* Spectrum bars animation */
+        .spectrum-bar {{
+            transition: height 0.3s ease, fill 0.3s ease;
+        }}
+        .spectrum-bar.animating {{
+            animation: pulse 0.5s ease-in-out;
+        }}
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.7; }}
+        }}
+
+        /* Problem indicator badges */
+        .problem-badge {{
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 5px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            background: rgba(255, 59, 48, 0.1);
+            color: #c9302c;
+            margin-right: 0.25rem;
+        }}
+        .problem-badge.warning {{
+            background: rgba(255, 159, 10, 0.1);
+            color: #b36b00;
+        }}
+        .problem-badge svg {{
+            width: 12px;
+            height: 12px;
+        }}
+
+        /* Clickable frequency bands in waterfall */
+        .band-clickable {{
+            cursor: pointer;
+        }}
+        .band-clickable:hover {{
+            filter: brightness(0.95);
+        }}
+
+        /* SVG axis styling for light theme */
+        .grid line {{ stroke: rgba(0,0,0,0.08); }}
+        .grid path {{ stroke: none; }}
     </style>
 </head>
 <body>
@@ -314,19 +521,43 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             </div>
         </div>
 
+        <div class="waterfall-section">
+            <div class="waterfall-card">
+                <div class="waterfall-header">
+                    <div class="chart-title" style="margin-bottom: 0;">Spectral Waterfall - Frequency Band Analysis</div>
+                    <div class="waterfall-legend">
+                        <span>Low Energy</span>
+                        <div class="gradient-bar"></div>
+                        <span>High Energy</span>
+                    </div>
+                </div>
+                <div id="waterfall-chart"></div>
+                <div style="margin-top: 0.75rem; font-size: 0.75rem; color: var(--dim);">
+                    Click any cell to see detailed analysis. Sharp drops between bands (dark to light transitions) indicate lossy compression artifacts.
+                </div>
+            </div>
+        </div>
+
         <div class="detail-panel" id="detail-panel">
             <div class="detail-header">
                 <div class="detail-filename" id="detail-filename">filename.mp3</div>
                 <button class="detail-close" onclick="closeDetail()">&times;</button>
             </div>
-            <div class="detail-grid">
-                <div>
-                    <div class="chart-title">Frequency Band Energy</div>
-                    <div id="file-spectrum"></div>
+            <div class="detail-grid-enhanced">
+                <div class="spectrum-analyzer">
+                    <div class="chart-title">Frequency Response Curve</div>
+                    <div id="freq-response-curve"></div>
+                    <div class="spectrum-analyzer-label">FREQUENCY SPECTRUM ANALYSIS</div>
                 </div>
-                <div>
-                    <div class="chart-title">Analysis Details</div>
-                    <div id="file-details"></div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <div>
+                        <div class="chart-title">Frequency Band Energy</div>
+                        <div id="file-spectrum"></div>
+                    </div>
+                    <div>
+                        <div class="chart-title">Analysis Details</div>
+                        <div id="file-details"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -361,10 +592,10 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
     const data = {json_data};
 
     const colors = {{
-        ok: '#3fb950',
-        suspect: '#d29922',
-        transcode: '#f85149',
-        error: '#6e7681'
+        ok: '#34c759',
+        suspect: '#ff9f0a',
+        transcode: '#ff3b30',
+        error: '#8e8e93'
     }};
 
     // Donut Chart
@@ -395,8 +626,8 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             .append('path')
             .attr('d', arc)
             .attr('fill', d => d.data.color)
-            .attr('stroke', '#0d1117')
-            .attr('stroke-width', 2)
+            .attr('stroke', '#ffffff')
+            .attr('stroke-width', 3)
             .style('cursor', 'pointer')
             .on('mouseover', function(event, d) {{
                 d3.select(this).transition().duration(100).attr('d', arcHover);
@@ -411,16 +642,18 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         svg.append('text')
             .attr('text-anchor', 'middle')
             .attr('dy', '-0.2em')
-            .style('font-size', '2.5rem')
-            .style('font-weight', '700')
-            .style('fill', '#e6edf3')
+            .style('font-size', '2.25rem')
+            .style('font-weight', '600')
+            .style('fill', '#1d1d1f')
+            .style('letter-spacing', '-0.02em')
             .text(data.summary.total);
 
         svg.append('text')
             .attr('text-anchor', 'middle')
             .attr('dy', '1.5em')
-            .style('font-size', '0.875rem')
-            .style('fill', '#7d8590')
+            .style('font-size', '0.8125rem')
+            .style('fill', '#86868b')
+            .style('font-weight', '500')
             .text('files');
     }}
 
@@ -452,7 +685,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             .attr('class', 'grid')
             .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
             .style('stroke-dasharray', '3,3')
-            .style('stroke-opacity', 0.1);
+            .style('stroke-opacity', 0.12);
 
         // Threshold lines
         [35, 65].forEach(thresh => {{
@@ -495,15 +728,17 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         // Y axis
         svg.append('g')
             .call(d3.axisLeft(y).ticks(5).tickFormat(d => d + '%'))
-            .style('color', '#7d8590');
+            .style('color', '#86868b')
+            .style('font-size', '0.75rem');
 
         // X axis label
         svg.append('text')
             .attr('x', width / 2)
             .attr('y', height + 45)
             .attr('text-anchor', 'middle')
-            .style('fill', '#7d8590')
-            .style('font-size', '0.875rem')
+            .style('fill', '#86868b')
+            .style('font-size', '0.8125rem')
+            .style('font-weight', '500')
             .text('Files (sorted by score)');
     }}
 
@@ -547,9 +782,10 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
 
         // Grid
         svg.append('g')
+            .attr('class', 'grid')
             .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
             .style('stroke-dasharray', '3,3')
-            .style('stroke-opacity', 0.1);
+            .style('stroke-opacity', 0.12);
 
         // Bars
         svg.selectAll('.bar')
@@ -576,18 +812,483 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             .attr('x2', width)
             .attr('y1', y(0))
             .attr('y2', y(0))
-            .attr('stroke', '#7d8590')
+            .attr('stroke', '#86868b')
             .attr('stroke-dasharray', '3,3');
 
         // Axes
         svg.append('g')
             .attr('transform', `translate(0,${{height}})`)
             .call(d3.axisBottom(x))
-            .style('color', '#7d8590');
+            .style('color', '#86868b')
+            .style('font-size', '0.75rem');
 
         svg.append('g')
             .call(d3.axisLeft(y).ticks(6).tickFormat(d => d + ' dB'))
-            .style('color', '#7d8590');
+            .style('color', '#86868b')
+            .style('font-size', '0.75rem');
+    }}
+
+    // Spectral Waterfall Heatmap
+    function drawSpectralWaterfall() {{
+        const container = document.getElementById('waterfall-chart');
+        const filesWithSpectral = data.files.filter(f => f.spectral);
+
+        if (filesWithSpectral.length === 0) {{
+            container.innerHTML = '<div style="text-align: center; color: var(--dim); padding: 2rem;">No spectral data available</div>';
+            return;
+        }}
+
+        const bandLabels = ['Full\\n20Hz-20k', 'Mid-High\\n10-15kHz', 'High\\n15-20kHz', 'Upper\\n17-20kHz', 'Ultrasonic\\n20-22kHz'];
+        const bandKeys = ['rms_full', 'rms_mid_high', 'rms_high', 'rms_upper', 'rms_ultrasonic'];
+
+        const margin = {{ top: 50, right: 30, bottom: 20, left: 200 }};
+        const cellWidth = 80;
+        const cellHeight = 28;
+        const width = bandLabels.length * cellWidth;
+        const height = Math.min(filesWithSpectral.length * cellHeight, 600);
+
+        const svg = d3.select('#waterfall-chart')
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+
+        // Calculate actual data range for color scale
+        let minVal = Infinity, maxVal = -Infinity;
+        filesWithSpectral.forEach(f => {{
+            bandKeys.forEach(key => {{
+                const val = f.spectral[key];
+                if (val < minVal) minVal = val;
+                if (val > maxVal) maxVal = val;
+            }});
+        }});
+
+        // Color scale: light blue (low energy) to deep blue (high energy) - Apple style
+        const colorScale = d3.scaleSequential()
+            .domain([minVal, maxVal])
+            .interpolator(d3.interpolateRgbBasis(['#f0f7ff', '#c7e0f4', '#86c1e8', '#4ba3db', '#1a7dc4', '#0055aa']));
+
+        // Create cells
+        const displayFiles = filesWithSpectral.slice(0, Math.floor(600 / cellHeight));
+
+        displayFiles.forEach((file, fileIdx) => {{
+            const y = fileIdx * cellHeight;
+
+            bandKeys.forEach((key, bandIdx) => {{
+                const value = file.spectral[key];
+                const x = bandIdx * cellWidth;
+
+                // Determine if this is a "problem" cell
+                let isProblem = false;
+                if (bandIdx >= 3 && file.spectral.upper_drop > 15) isProblem = true;
+                if (bandIdx === 4 && file.spectral.ultrasonic_drop > 25) isProblem = true;
+
+                const cell = g.append('rect')
+                    .attr('class', 'waterfall-cell')
+                    .attr('x', x + 2)
+                    .attr('y', y + 2)
+                    .attr('width', cellWidth - 4)
+                    .attr('height', cellHeight - 4)
+                    .attr('rx', 4)
+                    .attr('fill', colorScale(value))
+                    .attr('data-file', file.filename)
+                    .attr('data-band', bandIdx)
+                    .on('mouseover', function(event) {{
+                        d3.select(this).classed('highlighted', true);
+                        const bandName = bandLabels[bandIdx].replace('\\n', ' ');
+                        let tooltipText = `${{file.filename}}\\n${{bandName}}: ${{value.toFixed(1)}} dB`;
+                        if (bandIdx >= 3 && file.spectral.upper_drop > 15) {{
+                            tooltipText += `\\nUpper Drop: ${{file.spectral.upper_drop.toFixed(1)}} dB`;
+                        }}
+                        if (bandIdx === 4 && file.spectral.ultrasonic_drop > 25) {{
+                            tooltipText += `\\nUltrasonic Drop: ${{file.spectral.ultrasonic_drop.toFixed(1)}} dB`;
+                        }}
+                        showTooltipMultiline(event, tooltipText);
+                    }})
+                    .on('mouseout', function() {{
+                        d3.select(this).classed('highlighted', false);
+                        hideTooltip();
+                    }})
+                    .on('click', () => showDetail(file));
+
+                // Add warning indicator for problem cells
+                if (isProblem) {{
+                    g.append('circle')
+                        .attr('cx', x + cellWidth - 10)
+                        .attr('cy', y + 10)
+                        .attr('r', 4)
+                        .attr('fill', file.verdict === 'Transcode' ? colors.transcode : colors.suspect)
+                        .style('pointer-events', 'none');
+                }}
+            }});
+
+            // File labels on the left
+            g.append('text')
+                .attr('class', `file-label ${{file.verdict.toLowerCase()}}`)
+                .attr('x', -10)
+                .attr('y', y + cellHeight / 2 + 4)
+                .attr('text-anchor', 'end')
+                .text(file.filename.length > 28 ? file.filename.slice(0, 25) + '...' : file.filename)
+                .on('click', () => showDetail(file))
+                .append('title')
+                .text(file.filename);
+        }});
+
+        // Band labels on top
+        bandLabels.forEach((label, i) => {{
+            const lines = label.split('\\n');
+            const textGroup = g.append('g')
+                .attr('transform', `translate(${{i * cellWidth + cellWidth/2}}, -10)`);
+
+            lines.forEach((line, lineIdx) => {{
+                textGroup.append('text')
+                    .attr('class', 'freq-label')
+                    .attr('text-anchor', 'middle')
+                    .attr('y', lineIdx * 12 - 15)
+                    .text(line);
+            }});
+        }});
+
+        // Add drop indicators between bands
+        displayFiles.forEach((file, fileIdx) => {{
+            if (!file.spectral) return;
+            const y = fileIdx * cellHeight;
+
+            // Upper drop indicator (between High and Upper)
+            if (file.spectral.upper_drop > 10) {{
+                const dropColor = file.spectral.upper_drop > 15 ? colors.transcode : colors.suspect;
+                g.append('path')
+                    .attr('d', `M${{3 * cellWidth - 2}},${{y + cellHeight/2}} L${{3 * cellWidth + 4}},${{y + cellHeight/2}}`)
+                    .attr('stroke', dropColor)
+                    .attr('stroke-width', 2)
+                    .attr('marker-end', 'url(#dropArrow)');
+            }}
+
+            // Ultrasonic drop indicator
+            if (file.spectral.ultrasonic_drop > 15) {{
+                const dropColor = file.spectral.ultrasonic_drop > 25 ? colors.transcode : colors.suspect;
+                g.append('path')
+                    .attr('d', `M${{4 * cellWidth - 2}},${{y + cellHeight/2}} L${{4 * cellWidth + 4}},${{y + cellHeight/2}}`)
+                    .attr('stroke', dropColor)
+                    .attr('stroke-width', 2);
+            }}
+        }});
+
+        // Arrow marker definition
+        svg.append('defs').append('marker')
+            .attr('id', 'dropArrow')
+            .attr('viewBox', '0 -5 10 10')
+            .attr('refX', 8)
+            .attr('markerWidth', 6)
+            .attr('markerHeight', 6)
+            .attr('orient', 'auto')
+            .append('path')
+            .attr('d', 'M0,-5L10,0L0,5')
+            .attr('fill', colors.transcode);
+
+        // Show truncation notice if needed
+        if (filesWithSpectral.length > displayFiles.length) {{
+            container.insertAdjacentHTML('beforeend',
+                `<div style="text-align: center; color: var(--dim); padding: 0.5rem; font-size: 0.75rem;">
+                    Showing ${{displayFiles.length}} of ${{filesWithSpectral.length}} files. Click on table rows below to see all files.
+                </div>`);
+        }}
+    }}
+
+    // Multiline tooltip helper
+    function showTooltipMultiline(event, text) {{
+        const tooltip = document.getElementById('tooltip');
+        tooltip.innerHTML = text.split('\\n').map(line => `<div>${{line}}</div>`).join('');
+        tooltip.classList.add('visible');
+        tooltip.style.left = (event.pageX + 10) + 'px';
+        tooltip.style.top = (event.pageY - 10) + 'px';
+    }}
+
+    // Interactive Frequency Response Curve
+    function drawFrequencyResponseCurve(file) {{
+        const container = document.getElementById('freq-response-curve');
+        container.innerHTML = '';
+
+        if (!file.spectral) {{
+            container.innerHTML = '<div style="text-align: center; color: var(--dim); padding: 2rem;">No spectral data available</div>';
+            return;
+        }}
+
+        const margin = {{ top: 30, right: 40, bottom: 50, left: 60 }};
+        const width = container.clientWidth - margin.left - margin.right;
+        const height = 280 - margin.top - margin.bottom;
+
+        const svg = d3.select('#freq-response-curve')
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        // Gradient definition for curve fill
+        const defs = svg.append('defs');
+
+        const gradient = defs.append('linearGradient')
+            .attr('id', 'curveGradient')
+            .attr('x1', '0%')
+            .attr('y1', '0%')
+            .attr('x2', '0%')
+            .attr('y2', '100%');
+
+        gradient.append('stop')
+            .attr('offset', '0%')
+            .attr('stop-color', file.verdict === 'Ok' ? colors.ok : file.verdict === 'Suspect' ? colors.suspect : colors.transcode)
+            .attr('stop-opacity', 0.6);
+
+        gradient.append('stop')
+            .attr('offset', '100%')
+            .attr('stop-color', file.verdict === 'Ok' ? colors.ok : file.verdict === 'Suspect' ? colors.suspect : colors.transcode)
+            .attr('stop-opacity', 0.05);
+
+        // Glow filter for problem areas
+        const filter = defs.append('filter')
+            .attr('id', 'glow');
+        filter.append('feGaussianBlur')
+            .attr('stdDeviation', '3')
+            .attr('result', 'coloredBlur');
+        const feMerge = filter.append('feMerge');
+        feMerge.append('feMergeNode').attr('in', 'coloredBlur');
+        feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+
+        // Frequency points (logarithmic scale feel)
+        const freqPoints = [
+            {{ freq: 20, label: '20Hz', band: 'full' }},
+            {{ freq: 100, label: '100Hz', band: 'full' }},
+            {{ freq: 1000, label: '1kHz', band: 'full' }},
+            {{ freq: 5000, label: '5kHz', band: 'full' }},
+            {{ freq: 10000, label: '10kHz', band: 'mid_high' }},
+            {{ freq: 15000, label: '15kHz', band: 'high' }},
+            {{ freq: 17000, label: '17kHz', band: 'upper' }},
+            {{ freq: 19000, label: '19kHz', band: 'upper' }},
+            {{ freq: 20000, label: '20kHz', band: 'ultrasonic' }},
+            {{ freq: 22000, label: '22kHz', band: 'ultrasonic' }}
+        ];
+
+        // Simulate frequency response based on spectral data
+        const s = file.spectral;
+        const baseLevel = s.rms_full;
+
+        const curveData = [
+            {{ freq: 20, db: baseLevel }},
+            {{ freq: 100, db: baseLevel + 2 }},
+            {{ freq: 500, db: baseLevel + 3 }},
+            {{ freq: 1000, db: baseLevel + 2 }},
+            {{ freq: 3000, db: baseLevel + 1 }},
+            {{ freq: 5000, db: baseLevel }},
+            {{ freq: 8000, db: s.rms_mid_high + 2 }},
+            {{ freq: 10000, db: s.rms_mid_high }},
+            {{ freq: 12000, db: (s.rms_mid_high + s.rms_high) / 2 }},
+            {{ freq: 15000, db: s.rms_high }},
+            {{ freq: 16000, db: (s.rms_high + s.rms_upper) / 2 }},
+            {{ freq: 17000, db: s.rms_upper }},
+            {{ freq: 18000, db: (s.rms_upper + s.rms_ultrasonic) / 2 }},
+            {{ freq: 19000, db: s.rms_ultrasonic + 3 }},
+            {{ freq: 20000, db: s.rms_ultrasonic }},
+            {{ freq: 21000, db: s.rms_ultrasonic - 3 }},
+            {{ freq: 22000, db: s.rms_ultrasonic - 6 }}
+        ];
+
+        // Scales
+        const x = d3.scaleLog()
+            .domain([20, 22000])
+            .range([0, width]);
+
+        const yMin = Math.min(...curveData.map(d => d.db), -80);
+        const yMax = Math.max(...curveData.map(d => d.db), 0);
+
+        const y = d3.scaleLinear()
+            .domain([yMin - 10, yMax + 5])
+            .range([height, 0]);
+
+        // Grid
+        g.append('g')
+            .attr('class', 'grid')
+            .call(d3.axisLeft(y).tickSize(-width).tickFormat(''))
+            .style('stroke-dasharray', '3,4')
+            .style('stroke-opacity', 0.12);
+
+        // Highlight problem frequency regions
+        if (s.upper_drop > 15) {{
+            g.append('rect')
+                .attr('class', 'freq-band-highlight')
+                .attr('x', x(15000))
+                .attr('y', 0)
+                .attr('width', x(20000) - x(15000))
+                .attr('height', height)
+                .style('filter', 'url(#glow)');
+
+            g.append('text')
+                .attr('class', 'drop-annotation')
+                .attr('x', x(17000))
+                .attr('y', 20)
+                .attr('text-anchor', 'middle')
+                .text(`-${{s.upper_drop.toFixed(0)}}dB DROP`);
+        }}
+
+        if (s.ultrasonic_drop > 25) {{
+            g.append('rect')
+                .attr('class', 'freq-band-highlight')
+                .attr('x', x(19000))
+                .attr('y', 0)
+                .attr('width', x(22000) - x(19000))
+                .attr('height', height)
+                .style('filter', 'url(#glow)');
+
+            if (s.upper_drop <= 15) {{
+                g.append('text')
+                    .attr('class', 'drop-annotation')
+                    .attr('x', x(20500))
+                    .attr('y', 20)
+                    .attr('text-anchor', 'middle')
+                    .text(`320k CLIFF`);
+            }}
+        }}
+
+        // Area under curve
+        const area = d3.area()
+            .x(d => x(d.freq))
+            .y0(height)
+            .y1(d => y(d.db))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(curveData)
+            .attr('class', 'curve-gradient')
+            .attr('d', area)
+            .attr('fill', 'url(#curveGradient)');
+
+        // Main curve line
+        const line = d3.line()
+            .x(d => x(d.freq))
+            .y(d => y(d.db))
+            .curve(d3.curveMonotoneX);
+
+        g.append('path')
+            .datum(curveData)
+            .attr('class', 'curve-path')
+            .attr('d', line)
+            .attr('stroke', file.verdict === 'Ok' ? colors.ok : file.verdict === 'Suspect' ? colors.suspect : colors.transcode);
+
+        // Interactive points
+        curveData.forEach((point, i) => {{
+            const isProblemPoint = (point.freq >= 15000 && s.upper_drop > 15) ||
+                                   (point.freq >= 19000 && s.ultrasonic_drop > 25);
+
+            g.append('circle')
+                .attr('cx', x(point.freq))
+                .attr('cy', y(point.db))
+                .attr('r', isProblemPoint ? 6 : 4)
+                .attr('fill', isProblemPoint ? colors.transcode : (file.verdict === 'Ok' ? colors.ok : colors.suspect))
+                .attr('stroke', '#ffffff')
+                .attr('stroke-width', 2)
+                .style('cursor', 'pointer')
+                .on('mouseover', function(event) {{
+                    d3.select(this)
+                        .transition()
+                        .duration(100)
+                        .attr('r', isProblemPoint ? 8 : 6);
+
+                    let tooltipText = `${{formatFreq(point.freq)}}: ${{point.db.toFixed(1)}} dB`;
+                    if (point.freq >= 17000 && point.freq < 20000 && s.upper_drop > 15) {{
+                        tooltipText += `\\nUpper band severely attenuated`;
+                    }}
+                    if (point.freq >= 20000 && s.ultrasonic_drop > 25) {{
+                        tooltipText += `\\n320kbps MP3 cutoff detected`;
+                    }}
+                    showTooltipMultiline(event, tooltipText);
+                }})
+                .on('mouseout', function() {{
+                    d3.select(this)
+                        .transition()
+                        .duration(100)
+                        .attr('r', isProblemPoint ? 6 : 4);
+                    hideTooltip();
+                }});
+        }});
+
+        // Frequency markers
+        const markers = [100, 1000, 10000, 20000];
+        markers.forEach(freq => {{
+            g.append('line')
+                .attr('class', 'freq-marker')
+                .attr('x1', x(freq))
+                .attr('x2', x(freq))
+                .attr('y1', 0)
+                .attr('y2', height);
+
+            g.append('text')
+                .attr('class', 'freq-marker-label')
+                .attr('x', x(freq))
+                .attr('y', height + 15)
+                .attr('text-anchor', 'middle')
+                .text(formatFreq(freq));
+        }});
+
+        // Axes
+        g.append('g')
+            .attr('transform', `translate(0,${{height}})`)
+            .call(d3.axisBottom(x)
+                .tickValues([20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000])
+                .tickFormat(d => ''))
+            .style('color', '#86868b');
+
+        g.append('g')
+            .call(d3.axisLeft(y).ticks(6).tickFormat(d => d + ' dB'))
+            .style('color', '#86868b')
+            .style('font-size', '0.75rem');
+
+        // Axis labels
+        svg.append('text')
+            .attr('x', margin.left + width / 2)
+            .attr('y', height + margin.top + 40)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.75rem')
+            .style('font-weight', '500')
+            .text('Frequency (Hz) - Logarithmic Scale');
+
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -(margin.top + height / 2))
+            .attr('y', 15)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.75rem')
+            .style('font-weight', '500')
+            .text('Energy Level (dB)');
+
+        // Legend for problem indicators
+        if (s.upper_drop > 15 || s.ultrasonic_drop > 25) {{
+            const legendG = svg.append('g')
+                .attr('transform', `translate(${{margin.left + 10}}, ${{margin.top + 5}})`);
+
+            legendG.append('rect')
+                .attr('width', 12)
+                .attr('height', 12)
+                .attr('rx', 2)
+                .attr('fill', 'rgba(248, 81, 73, 0.2)')
+                .attr('stroke', colors.transcode);
+
+            legendG.append('text')
+                .attr('x', 18)
+                .attr('y', 10)
+                .style('fill', colors.transcode)
+                .style('font-size', '0.7rem')
+                .text('Lossy compression damage detected');
+        }}
+    }}
+
+    function formatFreq(freq) {{
+        if (freq >= 1000) return (freq / 1000) + 'kHz';
+        return freq + 'Hz';
     }}
 
     // Show file details
@@ -596,6 +1297,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         panel.classList.add('active');
         document.getElementById('detail-filename').textContent = file.filename;
 
+        drawFrequencyResponseCurve(file);
         drawFileSpectrum(file);
 
         const detailsHtml = `
@@ -692,7 +1394,14 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
     // Initialize
     drawDonutChart();
     drawScoreChart();
+    drawSpectralWaterfall();
     buildTable();
+
+    // Auto-show first problematic file if any
+    const firstProblem = data.files.find(f => f.verdict !== 'Ok' && f.spectral);
+    if (firstProblem) {{
+        setTimeout(() => showDetail(firstProblem), 500);
+    }}
     </script>
 </body>
 </html>
