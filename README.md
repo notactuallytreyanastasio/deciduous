@@ -34,7 +34,32 @@ The primary use case is analyzing FLAC/WAV files, but Losselot can also detect M
 
 ## Installation
 
+**No dependencies required** - binaries are fully self-contained.
+
+### Pre-built Binaries (Recommended)
+
+Download from [Releases](https://github.com/notactuallytreyanastasio/losselot/releases):
+
+| Platform | Binary |
+|----------|--------|
+| macOS Apple Silicon | `losselot-darwin-arm64` |
+| macOS Intel | `losselot-darwin-amd64` |
+| Linux x86_64 | `losselot-linux-amd64` |
+| Windows x86_64 | `losselot-windows-amd64.exe` |
+
+```bash
+# macOS/Linux: make executable and run
+chmod +x losselot-*
+./losselot-darwin-arm64 --help
+
+# Or move to PATH
+sudo mv losselot-darwin-arm64 /usr/local/bin/losselot
+losselot --help
+```
+
 ### From Source
+
+Requires [Rust](https://rustup.rs/) (no other dependencies):
 
 ```bash
 git clone https://github.com/notactuallytreyanastasio/losselot.git
@@ -43,13 +68,11 @@ cargo build --release
 ./target/release/losselot --help
 ```
 
-### Pre-built Binaries
+### Via Cargo
 
-Download from [Releases](https://github.com/notactuallytreyanastasio/losselot/releases):
-- `losselot-darwin-amd64` - macOS Intel
-- `losselot-darwin-arm64` - macOS Apple Silicon
-- `losselot-linux-amd64` - Linux x86_64
-- `losselot-windows-amd64.exe` - Windows x86_64
+```bash
+cargo install --git https://github.com/notactuallytreyanastasio/losselot
+```
 
 ## Usage
 
@@ -110,8 +133,14 @@ losselot -j 8 ~/Music/
 | `severe_hf_damage` | Major high frequency loss (probably from 128kbps or lower) |
 | `hf_cutoff_detected` | Clear lossy cutoff pattern detected |
 | `possible_lossy_origin` | Mild HF damage, possibly from high-bitrate lossy |
+| `cliff_at_20khz` | Sharp cutoff at 20kHz (320kbps MP3 signature) |
+| `steep_20khz_cutoff` | Significant drop at 20kHz boundary |
+| `possible_320k_origin` | May have originated from 320kbps MP3 |
+| `dead_ultrasonic_band` | No content above 20kHz (strong 320k indicator) |
+| `weak_ultrasonic_content` | Low energy above 20kHz |
 | `steep_hf_rolloff` | High frequencies drop off too sharply |
 | `silent_17k+` | Upper frequencies (17-20kHz) are essentially silent |
+| `silent_20k+` | Ultrasonic frequencies (20-22kHz) are silent |
 | `lowpass_mismatch` | (MP3 only) LAME header lowpass doesn't match bitrate |
 
 ### Verbose Output
