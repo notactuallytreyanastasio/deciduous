@@ -7,7 +7,7 @@ use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
 #[command(name = "losselot")]
-#[command(author, version, about = "Detect MP3s transcoded from lower quality sources")]
+#[command(author, version, about = "Detect 'lossless' files that were created from lossy sources")]
 struct Args {
     /// File or directory to analyze
     #[arg(required = true)]

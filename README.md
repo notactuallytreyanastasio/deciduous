@@ -1,31 +1,36 @@
 # Losselot
 
-Detect MP3s that have been transcoded from lower quality sources.
+Detect "lossless" audio files that were actually created from lossy sources.
 
-## What It Does
+## The Problem
 
-Losselot combines **spectral analysis** and **binary forensics** to identify MP3 files that claim to be high bitrate but were actually encoded from lower quality sources.
+You download a FLAC or WAV file labeled as "lossless" - but how do you know it wasn't just an MP3 that someone converted? Once audio goes through lossy compression (MP3, AAC, etc.), the lost frequencies are gone forever. Converting to FLAC doesn't bring them back.
 
-### Detection Methods
+**Losselot detects these fake lossless files.**
 
-1. **Binary Analysis** (no external dependencies)
-   - Parses MP3 frame headers
-   - Extracts LAME/Xing header information
-   - **Key check**: LAME header contains lowpass filter frequency - if a "320kbps" file has lowpass=16000Hz, it was transcoded from 128kbps
-   - Detects multiple encoder signatures
-   - Analyzes frame size consistency
+## How It Works
 
-2. **Spectral Analysis**
-   - Decodes MP3 to PCM using symphonia (pure Rust)
-   - Performs FFT to measure energy in frequency bands
-   - Compares energy dropoff between bands (10-15kHz, 15-20kHz, 17-20kHz)
-   - Transcodes have a characteristic "cliff" where high frequencies die
+Lossy codecs like MP3 work by removing high frequencies that are "less audible." A 128kbps MP3 typically cuts everything above ~16kHz. When you convert that MP3 to FLAC, the cutoff remains - it's a permanent scar.
 
-### Scoring
+Losselot performs **spectral analysis** to measure energy in different frequency bands:
+- Real lossless audio has gradual, natural high-frequency rolloff
+- Fake lossless (from MP3/AAC) has a sharp cliff where the original encoder cut frequencies
 
-- **0-34%**: OK (clean file)
-- **35-64%**: SUSPECT (might be transcoded)
-- **65-100%**: TRANSCODE (almost certainly transcoded)
+### What It Detects
+
+| Source | Detection |
+|--------|-----------|
+| MP3 128kbps → FLAC | Easily detected (hard cutoff at ~16kHz) |
+| MP3 192kbps → FLAC | Usually detected (cutoff at ~18kHz) |
+| MP3 320kbps → FLAC | Difficult (cutoff at ~20kHz, near natural rolloff) |
+| AAC 128kbps → FLAC | Sometimes detected (AAC is more efficient) |
+| Real lossless | Shows 0% score, natural rolloff |
+
+## Supported Formats
+
+**Input formats:** FLAC, WAV, AIFF, MP3, M4A, AAC, OGG, Opus, WMA, ALAC
+
+The primary use case is analyzing FLAC/WAV files, but Losselot can also detect MP3→MP3 transcodes using binary forensics (LAME header analysis).
 
 ## Installation
 
@@ -68,17 +73,17 @@ Options:
 ### Examples
 
 ```bash
-# Analyze a single file
-losselot suspicious.mp3
+# Check if a FLAC is really lossless
+losselot album.flac
 
-# Analyze entire music library
-losselot ~/Music/
+# Scan your entire lossless library
+losselot ~/Music/FLAC/
 
 # Generate HTML report
 losselot -o report.html ~/Music/
 
-# Quick scan (binary-only, no FFT)
-losselot --no-spectral ~/Music/
+# Show detailed spectral info
+losselot -v suspicious.flac
 
 # Parallel processing with 8 workers
 losselot -j 8 ~/Music/
@@ -90,19 +95,49 @@ losselot -j 8 ~/Music/
 - `1`: Some files suspect
 - `2`: Transcodes detected
 
+## Understanding Results
+
+### Verdicts
+
+- **OK (0-34%)**: Appears to be genuine lossless
+- **SUSPECT (35-64%)**: Might have lossy origins, worth investigating
+- **TRANSCODE (65-100%)**: Almost certainly from a lossy source
+
+### Flags
+
+| Flag | Meaning |
+|------|---------|
+| `severe_hf_damage` | Major high frequency loss (probably from 128kbps or lower) |
+| `hf_cutoff_detected` | Clear lossy cutoff pattern detected |
+| `possible_lossy_origin` | Mild HF damage, possibly from high-bitrate lossy |
+| `steep_hf_rolloff` | High frequencies drop off too sharply |
+| `silent_17k+` | Upper frequencies (17-20kHz) are essentially silent |
+| `lowpass_mismatch` | (MP3 only) LAME header lowpass doesn't match bitrate |
+
+### Verbose Output
+
+Use `-v` to see spectral details:
+```
+Spectral: full=-12.3dB high=-45.1dB upper=-68.2dB | drops: high=32.8 upper=42.1
+```
+
+- **full**: Overall signal level (20Hz-20kHz)
+- **high**: 15-20kHz band level
+- **upper**: 17-20kHz band level
+- **drops**: Difference between bands (higher = more suspicious)
+
+A real lossless file typically has `upper_drop` of 4-8 dB. A fake from MP3 128k might have 40-70 dB.
+
 ## Report Formats
 
 ### HTML
-Beautiful dark-mode report with:
-- Summary statistics
-- Color-coded verdicts
-- Score progress bars
-- Flag reference legend
+Dark-mode report with summary statistics, color-coded verdicts, and flag reference.
 
 ### CSV
 ```csv
 verdict,filepath,bitrate_kbps,combined_score,spectral_score,binary_score,flags,encoder,lowpass
-TRANSCODE,/path/to/file.mp3,320,85,45,40,lowpass_mismatch(16000Hz),LAME3.100,16000
+TRANSCODE,/path/to/fake.flac,0,80,80,0,severe_hf_damage,,
+OK,/path/to/real.flac,0,0,0,0,,,
 ```
 
 ### JSON
@@ -114,33 +149,27 @@ TRANSCODE,/path/to/file.mp3,320,85,45,40,lowpass_mismatch(16000Hz),LAME3.100,160
 }
 ```
 
-## Flags Reference
+## Technical Details
 
-| Flag | Meaning |
-|------|---------|
-| `lowpass_mismatch` | LAME header lowpass frequency doesn't match declared bitrate (smoking gun!) |
-| `multi_encoder_sigs` | Multiple encoder signatures found in file |
-| `irregular_frames` | CBR frame sizes are inconsistent |
-| `steep_hf_rolloff` | High frequencies drop off too sharply |
-| `dead_upper_band` | 17-20kHz range has almost no energy |
-| `silent_17k+` | Upper frequencies are essentially silent |
+### Spectral Analysis Method
 
-## How Transcoding Detection Works
+1. Decode audio to PCM (using symphonia - pure Rust, no ffmpeg)
+2. Apply Hanning window to ~15 seconds of audio
+3. Perform FFT (8192-point) on overlapping windows
+4. Measure average energy in frequency bands:
+   - Full: 20Hz - 20kHz
+   - Mid-high: 10kHz - 15kHz
+   - High: 15kHz - 20kHz
+   - Upper: 17kHz - 20kHz
+5. Calculate drop between mid-high and upper bands
+6. Score based on how severe the drop is
 
-When you encode audio to MP3, the encoder applies a lowpass filter based on the bitrate:
-- 320kbps → ~20.5kHz lowpass
-- 256kbps → ~20kHz lowpass
-- 192kbps → ~18.5kHz lowpass
-- 128kbps → ~16kHz lowpass
+### MP3-Specific Analysis
 
-**The LAME encoder writes this lowpass frequency into a header field.**
-
-If someone takes a 128kbps MP3 and re-encodes it at 320kbps:
-- The file claims to be 320kbps
-- But the LAME header still says lowpass=16000Hz
-- And the spectral analysis shows no energy above 16kHz
-
-This is the "smoking gun" that Losselot looks for.
+For MP3 files, Losselot also performs binary forensics:
+- Parses LAME/Xing headers for lowpass frequency
+- If a "320kbps" MP3 has lowpass=16000Hz, it was transcoded from 128kbps
+- Detects multiple encoder signatures (suggests re-encoding)
 
 ## Building
 
@@ -155,20 +184,12 @@ cargo build --release
 cargo test
 ```
 
-### Cross-compilation
+## Limitations
 
-The GitHub Actions workflow builds for all platforms automatically on release tags.
-
-For manual cross-compilation:
-```bash
-# macOS (both architectures)
-cargo build --release --target x86_64-apple-darwin
-cargo build --release --target aarch64-apple-darwin
-
-# Requires cross or appropriate toolchain
-cross build --release --target x86_64-unknown-linux-gnu
-cross build --release --target x86_64-pc-windows-gnu
-```
+- **High-bitrate lossy is hard to detect**: MP3 320kbps has cutoff near 20kHz, similar to natural rolloff
+- **Some codecs are stealthier**: AAC and Vorbis are more efficient than MP3, leaving less obvious damage
+- **Dark/quiet recordings**: Low energy in high frequencies is normal for some content
+- **Not 100% definitive**: Use as one data point, not absolute proof
 
 ## License
 
