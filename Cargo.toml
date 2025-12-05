@@ -43,6 +43,10 @@ rfd = { version = "0.15", optional = true }
 # Cross-platform file opening
 open = "5.3"
 
+# HTTP server for interactive mode
+tiny_http = "0.12"
+serde_urlencoded = "0.7"
+
 # Date/time for report filenames
 chrono = "0.4"
 

@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Losselot</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #fafafa; color: #333; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 1rem; }
+    h1 { font-size: 1.25rem; font-weight: 600; }
+    .meta { color: #666; font-size: 0.8rem; margin: 0.25rem 0 1rem; }
+    .meta code { background: #eee; padding: 0.125rem 0.375rem; border-radius: 3px; font-size: 0.75rem; }
+
+    .summary { display: flex; gap: 0.75rem; margin: 1rem 0; flex-wrap: wrap; }
+    .stat { background: #fff; border: 1px solid #e0e0e0; padding: 0.5rem 1rem; border-radius: 6px; text-align: center; min-width: 70px; }
+    .stat .label { display: block; font-size: 0.65rem; color: #888; text-transform: uppercase; }
+    .stat .value { font-size: 1.25rem; font-weight: 600; }
+    .stat.ok .value { color: #2e7d32; }
+    .stat.suspect .value { color: #f57c00; }
+    .stat.transcode .value { color: #c62828; }
+
+    .layout { display: grid; grid-template-columns: 280px 1fr; gap: 1rem; }
+    @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+    .file-list { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 0.75rem; max-height: 75vh; overflow-y: auto; }
+    .file-list h2 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.5rem; color: #555; }
+    .file-list ul { list-style: none; }
+    .file-list li { display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.5rem; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
+    .file-list li:hover { background: #f5f5f5; }
+    .file-list li.selected { background: #e3f2fd; }
+    .file-list .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .file-list .score { font-size: 0.7rem; color: #888; min-width: 24px; text-align: right; }
+
+    .badge { font-size: 0.6rem; padding: 0.1rem 0.35rem; border-radius: 3px; font-weight: 600; text-transform: uppercase; }
+    .badge.ok { background: #e8f5e9; color: #2e7d32; }
+    .badge.suspect { background: #fff3e0; color: #f57c00; }
+    .badge.transcode { background: #ffebee; color: #c62828; }
+    .badge.error { background: #f5f5f5; color: #757575; }
+
+    .detail { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 320px; gap: 1rem; }
+    @media (max-width: 1100px) { .detail-grid { grid-template-columns: 1fr; } }
+
+    .detail h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; word-break: break-all; }
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 0.4rem; font-size: 0.8rem; }
+    .info-grid strong { color: #666; }
+
+    .flags { margin: 0.75rem 0; }
+    .flag { display: inline-block; background: #fff8e1; color: #f57c00; border: 1px solid #ffe0b2; padding: 0.1rem 0.4rem; border-radius: 3px; margin: 0.15rem; font-size: 0.7rem; font-family: monospace; }
+
+    .chart { margin: 1rem 0; background: #fafafa; border: 1px solid #eee; border-radius: 6px; padding: 0.75rem; }
+    .chart h3 { font-size: 0.8rem; font-weight: 600; color: #555; margin-bottom: 0.5rem; }
+    .chart h3 span { font-weight: 400; color: #888; font-size: 0.7rem; }
+    .chart-container { position: relative; }
+    .chart canvas { display: block; width: 100%; }
+
+    .verdict-summary { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; }
+    .verdict-summary h3 { font-size: 0.85rem; font-weight: 600; margin-bottom: 0.75rem; }
+    .verdict-badge { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 4px; font-weight: 700; font-size: 1rem; margin-bottom: 0.75rem; }
+    .verdict-badge.ok { background: #e8f5e9; color: #2e7d32; }
+    .verdict-badge.suspect { background: #fff3e0; color: #f57c00; }
+    .verdict-badge.transcode { background: #ffebee; color: #c62828; }
+
+    .verdict-meter { margin: 0.75rem 0; }
+    .verdict-meter label { font-size: 0.7rem; color: #666; display: block; margin-bottom: 0.25rem; }
+    .meter-bar { height: 10px; background: linear-gradient(to right, #4caf50 0%, #4caf50 35%, #ff9800 35%, #ff9800 65%, #f44336 65%, #f44336 100%); border-radius: 5px; position: relative; }
+    .meter-marker { position: absolute; top: -3px; width: 4px; height: 16px; background: #333; border-radius: 2px; transform: translateX(-50%); }
+
+    .verdict-detail { font-size: 0.75rem; color: #555; line-height: 1.5; }
+    .verdict-detail dt { font-weight: 600; color: #333; margin-top: 0.5rem; }
+    .verdict-detail dd { margin-left: 0; color: #666; }
+
+    .encoding-chain { background: #fff8e1; border: 1px solid #ffe0b2; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    .encoding-chain-title { display: flex; align-items: center; gap: 0.5rem; color: #e65100; font-weight: 600; font-size: 0.85rem; margin-bottom: 0.5rem; }
+    .encoding-chain-subtitle { font-size: 0.7rem; color: #888; margin-bottom: 0.75rem; }
+    .chain-timeline { display: flex; align-items: center; flex-wrap: wrap; gap: 0.25rem; margin: 0.75rem 0; }
+    .chain-node { text-align: center; }
+    .chain-encoder { padding: 0.35rem 0.6rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; border: 2px solid; }
+    .chain-encoder.source { background: #e8f5e9; border-color: #4caf50; color: #2e7d32; }
+    .chain-encoder.lossy { background: #fff3e0; border-color: #ff9800; color: #e65100; }
+    .chain-encoder.final { background: #ffebee; border-color: #f44336; color: #c62828; }
+    .chain-quality { font-size: 0.6rem; color: #888; margin-top: 0.2rem; }
+    .chain-quality.degraded { color: #c62828; }
+    .chain-arrow { display: flex; flex-direction: column; align-items: center; color: #999; padding: 0 0.25rem; }
+    .chain-arrow svg { width: 24px; height: 14px; }
+    .chain-arrow-label { font-size: 0.55rem; text-transform: uppercase; color: #aaa; }
+    .damage-bar { height: 8px; background: linear-gradient(to right, #4caf50 0%, #4caf50 40%, #ff9800 40%, #ff9800 70%, #f44336 70%); border-radius: 4px; position: relative; margin: 0.5rem 0; }
+    .damage-marker { position: absolute; top: -4px; width: 6px; height: 16px; background: #333; border-radius: 3px; border: 2px solid #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.3); transform: translateX(-50%); }
+    .chain-legend { display: flex; gap: 1rem; margin-top: 0.75rem; font-size: 0.65rem; color: #666; }
+    .chain-legend-item { display: flex; align-items: center; gap: 0.25rem; }
+    .chain-legend-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    .issues-detected { background: #ffebee; border: 1px solid #ffcdd2; border-radius: 6px; padding: 0.5rem 0.75rem; margin: 0.75rem 0; }
+    .issues-detected-title { color: #c62828; font-weight: 600; font-size: 0.8rem; display: flex; align-items: center; gap: 0.35rem; }
+    .issues-detected-detail { font-size: 0.75rem; color: #666; margin-top: 0.25rem; }
+
+    .loading { text-align: center; padding: 3rem; color: #888; }
+    .error { background: #ffebee; color: #c62828; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
+    .placeholder { color: #999; text-align: center; padding: 3rem; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script>const DEFAULT_PATH = "{{DEFAULT_PATH}}";</script>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    function App() {
+      const [data, setData] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+
+      useEffect(() => {
+        fetch(`/api/analyze?path=${encodeURIComponent(DEFAULT_PATH)}`)
+          .then(r => r.json())
+          .then(res => {
+            if (res.ok) {
+              setData(res.data);
+              if (res.data.files.length > 0) setSelected(res.data.files[0]);
+            } else setError(res.error || 'Analysis failed');
+          })
+          .catch(e => setError(e.message))
+          .finally(() => setLoading(false));
+      }, []);
+
+      if (loading) return <div className="container"><h1>Losselot</h1><div className="loading">Analyzing...</div></div>;
+      if (error) return <div className="container"><h1>Losselot</h1><div className="error">{error}</div></div>;
+
+      return (
+        <div className="container">
+          <h1>Losselot</h1>
+          <p className="meta"><code>{data.params.path}</code> — {data.summary.total} files</p>
+          <Summary summary={data.summary} />
+          <div className="layout">
+            <FileList files={data.files} selected={selected} onSelect={setSelected} />
+            {selected ? <FileDetail file={selected} /> : <div className="detail placeholder">Select a file</div>}
+          </div>
+        </div>
+      );
+    }
+
+    function Summary({ summary }) {
+      return (
+        <div className="summary">
+          <div className="stat"><span className="label">Total</span><span className="value">{summary.total}</span></div>
+          <div className="stat ok"><span className="label">Clean</span><span className="value">{summary.ok}</span></div>
+          <div className="stat suspect"><span className="label">Suspect</span><span className="value">{summary.suspect}</span></div>
+          <div className="stat transcode"><span className="label">Transcode</span><span className="value">{summary.transcode}</span></div>
+        </div>
+      );
+    }
+
+    function FileList({ files, selected, onSelect }) {
+      return (
+        <div className="file-list">
+          <h2>Files ({files.length})</h2>
+          <ul>
+            {files.map((f, i) => (
+              <li key={i} className={selected === f ? 'selected' : ''} onClick={() => onSelect(f)}>
+                <span className="name">{f.file_name}</span>
+                <span className="score">{f.combined_score}%</span>
+                <span className={`badge ${f.verdict.toLowerCase()}`}>{f.verdict}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      );
+    }
+
+    function FileDetail({ file }) {
+      return (
+        <div className="detail">
+          <div className="detail-grid">
+            <div className="detail-main">
+              <h2>{file.file_name}</h2>
+              <div className="info-grid">
+                <div><strong>Bitrate:</strong> {file.bitrate} kbps</div>
+                <div><strong>Sample Rate:</strong> {file.sample_rate} Hz</div>
+                <div><strong>Duration:</strong> {file.duration_secs?.toFixed(1)}s</div>
+                <div><strong>Encoder:</strong> {file.encoder}</div>
+                {file.lowpass && <div><strong>Lowpass:</strong> {file.lowpass} Hz</div>}
+              </div>
+
+              {file.flags?.length > 0 && (
+                <div className="flags">
+                  {file.flags.map((f, i) => <span key={i} className="flag">{f}</span>)}
+                </div>
+              )}
+
+              <IssuesDetected file={file} />
+              <EncodingChain file={file} />
+
+              {file.spectral_details?.spectrogram && <Spectrogram data={file.spectral_details.spectrogram} />}
+              {file.binary_details?.bitrate_timeline && <BitrateChart data={file.binary_details.bitrate_timeline} />}
+              {file.spectral_details?.stereo_correlation && <StereoChart data={file.spectral_details.stereo_correlation} />}
+            </div>
+
+            <VerdictSummary file={file} />
+          </div>
+        </div>
+      );
+    }
+
+    function VerdictSummary({ file }) {
+      const v = file.verdict.toLowerCase();
+      const getExplanation = () => {
+        if (v === 'ok') return 'This file appears to be a legitimate encode with expected frequency content for its bitrate.';
+        if (v === 'suspect') return 'This file shows some indicators of possible lossy origin, but evidence is not conclusive.';
+        return 'This file shows strong evidence of being transcoded from a lower quality source.';
+      };
+
+      return (
+        <div className="verdict-summary">
+          <h3>Analysis Summary</h3>
+          <div className={`verdict-badge ${v}`}>{file.verdict}</div>
+
+          <div className="verdict-meter">
+            <label>Confidence Score: {file.combined_score}%</label>
+            <div className="meter-bar">
+              <div className="meter-marker" style={{left: `${file.combined_score}%`}} />
+            </div>
+          </div>
+
+          <dl className="verdict-detail">
+            <dt>Verdict</dt>
+            <dd>{getExplanation()}</dd>
+
+            <dt>Spectral Score</dt>
+            <dd>{file.spectral_score}/100 — frequency content analysis</dd>
+
+            <dt>Binary Score</dt>
+            <dd>{file.binary_score}/100 — encoder metadata analysis</dd>
+
+            {file.lowpass && (
+              <>
+                <dt>Lowpass Filter</dt>
+                <dd>{file.lowpass} Hz {file.bitrate >= 256 && file.lowpass < 19000 ? '(lower than expected)' : ''}</dd>
+              </>
+            )}
+
+            {file.binary_details?.reencoded && (
+              <>
+                <dt>Re-encoding</dt>
+                <dd>Detected: {file.binary_details.encoding_chain || 'multiple passes'}</dd>
+              </>
+            )}
+          </dl>
+        </div>
+      );
+    }
+
+    function EncodingChain({ file }) {
+      const b = file.binary_details;
+      const s = file.spectral_details;
+      const hasSpectralEvidence = s && (s.upper_drop > 15 || s.ultrasonic_drop > 25);
+      const hasBinaryEvidence = b && b.reencoded;
+      const isTranscode = file.verdict === 'Transcode' || file.verdict === 'Suspect';
+
+      if (!hasBinaryEvidence && !hasSpectralEvidence && !isTranscode) return null;
+
+      // Build encoding chain
+      const chain = [{ name: 'Original', type: 'source', quality: 'Lossless/Unknown' }];
+
+      if (hasBinaryEvidence && b.lame_occurrences > 0) {
+        for (let i = 0; i < b.lame_occurrences; i++) {
+          chain.push({
+            name: i === 0 ? (file.encoder || 'LAME') : 'LAME',
+            type: i === 0 ? 'lossy' : 'final',
+            quality: i === 0 ? 'First lossy encode' : `Pass ${i + 1} - cumulative loss`
+          });
+        }
+        if (b.ffmpeg_occurrences > 0) {
+          for (let i = 0; i < b.ffmpeg_occurrences; i++) {
+            chain.push({ name: 'FFmpeg', type: 'final', quality: `Processing pass ${i + 1}` });
+          }
+        }
+      } else if (hasSpectralEvidence || isTranscode) {
+        chain.push({ name: '??? Lossy', type: 'lossy', quality: 'Unknown codec/bitrate' });
+        if (s && s.upper_drop > 25) {
+          chain.push({ name: '??? Lossy', type: 'final', quality: 'Additional encoding suspected' });
+        }
+        chain.push({ name: file.encoder || 'LAME', type: 'final', quality: `Final encode (${file.bitrate}kbps)` });
+      }
+
+      const lossyPasses = chain.filter(c => c.type !== 'source').length;
+      const qualityEstimate = Math.max(0, 100 - (lossyPasses * 15));
+
+      const Arrow = () => (
+        <svg viewBox="0 0 32 20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M0 10H28M28 10L20 2M28 10L20 18" />
+        </svg>
+      );
+
+      return (
+        <div className="encoding-chain">
+          <div className="encoding-chain-title">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            {hasBinaryEvidence ? 'Encoding History Detected - File Has Been Re-encoded' : 'Transcoding Evidence - Spectral Analysis Indicates Prior Lossy Encoding'}
+          </div>
+          {!hasBinaryEvidence && (
+            <div className="encoding-chain-subtitle">Intermediate codec signatures not preserved in final MP3 - chain reconstructed from frequency damage</div>
+          )}
+
+          <div className="chain-timeline">
+            {chain.map((node, idx) => (
+              <React.Fragment key={idx}>
+                <div className="chain-node">
+                  <div className={`chain-encoder ${node.type}`}>{node.name}</div>
+                  <div className={`chain-quality ${node.type === 'final' ? 'degraded' : ''}`}>{node.quality}</div>
+                </div>
+                {idx < chain.length - 1 && (
+                  <div className="chain-arrow">
+                    <Arrow />
+                    <span className="chain-arrow-label">{idx === 0 ? 'encode' : 'transcode'}</span>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+
+          <div style={{marginTop: '0.75rem'}}>
+            <div style={{fontSize: '0.7rem', color: '#888', marginBottom: '0.25rem'}}>
+              Estimated Quality Retention After {lossyPasses} Lossy Pass{lossyPasses > 1 ? 'es' : ''}
+            </div>
+            <div className="damage-bar">
+              <div className="damage-marker" style={{left: `${qualityEstimate}%`}} />
+            </div>
+            <div style={{display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#888', marginTop: '0.25rem'}}>
+              <span>0% (Destroyed)</span>
+              <span style={{color: '#c62828', fontWeight: 600}}>~{qualityEstimate}%</span>
+              <span>100% (Original)</span>
+            </div>
+          </div>
+
+          <div className="chain-legend">
+            <div className="chain-legend-item"><div className="chain-legend-dot" style={{background: '#4caf50'}} /><span>Source</span></div>
+            <div className="chain-legend-item"><div className="chain-legend-dot" style={{background: '#ff9800'}} /><span>First Lossy Encode</span></div>
+            <div className="chain-legend-item"><div className="chain-legend-dot" style={{background: '#f44336'}} /><span>Re-encode (Quality Loss)</span></div>
+          </div>
+        </div>
+      );
+    }
+
+    function IssuesDetected({ file }) {
+      const s = file.spectral_details;
+      if (!s || (s.upper_drop <= 15 && s.ultrasonic_drop <= 25)) return null;
+
+      return (
+        <div className="issues-detected">
+          <div className="issues-detected-title">
+            <span>⚠️</span> Issues Detected
+          </div>
+          <div className="issues-detected-detail">
+            {s.upper_drop > 15 && <div>Upper drop: {s.upper_drop.toFixed(1)} dB</div>}
+            {s.ultrasonic_drop > 25 && <div>Ultrasonic drop: {s.ultrasonic_drop.toFixed(1)} dB</div>}
+          </div>
+        </div>
+      );
+    }
+
+    function Spectrogram({ data }) {
+      const ref = useRef();
+      useEffect(() => {
+        const c = ref.current; if (!c) return;
+        const ctx = c.getContext('2d');
+        const { num_time_slices: tw, num_freq_bins: th, magnitudes, times, frequencies } = data;
+
+        const pad = { left: 50, right: 60, top: 10, bottom: 30 };
+        const w = c.width = c.offsetWidth * 2;
+        const h = c.height = 200 * 2;
+        const chartW = w - pad.left - pad.right;
+        const chartH = h - pad.top - pad.bottom;
+
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, w, h);
+
+        // Draw spectrogram
+        const img = ctx.createImageData(tw, th);
+        let min = 0, max = -96;
+        for (const m of magnitudes) { if (m > max) max = m; if (m < min) min = m; }
+        const range = max - min || 1;
+
+        for (let t = 0; t < tw; t++) {
+          for (let f = 0; f < th; f++) {
+            const val = (magnitudes[t * th + f] - min) / range;
+            const idx = ((th - 1 - f) * tw + t) * 4;
+            // Warm colormap: black -> red -> orange -> yellow -> white
+            if (val < 0.25) {
+              img.data[idx] = Math.floor(val * 4 * 180);
+              img.data[idx+1] = 0;
+              img.data[idx+2] = 0;
+            } else if (val < 0.5) {
+              img.data[idx] = 180 + Math.floor((val - 0.25) * 4 * 75);
+              img.data[idx+1] = Math.floor((val - 0.25) * 4 * 100);
+              img.data[idx+2] = 0;
+            } else if (val < 0.75) {
+              img.data[idx] = 255;
+              img.data[idx+1] = 100 + Math.floor((val - 0.5) * 4 * 155);
+              img.data[idx+2] = Math.floor((val - 0.5) * 4 * 100);
+            } else {
+              img.data[idx] = 255;
+              img.data[idx+1] = 255;
+              img.data[idx+2] = 100 + Math.floor((val - 0.75) * 4 * 155);
+            }
+            img.data[idx+3] = 255;
+          }
+        }
+
+        // Draw to temp canvas then scale
+        const tmp = document.createElement('canvas');
+        tmp.width = tw; tmp.height = th;
+        tmp.getContext('2d').putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tmp, pad.left, pad.top, chartW, chartH);
+
+        // Y-axis (Frequency)
+        ctx.fillStyle = '#666';
+        ctx.font = '16px system-ui';
+        ctx.textAlign = 'right';
+        const maxFreq = frequencies?.[frequencies.length - 1] || 22050;
+        [0, 5000, 10000, 15000, 20000].forEach(f => {
+          if (f <= maxFreq) {
+            const y = pad.top + chartH - (f / maxFreq) * chartH;
+            ctx.fillText(`${f/1000}k`, pad.left - 8, y + 6);
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
+          }
+        });
+        ctx.save();
+        ctx.translate(14, pad.top + chartH/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.textAlign = 'center';
+        ctx.fillText('Frequency (Hz)', 0, 0);
+        ctx.restore();
+
+        // X-axis (Time)
+        ctx.textAlign = 'center';
+        const maxTime = times?.[times.length - 1] || 10;
+        for (let t = 0; t <= maxTime; t += 2) {
+          const x = pad.left + (t / maxTime) * chartW;
+          ctx.fillText(`${t.toFixed(0)}s`, x, h - 8);
+        }
+        ctx.fillText('Time (seconds)', pad.left + chartW/2, h - 8 + 20);
+
+        // Color legend
+        const legW = 15, legH = chartH;
+        const legX = w - pad.right + 15;
+        for (let i = 0; i < legH; i++) {
+          const val = 1 - i / legH;
+          ctx.fillStyle = val < 0.25 ? `rgb(${Math.floor(val*4*180)},0,0)` :
+                          val < 0.5 ? `rgb(${180+Math.floor((val-0.25)*4*75)},${Math.floor((val-0.25)*4*100)},0)` :
+                          val < 0.75 ? `rgb(255,${100+Math.floor((val-0.5)*4*155)},${Math.floor((val-0.5)*4*100)})` :
+                          `rgb(255,255,${100+Math.floor((val-0.75)*4*155)})`;
+          ctx.fillRect(legX, pad.top + i, legW, 1);
+        }
+        ctx.fillStyle = '#666';
+        ctx.textAlign = 'left';
+        ctx.fillText('0 dB', legX + legW + 5, pad.top + 14);
+        ctx.fillText('-96 dB', legX + legW + 5, pad.top + legH);
+      }, [data]);
+
+      return (
+        <div className="chart">
+          <h3>Spectrogram <span>(Time vs Frequency — brighter = louder)</span></h3>
+          <canvas ref={ref} style={{height: '200px'}} />
+        </div>
+      );
+    }
+
+    function BitrateChart({ data }) {
+      const ref = useRef();
+      useEffect(() => {
+        const c = ref.current; if (!c) return;
+        const ctx = c.getContext('2d');
+        const { times, bitrates, min_bitrate, max_bitrate, avg_bitrate, is_vbr } = data;
+
+        const pad = { left: 55, right: 80, top: 25, bottom: 35 };
+        const w = c.width = c.offsetWidth * 2;
+        const h = c.height = 160 * 2;
+        const chartW = w - pad.left - pad.right;
+        const chartH = h - pad.top - pad.bottom;
+
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, w, h);
+
+        // Calculate nice Y range
+        const yMin = Math.floor(min_bitrate / 50) * 50 - 50;
+        const yMax = Math.ceil(max_bitrate / 50) * 50 + 50;
+        const yRange = yMax - yMin;
+
+        const xScale = t => pad.left + (t / times[times.length-1]) * chartW;
+        const yScale = b => pad.top + chartH - ((b - yMin) / yRange) * chartH;
+
+        // Fill area
+        ctx.fillStyle = 'rgba(255, 152, 0, 0.2)';
+        ctx.beginPath();
+        ctx.moveTo(xScale(times[0]), yScale(yMin));
+        times.forEach((t, i) => ctx.lineTo(xScale(t), yScale(bitrates[i])));
+        ctx.lineTo(xScale(times[times.length-1]), yScale(yMin));
+        ctx.closePath();
+        ctx.fill();
+
+        // Line
+        ctx.strokeStyle = '#ff9800';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        times.forEach((t, i) => i === 0 ? ctx.moveTo(xScale(t), yScale(bitrates[i])) : ctx.lineTo(xScale(t), yScale(bitrates[i])));
+        ctx.stroke();
+
+        // Avg line
+        ctx.strokeStyle = '#4caf50';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([8, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yScale(avg_bitrate));
+        ctx.lineTo(pad.left + chartW, yScale(avg_bitrate));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Y-axis - dynamic step to avoid overlap
+        ctx.fillStyle = '#666';
+        ctx.font = '16px system-ui';
+        ctx.textAlign = 'right';
+        const yStep = yRange > 300 ? 100 : yRange > 150 ? 50 : 25;
+        for (let b = Math.ceil(yMin / yStep) * yStep; b <= yMax; b += yStep) {
+          const y = yScale(b);
+          ctx.fillText(`${b}`, pad.left - 8, y + 5);
+          ctx.strokeStyle = '#e0e0e0';
+          ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
+        }
+        ctx.save();
+        ctx.translate(16, pad.top + chartH/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.textAlign = 'center';
+        ctx.fillText('Bitrate (kbps)', 0, 0);
+        ctx.restore();
+
+        // X-axis
+        ctx.textAlign = 'center';
+        const maxTime = times[times.length - 1];
+        const step = maxTime > 10 ? 2 : 1;
+        for (let t = 0; t <= maxTime; t += step) {
+          const x = xScale(t);
+          ctx.fillText(`${t.toFixed(1)}s`, x, h - pad.bottom + 22);
+        }
+        ctx.fillText('Time (seconds)', pad.left + chartW/2, h - 6);
+
+        // Labels
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#4caf50';
+        ctx.font = 'bold 22px system-ui';
+        ctx.fillText(is_vbr ? 'VBR' : 'CBR', pad.left + 10, pad.top + 20);
+
+        ctx.textAlign = 'right';
+        ctx.font = '18px system-ui';
+        ctx.fillStyle = '#ff9800';
+        ctx.fillText(`${min_bitrate} - ${max_bitrate} kbps`, w - pad.right + 70, pad.top + 18);
+        ctx.fillStyle = '#4caf50';
+        ctx.fillText(`avg: ${avg_bitrate} kbps`, w - pad.right + 70, pad.top + 40);
+      }, [data]);
+
+      return (
+        <div className="chart">
+          <h3>Bitrate Timeline <span>(Per-frame bitrate over time)</span></h3>
+          <canvas ref={ref} style={{height: '160px'}} />
+        </div>
+      );
+    }
+
+    function StereoChart({ data }) {
+      const ref = useRef();
+      useEffect(() => {
+        const c = ref.current; if (!c) return;
+        const ctx = c.getContext('2d');
+        const { times, correlations, avg_correlation, min_correlation, max_correlation } = data;
+
+        const pad = { left: 55, right: 100, top: 25, bottom: 35 };
+        const w = c.width = c.offsetWidth * 2;
+        const h = c.height = 160 * 2;
+        const chartW = w - pad.left - pad.right;
+        const chartH = h - pad.top - pad.bottom;
+
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 0, w, h);
+
+        const xScale = t => pad.left + (t / times[times.length-1]) * chartW;
+        const yScale = c => pad.top + chartH - ((c + 1) / 2) * chartH;
+
+        // Fill area (above 0)
+        ctx.fillStyle = 'rgba(76, 175, 80, 0.15)';
+        ctx.beginPath();
+        ctx.moveTo(xScale(times[0]), yScale(0));
+        times.forEach((t, i) => ctx.lineTo(xScale(t), yScale(Math.max(0, correlations[i]))));
+        ctx.lineTo(xScale(times[times.length-1]), yScale(0));
+        ctx.closePath();
+        ctx.fill();
+
+        // Line
+        ctx.strokeStyle = '#4caf50';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        times.forEach((t, i) => i === 0 ? ctx.moveTo(xScale(t), yScale(correlations[i])) : ctx.lineTo(xScale(t), yScale(correlations[i])));
+        ctx.stroke();
+
+        // Zero line
+        ctx.strokeStyle = '#999';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(pad.left, yScale(0));
+        ctx.lineTo(pad.left + chartW, yScale(0));
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Y-axis
+        ctx.fillStyle = '#666';
+        ctx.font = '16px system-ui';
+        ctx.textAlign = 'right';
+        [-1, -0.5, 0, 0.5, 1].forEach(v => {
+          const y = yScale(v);
+          ctx.fillText(v.toFixed(1), pad.left - 8, y + 6);
+          if (v !== 0) {
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + chartW, y); ctx.stroke();
+          }
+        });
+        ctx.save();
+        ctx.translate(16, pad.top + chartH/2);
+        ctx.rotate(-Math.PI/2);
+        ctx.textAlign = 'center';
+        ctx.fillText('Correlation', 0, 0);
+        ctx.restore();
+
+        // X-axis
+        ctx.textAlign = 'center';
+        const maxTime = times[times.length - 1];
+        const step = maxTime > 10 ? 2 : 1;
+        for (let t = 0; t <= maxTime; t += step) {
+          ctx.fillText(`${t.toFixed(1)}s`, xScale(t), h - pad.bottom + 22);
+        }
+        ctx.fillText('Time (seconds)', pad.left + chartW/2, h - 6);
+
+        // Labels
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#4caf50';
+        ctx.font = 'bold 20px system-ui';
+        const stereoType = avg_correlation > 0.95 ? 'Mono/Near-Mono' : avg_correlation > 0.7 ? 'Normal Stereo' : 'Wide Stereo';
+        ctx.fillText(stereoType, pad.left + 10, pad.top + 18);
+
+        ctx.textAlign = 'right';
+        ctx.font = '18px system-ui';
+        ctx.fillStyle = '#4caf50';
+        ctx.fillText(`avg: ${avg_correlation?.toFixed(2)}`, w - pad.right + 90, pad.top + 18);
+        ctx.fillStyle = '#666';
+        ctx.fillText(`min: ${min_correlation?.toFixed(2)} / max: ${max_correlation?.toFixed(2)}`, w - pad.right + 90, pad.top + 40);
+      }, [data]);
+
+      return (
+        <div className="chart">
+          <h3>Stereo Correlation <span>(L/R channel similarity — 1.0 = mono)</span></h3>
+          <canvas ref={ref} style={{height: '160px'}} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

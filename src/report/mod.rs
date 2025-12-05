@@ -44,7 +44,7 @@ pub fn generate<P: AsRef<Path>>(path: P, results: &[AnalysisResult]) -> io::Resu
 }
 
 /// Summary statistics for a batch of results
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct Summary {
     pub total: usize,
     pub ok: usize,

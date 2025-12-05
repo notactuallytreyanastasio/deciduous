@@ -1,5 +1,5 @@
 use chrono::Local;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
 use losselot::{AnalysisResult, Analyzer, Verdict};
 use rayon::prelude::*;
@@ -11,6 +11,9 @@ use walkdir::WalkDir;
 #[command(name = "losselot")]
 #[command(author, version, about = "Detect 'lossless' files that were created from lossy sources")]
 struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// File or directory to analyze (optional in GUI mode)
     path: Option<PathBuf>,
 
@@ -55,8 +58,34 @@ struct Args {
     threshold: u32,
 }
 
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// Start interactive web UI for analysis
+    Serve {
+        /// File or directory to analyze
+        path: PathBuf,
+
+        /// Port to listen on
+        #[arg(short, long, default_value = "3001")]
+        port: u16,
+    },
+}
+
 fn main() {
     let args = Args::parse();
+
+    // Handle subcommands first
+    if let Some(cmd) = args.command {
+        match cmd {
+            Command::Serve { path, port } => {
+                if let Err(e) = losselot::serve::start(port, path) {
+                    eprintln!("Server error: {}", e);
+                    std::process::exit(1);
+                }
+                return;
+            }
+        }
+    }
 
     // Determine if we should use GUI mode
     // With GUI feature: launch GUI if --gui flag OR no path provided
