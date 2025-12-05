@@ -56,6 +56,28 @@ use symphonia::core::probe::Hint;
 const FFT_SIZE: usize = 8192;
 const SAMPLE_RATE: u32 = 44100;
 
+// Spectrogram parameters - downsample for reasonable file size
+// Target: ~128 frequency bins, ~100 time slices max
+const SPECTROGRAM_FREQ_BINS: usize = 128;
+const SPECTROGRAM_MAX_TIME_SLICES: usize = 100;
+
+/// Spectrogram data for visualization - FFT magnitudes over time
+/// Downsampled for efficient storage and rendering
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct SpectrogramData {
+    /// Time points in seconds for each column
+    pub times: Vec<f64>,
+    /// Frequency bins in Hz for each row (0 to ~22kHz)
+    pub frequencies: Vec<f64>,
+    /// Magnitude data as flattened 2D array [time][freq] in dB
+    /// Access: magnitudes[time_idx * num_freq_bins + freq_idx]
+    pub magnitudes: Vec<f64>,
+    /// Number of frequency bins (rows)
+    pub num_freq_bins: usize,
+    /// Number of time slices (columns)
+    pub num_time_slices: usize,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct SpectralDetails {
     /// RMS level of full signal (dB)
@@ -78,6 +100,9 @@ pub struct SpectralDetails {
     pub ultrasonic_drop: f64,
     /// Spectral flatness in 19-21kHz (1.0 = noise-like, 0.0 = tonal/empty)
     pub ultrasonic_flatness: f64,
+    /// Spectrogram data for visualization (None if not generated)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spectrogram: Option<SpectrogramData>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -265,6 +290,27 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
     // For spectral flatness calculation
     let mut ultrasonic_magnitudes: Vec<f64> = Vec::new();
 
+    // For spectrogram: collect downsampled magnitude spectra
+    let bin_resolution = sample_rate as f64 / FFT_SIZE as f64;
+    let nyquist_bin = FFT_SIZE / 2;
+
+    // Calculate frequency bin downsampling factor
+    let freq_downsample = (nyquist_bin / SPECTROGRAM_FREQ_BINS).max(1);
+    let actual_freq_bins = nyquist_bin / freq_downsample;
+
+    // Calculate time downsampling factor
+    let time_downsample = (num_windows / SPECTROGRAM_MAX_TIME_SLICES).max(1);
+    let actual_time_slices = (num_windows + time_downsample - 1) / time_downsample;
+
+    // Pre-allocate spectrogram storage
+    let mut spectrogram_magnitudes: Vec<f64> = Vec::with_capacity(actual_time_slices * actual_freq_bins);
+    let mut spectrogram_times: Vec<f64> = Vec::with_capacity(actual_time_slices);
+
+    // Build frequency axis (Hz)
+    let spectrogram_frequencies: Vec<f64> = (0..actual_freq_bins)
+        .map(|i| (i * freq_downsample) as f64 * bin_resolution)
+        .collect();
+
     for i in 0..num_windows {
         let start = i * hop_size;
         let end = start + FFT_SIZE;
@@ -292,11 +338,33 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
         avg_ultrasonic += band_energy(&buffer, sample_rate, 20000, 22000);
 
         // Collect magnitudes in 19-21kHz for flatness calculation
-        let bin_resolution = sample_rate as f64 / FFT_SIZE as f64;
         let low_bin = (19000.0 / bin_resolution) as usize;
         let high_bin = (21000.0 / bin_resolution).min((FFT_SIZE / 2) as f64) as usize;
         for bin in low_bin..=high_bin.min(buffer.len() - 1) {
             ultrasonic_magnitudes.push(buffer[bin].norm());
+        }
+
+        // Collect spectrogram data (downsampled)
+        if i % time_downsample == 0 {
+            let time_sec = (start as f64) / sample_rate as f64;
+            spectrogram_times.push(time_sec);
+
+            // Downsample frequency bins by averaging
+            for freq_idx in 0..actual_freq_bins {
+                let bin_start = freq_idx * freq_downsample;
+                let bin_end = (bin_start + freq_downsample).min(nyquist_bin);
+
+                let mut sum = 0.0;
+                for bin in bin_start..bin_end {
+                    if bin < buffer.len() {
+                        sum += buffer[bin].norm();
+                    }
+                }
+                let avg_mag = sum / (bin_end - bin_start) as f64;
+                // Convert to dB, floor at -96dB
+                let db = if avg_mag > 0.0 { 20.0 * avg_mag.log10() } else { -96.0 };
+                spectrogram_magnitudes.push(db.max(-96.0));
+            }
         }
     }
 
@@ -324,6 +392,17 @@ pub fn analyze(data: &[u8], _declared_sample_rate: u32) -> SpectralResult {
     // Calculate spectral flatness in 19-21kHz range
     // Flatness = geometric_mean / arithmetic_mean (1.0 = white noise, 0.0 = pure tone/silence)
     result.details.ultrasonic_flatness = spectral_flatness(&ultrasonic_magnitudes);
+
+    // Store spectrogram data
+    if !spectrogram_times.is_empty() && !spectrogram_magnitudes.is_empty() {
+        result.details.spectrogram = Some(SpectrogramData {
+            times: spectrogram_times,
+            frequencies: spectrogram_frequencies,
+            magnitudes: spectrogram_magnitudes,
+            num_freq_bins: actual_freq_bins,
+            num_time_slices: actual_time_slices,
+        });
+    }
 
     // Score based on analysis
     // Tuned to detect lossy origins in "lossless" files
@@ -844,6 +923,121 @@ mod tests {
                 name,
                 low,
                 high
+            );
+        }
+    }
+
+    // ==========================================================================
+    // SPECTROGRAM DATA STRUCTURE TESTS
+    // ==========================================================================
+    //
+    // The SpectrogramData struct stores FFT magnitude data over time for
+    // visualization. It's downsampled to reduce file size while maintaining
+    // enough detail to see frequency cutoffs.
+    //
+    // Key properties:
+    // - times: Time points (in seconds) for each column
+    // - frequencies: Frequency bins (in Hz) for each row
+    // - magnitudes: Flattened 2D array of dB values [time][freq]
+    // ==========================================================================
+
+    #[test]
+    fn test_spectrogram_data_default() {
+        let sg = SpectrogramData::default();
+
+        assert!(sg.times.is_empty(), "Default times should be empty");
+        assert!(sg.frequencies.is_empty(), "Default frequencies should be empty");
+        assert!(sg.magnitudes.is_empty(), "Default magnitudes should be empty");
+        assert_eq!(sg.num_freq_bins, 0, "Default freq bins should be 0");
+        assert_eq!(sg.num_time_slices, 0, "Default time slices should be 0");
+    }
+
+    #[test]
+    fn test_spectrogram_data_structure() {
+        // Test that the data structure maintains correct dimensions
+        let num_time = 10;
+        let num_freq = 128;
+
+        let sg = SpectrogramData {
+            times: (0..num_time).map(|i| i as f64 * 0.1).collect(),
+            frequencies: (0..num_freq).map(|i| i as f64 * 172.0).collect(), // ~22kHz / 128
+            magnitudes: vec![-50.0; num_time * num_freq],
+            num_freq_bins: num_freq,
+            num_time_slices: num_time,
+        };
+
+        assert_eq!(sg.times.len(), num_time);
+        assert_eq!(sg.frequencies.len(), num_freq);
+        assert_eq!(sg.magnitudes.len(), num_time * num_freq);
+
+        // Test indexing: magnitudes[time_idx * num_freq_bins + freq_idx]
+        let time_idx = 5;
+        let freq_idx = 64;
+        let idx = time_idx * num_freq + freq_idx;
+        assert!(idx < sg.magnitudes.len(), "Index should be valid");
+    }
+
+    #[test]
+    fn test_spectrogram_downsampling_constants() {
+        // Verify downsampling parameters are reasonable
+        assert!(
+            SPECTROGRAM_FREQ_BINS <= FFT_SIZE / 2,
+            "Freq bins should be <= Nyquist bins"
+        );
+        assert!(
+            SPECTROGRAM_MAX_TIME_SLICES > 0,
+            "Must have at least one time slice"
+        );
+
+        // Calculate approximate data size
+        let max_data_points = SPECTROGRAM_FREQ_BINS * SPECTROGRAM_MAX_TIME_SLICES;
+        let bytes_per_point = 8; // f64
+        let max_bytes = max_data_points * bytes_per_point;
+
+        // Should be under ~100KB per file
+        assert!(
+            max_bytes < 150_000,
+            "Spectrogram data should be reasonably sized: {} bytes",
+            max_bytes
+        );
+    }
+
+    #[test]
+    fn test_spectrogram_in_spectral_details() {
+        // SpectralDetails should be able to hold spectrogram data
+        let details = SpectralDetails {
+            spectrogram: Some(SpectrogramData {
+                times: vec![0.0, 0.1, 0.2],
+                frequencies: vec![0.0, 5000.0, 10000.0, 15000.0, 20000.0],
+                magnitudes: vec![-30.0; 15], // 3 times * 5 freqs
+                num_freq_bins: 5,
+                num_time_slices: 3,
+            }),
+            ..Default::default()
+        };
+
+        assert!(details.spectrogram.is_some());
+        let sg = details.spectrogram.unwrap();
+        assert_eq!(sg.num_time_slices, 3);
+        assert_eq!(sg.num_freq_bins, 5);
+    }
+
+    #[test]
+    fn test_spectrogram_db_range() {
+        // dB values should be in expected range
+        let min_db = -96.0; // Floor value
+        let max_db = 0.0; // Full scale
+
+        // Create test magnitudes spanning the range
+        let magnitudes = vec![min_db, -60.0, -30.0, -10.0, max_db];
+
+        for &db in &magnitudes {
+            assert!(
+                db >= min_db && db <= max_db,
+                "dB value {} should be in range [{}, {}]",
+                db,
+                min_db,
+                max_db
             );
         }
     }

@@ -791,6 +791,10 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                 <div class="chart-title">Frequency Response Curve</div>
                 <div id="freq-response-curve"></div>
             </div>
+            <div class="spectrogram-section" style="margin-top: 1.5rem;">
+                <div class="chart-title">Spectrogram <span style="font-weight: 400; color: var(--dim); font-size: 0.75rem;">(Time vs Frequency - brighter = louder)</span></div>
+                <div id="spectrogram-container" style="width: 100%; overflow-x: auto;"></div>
+            </div>
             <div class="detail-grid" style="margin-top: 1.5rem;">
                 <div>
                     <div class="chart-title">Frequency Band Energy</div>
@@ -1137,6 +1141,155 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             .style('fill', '#86868b')
             .style('font-size', '0.65rem')
             .text('Energy');
+    }}
+
+    // Spectrogram visualization using canvas for performance
+    function drawSpectrogram(file) {{
+        const container = document.getElementById('spectrogram-container');
+        container.innerHTML = '';
+
+        if (!file.spectrogram) {{
+            container.innerHTML = '<div style="text-align: center; color: var(--dim); padding: 1rem; font-size: 0.875rem;">Spectrogram data not available</div>';
+            return;
+        }}
+
+        const sg = file.spectrogram;
+        const numTimeSlices = sg.num_time_slices;
+        const numFreqBins = sg.num_freq_bins;
+
+        // Canvas dimensions - scale for visibility
+        const cellWidth = Math.max(4, Math.min(8, 800 / numTimeSlices));
+        const cellHeight = Math.max(2, Math.min(4, 400 / numFreqBins));
+        const width = numTimeSlices * cellWidth;
+        const height = numFreqBins * cellHeight;
+        const margin = {{ top: 20, right: 60, bottom: 40, left: 50 }};
+
+        // Create wrapper for canvas and axes
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'relative';
+        wrapper.style.width = (width + margin.left + margin.right) + 'px';
+        wrapper.style.height = (height + margin.top + margin.bottom) + 'px';
+
+        // Create canvas for the heatmap
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.position = 'absolute';
+        canvas.style.left = margin.left + 'px';
+        canvas.style.top = margin.top + 'px';
+        canvas.style.borderRadius = '4px';
+
+        const ctx = canvas.getContext('2d');
+
+        // Color scale for spectrogram (dark to bright, magma-like)
+        const colorScale = (db) => {{
+            // Normalize dB to 0-1 range (-96 to 0 dB)
+            const t = Math.max(0, Math.min(1, (db + 96) / 96));
+            // Magma-like colormap
+            const r = Math.floor(255 * Math.min(1, t * 2));
+            const g = Math.floor(255 * Math.max(0, Math.min(1, (t - 0.3) * 2)));
+            const b = Math.floor(255 * Math.max(0, Math.min(1, (t - 0.6) * 2.5)));
+            return `rgb(${{r}},${{g}},${{b}})`;
+        }};
+
+        // Draw spectrogram (time on X, frequency on Y, low freq at bottom)
+        for (let t = 0; t < numTimeSlices; t++) {{
+            for (let f = 0; f < numFreqBins; f++) {{
+                const idx = t * numFreqBins + f;
+                const db = sg.magnitudes[idx];
+                ctx.fillStyle = colorScale(db);
+                // Flip Y axis so low frequencies are at bottom
+                ctx.fillRect(t * cellWidth, (numFreqBins - 1 - f) * cellHeight, cellWidth, cellHeight);
+            }}
+        }}
+
+        wrapper.appendChild(canvas);
+
+        // Create SVG for axes and labels
+        const svg = d3.select(wrapper)
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom)
+            .style('position', 'absolute')
+            .style('top', '0')
+            .style('left', '0')
+            .style('pointer-events', 'none');
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+
+        // Time axis
+        const maxTime = sg.times[sg.times.length - 1] || (numTimeSlices * 0.1);
+        const xScale = d3.scaleLinear().domain([0, maxTime]).range([0, width]);
+        g.append('g')
+            .attr('transform', `translate(0,${{height}})`)
+            .call(d3.axisBottom(xScale).ticks(5).tickFormat(d => d.toFixed(1) + 's'))
+            .style('color', '#86868b')
+            .style('font-size', '0.7rem');
+
+        // Frequency axis (log scale for better visualization)
+        const maxFreq = sg.frequencies[sg.frequencies.length - 1] || 22050;
+        const yScale = d3.scaleLinear().domain([0, maxFreq]).range([height, 0]);
+        g.append('g')
+            .call(d3.axisLeft(yScale).tickValues([0, 5000, 10000, 15000, 20000]).tickFormat(d => (d/1000) + 'k'))
+            .style('color', '#86868b')
+            .style('font-size', '0.7rem');
+
+        // Y axis label
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -(margin.top + height/2))
+            .attr('y', 12)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Frequency (Hz)');
+
+        // X axis label
+        svg.append('text')
+            .attr('x', margin.left + width/2)
+            .attr('y', height + margin.top + 35)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Time (seconds)');
+
+        // Color bar legend
+        const legendWidth = 15;
+        const legendHeight = height;
+        const legendCanvas = document.createElement('canvas');
+        legendCanvas.width = legendWidth;
+        legendCanvas.height = legendHeight;
+        legendCanvas.style.position = 'absolute';
+        legendCanvas.style.left = (margin.left + width + 10) + 'px';
+        legendCanvas.style.top = margin.top + 'px';
+        legendCanvas.style.borderRadius = '2px';
+
+        const legendCtx = legendCanvas.getContext('2d');
+        for (let i = 0; i < legendHeight; i++) {{
+            const db = -96 + (96 * (legendHeight - i) / legendHeight);
+            legendCtx.fillStyle = colorScale(db);
+            legendCtx.fillRect(0, i, legendWidth, 1);
+        }}
+
+        wrapper.appendChild(legendCanvas);
+
+        // Legend labels
+        svg.append('text')
+            .attr('x', margin.left + width + legendWidth + 15)
+            .attr('y', margin.top + 8)
+            .style('fill', '#86868b')
+            .style('font-size', '0.6rem')
+            .text('0 dB');
+
+        svg.append('text')
+            .attr('x', margin.left + width + legendWidth + 15)
+            .attr('y', margin.top + height)
+            .style('fill', '#86868b')
+            .style('font-size', '0.6rem')
+            .text('-96 dB');
+
+        container.appendChild(wrapper);
     }}
 
     // Spectral Waterfall Heatmap
@@ -1842,6 +1995,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         drawEncodingChain(file, 'encoding-chain-container');
         drawFrequencyResponseCurve(file);
         drawFileSpectrum(file);
+        drawSpectrogram(file);
 
         const detailsHtml = `
             <div style="display: grid; gap: 0.75rem;">
@@ -2039,6 +2193,32 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
 
 fn build_json_data(results: &[&AnalysisResult]) -> String {
     let files: Vec<String> = results.iter().map(|r| {
+        // Build spectrogram JSON if available
+        let spectrogram_json = if let Some(ref s) = r.spectral_details {
+            if let Some(ref sg) = s.spectrogram {
+                let times: Vec<String> = sg.times.iter().map(|t| format!("{:.3}", t)).collect();
+                let freqs: Vec<String> = sg.frequencies.iter().map(|f| format!("{:.1}", f)).collect();
+                let mags: Vec<String> = sg.magnitudes.iter().map(|m| format!("{:.1}", m)).collect();
+                format!(r#"{{
+                    "times": [{}],
+                    "frequencies": [{}],
+                    "magnitudes": [{}],
+                    "num_freq_bins": {},
+                    "num_time_slices": {}
+                }}"#,
+                    times.join(","),
+                    freqs.join(","),
+                    mags.join(","),
+                    sg.num_freq_bins,
+                    sg.num_time_slices
+                )
+            } else {
+                "null".to_string()
+            }
+        } else {
+            "null".to_string()
+        };
+
         let spectral = if let Some(ref s) = r.spectral_details {
             format!(r#"{{
                 "rms_full": {:.2},
@@ -2096,7 +2276,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "lowpass": {},
             "flags": [{}],
             "spectral": {},
-            "binary": {}
+            "binary": {},
+            "spectrogram": {}
         }}"#,
             json_escape(&r.file_name),
             json_escape(&r.file_path),
@@ -2109,7 +2290,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             r.lowpass.map(|l| l.to_string()).unwrap_or_else(|| "null".to_string()),
             flags.join(","),
             spectral,
-            binary
+            binary,
+            spectrogram_json
         )
     }).collect();
 

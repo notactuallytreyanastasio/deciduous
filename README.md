@@ -90,6 +90,15 @@ The **"1x RE-ENCODED"** badge indicates this file has been through multiple enco
 **Frequency Band Energy:**
 Quick visual of energy in each frequency band as a waveform. The gradient shows energy distribution - green is healthy, red indicates problem areas at high frequencies.
 
+**Spectrogram:**
+
+![Spectrogram](docs/spectrogram.png)
+
+A time vs. frequency heatmap showing the audio's spectral content over the first ~15 seconds. Brighter colors = more energy. Look for:
+- **Horizontal cutoff lines** - Where frequencies suddenly stop (lossy compression damage)
+- **Missing high frequencies** - Dark bands at the top indicate missing ultrasonic content
+- **Consistent patterns** - Real music has varied spectral content; transcodes often show uniform damage
+
 **Analysis Details:**
 - **Verdict**: CLEAN, SUSPECT, or TRANSCODE
 - **Score**: 0-100% (higher = more likely to be fake)
