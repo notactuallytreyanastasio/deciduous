@@ -29,6 +29,23 @@ use crate::mp3::{frame, lame};
 use serde::Serialize;
 use std::io::{Read, Seek};
 
+/// Per-frame bitrate data for VBR timeline visualization
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct BitrateTimeline {
+    /// Time points in seconds for each frame
+    pub times: Vec<f64>,
+    /// Bitrate in kbps for each frame
+    pub bitrates: Vec<u32>,
+    /// Whether this is VBR (multiple different bitrates)
+    pub is_vbr: bool,
+    /// Minimum bitrate seen
+    pub min_bitrate: u32,
+    /// Maximum bitrate seen
+    pub max_bitrate: u32,
+    /// Average bitrate
+    pub avg_bitrate: u32,
+}
+
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct BinaryDetails {
     pub lowpass: Option<u32>,
@@ -46,6 +63,9 @@ pub struct BinaryDetails {
     pub encoding_chain: Option<String>,
     /// True if file shows evidence of re-encoding
     pub reencoded: bool,
+    /// Per-frame bitrate timeline data for visualization
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bitrate_timeline: Option<BitrateTimeline>,
 }
 
 pub struct BinaryResult {
@@ -171,9 +191,9 @@ pub fn analyze<R: Read + Seek>(data: &[u8], reader: &mut R, bitrate: u32) -> Bin
         }
     }
 
-    // Frame size analysis
+    // Frame size analysis and bitrate timeline
     reader.seek(std::io::SeekFrom::Start(0)).ok();
-    if let Ok(frame_stats) = frame::scan_frames(reader, 200) {
+    if let Ok(frame_stats) = frame::scan_frames(reader, 500) {
         let cv = frame_stats.frame_size_cv();
         result.details.frame_size_cv = cv;
 
@@ -181,6 +201,28 @@ pub fn analyze<R: Read + Seek>(data: &[u8], reader: &mut R, bitrate: u32) -> Bin
         if bitrate >= 256 && cv > 15.0 {
             result.score += 10;
             result.flags.push("irregular_frames".to_string());
+        }
+
+        // Build bitrate timeline for visualization
+        if !frame_stats.bitrates.is_empty() {
+            // Calculate time for each frame
+            // MPEG1 Layer3: 1152 samples/frame at 44100 Hz = ~26.1ms per frame
+            const SAMPLES_PER_FRAME: f64 = 1152.0;
+            const SAMPLE_RATE: f64 = 44100.0;
+            let frame_duration = SAMPLES_PER_FRAME / SAMPLE_RATE;
+
+            let times: Vec<f64> = (0..frame_stats.bitrates.len())
+                .map(|i| i as f64 * frame_duration)
+                .collect();
+
+            result.details.bitrate_timeline = Some(BitrateTimeline {
+                times,
+                bitrates: frame_stats.bitrates.clone(),
+                is_vbr: frame_stats.is_vbr,
+                min_bitrate: frame_stats.min_bitrate,
+                max_bitrate: frame_stats.max_bitrate,
+                avg_bitrate: frame_stats.avg_bitrate,
+            });
         }
     }
 
@@ -684,5 +726,96 @@ mod tests {
             !result.flags.iter().any(|f| f.contains("lame_reencoded")),
             "Single encode should not be flagged as re-encoded"
         );
+    }
+
+    // ==========================================================================
+    // BITRATE TIMELINE TESTS
+    // ==========================================================================
+    //
+    // BitrateTimeline stores per-frame bitrate data for visualization.
+    // This enables the bitrate timeline graph that shows how bitrate
+    // varies over time, useful for identifying:
+    //   - VBR vs CBR encoding
+    //   - Suspicious bitrate patterns in re-encoded files
+    //   - Whether a "320kbps" file actually has consistent bitrate
+    // ==========================================================================
+
+    #[test]
+    fn test_bitrate_timeline_default() {
+        let bt = BitrateTimeline::default();
+
+        assert!(bt.times.is_empty());
+        assert!(bt.bitrates.is_empty());
+        assert!(!bt.is_vbr);
+        assert_eq!(bt.min_bitrate, 0);
+        assert_eq!(bt.max_bitrate, 0);
+        assert_eq!(bt.avg_bitrate, 0);
+    }
+
+    #[test]
+    fn test_bitrate_timeline_cbr_structure() {
+        // CBR file has constant bitrate across all frames
+        let bt = BitrateTimeline {
+            times: vec![0.0, 0.026, 0.052, 0.078, 0.104],
+            bitrates: vec![320, 320, 320, 320, 320],
+            is_vbr: false,
+            min_bitrate: 320,
+            max_bitrate: 320,
+            avg_bitrate: 320,
+        };
+
+        assert!(!bt.is_vbr, "Should be CBR");
+        assert_eq!(bt.min_bitrate, bt.max_bitrate, "CBR has uniform bitrate");
+        assert_eq!(bt.times.len(), bt.bitrates.len(), "Must have same length");
+    }
+
+    #[test]
+    fn test_bitrate_timeline_vbr_structure() {
+        // VBR file has varying bitrate
+        let bt = BitrateTimeline {
+            times: vec![0.0, 0.026, 0.052, 0.078],
+            bitrates: vec![192, 256, 128, 320],
+            is_vbr: true,
+            min_bitrate: 128,
+            max_bitrate: 320,
+            avg_bitrate: 224,
+        };
+
+        assert!(bt.is_vbr, "Should be VBR");
+        assert!(bt.min_bitrate < bt.max_bitrate, "VBR has varying bitrate");
+    }
+
+    #[test]
+    fn test_bitrate_timeline_time_calculation() {
+        // Time should increase by ~26ms per frame (1152 samples at 44.1kHz)
+        const SAMPLES_PER_FRAME: f64 = 1152.0;
+        const SAMPLE_RATE: f64 = 44100.0;
+        let frame_duration = SAMPLES_PER_FRAME / SAMPLE_RATE;
+
+        assert!((frame_duration - 0.026).abs() < 0.001, "Frame duration ~26ms");
+
+        let times: Vec<f64> = (0..5).map(|i| i as f64 * frame_duration).collect();
+        assert!((times[1] - 0.026).abs() < 0.001);
+        assert!((times[4] - 0.104).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_bitrate_timeline_in_binary_details() {
+        // BinaryDetails should be able to hold bitrate timeline
+        let details = BinaryDetails {
+            bitrate_timeline: Some(BitrateTimeline {
+                times: vec![0.0, 0.026],
+                bitrates: vec![320, 320],
+                is_vbr: false,
+                min_bitrate: 320,
+                max_bitrate: 320,
+                avg_bitrate: 320,
+            }),
+            ..Default::default()
+        };
+
+        assert!(details.bitrate_timeline.is_some());
+        let bt = details.bitrate_timeline.unwrap();
+        assert_eq!(bt.avg_bitrate, 320);
     }
 }

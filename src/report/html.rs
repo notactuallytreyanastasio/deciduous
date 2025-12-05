@@ -795,6 +795,10 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
                 <div class="chart-title">Spectrogram <span style="font-weight: 400; color: var(--dim); font-size: 0.75rem;">(Time vs Frequency - brighter = louder)</span></div>
                 <div id="spectrogram-container" style="width: 100%; overflow-x: auto;"></div>
             </div>
+            <div class="bitrate-timeline-section" style="margin-top: 1.5rem;">
+                <div class="chart-title">Bitrate Timeline <span style="font-weight: 400; color: var(--dim); font-size: 0.75rem;">(Per-frame bitrate over time)</span></div>
+                <div id="bitrate-timeline-container"></div>
+            </div>
             <div class="detail-grid" style="margin-top: 1.5rem;">
                 <div>
                     <div class="chart-title">Frequency Band Energy</div>
@@ -1290,6 +1294,160 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
             .text('-96 dB');
 
         container.appendChild(wrapper);
+    }}
+
+    // Bitrate Timeline visualization
+    function drawBitrateTimeline(file) {{
+        const container = document.getElementById('bitrate-timeline-container');
+        container.innerHTML = '';
+
+        if (!file.bitrate_timeline) {{
+            container.innerHTML = '<div style="text-align: center; color: var(--dim); padding: 1rem; font-size: 0.875rem;">Bitrate timeline not available (MP3 only)</div>';
+            return;
+        }}
+
+        const bt = file.bitrate_timeline;
+        const margin = {{ top: 20, right: 30, bottom: 40, left: 60 }};
+        const width = Math.min(container.clientWidth || 800, 900) - margin.left - margin.right;
+        const height = 150 - margin.top - margin.bottom;
+
+        const svg = d3.select(container)
+            .append('svg')
+            .attr('width', width + margin.left + margin.right)
+            .attr('height', height + margin.top + margin.bottom);
+
+        const g = svg.append('g')
+            .attr('transform', `translate(${{margin.left}},${{margin.top}})`);
+
+        // X scale (time)
+        const maxTime = bt.times[bt.times.length - 1] || (bt.times.length * 0.026);
+        const xScale = d3.scaleLinear()
+            .domain([0, maxTime])
+            .range([0, width]);
+
+        // Y scale (bitrate)
+        const yPadding = (bt.max_bitrate - bt.min_bitrate) * 0.1 || 20;
+        const yScale = d3.scaleLinear()
+            .domain([Math.max(0, bt.min_bitrate - yPadding), bt.max_bitrate + yPadding])
+            .range([height, 0]);
+
+        // Background grid
+        g.append('g')
+            .attr('class', 'grid')
+            .call(d3.axisLeft(yScale).tickSize(-width).tickFormat('').ticks(5))
+            .style('stroke-dasharray', '2,4')
+            .style('stroke-opacity', 0.1);
+
+        // Create data points
+        const dataPoints = bt.times.map((t, i) => ({{ time: t, bitrate: bt.bitrates[i] }}));
+
+        // Area fill
+        const area = d3.area()
+            .x(d => xScale(d.time))
+            .y0(height)
+            .y1(d => yScale(d.bitrate))
+            .curve(d3.curveStepAfter);
+
+        // Color based on VBR
+        const lineColor = bt.is_vbr ? colors.suspect : colors.ok;
+
+        g.append('path')
+            .datum(dataPoints)
+            .attr('fill', lineColor)
+            .attr('fill-opacity', 0.2)
+            .attr('d', area);
+
+        // Line
+        const line = d3.line()
+            .x(d => xScale(d.time))
+            .y(d => yScale(d.bitrate))
+            .curve(d3.curveStepAfter);
+
+        g.append('path')
+            .datum(dataPoints)
+            .attr('fill', 'none')
+            .attr('stroke', lineColor)
+            .attr('stroke-width', 1.5)
+            .attr('d', line);
+
+        // Average line
+        g.append('line')
+            .attr('x1', 0)
+            .attr('x2', width)
+            .attr('y1', yScale(bt.avg_bitrate))
+            .attr('y2', yScale(bt.avg_bitrate))
+            .attr('stroke', colors.ok)
+            .attr('stroke-width', 1)
+            .attr('stroke-dasharray', '4,4')
+            .attr('opacity', 0.7);
+
+        g.append('text')
+            .attr('x', width - 5)
+            .attr('y', yScale(bt.avg_bitrate) - 5)
+            .attr('text-anchor', 'end')
+            .style('fill', colors.ok)
+            .style('font-size', '0.65rem')
+            .text(`avg: ${{bt.avg_bitrate}}k`);
+
+        // X axis
+        g.append('g')
+            .attr('transform', `translate(0,${{height}})`)
+            .call(d3.axisBottom(xScale).ticks(6).tickFormat(d => d.toFixed(1) + 's'))
+            .style('color', '#86868b')
+            .style('font-size', '0.7rem');
+
+        // Y axis
+        g.append('g')
+            .call(d3.axisLeft(yScale).ticks(5).tickFormat(d => d + 'k'))
+            .style('color', '#86868b')
+            .style('font-size', '0.7rem');
+
+        // Y axis label
+        svg.append('text')
+            .attr('transform', 'rotate(-90)')
+            .attr('x', -(margin.top + height/2))
+            .attr('y', 14)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Bitrate (kbps)');
+
+        // X axis label
+        svg.append('text')
+            .attr('x', margin.left + width/2)
+            .attr('y', height + margin.top + 35)
+            .attr('text-anchor', 'middle')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text('Time (seconds)');
+
+        // VBR indicator
+        if (bt.is_vbr) {{
+            svg.append('text')
+                .attr('x', margin.left + 5)
+                .attr('y', margin.top + 12)
+                .style('fill', colors.suspect)
+                .style('font-size', '0.7rem')
+                .style('font-weight', '600')
+                .text('VBR');
+        }} else {{
+            svg.append('text')
+                .attr('x', margin.left + 5)
+                .attr('y', margin.top + 12)
+                .style('fill', colors.ok)
+                .style('font-size', '0.7rem')
+                .style('font-weight', '600')
+                .text('CBR');
+        }}
+
+        // Min/Max labels
+        svg.append('text')
+            .attr('x', margin.left + width - 5)
+            .attr('y', margin.top + 12)
+            .attr('text-anchor', 'end')
+            .style('fill', '#86868b')
+            .style('font-size', '0.65rem')
+            .text(`${{bt.min_bitrate}}k - ${{bt.max_bitrate}}k`);
     }}
 
     // Spectral Waterfall Heatmap
@@ -1996,6 +2154,7 @@ pub fn write<W: Write>(writer: &mut W, results: &[AnalysisResult]) -> io::Result
         drawFrequencyResponseCurve(file);
         drawFileSpectrum(file);
         drawSpectrogram(file);
+        drawBitrateTimeline(file);
 
         const detailsHtml = `
             <div style="display: grid; gap: 0.75rem;">
@@ -2237,6 +2396,33 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "null".to_string()
         };
 
+        // Build bitrate timeline JSON if available
+        let bitrate_timeline_json = if let Some(ref b) = r.binary_details {
+            if let Some(ref bt) = b.bitrate_timeline {
+                let times: Vec<String> = bt.times.iter().map(|t| format!("{:.3}", t)).collect();
+                let bitrates: Vec<String> = bt.bitrates.iter().map(|b| b.to_string()).collect();
+                format!(r#"{{
+                    "times": [{}],
+                    "bitrates": [{}],
+                    "is_vbr": {},
+                    "min_bitrate": {},
+                    "max_bitrate": {},
+                    "avg_bitrate": {}
+                }}"#,
+                    times.join(","),
+                    bitrates.join(","),
+                    bt.is_vbr,
+                    bt.min_bitrate,
+                    bt.max_bitrate,
+                    bt.avg_bitrate
+                )
+            } else {
+                "null".to_string()
+            }
+        } else {
+            "null".to_string()
+        };
+
         // Build binary details JSON with encoding history
         let binary = if let Some(ref b) = r.binary_details {
             format!(r#"{{
@@ -2277,7 +2463,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             "flags": [{}],
             "spectral": {},
             "binary": {},
-            "spectrogram": {}
+            "spectrogram": {},
+            "bitrate_timeline": {}
         }}"#,
             json_escape(&r.file_name),
             json_escape(&r.file_path),
@@ -2291,7 +2478,8 @@ fn build_json_data(results: &[&AnalysisResult]) -> String {
             flags.join(","),
             spectral,
             binary,
-            spectrogram_json
+            spectrogram_json,
+            bitrate_timeline_json
         )
     }).collect();
 

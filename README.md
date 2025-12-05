@@ -99,6 +99,15 @@ A time vs. frequency heatmap showing the audio's spectral content over the first
 - **Missing high frequencies** - Dark bands at the top indicate missing ultrasonic content
 - **Consistent patterns** - Real music has varied spectral content; transcodes often show uniform damage
 
+**Bitrate Timeline:**
+
+![Bitrate Timeline](docs/bitrate_tl.png)
+
+Shows how bitrate varies over time for MP3 files. Useful for identifying:
+- **VBR vs CBR** - VBR files show bitrate fluctuations, CBR shows a flat line
+- **Suspicious patterns** - A "320kbps" file with mostly 128kbps frames is fake
+- **Re-encoding artifacts** - Unusual bitrate distributions can indicate multiple encoding passes
+
 **Analysis Details:**
 - **Verdict**: CLEAN, SUSPECT, or TRANSCODE
 - **Score**: 0-100% (higher = more likely to be fake)
