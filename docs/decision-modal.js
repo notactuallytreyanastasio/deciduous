@@ -68,6 +68,12 @@ const DecisionModal = (function() {
         .dm-confidence.high { background: #22c55e33; color: #4ade80; }
         .dm-confidence.med { background: #eab30833; color: #fbbf24; }
         .dm-confidence.low { background: #ef444433; color: #f87171; }
+        .dm-commit {
+            font-size: 9px; padding: 2px 6px; border-radius: 4px; font-weight: 500;
+            font-family: monospace; background: #3b82f633; color: #60a5fa;
+            text-decoration: none; transition: all 0.2s;
+        }
+        .dm-commit:hover { background: #3b82f655; color: #93c5fd; }
         .dm-title { font-size: 13px; color: #eee; flex: 1; }
         .dm-time { font-size: 10px; color: #666; }
         .dm-desc { font-size: 12px; color: #999; line-height: 1.4; }
@@ -103,10 +109,22 @@ const DecisionModal = (function() {
         try { return JSON.parse(node.metadata_json).confidence; } catch { return null; }
     }
 
+    function getCommit(node) {
+        if (!node.metadata_json) return null;
+        try { return JSON.parse(node.metadata_json).commit || null; } catch { return null; }
+    }
+
     function confidenceBadge(conf) {
         if (conf === null || conf === undefined) return '';
         const level = conf >= 70 ? 'high' : conf >= 40 ? 'med' : 'low';
         return `<span class="dm-confidence ${level}">${conf}%</span>`;
+    }
+
+    function commitBadge(commit) {
+        if (!commit) return '';
+        const short = commit.slice(0, 7);
+        const url = `https://github.com/notactuallytreyanastasio/losselot/commit/${commit}`;
+        return `<a href="${url}" target="_blank" class="dm-commit" title="View commit ${short}">${short}</a>`;
     }
 
     function renderNodes(nodes, edges) {
@@ -117,6 +135,7 @@ const DecisionModal = (function() {
 
         return `<div class="dm-timeline">${nodes.map(node => {
             const conf = getConfidence(node);
+            const commit = getCommit(node);
             const edge = edgeMap[node.id];
             const time = new Date(node.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
             return `
@@ -125,6 +144,7 @@ const DecisionModal = (function() {
                     <div class="dm-node-header">
                         <span class="dm-type type-${node.node_type}">${node.node_type}</span>
                         ${confidenceBadge(conf)}
+                        ${commitBadge(commit)}
                         <span class="dm-title">${node.title}</span>
                         <span class="dm-time">${time}</span>
                     </div>
