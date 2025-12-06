@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spelunk - Losselot Graph Explorer</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a1a;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        .app-container {
+            display: flex;
+            height: 100vh;
+        }
+
+        .graph-panel {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle at center, #0f0f2a 0%, #0a0a1a 100%);
+        }
+
+        #graph-canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls-overlay {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+        }
+
+        .control-bar {
+            background: rgba(20, 20, 40, 0.95);
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid #2a2a4a;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-bar h1 {
+            font-size: 20px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-bar .subtitle { color: #888; font-size: 12px; }
+
+        .filter-buttons {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            color: #888;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            transition: all 0.2s;
+        }
+        .filter-btn:hover { border-color: #3b82f6; color: #fff; }
+        .filter-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+
+        .search-box {
+            background: #1a1a2e;
+            border: 1px solid #2a2a4a;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 200px;
+            font-size: 13px;
+        }
+
+        .legend {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 8px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: #888;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        .detail-panel {
+            width: 400px;
+            background: #0f0f1f;
+            border-left: 1px solid #1e1e3f;
+            overflow-y: auto;
+            transition: transform 0.3s;
+        }
+        .detail-panel.hidden { transform: translateX(100%); }
+
+        .detail-header {
+            padding: 20px;
+            border-bottom: 1px solid #1e1e3f;
+            position: sticky;
+            top: 0;
+            background: #0f0f1f;
+        }
+        .detail-header h2 { font-size: 16px; margin-bottom: 8px; }
+        .detail-close {
+            position: absolute;
+            right: 15px;
+            top: 15px;
+            background: none;
+            border: none;
+            color: #666;
+            font-size: 20px;
+            cursor: pointer;
+        }
+        .detail-close:hover { color: #fff; }
+
+        .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+        .badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+        .badge-goal { background: #22c55e33; color: #4ade80; }
+        .badge-decision { background: #eab30833; color: #fbbf24; }
+        .badge-option { background: #06b6d433; color: #22d3ee; }
+        .badge-action { background: #ef444433; color: #f87171; }
+        .badge-outcome { background: #a855f733; color: #c084fc; }
+        .badge-observation { background: #6b728033; color: #9ca3af; }
+        .badge-commit { background: #3b82f633; color: #60a5fa; }
+        .badge-conf-high { background: #22c55e33; color: #4ade80; }
+        .badge-conf-med { background: #eab30833; color: #fbbf24; }
+        .badge-conf-low { background: #ef444433; color: #f87171; }
+
+        .detail-body { padding: 20px; }
+        .detail-section {
+            background: #16162e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .detail-section h3 {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .detail-section p { font-size: 14px; line-height: 1.5; }
+
+        .connection-list { list-style: none; }
+        .connection-list li {
+            padding: 10px;
+            border-bottom: 1px solid #2a2a4a;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+        .connection-list li:hover { background: #1a1a3a; }
+        .connection-list li:last-child { border: none; }
+
+        .commit-link {
+            color: #60a5fa;
+            text-decoration: none;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .commit-link:hover { text-decoration: underline; }
+
+        .path-trace {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        .path-trace h3 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+        .path-node {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-left: 2px solid #3b82f6;
+            padding-left: 15px;
+            margin-left: 5px;
+            font-size: 13px;
+            cursor: pointer;
+        }
+        .path-node:hover { color: #60a5fa; }
+
+        .stats-bar {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+        .stat {
+            background: rgba(20, 20, 40, 0.95);
+            padding: 10px 15px;
+            border-radius: 8px;
+            border: 1px solid #2a2a4a;
+        }
+        .stat-value { font-size: 20px; font-weight: 700; }
+        .stat-label { font-size: 11px; color: #888; }
+
+        .nav-links {
+            position: absolute;
+            top: 20px;
+            right: 420px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+        .nav-links a {
+            color: #60a5fa;
+            text-decoration: none;
+            font-size: 13px;
+            background: rgba(20, 20, 40, 0.95);
+            padding: 8px 15px;
+            border-radius: 6px;
+            border: 1px solid #2a2a4a;
+        }
+        .nav-links a:hover { border-color: #3b82f6; }
+
+        /* D3 Graph styles */
+        .node { cursor: pointer; }
+        .node circle { transition: all 0.2s; }
+        .node:hover circle { transform: scale(1.2); }
+        .node.selected circle { stroke-width: 4px; }
+        .node text { font-size: 11px; fill: #ccc; pointer-events: none; }
+
+        .link { stroke-opacity: 0.4; }
+        .link.highlighted { stroke-opacity: 1; stroke-width: 3px; }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(20, 20, 40, 0.98);
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #3b82f6;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 300px;
+            font-size: 13px;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+        .tooltip.visible { opacity: 1; }
+    </style>
+</head>
+<body>
+    <div class="app-container">
+        <div class="graph-panel">
+            <svg id="graph-canvas"></svg>
+
+            <div class="controls-overlay">
+                <div class="control-bar">
+                    <h1>🔦 Spelunk <span style="font-size: 12px; color: #888; font-weight: normal;">Graph Explorer</span></h1>
+                    <p class="subtitle">Explore the decision graph visually. Click nodes to trace paths.</p>
+                </div>
+                <div class="control-bar">
+                    <div class="filter-buttons">
+                        <button class="filter-btn active" data-filter="all">All</button>
+                        <button class="filter-btn" data-filter="goal">Goals</button>
+                        <button class="filter-btn" data-filter="decision">Decisions</button>
+                        <button class="filter-btn" data-filter="action">Actions</button>
+                        <button class="filter-btn" data-filter="outcome">Outcomes</button>
+                        <button class="filter-btn" data-filter="observation">Observations</button>
+                    </div>
+                    <div class="legend">
+                        <div class="legend-item"><div class="legend-dot" style="background: #22c55e;"></div> Goal</div>
+                        <div class="legend-item"><div class="legend-dot" style="background: #eab308;"></div> Decision</div>
+                        <div class="legend-item"><div class="legend-dot" style="background: #06b6d4;"></div> Option</div>
+                        <div class="legend-item"><div class="legend-dot" style="background: #ef4444;"></div> Action</div>
+                        <div class="legend-item"><div class="legend-dot" style="background: #a855f7;"></div> Outcome</div>
+                        <div class="legend-item"><div class="legend-dot" style="background: #6b7280;"></div> Observation</div>
+                    </div>
+                </div>
+                <div class="control-bar">
+                    <input type="text" class="search-box" id="search" placeholder="Search nodes...">
+                </div>
+            </div>
+
+            <div class="nav-links">
+                <a href="./">Home</a>
+                <a href="demo/">Chains View</a>
+                <a href="analyzer.html">Analyzer</a>
+            </div>
+
+            <div class="stats-bar">
+                <div class="stat">
+                    <div class="stat-value" id="node-count">0</div>
+                    <div class="stat-label">Nodes</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="edge-count">0</div>
+                    <div class="stat-label">Edges</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" id="commit-count">0</div>
+                    <div class="stat-label">Commits Linked</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="detail-panel" id="detail-panel">
+            <div class="detail-header">
+                <button class="detail-close" onclick="closeDetail()">&times;</button>
+                <div class="badges" id="detail-badges"></div>
+                <h2 id="detail-title">Select a node</h2>
+                <p id="detail-meta" style="color: #888; font-size: 12px;"></p>
+            </div>
+            <div class="detail-body" id="detail-body">
+                <p style="color: #666;">Click a node in the graph to see its details and trace connections.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        let graphData = null;
+        let simulation = null;
+        let selectedNode = null;
+        let currentFilter = 'all';
+
+        const colors = {
+            goal: '#22c55e',
+            decision: '#eab308',
+            option: '#06b6d4',
+            action: '#ef4444',
+            outcome: '#a855f7',
+            observation: '#6b7280'
+        };
+
+        async function loadGraph() {
+            const res = await fetch('demo/graph-data.json');
+            graphData = await res.json();
+            initGraph();
+            updateStats();
+        }
+
+        function getConfidence(node) {
+            if (!node.metadata_json) return null;
+            try { return JSON.parse(node.metadata_json).confidence; } catch { return null; }
+        }
+
+        function getCommit(node) {
+            if (!node.metadata_json) return null;
+            try { return JSON.parse(node.metadata_json).commit || null; } catch { return null; }
+        }
+
+        function initGraph() {
+            const svg = d3.select('#graph-canvas');
+            const width = svg.node().getBoundingClientRect().width;
+            const height = svg.node().getBoundingClientRect().height;
+
+            svg.selectAll('*').remove();
+
+            // Create container for zoom
+            const g = svg.append('g');
+
+            // Add zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => g.attr('transform', event.transform));
+            svg.call(zoom);
+
+            // Create links
+            const links = graphData.edges.map(e => ({
+                source: graphData.nodes.find(n => n.id === e.from_node_id),
+                target: graphData.nodes.find(n => n.id === e.to_node_id),
+                type: e.edge_type,
+                rationale: e.rationale
+            })).filter(l => l.source && l.target);
+
+            // Create simulation
+            simulation = d3.forceSimulation(graphData.nodes)
+                .force('link', d3.forceLink(links).id(d => d.id).distance(80))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(30));
+
+            // Draw links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'link')
+                .attr('stroke', d => d.type === 'chosen' ? '#22c55e' : d.type === 'rejected' ? '#ef4444' : '#3b82f6')
+                .attr('stroke-dasharray', d => d.type === 'rejected' ? '5,5' : null);
+
+            // Draw nodes
+            const node = g.append('g')
+                .selectAll('.node')
+                .data(graphData.nodes)
+                .join('g')
+                .attr('class', 'node')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+
+            node.append('circle')
+                .attr('r', d => {
+                    if (d.node_type === 'goal') return 18;
+                    if (d.node_type === 'decision') return 15;
+                    return 12;
+                })
+                .attr('fill', d => colors[d.node_type] || '#666')
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2);
+
+            // Add labels to larger nodes
+            node.filter(d => d.node_type === 'goal' || d.node_type === 'decision')
+                .append('text')
+                .attr('dy', 30)
+                .attr('text-anchor', 'middle')
+                .text(d => truncate(d.title, 20));
+
+            // Tooltip
+            const tooltip = d3.select('#tooltip');
+
+            node.on('mouseover', (event, d) => {
+                const conf = getConfidence(d);
+                tooltip.html(`
+                    <strong>${d.title}</strong><br>
+                    <span style="color: ${colors[d.node_type]};">${d.node_type}</span>
+                    ${conf !== null ? ` · <span style="color: #4ade80;">${conf}%</span>` : ''}
+                `);
+                tooltip.classed('visible', true);
+            })
+            .on('mousemove', (event) => {
+                tooltip
+                    .style('left', (event.pageX + 15) + 'px')
+                    .style('top', (event.pageY - 10) + 'px');
+            })
+            .on('mouseout', () => {
+                tooltip.classed('visible', false);
+            })
+            .on('click', (event, d) => {
+                selectNode(d);
+            });
+
+            // Update positions on tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) simulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+
+        function selectNode(node) {
+            selectedNode = node;
+
+            // Update visual selection
+            d3.selectAll('.node').classed('selected', d => d.id === node.id);
+
+            // Highlight connected edges
+            d3.selectAll('.link')
+                .classed('highlighted', d => d.source.id === node.id || d.target.id === node.id);
+
+            renderDetail(node);
+        }
+
+        function renderDetail(node) {
+            const conf = getConfidence(node);
+            const commit = getCommit(node);
+
+            // Badges
+            let badges = `<span class="badge badge-${node.node_type}">${node.node_type}</span>`;
+            if (conf !== null) {
+                const level = conf >= 70 ? 'high' : conf >= 40 ? 'med' : 'low';
+                badges += `<span class="badge badge-conf-${level}">${conf}%</span>`;
+            }
+            if (commit) {
+                badges += `<a href="https://github.com/notactuallytreyanastasio/losselot/commit/${commit}" target="_blank" class="badge badge-commit">${commit.slice(0,7)}</a>`;
+            }
+            document.getElementById('detail-badges').innerHTML = badges;
+            document.getElementById('detail-title').textContent = node.title;
+            document.getElementById('detail-meta').textContent = `Node #${node.id} · ${new Date(node.created_at).toLocaleString()}`;
+
+            // Body
+            const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
+            const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
+
+            const getNode = (id) => graphData.nodes.find(n => n.id === id);
+
+            let bodyHtml = '';
+
+            if (node.description) {
+                bodyHtml += `
+                    <div class="detail-section">
+                        <h3>Description</h3>
+                        <p>${node.description}</p>
+                    </div>
+                `;
+            }
+
+            // Path trace - show path to root
+            const path = tracePath(node.id);
+            if (path.length > 1) {
+                bodyHtml += `
+                    <div class="path-trace">
+                        <h3>Path to Root</h3>
+                        ${path.map(n => `
+                            <div class="path-node" onclick="selectNodeById(${n.id})">
+                                <span class="badge badge-${n.node_type}" style="font-size: 9px;">${n.node_type}</span>
+                                ${truncate(n.title, 35)}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            if (incoming.length > 0) {
+                bodyHtml += `
+                    <div class="detail-section">
+                        <h3>Incoming (${incoming.length})</h3>
+                        <ul class="connection-list">
+                            ${incoming.map(e => {
+                                const n = getNode(e.from_node_id);
+                                return `
+                                    <li onclick="selectNodeById(${e.from_node_id})">
+                                        <span class="badge badge-${n?.node_type || 'unknown'}">${n?.node_type || '?'}</span>
+                                        <span>${truncate(n?.title || 'Unknown', 30)}</span>
+                                    </li>
+                                `;
+                            }).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            if (outgoing.length > 0) {
+                bodyHtml += `
+                    <div class="detail-section">
+                        <h3>Outgoing (${outgoing.length})</h3>
+                        <ul class="connection-list">
+                            ${outgoing.map(e => {
+                                const n = getNode(e.to_node_id);
+                                return `
+                                    <li onclick="selectNodeById(${e.to_node_id})">
+                                        <span class="badge badge-${e.edge_type}" style="background: ${e.edge_type === 'chosen' ? '#22c55e33' : e.edge_type === 'rejected' ? '#ef444433' : '#3b82f633'}; color: ${e.edge_type === 'chosen' ? '#4ade80' : e.edge_type === 'rejected' ? '#f87171' : '#60a5fa'};">${e.edge_type}</span>
+                                        <span class="badge badge-${n?.node_type || 'unknown'}">${n?.node_type || '?'}</span>
+                                        <span>${truncate(n?.title || 'Unknown', 25)}</span>
+                                        ${e.rationale ? `<span style="color: #666; font-size: 11px; margin-left: auto;">${e.rationale}</span>` : ''}
+                                    </li>
+                                `;
+                            }).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+
+            document.getElementById('detail-body').innerHTML = bodyHtml || '<p style="color: #666;">No additional details.</p>';
+        }
+
+        function tracePath(nodeId) {
+            const path = [];
+            const visited = new Set();
+            let current = graphData.nodes.find(n => n.id === nodeId);
+
+            while (current && !visited.has(current.id)) {
+                path.unshift(current);
+                visited.add(current.id);
+
+                // Find incoming edge
+                const inEdge = graphData.edges.find(e => e.to_node_id === current.id);
+                if (inEdge) {
+                    current = graphData.nodes.find(n => n.id === inEdge.from_node_id);
+                } else {
+                    break;
+                }
+            }
+
+            return path;
+        }
+
+        function selectNodeById(id) {
+            const node = graphData.nodes.find(n => n.id === id);
+            if (node) selectNode(node);
+        }
+
+        function closeDetail() {
+            selectedNode = null;
+            d3.selectAll('.node').classed('selected', false);
+            d3.selectAll('.link').classed('highlighted', false);
+            document.getElementById('detail-badges').innerHTML = '';
+            document.getElementById('detail-title').textContent = 'Select a node';
+            document.getElementById('detail-meta').textContent = '';
+            document.getElementById('detail-body').innerHTML = '<p style="color: #666;">Click a node in the graph to see its details and trace connections.</p>';
+        }
+
+        function updateStats() {
+            document.getElementById('node-count').textContent = graphData.nodes.length;
+            document.getElementById('edge-count').textContent = graphData.edges.length;
+
+            const linkedCommits = graphData.nodes.filter(n => getCommit(n)).length;
+            document.getElementById('commit-count').textContent = linkedCommits;
+        }
+
+        function truncate(str, len) {
+            if (!str) return '';
+            return str.length > len ? str.slice(0, len) + '...' : str;
+        }
+
+        // Filter buttons
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentFilter = btn.dataset.filter;
+                applyFilter();
+            });
+        });
+
+        function applyFilter() {
+            d3.selectAll('.node').style('opacity', d => {
+                if (currentFilter === 'all') return 1;
+                return d.node_type === currentFilter ? 1 : 0.15;
+            });
+        }
+
+        // Search
+        document.getElementById('search').addEventListener('input', (e) => {
+            const term = e.target.value.toLowerCase();
+            d3.selectAll('.node').style('opacity', d => {
+                if (!term) return currentFilter === 'all' ? 1 : (d.node_type === currentFilter ? 1 : 0.15);
+                const match = d.title.toLowerCase().includes(term) || (d.description || '').toLowerCase().includes(term);
+                return match ? 1 : 0.15;
+            });
+        });
+
+        loadGraph();
+    </script>
+</body>
+</html>
