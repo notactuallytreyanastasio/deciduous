@@ -132,7 +132,7 @@
     <div class="container">
         <div class="header-row">
             <div class="header-left">
-                <h1>Losselot <a href="./" class="nav-link">Docs</a> <a href="./demo/" class="nav-link">Decision Graph</a></h1>
+                <h1>Losselot <a href="./" class="nav-link">Docs</a> <a href="./demo/" class="nav-link">Decision Graph</a> <button class="nav-link" style="background:none;border:none;cursor:pointer;font-size:0.75rem;" onclick="DecisionModal.show({title:'WASM Analyzer Decisions', search:'WASM'})">How this was built</button></h1>
                 <p class="meta">Audio forensics: spectral FFT + MP3 binary analysis in WebAssembly</p>
             </div>
             <div class="summary" id="summary" style="display: none;">
@@ -649,5 +649,6 @@
         function formatBytes(b) { return b < 1024 ? b + ' B' : b < 1024 * 1024 ? (b / 1024).toFixed(1) + ' KB' : (b / (1024 * 1024)).toFixed(2) + ' MB'; }
         function getFileExtension(f) { return f.split('.').pop() || ''; }
     </script>
+    <script src="decision-modal.js"></script>
 </body>
 </html>
