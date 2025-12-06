@@ -30,29 +30,29 @@ Open [http://localhost:3000](http://localhost:3000) and explore the interactive 
 
 Losselot is both a powerful audio forensics tool AND a living experiment in AI-assisted development. There are four things worth exploring here:
 
-<div class="pillars">
-
 ### 1. Audio Forensics
+
 Detect fake lossless files using dual analysis: binary metadata inspection and FFT-based spectral analysis. Identify transcodes, re-encodes, and laundered audio.
 
 [Explore Audio Analysis →](audio-analysis)
 
 ### 2. Decision Graph
+
 A persistent knowledge graph that tracks WHY decisions were made. Every algorithm choice, every rejected approach, documented and visualized.
 
 [Explore Decision Graph →](decision-graph)
 
 ### 3. Claude Tooling
+
 Slash commands, context recovery, and session continuity tools that let Claude maintain understanding across long-running development.
 
 [Explore Claude Tooling →](claude-tooling)
 
 ### 4. Development Story
+
 This project is being built in public with AI assistance. See how decisions evolved, what didn't work, and what we learned.
 
 [Read the Story →](story)
-
-</div>
 
 ---
 
@@ -60,9 +60,7 @@ This project is being built in public with AI assistance. See how decisions evol
 
 We've included a vendored analysis of sample files so you can explore without building anything:
 
-<div id="demo-embed">
-  <a href="demo/" class="demo-button">Launch Interactive Demo →</a>
-</div>
+**[Launch Interactive Demo →](demo/)**
 
 The demo includes:
 - Pre-analyzed audio files (clean, transcode, re-encoded)
