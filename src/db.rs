@@ -726,9 +726,12 @@ impl Database {
     // ========================================================================
 
     /// Create a new decision node
-    pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>) -> Result<i32> {
+    pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
+
+        // Build metadata JSON with confidence if provided
+        let metadata = confidence.map(|c| format!(r#"{{"confidence":{}}}"#, c.min(100)));
 
         let new_node = NewDecisionNode {
             node_type,
@@ -737,7 +740,7 @@ impl Database {
             status: "pending",
             created_at: &now,
             updated_at: &now,
-            metadata_json: None,
+            metadata_json: metadata.as_deref(),
         };
 
         diesel::insert_into(decision_nodes::table)

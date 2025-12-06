@@ -160,6 +160,16 @@
         .type-observation { background: #6b7280; color: #fff; }
         .node-title { font-size: 14px; line-height: 1.4; }
 
+        .confidence-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .confidence-high { background: #22c55e33; color: #4ade80; }
+        .confidence-med { background: #eab30833; color: #fbbf24; }
+        .confidence-low { background: #ef444433; color: #f87171; }
+
         .detail-panel {
             flex: 1;
             padding: 25px;
@@ -608,11 +618,13 @@
                                 hour: 'numeric', minute: '2-digit'
                             });
 
+                            const conf = getConfidence(node);
                             return `
                                 ${edge && edge.rationale ? `<div class="flow-edge-label">↳ ${edge.rationale}</div>` : ''}
                                 <div class="flow-node type-${node.node_type} ${isSelected}" onclick="selectNodeInChain(${node.id})">
                                     <div class="flow-node-header">
                                         <span class="node-type type-${node.node_type}">${node.node_type}</span>
+                                        ${confidenceBadge(conf)}
                                         <span class="flow-node-title">${node.title}</span>
                                         <span class="flow-node-time">${time}</span>
                                     </div>
@@ -645,13 +657,16 @@
                 return node ? node.title : 'Unknown';
             };
 
+            const conf = getConfidence(selectedNode);
             panel.innerHTML = `
                 <div class="detail-content">
                     <span class="node-type type-${selectedNode.node_type}">${selectedNode.node_type}</span>
+                    ${confidenceBadge(conf)}
                     <h2>${selectedNode.title}</h2>
                     <div class="detail-meta">
                         <span>ID: ${selectedNode.id}</span>
                         <span>Status: ${selectedNode.status}</span>
+                        ${conf !== null ? `<span>Confidence: ${conf}%</span>` : ''}
                         <span>Created: ${new Date(selectedNode.created_at).toLocaleDateString()}</span>
                     </div>
                     ${selectedNode.description ? `<div class="detail-description">${selectedNode.description}</div>` : ''}
@@ -701,6 +716,20 @@
             if (hours < 24) return `${hours}h ${mins % 60}m`;
             const days = Math.floor(hours / 24);
             return `${days}d ${hours % 24}h`;
+        }
+
+        function getConfidence(node) {
+            if (!node.metadata_json) return null;
+            try {
+                const meta = JSON.parse(node.metadata_json);
+                return meta.confidence;
+            } catch { return null; }
+        }
+
+        function confidenceBadge(conf) {
+            if (conf === null || conf === undefined) return '';
+            const level = conf >= 70 ? 'high' : conf >= 40 ? 'med' : 'low';
+            return `<span class="confidence-badge confidence-${level}">${conf}%</span>`;
         }
 
         loadGraph();

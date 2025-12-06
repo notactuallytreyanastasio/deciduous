@@ -559,6 +559,56 @@
       "created_at": "2025-12-05T22:19:06.860051-05:00",
       "updated_at": "2025-12-05T22:19:06.860051-05:00",
       "metadata_json": null
+    },
+    {
+      "id": 57,
+      "node_type": "decision",
+      "title": "Add decision modal to each feature page showing how that feature came to be - click button, see chain",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T22:37:22.241712-05:00",
+      "updated_at": "2025-12-05T22:37:22.241712-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 58,
+      "node_type": "decision",
+      "title": "Add confidence weights to decisions - track how right we think something is, compare with hindsight later",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T22:37:22.962173-05:00",
+      "updated_at": "2025-12-05T22:37:22.962173-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 59,
+      "node_type": "decision",
+      "title": "Improve landing page - more minimalist, better central linking between all features",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T22:37:24.018193-05:00",
+      "updated_at": "2025-12-05T22:37:24.018193-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 60,
+      "node_type": "observation",
+      "title": "Testing confidence weight system",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T22:39:15.966328-05:00",
+      "updated_at": "2025-12-05T22:39:15.966328-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 61,
+      "node_type": "decision",
+      "title": "Test makefile confidence",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T22:39:44.489096-05:00",
+      "updated_at": "2025-12-05T22:39:44.489096-05:00",
+      "metadata_json": "{\"confidence\":90}"
     }
   ],
   "edges": [

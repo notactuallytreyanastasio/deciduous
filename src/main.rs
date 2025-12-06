@@ -100,6 +100,10 @@ enum DbAction {
         /// Optional description
         #[arg(short, long)]
         description: Option<String>,
+
+        /// Confidence level (0-100) - how sure are we about this decision?
+        #[arg(short, long)]
+        confidence: Option<u8>,
     },
 
     /// Add an edge between nodes
@@ -496,9 +500,12 @@ fn handle_db_action(action: DbAction) {
             }
         }
 
-        DbAction::AddNode { node_type, title, description } => {
-            match db.create_node(&node_type, &title, description.as_deref()) {
-                Ok(id) => println!("Created node {} (type: {}, title: {})", id, node_type, title),
+        DbAction::AddNode { node_type, title, description, confidence } => {
+            match db.create_node(&node_type, &title, description.as_deref(), confidence) {
+                Ok(id) => {
+                    let conf_str = confidence.map(|c| format!(" [confidence: {}%]", c)).unwrap_or_default();
+                    println!("Created node {} (type: {}, title: {}){}", id, node_type, title, conf_str);
+                }
                 Err(e) => eprintln!("Error: {}", e),
             }
         }

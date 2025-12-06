@@ -131,30 +131,30 @@ db-view: release
 	@sleep 1
 	open http://localhost:$(or $(PORT),3001)/graph
 
-# Create nodes
+# Create nodes (optional C=confidence 0-100)
 goal: release
-	@test -n "$(T)" || (echo "Usage: make goal T='Your goal title'" && exit 1)
-	$(BINARY) db add-node -t goal "$(T)"
+	@test -n "$(T)" || (echo "Usage: make goal T='Your goal title' [C=80]" && exit 1)
+	$(BINARY) db add-node -t goal "$(T)" $(if $(C),-c $(C),)
 
 decision: release
-	@test -n "$(T)" || (echo "Usage: make decision T='Your decision title'" && exit 1)
-	$(BINARY) db add-node -t decision "$(T)"
+	@test -n "$(T)" || (echo "Usage: make decision T='Your decision title' [C=80]" && exit 1)
+	$(BINARY) db add-node -t decision "$(T)" $(if $(C),-c $(C),)
 
 option: release
-	@test -n "$(T)" || (echo "Usage: make option T='Your option title'" && exit 1)
-	$(BINARY) db add-node -t option "$(T)"
+	@test -n "$(T)" || (echo "Usage: make option T='Your option title' [C=80]" && exit 1)
+	$(BINARY) db add-node -t option "$(T)" $(if $(C),-c $(C),)
 
 action: release
-	@test -n "$(T)" || (echo "Usage: make action T='Your action title'" && exit 1)
-	$(BINARY) db add-node -t action "$(T)"
+	@test -n "$(T)" || (echo "Usage: make action T='Your action title' [C=80]" && exit 1)
+	$(BINARY) db add-node -t action "$(T)" $(if $(C),-c $(C),)
 
 outcome: release
-	@test -n "$(T)" || (echo "Usage: make outcome T='Your outcome title'" && exit 1)
-	$(BINARY) db add-node -t outcome "$(T)"
+	@test -n "$(T)" || (echo "Usage: make outcome T='Your outcome title' [C=80]" && exit 1)
+	$(BINARY) db add-node -t outcome "$(T)" $(if $(C),-c $(C),)
 
 obs: release
-	@test -n "$(T)" || (echo "Usage: make obs T='Your observation'" && exit 1)
-	$(BINARY) db add-node -t observation "$(T)"
+	@test -n "$(T)" || (echo "Usage: make obs T='Your observation' [C=80]" && exit 1)
+	$(BINARY) db add-node -t observation "$(T)" $(if $(C),-c $(C),)
 
 # Create edges
 link: release
