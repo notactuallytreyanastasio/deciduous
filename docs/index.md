@@ -9,6 +9,8 @@ title: Home
 
 Ever downloaded a FLAC or WAV and wondered if it's the real deal, or just an MP3 someone converted? Losselot tells you the truth in seconds.
 
+![Losselot in action](demo.gif)
+
 ---
 
 ## Quick Start (30 seconds)
