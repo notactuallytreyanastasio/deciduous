@@ -639,6 +639,96 @@
       "created_at": "2025-12-05T23:25:11.119495-05:00",
       "updated_at": "2025-12-05T23:25:11.119495-05:00",
       "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 65,
+      "node_type": "decision",
+      "title": "Organization phase: TypeScript types for graph data, ensure weights shown everywhere",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:26:21.644145-05:00",
+      "updated_at": "2025-12-05T23:26:21.644145-05:00",
+      "metadata_json": "{\"confidence\":80}"
+    },
+    {
+      "id": 66,
+      "node_type": "decision",
+      "title": "TypeScript build system for frontend - write TS, deploy compiled JS. Add JS testing with CI feedback loops",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:28:22.384641-05:00",
+      "updated_at": "2025-12-05T23:28:22.384641-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 67,
+      "node_type": "action",
+      "title": "Added confidence weights documentation to decision-graph.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:28:54.344166-05:00",
+      "updated_at": "2025-12-05T23:28:54.344166-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 68,
+      "node_type": "action",
+      "title": "Setting up TypeScript build system in docs/ folder",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:29:26.950793-05:00",
+      "updated_at": "2025-12-05T23:29:26.950793-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 69,
+      "node_type": "action",
+      "title": "Fixed WASM 404 on prod - Jekyll needed explicit 'include: wasm' in _config.yml",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:32:44.048844-05:00",
+      "updated_at": "2025-12-05T23:32:44.048844-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 70,
+      "node_type": "observation",
+      "title": "Jekyll excludes dynamically created directories by default - wasm/ is created by CI but not in git, so Jekyll skipped it",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:32:44.752737-05:00",
+      "updated_at": "2025-12-05T23:32:44.752737-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 71,
+      "node_type": "decision",
+      "title": "Add commit hash linking to decision graph nodes - store commit SHAs in metadata_json for full code-decision traceability",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:32:51.908132-05:00",
+      "updated_at": "2025-12-05T23:32:51.908132-05:00",
+      "metadata_json": "{\"confidence\":75}"
+    },
+    {
+      "id": 72,
+      "node_type": "action",
+      "title": "Added TypeScript build system with types mirroring Rust backend (graph.ts, analysis.ts), Vitest tests (29 passing), CI integration",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:36:27.391461-05:00",
+      "updated_at": "2025-12-05T23:36:27.391461-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 73,
+      "node_type": "action",
+      "title": "Added commit hash linking to decision graph",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T23:39:33.674912-05:00",
+      "updated_at": "2025-12-05T23:39:33.674912-05:00",
+      "metadata_json": "{\"confidence\":90,\"commit\":\"5a2ae23\"}"
     }
   ],
   "edges": [

@@ -17,6 +17,7 @@ export type EdgeType = 'leads_to' | 'requires' | 'chosen' | 'rejected' | 'blocks
 /** Metadata stored in metadata_json field */
 export interface NodeMetadata {
   confidence?: number;  // 0-100 confidence score
+  commit?: string;       // Git commit hash
   [key: string]: unknown;
 }
 
@@ -87,6 +88,31 @@ export function parseMetadata(json: string | null): NodeMetadata | null {
 export function getConfidence(node: DecisionNode): number | null {
   const meta = parseMetadata(node.metadata_json);
   return meta?.confidence ?? null;
+}
+
+/**
+ * Extract commit hash from a node
+ */
+export function getCommit(node: DecisionNode): string | null {
+  const meta = parseMetadata(node.metadata_json);
+  return meta?.commit ?? null;
+}
+
+/**
+ * Get short commit hash (7 chars)
+ */
+export function shortCommit(commit: string | null): string | null {
+  if (!commit) return null;
+  return commit.slice(0, 7);
+}
+
+/**
+ * Create GitHub commit URL
+ * @param commit - Full or short commit hash
+ * @param repo - Repository in format "owner/repo"
+ */
+export function githubCommitUrl(commit: string, repo: string): string {
+  return `https://github.com/${repo}/commit/${commit}`;
 }
 
 /**

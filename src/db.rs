@@ -726,12 +726,17 @@ impl Database {
     // ========================================================================
 
     /// Create a new decision node
-    pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>) -> Result<i32> {
+    pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>, commit: Option<&str>) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        // Build metadata JSON with confidence if provided
-        let metadata = confidence.map(|c| format!(r#"{{"confidence":{}}}"#, c.min(100)));
+        // Build metadata JSON with confidence and/or commit if provided
+        let metadata = match (confidence, commit) {
+            (Some(c), Some(h)) => Some(format!(r#"{{"confidence":{},"commit":"{}"}}"#, c.min(100), h)),
+            (Some(c), None) => Some(format!(r#"{{"confidence":{}}}"#, c.min(100))),
+            (None, Some(h)) => Some(format!(r#"{{"commit":"{}"}}"#, h)),
+            (None, None) => None,
+        };
 
         let new_node = NewDecisionNode {
             node_type,

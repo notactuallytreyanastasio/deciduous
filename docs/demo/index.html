@@ -170,6 +170,22 @@
         .confidence-med { background: #eab30833; color: #fbbf24; }
         .confidence-low { background: #ef444433; color: #f87171; }
 
+        .commit-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-family: monospace;
+            background: #3b82f633;
+            color: #60a5fa;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .commit-badge:hover {
+            background: #3b82f655;
+            color: #93c5fd;
+        }
+
         .detail-panel {
             flex: 1;
             padding: 25px;
@@ -619,12 +635,14 @@
                             });
 
                             const conf = getConfidence(node);
+                            const commit = getCommit(node);
                             return `
                                 ${edge && edge.rationale ? `<div class="flow-edge-label">↳ ${edge.rationale}</div>` : ''}
                                 <div class="flow-node type-${node.node_type} ${isSelected}" onclick="selectNodeInChain(${node.id})">
                                     <div class="flow-node-header">
                                         <span class="node-type type-${node.node_type}">${node.node_type}</span>
                                         ${confidenceBadge(conf)}
+                                        ${commitBadge(commit)}
                                         <span class="flow-node-title">${node.title}</span>
                                         <span class="flow-node-time">${time}</span>
                                     </div>
@@ -658,15 +676,18 @@
             };
 
             const conf = getConfidence(selectedNode);
+            const commit = getCommit(selectedNode);
             panel.innerHTML = `
                 <div class="detail-content">
                     <span class="node-type type-${selectedNode.node_type}">${selectedNode.node_type}</span>
                     ${confidenceBadge(conf)}
+                    ${commitBadge(commit)}
                     <h2>${selectedNode.title}</h2>
                     <div class="detail-meta">
                         <span>ID: ${selectedNode.id}</span>
                         <span>Status: ${selectedNode.status}</span>
                         ${conf !== null ? `<span>Confidence: ${conf}%</span>` : ''}
+                        ${commit ? `<span>Commit: ${commitBadge(commit)}</span>` : ''}
                         <span>Created: ${new Date(selectedNode.created_at).toLocaleDateString()}</span>
                     </div>
                     ${selectedNode.description ? `<div class="detail-description">${selectedNode.description}</div>` : ''}
@@ -726,10 +747,25 @@
             } catch { return null; }
         }
 
+        function getCommit(node) {
+            if (!node.metadata_json) return null;
+            try {
+                const meta = JSON.parse(node.metadata_json);
+                return meta.commit || null;
+            } catch { return null; }
+        }
+
         function confidenceBadge(conf) {
             if (conf === null || conf === undefined) return '';
             const level = conf >= 70 ? 'high' : conf >= 40 ? 'med' : 'low';
             return `<span class="confidence-badge confidence-${level}">${conf}%</span>`;
+        }
+
+        function commitBadge(commit) {
+            if (!commit) return '';
+            const short = commit.slice(0, 7);
+            const url = `https://github.com/notactuallytreyanastasio/losselot/commit/${commit}`;
+            return `<a href="${url}" target="_blank" class="commit-badge" title="View commit ${short}">${short}</a>`;
         }
 
         loadGraph();

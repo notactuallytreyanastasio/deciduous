@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   parseMetadata,
   getConfidence,
+  getCommit,
+  shortCommit,
+  githubCommitUrl,
   getConfidenceLevel,
   parseNode,
   type DecisionNode,
@@ -55,6 +58,61 @@ describe('graph type helpers', () => {
 
     it('returns null when metadata has no confidence', () => {
       expect(getConfidence(makeNode('{"other": "data"}'))).toBeNull();
+    });
+  });
+
+  describe('getCommit', () => {
+    const makeNode = (metadata: string | null): DecisionNode => ({
+      id: 1,
+      node_type: 'action',
+      title: 'Test',
+      description: null,
+      status: 'completed',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+      metadata_json: metadata,
+    });
+
+    it('returns null when no metadata', () => {
+      expect(getCommit(makeNode(null))).toBeNull();
+    });
+
+    it('extracts commit hash from metadata', () => {
+      expect(getCommit(makeNode('{"commit": "abc123def456"}'))).toBe('abc123def456');
+    });
+
+    it('extracts commit when both confidence and commit present', () => {
+      expect(getCommit(makeNode('{"confidence": 85, "commit": "5a2ae23"}'))).toBe('5a2ae23');
+    });
+
+    it('returns null when metadata has no commit', () => {
+      expect(getCommit(makeNode('{"confidence": 90}'))).toBeNull();
+    });
+  });
+
+  describe('shortCommit', () => {
+    it('returns null for null input', () => {
+      expect(shortCommit(null)).toBeNull();
+    });
+
+    it('shortens long commit hash to 7 chars', () => {
+      expect(shortCommit('abc123def456789')).toBe('abc123d');
+    });
+
+    it('returns full hash if already short', () => {
+      expect(shortCommit('abc')).toBe('abc');
+    });
+  });
+
+  describe('githubCommitUrl', () => {
+    it('generates correct GitHub commit URL', () => {
+      expect(githubCommitUrl('abc123', 'owner/repo'))
+        .toBe('https://github.com/owner/repo/commit/abc123');
+    });
+
+    it('works with full commit hash', () => {
+      expect(githubCommitUrl('5a2ae23f8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e', 'notactuallytreyanastasio/losselot'))
+        .toBe('https://github.com/notactuallytreyanastasio/losselot/commit/5a2ae23f8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e');
     });
   });
 

@@ -104,6 +104,10 @@ enum DbAction {
         /// Confidence level (0-100) - how sure are we about this decision?
         #[arg(short, long)]
         confidence: Option<u8>,
+
+        /// Git commit hash to link this node to
+        #[arg(long)]
+        commit: Option<String>,
     },
 
     /// Add an edge between nodes
@@ -500,11 +504,12 @@ fn handle_db_action(action: DbAction) {
             }
         }
 
-        DbAction::AddNode { node_type, title, description, confidence } => {
-            match db.create_node(&node_type, &title, description.as_deref(), confidence) {
+        DbAction::AddNode { node_type, title, description, confidence, commit } => {
+            match db.create_node(&node_type, &title, description.as_deref(), confidence, commit.as_deref()) {
                 Ok(id) => {
                     let conf_str = confidence.map(|c| format!(" [confidence: {}%]", c)).unwrap_or_default();
-                    println!("Created node {} (type: {}, title: {}){}", id, node_type, title, conf_str);
+                    let commit_str = commit.as_ref().map(|c| format!(" [commit: {}]", &c[..7.min(c.len())])).unwrap_or_default();
+                    println!("Created node {} (type: {}, title: {}){}{}", id, node_type, title, conf_str, commit_str);
                 }
                 Err(e) => eprintln!("Error: {}", e),
             }
