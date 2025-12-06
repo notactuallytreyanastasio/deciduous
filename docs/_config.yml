@@ -1,0 +1,33 @@
+title: Losselot
+description: Audio forensics meets AI-assisted development - A living museum
+url: "https://notactuallytreyanastasio.github.io"
+baseurl: "/losselot"
+
+# Theme
+remote_theme: pages-themes/minimal@v0.2.0
+plugins:
+  - jekyll-remote-theme
+
+# Navigation
+nav:
+  - title: Quick Start
+    url: /
+  - title: Audio Analysis
+    url: /audio-analysis
+  - title: Decision Graph
+    url: /decision-graph
+  - title: Claude Tooling
+    url: /claude-tooling
+  - title: Development Story
+    url: /story
+
+# Exclude from build
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+
+# Markdown settings
+markdown: kramdown
+highlighter: rouge

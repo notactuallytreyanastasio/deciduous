@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Losselot Demo - Decision Graph</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .header {
+            background: #16213e;
+            padding: 20px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { color: #888; font-size: 14px; }
+        .header a { color: #00d9ff; text-decoration: none; }
+        .header a:hover { text-decoration: underline; }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+            padding: 20px;
+            background: #16213e;
+            margin: 20px;
+            border-radius: 8px;
+        }
+        .stat { text-align: center; }
+        .stat .num { font-size: 32px; font-weight: bold; color: #00d9ff; }
+        .stat .label { font-size: 12px; color: #888; text-transform: uppercase; }
+
+        .main { display: flex; height: calc(100vh - 180px); }
+
+        .sidebar {
+            width: 350px;
+            background: #16213e;
+            overflow-y: auto;
+            border-right: 1px solid #0f3460;
+        }
+        .node-list { padding: 10px; }
+        .node-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+        }
+        .node-item:hover { background: #252547; }
+        .node-item.selected { border-left-color: #00d9ff; background: #252547; }
+        .node-type {
+            font-size: 10px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 6px;
+        }
+        .type-goal { background: #22c55e; color: #000; }
+        .type-decision { background: #eab308; color: #000; }
+        .type-option { background: #06b6d4; color: #000; }
+        .type-action { background: #ef4444; color: #fff; }
+        .type-outcome { background: #a855f7; color: #fff; }
+        .type-observation { background: #6b7280; color: #fff; }
+        .node-title { font-size: 14px; line-height: 1.4; }
+
+        .detail-panel {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+        }
+        .detail-empty {
+            text-align: center;
+            color: #666;
+            padding-top: 100px;
+        }
+        .detail-content h2 { font-size: 24px; margin-bottom: 20px; }
+        .detail-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #888;
+        }
+        .detail-description {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .connections h3 { font-size: 16px; margin-bottom: 12px; color: #888; }
+        .connection {
+            padding: 10px;
+            background: #16213e;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .edge-type {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #333;
+        }
+        .edge-type.chosen { background: #22c55e; color: #000; }
+        .edge-type.rejected { background: #ef4444; }
+        .edge-type.leads_to { background: #6b7280; }
+
+        .nav-links {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        .nav-links a {
+            color: #00d9ff;
+            text-decoration: none;
+            margin-right: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Losselot Decision Graph</h1>
+        <p>Real decisions from development - <a href="../">← Back to docs</a></p>
+    </div>
+
+    <div class="stats" id="stats">
+        <div class="stat"><div class="num" id="node-count">-</div><div class="label">Nodes</div></div>
+        <div class="stat"><div class="num" id="edge-count">-</div><div class="label">Edges</div></div>
+        <div class="stat"><div class="num" id="goal-count">-</div><div class="label">Goals</div></div>
+        <div class="stat"><div class="num" id="decision-count">-</div><div class="label">Decisions</div></div>
+        <div class="stat"><div class="num" id="action-count">-</div><div class="label">Actions</div></div>
+    </div>
+
+    <div class="main">
+        <div class="sidebar">
+            <div class="node-list" id="node-list"></div>
+        </div>
+        <div class="detail-panel" id="detail-panel">
+            <div class="detail-empty">
+                <p>Select a node to see details</p>
+                <p style="margin-top: 10px; font-size: 12px;">This is real data from the losselot.db decision graph</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let graphData = null;
+        let selectedNode = null;
+
+        async function loadGraph() {
+            const response = await fetch('graph-data.json');
+            graphData = await response.json();
+            renderStats();
+            renderNodeList();
+        }
+
+        function renderStats() {
+            const nodes = graphData.data.nodes;
+            const edges = graphData.data.edges;
+            document.getElementById('node-count').textContent = nodes.length;
+            document.getElementById('edge-count').textContent = edges.length;
+            document.getElementById('goal-count').textContent = nodes.filter(n => n.node_type === 'goal').length;
+            document.getElementById('decision-count').textContent = nodes.filter(n => n.node_type === 'decision').length;
+            document.getElementById('action-count').textContent = nodes.filter(n => n.node_type === 'action').length;
+        }
+
+        function renderNodeList() {
+            const list = document.getElementById('node-list');
+            const nodes = graphData.data.nodes;
+
+            list.innerHTML = nodes.map(node => `
+                <div class="node-item" data-id="${node.id}" onclick="selectNode(${node.id})">
+                    <span class="node-type type-${node.node_type}">${node.node_type}</span>
+                    <div class="node-title">${node.title}</div>
+                </div>
+            `).join('');
+        }
+
+        function selectNode(id) {
+            selectedNode = graphData.data.nodes.find(n => n.id === id);
+
+            // Update selection state
+            document.querySelectorAll('.node-item').forEach(el => {
+                el.classList.toggle('selected', parseInt(el.dataset.id) === id);
+            });
+
+            renderDetail();
+        }
+
+        function renderDetail() {
+            const panel = document.getElementById('detail-panel');
+            if (!selectedNode) {
+                panel.innerHTML = '<div class="detail-empty"><p>Select a node to see details</p></div>';
+                return;
+            }
+
+            const incoming = graphData.data.edges.filter(e => e.to_node_id === selectedNode.id);
+            const outgoing = graphData.data.edges.filter(e => e.from_node_id === selectedNode.id);
+
+            const getNodeTitle = (id) => {
+                const node = graphData.data.nodes.find(n => n.id === id);
+                return node ? node.title : 'Unknown';
+            };
+
+            panel.innerHTML = `
+                <div class="detail-content">
+                    <span class="node-type type-${selectedNode.node_type}">${selectedNode.node_type}</span>
+                    <h2>${selectedNode.title}</h2>
+                    <div class="detail-meta">
+                        <span>ID: ${selectedNode.id}</span>
+                        <span>Status: ${selectedNode.status}</span>
+                        <span>Created: ${new Date(selectedNode.created_at).toLocaleDateString()}</span>
+                    </div>
+                    ${selectedNode.description ? `<div class="detail-description">${selectedNode.description}</div>` : ''}
+
+                    ${incoming.length > 0 ? `
+                        <div class="connections">
+                            <h3>Incoming (${incoming.length})</h3>
+                            ${incoming.map(e => `
+                                <div class="connection" onclick="selectNode(${e.from_node_id})">
+                                    <span class="edge-type ${e.edge_type}">${e.edge_type}</span>
+                                    <span>← ${getNodeTitle(e.from_node_id)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    ${outgoing.length > 0 ? `
+                        <div class="connections" style="margin-top: 20px;">
+                            <h3>Outgoing (${outgoing.length})</h3>
+                            ${outgoing.map(e => `
+                                <div class="connection" onclick="selectNode(${e.to_node_id})">
+                                    <span class="edge-type ${e.edge_type}">${e.edge_type}</span>
+                                    <span>→ ${getNodeTitle(e.to_node_id)}</span>
+                                    ${e.rationale ? `<span style="color: #666; font-size: 12px; margin-left: auto;">${e.rationale}</span>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+
+                    <div class="nav-links">
+                        <a href="../decision-graph">Learn about the graph →</a>
+                        <a href="../claude-tooling">See the tooling →</a>
+                    </div>
+                </div>
+            `;
+        }
+
+        loadGraph();
+    </script>
+</body>
+</html>

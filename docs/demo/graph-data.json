@@ -1,0 +1,320 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "node_type": "goal",
+      "title": "Test lo-fi detection on charlie.flac",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T17:09:17.953137-05:00",
+      "updated_at": "2025-12-05T17:09:17.953137-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 2,
+      "node_type": "decision",
+      "title": "Lo-fi detection approach",
+      "description": "How to distinguish MP3 brick-wall cutoff from natural tape/lo-fi rolloff",
+      "status": "pending",
+      "created_at": "2025-12-05T17:10:59.144148-05:00",
+      "updated_at": "2025-12-05T17:10:59.144148-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 3,
+      "node_type": "option",
+      "title": "Approach A: Temporal Cutoff Variance",
+      "description": "Measure how cutoff frequency varies over time. MP3=fixed, Tape=varies. Key metric: std dev of cutoff freq across windows",
+      "status": "pending",
+      "created_at": "2025-12-05T17:11:00.369878-05:00",
+      "updated_at": "2025-12-05T17:11:00.369878-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 4,
+      "node_type": "option",
+      "title": "Approach B: Cross-Frequency Coherence (CFCC)",
+      "description": "Measure correlation between adjacent frequency bands. MP3=sudden decorrelation at cliff. Tape=gradual decorrelation",
+      "status": "pending",
+      "created_at": "2025-12-05T17:11:03.792233-05:00",
+      "updated_at": "2025-12-05T17:11:03.792233-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 5,
+      "node_type": "observation",
+      "title": "Approach A requires per-window cutoff detection",
+      "description": "Need to find -20dB point in each FFT window, track frequency, calc std dev. Adds complexity but gives strong signal for variance",
+      "status": "pending",
+      "created_at": "2025-12-05T17:11:17.381479-05:00",
+      "updated_at": "2025-12-05T17:11:17.381479-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 6,
+      "node_type": "observation",
+      "title": "Approach B detects cliff via decorrelation",
+      "description": "Measures correlation between adjacent bands. Cliff = sudden drop >0.25. Works with existing FFT data structure",
+      "status": "pending",
+      "created_at": "2025-12-05T17:11:18.722242-05:00",
+      "updated_at": "2025-12-05T17:11:18.722242-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 7,
+      "node_type": "action",
+      "title": "Implemented CFCC in commit aa464b6",
+      "description": "Added CrossFrequencyCoherence struct, cliff detection at known codec cutoffs, +25 for cfcc_cliff, -15 for lofi_safe_natural_rolloff",
+      "status": "pending",
+      "created_at": "2025-12-05T17:11:19.855764-05:00",
+      "updated_at": "2025-12-05T17:11:19.855764-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 8,
+      "node_type": "outcome",
+      "title": "CFCC passes 157 tests, detects 25/29 transcodes",
+      "description": "Test results: 25 TRANSCODE, 3 SUSPECT, 1 OK (AAC decoder issue). Approach B chosen and implemented",
+      "status": "pending",
+      "created_at": "2025-12-05T17:11:21.688998-05:00",
+      "updated_at": "2025-12-05T17:11:21.688998-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 9,
+      "node_type": "observation",
+      "title": "Code organization: consider splitting large files",
+      "description": "ui.html, graph_ui.html, spectral.rs are getting large. May want to modularize: separate CSS, split analysis components, use proper build tooling",
+      "status": "pending",
+      "created_at": "2025-12-05T17:15:24.716327-05:00",
+      "updated_at": "2025-12-05T17:15:24.716327-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 10,
+      "node_type": "observation",
+      "title": "MP3 vs Tape: MP3 has brick-wall cutoff at fixed freq, tape has gradual rolloff that varies with dynamics",
+      "description": "Core insight: MP3 encoders apply same filter everywhere, analog rolloff is content-dependent",
+      "status": "pending",
+      "created_at": "2025-12-05T17:38:32.883600-05:00",
+      "updated_at": "2025-12-05T17:38:32.883600-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 11,
+      "node_type": "observation",
+      "title": "CFCC scoring: +25 cfcc_cliff, +15 decorrelation_spike, -15 lofi_safe_natural_rolloff",
+      "description": "Cliff threshold >0.25 drop in correlation between adjacent bands",
+      "status": "pending",
+      "created_at": "2025-12-05T17:38:32.892469-05:00",
+      "updated_at": "2025-12-05T17:38:32.892469-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 12,
+      "node_type": "observation",
+      "title": "Known codec cutoffs: 64-96k=10.5-12kHz, 128k=14-16.5kHz, 192k=16.5-18.5kHz, 256k=18-19.5kHz, 320k=19.5-21kHz",
+      "description": "Used for matching detected cliffs to likely source bitrates",
+      "status": "pending",
+      "created_at": "2025-12-05T17:38:32.899872-05:00",
+      "updated_at": "2025-12-05T17:38:32.899872-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 13,
+      "node_type": "goal",
+      "title": "Create GitHub Pages living museum site",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-05T20:18:02.826390-05:00",
+      "updated_at": "2025-12-05T20:18:02.826390-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 14,
+      "node_type": "decision",
+      "title": "Site structure and content organization",
+      "description": "How to organize the museum: sections, tours, interactive demos",
+      "status": "pending",
+      "created_at": "2025-12-05T20:18:03.595373-05:00",
+      "updated_at": "2025-12-05T20:18:03.595373-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 15,
+      "node_type": "option",
+      "title": "Section-based site",
+      "description": "Landing -> Quick Start -> Audio Analysis -> Claude Tooling -> Decision Graph Tour -> Development Story",
+      "status": "pending",
+      "created_at": "2025-12-05T20:18:14.642468-05:00",
+      "updated_at": "2025-12-05T20:18:14.642468-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 16,
+      "node_type": "observation",
+      "title": "Four pillars of value",
+      "description": "1) Claude tooling for long-running codebase state 2) Audio forensics tools 3) React/GUI methodologies 4) Public development process",
+      "status": "pending",
+      "created_at": "2025-12-05T20:18:15.498983-05:00",
+      "updated_at": "2025-12-05T20:18:15.498983-05:00",
+      "metadata_json": null
+    },
+    {
+      "id": 17,
+      "node_type": "action",
+      "title": "Created docs/ site structure with Jekyll config and 5 pages",
+      "description": "index.md, audio-analysis.md, decision-graph.md, claude-tooling.md, story.md",
+      "status": "pending",
+      "created_at": "2025-12-05T20:22:07.903117-05:00",
+      "updated_at": "2025-12-05T20:22:07.903117-05:00",
+      "metadata_json": null
+    }
+  ],
+  "edges": [
+    {
+      "id": 1,
+      "from_node_id": 1,
+      "to_node_id": 2,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Testing charlie.flac revealed need for lo-fi detection",
+      "created_at": "2025-12-05T17:11:33.912610-05:00"
+    },
+    {
+      "id": 2,
+      "from_node_id": 2,
+      "to_node_id": 3,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option A from LOFI_DETECTION_NOTES.md",
+      "created_at": "2025-12-05T17:11:33.918999-05:00"
+    },
+    {
+      "id": 3,
+      "from_node_id": 2,
+      "to_node_id": 4,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option B - CFCC approach",
+      "created_at": "2025-12-05T17:11:33.926400-05:00"
+    },
+    {
+      "id": 4,
+      "from_node_id": 3,
+      "to_node_id": 5,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Technical analysis of Approach A",
+      "created_at": "2025-12-05T17:11:33.933452-05:00"
+    },
+    {
+      "id": 5,
+      "from_node_id": 4,
+      "to_node_id": 6,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Technical analysis of Approach B",
+      "created_at": "2025-12-05T17:11:33.941841-05:00"
+    },
+    {
+      "id": 6,
+      "from_node_id": 2,
+      "to_node_id": 4,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "CFCC simpler to implement, works with existing FFT structure",
+      "created_at": "2025-12-05T17:11:33.949119-05:00"
+    },
+    {
+      "id": 7,
+      "from_node_id": 2,
+      "to_node_id": 3,
+      "edge_type": "rejected",
+      "weight": 1.0,
+      "rationale": "More complex, requires additional per-window tracking - may revisit later",
+      "created_at": "2025-12-05T17:11:33.956127-05:00"
+    },
+    {
+      "id": 8,
+      "from_node_id": 4,
+      "to_node_id": 7,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implemented CFCC",
+      "created_at": "2025-12-05T17:11:33.963371-05:00"
+    },
+    {
+      "id": 9,
+      "from_node_id": 7,
+      "to_node_id": 8,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Test results",
+      "created_at": "2025-12-05T17:11:33.971498-05:00"
+    },
+    {
+      "id": 10,
+      "from_node_id": 2,
+      "to_node_id": 10,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Key insight driving detection",
+      "created_at": "2025-12-05T17:38:32.908821-05:00"
+    },
+    {
+      "id": 11,
+      "from_node_id": 7,
+      "to_node_id": 11,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Scoring implementation",
+      "created_at": "2025-12-05T17:38:32.917282-05:00"
+    },
+    {
+      "id": 12,
+      "from_node_id": 7,
+      "to_node_id": 12,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Codec frequency table",
+      "created_at": "2025-12-05T17:38:32.924879-05:00"
+    },
+    {
+      "id": 13,
+      "from_node_id": 13,
+      "to_node_id": 14,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal leads to structure decision",
+      "created_at": "2025-12-05T20:18:16.906857-05:00"
+    },
+    {
+      "id": 14,
+      "from_node_id": 14,
+      "to_node_id": 15,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Structure option",
+      "created_at": "2025-12-05T20:18:17.998437-05:00"
+    },
+    {
+      "id": 15,
+      "from_node_id": 13,
+      "to_node_id": 16,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Understanding value proposition",
+      "created_at": "2025-12-05T20:18:19.408356-05:00"
+    },
+    {
+      "id": 16,
+      "from_node_id": 14,
+      "to_node_id": 17,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of section-based site structure",
+      "created_at": "2025-12-05T20:22:15.411781-05:00"
+    }
+  ]
+}

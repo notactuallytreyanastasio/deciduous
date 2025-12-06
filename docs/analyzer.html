@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Losselot - Client-Side Audio Analyzer</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { max-width: 900px; margin: 0 auto; }
+
+        h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(90deg, #00d9ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .subtitle { color: #888; margin-bottom: 30px; }
+        .subtitle a { color: #00d9ff; text-decoration: none; }
+
+        .drop-zone {
+            border: 3px dashed #0f3460;
+            border-radius: 20px;
+            padding: 60px 40px;
+            text-align: center;
+            background: rgba(15, 52, 96, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 30px;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #00d9ff;
+            background: rgba(0, 217, 255, 0.1);
+        }
+        .drop-zone h2 { font-size: 1.5em; margin-bottom: 15px; }
+        .drop-zone p { color: #888; }
+        .drop-zone input { display: none; }
+
+        .status {
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status.loading { display: block; background: rgba(0, 217, 255, 0.2); }
+        .status.error { display: block; background: rgba(239, 68, 68, 0.2); }
+        .status.success { display: block; background: rgba(34, 197, 94, 0.2); }
+
+        .result {
+            background: #16213e;
+            border-radius: 15px;
+            padding: 25px;
+            display: none;
+        }
+        .result.visible { display: block; }
+
+        .verdict {
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .verdict.CLEAN { background: linear-gradient(135deg, #22c55e33, #16a34a33); color: #22c55e; }
+        .verdict.SUSPECT { background: linear-gradient(135deg, #eab30833, #ca8a0433); color: #eab308; }
+        .verdict.TRANSCODE { background: linear-gradient(135deg, #ef444433, #dc262633); color: #ef4444; }
+
+        .score-bar {
+            height: 30px;
+            background: #1a1a2e;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        .score-fill {
+            height: 100%;
+            border-radius: 15px;
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .metric {
+            background: #1a1a2e;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .metric-label { font-size: 0.8em; color: #888; text-transform: uppercase; }
+        .metric-value { font-size: 1.5em; font-weight: bold; color: #00d9ff; }
+
+        .flags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .flag {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            background: #0f3460;
+        }
+        .flag.positive { background: #ef444433; color: #ef4444; }
+        .flag.negative { background: #22c55e33; color: #22c55e; }
+
+        .spectrum {
+            background: #1a1a2e;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .spectrum h3 { margin-bottom: 15px; }
+        #spectrum-canvas {
+            width: 100%;
+            height: 200px;
+            background: #0a0a15;
+            border-radius: 8px;
+        }
+
+        .tech-note {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(0, 217, 255, 0.1);
+            border-radius: 10px;
+            font-size: 0.9em;
+        }
+        .tech-note h4 { margin-bottom: 10px; color: #00d9ff; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Losselot</h1>
+        <p class="subtitle">
+            Client-side audio analysis powered by WebAssembly
+            <br><a href="./">← Back to docs</a>
+        </p>
+
+        <div class="drop-zone" id="drop-zone">
+            <h2>Drop an audio file here</h2>
+            <p>or click to browse</p>
+            <p style="margin-top: 15px; font-size: 0.9em;">Supports: MP3, FLAC, WAV, OGG, M4A</p>
+            <input type="file" id="file-input" accept="audio/*">
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="result" id="result">
+            <div class="verdict" id="verdict">ANALYZING...</div>
+
+            <div class="score-bar">
+                <div class="score-fill" id="score-fill"></div>
+            </div>
+
+            <div class="metrics">
+                <div class="metric">
+                    <div class="metric-label">Cutoff Frequency</div>
+                    <div class="metric-value" id="cutoff-freq">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cutoff Variance</div>
+                    <div class="metric-value" id="cutoff-var">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Rolloff Slope</div>
+                    <div class="metric-value" id="rolloff">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">CFCC Cliff</div>
+                    <div class="metric-value" id="cfcc">-</div>
+                </div>
+            </div>
+
+            <div class="flags" id="flags"></div>
+
+            <div class="spectrum">
+                <h3>Frequency Response</h3>
+                <canvas id="spectrum-canvas"></canvas>
+            </div>
+        </div>
+
+        <div class="tech-note">
+            <h4>How it works</h4>
+            <p>
+                <strong>100% Rust compiled to WebAssembly</strong> - no JavaScript fallback.
+                This runs the exact same FFT analysis as the CLI tool, just in your browser.
+                Your audio files never leave your device.
+            </p>
+            <p style="margin-top: 10px;">
+                The Web Audio API decodes your file to PCM, then the Rust analyzer performs
+                8192-sample windowed FFT with Hann windowing, detects CFCC codec cliffs at
+                16/17/18/19/20kHz boundaries, calculates cutoff variance (brick-wall detection),
+                and scores based on rolloff slope and ultrasonic energy.
+            </p>
+        </div>
+    </div>
+
+    <script type="module">
+        // Load WASM module - NO FALLBACK, this is the real deal
+        let analyzer = null;
+        let wasmReady = false;
+
+        async function initWasm() {
+            try {
+                showStatus('loading', 'Loading WASM analyzer...');
+                const wasm = await import('./wasm/losselot_wasm.js');
+                await wasm.default();
+                analyzer = new wasm.Analyzer();
+                wasmReady = true;
+                showStatus('success', 'WASM analyzer ready - drop a file to analyze');
+                console.log('WASM analyzer loaded - full Rust FFT analysis ready');
+            } catch (e) {
+                showStatus('error', `WASM failed to load: ${e.message}. Make sure the site was deployed via GitHub Actions.`);
+                console.error('WASM load failed:', e);
+            }
+        }
+
+        initWasm();
+
+        // File handling
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const status = document.getElementById('status');
+        const result = document.getElementById('result');
+
+        dropZone.addEventListener('click', () => fileInput.click());
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) {
+                analyzeFile(e.dataTransfer.files[0]);
+            }
+        });
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                analyzeFile(e.target.files[0]);
+            }
+        });
+
+        async function analyzeFile(file) {
+            // WASM REQUIRED - no fallback
+            if (!wasmReady || !analyzer) {
+                showStatus('error', 'WASM analyzer not loaded. Cannot analyze without it.');
+                return;
+            }
+
+            showStatus('loading', `Analyzing ${file.name} with Rust FFT...`);
+            result.classList.remove('visible');
+
+            try {
+                // Decode audio using Web Audio API
+                const audioContext = new AudioContext({ sampleRate: 44100 });
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+                // Get mono samples (mix down if stereo)
+                let samples;
+                if (audioBuffer.numberOfChannels === 1) {
+                    samples = audioBuffer.getChannelData(0);
+                } else {
+                    const left = audioBuffer.getChannelData(0);
+                    const right = audioBuffer.getChannelData(1);
+                    samples = new Float32Array(left.length);
+                    for (let i = 0; i < left.length; i++) {
+                        samples[i] = (left[i] + right[i]) / 2;
+                    }
+                }
+
+                // Analyze with WASM - the REAL Rust FFT analyzer
+                const analysisResult = analyzer.analyze(samples);
+
+                displayResult(analysisResult);
+                showStatus('success', `Analysis complete: ${analysisResult.verdict}`);
+
+            } catch (e) {
+                showStatus('error', `Error: ${e.message}`);
+                console.error(e);
+            }
+        }
+
+        function displayResult(r) {
+            document.getElementById('verdict').textContent = r.verdict;
+            document.getElementById('verdict').className = 'verdict ' + r.verdict;
+
+            const scoreFill = document.getElementById('score-fill');
+            scoreFill.style.width = r.score + '%';
+            scoreFill.textContent = r.score + '%';
+            scoreFill.style.background = r.score >= 65 ? '#ef4444' : r.score >= 35 ? '#eab308' : '#22c55e';
+
+            document.getElementById('cutoff-freq').textContent = Math.round(r.avg_cutoff_freq) + ' Hz';
+            document.getElementById('cutoff-var').textContent = Math.round(r.cutoff_variance);
+            document.getElementById('rolloff').textContent = r.rolloff_slope.toFixed(2) + ' dB/kHz';
+            document.getElementById('cfcc').textContent = r.cfcc_cliff_detected ? 'DETECTED' : 'None';
+
+            const flagsEl = document.getElementById('flags');
+            flagsEl.innerHTML = r.flags.map(f => {
+                const isNegative = f.includes('safe') || f.includes('natural');
+                return `<span class="flag ${isNegative ? 'negative' : 'positive'}">${f}</span>`;
+            }).join('');
+
+            // Draw frequency response if available
+            if (r.frequency_response && r.frequency_response.length > 0) {
+                drawSpectrum(r.frequency_response);
+            }
+
+            result.classList.add('visible');
+        }
+
+        function drawSpectrum(data) {
+            const canvas = document.getElementById('spectrum-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth * 2;
+            canvas.height = canvas.offsetHeight * 2;
+            ctx.scale(2, 2);
+
+            const w = canvas.offsetWidth;
+            const h = canvas.offsetHeight;
+
+            ctx.fillStyle = '#0a0a15';
+            ctx.fillRect(0, 0, w, h);
+
+            if (data.length === 0) return;
+
+            // Draw frequency response
+            ctx.beginPath();
+            ctx.strokeStyle = '#00d9ff';
+            ctx.lineWidth = 2;
+
+            const step = w / data.length;
+            const minDb = -100;
+            const maxDb = 0;
+
+            for (let i = 0; i < data.length; i++) {
+                const x = i * step;
+                const db = Math.max(minDb, Math.min(maxDb, data[i]));
+                const y = h - ((db - minDb) / (maxDb - minDb)) * h;
+
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            }
+            ctx.stroke();
+
+            // Draw frequency labels
+            ctx.fillStyle = '#666';
+            ctx.font = '10px sans-serif';
+            const freqLabels = ['5k', '10k', '15k', '20k'];
+            freqLabels.forEach((label, i) => {
+                const x = ((i + 1) / 5) * w;
+                ctx.fillText(label, x, h - 5);
+            });
+        }
+
+        function showStatus(type, message) {
+            status.className = 'status ' + type;
+            status.textContent = message;
+        }
+    </script>
+</body>
+</html>

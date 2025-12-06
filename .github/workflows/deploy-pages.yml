@@ -1,0 +1,58 @@
+name: Build WASM & Deploy Pages
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      - name: Build WASM module
+        working-directory: wasm-analyzer
+        run: wasm-pack build --target web --release
+
+      - name: Copy WASM to docs
+        run: |
+          mkdir -p docs/wasm
+          cp wasm-analyzer/pkg/losselot_wasm.js docs/wasm/
+          cp wasm-analyzer/pkg/losselot_wasm_bg.wasm docs/wasm/
+          cp wasm-analyzer/pkg/losselot_wasm.d.ts docs/wasm/ 2>/dev/null || true
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
