@@ -2,65 +2,114 @@
 
 Losselot detects fake "lossless" audio files—files claiming to be lossless (FLAC, WAV, AIFF) but actually created from lossy sources (MP3, AAC). It uses dual analysis: binary metadata inspection and FFT-based spectral analysis.
 
-## Decision Graph Memory (CRITICAL - READ FIRST)
+---
 
-**The decision graph IS your memory. It persists across sessions and context compactions.**
+## ⚠️ MANDATORY: Decision Graph Workflow
 
-### On Session Start - ALWAYS DO THIS:
-```bash
-./target/release/losselot db nodes    # See all decisions/observations
-./target/release/losselot db edges    # See how they connect
-./target/release/losselot db commands # Recent activity
+**THIS IS NOT OPTIONAL. The decision graph is watched live by the user. Every step must be logged IN REAL-TIME, not retroactively.**
+
+### The Core Rule
+
+```
+BEFORE you do something → Log what you're ABOUT to do
+AFTER it succeeds/fails → Log the outcome
+ALWAYS → Sync frequently so the live graph updates
 ```
 
-Or use: `/context`
+### Behavioral Triggers - MUST LOG WHEN:
 
-### During Work - LOG EVERYTHING:
-```bash
-# Log observations as you discover things
-./target/release/losselot db add-node -t observation "What you found"
+| Trigger | Log Type | Example |
+|---------|----------|---------|
+| User asks for a new feature | `goal` | "Add dark mode to UI" |
+| You're choosing between approaches | `decision` | "Choose state management approach" |
+| You identify multiple ways to do something | `option` (for each) | "Option A: Redux", "Option B: Context" |
+| You're about to write/edit code | `action` | "Implementing Redux store" |
+| You notice something interesting | `observation` | "Existing code uses hooks pattern" |
+| Something worked or failed | `outcome` | "Redux integration successful" |
+| You complete a git commit | `action` with `--commit` | Include the commit hash |
 
-# Log decisions when choosing between options
-./target/release/losselot db add-node -t decision "The choice you're making"
+### The Loop - Follow This EVERY Time
 
-# Log actions when you implement something
-./target/release/losselot db add-node -t action "What you did"
+```
+1. USER REQUEST RECEIVED
+   ↓
+   Log: goal or decision (what are we trying to do?)
 
-# Log outcomes when you see results
-./target/release/losselot db add-node -t outcome "What happened"
+2. BEFORE WRITING ANY CODE
+   ↓
+   Log: action "About to implement X"
 
-# Connect related nodes
-./target/release/losselot db add-edge FROM_ID TO_ID -r "Why they connect"
+3. AFTER EACH SIGNIFICANT CHANGE
+   ↓
+   Log: outcome "X completed" or observation "Found Y"
+   Link: Connect to related nodes
+
+4. BEFORE EVERY GIT PUSH
+   ↓
+   Run: make sync-graph
+   Commit: Include graph-data.json
+
+5. REPEAT - The user is watching the graph live
 ```
 
-Or use Makefile shortcuts (with optional confidence C=0-100):
+### Quick Commands
+
 ```bash
-make obs T="Your observation" C=85        # Add with 85% confidence
-make decision T="Your decision" C=70
-make action T="What you did" C=95
-make outcome T="Result" C=90
+# Log nodes (use --confidence 0-100, --commit HASH when applicable)
+./target/release/losselot db add-node -t goal "Title" --confidence 90
+./target/release/losselot db add-node -t decision "Title" --confidence 75
+./target/release/losselot db add-node -t action "Title" --confidence 85 --commit abc123
+./target/release/losselot db add-node -t observation "Title" --confidence 70
+./target/release/losselot db add-node -t outcome "Title" --confidence 95
+
+# Link nodes
+./target/release/losselot db add-edge FROM_ID TO_ID -r "Reason for connection"
+
+# Sync to live site (DO THIS FREQUENTLY)
+make sync-graph
+
+# Makefile shortcuts
+make goal T="Title" C=90
+make decision T="Title" C=75
+make action T="Title" C=85
+make obs T="Title" C=70
+make outcome T="Title" C=95
 make link FROM=1 TO=2 REASON="why"
 ```
 
-Confidence levels:
-- **70-100** (High) - Well understood, proven approach
-- **40-69** (Medium) - Reasonable choice, some uncertainty
-- **0-39** (Low) - Experimental, might revisit
+### Confidence Levels
 
-### Before Deploying - SYNC THE GRAPH:
+- **90-100**: Certain, proven, tested
+- **70-89**: High confidence, standard approach
+- **50-69**: Moderate confidence, some unknowns
+- **30-49**: Experimental, might change
+- **0-29**: Speculative, likely to revisit
+
+### Why This Matters
+
+1. **The user watches the graph live** - They see your reasoning as you work
+2. **Context WILL be lost** - The graph survives compaction, you don't
+3. **Retroactive logging misses details** - Log in the moment or lose nuance
+4. **Future sessions need this** - Your future self (or another session) will query this
+5. **Public accountability** - The graph is published at the live URL
+
+**Live graph**: https://notactuallytreyanastasio.github.io/losselot/demo/
+
+---
+
+## Session Start Checklist
+
+Every new session or after context recovery, run `/context` or:
+
 ```bash
-make sync-graph  # Exports to docs/demo/graph-data.json
-# Then commit and push - GitHub Pages shows the live graph
+./target/release/losselot db nodes    # What decisions exist?
+./target/release/losselot db edges    # How are they connected?
+./target/release/losselot db commands # What happened recently?
+git log --oneline -10                 # Recent commits
+git status                            # Current state
 ```
 
-**The live decision graph is at: https://notactuallytreyanastasio.github.io/losselot/demo/**
-
-### Why This Matters:
-- You WILL lose context. The graph survives.
-- Every decision you make should be queryable later
-- The graph shows WHY things were done, not just what
-- Future sessions can trace back through your reasoning
-- The public site displays ALL your logic transparently
+---
 
 ## Quick Reference
 
@@ -131,102 +180,29 @@ src/
 
 **Binary:** `lowpass_bitrate_mismatch`, `encoder_quality_mismatch`
 
-## Code Conventions
-
-- Use `rustfmt` for formatting
-- Tests go inline in each module using `#[test]`
-- All analysis results must be serializable via `serde`
-- Use `rayon` for parallel file processing
-- Error handling: propagate with `?`, use `anyhow` for CLI errors
-- Constants for thresholds are in `analyzer/mod.rs`
-
-## Key Constants
-
-```rust
-// analyzer/mod.rs
-const DEFAULT_SUSPECT_THRESHOLD: u8 = 35;
-const DEFAULT_TRANSCODE_THRESHOLD: u8 = 65;
-const AGREEMENT_BONUS: u8 = 15;
-
-// spectral.rs
-const FFT_SIZE: usize = 8192;  // ~186ms windows at 44.1kHz
-```
-
 ## Testing
 
 ### Rust Tests
 ```bash
-# Run all Rust tests
 cargo test
-
-# Run tests with output
 cargo test -- --nocapture
-
-# Run specific test
 cargo test test_threshold_boundaries
 ```
 
-Test files can be generated with `./examples/generate_test_files.sh` which creates various encoding scenarios (clean, transcoded, re-encoded chains).
-
 ### TypeScript/Frontend Tests
 ```bash
-# From docs/ directory
-npm run test        # Run all frontend tests
-npm run typecheck   # Check TypeScript types (no emit)
-npm run build       # Compile TypeScript to dist/
+cd docs && npm run test
+cd docs && npm run typecheck
 ```
-
-Frontend types are in `docs/src/types/` and mirror the Rust backend structs:
-- `graph.ts` - DecisionNode, DecisionEdge, GraphData (mirrors `src/db.rs`)
-- `analysis.ts` - AnalysisResult, BinaryAnalysis, SpectralAnalysis (mirrors WASM output)
-
-**IMPORTANT: Both Rust and TypeScript tests run in CI. All tests must pass before merge.**
-
-## Common Workflows
-
-### Adding a new detection flag
-1. Define flag string in `analyzer/spectral.rs` or `analyzer/binary.rs`
-2. Add detection logic in the appropriate `analyze()` function
-3. Push to `flags` vector in result
-4. Update HTML report if visualization needed (`report/html.rs`)
-
-### Adjusting thresholds
-1. Modify constants in `analyzer/mod.rs`
-2. Run tests to verify: `cargo test test_threshold`
-3. Test with real files from `examples/demo_files/`
-
-### Adding new audio format support
-1. Symphonia handles most decoding - check if codec is supported
-2. Add file extension to `SUPPORTED_EXTENSIONS` in `main.rs`
-3. Test with sample files
-
-## Exit Codes
-
-- `0`: All files clean
-- `1`: At least one suspect file
-- `2`: At least one definite transcode
-
-## Dependencies
-
-Key crates:
-- `symphonia`: Audio decoding
-- `rustfft`: FFT for spectral analysis
-- `clap`: CLI parsing
-- `rayon`: Parallel processing
-- `tiny_http`: Embedded web server
-- `rfd`: GUI file picker (optional, behind `gui` feature)
-- `diesel`: SQLite ORM for decision tracking
 
 ## Database Rules
 
 **CRITICAL: NEVER delete the SQLite database (`losselot.db`)**
 
-The database contains valuable decision graph data and analysis history. If you need to clear data:
-1. Use `losselot db backup` to create a backup first
+The database contains the decision graph. If you need to clear data:
+1. `losselot db backup` first
 2. Ask the user before any destructive operation
-3. The `db clear` command was intentionally removed - use backup/restore instead
 
-Database CLI tools:
 ```bash
 losselot db nodes      # List decision nodes
 losselot db edges      # List edges

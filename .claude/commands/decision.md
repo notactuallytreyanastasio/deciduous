@@ -6,69 +6,106 @@ argument-hint: <action> [args...]
 
 # Decision Graph Management
 
-You are helping manage the losselot decision graph - a DAG that tracks algorithm decisions, comparisons, and rationale for audio analysis improvements.
+**Log decisions IN REAL-TIME as you work, not retroactively.**
 
-## Available Actions
+## ⚠️ When to Use This
 
-Based on $ARGUMENTS, perform the appropriate action:
+| You're doing this... | Log this type | Command |
+|---------------------|---------------|---------|
+| Starting a new feature | `goal` | `/decision goal Add user auth` |
+| Choosing between approaches | `decision` | `/decision decision Choose auth method` |
+| Considering an option | `option` | `/decision option JWT tokens` |
+| About to write code | `action` | `/decision action Implementing JWT` |
+| Noticing something | `observation` | `/decision obs Found existing auth code` |
+| Finished something | `outcome` | `/decision outcome JWT working` |
 
-### List/View Commands
-- `nodes` or `list` - Show all decision nodes: `losselot db nodes`
-- `edges` - Show all edges: `losselot db edges`
-- `graph` - Show full graph as JSON: `losselot db graph`
-- `commands` - Show recent command log: `losselot db commands`
-- `view` - Open web viewer: `losselot serve . --port 3001` then navigate to /graph
+## Quick Commands
 
-### Create Nodes
-- `goal <title>` - Create a goal node: `losselot db add-node -t goal "<title>"`
-- `decision <title>` - Create a decision point: `losselot db add-node -t decision "<title>"`
-- `option <title>` - Create an option node: `losselot db add-node -t option "<title>"`
-- `action <title>` - Create an action node: `losselot db add-node -t action "<title>"`
-- `outcome <title>` - Create an outcome node: `losselot db add-node -t outcome "<title>"`
-- `observation <title>` - Create an observation: `losselot db add-node -t observation "<title>"`
+Based on $ARGUMENTS:
+
+### View Commands
+- `nodes` or `list` → `./target/release/losselot db nodes`
+- `edges` → `./target/release/losselot db edges`
+- `graph` → `./target/release/losselot db graph`
+- `commands` → `./target/release/losselot db commands`
+
+### Create Nodes (with optional confidence)
+- `goal <title>` → `./target/release/losselot db add-node -t goal "<title>" --confidence 90`
+- `decision <title>` → `./target/release/losselot db add-node -t decision "<title>" --confidence 75`
+- `option <title>` → `./target/release/losselot db add-node -t option "<title>" --confidence 70`
+- `action <title>` → `./target/release/losselot db add-node -t action "<title>" --confidence 85`
+- `obs <title>` → `./target/release/losselot db add-node -t observation "<title>" --confidence 80`
+- `outcome <title>` → `./target/release/losselot db add-node -t outcome "<title>" --confidence 90`
 
 ### Create Edges
-- `link <from> <to>` - Link two nodes: `losselot db add-edge <from> <to>`
-- `link <from> <to> -t <type>` - Link with type (leads_to, requires, chosen, rejected, blocks, enables)
+- `link <from> <to> [reason]` → `./target/release/losselot db add-edge <from> <to> -r "<reason>"`
 
-### Update Status
-- `status <id> <status>` - Update node status (pending, active, completed, rejected)
+### Sync to Live Site
+- `sync` → `make sync-graph`
 
-### Backup
-- `backup` - Create timestamped backup: `losselot db backup`
+## Node Types
 
-## Node Types Explained
-- **goal**: High-level objective (e.g., "Improve lo-fi detection accuracy")
-- **decision**: A choice point with multiple options
-- **option**: A possible approach to consider
-- **action**: Something we implemented or will implement
-- **outcome**: Result of an action (success/failure/learning)
-- **observation**: Data point or finding from testing
+| Type | Purpose | Example |
+|------|---------|---------|
+| `goal` | High-level objective | "Improve lo-fi detection" |
+| `decision` | Choice point with options | "Choose detection algorithm" |
+| `option` | Possible approach | "Use spectral slope" |
+| `action` | Something implemented | "Added CFCC analysis" |
+| `outcome` | Result of action | "CFCC working, 95% accuracy" |
+| `observation` | Finding or data point | "Tape has gradual rolloff" |
 
-## Edge Types Explained
-- **leads_to**: Natural progression (goal → decision)
-- **requires**: Dependency relationship
-- **chosen**: Selected option from a decision
-- **rejected**: Option that was not selected (with rationale)
-- **blocks**: Something preventing progress
-- **enables**: Something that makes another thing possible
+## Edge Types
+
+| Type | Meaning |
+|------|---------|
+| `leads_to` | Natural progression |
+| `chosen` | Selected option |
+| `rejected` | Not selected (include reason!) |
+| `requires` | Dependency |
+| `blocks` | Preventing progress |
+| `enables` | Makes something possible |
 
 ## Example Workflow
+
 ```bash
-# Start a new investigation
-losselot db add-node -t goal "Detect cassette tape lo-fi properly"
-losselot db add-node -t decision "Choose cutoff detection method"
-losselot db add-node -t option "Spectral slope analysis"
-losselot db add-node -t option "Cutoff variance measurement"
+# 1. User asks for a feature - log the goal
+./target/release/losselot db add-node -t goal "Add dark mode" --confidence 90
+# Created node 50
 
-# Link them
-losselot db add-edge 1 2 -t leads_to
-losselot db add-edge 2 3 -t leads_to
-losselot db add-edge 2 4 -t leads_to
+# 2. You identify options - log each one
+./target/release/losselot db add-node -t decision "Choose theme approach" --confidence 80
+./target/release/losselot db add-node -t option "CSS variables" --confidence 85
+./target/release/losselot db add-node -t option "Styled components" --confidence 70
+# Created nodes 51, 52, 53
 
-# Record a choice
-losselot db add-edge 2 3 -t chosen -r "Better handles gradual rolloff"
-losselot db add-edge 2 4 -t rejected -r "Too sensitive to natural variation"
+# 3. Link them
+./target/release/losselot db add-edge 50 51 -r "Goal leads to decision"
+./target/release/losselot db add-edge 51 52 -r "Option A"
+./target/release/losselot db add-edge 51 53 -r "Option B"
+
+# 4. Make a choice - log it
+./target/release/losselot db add-edge 51 52 -t chosen -r "Simpler, no build changes"
+./target/release/losselot db add-edge 51 53 -t rejected -r "Would require restructure"
+
+# 5. Implement - log BEFORE coding
+./target/release/losselot db add-node -t action "Implementing CSS variables theme" --confidence 90
+# Created node 54
+
+# 6. Done - log outcome
+./target/release/losselot db add-node -t outcome "Dark mode working" --confidence 95
+./target/release/losselot db add-edge 54 55 -r "Action completed"
+
+# 7. SYNC before pushing
+make sync-graph
+git add docs/demo/graph-data.json
 ```
 
-Execute the appropriate command based on the user's request in $ARGUMENTS.
+## The Rule
+
+```
+LOG BEFORE YOU CODE, NOT AFTER.
+SYNC BEFORE YOU PUSH.
+THE USER IS WATCHING LIVE.
+```
+
+**Live graph**: https://notactuallytreyanastasio.github.io/losselot/demo/

@@ -889,6 +889,86 @@
       "created_at": "2025-12-09T15:50:25.833927-05:00",
       "updated_at": "2025-12-09T15:50:25.833927-05:00",
       "metadata_json": "{\"confidence\":95,\"commit\":\"304cbc6\"}"
+    },
+    {
+      "id": 90,
+      "node_type": "goal",
+      "title": "Refactor Claude tooling to enforce real-time decision graph logging - every action logged BEFORE execution, not retroactively",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:25:50.499112-05:00",
+      "updated_at": "2025-12-09T16:25:50.499112-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 91,
+      "node_type": "decision",
+      "title": "How to restructure CLAUDE.md and command files for real-time logging enforcement",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:25:56.207925-05:00",
+      "updated_at": "2025-12-09T16:25:56.207925-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 92,
+      "node_type": "action",
+      "title": "Rewriting CLAUDE.md - putting MANDATORY WORKFLOW section at top with behavioral rules",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:26:08.079032-05:00",
+      "updated_at": "2025-12-09T16:26:08.079032-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 93,
+      "node_type": "outcome",
+      "title": "CLAUDE.md rewritten with mandatory workflow section at top, behavioral triggers table, and explicit loop",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:26:50.689043-05:00",
+      "updated_at": "2025-12-09T16:26:50.689043-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 94,
+      "node_type": "action",
+      "title": "Updating context.md - adding real-time logging reminders and sync triggers",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:27:06.659156-05:00",
+      "updated_at": "2025-12-09T16:27:06.659156-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 95,
+      "node_type": "outcome",
+      "title": "context.md updated with real-time logging reminders and cleaner structure",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:27:32.297067-05:00",
+      "updated_at": "2025-12-09T16:27:32.297067-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 96,
+      "node_type": "action",
+      "title": "Updating decision.md - adding workflow enforcement and trigger examples",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:27:39.509538-05:00",
+      "updated_at": "2025-12-09T16:27:39.509538-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 97,
+      "node_type": "outcome",
+      "title": "decision.md updated with workflow enforcement, trigger table, and example workflow",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T16:28:15.397298-05:00",
+      "updated_at": "2025-12-09T16:28:15.397298-05:00",
+      "metadata_json": "{\"confidence\":95}"
     }
   ],
   "edges": [
@@ -1386,6 +1466,51 @@
       "weight": 1.0,
       "rationale": "Iterated on design",
       "created_at": "2025-12-09T15:50:27.639140-05:00"
+    },
+    {
+      "id": 56,
+      "from_node_id": 90,
+      "to_node_id": 91,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal leads to decision about implementation approach",
+      "created_at": "2025-12-09T16:26:00.980622-05:00"
+    },
+    {
+      "id": 57,
+      "from_node_id": 92,
+      "to_node_id": 93,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action completed successfully",
+      "created_at": "2025-12-09T16:26:55.786461-05:00"
+    },
+    {
+      "id": 58,
+      "from_node_id": 94,
+      "to_node_id": 95,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action completed",
+      "created_at": "2025-12-09T16:27:39.500601-05:00"
+    },
+    {
+      "id": 59,
+      "from_node_id": 96,
+      "to_node_id": 97,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action completed",
+      "created_at": "2025-12-09T16:28:22.032587-05:00"
+    },
+    {
+      "id": 60,
+      "from_node_id": 91,
+      "to_node_id": 92,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Decision led to first action",
+      "created_at": "2025-12-09T16:28:22.041075-05:00"
     }
   ]
 }
