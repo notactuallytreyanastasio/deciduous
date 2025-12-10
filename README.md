@@ -55,6 +55,8 @@ The writeup includes goals, decisions, actions, outcomes, and an embedded graph:
 
 View the full decision graph with `deciduous serve`:
 
+![Force-directed graph with node details](screencaps_of_it_in_action/3a.png)
+
 ![Node detail view](screencaps_of_it_in_action/2a.png)
 
 ![Timeline view](screencaps_of_it_in_action/2b.png)
