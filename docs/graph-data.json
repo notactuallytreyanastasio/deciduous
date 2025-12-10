@@ -1429,6 +1429,16 @@
       "created_at": "2025-12-10T14:13:56.072048-05:00",
       "updated_at": "2025-12-10T14:13:56.072048-05:00",
       "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 144,
+      "node_type": "action",
+      "title": "Releasing deciduous v0.4.0 with editor-specific init flags",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T14:15:24.279487-05:00",
+      "updated_at": "2025-12-10T14:15:24.279487-05:00",
+      "metadata_json": "{\"confidence\":95}"
     }
   ],
   "edges": [
