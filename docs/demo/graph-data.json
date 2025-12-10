@@ -1269,6 +1269,66 @@
       "created_at": "2025-12-09T22:20:47.519634-05:00",
       "updated_at": "2025-12-09T22:20:47.519634-05:00",
       "metadata_json": "{\"confidence\":100}"
+    },
+    {
+      "id": 128,
+      "node_type": "goal",
+      "title": "Add editor-specific init flags (--claude, --windsurf) to deciduous",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:47:04.926395-05:00",
+      "updated_at": "2025-12-10T13:47:04.926395-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 129,
+      "node_type": "decision",
+      "title": "Design init command architecture for multiple editors",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:47:12.813152-05:00",
+      "updated_at": "2025-12-10T13:47:12.813152-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 130,
+      "node_type": "option",
+      "title": "Use mutually exclusive --claude / --windsurf flags with default to --claude",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:47:12.820245-05:00",
+      "updated_at": "2025-12-10T13:47:12.820245-05:00",
+      "metadata_json": "{\"confidence\":80}"
+    },
+    {
+      "id": 131,
+      "node_type": "observation",
+      "title": "Windsurf uses .windsurf/rules/rules.md for workspace rules and supports AGENTS.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:47:12.827920-05:00",
+      "updated_at": "2025-12-10T13:47:12.827920-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 132,
+      "node_type": "action",
+      "title": "Implemented --claude and --windsurf flags for init command",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:47:12.835479-05:00",
+      "updated_at": "2025-12-10T13:47:12.835479-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 133,
+      "node_type": "outcome",
+      "title": "Editor-specific init flags working - PR #2 created",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:47:12.843778-05:00",
+      "updated_at": "2025-12-10T13:47:12.843778-05:00",
+      "metadata_json": "{\"confidence\":95}"
     }
   ],
   "edges": [
@@ -2027,6 +2087,51 @@
       "weight": 1.0,
       "rationale": "Publishing completed successfully",
       "created_at": "2025-12-09T22:20:47.651216-05:00"
+    },
+    {
+      "id": 85,
+      "from_node_id": 128,
+      "to_node_id": 129,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal requires design decision",
+      "created_at": "2025-12-10T13:47:19.757897-05:00"
+    },
+    {
+      "id": 86,
+      "from_node_id": 129,
+      "to_node_id": 130,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design option",
+      "created_at": "2025-12-10T13:47:19.767144-05:00"
+    },
+    {
+      "id": 87,
+      "from_node_id": 129,
+      "to_node_id": 131,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Research finding",
+      "created_at": "2025-12-10T13:47:19.774932-05:00"
+    },
+    {
+      "id": 88,
+      "from_node_id": 130,
+      "to_node_id": 132,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Proceeding with flag implementation",
+      "created_at": "2025-12-10T13:47:19.782867-05:00"
+    },
+    {
+      "id": 89,
+      "from_node_id": 132,
+      "to_node_id": 133,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation completed",
+      "created_at": "2025-12-10T13:47:19.791766-05:00"
     }
   ]
 }
