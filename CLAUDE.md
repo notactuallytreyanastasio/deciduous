@@ -1,6 +1,6 @@
-# Losselot - Audio Forensics Tool
+# Deciduous - Decision Graph Tooling
 
-Losselot detects fake "lossless" audio files—files claiming to be lossless (FLAC, WAV, AIFF) but actually created from lossy sources (MP3, AAC). It uses dual analysis: binary metadata inspection and FFT-based spectral analysis.
+Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
 
 ---
 
@@ -46,7 +46,7 @@ ALWAYS → Sync frequently so the live graph updates
 
 4. BEFORE EVERY GIT PUSH
    ↓
-   Run: make sync-graph
+   Run: deciduous sync
    Commit: Include graph-data.json
 
 5. REPEAT - The user is watching the graph live
@@ -55,18 +55,36 @@ ALWAYS → Sync frequently so the live graph updates
 ### Quick Commands
 
 ```bash
-# Log nodes (use --confidence 0-100, --commit HASH when applicable)
-./target/release/losselot db add-node -t goal "Title" --confidence 90
-./target/release/losselot db add-node -t decision "Title" --confidence 75
-./target/release/losselot db add-node -t action "Title" --confidence 85 --commit abc123
-./target/release/losselot db add-node -t observation "Title" --confidence 70
-./target/release/losselot db add-node -t outcome "Title" --confidence 95
+# Log nodes (use -c/--confidence 0-100)
+deciduous add goal "Title" -c 90
+deciduous add decision "Title" -c 75
+deciduous add action "Title" -c 85
+deciduous add observation "Title" -c 70
+deciduous add outcome "Title" -c 95
 
 # Link nodes
-./target/release/losselot db add-edge FROM_ID TO_ID -r "Reason for connection"
+deciduous link FROM_ID TO_ID -r "Reason for connection"
+deciduous link 1 2 --edge-type chosen -r "Selected this approach"
 
-# Sync to live site (DO THIS FREQUENTLY)
-make sync-graph
+# View graph
+deciduous nodes           # List all nodes
+deciduous edges           # List all edges
+deciduous graph           # Full graph as JSON
+
+# Sync and export
+deciduous sync            # Export to .deciduous/web/graph-data.json
+
+# DOT export for visualizations
+deciduous dot                              # Output DOT to stdout
+deciduous dot -o graph.dot                 # Output to file
+deciduous dot --png -o graph.dot           # Generate PNG (requires graphviz)
+deciduous dot --nodes 1-11                 # Filter to specific nodes
+deciduous dot --roots 1,5 --png            # Filter from root nodes (BFS)
+
+# PR writeup generation
+deciduous writeup -t "PR Title"            # Generate markdown writeup
+deciduous writeup -t "Title" --nodes 1-11  # Writeup for specific nodes
+deciduous writeup --no-dot --no-test-plan  # Skip sections
 
 # Makefile shortcuts
 make goal T="Title" C=90
@@ -75,6 +93,8 @@ make action T="Title" C=85
 make obs T="Title" C=70
 make outcome T="Title" C=95
 make link FROM=1 TO=2 REASON="why"
+make dot NODES=1-11 PNG=1
+make writeup TITLE="PR Title" NODES=1-11
 ```
 
 ### Confidence Levels
@@ -93,8 +113,6 @@ make link FROM=1 TO=2 REASON="why"
 4. **Future sessions need this** - Your future self (or another session) will query this
 5. **Public accountability** - The graph is published at the live URL
 
-**Live graph**: https://notactuallytreyanastasio.github.io/losselot/demo/
-
 ---
 
 ## Session Start Checklist
@@ -102,11 +120,11 @@ make link FROM=1 TO=2 REASON="why"
 Every new session or after context recovery, run `/context` or:
 
 ```bash
-./target/release/losselot db nodes    # What decisions exist?
-./target/release/losselot db edges    # How are they connected?
-./target/release/losselot db commands # What happened recently?
-git log --oneline -10                 # Recent commits
-git status                            # Current state
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected?
+deciduous commands        # What happened recently?
+git log --oneline -10     # Recent commits
+git status                # Current state
 ```
 
 ---
@@ -120,96 +138,97 @@ cargo build --release
 # Run tests
 cargo test
 
-# Analyze a file
-cargo run -- path/to/file.flac
+# Initialize in a new project
+deciduous init
 
-# Analyze a directory
-cargo run -- ~/Music/
+# Start graph viewer
+deciduous serve --port 3000
 
-# Interactive web UI
-cargo run -- serve ~/Music/ --port 3000
+# Export graph
+deciduous sync
+deciduous graph > graph.json
 
-# Skip spectral analysis (faster)
-cargo run -- --no-spectral path/to/file.flac
+# Generate DOT visualization
+deciduous dot --png -o docs/decision-graph.dot
 
-# Generate test files (requires ffmpeg, lame, sox)
-./examples/generate_test_files.sh
+# Generate PR writeup
+deciduous writeup -t "Feature X" --nodes 1-15 -o PR-WRITEUP.md
 ```
 
 ## Architecture
 
 ```
 src/
-├── main.rs              # CLI entry, argument parsing, parallel execution
+├── main.rs              # CLI entry, command dispatch
 ├── lib.rs               # Public API exports
+├── db.rs                # SQLite database via Diesel ORM
+├── schema.rs            # Diesel table definitions
+├── init.rs              # Project initialization (deciduous init)
 ├── serve.rs             # HTTP server for web UI
-├── ui.html              # Embedded web UI (D3.js visualizations)
-├── analyzer/
-│   ├── mod.rs           # Core orchestration, score combination
-│   ├── spectral.rs      # FFT frequency analysis (8192-sample windows)
-│   └── binary.rs        # MP3 metadata, LAME headers, encoder signatures
-├── mp3/
-│   ├── mod.rs           # MP3 module exports
-│   ├── frame.rs         # MP3 frame header parsing
-│   └── lame.rs          # LAME/Xing header extraction
-└── report/
-    ├── mod.rs           # Report dispatcher
-    ├── html.rs          # Interactive HTML report
-    ├── json.rs          # JSON output
-    └── csv.rs           # CSV output
+└── export.rs            # DOT export and PR writeup generation
 ```
 
-## Scoring System
+## CLI Commands
 
-| Component | Max Points | Key Indicators |
-|-----------|------------|----------------|
-| Binary    | ~50        | Lowpass mismatch, multiple encoder signatures, frame variance |
-| Spectral  | ~50        | High-frequency drops, missing ultrasonic, steep rolloff |
-| Agreement | +15        | Bonus when both methods agree on transcode |
+| Command | Description |
+|---------|-------------|
+| `deciduous init` | Initialize deciduous in current directory |
+| `deciduous add <type> "title"` | Add a node (goal/decision/option/action/outcome/observation) |
+| `deciduous link <from> <to>` | Create edge between nodes |
+| `deciduous status <id> <status>` | Update node status |
+| `deciduous nodes` | List all nodes |
+| `deciduous edges` | List all edges |
+| `deciduous graph` | Output full graph as JSON |
+| `deciduous commands` | Show recent command log |
+| `deciduous backup` | Create database backup |
+| `deciduous serve` | Start web viewer |
+| `deciduous sync` | Export graph to JSON file |
+| `deciduous dot` | Export graph as DOT format |
+| `deciduous writeup` | Generate PR writeup markdown |
 
-**Verdicts:**
-- `OK` (0-34): Clean file
-- `SUSPECT` (35-64): Possibly transcoded
-- `TRANSCODE` (65-100): Definitely transcoded
+## DOT Export Options
 
-## Key Detection Flags
-
-**Spectral:** `severe_hf_damage`, `hf_cutoff_detected`, `weak_ultrasonic_content`, `dead_ultrasonic_band`, `silent_17k+`, `steep_hf_rolloff`
-
-**Re-encoding:** `multi_encoder_sigs`, `encoding_chain(LAME → FFmpeg)`, `lame_reencoded_x2`, `ffmpeg_processed_x2`
-
-**Binary:** `lowpass_bitrate_mismatch`, `encoder_quality_mismatch`
-
-## Testing
-
-### Rust Tests
 ```bash
-cargo test
-cargo test -- --nocapture
-cargo test test_threshold_boundaries
+deciduous dot [OPTIONS]
+
+Options:
+  -o, --output <FILE>     Output file (default: stdout)
+  -r, --roots <IDS>       Root node IDs for BFS traversal (comma-separated)
+  -n, --nodes <SPEC>      Specific node IDs or ranges (e.g., "1-11" or "1,3,5-10")
+  -t, --title <TITLE>     Graph title
+      --rankdir <DIR>     Graph direction: TB (top-bottom) or LR (left-right)
+      --png               Generate PNG file (requires graphviz installed)
 ```
 
-### TypeScript/Frontend Tests
+## Writeup Options
+
 ```bash
-cd docs && npm run test
-cd docs && npm run typecheck
+deciduous writeup [OPTIONS]
+
+Options:
+  -t, --title <TITLE>     PR title
+  -r, --roots <IDS>       Root node IDs (comma-separated, traverses children)
+  -n, --nodes <SPEC>      Specific node IDs or ranges
+  -o, --output <FILE>     Output file (default: stdout)
+      --no-dot            Skip DOT graph section
+      --no-test-plan      Skip test plan section
 ```
 
 ## Database Rules
 
-**CRITICAL: NEVER delete the SQLite database (`losselot.db`)**
+**CRITICAL: NEVER delete the SQLite database (`.deciduous/deciduous.db`)**
 
 The database contains the decision graph. If you need to clear data:
-1. `losselot db backup` first
+1. `deciduous backup` first
 2. Ask the user before any destructive operation
 
-```bash
-losselot db nodes      # List decision nodes
-losselot db edges      # List edges
-losselot db graph      # Full graph as JSON
-losselot db add-node   # Add a decision node
-losselot db add-edge   # Add an edge between nodes
-losselot db status     # Update node status
-losselot db commands   # Show recent command log
-losselot db backup     # Create timestamped backup
-```
+## GitHub Action for PNG Cleanup
+
+When you run `deciduous init`, a GitHub workflow is created at `.github/workflows/cleanup-decision-graphs.yml`. This workflow:
+
+1. Triggers after any PR is merged
+2. Finds decision graph PNG/DOT files
+3. Creates a cleanup branch and removes them
+4. Auto-merges the cleanup PR
+
+This keeps your repo clean of accumulated visualization files while still having nice graphs in PRs.
