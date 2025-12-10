@@ -71,6 +71,22 @@ View the full decision graph with `deciduous serve`:
 cargo install deciduous
 ```
 
+**Requirements:**
+- Rust toolchain (for `cargo install`)
+- **Optional:** graphviz (for `--png` flag to generate PNG images)
+  ```bash
+  # macOS
+  brew install graphviz
+
+  # Ubuntu/Debian
+  apt install graphviz
+
+  # Windows
+  choco install graphviz
+  ```
+
+The deciduous binary is self-contained - no runtime dependencies for core functionality.
+
 ### 2. Initialize in your project
 
 ```bash

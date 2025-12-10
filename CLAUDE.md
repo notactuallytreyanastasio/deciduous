@@ -245,6 +245,174 @@ The database contains the decision graph. If you need to clear data:
 1. `deciduous backup` first
 2. Ask the user before any destructive operation
 
+---
+
+## Development Rules
+
+### Code Quality - MANDATORY
+
+1. **ALWAYS run tests before committing:**
+   ```bash
+   cargo test
+   ```
+   Do NOT commit if tests fail.
+
+2. **ALWAYS ensure code compiles:**
+   ```bash
+   cargo build --release
+   ```
+   Do NOT commit code that doesn't compile.
+
+3. **Write tests for new functionality:**
+   - New commands need tests
+   - Bug fixes need regression tests
+   - Edge cases need coverage
+
+4. **Run clippy for lints:**
+   ```bash
+   cargo clippy
+   ```
+
+### Pre-Commit Checklist
+
+```bash
+cargo test              # All tests pass?
+cargo build --release   # Compiles cleanly?
+cargo clippy            # No warnings?
+```
+
+Only commit if ALL pass.
+
+---
+
+## Release Process - MANDATORY
+
+### Semantic Versioning (SemVer)
+
+Follow semver strictly: `MAJOR.MINOR.PATCH`
+
+| Change Type | Version Bump | Example |
+|-------------|--------------|---------|
+| Breaking API change | MAJOR | 1.0.0 → 2.0.0 |
+| New feature (backward compatible) | MINOR | 1.0.0 → 1.1.0 |
+| Bug fix (backward compatible) | PATCH | 1.0.0 → 1.0.1 |
+
+### Release Checklist
+
+1. **Update version in Cargo.toml:**
+   ```toml
+   version = "X.Y.Z"
+   ```
+
+2. **Run full test suite:**
+   ```bash
+   cargo test
+   cargo build --release
+   ```
+
+3. **Update CHANGELOG (if exists) or commit message with release notes**
+
+4. **Commit the version bump:**
+   ```bash
+   git add Cargo.toml Cargo.lock
+   git commit -m "release: vX.Y.Z - <brief description>"
+   ```
+
+5. **Create and push a git tag:**
+   ```bash
+   git tag -a vX.Y.Z -m "vX.Y.Z: <release notes>"
+   git push origin main
+   git push origin vX.Y.Z
+   ```
+
+6. **Publish to crates.io:**
+   ```bash
+   cargo publish
+   ```
+
+7. **Create GitHub Release:**
+   ```bash
+   gh release create vX.Y.Z --title "vX.Y.Z" --notes "<release notes>"
+   ```
+   Or use the GitHub UI: Releases → Draft new release → Choose tag → Add notes
+
+### Release Notes Format
+
+```markdown
+## vX.Y.Z
+
+### Added
+- New feature A
+- New feature B
+
+### Changed
+- Updated behavior of X
+
+### Fixed
+- Bug fix for Y
+- Bug fix for Z
+
+### Breaking Changes (if MAJOR bump)
+- API change description
+```
+
+### Example Full Release
+
+```bash
+# 1. Bump version
+sed -i '' 's/version = "0.3.4"/version = "0.3.5"/' Cargo.toml
+
+# 2. Test
+cargo test && cargo build --release
+
+# 3. Commit
+git add Cargo.toml Cargo.lock
+git commit -m "release: v0.3.5 - fix detail panel layout"
+
+# 4. Tag
+git tag -a v0.3.5 -m "v0.3.5: Fix detail panel layout for connections
+
+- Rationale text now displays on separate line
+- Full node titles shown without truncation
+- Improved readability of incoming/outgoing connections"
+
+# 5. Push
+git push origin main
+git push origin v0.3.5
+
+# 6. Publish
+cargo publish
+
+# 7. GitHub Release
+gh release create v0.3.5 --title "v0.3.5" --notes "Fix detail panel layout for connections
+
+- Rationale text now displays on separate line
+- Full node titles shown without truncation
+- Improved readability of incoming/outgoing connections"
+```
+
+---
+
+## External Dependencies
+
+### Required at Runtime
+
+| Dependency | Required For | Install |
+|------------|--------------|---------|
+| None | Core functionality | - |
+
+The deciduous binary is self-contained for core features.
+
+### Optional Dependencies
+
+| Dependency | Required For | Install |
+|------------|--------------|---------|
+| graphviz | `--png` flag (DOT → PNG) | `brew install graphviz` / `apt install graphviz` |
+
+If graphviz is not installed, `deciduous dot --png` will fail with a helpful error message.
+
+---
+
 ## GitHub Action for PNG Cleanup
 
 When you run `deciduous init`, a GitHub workflow is created at `.github/workflows/cleanup-decision-graphs.yml`. This workflow:
