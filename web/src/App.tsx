@@ -21,6 +21,7 @@ const isLocalServer = typeof window !== 'undefined' &&
 export const App: React.FC = () => {
   // Load graph data with optional SSE for live updates
   // Use /api/graph when running from deciduous serve, static file for GitHub Pages
+  // Enable 30-second auto-refresh when running locally (deciduous serve)
   const {
     graphData,
     gitHistory,
@@ -31,6 +32,7 @@ export const App: React.FC = () => {
     graphUrl: isLocalServer ? '/api/graph' : './graph-data.json',
     gitHistoryUrl: './git-history.json',
     enableSSE: false, // Disable SSE until deciduous serve is implemented
+    pollInterval: isLocalServer ? 30000 : 0, // 30-second refresh for local server only
   });
 
   // Compute chains and sessions

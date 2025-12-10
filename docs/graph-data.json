@@ -1469,6 +1469,46 @@
       "created_at": "2025-12-10T14:27:57.697083-05:00",
       "updated_at": "2025-12-10T14:27:57.697083-05:00",
       "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 148,
+      "node_type": "outcome",
+      "title": "Released deciduous v0.4.1 with fixed Windsurf rules format",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T14:29:28.568649-05:00",
+      "updated_at": "2025-12-10T14:29:28.568649-05:00",
+      "metadata_json": "{\"confidence\":100}"
+    },
+    {
+      "id": 149,
+      "node_type": "goal",
+      "title": "Add auto-refresh to bundled React viewer",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T14:38:47.848040-05:00",
+      "updated_at": "2025-12-10T14:38:47.848040-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 150,
+      "node_type": "action",
+      "title": "Adding 30-second auto-refresh to useGraphData hook for local server",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T14:39:11.766789-05:00",
+      "updated_at": "2025-12-10T14:39:11.766789-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 151,
+      "node_type": "outcome",
+      "title": "Added 30-second auto-refresh to web viewer for deciduous serve",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T14:41:29.432050-05:00",
+      "updated_at": "2025-12-10T14:41:29.432050-05:00",
+      "metadata_json": "{\"confidence\":95}"
     }
   ],
   "edges": [
@@ -2362,6 +2402,24 @@
       "weight": 1.0,
       "rationale": "Research finding",
       "created_at": "2025-12-10T14:28:04.443389-05:00"
+    },
+    {
+      "id": 100,
+      "from_node_id": 147,
+      "to_node_id": 148,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release complete",
+      "created_at": "2025-12-10T14:29:28.577205-05:00"
+    },
+    {
+      "id": 101,
+      "from_node_id": 150,
+      "to_node_id": 151,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-10T14:41:29.441631-05:00"
     }
   ]
 }

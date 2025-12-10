@@ -95,6 +95,21 @@
   - Version-controlled benchmark definitions
   - CI integration for regression testing model capabilities
 
+### Code Tracking & File Associations
+- [ ] Associate nodes with code changes
+  - `deciduous add action "Implementing X" --files src/foo.rs,src/bar.rs`
+  - Track which files were touched for each action/outcome
+  - Store file paths and optionally line ranges
+- [ ] **Web UI: "View Code" button on nodes**
+  - Click a node → see associated files
+  - Show git diff for the commit linked to that node
+  - Quick navigation to file locations
+- [ ] Update `.claude/commands/` and `.windsurf/rules/` templates
+  - Include instructions to log file associations
+  - `deciduous add action "..." --files <changed-files>`
+- [ ] `deciduous files <node-id>` command to list associated files
+- [ ] Reverse lookup: `deciduous nodes --file src/foo.rs` to find nodes touching a file
+
 ### Prompt Tracking
 - [ ] Capture prompts alongside decisions
   - Store the exact user prompt that triggered a goal/decision
@@ -109,3 +124,7 @@
 - [ ] Prompt → Outcome analysis
   - Correlate prompt patterns with successful outcomes
   - Identify which prompt styles lead to better decisions
+- [ ] **View prompts in web UI**
+  - Display the original prompt in node detail panel
+  - Filter/search nodes by prompt content
+  - "Copy prompt" button for reuse

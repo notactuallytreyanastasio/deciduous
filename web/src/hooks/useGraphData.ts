@@ -16,6 +16,8 @@ interface UseGraphDataOptions {
   enableSSE?: boolean;
   /** SSE endpoint (default: '/api/events') */
   sseUrl?: string;
+  /** Polling interval in milliseconds (0 to disable, default: 0) */
+  pollInterval?: number;
 }
 
 interface UseGraphDataResult {
@@ -43,6 +45,7 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
     gitHistoryUrl,
     enableSSE = false,
     sseUrl = '/api/events',
+    pollInterval = 0,
   } = options;
 
   const [graphData, setGraphData] = useState<GraphData | null>(null);
@@ -163,6 +166,19 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
       if (reconnectTimeout) clearTimeout(reconnectTimeout);
     };
   }, [enableSSE, sseUrl, fetchGraph]);
+
+  /**
+   * Polling for auto-refresh (used when SSE is not available)
+   */
+  useEffect(() => {
+    if (pollInterval <= 0) return;
+
+    const intervalId = setInterval(() => {
+      fetchGraph();
+    }, pollInterval);
+
+    return () => clearInterval(intervalId);
+  }, [pollInterval, fetchGraph]);
 
   return {
     graphData,
