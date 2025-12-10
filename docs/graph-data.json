@@ -1339,6 +1339,66 @@
       "created_at": "2025-12-10T13:53:56.353912-05:00",
       "updated_at": "2025-12-10T13:53:56.353912-05:00",
       "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 135,
+      "node_type": "observation",
+      "title": "Windsurf rules have 4 trigger modes: manual, always, model, glob",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:54:30.802422-05:00",
+      "updated_at": "2025-12-10T13:54:30.802422-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 136,
+      "node_type": "decision",
+      "title": "How to structure Windsurf rules for always-on enforcement",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:54:30.812264-05:00",
+      "updated_at": "2025-12-10T13:54:30.812264-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 137,
+      "node_type": "option",
+      "title": "Use 'trigger: always' frontmatter + XML tags for rule grouping",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:54:30.822022-05:00",
+      "updated_at": "2025-12-10T13:54:30.822022-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 138,
+      "node_type": "observation",
+      "title": "Windsurf memories are auto-retrieved by Cascade when relevant - separate from rules",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:54:30.831868-05:00",
+      "updated_at": "2025-12-10T13:54:30.831868-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 139,
+      "node_type": "outcome",
+      "title": "Windsurf setup now has: Always On rules, model-triggered context recovery, auto-retrieved memories",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:54:44.798331-05:00",
+      "updated_at": "2025-12-10T13:54:44.798331-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 140,
+      "node_type": "observation",
+      "title": "Roadmap item: commit-centric graph navigation and per-commit tooling",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:55:41.187567-05:00",
+      "updated_at": "2025-12-10T13:55:41.187567-05:00",
+      "metadata_json": "{\"confidence\":80}"
     }
   ],
   "edges": [
@@ -2151,6 +2211,60 @@
       "weight": 1.0,
       "rationale": "Enhancement to Windsurf setup",
       "created_at": "2025-12-10T13:53:56.364069-05:00"
+    },
+    {
+      "id": 91,
+      "from_node_id": 133,
+      "to_node_id": 135,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "User feedback prompted research",
+      "created_at": "2025-12-10T13:54:37.386511-05:00"
+    },
+    {
+      "id": 92,
+      "from_node_id": 135,
+      "to_node_id": 136,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Research informed design decision",
+      "created_at": "2025-12-10T13:54:37.396175-05:00"
+    },
+    {
+      "id": 93,
+      "from_node_id": 136,
+      "to_node_id": 137,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design option",
+      "created_at": "2025-12-10T13:54:37.406511-05:00"
+    },
+    {
+      "id": 94,
+      "from_node_id": 136,
+      "to_node_id": 138,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Research finding",
+      "created_at": "2025-12-10T13:54:37.416886-05:00"
+    },
+    {
+      "id": 95,
+      "from_node_id": 137,
+      "to_node_id": 134,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Implemented this approach",
+      "created_at": "2025-12-10T13:54:37.424685-05:00"
+    },
+    {
+      "id": 96,
+      "from_node_id": 134,
+      "to_node_id": 139,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-10T13:54:44.808253-05:00"
     }
   ]
 }
