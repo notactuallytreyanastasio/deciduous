@@ -82,6 +82,8 @@ This creates:
 - `.deciduous/` - SQLite database
 - `.claude/commands/decision.md` - `/decision` slash command
 - `.claude/commands/context.md` - `/context` slash command
+- `docs/` - Static viewer for GitHub Pages
+- `.github/workflows/deploy-pages.yml` - Auto-deploy to GitHub Pages
 - `.github/workflows/cleanup-decision-graphs.yml` - Auto-cleanup PNGs after PR merge
 - `CLAUDE.md` - Project instructions with workflow
 
@@ -140,6 +142,31 @@ Every node can have a confidence score (0-100):
 | 50-69 | Moderate, some unknowns |
 | 30-49 | Experimental |
 | 0-29 | Speculative |
+
+---
+
+## GitHub Pages
+
+Deciduous can deploy your decision graph to GitHub Pages for public viewing.
+
+### Setup
+
+1. Run `deciduous init` (creates `docs/` and workflow)
+2. Export your graph: `deciduous sync`
+3. Commit and push: `git add docs/ .github/ && git push`
+4. Enable Pages in repo settings: **Settings → Pages → Source: Deploy from branch → `gh-pages`**
+
+Your graph will be live at `https://<username>.github.io/<repo>/`
+
+### Live Example
+
+See a real decision graph: [deciduous_example](https://notactuallytreyanastasio.github.io/deciduous_example/)
+
+The viewer includes:
+- **Chains view** - Decision chains with flow visualization
+- **Timeline view** - Chronological node timeline
+- **Graph view** - Force-directed interactive graph
+- **DAG view** - Hierarchical directed acyclic graph
 
 ---
 
