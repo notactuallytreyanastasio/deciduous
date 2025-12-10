@@ -21,6 +21,29 @@ deciduous edges
 deciduous commands
 ```
 
+## Step 1.5: Audit Graph Integrity
+
+**CRITICAL: Check that all nodes are logically connected.**
+
+```bash
+# Find nodes with no incoming edges (potential missing connections)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+
+**Review each flagged node:**
+- Root `goal` nodes are VALID without parents
+- `outcome` nodes MUST link back to their action/goal
+- `action` nodes MUST link to their parent goal/decision
+- `option` nodes MUST link to their parent decision
+
+**Fix missing connections:**
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
+```
+
 ## Step 2: Check Git State
 
 ```bash
@@ -92,15 +115,21 @@ SESSION START
     ↓
 Run /context → See past decisions
     ↓
+AUDIT → Fix any orphan nodes first!
+    ↓
 DO WORK → Log BEFORE each action
     ↓
+CONNECT → Link new nodes immediately
+    ↓
 AFTER CHANGES → Log outcomes, observations
+    ↓
+AUDIT AGAIN → Any new orphans?
     ↓
 BEFORE PUSH → deciduous sync
     ↓
 PUSH → Live graph updates
     ↓
-SESSION END → Graph persists
+SESSION END → Final audit
     ↓
 (repeat)
 ```

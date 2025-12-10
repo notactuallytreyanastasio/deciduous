@@ -38,18 +38,57 @@ ALWAYS → Sync frequently so the live graph updates
 2. BEFORE WRITING ANY CODE
    ↓
    Log: action "About to implement X"
+   Link: Connect action to its parent goal/decision IMMEDIATELY
 
 3. AFTER EACH SIGNIFICANT CHANGE
    ↓
    Log: outcome "X completed" or observation "Found Y"
-   Link: Connect to related nodes
+   Link: Connect outcome back to its action/goal IMMEDIATELY
 
-4. BEFORE EVERY GIT PUSH
+4. AUDIT CONNECTIONS
+   ↓
+   Ask: Does every outcome link to what caused it?
+   Ask: Does every action link to why I did it?
+   Fix: Any missing connections before continuing
+
+5. BEFORE EVERY GIT PUSH
    ↓
    Run: deciduous sync
    Commit: Include graph-data.json
 
-5. REPEAT - The user is watching the graph live
+6. REPEAT - The user is watching the graph live
+```
+
+### ⚠️ CRITICAL: Maintain the Logical Thread
+
+**The graph's value is in its CONNECTIONS, not just its nodes.**
+
+Every time you create a node, IMMEDIATELY link it:
+
+| When you create... | Link it to... | Why |
+|-------------------|---------------|-----|
+| `outcome` | The action/goal it resolves | Shows what work produced this result |
+| `action` | The goal/decision that spawned it | Shows why you did this work |
+| `option` | Its parent decision | Shows what choice this relates to |
+| `observation` | Related goal/action | Shows context for the finding |
+| `decision` | Parent goal (if any) | Shows what prompted the choice |
+
+**Root `goal` nodes are the ONLY valid orphans.** Everything else needs a parent.
+
+### Audit Checklist (Do This Regularly)
+
+Before `deciduous sync`, ask yourself:
+1. Does every **outcome** link back to what caused it?
+2. Does every **action** link to why I did it?
+3. Are there any **dangling outcomes** floating without parents?
+4. Can I trace from any outcome back to a root goal?
+
+```bash
+# Find nodes that might need connections
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
 ```
 
 ### Quick Commands

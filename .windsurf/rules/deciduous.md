@@ -79,12 +79,56 @@ deciduous sync
 - `enables` - Makes something possible
 </edge_types>
 
+## Graph Integrity - CRITICAL
+
+<integrity_rules>
+**Every node MUST be logically connected.** Floating nodes break the graph's value.
+
+### Connection Rules
+| Node Type | MUST connect to | Valid orphan? |
+|-----------|----------------|---------------|
+| `outcome` | The action/goal it resolves | NO - always needs parent |
+| `action` | The decision/goal that spawned it | NO - always needs parent |
+| `option` | Its parent decision | NO - always needs parent |
+| `observation` | Related goal/action/decision | Usually no |
+| `decision` | Parent goal (if any) | Sometimes |
+| `goal` | Can be a root | YES - root goals are valid |
+
+### Audit Checklist
+After creating nodes, ask:
+1. Does every **outcome** link back to what caused it?
+2. Does every **action** link to why you did it?
+3. Does every **option** link to its decision?
+4. Are there **dangling outcomes** with no parent?
+
+### Find Disconnected Nodes
+```bash
+# List nodes with no incoming edges
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+
+### Fix Missing Connections
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
+```
+
+### When to Audit
+- At session start
+- Before every `deciduous sync`
+- After creating multiple nodes quickly
+- When graph looks disconnected in web UI
+</integrity_rules>
+
 ## The Rule
 
 <core_rule>
 LOG BEFORE YOU CODE, NOT AFTER.
+CONNECT EVERY NODE TO ITS PARENT.
+AUDIT FOR ORPHANS REGULARLY.
 SYNC BEFORE YOU PUSH.
-THE USER IS WATCHING THE GRAPH LIVE.
 </core_rule>
 
 </decision_graph_workflow>

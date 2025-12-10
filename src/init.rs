@@ -133,11 +133,31 @@ Based on $ARGUMENTS:
 | `blocks` | Preventing progress |
 | `enables` | Makes something possible |
 
+## ⚠️ CRITICAL: Maintain Connections
+
+**The graph's value is in its CONNECTIONS, not just nodes.**
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The goal/decision that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action |
+
+**Root `goal` nodes are the ONLY valid orphans.**
+
+### Audit Checklist (Before Every Sync)
+
+1. Does every **outcome** link to what caused it?
+2. Does every **action** link to why you did it?
+3. Any **dangling outcomes** without parents?
+
 ## The Rule
 
 ```
 LOG BEFORE YOU CODE, NOT AFTER.
-SYNC BEFORE YOU PUSH.
+CONNECT EVERY NODE IMMEDIATELY.
+AUDIT BEFORE SYNC.
 ```
 "#;
 
@@ -325,7 +345,8 @@ const CLAUDE_MD_SECTION: &str = r#"
 ```
 BEFORE you do something -> Log what you're ABOUT to do
 AFTER it succeeds/fails -> Log the outcome
-ALWAYS -> Sync frequently so the graph updates
+CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
 ```
 
 ### Behavioral Triggers - MUST LOG WHEN:
@@ -338,37 +359,46 @@ ALWAYS -> Sync frequently so the graph updates
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
+### ⚠️ CRITICAL: Maintain Connections
+
+**The graph's value is in its CONNECTIONS, not just nodes.**
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The goal/decision that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action |
+
+**Root `goal` nodes are the ONLY valid orphans.**
+
 ### Quick Commands
 
 ```bash
 deciduous add goal "Title" -c 90
-deciduous add decision "Title" -c 75
 deciduous add action "Title" -c 85
-deciduous link FROM TO -r "reason"
+deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
-deciduous dot --png -o graph.dot  # Generate visualization
-deciduous writeup -t "PR Title"   # Generate PR writeup
 
-# Optional metadata for nodes
-# -p, --prompt "..."   Store the user prompt that triggered this
-# -f, --files "a.rs,b.rs"   Associate files with this node
+# Optional metadata
+# -p, --prompt "..."   Store the user prompt
+# -f, --files "a.rs,b.rs"   Associate files
 # -b, --branch <name>   Git branch (auto-detected)
-# --commit <hash>   Link to a git commit
-
-# Filter by branch
-deciduous nodes --branch main
 ```
+
+### Audit Checklist (Before Every Sync)
+
+1. Does every **outcome** link back to what caused it?
+2. Does every **action** link to why you did it?
+3. Any **dangling outcomes** without parents?
 
 ### Session Start Checklist
 
-Every new session, run `/context` or:
-
 ```bash
 deciduous nodes    # What decisions exist?
-deciduous edges    # How are they connected?
+deciduous edges    # How are they connected? Any gaps?
 git status         # Current state
-git log -10        # Recent commits
 ```
 "#;
 
@@ -458,6 +488,26 @@ deciduous sync
 - `blocks` - Preventing progress
 - `enables` - Makes possible
 </edge_types>
+
+## ⚠️ CRITICAL: Maintain Connections
+
+<connection_rules>
+**The graph's value is in its CONNECTIONS, not just nodes.**
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The goal/decision that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action |
+
+**Root `goal` nodes are the ONLY valid orphans.**
+
+### Audit Before Every Sync
+1. Does every **outcome** link to what caused it?
+2. Does every **action** link to why you did it?
+3. Any **dangling outcomes** without parents?
+</connection_rules>
 
 </decision_graph_workflow>
 "#;
@@ -565,7 +615,8 @@ const AGENTS_MD_SECTION: &str = r#"
 ```
 BEFORE you do something -> Log what you're ABOUT to do
 AFTER it succeeds/fails -> Log the outcome
-ALWAYS -> Sync frequently so the graph updates
+CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
 ```
 
 ### Behavioral Triggers - MUST LOG WHEN:
@@ -578,27 +629,39 @@ ALWAYS -> Sync frequently so the graph updates
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
+### ⚠️ CRITICAL: Maintain Connections
+
+**The graph's value is in its CONNECTIONS, not just nodes.**
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The goal/decision that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action |
+
+**Root `goal` nodes are the ONLY valid orphans.**
+
 ### Quick Commands
 
 ```bash
 deciduous add goal "Title" -c 90
-deciduous add decision "Title" -c 75
 deciduous add action "Title" -c 85
-deciduous link FROM TO -r "reason"
+deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
-deciduous dot --png -o graph.dot  # Generate visualization
-deciduous writeup -t "PR Title"   # Generate PR writeup
 
-# Optional metadata for nodes
-# -p, --prompt "..."   Store the user prompt that triggered this
-# -f, --files "a.rs,b.rs"   Associate files with this node
+# Optional metadata
+# -p, --prompt "..."   Store the user prompt
+# -f, --files "a.rs,b.rs"   Associate files
 # -b, --branch <name>   Git branch (auto-detected)
-# --commit <hash>   Link to a git commit
-
-# Filter by branch
-deciduous nodes --branch main
 ```
+
+### Audit Checklist (Before Every Sync)
+
+1. Does every **outcome** link to what caused it?
+2. Does every **action** link to why you did it?
+3. Any **dangling outcomes** without parents?
 
 ### Session Start Checklist
 

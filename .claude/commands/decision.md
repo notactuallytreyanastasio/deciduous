@@ -85,12 +85,55 @@ Based on $ARGUMENTS:
 | `blocks` | Preventing progress |
 | `enables` | Makes something possible |
 
+## Graph Integrity - CRITICAL
+
+**Every node MUST be logically connected.** Floating nodes break the graph's value.
+
+### Connection Rules
+| Node Type | MUST connect to | Example |
+|-----------|----------------|---------|
+| `outcome` | The action/goal it resolves | "JWT working" → links FROM "Implementing JWT" |
+| `action` | The decision/goal that spawned it | "Implementing JWT" → links FROM "Add auth" |
+| `option` | Its parent decision | "Use JWT" → links FROM "Choose auth method" |
+| `observation` | Related goal/action/decision | "Found existing code" → links TO relevant node |
+| `decision` | Parent goal (if any) | "Choose auth" → links FROM "Add auth feature" |
+| `goal` | Can be a root (no parent needed) | Root goals are valid orphans |
+
+### Audit Checklist
+Ask yourself after creating nodes:
+1. Does every **outcome** link back to what caused it?
+2. Does every **action** link to why you did it?
+3. Does every **option** link to its decision?
+4. Are there **dangling outcomes** with no parent action/goal?
+
+### Find Disconnected Nodes
+```bash
+# List nodes with no incoming edges (potential orphans)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+Note: Root goals are VALID orphans. Outcomes/actions/options usually are NOT.
+
+### Fix Missing Connections
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
+```
+
+### When to Audit
+- Before every `deciduous sync`
+- After creating multiple nodes quickly
+- At session end
+- When the web UI graph looks disconnected
+
 ## The Rule
 
 ```
 LOG BEFORE YOU CODE, NOT AFTER.
+CONNECT EVERY NODE TO ITS PARENT.
+AUDIT FOR ORPHANS REGULARLY.
 SYNC BEFORE YOU PUSH.
-THE USER IS WATCHING LIVE.
 ```
 
 **Live graph**: https://notactuallytreyanastasio.github.io/deciduous/

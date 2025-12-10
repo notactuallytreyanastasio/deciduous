@@ -1599,6 +1599,26 @@
       "created_at": "2025-12-10T15:31:41.829555-05:00",
       "updated_at": "2025-12-10T15:31:41.829555-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 161,
+      "node_type": "goal",
+      "title": "Add graph integrity auditing to all tooling",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:39:59.852742-05:00",
+      "updated_at": "2025-12-10T15:39:59.852742-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User: outcomes should never float without ancestors. Audit and retroactively connect nodes.\"}"
+    },
+    {
+      "id": 162,
+      "node_type": "outcome",
+      "title": "Added graph integrity auditing to all tooling",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:45:06.057218-05:00",
+      "updated_at": "2025-12-10T15:45:06.057218-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -2546,6 +2566,15 @@
       "weight": 1.0,
       "rationale": "Branch-scoped graphs implementation complete",
       "created_at": "2025-12-10T15:31:47.665031-05:00"
+    },
+    {
+      "id": 106,
+      "from_node_id": 161,
+      "to_node_id": 162,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Graph integrity auditing implemented in all tooling",
+      "created_at": "2025-12-10T15:45:13.390902-05:00"
     }
   ]
 }
