@@ -128,3 +128,18 @@
   - Display the original prompt in node detail panel
   - Filter/search nodes by prompt content
   - "Copy prompt" button for reuse
+
+### Git Integration & Pre-commit Hook Awareness
+- [ ] Inspect and respect pre-commit hooks
+  - Detect `.git/hooks/pre-commit` or `.husky/` hooks
+  - Parse hook contents to understand what checks run
+  - Warn users if hooks might reject commits (linting, formatting, tests)
+- [ ] Pre-flight commit validation
+  - `deciduous commit --dry-run` to simulate what hooks would do
+  - Show which checks would pass/fail before actual commit
+- [ ] Auto-fix integration
+  - If hooks run formatters (prettier, rustfmt), detect and apply fixes
+  - Re-stage auto-fixed files before commit
+- [ ] Hook-aware templates
+  - Update `.claude/commands/` and `.windsurf/rules/` to mention pre-commit awareness
+  - Instruct LLMs to check for hooks before committing
