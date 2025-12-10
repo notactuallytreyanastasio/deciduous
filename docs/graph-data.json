@@ -1329,6 +1329,16 @@
       "created_at": "2025-12-10T13:47:12.843778-05:00",
       "updated_at": "2025-12-10T13:47:12.843778-05:00",
       "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 134,
+      "node_type": "action",
+      "title": "Improved Windsurf rules with proper triggers and memories",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:53:56.353912-05:00",
+      "updated_at": "2025-12-10T13:53:56.353912-05:00",
+      "metadata_json": "{\"confidence\":90}"
     }
   ],
   "edges": [
@@ -2132,6 +2142,15 @@
       "weight": 1.0,
       "rationale": "Implementation completed",
       "created_at": "2025-12-10T13:47:19.791766-05:00"
+    },
+    {
+      "id": 90,
+      "from_node_id": 132,
+      "to_node_id": 134,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Enhancement to Windsurf setup",
+      "created_at": "2025-12-10T13:53:56.364069-05:00"
     }
   ]
 }

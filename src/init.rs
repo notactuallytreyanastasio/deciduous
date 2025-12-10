@@ -354,163 +354,165 @@ git log -10        # Recent commits
 // WINDSURF-SPECIFIC TEMPLATES
 // ============================================================================
 
-/// Windsurf decision rule - placed in .windsurf/rules/decision.md
-const WINDSURF_DECISION_RULE: &str = r#"# Decision Graph Workflow
+/// Windsurf main rule - placed in .windsurf/rules/deciduous.md
+/// "Always On" trigger ensures Cascade enforces decision graph workflow on every interaction
+const WINDSURF_DECIDUOUS_RULE: &str = r#"---
+trigger: always
+---
 
-**Log decisions IN REAL-TIME as you work, not retroactively.**
+<decision_graph_workflow>
 
-## When to Log
+# Decision Graph - ALWAYS ON
 
-| You're doing this... | Log this type | Command |
-|---------------------|---------------|---------|
-| Starting a new feature | `goal` | `deciduous add goal "Add user auth" -c 90` |
-| Choosing between approaches | `decision` | `deciduous add decision "Choose auth method" -c 75` |
-| Considering an option | `option` | `deciduous add option "JWT tokens" -c 70` |
-| About to write code | `action` | `deciduous add action "Implementing JWT" -c 85` |
-| Noticing something | `observation` | `deciduous add observation "Found existing auth code" -c 80` |
-| Finished something | `outcome` | `deciduous add outcome "JWT working" -c 95` |
+This project uses Deciduous for persistent decision tracking. You MUST log decisions in real-time.
 
-## Quick Commands
+## MANDATORY: Log These Events
 
-### View Commands
-- `deciduous nodes` - List all nodes
-- `deciduous edges` - List all edges
-- `deciduous graph` - Full graph as JSON
-- `deciduous commands` - Recent command log
+<logging_triggers>
+- **New feature request** → `deciduous add goal "Feature name" -c 90`
+- **Choosing between approaches** → `deciduous add decision "What to decide" -c 75`
+- **Considering an option** → `deciduous add option "Option name" -c 70`
+- **About to write code** → `deciduous add action "What you're implementing" -c 85`
+- **Noticed something** → `deciduous add observation "What you found" -c 80`
+- **Something completed** → `deciduous add outcome "Result" -c 95`
+</logging_triggers>
 
-### Create Nodes (with optional confidence 0-100)
-- `deciduous add goal "<title>" -c 90`
-- `deciduous add decision "<title>" -c 75`
-- `deciduous add option "<title>" -c 70`
-- `deciduous add action "<title>" -c 85`
-- `deciduous add observation "<title>" -c 80`
-- `deciduous add outcome "<title>" -c 95`
+## MANDATORY: The Feedback Loop
 
-### Create Edges
-- `deciduous link <from_id> <to_id> -r "<reason>"`
-- `deciduous link 1 2 --edge-type chosen -r "Selected this approach"`
+<workflow>
+1. USER REQUEST → Log goal/decision FIRST (before any code)
+2. BEFORE coding → Log action
+3. AFTER changes → Log outcome + link nodes
+4. BEFORE git push → Run `deciduous sync`
+</workflow>
 
-### Sync and Export
-- `deciduous sync` - Export to docs/graph-data.json
-- `deciduous dot --png -o graph.dot` - Generate PNG visualization
-- `deciduous writeup -t "PR Title"` - Generate PR writeup
+## Commands
 
-## Node Types
+<commands>
+```bash
+# Add nodes (with confidence 0-100)
+deciduous add goal "Title" -c 90
+deciduous add decision "Title" -c 75
+deciduous add action "Title" -c 85
+deciduous add outcome "Title" -c 95
+deciduous add observation "Title" -c 80
 
-| Type | Purpose | Example |
-|------|---------|---------|
-| `goal` | High-level objective | "Add user authentication" |
-| `decision` | Choice point with options | "Choose auth method" |
-| `option` | Possible approach | "Use JWT tokens" |
-| `action` | Something implemented | "Added JWT middleware" |
-| `outcome` | Result of action | "JWT auth working" |
-| `observation` | Finding or data point | "Existing code uses sessions" |
+# Link nodes together
+deciduous link <from> <to> -r "reason"
+deciduous link 1 2 --edge-type chosen -r "Selected this approach"
+
+# View current graph
+deciduous nodes
+deciduous edges
+
+# Sync before pushing
+deciduous sync
+```
+</commands>
 
 ## Edge Types
 
-| Type | Meaning |
-|------|---------|
-| `leads_to` | Natural progression |
-| `chosen` | Selected option |
-| `rejected` | Not selected (include reason!) |
-| `requires` | Dependency |
-| `blocks` | Preventing progress |
-| `enables` | Makes something possible |
+<edge_types>
+- `leads_to` - Natural progression (default)
+- `chosen` - Selected this option
+- `rejected` - Did not select (include why!)
+- `requires` - Dependency
+- `blocks` - Preventing progress
+- `enables` - Makes possible
+</edge_types>
 
-## The Rule
-
-```
-LOG BEFORE YOU CODE, NOT AFTER.
-SYNC BEFORE YOU PUSH.
-```
+</decision_graph_workflow>
 "#;
 
 /// Windsurf context rule - placed in .windsurf/rules/context.md
-const WINDSURF_CONTEXT_RULE: &str = r#"# Context Recovery
+/// Model-triggered rule that fires when Cascade detects session start or context questions
+const WINDSURF_CONTEXT_RULE: &str = r#"---
+trigger: model
+description: Use when starting a new session, recovering context, or when the user asks about previous work
+---
 
-**RUN THIS AT SESSION START.** The decision graph is your persistent memory.
+<context_recovery>
 
-## Step 1: Query the Graph
+# Context Recovery
 
+When starting a session or recovering context, query the decision graph:
+
+<session_start>
 ```bash
-# See all decisions (look for recent ones and pending status)
+# 1. See what decisions exist (look for recent/pending)
 deciduous nodes
 
-# See how decisions connect
+# 2. See how they connect
 deciduous edges
 
-# What commands were recently run?
-deciduous commands
-```
-
-## Step 2: Check Git State
-
-```bash
+# 3. Check git state
 git status
 git log --oneline -10
-git diff --stat
 ```
+</session_start>
 
-## After Gathering Context, Report:
+## After Querying, Report:
 
-1. **Current branch** and pending changes
-2. **Recent decisions** (especially pending/active ones)
-3. **Last actions** from git log and command log
-4. **Open questions** or unresolved observations
-5. **Suggested next steps**
+1. Current branch and pending changes
+2. Recent decisions (especially pending/active ones)
+3. Last actions from the command log
+4. Suggested next steps
 
----
+<important>
+The decision graph survives context loss. Query it whenever you need to understand
+what was decided previously. Then continue logging per the deciduous.md rule.
+</important>
 
-## REMEMBER: Real-Time Logging Required
+</context_recovery>
+"#;
 
-After recovering context, you MUST follow the logging workflow:
+/// Windsurf memories file - placed in .windsurf/memories.md
+/// Project-level memories that Cascade auto-retrieves when relevant
+const WINDSURF_MEMORIES: &str = r#"# Project Memories
 
-```
-EVERY USER REQUEST -> Log goal/decision first
-BEFORE CODE CHANGES -> Log action
-AFTER CHANGES -> Log outcome, link nodes
-BEFORE GIT PUSH -> deciduous sync
-```
+## Decision Graph System
 
-### Quick Logging Commands
+This project uses **Deciduous** for persistent decision tracking.
 
-```bash
-deciduous add goal "What we're trying to do" -c 90
-deciduous add action "What I'm about to implement" -c 85
-deciduous add outcome "What happened" -c 95
-deciduous link FROM TO -r "Connection reason"
-deciduous sync  # Do this frequently!
-```
+<memory>
+**What is Deciduous?**
+A decision graph tool that tracks goals, decisions, actions, and outcomes.
+The graph survives context loss - when sessions end or context compacts,
+the reasoning persists in the database.
+</memory>
 
----
-
-## The Memory Loop
-
-```
-SESSION START
-    |
-Query graph -> See past decisions
-    |
-DO WORK -> Log BEFORE each action
-    |
-AFTER CHANGES -> Log outcomes, observations
-    |
-BEFORE PUSH -> deciduous sync
-    |
-PUSH -> Graph persists
-    |
-SESSION END -> Graph survives
-    |
-(repeat)
-```
-
----
-
-## Why This Matters
-
-- Context loss during compaction loses your reasoning
-- The graph survives - query it early, query it often
+<memory>
+**Why log decisions?**
+- Context compaction loses your reasoning
+- The graph survives and is queryable by future sessions
 - Retroactive logging misses details - log in the moment
+- The user may be watching the graph live
+</memory>
+
+<memory>
+**Key Commands**
+- `deciduous nodes` - see all decisions
+- `deciduous edges` - see connections
+- `deciduous add <type> "title" -c <confidence>` - add node
+- `deciduous link <from> <to> -r "reason"` - connect nodes
+- `deciduous sync` - export to docs/graph-data.json
+</memory>
+
+<memory>
+**Node Types**
+- goal: High-level objective
+- decision: Choice point
+- option: Possible approach
+- action: Implementation step
+- outcome: Result
+- observation: Finding/insight
+</memory>
+
+<memory>
+**The Rule**
+LOG BEFORE YOU CODE, NOT AFTER.
+SYNC BEFORE YOU PUSH.
+</memory>
 "#;
 
 /// AGENTS.md section for Windsurf (equivalent to CLAUDE.md section)
@@ -611,17 +613,25 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
         }
         Editor::Windsurf => {
+            // Create .windsurf directory
+            let windsurf_base = cwd.join(".windsurf");
+            create_dir_if_missing(&windsurf_base)?;
+
             // Create .windsurf/rules directory
-            let windsurf_dir = cwd.join(".windsurf").join("rules");
-            create_dir_if_missing(&windsurf_dir)?;
+            let windsurf_rules = windsurf_base.join("rules");
+            create_dir_if_missing(&windsurf_rules)?;
 
-            // Write decision.md rule
-            let decision_path = windsurf_dir.join("decision.md");
-            write_file_if_missing(&decision_path, WINDSURF_DECISION_RULE, ".windsurf/rules/decision.md")?;
+            // Write deciduous.md rule (Always On - main workflow)
+            let deciduous_rule_path = windsurf_rules.join("deciduous.md");
+            write_file_if_missing(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
 
-            // Write context.md rule
-            let context_path = windsurf_dir.join("context.md");
+            // Write context.md rule (Model-triggered - for session recovery)
+            let context_path = windsurf_rules.join("context.md");
             write_file_if_missing(&context_path, WINDSURF_CONTEXT_RULE, ".windsurf/rules/context.md")?;
+
+            // Write memories.md (project-level memories Cascade auto-retrieves)
+            let memories_path = windsurf_base.join("memories.md");
+            write_file_if_missing(&memories_path, WINDSURF_MEMORIES, ".windsurf/memories.md")?;
 
             // Append to or create AGENTS.md
             let agents_md_path = cwd.join("AGENTS.md");
@@ -682,7 +692,10 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             println!("  3. Use {} or {} slash commands", "/decision".cyan(), "/context".cyan());
         }
         Editor::Windsurf => {
-            println!("  3. Windsurf will auto-read rules from {}", ".windsurf/rules/".cyan());
+            println!("  3. Cascade will auto-enforce rules from {}", ".windsurf/rules/".cyan());
+            println!("     - {} (Always On)", "deciduous.md".cyan());
+            println!("     - {} (Model-triggered)", "context.md".cyan());
+            println!("     - {} (Auto-retrieved memories)", ".windsurf/memories.md".cyan());
         }
     }
 
