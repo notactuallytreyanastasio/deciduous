@@ -147,6 +147,10 @@ enum Command {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
+        /// PNG filename to embed (auto-detects repo/branch for GitHub URL)
+        #[arg(long)]
+        png: Option<String>,
+
         /// Skip DOT graph section
         #[arg(long)]
         no_dot: bool,
@@ -462,7 +466,7 @@ fn main() {
             }
         }
 
-        Command::Writeup { title, roots, nodes, output, no_dot, no_test_plan } => {
+        Command::Writeup { title, roots, nodes, output, png, no_dot, no_test_plan } => {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -479,11 +483,44 @@ fn main() {
                         graph
                     };
 
+                    // Auto-detect GitHub repo from git remote
+                    let github_repo = ProcessCommand::new("git")
+                        .args(["remote", "get-url", "origin"])
+                        .output()
+                        .ok()
+                        .and_then(|o| String::from_utf8(o.stdout).ok())
+                        .and_then(|url| {
+                            // Parse GitHub URL: git@github.com:owner/repo.git or https://github.com/owner/repo.git
+                            let url = url.trim();
+                            if url.contains("github.com") {
+                                let repo = url
+                                    .trim_end_matches(".git")
+                                    .split("github.com")
+                                    .last()
+                                    .map(|s| s.trim_start_matches(':').trim_start_matches('/'))
+                                    .map(|s| s.to_string());
+                                repo
+                            } else {
+                                None
+                            }
+                        });
+
+                    // Auto-detect current branch
+                    let git_branch = ProcessCommand::new("git")
+                        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                        .output()
+                        .ok()
+                        .and_then(|o| String::from_utf8(o.stdout).ok())
+                        .map(|s| s.trim().to_string());
+
                     let config = WriteupConfig {
                         title: title.unwrap_or_else(|| "Pull Request".to_string()),
                         root_ids: vec![], // Already filtered above
                         include_dot: !no_dot,
                         include_test_plan: !no_test_plan,
+                        png_filename: png,
+                        github_repo,
+                        git_branch,
                     };
 
                     let writeup = generate_pr_writeup(&filtered_graph, &config);

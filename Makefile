@@ -197,11 +197,11 @@ dot: release
 # PR writeup generation
 writeup: release
 	@if [ -n "$(NODES)" ]; then \
-		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --nodes "$(NODES)" $(if $(OUT),-o $(OUT),); \
+		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --nodes "$(NODES)" $(if $(PNG),--png "$(PNG)",) $(if $(OUT),-o $(OUT),); \
 	elif [ -n "$(ROOTS)" ]; then \
-		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --roots "$(ROOTS)" $(if $(OUT),-o $(OUT),); \
+		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --roots "$(ROOTS)" $(if $(PNG),--png "$(PNG)",) $(if $(OUT),-o $(OUT),); \
 	else \
-		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) $(if $(OUT),-o $(OUT),); \
+		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) $(if $(PNG),--png "$(PNG)",) $(if $(OUT),-o $(OUT),); \
 	fi
 
 # Help
@@ -282,6 +282,7 @@ help:
 	@echo ""
 	@echo "  make writeup                    Generate PR writeup"
 	@echo "  make writeup TITLE='PR Title' NODES=1-11"
+	@echo "  make writeup TITLE='PR' NODES=1-11 PNG=docs/graph.png"
 	@echo "  make writeup ROOTS=1 OUT=PR.md"
 	@echo ""
 	@echo "Deploy & Publish:"

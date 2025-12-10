@@ -84,6 +84,7 @@ deciduous dot --roots 1,5 --png            # Filter from root nodes (BFS)
 # PR writeup generation
 deciduous writeup -t "PR Title"            # Generate markdown writeup
 deciduous writeup -t "Title" --nodes 1-11  # Writeup for specific nodes
+deciduous writeup --png docs/graph.png     # Embed PNG with auto GitHub URL
 deciduous writeup --no-dot --no-test-plan  # Skip sections
 
 # Makefile shortcuts
@@ -210,9 +211,15 @@ Options:
   -r, --roots <IDS>       Root node IDs (comma-separated, traverses children)
   -n, --nodes <SPEC>      Specific node IDs or ranges
   -o, --output <FILE>     Output file (default: stdout)
+      --png <FILENAME>    PNG file to embed (auto-detects GitHub repo/branch for URL)
       --no-dot            Skip DOT graph section
       --no-test-plan      Skip test plan section
 ```
+
+**Important:** When using `--png`, the tool auto-detects your GitHub repo and current branch to generate the correct raw.githubusercontent.com URL. Make sure to:
+1. Generate the PNG first: `deciduous dot --png --nodes 1-11 -o docs/decision-graph.dot`
+2. Commit and push the PNG to your branch
+3. Then generate the writeup: `deciduous writeup --png docs/decision-graph.png --nodes 1-11`
 
 ## Database Rules
 

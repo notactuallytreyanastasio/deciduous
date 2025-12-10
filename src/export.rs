@@ -286,6 +286,12 @@ pub struct WriteupConfig {
     pub include_dot: bool,
     /// Include test plan section
     pub include_test_plan: bool,
+    /// PNG filename (will auto-detect GitHub repo/branch for URL)
+    pub png_filename: Option<String>,
+    /// GitHub repo in format "owner/repo" (auto-detected if not provided)
+    pub github_repo: Option<String>,
+    /// Git branch name (auto-detected if not provided)
+    pub git_branch: Option<String>,
 }
 
 /// Generate a PR writeup from a decision graph
@@ -430,6 +436,29 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
     // DOT graph section
     if config.include_dot {
         writeln!(writeup, "## Decision Graph\n").unwrap();
+
+        // Build image URL if PNG filename provided
+        let image_url = config.png_filename.as_ref().map(|filename| {
+            if let (Some(repo), Some(branch)) = (&config.github_repo, &config.git_branch) {
+                format!(
+                    "https://raw.githubusercontent.com/{}/{}/{}",
+                    repo, branch, filename
+                )
+            } else {
+                // Fallback to relative path (won't work in PR descriptions but OK for files)
+                filename.clone()
+            }
+        });
+
+        // If image URL available, show the PNG image
+        if let Some(url) = &image_url {
+            writeln!(writeup, "![Decision Graph]({})\n", url).unwrap();
+
+            // Put DOT source in collapsible details
+            writeln!(writeup, "<details>").unwrap();
+            writeln!(writeup, "<summary>DOT source (click to expand)</summary>\n").unwrap();
+        }
+
         writeln!(writeup, "```dot").unwrap();
         let dot_config = DotConfig {
             title: Some(config.title.clone()),
@@ -441,7 +470,11 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         write!(writeup, "{}", graph_to_dot(&filtered, &dot_config)).unwrap();
         writeln!(writeup, "```\n").unwrap();
 
-        writeln!(writeup, "*Render with: `dot -Tpng graph.dot -o graph.png`*\n").unwrap();
+        if image_url.is_some() {
+            writeln!(writeup, "</details>\n").unwrap();
+        } else {
+            writeln!(writeup, "*Render with: `dot -Tpng graph.dot -o graph.png`*\n").unwrap();
+        }
     }
 
     // Test plan section
@@ -572,6 +605,9 @@ mod tests {
             root_ids: vec![],
             include_dot: true,
             include_test_plan: true,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
         };
         let writeup = generate_pr_writeup(&graph, &config);
 
