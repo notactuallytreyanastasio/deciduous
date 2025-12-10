@@ -45,6 +45,7 @@ pub mod export;
 pub mod init;
 pub mod schema;
 pub mod serve;
+pub mod tui;
 
 pub use config::Config;
 pub use db::{
