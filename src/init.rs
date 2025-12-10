@@ -454,6 +454,23 @@ deciduous nodes    # What decisions exist?
 deciduous edges    # How are they connected? Any gaps?
 git status         # Current state
 ```
+
+### Multi-User Sync
+
+Share decisions across teammates:
+
+```bash
+# Export your branch's decisions
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate.json
+```
+
+PR workflow: Export patch → commit patch file → PR → teammates apply.
 "#;
 
 // ============================================================================
@@ -585,6 +602,25 @@ Branch dropdown filter in stats bar filters all views.
 2. Does every **action** link to why you did it?
 3. Any **dangling outcomes** without parents?
 </connection_rules>
+
+## Multi-User Sync
+
+<multi_user_sync>
+Share decisions across teammates:
+
+```bash
+# Export your branch's decisions
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate.json
+```
+
+PR workflow: Export patch → commit patch file → PR → teammates apply.
+</multi_user_sync>
 
 </decision_graph_workflow>
 "#;
@@ -763,6 +799,23 @@ deciduous edges    # How are they connected?
 git status         # Current state
 git log -10        # Recent commits
 ```
+
+### Multi-User Sync
+
+Share decisions across teammates:
+
+```bash
+# Export your branch's decisions
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate.json
+```
+
+PR workflow: Export patch → commit patch file → PR → teammates apply.
 "#;
 
 /// Initialize deciduous in the current directory
