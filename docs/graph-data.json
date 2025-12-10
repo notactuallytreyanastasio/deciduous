@@ -1,0 +1,112 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "node_type": "outcome",
+      "title": "Published deciduous v0.2.1 with updated docs, Makefile, and init templates",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-09T23:25:45.221414-05:00",
+      "updated_at": "2025-12-09T23:25:45.221414-05:00",
+      "metadata_json": "{\"confidence\":100}"
+    },
+    {
+      "id": 2,
+      "node_type": "goal",
+      "title": "Add editor-specific init flags (--claude, --windsurf) to deciduous",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:33:24.687353-05:00",
+      "updated_at": "2025-12-10T13:33:24.687353-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 3,
+      "node_type": "decision",
+      "title": "Design init command architecture for multiple editors",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:33:39.963426-05:00",
+      "updated_at": "2025-12-10T13:33:39.963426-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 4,
+      "node_type": "option",
+      "title": "Use mutually exclusive --claude / --windsurf flags with default to --claude",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:33:47.425782-05:00",
+      "updated_at": "2025-12-10T13:33:47.425782-05:00",
+      "metadata_json": "{\"confidence\":80}"
+    },
+    {
+      "id": 5,
+      "node_type": "observation",
+      "title": "Windsurf uses .windsurf/rules/rules.md for workspace rules and supports AGENTS.md via symlink or import",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:33:54.437761-05:00",
+      "updated_at": "2025-12-10T13:33:54.437761-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 6,
+      "node_type": "action",
+      "title": "Implementing --claude and --windsurf flags for init command",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:34:12.741065-05:00",
+      "updated_at": "2025-12-10T13:34:12.741065-05:00",
+      "metadata_json": "{\"confidence\":90}"
+    },
+    {
+      "id": 7,
+      "node_type": "outcome",
+      "title": "Editor-specific init flags implemented and tested",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T13:39:13.241874-05:00",
+      "updated_at": "2025-12-10T13:39:13.241874-05:00",
+      "metadata_json": "{\"confidence\":95}"
+    }
+  ],
+  "edges": [
+    {
+      "id": 1,
+      "from_node_id": 2,
+      "to_node_id": 3,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal requires design decision",
+      "created_at": "2025-12-10T13:33:46.080899-05:00"
+    },
+    {
+      "id": 2,
+      "from_node_id": 3,
+      "to_node_id": 4,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design option",
+      "created_at": "2025-12-10T13:33:53.538051-05:00"
+    },
+    {
+      "id": 3,
+      "from_node_id": 4,
+      "to_node_id": 6,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Proceeding with flag implementation",
+      "created_at": "2025-12-10T13:34:14.429365-05:00"
+    },
+    {
+      "id": 4,
+      "from_node_id": 6,
+      "to_node_id": 7,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation completed successfully",
+      "created_at": "2025-12-10T13:39:19.052097-05:00"
+    }
+  ]
+}
