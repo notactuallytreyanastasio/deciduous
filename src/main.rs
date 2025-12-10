@@ -16,7 +16,15 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Initialize deciduous in current directory
-    Init,
+    Init {
+        /// Initialize for Claude Code (creates .claude/commands/ and CLAUDE.md)
+        #[arg(long, group = "editor")]
+        claude: bool,
+
+        /// Initialize for Windsurf (creates .windsurf/rules/ and AGENTS.md)
+        #[arg(long, group = "editor")]
+        windsurf: bool,
+    },
 
     /// Add a new node to the decision graph
     Add {
@@ -173,8 +181,15 @@ fn main() {
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
-    if let Command::Init = args.command {
-        if let Err(e) = deciduous::init::init_project() {
+    if let Command::Init { claude: _, windsurf } = args.command {
+        // Determine editor type: default to Claude if neither specified
+        let editor = if windsurf {
+            deciduous::init::Editor::Windsurf
+        } else {
+            deciduous::init::Editor::Claude
+        };
+
+        if let Err(e) = deciduous::init::init_project(editor) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -190,7 +205,7 @@ fn main() {
     };
 
     match args.command {
-        Command::Init => unreachable!(), // Handled above
+        Command::Init { .. } => unreachable!(), // Handled above
         Command::Add { node_type, title, description, confidence, commit } => {
             match db.create_node(&node_type, &title, description.as_deref(), confidence, commit.as_deref()) {
                 Ok(id) => {
