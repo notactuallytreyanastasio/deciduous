@@ -15,7 +15,11 @@ struct ApiResponse<T> {
 
 impl<T: Serialize> ApiResponse<T> {
     fn success(data: T) -> Self {
-        Self { ok: true, data: Some(data), error: None }
+        Self {
+            ok: true,
+            data: Some(data),
+            error: None,
+        }
     }
 }
 
@@ -26,9 +30,8 @@ const GRAPH_VIEWER_HTML: &str = include_str!("viewer.html");
 /// Start the decision graph viewer server
 pub fn start_graph_server(port: u16) -> std::io::Result<()> {
     let addr = format!("127.0.0.1:{}", port);
-    let server = Server::http(&addr).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-    })?;
+    let server = Server::http(&addr)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     let url = format!("http://localhost:{}", port);
 
@@ -64,8 +67,9 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             let graph = get_decision_graph();
             let json = serde_json::to_string(&ApiResponse::success(graph))?;
 
-            let response = Response::from_string(json)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
             request.respond(response)
         }
 
@@ -74,8 +78,9 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             let commands = get_command_log();
             let json = serde_json::to_string(&ApiResponse::success(commands))?;
 
-            let response = Response::from_string(json)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
             request.respond(response)
         }
 
@@ -89,8 +94,14 @@ fn handle_request(request: Request) -> std::io::Result<()> {
 
 fn get_decision_graph() -> DecisionGraph {
     match Database::open() {
-        Ok(db) => db.get_graph().unwrap_or_else(|_| DecisionGraph { nodes: vec![], edges: vec![] }),
-        Err(_) => DecisionGraph { nodes: vec![], edges: vec![] },
+        Ok(db) => db.get_graph().unwrap_or_else(|_| DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        }),
+        Err(_) => DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        },
     }
 }
 

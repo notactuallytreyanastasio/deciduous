@@ -342,10 +342,65 @@ git log -10        # Recent commits
 ```
 "#;
 
+const AGENTS_MD_SECTION: &str = r#"
+## Decision Graph Workflow (VS Code Agent)
+
+**THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
+
+### The Core Rule
+
+```
+BEFORE you do something -> Log what you're ABOUT to do
+AFTER it succeeds/fails -> Log the outcome
+ALWAYS -> Sync frequently so the graph updates
+```
+
+### Behavioral Triggers - MUST LOG WHEN:
+
+| Trigger | Log Type | Example |
+|---------|----------|---------|
+| User asks for a new feature | `goal` | "Add dark mode" |
+| Choosing between approaches | `decision` | "Choose state management" |
+| About to write/edit code | `action` | "Implementing Redux store" |
+| Something worked or failed | `outcome` | "Redux integration successful" |
+| Notice something interesting | `observation` | "Existing code uses hooks" |
+
+### Quick Commands
+
+```bash
+deciduous add goal "Title" -c 90
+deciduous add decision "Title" -c 75
+deciduous add action "Title" -c 85
+deciduous link FROM TO -r "reason"
+deciduous serve   # View live
+deciduous sync    # Export for static hosting
+deciduous dot --png -o graph.dot  # Generate visualization
+deciduous writeup -t "PR Title"   # Generate PR writeup
+```
+
+### Session Start Checklist
+
+Every new session, run `/context` or:
+
+```bash
+deciduous nodes    # What decisions exist?
+deciduous edges    # How are they connected?
+git status         # Current state
+git log -10        # Recent commits
+```
+"#;
+
+/// Initialization environment flavors
+#[derive(Debug, PartialEq, Eq)]
+pub enum InitEnv {
+    Claude,
+    Code,
+}
+
 /// Initialize deciduous in the current directory
-pub fn init_project() -> Result<(), String> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| format!("Could not get current directory: {}", e))?;
+pub fn init_project(env: Option<InitEnv>) -> Result<(), String> {
+    let cwd =
+        std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
     println!("\n{}", "Initializing Deciduous...".cyan().bold());
     println!("   Directory: {}\n", cwd.display());
@@ -357,7 +412,10 @@ pub fn init_project() -> Result<(), String> {
     // 2. Initialize database by opening it (creates tables)
     let db_path = deciduous_dir.join("deciduous.db");
     if db_path.exists() {
-        println!("   {} .deciduous/deciduous.db (already exists, preserving data)", "Skipping".yellow());
+        println!(
+            "   {} .deciduous/deciduous.db (already exists, preserving data)",
+            "Skipping".yellow()
+        );
     } else {
         println!("   {} {}", "Creating".green(), ".deciduous/deciduous.db");
     }
@@ -366,21 +424,42 @@ pub fn init_project() -> Result<(), String> {
     // Database::open() uses CREATE TABLE IF NOT EXISTS - safe for existing DBs
     std::env::set_var("DECIDUOUS_DB_PATH", &db_path);
 
-    // 3. Create .claude/commands directory
-    let claude_dir = cwd.join(".claude").join("commands");
-    create_dir_if_missing(&claude_dir)?;
+    match env.unwrap_or(InitEnv::Claude) {
+        InitEnv::Claude => {
+            // 3. Create .claude/commands directory
+            let claude_dir = cwd.join(".claude").join("commands");
+            create_dir_if_missing(&claude_dir)?;
 
-    // 4. Write decision.md
-    let decision_path = claude_dir.join("decision.md");
-    write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+            // 4. Write decision.md
+            let decision_path = claude_dir.join("decision.md");
+            write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
 
-    // 5. Write context.md
-    let context_path = claude_dir.join("context.md");
-    write_file_if_missing(&context_path, CONTEXT_MD, ".claude/commands/context.md")?;
+            // 5. Write context.md
+            let context_path = claude_dir.join("context.md");
+            write_file_if_missing(&context_path, CONTEXT_MD, ".claude/commands/context.md")?;
 
-    // 6. Append to or create CLAUDE.md
-    let claude_md_path = cwd.join("CLAUDE.md");
-    append_claude_md(&claude_md_path)?;
+            // 6. Append to or create CLAUDE.md
+            let claude_md_path = cwd.join("CLAUDE.md");
+            append_claude_md(&claude_md_path)?;
+        }
+        InitEnv::Code => {
+            // 3. Create .vscode/agents directory
+            let agents_dir = cwd.join(".vscode").join("agents");
+            create_dir_if_missing(&agents_dir)?;
+
+            // 4. Write decision.md
+            let decision_path = agents_dir.join("decision.md");
+            write_file_if_missing(&decision_path, DECISION_MD, ".vscode/agents/decision.md")?;
+
+            // 5. Write context.md
+            let context_path = agents_dir.join("context.md");
+            write_file_if_missing(&context_path, CONTEXT_MD, ".vscode/agents/context.md")?;
+
+            // 6. Append to or create AGENTS.md
+            let agents_md_path = cwd.join("AGENTS.md");
+            append_agents_md(&agents_md_path)?;
+        }
+    }
 
     // 7. Add .deciduous to .gitignore if not already there
     add_to_gitignore(&cwd)?;
@@ -393,11 +472,19 @@ pub fn init_project() -> Result<(), String> {
 
         // Cleanup workflow for PR graph assets
         let cleanup_path = workflows_dir.join("cleanup-decision-graphs.yml");
-        write_file_if_missing(&cleanup_path, CLEANUP_WORKFLOW, ".github/workflows/cleanup-decision-graphs.yml")?;
+        write_file_if_missing(
+            &cleanup_path,
+            CLEANUP_WORKFLOW,
+            ".github/workflows/cleanup-decision-graphs.yml",
+        )?;
 
         // Deploy workflow for GitHub Pages
         let deploy_path = workflows_dir.join("deploy-pages.yml");
-        write_file_if_missing(&deploy_path, DEPLOY_PAGES_WORKFLOW, ".github/workflows/deploy-pages.yml")?;
+        write_file_if_missing(
+            &deploy_path,
+            DEPLOY_PAGES_WORKFLOW,
+            ".github/workflows/deploy-pages.yml",
+        )?;
     }
 
     // 9. Create docs/ directory for GitHub Pages
@@ -420,19 +507,30 @@ pub fn init_project() -> Result<(), String> {
     // 12. Create .nojekyll for GitHub Pages (prevents Jekyll processing)
     let nojekyll_path = docs_dir.join(".nojekyll");
     if !nojekyll_path.exists() {
-        fs::write(&nojekyll_path, "")
-            .map_err(|e| format!("Could not write .nojekyll: {}", e))?;
+        fs::write(&nojekyll_path, "").map_err(|e| format!("Could not write .nojekyll: {}", e))?;
         println!("   {} docs/.nojekyll", "Creating".green());
     }
 
     println!("\n{}", "Deciduous initialized!".green().bold());
     println!("\nNext steps:");
-    println!("  1. Run {} to start the local graph viewer", "deciduous serve".cyan());
-    println!("  2. Run {} to export graph for GitHub Pages", "deciduous sync".cyan());
-    println!("  3. Commit and push: {}", "git add docs/ .github/ && git push".cyan());
+    println!(
+        "  1. Run {} to start the local graph viewer",
+        "deciduous serve".cyan()
+    );
+    println!(
+        "  2. Run {} to export graph for GitHub Pages",
+        "deciduous sync".cyan()
+    );
+    println!(
+        "  3. Commit and push: {}",
+        "git add docs/ .github/ && git push".cyan()
+    );
     println!("  4. Enable GitHub Pages (Settings → Pages → Source: Deploy from branch, gh-pages)");
     println!();
-    println!("Your graph will be live at: {}", "https://<user>.github.io/<repo>/".cyan());
+    println!(
+        "Your graph will be live at: {}",
+        "https://<user>.github.io/<repo>/".cyan()
+    );
     println!();
 
     Ok(())
@@ -449,10 +547,13 @@ fn create_dir_if_missing(path: &Path) -> Result<(), String> {
 
 fn write_file_if_missing(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
     if path.exists() {
-        println!("   {} {} (already exists)", "Skipping".yellow(), display_name);
+        println!(
+            "   {} {} (already exists)",
+            "Skipping".yellow(),
+            display_name
+        );
     } else {
-        fs::write(path, content)
-            .map_err(|e| format!("Could not write {}: {}", display_name, e))?;
+        fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
         println!("   {} {}", "Creating".green(), display_name);
     }
     Ok(())
@@ -462,25 +563,59 @@ fn append_claude_md(path: &Path) -> Result<(), String> {
     let marker = "## Decision Graph Workflow";
 
     if path.exists() {
-        let existing = fs::read_to_string(path)
-            .map_err(|e| format!("Could not read CLAUDE.md: {}", e))?;
+        let existing =
+            fs::read_to_string(path).map_err(|e| format!("Could not read CLAUDE.md: {}", e))?;
 
         if existing.contains(marker) {
-            println!("   {} CLAUDE.md (workflow section already present)", "Skipping".yellow());
+            println!(
+                "   {} CLAUDE.md (workflow section already present)",
+                "Skipping".yellow()
+            );
             return Ok(());
         }
 
         // Append the section
         let new_content = format!("{}\n{}", existing.trim_end(), CLAUDE_MD_SECTION);
-        fs::write(path, new_content)
-            .map_err(|e| format!("Could not update CLAUDE.md: {}", e))?;
-        println!("   {} CLAUDE.md (added workflow section)", "Updated".green());
+        fs::write(path, new_content).map_err(|e| format!("Could not update CLAUDE.md: {}", e))?;
+        println!(
+            "   {} CLAUDE.md (added workflow section)",
+            "Updated".green()
+        );
     } else {
         // Create new CLAUDE.md
         let content = format!("# Project Instructions\n{}", CLAUDE_MD_SECTION);
-        fs::write(path, content)
-            .map_err(|e| format!("Could not create CLAUDE.md: {}", e))?;
+        fs::write(path, content).map_err(|e| format!("Could not create CLAUDE.md: {}", e))?;
         println!("   {} CLAUDE.md", "Creating".green());
+    }
+
+    Ok(())
+}
+
+fn append_agents_md(path: &Path) -> Result<(), String> {
+    let marker = "Decision Graph Workflow (VS Code Agent)";
+
+    if path.exists() {
+        let existing =
+            fs::read_to_string(path).map_err(|e| format!("Could not read AGENTS.md: {}", e))?;
+
+        if existing.contains(marker) {
+            println!(
+                "   {} AGENTS.md (workflow section already present)",
+                "Skipping".yellow()
+            );
+            return Ok(());
+        }
+
+        let new_content = format!("{}\n{}", existing.trim_end(), AGENTS_MD_SECTION);
+        fs::write(path, new_content).map_err(|e| format!("Could not update AGENTS.md: {}", e))?;
+        println!(
+            "   {} AGENTS.md (added workflow section)",
+            "Updated".green()
+        );
+    } else {
+        let content = format!("# Agent Instructions\n{}", AGENTS_MD_SECTION);
+        fs::write(path, content).map_err(|e| format!("Could not create AGENTS.md: {}", e))?;
+        println!("   {} AGENTS.md", "Creating".green());
     }
 
     Ok(())
@@ -494,13 +629,20 @@ fn add_to_gitignore(cwd: &Path) -> Result<(), String> {
         let existing = fs::read_to_string(&gitignore_path)
             .map_err(|e| format!("Could not read .gitignore: {}", e))?;
 
-        if existing.lines().any(|line| line.trim() == entry || line.trim() == ".deciduous") {
+        if existing
+            .lines()
+            .any(|line| line.trim() == entry || line.trim() == ".deciduous")
+        {
             // Already in gitignore
             return Ok(());
         }
 
         // Append
-        let new_content = format!("{}\n\n# Deciduous database (local)\n{}\n", existing.trim_end(), entry);
+        let new_content = format!(
+            "{}\n\n# Deciduous database (local)\n{}\n",
+            existing.trim_end(),
+            entry
+        );
         fs::write(&gitignore_path, new_content)
             .map_err(|e| format!("Could not update .gitignore: {}", e))?;
         println!("   {} .gitignore (added .deciduous/)", "Updated".green());

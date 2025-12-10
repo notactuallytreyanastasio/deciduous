@@ -48,7 +48,10 @@ pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
     CURRENT_SCHEMA,
 };
-pub use export::{graph_to_dot, generate_pr_writeup, filter_graph_from_roots, filter_graph_by_ids, parse_node_range, DotConfig, WriteupConfig};
+pub use export::{
+    filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
+    parse_node_range, DotConfig, WriteupConfig,
+};
 
 #[cfg(test)]
 mod tests {

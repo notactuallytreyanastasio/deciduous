@@ -333,14 +333,17 @@ impl Database {
     }
 
     fn get_conn(&self) -> Result<DbConn> {
-        self.pool.get().map_err(|e| DbError::Connection(e.to_string()))
+        self.pool
+            .get()
+            .map_err(|e| DbError::Connection(e.to_string()))
     }
 
     fn init_schema(&self) -> Result<()> {
         let mut conn = self.get_conn()?;
 
         // Run raw SQL to create tables if they don't exist
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS schema_versions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 version TEXT NOT NULL UNIQUE,
@@ -348,9 +351,12 @@ impl Database {
                 features TEXT NOT NULL,
                 introduced_at TEXT NOT NULL
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_nodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 node_type TEXT NOT NULL,
@@ -361,9 +367,12 @@ impl Database {
                 updated_at TEXT NOT NULL,
                 metadata_json TEXT
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_edges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 from_node_id INTEGER NOT NULL,
@@ -376,9 +385,12 @@ impl Database {
                 FOREIGN KEY (to_node_id) REFERENCES decision_nodes(id),
                 UNIQUE(from_node_id, to_node_id, edge_type)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_context (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 node_id INTEGER NOT NULL,
@@ -387,9 +399,12 @@ impl Database {
                 captured_at TEXT NOT NULL,
                 FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 name TEXT,
@@ -399,9 +414,12 @@ impl Database {
                 summary TEXT,
                 FOREIGN KEY (root_node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS session_nodes (
                 session_id INTEGER NOT NULL,
                 node_id INTEGER NOT NULL,
@@ -410,9 +428,12 @@ impl Database {
                 FOREIGN KEY (session_id) REFERENCES decision_sessions(id),
                 FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS command_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 command TEXT NOT NULL,
@@ -427,14 +448,25 @@ impl Database {
                 decision_node_id INTEGER,
                 FOREIGN KEY (decision_node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
         // Create indexes
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from ON decision_edges(from_node_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to ON decision_edges(to_node_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_command_started_at ON command_log(started_at)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
+            .execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)")
+            .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_edges_from ON decision_edges(from_node_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to ON decision_edges(to_node_id)")
+            .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_command_started_at ON command_log(started_at)",
+        )
+        .execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -465,13 +497,24 @@ impl Database {
     // ========================================================================
 
     /// Create a new decision node
-    pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>, commit: Option<&str>) -> Result<i32> {
+    pub fn create_node(
+        &self,
+        node_type: &str,
+        title: &str,
+        description: Option<&str>,
+        confidence: Option<u8>,
+        commit: Option<&str>,
+    ) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
         // Build metadata JSON with confidence and/or commit if provided
         let metadata = match (confidence, commit) {
-            (Some(c), Some(h)) => Some(format!(r#"{{"confidence":{},"commit":"{}"}}"#, c.min(100), h)),
+            (Some(c), Some(h)) => Some(format!(
+                r#"{{"confidence":{},"commit":"{}"}}"#,
+                c.min(100),
+                h
+            )),
             (Some(c), None) => Some(format!(r#"{{"confidence":{}}}"#, c.min(100))),
             (None, Some(h)) => Some(format!(r#"{{"commit":"{}"}}"#, h)),
             (None, None) => None,
@@ -491,19 +534,34 @@ impl Database {
             .values(&new_node)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
 
     /// Add a node (alias for create_node for doc examples)
-    pub fn add_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>, commit: Option<&str>) -> Result<i32> {
+    pub fn add_node(
+        &self,
+        node_type: &str,
+        title: &str,
+        description: Option<&str>,
+        confidence: Option<u8>,
+        commit: Option<&str>,
+    ) -> Result<i32> {
         self.create_node(node_type, title, description, confidence, commit)
     }
 
     /// Create an edge between nodes
-    pub fn create_edge(&self, from_id: i32, to_id: i32, edge_type: &str, rationale: Option<&str>) -> Result<i32> {
+    pub fn create_edge(
+        &self,
+        from_id: i32,
+        to_id: i32,
+        edge_type: &str,
+        rationale: Option<&str>,
+    ) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -520,14 +578,22 @@ impl Database {
             .values(&new_edge)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
 
     /// Add an edge (alias for create_edge for doc examples)
-    pub fn add_edge(&self, from_id: i32, to_id: i32, edge_type: &str, rationale: Option<&str>) -> Result<i32> {
+    pub fn add_edge(
+        &self,
+        from_id: i32,
+        to_id: i32,
+        edge_type: &str,
+        rationale: Option<&str>,
+    ) -> Result<i32> {
         self.create_edge(from_id, to_id, edge_type, rationale)
     }
 
@@ -608,7 +674,12 @@ impl Database {
     // ========================================================================
 
     /// Log a command execution
-    pub fn log_command(&self, command: &str, description: Option<&str>, working_dir: Option<&str>) -> Result<i32> {
+    pub fn log_command(
+        &self,
+        command: &str,
+        description: Option<&str>,
+        working_dir: Option<&str>,
+    ) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -629,8 +700,10 @@ impl Database {
             .values(&new_log)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
