@@ -1,13 +1,24 @@
 # Deciduous Roadmap
 
-## Backlog
+## Completed
 
-### Clean up legacy "losselot" references
-- [ ] Update `.claude/commands/decision.md` to use `deciduous` binary instead of `./target/release/losselot`
-- [ ] Update `.claude/commands/context.md` to use `deciduous` binary instead of `./target/release/losselot`
-- [ ] Update `CLAUDE.md` to remove any losselot-specific references
-- [ ] Ensure templates in `src/init.rs` use installed binary (`deciduous`) rather than build paths
-- [ ] Update live graph URLs to point to correct project
+### v0.6.0 - Multi-User Graph Sync (December 2024)
+- [x] jj-inspired dual-ID model with `change_id` (UUID) for globally unique nodes
+- [x] `deciduous diff export` - export nodes as shareable JSON patches
+- [x] `deciduous diff apply` - apply patches from teammates (idempotent)
+- [x] `deciduous diff status` - list available patches
+- [x] `deciduous migrate` - add change_id columns for sync
+- [x] Auto-migration on database open
+- [x] Bootstrapped templates include multi-user sync documentation
+
+### Legacy Cleanup (Complete)
+- [x] All templates use `deciduous` binary (no more `losselot` references)
+- [x] Live graph URLs point to correct project
+- [x] `src/init.rs` uses installed binary path
+
+---
+
+## Backlog
 
 ### Future Enhancements
 - [ ] Support for additional editors (Cursor, Copilot, etc.)
@@ -184,37 +195,6 @@
 - [ ] Consider moving git.log into `.deciduous/` directory for better organization
 - [ ] Add `deciduous log` command to view git.log contents
 - [ ] Document git.log purpose and location in tooling files
-
-### Multi-User Namespaces & Graph Merging
-- [ ] Support multiple users/agents writing to their own namespaces
-  - Each user/agent gets isolated namespace for their decision nodes
-  - Avoid write conflicts when multiple sessions work in parallel
-  - Namespace could be: user ID, session ID, agent name, or custom tag
-- [ ] Namespace-scoped operations
-  - `deciduous add goal "..." --namespace alice`
-  - `deciduous nodes --namespace bob`
-  - Nodes tagged with namespace in metadata_json
-- [ ] Merge namespaces into unified graph
-  - `deciduous merge --from alice --into main`
-  - Conflict resolution strategies (timestamp, manual, auto-link)
-  - Preserve provenance: track which namespace each node originated from
-- [ ] Cross-namespace linking
-  - Allow edges between nodes in different namespaces
-  - "Alice's outcome depends on Bob's action"
-  - Visualize cross-namespace dependencies
-- [ ] Web UI namespace support
-  - Filter by namespace (like branch filter)
-  - Color-code nodes by namespace/author
-  - Merged view showing all namespaces together
-- [ ] Use cases:
-  - **Team collaboration**: Multiple devs working on same codebase
-  - **Multi-agent workflows**: Different AI agents with their own decision streams
-  - **PR-based isolation**: Each PR gets its own namespace, merged on PR merge
-  - **Review workflows**: Reviewer adds nodes in their namespace, author sees feedback
-- [ ] Sync/rebase semantics
-  - Similar to git branches but for decision graphs
-  - `deciduous rebase --namespace feature --onto main`
-  - Handle node ID conflicts during merge
 
 ### DuckDB for OLAP Analytics
 - [ ] Add DuckDB as optional analytical backend for decision graph queries
