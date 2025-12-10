@@ -58,3 +58,39 @@
 - `gitui` - another git TUI with tree views
 - `diskonaut` - treemap visualization in terminal
 - `btm`/`bottom` - system monitor with good layout patterns
+
+### LLM Critique & Analysis
+- [ ] `deciduous critique --goal <id>` - Have an LLM analyze a goal's decision chain
+  - Review decisions made, options chosen/rejected
+  - Identify potential blind spots or unconsidered alternatives
+  - Evaluate confidence levels vs actual outcomes
+  - Suggest improvements for future similar decisions
+- [ ] Multi-model critique comparison
+  - `deciduous critique --goal <id> --models claude,gpt4,gemini`
+  - See how different models evaluate the same decision chain
+  - Highlight where models agree/disagree on quality
+- [ ] Critique storage - save critiques as special nodes linked to goals
+
+### LLM Benchmarking Framework
+- [ ] **Goal-based benchmarking**: Use the same goal/task across multiple LLMs
+  - Define a goal with acceptance criteria
+  - Run each model on the same task
+  - Compare: decisions made, paths taken, outcomes achieved
+- [ ] `deciduous benchmark` command
+  - `deciduous benchmark --task "Implement feature X" --models claude,gpt4,gemini,llama`
+  - Each model gets isolated graph namespace
+  - Automated or human evaluation of outcomes
+- [ ] Metrics to capture:
+  - Decision quality (did they consider good options?)
+  - Path efficiency (how direct was the route to outcome?)
+  - Confidence calibration (were high-confidence decisions correct?)
+  - Recovery ability (how did they handle setbacks?)
+  - Graph structure (complexity, dead ends, backtracking)
+- [ ] Benchmark reports
+  - Side-by-side comparison of decision graphs
+  - Aggregate stats across multiple benchmark runs
+  - Export to shareable format for publishing results
+- [ ] Reproducible benchmark suites
+  - Define standard tasks with known-good solutions
+  - Version-controlled benchmark definitions
+  - CI integration for regression testing model capabilities
