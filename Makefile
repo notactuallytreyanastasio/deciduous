@@ -174,7 +174,9 @@ status: release
 
 # DOT export
 dot: release
-	@if [ -n "$(NODES)" ]; then \
+	@if [ -n "$(AUTO)" ]; then \
+		$(BINARY) dot --auto $(if $(NODES),--nodes "$(NODES)",) $(if $(ROOTS),--roots "$(ROOTS)",); \
+	elif [ -n "$(NODES)" ]; then \
 		if [ -n "$(PNG)" ]; then \
 			$(BINARY) dot --nodes "$(NODES)" --png -o $(or $(OUT),decision-graph.dot); \
 		else \
@@ -196,7 +198,9 @@ dot: release
 
 # PR writeup generation
 writeup: release
-	@if [ -n "$(NODES)" ]; then \
+	@if [ -n "$(AUTO)" ]; then \
+		$(BINARY) writeup --auto $(if $(TITLE),-t "$(TITLE)",) $(if $(NODES),--nodes "$(NODES)",) $(if $(ROOTS),--roots "$(ROOTS)",) $(if $(OUT),-o $(OUT),); \
+	elif [ -n "$(NODES)" ]; then \
 		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --nodes "$(NODES)" $(if $(PNG),--png "$(PNG)",) $(if $(OUT),-o $(OUT),); \
 	elif [ -n "$(ROOTS)" ]; then \
 		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --roots "$(ROOTS)" $(if $(PNG),--png "$(PNG)",) $(if $(OUT),-o $(OUT),); \
@@ -276,12 +280,12 @@ help:
 	@echo "  make status ID=1 S=completed    Update node status"
 	@echo ""
 	@echo "  make dot                        Export full graph as DOT"
-	@echo "  make dot NODES=1-11             Export specific nodes"
+	@echo "  make dot AUTO=1 NODES=1-11      Branch-specific filename (recommended!)"
 	@echo "  make dot NODES=1-11 PNG=1       Export with PNG generation"
 	@echo "  make dot ROOTS=1,5 PNG=1 OUT=graph.dot"
 	@echo ""
 	@echo "  make writeup                    Generate PR writeup"
-	@echo "  make writeup TITLE='PR Title' NODES=1-11"
+	@echo "  make writeup AUTO=1 TITLE='PR' NODES=1-11  (recommended!)"
 	@echo "  make writeup TITLE='PR' NODES=1-11 PNG=docs/graph.png"
 	@echo "  make writeup ROOTS=1 OUT=PR.md"
 	@echo ""

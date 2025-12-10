@@ -104,7 +104,7 @@ enum Command {
 
     /// Export graph as DOT format
     Dot {
-        /// Output file (default: stdout)
+        /// Output file (default: stdout). Use --auto for branch-specific naming.
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -119,6 +119,10 @@ enum Command {
         /// Generate PNG using graphviz (requires dot command)
         #[arg(long)]
         png: bool,
+
+        /// Auto-generate branch-specific filename in docs/ (e.g., docs/decision-graph-feature-foo.dot)
+        #[arg(long)]
+        auto: bool,
 
         /// Graph title
         #[arg(short, long)]
@@ -150,6 +154,10 @@ enum Command {
         /// PNG filename to embed (auto-detects repo/branch for GitHub URL)
         #[arg(long)]
         png: Option<String>,
+
+        /// Auto-detect PNG from branch name (looks for docs/decision-graph-{branch}.png)
+        #[arg(long)]
+        auto: bool,
 
         /// Skip DOT graph section
         #[arg(long)]
@@ -385,7 +393,7 @@ fn main() {
             }
         }
 
-        Command::Dot { output, roots, nodes, png, title, rankdir } => {
+        Command::Dot { output, roots, nodes, png, auto, title, rankdir } => {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -413,9 +421,31 @@ fn main() {
 
                     let dot = graph_to_dot(&filtered_graph, &config);
 
-                    if png {
+                    // Determine output path
+                    let effective_output = if auto {
+                        // Auto-generate branch-specific filename
+                        let branch = ProcessCommand::new("git")
+                            .args(["rev-parse", "--abbrev-ref", "HEAD"])
+                            .output()
+                            .ok()
+                            .and_then(|o| String::from_utf8(o.stdout).ok())
+                            .map(|s| s.trim().to_string())
+                            .unwrap_or_else(|| "main".to_string());
+
+                        // Sanitize branch name for filename
+                        let safe_branch = branch.replace('/', "-");
+
+                        // Create docs/ if needed
+                        let _ = std::fs::create_dir_all("docs");
+
+                        Some(PathBuf::from(format!("docs/decision-graph-{}.dot", safe_branch)))
+                    } else {
+                        output.clone()
+                    };
+
+                    if png || auto {
                         // Generate PNG using graphviz
-                        let dot_path = output.clone().unwrap_or_else(|| PathBuf::from("graph.dot"));
+                        let dot_path = effective_output.clone().unwrap_or_else(|| PathBuf::from("graph.dot"));
                         let png_path = dot_path.with_extension("png");
 
                         // Write DOT file
@@ -466,7 +496,7 @@ fn main() {
             }
         }
 
-        Command::Writeup { title, roots, nodes, output, png, no_dot, no_test_plan } => {
+        Command::Writeup { title, roots, nodes, output, png, auto, no_dot, no_test_plan } => {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -513,12 +543,23 @@ fn main() {
                         .and_then(|o| String::from_utf8(o.stdout).ok())
                         .map(|s| s.trim().to_string());
 
+                    // Determine PNG filename
+                    let png_filename = if auto {
+                        // Auto-generate from branch name
+                        git_branch.as_ref().map(|branch| {
+                            let safe_branch = branch.replace('/', "-");
+                            format!("docs/decision-graph-{}.png", safe_branch)
+                        })
+                    } else {
+                        png
+                    };
+
                     let config = WriteupConfig {
                         title: title.unwrap_or_else(|| "Pull Request".to_string()),
                         root_ids: vec![], // Already filtered above
                         include_dot: !no_dot,
                         include_test_plan: !no_test_plan,
-                        png_filename: png,
+                        png_filename,
                         github_repo,
                         git_branch,
                     };
