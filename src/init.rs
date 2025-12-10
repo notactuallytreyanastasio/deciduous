@@ -9,7 +9,7 @@ use std::path::Path;
 /// Static HTML viewer for GitHub Pages (embedded at compile time)
 const PAGES_VIEWER_HTML: &str = include_str!("pages_viewer.html");
 
-/// GitHub Pages deploy workflow (deploys docs/ to /graph subpath)
+/// GitHub Pages deploy workflow (deploys to gh-pages branch, safe for project repos)
 const DEPLOY_PAGES_WORKFLOW: &str = r#"name: Deploy Decision Graph to Pages
 
 on:
@@ -20,42 +20,21 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages-graph"
-  cancel-in-progress: true
+  contents: write
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Prepare site
-        run: |
-          mkdir -p _site/graph
-          cp docs/index.html _site/graph/
-          cp docs/graph-data.json _site/graph/
-          touch _site/.nojekyll
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _site
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}graph/
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs
+          publish_branch: gh-pages
+          force_orphan: true
 "#;
 
 /// Templates embedded at compile time
@@ -377,10 +356,14 @@ pub fn init_project() -> Result<(), String> {
 
     // 2. Initialize database by opening it (creates tables)
     let db_path = deciduous_dir.join("deciduous.db");
-    println!("   {} {}", "Creating".green(), ".deciduous/deciduous.db");
+    if db_path.exists() {
+        println!("   {} .deciduous/deciduous.db (already exists, preserving data)", "Skipping".yellow());
+    } else {
+        println!("   {} {}", "Creating".green(), ".deciduous/deciduous.db");
+    }
 
-    // Touch the DB path - the Database::open() will create it
-    // We need to set the env var so Database::open() uses this path
+    // Set the env var so Database::open() uses this path
+    // Database::open() uses CREATE TABLE IF NOT EXISTS - safe for existing DBs
     std::env::set_var("DECIDUOUS_DB_PATH", &db_path);
 
     // 3. Create .claude/commands directory
@@ -446,8 +429,8 @@ pub fn init_project() -> Result<(), String> {
     println!("\nNext steps:");
     println!("  1. Run {} to start the local graph viewer", "deciduous serve".cyan());
     println!("  2. Run {} to export graph for GitHub Pages", "deciduous sync".cyan());
-    println!("  3. Commit and push to deploy: {}", "git add docs/ && git push".cyan());
-    println!("  4. Enable GitHub Pages (Settings → Pages → Source: Deploy from branch, /docs)");
+    println!("  3. Commit and push: {}", "git add docs/ .github/ && git push".cyan());
+    println!("  4. Enable GitHub Pages (Settings → Pages → Source: Deploy from branch, gh-pages)");
     println!();
     println!("Your graph will be live at: {}", "https://<user>.github.io/<repo>/".cyan());
     println!();
