@@ -41,7 +41,14 @@ Based on $ARGUMENTS:
 - `-c, --confidence <0-100>` - Confidence level
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
 - `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-b, --branch <name>` - Git branch (auto-detected by default)
+- `--no-branch` - Skip branch auto-detection
 - `--commit <hash>` - Link to a git commit
+
+### Branch Filtering
+- `deciduous nodes --branch main` - Show only nodes from main branch
+- `deciduous nodes --branch feature-x` - Show only nodes from feature-x branch
+- Web UI has branch dropdown filter in stats bar
 
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`

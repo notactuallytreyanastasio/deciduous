@@ -12,6 +12,9 @@ interface LayoutProps {
   children: React.ReactNode;
   stats?: GraphStats;
   lastUpdated?: Date | null;
+  branches?: string[];
+  selectedBranch?: string | null;
+  onBranchChange?: (branch: string | null) => void;
 }
 
 type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag';
@@ -23,7 +26,7 @@ const TABS: { id: ViewTab; label: string; path: string }[] = [
   { id: 'dag', label: 'DAG', path: '/dag' },
 ];
 
-export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated }) => {
+export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, branches, selectedBranch, onBranchChange }) => {
   const location = useLocation();
 
   const getCurrentTab = (): ViewTab => {
@@ -92,8 +95,23 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated }) 
               <div style={styles.statLabel}>Commits</div>
             </div>
           )}
-          {lastUpdated && (
+          {/* Branch Filter */}
+          {branches && branches.length > 0 && (
             <div style={{ ...styles.stat, marginLeft: 'auto' }}>
+              <select
+                value={selectedBranch || ''}
+                onChange={(e) => onBranchChange?.(e.target.value || null)}
+                style={styles.branchSelect}
+              >
+                <option value="">All branches</option>
+                {branches.map(branch => (
+                  <option key={branch} value={branch}>{branch}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {lastUpdated && (
+            <div style={{ ...styles.stat, marginLeft: branches?.length ? '10px' : 'auto' }}>
               <div style={{ ...styles.statLabel, fontSize: '10px' }}>
                 Updated {lastUpdated.toLocaleTimeString()}
               </div>
@@ -191,6 +209,16 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '10px',
     color: '#888',
     textTransform: 'uppercase',
+  },
+  branchSelect: {
+    backgroundColor: '#1a1a2e',
+    color: '#00d9ff',
+    border: '1px solid #0f3460',
+    borderRadius: '4px',
+    padding: '6px 10px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    minWidth: '120px',
   },
   main: {
     height: 'calc(100vh - 140px)',

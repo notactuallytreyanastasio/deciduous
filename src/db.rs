@@ -10,15 +10,16 @@ use diesel::sqlite::SqliteConnection;
 use serde_json::json;
 use std::path::Path;
 
-/// Build metadata JSON from optional fields (confidence, commit, prompt, files)
+/// Build metadata JSON from optional fields (confidence, commit, prompt, files, branch)
 fn build_metadata_json(
     confidence: Option<u8>,
     commit: Option<&str>,
     prompt: Option<&str>,
     files: Option<&str>,
+    branch: Option<&str>,
 ) -> Option<String> {
     // Only create JSON if at least one field is present
-    if confidence.is_none() && commit.is_none() && prompt.is_none() && files.is_none() {
+    if confidence.is_none() && commit.is_none() && prompt.is_none() && files.is_none() && branch.is_none() {
         return None;
     }
 
@@ -38,8 +39,29 @@ fn build_metadata_json(
         let file_list: Vec<&str> = f.split(',').map(|s| s.trim()).collect();
         obj.insert("files".to_string(), json!(file_list));
     }
+    if let Some(b) = branch {
+        obj.insert("branch".to_string(), json!(b));
+    }
 
     Some(serde_json::Value::Object(obj).to_string())
+}
+
+/// Get current git branch name
+pub fn get_current_git_branch() -> Option<String> {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty() && s != "HEAD")
+            } else {
+                None
+            }
+        })
 }
 
 /// Walk up directory tree to find .deciduous folder (like git finds .git)
@@ -499,7 +521,7 @@ impl Database {
 
     /// Create a new decision node
     pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>, commit: Option<&str>) -> Result<i32> {
-        self.create_node_full(node_type, title, description, confidence, commit, None, None)
+        self.create_node_full(node_type, title, description, confidence, commit, None, None, None)
     }
 
     /// Create a decision node with full metadata (including prompt and files)
@@ -512,12 +534,13 @@ impl Database {
         commit: Option<&str>,
         prompt: Option<&str>,
         files: Option<&str>,
+        branch: Option<&str>,
     ) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
         // Build metadata JSON with all optional fields
-        let metadata = build_metadata_json(confidence, commit, prompt, files);
+        let metadata = build_metadata_json(confidence, commit, prompt, files, branch);
 
         let new_node = NewDecisionNode {
             node_type,

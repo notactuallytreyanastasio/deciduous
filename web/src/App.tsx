@@ -4,7 +4,7 @@
  * Sets up routing and data loading for the unified graph viewer.
  */
 
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useGraphData } from './hooks/useGraphData';
 import { useChains } from './hooks/useChains';
@@ -13,6 +13,7 @@ import { ChainsView } from './views/ChainsView';
 import { TimelineView } from './views/TimelineView';
 import { GraphView } from './views/GraphView';
 import { DagView } from './views/DagView';
+import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
 // Detect if running from deciduous serve (localhost) vs static file (GitHub Pages)
 const isLocalServer = typeof window !== 'undefined' &&
@@ -35,8 +36,31 @@ export const App: React.FC = () => {
     pollInterval: isLocalServer ? 30000 : 0, // 30-second refresh for local server only
   });
 
-  // Compute chains and sessions
-  const { chains, sessions, stats } = useChains(graphData);
+  // Branch filter state
+  const [selectedBranch, setSelectedBranch] = useState<string | null>(null);
+
+  // Get unique branches from all nodes
+  const branches = useMemo(() => {
+    if (!graphData) return [];
+    return getUniqueBranches(graphData.nodes);
+  }, [graphData]);
+
+  // Filter graph data by selected branch
+  const filteredGraphData = useMemo((): GraphData | null => {
+    if (!graphData) return null;
+    if (!selectedBranch) return graphData;
+
+    const filteredNodes = graphData.nodes.filter(node => getBranch(node) === selectedBranch);
+    const nodeIds = new Set(filteredNodes.map(n => n.id));
+    const filteredEdges = graphData.edges.filter(
+      edge => nodeIds.has(edge.from_node_id) && nodeIds.has(edge.to_node_id)
+    );
+
+    return { nodes: filteredNodes, edges: filteredEdges };
+  }, [graphData, selectedBranch]);
+
+  // Compute chains and sessions from filtered data
+  const { chains, sessions, stats } = useChains(filteredGraphData);
 
   // Loading state
   if (loading) {
@@ -76,13 +100,19 @@ export const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <Layout stats={stats} lastUpdated={lastUpdated}>
+      <Layout
+        stats={stats}
+        lastUpdated={lastUpdated}
+        branches={branches}
+        selectedBranch={selectedBranch}
+        onBranchChange={setSelectedBranch}
+      >
         <Routes>
           <Route
             path="/"
             element={
               <ChainsView
-                graphData={graphData}
+                graphData={filteredGraphData!}
                 chains={chains}
                 sessions={sessions}
               />
@@ -92,7 +122,7 @@ export const App: React.FC = () => {
             path="/timeline"
             element={
               <TimelineView
-                graphData={graphData}
+                graphData={filteredGraphData!}
                 gitHistory={gitHistory}
               />
             }
@@ -100,14 +130,14 @@ export const App: React.FC = () => {
           <Route
             path="/graph"
             element={
-              <GraphView graphData={graphData} />
+              <GraphView graphData={filteredGraphData!} />
             }
           />
           <Route
             path="/dag"
             element={
               <DagView
-                graphData={graphData}
+                graphData={filteredGraphData!}
                 chains={chains}
               />
             }

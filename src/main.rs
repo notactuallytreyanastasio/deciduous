@@ -53,6 +53,14 @@ enum Command {
         /// Files associated with this node (comma-separated)
         #[arg(short, long)]
         files: Option<String>,
+
+        /// Git branch (auto-detected if not specified)
+        #[arg(short, long)]
+        branch: Option<String>,
+
+        /// Skip auto-detection of git branch
+        #[arg(long)]
+        no_branch: bool,
     },
 
     /// Add an edge between nodes
@@ -82,7 +90,15 @@ enum Command {
     },
 
     /// List all nodes
-    Nodes,
+    Nodes {
+        /// Filter by git branch
+        #[arg(short, long)]
+        branch: Option<String>,
+
+        /// Filter by node type (goal, decision, action, etc.)
+        #[arg(short = 't', long)]
+        node_type: Option<String>,
+    },
 
     /// List all edges
     Edges,
@@ -214,15 +230,23 @@ fn main() {
 
     match args.command {
         Command::Init { .. } => unreachable!(), // Handled above
-        Command::Add { node_type, title, description, confidence, commit, prompt, files } => {
-            match db.create_node_full(&node_type, &title, description.as_deref(), confidence, commit.as_deref(), prompt.as_deref(), files.as_deref()) {
+        Command::Add { node_type, title, description, confidence, commit, prompt, files, branch, no_branch } => {
+            // Auto-detect branch if not specified and not disabled
+            let effective_branch = if no_branch {
+                None
+            } else {
+                branch.or_else(deciduous::get_current_git_branch)
+            };
+
+            match db.create_node_full(&node_type, &title, description.as_deref(), confidence, commit.as_deref(), prompt.as_deref(), files.as_deref(), effective_branch.as_deref()) {
                 Ok(id) => {
                     let conf_str = confidence.map(|c| format!(" [confidence: {}%]", c)).unwrap_or_default();
                     let commit_str = commit.as_ref().map(|c| format!(" [commit: {}]", &c[..7.min(c.len())])).unwrap_or_default();
                     let prompt_str = if prompt.is_some() { " [prompt saved]" } else { "" };
                     let files_str = files.as_ref().map(|f| format!(" [files: {}]", f)).unwrap_or_default();
-                    println!("{} node {} (type: {}, title: {}){}{}{}{}",
-                        "Created".green(), id, node_type, title, conf_str, commit_str, prompt_str, files_str);
+                    let branch_str = effective_branch.as_ref().map(|b| format!(" [branch: {}]", b)).unwrap_or_default();
+                    println!("{} node {} (type: {}, title: {}){}{}{}{}{}",
+                        "Created".green(), id, node_type, title, conf_str, commit_str, prompt_str, files_str, branch_str);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -253,15 +277,47 @@ fn main() {
             }
         }
 
-        Command::Nodes => {
+        Command::Nodes { branch, node_type } => {
             match db.get_all_nodes() {
                 Ok(nodes) => {
-                    if nodes.is_empty() {
-                        println!("No nodes found. Add one with: deciduous add goal \"My goal\"");
+                    // Filter nodes by branch and/or type
+                    let filtered: Vec<_> = nodes.into_iter().filter(|n| {
+                        // Filter by branch if specified
+                        let branch_match = match &branch {
+                            Some(b) => {
+                                n.metadata_json.as_ref().map_or(false, |meta| {
+                                    serde_json::from_str::<serde_json::Value>(meta)
+                                        .ok()
+                                        .and_then(|v| v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()))
+                                        .map_or(false, |node_branch| node_branch == *b)
+                                })
+                            }
+                            None => true,
+                        };
+                        // Filter by type if specified
+                        let type_match = match &node_type {
+                            Some(t) => n.node_type == *t,
+                            None => true,
+                        };
+                        branch_match && type_match
+                    }).collect();
+
+                    if filtered.is_empty() {
+                        if branch.is_some() || node_type.is_some() {
+                            println!("No nodes found matching filters.");
+                        } else {
+                            println!("No nodes found. Add one with: deciduous add goal \"My goal\"");
+                        }
                     } else {
+                        let header = if branch.is_some() {
+                            format!("Nodes on branch '{}' ({} total):", branch.as_ref().unwrap(), filtered.len())
+                        } else {
+                            format!("{} nodes:", filtered.len())
+                        };
+                        println!("{}", header.cyan());
                         println!("{:<5} {:<12} {:<10} {}", "ID", "TYPE", "STATUS", "TITLE");
                         println!("{}", "-".repeat(70));
-                        for n in nodes {
+                        for n in filtered {
                             let type_colored = match n.node_type.as_str() {
                                 "goal" => n.node_type.yellow(),
                                 "decision" => n.node_type.cyan(),

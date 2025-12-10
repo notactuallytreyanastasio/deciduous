@@ -89,7 +89,14 @@ Based on $ARGUMENTS:
 - `-c, --confidence <0-100>` - Confidence level
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
 - `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-b, --branch <name>` - Git branch (auto-detected by default)
+- `--no-branch` - Skip branch auto-detection
 - `--commit <hash>` - Link to a git commit
+
+### Branch Filtering
+- `deciduous nodes --branch main` - Show only nodes from main branch
+- `deciduous nodes --branch feature-x` - Filter by any branch
+- Web UI has branch dropdown filter in stats bar
 
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
@@ -346,7 +353,11 @@ deciduous writeup -t "PR Title"   # Generate PR writeup
 # Optional metadata for nodes
 # -p, --prompt "..."   Store the user prompt that triggered this
 # -f, --files "a.rs,b.rs"   Associate files with this node
+# -b, --branch <name>   Git branch (auto-detected)
 # --commit <hash>   Link to a git commit
+
+# Filter by branch
+deciduous nodes --branch main
 ```
 
 ### Session Start Checklist
@@ -414,10 +425,15 @@ deciduous add observation "Title" -c 80
 # Optional metadata flags for nodes
 # -p, --prompt "..."   Store the user prompt that triggered this
 # -f, --files "a.rs,b.rs"   Associate files with this node
+# -b, --branch <name>   Git branch (auto-detected)
 # --commit <hash>   Link to a git commit
 
 # Example with prompt and files
 deciduous add goal "Add auth" -c 90 -p "User asked: add login feature" -f "src/auth.rs,src/routes.rs"
+
+# Filter by branch
+deciduous nodes --branch main
+deciduous nodes --branch feature-x
 
 # Link nodes together
 deciduous link <from> <to> -r "reason"
@@ -577,7 +593,11 @@ deciduous writeup -t "PR Title"   # Generate PR writeup
 # Optional metadata for nodes
 # -p, --prompt "..."   Store the user prompt that triggered this
 # -f, --files "a.rs,b.rs"   Associate files with this node
+# -b, --branch <name>   Git branch (auto-detected)
 # --commit <hash>   Link to a git commit
+
+# Filter by branch
+deciduous nodes --branch main
 ```
 
 ### Session Start Checklist

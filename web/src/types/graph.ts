@@ -52,6 +52,9 @@ export type EdgeType = typeof EDGE_TYPES[number];
 export interface NodeMetadata {
   confidence?: number;  // 0-100 confidence score
   commit?: string;      // Git commit hash (full 40 chars)
+  prompt?: string;      // User prompt that triggered this decision
+  files?: string[];     // Associated files
+  branch?: string;      // Git branch this node was created on
   [key: string]: unknown;  // Allow extension
 }
 
@@ -186,6 +189,42 @@ export function getConfidence(node: DecisionNode): number | null {
 export function getCommit(node: DecisionNode): string | null {
   const meta = parseMetadata(node.metadata_json);
   return meta?.commit ?? null;
+}
+
+/**
+ * Extract branch from a node
+ */
+export function getBranch(node: DecisionNode): string | null {
+  const meta = parseMetadata(node.metadata_json);
+  return meta?.branch ?? null;
+}
+
+/**
+ * Extract prompt from a node
+ */
+export function getPrompt(node: DecisionNode): string | null {
+  const meta = parseMetadata(node.metadata_json);
+  return meta?.prompt ?? null;
+}
+
+/**
+ * Extract associated files from a node
+ */
+export function getFiles(node: DecisionNode): string[] | null {
+  const meta = parseMetadata(node.metadata_json);
+  return meta?.files ?? null;
+}
+
+/**
+ * Get all unique branches from a list of nodes
+ */
+export function getUniqueBranches(nodes: DecisionNode[]): string[] {
+  const branches = new Set<string>();
+  for (const node of nodes) {
+    const branch = getBranch(node);
+    if (branch) branches.add(branch);
+  }
+  return Array.from(branches).sort();
 }
 
 /**

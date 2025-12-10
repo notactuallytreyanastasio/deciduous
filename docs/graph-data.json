@@ -1539,6 +1539,66 @@
       "created_at": "2025-12-10T14:49:38.356605-05:00",
       "updated_at": "2025-12-10T14:49:38.356605-05:00",
       "metadata_json": "{\"confidence\":95}"
+    },
+    {
+      "id": 155,
+      "node_type": "goal",
+      "title": "Branch-scoped decision graphs - circle nodes by git branch context",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:21:45.885883-05:00",
+      "updated_at": "2025-12-10T15:21:45.885883-05:00",
+      "metadata_json": "{\"confidence\":90,\"prompt\":\"User wants to filter graph by git branch - see only decisions made on a specific branch\"}"
+    },
+    {
+      "id": 156,
+      "node_type": "decision",
+      "title": "Store branch in metadata_json vs new column",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:22:12.984560-05:00",
+      "updated_at": "2025-12-10T15:22:12.984560-05:00",
+      "metadata_json": "{\"confidence\":80}"
+    },
+    {
+      "id": 157,
+      "node_type": "option",
+      "title": "Use metadata_json - no schema change, flexible",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:22:25.458982-05:00",
+      "updated_at": "2025-12-10T15:22:25.458982-05:00",
+      "metadata_json": "{\"confidence\":85}"
+    },
+    {
+      "id": 158,
+      "node_type": "option",
+      "title": "Add branch column - requires migration",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:22:25.469764-05:00",
+      "updated_at": "2025-12-10T15:22:25.469764-05:00",
+      "metadata_json": "{\"confidence\":60}"
+    },
+    {
+      "id": 159,
+      "node_type": "action",
+      "title": "Testing branch auto-detection",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:26:39.543994-05:00",
+      "updated_at": "2025-12-10T15:26:39.543994-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 160,
+      "node_type": "outcome",
+      "title": "Implemented branch-scoped decision graphs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-10T15:31:41.829555-05:00",
+      "updated_at": "2025-12-10T15:31:41.829555-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -2459,6 +2519,33 @@
       "weight": 1.0,
       "rationale": "Goal achieved",
       "created_at": "2025-12-10T14:49:38.365344-05:00"
+    },
+    {
+      "id": 103,
+      "from_node_id": 155,
+      "to_node_id": 156,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal leads to design decision",
+      "created_at": "2025-12-10T15:22:25.480145-05:00"
+    },
+    {
+      "id": 104,
+      "from_node_id": 156,
+      "to_node_id": 157,
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Simpler, consistent with prompt/files approach",
+      "created_at": "2025-12-10T15:22:25.488009-05:00"
+    },
+    {
+      "id": 105,
+      "from_node_id": 155,
+      "to_node_id": 160,
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Branch-scoped graphs implementation complete",
+      "created_at": "2025-12-10T15:31:47.665031-05:00"
     }
   ]
 }
