@@ -219,6 +219,13 @@ enum Command {
 
     /// Migrate database to add change_id columns (for multi-user sync)
     Migrate,
+
+    /// Launch the terminal user interface
+    Tui {
+        /// Optional database path (default: auto-discover)
+        #[arg(short, long)]
+        db: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -293,6 +300,15 @@ fn main() {
         };
 
         if let Err(e) = deciduous::init::update_tooling(editor) {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    // Handle TUI separately - it has its own event loop
+    if let Command::Tui { db } = args.command {
+        if let Err(e) = deciduous::tui::run(db) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -873,6 +889,8 @@ fn main() {
                 }
             }
         }
+
+        Command::Tui { .. } => unreachable!(), // Handled above
     }
 }
 
