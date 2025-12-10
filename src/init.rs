@@ -6,6 +6,58 @@ use colored::Colorize;
 use std::fs;
 use std::path::Path;
 
+/// Static HTML viewer for GitHub Pages (embedded at compile time)
+const PAGES_VIEWER_HTML: &str = include_str!("pages_viewer.html");
+
+/// GitHub Pages deploy workflow
+const DEPLOY_PAGES_WORKFLOW: &str = r#"name: Deploy Decision Graph to Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Build with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+"#;
+
 /// Templates embedded at compile time
 const DECISION_MD: &str = r#"---
 description: Manage decision graph - track algorithm choices and reasoning
@@ -350,21 +402,54 @@ pub fn init_project() -> Result<(), String> {
     // 7. Add .deciduous to .gitignore if not already there
     add_to_gitignore(&cwd)?;
 
-    // 8. Create GitHub workflow for cleanup (if .github exists or .git exists)
+    // 8. Create GitHub workflows (if .git exists)
     let git_dir = cwd.join(".git");
     if git_dir.exists() {
         let workflows_dir = cwd.join(".github").join("workflows");
         create_dir_if_missing(&workflows_dir)?;
 
-        let workflow_path = workflows_dir.join("cleanup-decision-graphs.yml");
-        write_file_if_missing(&workflow_path, CLEANUP_WORKFLOW, ".github/workflows/cleanup-decision-graphs.yml")?;
+        // Cleanup workflow for PR graph assets
+        let cleanup_path = workflows_dir.join("cleanup-decision-graphs.yml");
+        write_file_if_missing(&cleanup_path, CLEANUP_WORKFLOW, ".github/workflows/cleanup-decision-graphs.yml")?;
+
+        // Deploy workflow for GitHub Pages
+        let deploy_path = workflows_dir.join("deploy-pages.yml");
+        write_file_if_missing(&deploy_path, DEPLOY_PAGES_WORKFLOW, ".github/workflows/deploy-pages.yml")?;
+    }
+
+    // 9. Create docs/ directory for GitHub Pages
+    let docs_dir = cwd.join("docs");
+    create_dir_if_missing(&docs_dir)?;
+
+    // 10. Write static viewer HTML to docs/index.html
+    let viewer_path = docs_dir.join("index.html");
+    write_file_if_missing(&viewer_path, PAGES_VIEWER_HTML, "docs/index.html")?;
+
+    // 11. Create empty graph-data.json (will be populated by sync)
+    let graph_data_path = docs_dir.join("graph-data.json");
+    if !graph_data_path.exists() {
+        let empty_graph = r#"{"nodes":[],"edges":[]}"#;
+        fs::write(&graph_data_path, empty_graph)
+            .map_err(|e| format!("Could not write graph-data.json: {}", e))?;
+        println!("   {} docs/graph-data.json", "Creating".green());
+    }
+
+    // 12. Create .nojekyll for GitHub Pages (prevents Jekyll processing)
+    let nojekyll_path = docs_dir.join(".nojekyll");
+    if !nojekyll_path.exists() {
+        fs::write(&nojekyll_path, "")
+            .map_err(|e| format!("Could not write .nojekyll: {}", e))?;
+        println!("   {} docs/.nojekyll", "Creating".green());
     }
 
     println!("\n{}", "Deciduous initialized!".green().bold());
     println!("\nNext steps:");
-    println!("  1. Run {} to start the graph viewer", "deciduous serve".cyan());
-    println!("  2. Use {} to recover context at session start", "/context".cyan());
-    println!("  3. Use {} to log decisions as you work", "/decision".cyan());
+    println!("  1. Run {} to start the local graph viewer", "deciduous serve".cyan());
+    println!("  2. Run {} to export graph for GitHub Pages", "deciduous sync".cyan());
+    println!("  3. Commit and push to deploy: {}", "git add docs/ && git push".cyan());
+    println!("  4. Enable GitHub Pages (Settings → Pages → Source: Deploy from branch, /docs)");
+    println!();
+    println!("Your graph will be live at: {}", "https://<user>.github.io/<repo>/".cyan());
     println!();
 
     Ok(())
