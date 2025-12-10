@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Decision Graph</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .header {
+            background: #16213e;
+            padding: 20px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 8px; }
+        .header p { color: #888; font-size: 14px; }
+        .header a { color: #00d9ff; text-decoration: none; }
+        .header a:hover { text-decoration: underline; }
+
+        .stats {
+            display: flex;
+            gap: 20px;
+            padding: 15px 20px;
+            background: #16213e;
+            margin: 15px;
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        .stat { text-align: center; min-width: 60px; }
+        .stat .num { font-size: 24px; font-weight: bold; color: #00d9ff; }
+        .stat .label { font-size: 10px; color: #888; text-transform: uppercase; }
+
+        .main { display: flex; height: calc(100vh - 160px); }
+
+        .sidebar {
+            width: 380px;
+            background: #16213e;
+            overflow-y: auto;
+            border-right: 1px solid #0f3460;
+        }
+
+        .view-toggle {
+            display: flex;
+            padding: 10px;
+            gap: 5px;
+            border-bottom: 1px solid #0f3460;
+        }
+        .view-btn {
+            flex: 1;
+            padding: 8px;
+            border: none;
+            background: #1a1a2e;
+            color: #888;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .view-btn.active { background: #0f3460; color: #00d9ff; }
+        .view-btn:hover { background: #252547; }
+
+        .session-group { border-bottom: 1px solid #0f3460; }
+        .session-header {
+            padding: 12px 15px;
+            background: #1a1a2e;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .session-header:hover { background: #252547; }
+        .session-toggle {
+            width: 16px; height: 16px;
+            display: flex; align-items: center; justify-content: center;
+            color: #666;
+            transition: transform 0.2s;
+        }
+        .session-header.expanded .session-toggle { transform: rotate(90deg); }
+        .session-title { flex: 1; font-size: 13px; font-weight: 600; }
+        .session-count {
+            font-size: 11px; color: #666;
+            background: #0f3460;
+            padding: 2px 8px;
+            border-radius: 10px;
+        }
+
+        .chain-list { display: none; padding: 5px 10px 10px; }
+        .session-header.expanded + .chain-list { display: block; }
+
+        .chain-item {
+            padding: 10px 12px;
+            margin: 4px 0;
+            background: #252547;
+            border-radius: 6px;
+            cursor: pointer;
+            border-left: 3px solid transparent;
+        }
+        .chain-item:hover { background: #2d2d5a; }
+        .chain-item.selected { border-left-color: #00d9ff; background: #2d2d5a; }
+        .chain-summary { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+        .chain-title { font-size: 13px; flex: 1; }
+        .chain-stats { font-size: 10px; color: #666; }
+        .chain-types { display: flex; gap: 3px; margin-top: 6px; }
+        .chain-type-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+        .node-list { padding: 10px; }
+        .node-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            background: #1a1a2e;
+            border-radius: 6px;
+            cursor: pointer;
+            border-left: 4px solid transparent;
+        }
+        .node-item:hover { background: #252547; }
+        .node-item.selected { border-left-color: #00d9ff; background: #252547; }
+        .node-type {
+            font-size: 10px;
+            text-transform: uppercase;
+            padding: 2px 6px;
+            border-radius: 3px;
+            display: inline-block;
+            margin-bottom: 6px;
+        }
+        .type-goal { background: #22c55e; color: #000; }
+        .type-decision { background: #eab308; color: #000; }
+        .type-option { background: #06b6d4; color: #000; }
+        .type-action { background: #ef4444; color: #fff; }
+        .type-outcome { background: #a855f7; color: #fff; }
+        .type-observation { background: #6b7280; color: #fff; }
+        .node-title { font-size: 14px; line-height: 1.4; }
+
+        .confidence-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        .confidence-high { background: #22c55e33; color: #4ade80; }
+        .confidence-med { background: #eab30833; color: #fbbf24; }
+        .confidence-low { background: #ef444433; color: #f87171; }
+
+        .commit-badge {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 500;
+            font-family: monospace;
+            background: #3b82f633;
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        .commit-badge:hover { background: #3b82f655; color: #93c5fd; }
+
+        .detail-panel {
+            flex: 1;
+            padding: 25px;
+            overflow-y: auto;
+            background: #1a1a2e;
+        }
+        .detail-empty {
+            text-align: center;
+            color: #666;
+            padding-top: 80px;
+        }
+        .detail-empty svg { opacity: 0.3; margin-bottom: 20px; }
+
+        .chain-flow { max-width: 700px; }
+        .chain-flow-header { margin-bottom: 25px; }
+        .chain-flow-header h2 { font-size: 20px; margin-bottom: 8px; }
+        .chain-flow-meta { font-size: 12px; color: #666; }
+
+        .flow-timeline { position: relative; padding-left: 30px; }
+        .flow-timeline::before {
+            content: '';
+            position: absolute;
+            left: 8px; top: 0; bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, #0f3460, #00d9ff, #0f3460);
+        }
+
+        .flow-node {
+            position: relative;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #16213e;
+            border-radius: 8px;
+            border: 1px solid #0f3460;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .flow-node:hover { border-color: #00d9ff; transform: translateX(5px); }
+        .flow-node.selected { border-color: #00d9ff; background: #1c2844; }
+        .flow-node::before {
+            content: '';
+            position: absolute;
+            left: -26px; top: 20px;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            border: 2px solid #00d9ff;
+            background: #1a1a2e;
+        }
+        .flow-node.type-goal::before { background: #22c55e; border-color: #22c55e; }
+        .flow-node.type-decision::before { background: #eab308; border-color: #eab308; }
+        .flow-node.type-action::before { background: #ef4444; border-color: #ef4444; }
+        .flow-node.type-outcome::before { background: #a855f7; border-color: #a855f7; }
+        .flow-node.type-option::before { background: #06b6d4; border-color: #06b6d4; }
+        .flow-node.type-observation::before { background: #6b7280; border-color: #6b7280; }
+
+        .flow-node-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .flow-node-title { font-size: 14px; font-weight: 500; flex: 1; color: #eee; }
+        .flow-node-time { font-size: 10px; color: #888; }
+        .flow-node-desc { font-size: 12px; color: #aaa; line-height: 1.5; }
+        .flow-edge-label {
+            font-size: 11px;
+            color: #4ade80;
+            margin: -10px 0 10px 0;
+            padding-left: 5px;
+            font-weight: 500;
+        }
+
+        .detail-content h2 { font-size: 24px; margin-bottom: 20px; }
+        .detail-meta {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #888;
+        }
+        .detail-description {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            line-height: 1.6;
+        }
+        .connections h3 { font-size: 16px; margin-bottom: 12px; color: #888; }
+        .connection {
+            padding: 10px;
+            background: #16213e;
+            border-radius: 6px;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+        }
+        .connection:hover { background: #1c2844; }
+        .edge-type {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #333;
+        }
+        .edge-type.chosen { background: #22c55e; color: #000; }
+        .edge-type.rejected { background: #ef4444; }
+        .edge-type.leads_to { background: #6b7280; }
+
+        .nav-links {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+        }
+        .nav-links a {
+            color: #00d9ff;
+            text-decoration: none;
+            margin-right: 20px;
+            font-size: 13px;
+        }
+        .nav-links a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1 id="page-title">Decision Graph</h1>
+        <p id="page-subtitle">Powered by <a href="https://github.com/notactuallytreyanastasio/deciduous">Deciduous</a></p>
+    </div>
+
+    <div class="stats" id="stats">
+        <div class="stat"><div class="num" id="node-count">-</div><div class="label">Nodes</div></div>
+        <div class="stat"><div class="num" id="edge-count">-</div><div class="label">Edges</div></div>
+        <div class="stat"><div class="num" id="chain-count">-</div><div class="label">Chains</div></div>
+        <div class="stat"><div class="num" id="session-count">-</div><div class="label">Sessions</div></div>
+    </div>
+
+    <div class="main">
+        <div class="sidebar">
+            <div class="view-toggle">
+                <button class="view-btn active" data-view="chains">Chains</button>
+                <button class="view-btn" data-view="sessions">Sessions</button>
+                <button class="view-btn" data-view="all">All Nodes</button>
+            </div>
+            <div id="sidebar-content"></div>
+        </div>
+        <div class="detail-panel" id="detail-panel">
+            <div class="detail-empty">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v6l4 2"/>
+                </svg>
+                <p>Select a chain or node to explore</p>
+                <p style="margin-top: 10px; font-size: 12px;">Chains show connected decisions and their outcomes</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration - edit these for your repo
+        const CONFIG = {
+            repoUrl: '', // e.g., 'https://github.com/owner/repo' - auto-detected from page URL if empty
+            title: 'Decision Graph',
+            subtitle: ''
+        };
+
+        // Auto-detect GitHub repo from page URL
+        (function() {
+            const url = window.location.href;
+            const match = url.match(/https?:\/\/([^.]+)\.github\.io\/([^\/]+)/);
+            if (match) {
+                CONFIG.repoUrl = `https://github.com/${match[1]}/${match[2]}`;
+                CONFIG.title = `${match[2]} Decision Graph`;
+            }
+            document.getElementById('page-title').textContent = CONFIG.title;
+            if (CONFIG.subtitle) {
+                document.getElementById('page-subtitle').innerHTML = CONFIG.subtitle;
+            }
+        })();
+
+        let graphData = null;
+        let chains = [];
+        let sessions = [];
+        let selectedChain = null;
+        let selectedNode = null;
+        let currentView = 'chains';
+
+        async function loadGraph() {
+            try {
+                const response = await fetch('graph-data.json');
+                graphData = await response.json();
+                buildChainsAndSessions();
+                renderStats();
+                renderSidebar();
+                setupViewToggle();
+            } catch (e) {
+                document.getElementById('detail-panel').innerHTML = `
+                    <div class="detail-empty">
+                        <p style="color: #ef4444;">Could not load graph-data.json</p>
+                        <p style="margin-top: 10px; font-size: 12px;">Run <code>deciduous sync</code> to generate the graph data.</p>
+                    </div>
+                `;
+            }
+        }
+
+        function buildChainsAndSessions() {
+            const nodes = graphData.nodes;
+            const edges = graphData.edges;
+
+            const outgoing = {};
+            const incoming = {};
+            nodes.forEach(n => { outgoing[n.id] = []; incoming[n.id] = []; });
+            edges.forEach(e => {
+                if (outgoing[e.from_node_id]) outgoing[e.from_node_id].push({ to: e.to_node_id, edge: e });
+                if (incoming[e.to_node_id]) incoming[e.to_node_id].push({ from: e.from_node_id, edge: e });
+            });
+
+            const visited = new Set();
+            chains = [];
+
+            const roots = nodes
+                .filter(n => n.node_type === 'goal' || incoming[n.id].length === 0)
+                .sort((a, b) => {
+                    if (a.node_type === 'goal' && b.node_type !== 'goal') return -1;
+                    if (b.node_type === 'goal' && a.node_type !== 'goal') return 1;
+                    return new Date(a.created_at) - new Date(b.created_at);
+                });
+
+            function buildChain(rootId) {
+                if (visited.has(rootId)) return null;
+                const chain = { root: null, nodes: [], edges: [] };
+                const queue = [rootId];
+
+                while (queue.length > 0) {
+                    const nodeId = queue.shift();
+                    if (visited.has(nodeId)) continue;
+                    visited.add(nodeId);
+
+                    const node = nodes.find(n => n.id === nodeId);
+                    if (node) {
+                        chain.nodes.push(node);
+                        if (!chain.root) chain.root = node;
+                    }
+
+                    (outgoing[nodeId] || []).forEach(({ to, edge }) => {
+                        if (!visited.has(to)) {
+                            queue.push(to);
+                            chain.edges.push(edge);
+                        }
+                    });
+                }
+
+                chain.nodes.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+                return chain.nodes.length > 0 ? chain : null;
+            }
+
+            roots.forEach(root => {
+                const chain = buildChain(root.id);
+                if (chain) chains.push(chain);
+            });
+
+            nodes.forEach(n => {
+                if (!visited.has(n.id)) {
+                    const chain = buildChain(n.id);
+                    if (chain) chains.push(chain);
+                }
+            });
+
+            chains.sort((a, b) => new Date(b.nodes[0].created_at) - new Date(a.nodes[0].created_at));
+
+            const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
+            const sortedNodes = [...nodes].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+            sessions = [];
+            let currentSession = null;
+
+            sortedNodes.forEach(node => {
+                const nodeTime = new Date(node.created_at).getTime();
+                if (!currentSession || nodeTime - currentSession.endTime > SESSION_GAP_MS) {
+                    currentSession = { startTime: nodeTime, endTime: nodeTime, nodes: [node], chains: [] };
+                    sessions.push(currentSession);
+                } else {
+                    currentSession.endTime = nodeTime;
+                    currentSession.nodes.push(node);
+                }
+            });
+
+            chains.forEach(chain => {
+                const chainStart = new Date(chain.nodes[0].created_at).getTime();
+                const session = sessions.find(s => chainStart >= s.startTime && chainStart <= s.endTime + SESSION_GAP_MS);
+                if (session) session.chains.push(chain);
+            });
+
+            sessions.reverse();
+        }
+
+        function renderStats() {
+            document.getElementById('node-count').textContent = graphData.nodes.length;
+            document.getElementById('edge-count').textContent = graphData.edges.length;
+            document.getElementById('chain-count').textContent = chains.length;
+            document.getElementById('session-count').textContent = sessions.length;
+        }
+
+        function setupViewToggle() {
+            document.querySelectorAll('.view-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentView = btn.dataset.view;
+                    renderSidebar();
+                });
+            });
+        }
+
+        function renderSidebar() {
+            const container = document.getElementById('sidebar-content');
+            if (currentView === 'chains') renderChainList(container);
+            else if (currentView === 'sessions') renderSessionList(container);
+            else renderAllNodes(container);
+        }
+
+        function renderChainList(container) {
+            container.innerHTML = `<div class="node-list">${chains.map((chain, i) => renderChainItem(chain, i)).join('')}</div>`;
+        }
+
+        function renderChainItem(chain, index) {
+            const types = [...new Set(chain.nodes.map(n => n.node_type))];
+            const selected = selectedChain === index ? 'selected' : '';
+            return `
+                <div class="chain-item ${selected}" onclick="selectChain(${index})">
+                    <div class="chain-summary">
+                        <span class="node-type type-${chain.root.node_type}">${chain.root.node_type}</span>
+                        <span class="chain-title">${truncate(chain.root.title, 40)}</span>
+                    </div>
+                    <div class="chain-stats">${chain.nodes.length} nodes</div>
+                    <div class="chain-types">${types.map(t => `<span class="chain-type-dot type-${t}" title="${t}"></span>`).join('')}</div>
+                </div>
+            `;
+        }
+
+        function renderSessionList(container) {
+            container.innerHTML = sessions.map((session, i) => {
+                const date = new Date(session.startTime);
+                const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                return `
+                    <div class="session-group">
+                        <div class="session-header" onclick="toggleSession(this)">
+                            <span class="session-toggle">▶</span>
+                            <span class="session-title">${dateStr} @ ${timeStr}</span>
+                            <span class="session-count">${session.nodes.length} nodes</span>
+                        </div>
+                        <div class="chain-list">
+                            ${session.chains.map((chain) => {
+                                const globalIndex = chains.indexOf(chain);
+                                return renderChainItem(chain, globalIndex);
+                            }).join('')}
+                            ${session.chains.length === 0 ? '<div style="color:#666;font-size:12px;padding:10px;">No chains</div>' : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAllNodes(container) {
+            container.innerHTML = `
+                <div class="node-list">
+                    ${graphData.nodes.map(node => `
+                        <div class="node-item ${selectedNode?.id === node.id ? 'selected' : ''}" onclick="selectNodeDirect(${node.id})">
+                            <span class="node-type type-${node.node_type}">${node.node_type}</span>
+                            <div class="node-title">${node.title}</div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function toggleSession(header) { header.classList.toggle('expanded'); }
+
+        function selectChain(index) {
+            selectedChain = index;
+            selectedNode = null;
+            renderSidebar();
+            renderChainFlow(chains[index]);
+        }
+
+        function selectNodeDirect(id) {
+            selectedNode = graphData.nodes.find(n => n.id === id);
+            selectedChain = null;
+            renderSidebar();
+            renderNodeDetail();
+        }
+
+        function selectNodeInChain(id) {
+            selectedNode = graphData.nodes.find(n => n.id === id);
+            if (selectedChain !== null) renderChainFlow(chains[selectedChain]);
+        }
+
+        function renderChainFlow(chain) {
+            const panel = document.getElementById('detail-panel');
+            const duration = getDuration(chain.nodes[0].created_at, chain.nodes[chain.nodes.length - 1].created_at);
+
+            const edgeMap = {};
+            chain.edges.forEach(e => { edgeMap[e.to_node_id] = e; });
+
+            panel.innerHTML = `
+                <div class="chain-flow">
+                    <div class="chain-flow-header">
+                        <span class="node-type type-${chain.root.node_type}">${chain.root.node_type}</span>
+                        <h2>${chain.root.title}</h2>
+                        <div class="chain-flow-meta">${chain.nodes.length} nodes · ${duration}</div>
+                    </div>
+                    <div class="flow-timeline">
+                        ${chain.nodes.map((node) => {
+                            const edge = edgeMap[node.id];
+                            const isSelected = selectedNode?.id === node.id ? 'selected' : '';
+                            const time = new Date(node.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                            const conf = getConfidence(node);
+                            const commit = getCommit(node);
+                            return `
+                                ${edge && edge.rationale ? `<div class="flow-edge-label">↳ ${edge.rationale}</div>` : ''}
+                                <div class="flow-node type-${node.node_type} ${isSelected}" onclick="selectNodeInChain(${node.id})">
+                                    <div class="flow-node-header">
+                                        <span class="node-type type-${node.node_type}">${node.node_type}</span>
+                                        ${confidenceBadge(conf)}
+                                        ${commitBadge(commit)}
+                                        <span class="flow-node-title">${node.title}</span>
+                                        <span class="flow-node-time">${time}</span>
+                                    </div>
+                                    ${node.description ? `<div class="flow-node-desc">${node.description}</div>` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderNodeDetail() {
+            const panel = document.getElementById('detail-panel');
+            if (!selectedNode) {
+                panel.innerHTML = '<div class="detail-empty"><p>Select a node</p></div>';
+                return;
+            }
+
+            const incoming = graphData.edges.filter(e => e.to_node_id === selectedNode.id);
+            const outgoing = graphData.edges.filter(e => e.from_node_id === selectedNode.id);
+            const getNodeTitle = (id) => graphData.nodes.find(n => n.id === id)?.title || 'Unknown';
+            const conf = getConfidence(selectedNode);
+            const commit = getCommit(selectedNode);
+
+            panel.innerHTML = `
+                <div class="detail-content">
+                    <span class="node-type type-${selectedNode.node_type}">${selectedNode.node_type}</span>
+                    ${confidenceBadge(conf)}
+                    ${commitBadge(commit)}
+                    <h2>${selectedNode.title}</h2>
+                    <div class="detail-meta">
+                        <span>ID: ${selectedNode.id}</span>
+                        <span>Status: ${selectedNode.status}</span>
+                        <span>Created: ${new Date(selectedNode.created_at).toLocaleDateString()}</span>
+                    </div>
+                    ${selectedNode.description ? `<div class="detail-description">${selectedNode.description}</div>` : ''}
+                    ${incoming.length > 0 ? `
+                        <div class="connections">
+                            <h3>Incoming (${incoming.length})</h3>
+                            ${incoming.map(e => `
+                                <div class="connection" onclick="selectNodeDirect(${e.from_node_id})">
+                                    <span class="edge-type ${e.edge_type}">${e.edge_type}</span>
+                                    <span>← ${truncate(getNodeTitle(e.from_node_id), 50)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    ${outgoing.length > 0 ? `
+                        <div class="connections" style="margin-top: 20px;">
+                            <h3>Outgoing (${outgoing.length})</h3>
+                            ${outgoing.map(e => `
+                                <div class="connection" onclick="selectNodeDirect(${e.to_node_id})">
+                                    <span class="edge-type ${e.edge_type}">${e.edge_type}</span>
+                                    <span>→ ${truncate(getNodeTitle(e.to_node_id), 50)}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function truncate(str, len) { return str.length > len ? str.substring(0, len) + '...' : str; }
+
+        function getDuration(start, end) {
+            const ms = new Date(end) - new Date(start);
+            const mins = Math.floor(ms / 60000);
+            if (mins < 60) return `${mins}m`;
+            const hours = Math.floor(mins / 60);
+            if (hours < 24) return `${hours}h`;
+            return `${Math.floor(hours / 24)}d`;
+        }
+
+        function getConfidence(node) {
+            if (!node.metadata_json) return null;
+            try { return JSON.parse(node.metadata_json).confidence; } catch { return null; }
+        }
+
+        function getCommit(node) {
+            if (!node.metadata_json) return null;
+            try { return JSON.parse(node.metadata_json).commit; } catch { return null; }
+        }
+
+        function confidenceBadge(conf) {
+            if (conf === null || conf === undefined) return '';
+            const level = conf >= 70 ? 'high' : conf >= 40 ? 'med' : 'low';
+            return `<span class="confidence-badge confidence-${level}">${conf}%</span>`;
+        }
+
+        function commitBadge(commit) {
+            if (!commit) return '';
+            const short = commit.slice(0, 7);
+            const url = CONFIG.repoUrl ? `${CONFIG.repoUrl}/commit/${commit}` : '#';
+            return `<a href="${url}" target="_blank" class="commit-badge">${short}</a>`;
+        }
+
+        loadGraph();
+    </script>
+</body>
+</html>

@@ -310,8 +310,9 @@ fn main() {
         }
 
         Command::Sync { output } => {
+            // Default to docs/ for GitHub Pages compatibility
             let output_path = output.unwrap_or_else(|| {
-                PathBuf::from(".deciduous/web/graph-data.json")
+                PathBuf::from("docs/graph-data.json")
             });
 
             // Create parent directories if needed
