@@ -52,6 +52,13 @@ Based on $ARGUMENTS:
 ### Sync Graph
 - `sync` -> `deciduous sync`
 
+### Export & Visualization
+- `dot` -> `deciduous dot` (output DOT to stdout)
+- `dot --png` -> `deciduous dot --png -o graph.dot` (generate PNG)
+- `dot --nodes 1-11` -> `deciduous dot --nodes 1-11` (filter nodes)
+- `writeup` -> `deciduous writeup` (generate PR writeup)
+- `writeup -t "Title" --nodes 1-11` -> filtered writeup
+
 ## Node Types
 
 | Type | Purpose | Example |
@@ -288,6 +295,8 @@ deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"
 deciduous serve   # View live
 deciduous sync    # Export for static hosting
+deciduous dot --png -o graph.dot  # Generate visualization
+deciduous writeup -t "PR Title"   # Generate PR writeup
 ```
 
 ### Session Start Checklist

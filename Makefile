@@ -1,4 +1,4 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
+.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
 
 # Default target
 all: release
@@ -172,6 +172,38 @@ status: release
 	@test -n "$(S)" || (echo "Usage: make status ID=1 S=completed (pending|active|completed|rejected)" && exit 1)
 	$(BINARY) status $(ID) $(S)
 
+# DOT export
+dot: release
+	@if [ -n "$(NODES)" ]; then \
+		if [ -n "$(PNG)" ]; then \
+			$(BINARY) dot --nodes "$(NODES)" --png -o $(or $(OUT),decision-graph.dot); \
+		else \
+			$(BINARY) dot --nodes "$(NODES)" $(if $(OUT),-o $(OUT),); \
+		fi \
+	elif [ -n "$(ROOTS)" ]; then \
+		if [ -n "$(PNG)" ]; then \
+			$(BINARY) dot --roots "$(ROOTS)" --png -o $(or $(OUT),decision-graph.dot); \
+		else \
+			$(BINARY) dot --roots "$(ROOTS)" $(if $(OUT),-o $(OUT),); \
+		fi \
+	else \
+		if [ -n "$(PNG)" ]; then \
+			$(BINARY) dot --png -o $(or $(OUT),decision-graph.dot); \
+		else \
+			$(BINARY) dot $(if $(OUT),-o $(OUT),); \
+		fi \
+	fi
+
+# PR writeup generation
+writeup: release
+	@if [ -n "$(NODES)" ]; then \
+		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --nodes "$(NODES)" $(if $(OUT),-o $(OUT),); \
+	elif [ -n "$(ROOTS)" ]; then \
+		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) --roots "$(ROOTS)" $(if $(OUT),-o $(OUT),); \
+	else \
+		$(BINARY) writeup $(if $(TITLE),-t "$(TITLE)",) $(if $(OUT),-o $(OUT),); \
+	fi
+
 # Help
 help:
 	@echo "Deciduous - Decision Graph Tooling"
@@ -242,6 +274,15 @@ help:
 	@echo "  make link FROM=1 TO=2           Link nodes"
 	@echo "  make link FROM=1 TO=2 TYPE=chosen REASON='why'"
 	@echo "  make status ID=1 S=completed    Update node status"
+	@echo ""
+	@echo "  make dot                        Export full graph as DOT"
+	@echo "  make dot NODES=1-11             Export specific nodes"
+	@echo "  make dot NODES=1-11 PNG=1       Export with PNG generation"
+	@echo "  make dot ROOTS=1,5 PNG=1 OUT=graph.dot"
+	@echo ""
+	@echo "  make writeup                    Generate PR writeup"
+	@echo "  make writeup TITLE='PR Title' NODES=1-11"
+	@echo "  make writeup ROOTS=1 OUT=PR.md"
 	@echo ""
 	@echo "Deploy & Publish:"
 	@echo "  make sync-graph    Export decision graph to docs/demo/graph-data.json"
