@@ -24,10 +24,10 @@ Build the project and run the test suite.
 
 ## Test categories in this project
 - `test_public_exports` - API verification
-- `test_verdict_*` - Verdict classification
-- `test_analyzer_*` - Analyzer configuration
-- `test_threshold_*` - Threshold boundaries
-- `test_agreement_*` - Agreement bonus logic
-- `test_scenario_*` - Real-world scenarios
+- `test_filter_graph` - Graph filtering
+- `test_extract_commit` - Commit extraction from metadata
+- `test_extract_confidence` - Confidence extraction from metadata
+- `test_graph_to_dot` - DOT export
+- `test_generate_writeup` - PR writeup generation
 
 $ARGUMENTS

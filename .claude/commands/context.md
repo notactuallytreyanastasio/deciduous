@@ -1,6 +1,6 @@
 ---
 description: Recover context from decision graph and recent activity - USE THIS ON SESSION START
-allowed-tools: Bash(losselot:*, make:*, git:*, cat:*, tail:*)
+allowed-tools: Bash(deciduous:*, git:*, cat:*, tail:*)
 argument-hint: [focus-area]
 ---
 
@@ -12,13 +12,13 @@ argument-hint: [focus-area]
 
 ```bash
 # See all decisions (look for recent ones and pending status)
-./target/release/losselot db nodes
+deciduous nodes
 
 # See how decisions connect
-./target/release/losselot db edges
+deciduous edges
 
 # What commands were recently run?
-./target/release/losselot db commands
+deciduous commands
 ```
 
 ## Step 2: Check Git State
@@ -45,7 +45,7 @@ cat git.log | tail -30
 
 ---
 
-## ⚠️ REMEMBER: Real-Time Logging Required
+## REMEMBER: Real-Time Logging Required
 
 After recovering context, you MUST follow the logging workflow:
 
@@ -53,7 +53,7 @@ After recovering context, you MUST follow the logging workflow:
 EVERY USER REQUEST → Log goal/decision first
 BEFORE CODE CHANGES → Log action
 AFTER CHANGES → Log outcome, link nodes
-BEFORE GIT PUSH → make sync-graph
+BEFORE GIT PUSH → deciduous sync
 ```
 
 **The user is watching the graph live.** Log as you go, not after.
@@ -61,11 +61,15 @@ BEFORE GIT PUSH → make sync-graph
 ### Quick Logging Commands
 
 ```bash
-./target/release/losselot db add-node -t goal "What we're trying to do" --confidence 90
-./target/release/losselot db add-node -t action "What I'm about to implement" --confidence 85
-./target/release/losselot db add-node -t outcome "What happened" --confidence 95
-./target/release/losselot db add-edge FROM TO -r "Connection reason"
-make sync-graph  # Do this frequently!
+deciduous add goal "What we're trying to do" -c 90
+deciduous add action "What I'm about to implement" -c 85
+deciduous add outcome "What happened" -c 95
+deciduous link FROM TO -r "Connection reason"
+
+# Optional metadata
+deciduous add goal "Title" -c 90 -p "User prompt" -f "src/file.rs"
+
+deciduous sync  # Do this frequently!
 ```
 
 ---
@@ -74,10 +78,10 @@ make sync-graph  # Do this frequently!
 
 If $ARGUMENTS specifies a focus, prioritize context for:
 
-- **lofi** / **cfcc**: Lo-fi detection, CFCC algorithm nodes
-- **spectral**: Spectral analysis decisions
+- **auth**: Authentication-related decisions
 - **ui** / **graph**: UI and graph viewer state
-- **detection**: General detection algorithms
+- **cli**: Command-line interface changes
+- **api**: API endpoints and data structures
 
 ---
 
@@ -92,7 +96,7 @@ DO WORK → Log BEFORE each action
     ↓
 AFTER CHANGES → Log outcomes, observations
     ↓
-BEFORE PUSH → make sync-graph
+BEFORE PUSH → deciduous sync
     ↓
 PUSH → Live graph updates
     ↓
@@ -101,7 +105,7 @@ SESSION END → Graph persists
 (repeat)
 ```
 
-**Live graph**: https://notactuallytreyanastasio.github.io/losselot/demo/
+**Live graph**: https://notactuallytreyanastasio.github.io/deciduous/
 
 ---
 
