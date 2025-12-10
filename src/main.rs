@@ -1,8 +1,9 @@
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use deciduous::Database;
+use deciduous::{Database, DotConfig, MermaidConfig, WriteupConfig, graph_to_dot, graph_to_mermaid, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
 use std::path::PathBuf;
+use std::process::Command as ProcessCommand;
 
 #[derive(Parser, Debug)]
 #[command(name = "deciduous")]
@@ -99,6 +100,87 @@ enum Command {
         /// Number of commands to show
         #[arg(short, long, default_value = "20")]
         limit: i64,
+    },
+
+    /// Export graph as DOT format
+    Dot {
+        /// Output file (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Root node IDs to filter (comma-separated, traverses children)
+        #[arg(short, long)]
+        roots: Option<String>,
+
+        /// Specific node IDs or ranges (e.g., "1-11" or "1,3,5-10")
+        #[arg(short, long)]
+        nodes: Option<String>,
+
+        /// Generate PNG using graphviz (requires dot command)
+        #[arg(long)]
+        png: bool,
+
+        /// Graph title
+        #[arg(short, long)]
+        title: Option<String>,
+
+        /// Graph direction: TB (top-bottom) or LR (left-right)
+        #[arg(long, default_value = "TB")]
+        rankdir: String,
+    },
+
+    /// Export graph as Mermaid format (renders natively on GitHub)
+    Mermaid {
+        /// Output file (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Root node IDs to filter (comma-separated, traverses children)
+        #[arg(short, long)]
+        roots: Option<String>,
+
+        /// Specific node IDs or ranges (e.g., "1-11" or "1,3,5-10")
+        #[arg(short, long)]
+        nodes: Option<String>,
+
+        /// Graph title
+        #[arg(short, long)]
+        title: Option<String>,
+
+        /// Graph direction: TB, BT, LR, RL
+        #[arg(long, default_value = "TB")]
+        direction: String,
+
+        /// Wrap output in ```mermaid code fence for markdown
+        #[arg(long)]
+        fence: bool,
+    },
+
+    /// Generate PR writeup from decision graph
+    Writeup {
+        /// PR title
+        #[arg(short, long)]
+        title: Option<String>,
+
+        /// Root node IDs to include (comma-separated, traverses children)
+        #[arg(short, long)]
+        roots: Option<String>,
+
+        /// Specific node IDs or ranges (e.g., "1-11" or "1,3,5-10")
+        #[arg(short = 'n', long)]
+        nodes: Option<String>,
+
+        /// Output file (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Skip DOT graph section
+        #[arg(long)]
+        no_dot: bool,
+
+        /// Skip test plan section
+        #[arg(long)]
+        no_test_plan: bool,
     },
 }
 
@@ -317,6 +399,180 @@ fn main() {
                                 c.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "running".to_string())
                             );
                         }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Command::Dot { output, roots, nodes, png, title, rankdir } => {
+            match db.get_graph() {
+                Ok(graph) => {
+                    // Filter by specific node IDs if provided
+                    let filtered_graph = if let Some(node_spec) = nodes {
+                        let node_ids = parse_node_range(&node_spec);
+                        filter_graph_by_ids(&graph, &node_ids)
+                    } else if let Some(root_spec) = roots {
+                        // Parse root IDs and traverse
+                        let root_ids: Vec<i32> = root_spec
+                            .split(',')
+                            .filter_map(|s| s.trim().parse().ok())
+                            .collect();
+                        deciduous::filter_graph_from_roots(&graph, &root_ids)
+                    } else {
+                        graph
+                    };
+
+                    let config = DotConfig {
+                        title,
+                        show_rationale: true,
+                        show_confidence: true,
+                        show_ids: true,
+                        rankdir,
+                    };
+
+                    let dot = graph_to_dot(&filtered_graph, &config);
+
+                    if png {
+                        // Generate PNG using graphviz
+                        let dot_path = output.clone().unwrap_or_else(|| PathBuf::from("graph.dot"));
+                        let png_path = dot_path.with_extension("png");
+
+                        // Write DOT file
+                        if let Err(e) = std::fs::write(&dot_path, &dot) {
+                            eprintln!("{} Writing DOT file: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+
+                        // Run graphviz
+                        match ProcessCommand::new("dot")
+                            .args(["-Tpng", &dot_path.to_string_lossy(), "-o", &png_path.to_string_lossy()])
+                            .output()
+                        {
+                            Ok(output) => {
+                                if output.status.success() {
+                                    println!("{} DOT: {}", "Exported".green(), dot_path.display());
+                                    println!("{} PNG: {}", "Generated".green(), png_path.display());
+                                } else {
+                                    eprintln!("{} graphviz failed: {}", "Error:".red(),
+                                        String::from_utf8_lossy(&output.stderr));
+                                    eprintln!("Make sure graphviz is installed: brew install graphviz");
+                                    std::process::exit(1);
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("{} Running graphviz: {}", "Error:".red(), e);
+                                eprintln!("Make sure graphviz is installed: brew install graphviz");
+                                std::process::exit(1);
+                            }
+                        }
+                    } else if let Some(path) = output {
+                        // Write to file
+                        if let Err(e) = std::fs::write(&path, &dot) {
+                            eprintln!("{} Writing file: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                        println!("{} DOT graph to {}", "Exported".green(), path.display());
+                        println!("  {} nodes, {} edges", filtered_graph.nodes.len(), filtered_graph.edges.len());
+                    } else {
+                        // Print to stdout
+                        println!("{}", dot);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Command::Mermaid { output, roots, nodes, title, direction, fence } => {
+            match db.get_graph() {
+                Ok(graph) => {
+                    // Filter by specific node IDs if provided
+                    let filtered_graph = if let Some(node_spec) = nodes {
+                        let node_ids = parse_node_range(&node_spec);
+                        filter_graph_by_ids(&graph, &node_ids)
+                    } else if let Some(root_spec) = roots {
+                        let root_ids: Vec<i32> = root_spec
+                            .split(',')
+                            .filter_map(|s| s.trim().parse().ok())
+                            .collect();
+                        deciduous::filter_graph_from_roots(&graph, &root_ids)
+                    } else {
+                        graph
+                    };
+
+                    let config = MermaidConfig {
+                        title,
+                        show_confidence: true,
+                        show_ids: true,
+                        direction,
+                    };
+
+                    let mermaid = graph_to_mermaid(&filtered_graph, &config);
+
+                    let output_content = if fence {
+                        format!("```mermaid\n{}```", mermaid)
+                    } else {
+                        mermaid
+                    };
+
+                    if let Some(path) = output {
+                        if let Err(e) = std::fs::write(&path, &output_content) {
+                            eprintln!("{} Writing file: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                        println!("{} Mermaid graph to {}", "Exported".green(), path.display());
+                        println!("  {} nodes, {} edges", filtered_graph.nodes.len(), filtered_graph.edges.len());
+                    } else {
+                        println!("{}", output_content);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Command::Writeup { title, roots, nodes, output, no_dot, no_test_plan } => {
+            match db.get_graph() {
+                Ok(graph) => {
+                    // Filter by specific node IDs if provided
+                    let filtered_graph = if let Some(node_spec) = nodes {
+                        let node_ids = parse_node_range(&node_spec);
+                        filter_graph_by_ids(&graph, &node_ids)
+                    } else if let Some(root_spec) = roots {
+                        let root_ids: Vec<i32> = root_spec
+                            .split(',')
+                            .filter_map(|s| s.trim().parse().ok())
+                            .collect();
+                        deciduous::filter_graph_from_roots(&graph, &root_ids)
+                    } else {
+                        graph
+                    };
+
+                    let config = WriteupConfig {
+                        title: title.unwrap_or_else(|| "Pull Request".to_string()),
+                        root_ids: vec![], // Already filtered above
+                        include_dot: !no_dot,
+                        include_test_plan: !no_test_plan,
+                    };
+
+                    let writeup = generate_pr_writeup(&filtered_graph, &config);
+
+                    if let Some(path) = output {
+                        if let Err(e) = std::fs::write(&path, &writeup) {
+                            eprintln!("{} Writing file: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                        println!("{} PR writeup to {}", "Generated".green(), path.display());
+                    } else {
+                        println!("{}", writeup);
                     }
                 }
                 Err(e) => {

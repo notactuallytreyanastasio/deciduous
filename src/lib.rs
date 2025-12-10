@@ -39,6 +39,7 @@
 //! ```
 
 pub mod db;
+pub mod export;
 pub mod init;
 pub mod schema;
 pub mod serve;
@@ -47,6 +48,7 @@ pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
     CURRENT_SCHEMA,
 };
+pub use export::{graph_to_dot, graph_to_mermaid, generate_pr_writeup, filter_graph_from_roots, filter_graph_by_ids, parse_node_range, DotConfig, MermaidConfig, WriteupConfig};
 
 #[cfg(test)]
 mod tests {
