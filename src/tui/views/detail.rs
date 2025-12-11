@@ -31,6 +31,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     let commit = App::get_commit(node);
     let files = App::get_files(node);
     let branch = App::get_branch(node);
+    let prompt = App::get_prompt(node);
 
     // Build content lines
     let mut lines: Vec<Line> = vec![];
@@ -76,6 +77,48 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                     line,
                     Style::default().fg(Color::Gray),
                 )));
+            }
+            lines.push(Line::from(""));
+        }
+    }
+
+    // Prompt section - show the user prompt that triggered this node
+    if let Some(ref p) = prompt {
+        if !p.is_empty() {
+            lines.push(Line::from(Span::styled(
+                "─── Prompt ───",
+                Style::default().fg(Color::LightBlue).bold(),
+            )));
+            lines.push(Line::from(""));
+
+            // Word-wrap the prompt text for readability
+            let prompt_width = (inner_area.width as usize).saturating_sub(4);
+            for line in p.lines() {
+                // Simple word wrap
+                let words: Vec<&str> = line.split_whitespace().collect();
+                let mut current_line = String::new();
+
+                for word in words {
+                    if current_line.is_empty() {
+                        current_line = format!("  {}", word);
+                    } else if current_line.len() + word.len() + 1 <= prompt_width {
+                        current_line.push(' ');
+                        current_line.push_str(word);
+                    } else {
+                        lines.push(Line::from(Span::styled(
+                            current_line.clone(),
+                            Style::default().fg(Color::LightBlue).italic(),
+                        )));
+                        current_line = format!("  {}", word);
+                    }
+                }
+
+                if !current_line.is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        current_line,
+                        Style::default().fg(Color::LightBlue).italic(),
+                    )));
+                }
             }
             lines.push(Line::from(""));
         }
