@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
-use super::app::{App, Mode, View};
+use super::app::{App, Mode, View, ModalContent};
 use super::views::{timeline, dag, detail};
 use super::widgets::file_picker;
 
@@ -61,6 +61,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
     if app.file_picker.is_some() {
         file_picker::draw(frame, app, area);
     }
+
+    if app.modal.is_some() {
+        draw_modal(frame, app, area);
+    }
 }
 
 fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
@@ -109,9 +113,21 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::raw(" "));
     }
 
+    // Branch filter
+    spans.push(Span::raw("│ Branch: "));
+    let branch_text = app.branch_filter.as_deref().unwrap_or("All");
+    spans.push(Span::styled(
+        format!("[{}]", branch_text),
+        if app.branch_filter.is_some() {
+            Style::default().fg(Color::Black).bg(Color::Cyan)
+        } else {
+            Style::default().fg(Color::DarkGray)
+        },
+    ));
+
     // Search indicator
     if app.mode == Mode::Search || !app.search_query.is_empty() {
-        spans.push(Span::raw("│ Search: "));
+        spans.push(Span::raw(" │ Search: "));
         spans.push(Span::styled(
             &app.search_query,
             Style::default().fg(Color::Cyan),
@@ -130,7 +146,7 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let keybinds = match app.current_view {
         View::Timeline => {
-            "j/k:move  Enter:detail  o:open-code  /:search  f:filter  Tab:DAG  ?:help  q:quit"
+            "j/k:move  Enter:detail  o:files  O:commit  s:story  /:search  f:type  b:branch  ?:help  q:quit"
         }
         View::Dag => {
             "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit"
@@ -224,4 +240,173 @@ pub fn node_type_style(node_type: &str) -> Style {
         .fg(Color::Black)
         .bg(node_type_color(node_type))
         .bold()
+}
+
+fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
+    let Some(ref modal) = app.modal else { return };
+
+    // Size based on content
+    let popup_width = 70.min(area.width.saturating_sub(4));
+    let popup_height = 12.min(area.height.saturating_sub(4));
+
+    let popup_area = Rect {
+        x: (area.width - popup_width) / 2,
+        y: (area.height - popup_height) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    match modal {
+        ModalContent::Commit { hash, node_title, git_output } => {
+            // Make commit modal much larger to show full git output
+            let large_width = (area.width as f32 * 0.9) as u16;
+            let large_height = (area.height as f32 * 0.9) as u16;
+
+            let large_area = Rect {
+                x: (area.width - large_width) / 2,
+                y: (area.height - large_height) / 2,
+                width: large_width,
+                height: large_height,
+            };
+
+            frame.render_widget(Clear, large_area);
+
+            let content = format!(
+                "Node: {}\n\n{}",
+                node_title, git_output
+            );
+
+            let modal_widget = Paragraph::new(content)
+                .block(
+                    Block::default()
+                        .title(format!(" Commit: {} ", hash))
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Yellow)),
+                )
+                .wrap(Wrap { trim: false })
+                .style(Style::default().fg(Color::White).bg(Color::Black));
+
+            frame.render_widget(modal_widget, large_area);
+            return; // Skip the default popup_area
+        }
+        ModalContent::NodeDetail { node_id } => {
+            let node_info = if let Some(node) = app.graph.nodes.iter().find(|n| n.id == *node_id) {
+                format!("\n  {} - {}\n\n  {}", node.node_type.to_uppercase(), node.title,
+                    node.description.as_deref().unwrap_or("No description"))
+            } else {
+                format!("Node {} not found", node_id)
+            };
+
+            let modal_widget = Paragraph::new(node_info)
+                .block(
+                    Block::default()
+                        .title(" Node Detail ")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Cyan)),
+                )
+                .wrap(Wrap { trim: true })
+                .style(Style::default().fg(Color::White).bg(Color::Black));
+
+            frame.render_widget(modal_widget, popup_area);
+        }
+        ModalContent::GoalStory { goal_id } => {
+            draw_goal_story_modal(frame, app, *goal_id, area);
+            return; // Uses its own sizing
+        }
+    }
+}
+
+fn draw_goal_story_modal(frame: &mut Frame, app: &App, goal_id: i32, area: Rect) {
+    // Make the story modal larger - it shows more content
+    let popup_width = (area.width as f32 * 0.85) as u16;
+    let popup_height = (area.height as f32 * 0.85) as u16;
+
+    let popup_area = Rect {
+        x: (area.width - popup_width) / 2,
+        y: (area.height - popup_height) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    // Get the goal and its descendants
+    let descendants = app.get_goal_descendants(goal_id);
+
+    let goal_title = app.get_node_by_id(goal_id)
+        .map(|n| n.title.as_str())
+        .unwrap_or("Unknown Goal");
+
+    // Build hierarchical text representation
+    let mut lines: Vec<Line> = vec![
+        Line::from(""),
+    ];
+
+    for (_id, node, depth) in &descendants {
+        let indent = "  ".repeat(*depth);
+        let prefix = if *depth == 0 {
+            "🎯 "
+        } else {
+            match node.node_type.as_str() {
+                "decision" => "├─ 🤔 ",
+                "option" => "│  ├─ 💡 ",
+                "action" => "│  └─ ⚡ ",
+                "outcome" => "└─ ✅ ",
+                "observation" => "│  📝 ",
+                _ => "├─ ",
+            }
+        };
+
+        let type_color = node_type_color(&node.node_type);
+        let type_badge = format!("[{}]", node.node_type.to_uppercase());
+
+        // Truncate title if too long
+        let max_title_len = popup_width.saturating_sub(20 + (depth * 2) as u16) as usize;
+        let title = if node.title.len() > max_title_len {
+            format!("{}...", &node.title[..max_title_len.saturating_sub(3)])
+        } else {
+            node.title.clone()
+        };
+
+        lines.push(Line::from(vec![
+            Span::raw(format!("{}{}", indent, prefix)),
+            Span::styled(type_badge, Style::default().fg(type_color).bold()),
+            Span::raw(" "),
+            Span::styled(title, Style::default().fg(Color::White)),
+        ]));
+
+        // Add confidence if present
+        if let Some(conf) = super::app::App::get_confidence(node) {
+            let conf_color = if conf >= 80 {
+                Color::Green
+            } else if conf >= 50 {
+                Color::Yellow
+            } else {
+                Color::Red
+            };
+            lines.push(Line::from(vec![
+                Span::raw(format!("{}      ", indent)),
+                Span::styled(format!("{}%", conf), Style::default().fg(conf_color)),
+            ]));
+        }
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "  Press Esc or q to close",
+        Style::default().fg(Color::DarkGray),
+    )));
+
+    let story_widget = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title(format!(" Goal Story: {} ", goal_title))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green)),
+        )
+        .style(Style::default().bg(Color::Black));
+
+    frame.render_widget(story_widget, popup_area);
 }

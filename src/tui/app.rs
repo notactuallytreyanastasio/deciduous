@@ -23,6 +23,15 @@ pub enum Focus {
     Search,
     FilePicker,
     Help,
+    Modal,
+}
+
+/// Modal content types
+#[derive(Debug, Clone)]
+pub enum ModalContent {
+    Commit { hash: String, node_title: String, git_output: String },
+    NodeDetail { node_id: i32 },
+    GoalStory { goal_id: i32 },
 }
 
 /// Input mode
@@ -126,6 +135,9 @@ pub struct App {
 
     // Status message
     pub status_message: Option<(String, Instant)>,
+
+    // Modal
+    pub modal: Option<ModalContent>,
 }
 
 impl App {
@@ -170,6 +182,7 @@ impl App {
             refresh_shown_at: None,
             pending_g: false,
             status_message: None,
+            modal: None,
         })
     }
 
@@ -340,10 +353,12 @@ impl App {
     }
 
     pub fn toggle_view(&mut self) {
-        self.current_view = match self.current_view {
-            View::Timeline => View::Dag,
-            View::Dag => View::Timeline,
-        };
+        // DAG view disabled for now - needs layout improvements
+        // self.current_view = match self.current_view {
+        //     View::Timeline => View::Dag,
+        //     View::Dag => View::Timeline,
+        // };
+        self.set_status("DAG view temporarily disabled".to_string());
     }
 
     pub fn toggle_detail(&mut self) {
@@ -433,5 +448,152 @@ impl App {
         self.dag_zoom = 1.0;
         self.dag_offset_x = 0;
         self.dag_offset_y = 0;
+    }
+
+    /// Show commit modal for current node
+    pub fn show_commit_modal(&mut self) {
+        if let Some(node) = self.selected_node() {
+            if let Some(commit) = types::get_commit(node) {
+                // Run git show to get the full commit info
+                let git_output = std::process::Command::new("git")
+                    .args(["show", "--stat", &commit])
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+                    .unwrap_or_else(|e| format!("Failed to run git show: {}", e));
+
+                self.modal = Some(ModalContent::Commit {
+                    hash: commit,
+                    node_title: node.title.clone(),
+                    git_output,
+                });
+                self.focus = Focus::Modal;
+            } else {
+                self.set_status("No commit associated with this node".to_string());
+            }
+        }
+    }
+
+    /// Close the modal
+    pub fn close_modal(&mut self) {
+        self.modal = None;
+        self.focus = Focus::List;
+    }
+
+    /// Get unique branches from the graph
+    pub fn get_unique_branches(&self) -> Vec<String> {
+        types::get_unique_branches(&self.graph.nodes)
+    }
+
+    /// Cycle through branch filters
+    pub fn cycle_branch_filter(&mut self) {
+        let branches = self.get_unique_branches();
+        if branches.is_empty() {
+            self.set_status("No branches found".to_string());
+            return;
+        }
+
+        self.branch_filter = match &self.branch_filter {
+            None => Some(branches[0].clone()),
+            Some(current) => {
+                let idx = branches.iter().position(|b| b == current);
+                match idx {
+                    Some(i) if i + 1 < branches.len() => Some(branches[i + 1].clone()),
+                    _ => None, // Cycle back to "all"
+                }
+            }
+        };
+
+        if let Some(ref branch) = self.branch_filter {
+            self.set_status(format!("Filter: {}", branch));
+        } else {
+            self.set_status("Filter: All branches".to_string());
+        }
+
+        self.apply_filters();
+    }
+
+    /// Show story for selected goal (or find parent goal if on another node type)
+    pub fn show_goal_story(&mut self) {
+        if let Some(node) = self.selected_node() {
+            if node.node_type == "goal" {
+                self.modal = Some(ModalContent::GoalStory { goal_id: node.id });
+                self.focus = Focus::Modal;
+            } else {
+                // Try to find the root goal by traversing up
+                if let Some(goal_id) = self.find_root_goal(node.id) {
+                    self.modal = Some(ModalContent::GoalStory { goal_id });
+                    self.focus = Focus::Modal;
+                } else {
+                    self.set_status("No parent goal found for this node".to_string());
+                }
+            }
+        }
+    }
+
+    /// Find the root goal by traversing incoming edges
+    pub fn find_root_goal(&self, start_id: i32) -> Option<i32> {
+        let mut visited = std::collections::HashSet::new();
+        let mut current = start_id;
+
+        loop {
+            if visited.contains(&current) {
+                return None; // Cycle detected
+            }
+            visited.insert(current);
+
+            // Check if current node is a goal
+            if let Some(node) = self.get_node_by_id(current) {
+                if node.node_type == "goal" {
+                    return Some(current);
+                }
+            }
+
+            // Find incoming edges to traverse up
+            let incoming: Vec<_> = self.graph.edges.iter()
+                .filter(|e| e.to_node_id == current)
+                .collect();
+
+            if incoming.is_empty() {
+                return None; // No parent
+            }
+
+            // Take the first incoming edge (could be smarter about this)
+            current = incoming[0].from_node_id;
+        }
+    }
+
+    /// Get all descendant nodes from a goal (BFS traversal)
+    pub fn get_goal_descendants(&self, goal_id: i32) -> Vec<(i32, &DecisionNode, usize)> {
+        let mut result = Vec::new();
+        let mut queue = std::collections::VecDeque::new();
+        let mut visited = std::collections::HashSet::new();
+
+        // Start with the goal itself at depth 0
+        queue.push_back((goal_id, 0usize));
+
+        while let Some((node_id, depth)) = queue.pop_front() {
+            if visited.contains(&node_id) {
+                continue;
+            }
+            visited.insert(node_id);
+
+            if let Some(node) = self.get_node_by_id(node_id) {
+                result.push((node_id, node, depth));
+
+                // Add all children (outgoing edges)
+                for edge in &self.graph.edges {
+                    if edge.from_node_id == node_id && !visited.contains(&edge.to_node_id) {
+                        queue.push_back((edge.to_node_id, depth + 1));
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    /// Get all goals in the graph
+    pub fn get_goals(&self) -> Vec<&DecisionNode> {
+        self.graph.nodes.iter().filter(|n| n.node_type == "goal").collect()
     }
 }

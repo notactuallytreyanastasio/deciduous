@@ -103,39 +103,51 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::Cyan).bold(),
     )));
 
-    for edge in incoming.iter().take(5) {
+    for edge in incoming.iter() {
         if let Some(from_node) = app.get_node_by_id(edge.from_node_id) {
             let type_color = node_type_color(&from_node.node_type);
+            let edge_indicator = match edge.edge_type.as_str() {
+                "chosen" => "←✓",
+                "rejected" => "←✗",
+                _ => "← ",
+            };
+            let edge_style = match edge.edge_type.as_str() {
+                "chosen" => Style::default().fg(Color::Green),
+                "rejected" => Style::default().fg(Color::Red),
+                _ => Style::default().fg(Color::Cyan),
+            };
+
+            // Type badge
             lines.push(Line::from(vec![
-                Span::styled("← ", Style::default().fg(Color::Cyan)),
+                Span::styled(edge_indicator, edge_style),
+                Span::raw(" "),
                 Span::styled(
-                    format!("[{}] ", from_node.node_type.chars().next().unwrap_or('?').to_uppercase()),
-                    Style::default().fg(type_color),
+                    format!("[{}]", from_node.node_type.to_uppercase()),
+                    Style::default().fg(type_color).bold(),
                 ),
                 Span::styled(
-                    truncate_str(&from_node.title, inner_area.width as usize - 10),
-                    Style::default().fg(Color::White),
+                    format!(" #{}", from_node.id),
+                    Style::default().fg(Color::DarkGray),
                 ),
             ]));
+
+            // Full title (no truncation)
+            lines.push(Line::from(Span::styled(
+                format!("   {}", from_node.title),
+                Style::default().fg(Color::White),
+            )));
 
             // Show rationale if present
             if let Some(ref rationale) = edge.rationale {
                 if !rationale.is_empty() {
                     lines.push(Line::from(Span::styled(
-                        format!("  {}", truncate_str(rationale, inner_area.width as usize - 6)),
+                        format!("   └ {}", rationale),
                         Style::default().fg(Color::DarkGray).italic(),
                     )));
                 }
             }
         }
     }
-    if incoming.len() > 5 {
-        lines.push(Line::from(Span::styled(
-            format!("  ... and {} more", incoming.len() - 5),
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
-
     lines.push(Line::from(""));
 
     // Outgoing edges
@@ -144,45 +156,51 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::Yellow).bold(),
     )));
 
-    for edge in outgoing.iter().take(5) {
+    for edge in outgoing.iter() {
         if let Some(to_node) = app.get_node_by_id(edge.to_node_id) {
             let type_color = node_type_color(&to_node.node_type);
+            let edge_indicator = match edge.edge_type.as_str() {
+                "chosen" => "→✓",
+                "rejected" => "→✗",
+                _ => "→ ",
+            };
             let edge_style = match edge.edge_type.as_str() {
                 "chosen" => Style::default().fg(Color::Green).bold(),
                 "rejected" => Style::default().fg(Color::Red),
                 _ => Style::default().fg(Color::Yellow),
             };
 
+            // Type badge
             lines.push(Line::from(vec![
-                Span::styled("→ ", edge_style),
+                Span::styled(edge_indicator, edge_style),
+                Span::raw(" "),
                 Span::styled(
-                    format!("[{}] ", to_node.node_type.chars().next().unwrap_or('?').to_uppercase()),
-                    Style::default().fg(type_color),
+                    format!("[{}]", to_node.node_type.to_uppercase()),
+                    Style::default().fg(type_color).bold(),
                 ),
                 Span::styled(
-                    truncate_str(&to_node.title, inner_area.width as usize - 10),
-                    Style::default().fg(Color::White),
+                    format!(" #{}", to_node.id),
+                    Style::default().fg(Color::DarkGray),
                 ),
             ]));
+
+            // Full title (no truncation)
+            lines.push(Line::from(Span::styled(
+                format!("   {}", to_node.title),
+                Style::default().fg(Color::White),
+            )));
 
             // Show rationale if present
             if let Some(ref rationale) = edge.rationale {
                 if !rationale.is_empty() {
                     lines.push(Line::from(Span::styled(
-                        format!("  {}", truncate_str(rationale, inner_area.width as usize - 6)),
+                        format!("   └ {}", rationale),
                         Style::default().fg(Color::DarkGray).italic(),
                     )));
                 }
             }
         }
     }
-    if outgoing.len() > 5 {
-        lines.push(Line::from(Span::styled(
-            format!("  ... and {} more", outgoing.len() - 5),
-            Style::default().fg(Color::DarkGray),
-        )));
-    }
-
     lines.push(Line::from(""));
 
     // Separator
@@ -199,12 +217,34 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         )));
     }
 
-    // Commit
+    // Commit - show full info from git
     if let Some(ref hash) = commit {
-        lines.push(Line::from(vec![
-            Span::styled("Commit: ", Style::default().fg(Color::DarkGray)),
-            Span::styled(hash, Style::default().fg(Color::Yellow)),
-        ]));
+        lines.push(Line::from(Span::styled(
+            "─── Commit ───",
+            Style::default().fg(Color::Yellow).bold(),
+        )));
+
+        // Run git log to get commit info
+        if let Ok(output) = std::process::Command::new("git")
+            .args(["log", "-1", "--format=%h %s%n%n%b", hash])
+            .output()
+        {
+            let commit_info = String::from_utf8_lossy(&output.stdout);
+            for line in commit_info.lines() {
+                if !line.is_empty() {
+                    lines.push(Line::from(Span::styled(
+                        line.to_string(),
+                        Style::default().fg(Color::White),
+                    )));
+                }
+            }
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled("Hash: ", Style::default().fg(Color::DarkGray)),
+                Span::styled(hash, Style::default().fg(Color::Yellow)),
+            ]));
+        }
+        lines.push(Line::from(""));
     }
 
     // Branch
@@ -240,14 +280,6 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         .scroll((app.detail_scroll as u16, 0));
 
     frame.render_widget(detail, inner_area);
-}
-
-fn truncate_str(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
-        s.to_string()
-    } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
-    }
 }
 
 fn format_date(ts: &str) -> String {

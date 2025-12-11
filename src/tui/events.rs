@@ -4,7 +4,7 @@
 
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::app::{App, Focus, Mode, View};
+use super::app::{App, Focus, Mode, View, ModalContent};
 
 /// Handle a key event, returns true if app should quit
 pub fn handle_event(app: &mut App, key: KeyEvent) -> bool {
@@ -14,6 +14,11 @@ pub fn handle_event(app: &mut App, key: KeyEvent) -> bool {
             app.show_help = false;
         }
         return false;
+    }
+
+    // Handle modal
+    if app.focus == Focus::Modal {
+        return handle_modal(app, key);
     }
 
     // Handle file picker
@@ -147,16 +152,19 @@ fn handle_timeline_keys(app: &mut App, key: KeyEvent) -> bool {
             }
         }
 
-        // Open commit
+        // Open commit modal
         KeyCode::Char('O') => {
-            if let Some(node) = app.selected_node() {
-                if let Some(commit) = App::get_commit(node) {
-                    app.set_status(format!("Opening commit: {}", commit));
-                    // TODO: Actually open git show
-                } else {
-                    app.set_status("No commit associated with this node".to_string());
-                }
-            }
+            app.show_commit_modal();
+        }
+
+        // Filter by branch
+        KeyCode::Char('b') => {
+            app.cycle_branch_filter();
+        }
+
+        // Show goal story (hierarchy from goal to outcomes)
+        KeyCode::Char('s') => {
+            app.show_goal_story();
         }
 
         // Refresh
@@ -257,6 +265,24 @@ fn handle_file_picker(app: &mut App, key: KeyEvent) -> bool {
             }
             _ => {}
         }
+    }
+    false
+}
+
+fn handle_modal(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+            app.close_modal();
+        }
+        // In commit modal, 'o' could open in git
+        KeyCode::Char('o') => {
+            if let Some(ModalContent::Commit { ref hash, .. }) = app.modal {
+                // Set status to indicate we'd open git show
+                app.set_status(format!("git show {} (not implemented yet)", hash));
+            }
+            app.close_modal();
+        }
+        _ => {}
     }
     false
 }
