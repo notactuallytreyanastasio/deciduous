@@ -2573,6 +2573,83 @@
       "created_at": "2025-12-11T01:03:04.815949-05:00",
       "updated_at": "2025-12-11T01:03:04.815949-05:00",
       "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90,\"files\":[\"src/tui/ui.rs\"]}"
+    },
+    {
+      "id": 235,
+      "change_id": "31ee219b-16df-41c7-9978-e44cb4456c86",
+      "node_type": "outcome",
+      "title": "Modal scrolling implemented with j/k/g/G navigation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:12.328762-05:00",
+      "updated_at": "2025-12-11T01:06:12.328762-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"commit\":\"40894d9\",\"confidence\":95}"
+    },
+    {
+      "id": 236,
+      "change_id": "af2f058a-2f74-473a-ad57-a076448b286a",
+      "node_type": "outcome",
+      "title": "Syntect syntax highlighting working for file previews",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:12.357570-05:00",
+      "updated_at": "2025-12-11T01:06:12.357570-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"commit\":\"101755b\",\"confidence\":95}"
+    },
+    {
+      "id": 237,
+      "change_id": "86754933-5b9d-4f40-988e-4eefa4877ca6",
+      "node_type": "outcome",
+      "title": "Diff modal shows +/- coloring in green/red",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:12.385588-05:00",
+      "updated_at": "2025-12-11T01:06:12.385588-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"commit\":\"40894d9\",\"confidence\":95}"
+    },
+    {
+      "id": 238,
+      "change_id": "7e620177-ccd2-4c29-9c29-ea63fc70e949",
+      "node_type": "outcome",
+      "title": "'o' key in modals opens file in editor (suspends TUI)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:12.411733-05:00",
+      "updated_at": "2025-12-11T01:06:12.411733-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"commit\":\"40894d9\",\"confidence\":95}"
+    },
+    {
+      "id": 239,
+      "change_id": "1f771036-3e1d-4368-96c3-0afa1ca170d9",
+      "node_type": "outcome",
+      "title": "Shift-B fuzzy branch search with Tab/arrows navigation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:12.435793-05:00",
+      "updated_at": "2025-12-11T01:06:12.435793-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"commit\":\"40894d9\",\"confidence\":95}"
+    },
+    {
+      "id": 240,
+      "change_id": "1fa73c05-672c-4905-a96d-69746fb5f729",
+      "node_type": "outcome",
+      "title": "Shift-R toggles chronological/reverse-chrono order",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:12.457445-05:00",
+      "updated_at": "2025-12-11T01:06:12.457445-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"commit\":\"101755b\",\"confidence\":95}"
+    },
+    {
+      "id": 241,
+      "change_id": "f2877f7d-9659-4941-865e-12bdcaa30ded",
+      "node_type": "outcome",
+      "title": "Graph integrity verified: 240 nodes, 181 edges, no orphans",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:06:19.847172-05:00",
+      "updated_at": "2025-12-11T01:06:19.847172-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -4500,6 +4577,83 @@
       "weight": 1.0,
       "rationale": "Implementation complete",
       "created_at": "2025-12-11T01:03:04.825959-05:00"
+    },
+    {
+      "id": 176,
+      "from_node_id": 227,
+      "to_node_id": 235,
+      "from_change_id": "bd6b8356-53a7-42cf-83d6-17e98e17db71",
+      "to_change_id": "31ee219b-16df-41c7-9978-e44cb4456c86",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T01:06:12.337723-05:00"
+    },
+    {
+      "id": 177,
+      "from_node_id": 234,
+      "to_node_id": 236,
+      "from_change_id": "1c7e250b-d5f5-4956-87a6-bd12a6d494b6",
+      "to_change_id": "af2f058a-2f74-473a-ad57-a076448b286a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T01:06:12.368815-05:00"
+    },
+    {
+      "id": 178,
+      "from_node_id": 229,
+      "to_node_id": 237,
+      "from_change_id": "e863e993-2ebe-4a6f-9073-2cd4deb2fb48",
+      "to_change_id": "86754933-5b9d-4f40-988e-4eefa4877ca6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T01:06:12.393017-05:00"
+    },
+    {
+      "id": 179,
+      "from_node_id": 230,
+      "to_node_id": 238,
+      "from_change_id": "705d9066-4b44-423a-a491-800cc1dfaf62",
+      "to_change_id": "7e620177-ccd2-4c29-9c29-ea63fc70e949",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T01:06:12.418279-05:00"
+    },
+    {
+      "id": 180,
+      "from_node_id": 231,
+      "to_node_id": 239,
+      "from_change_id": "7b890bcf-648c-4af1-9d64-7b6324af788c",
+      "to_change_id": "1f771036-3e1d-4368-96c3-0afa1ca170d9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T01:06:12.442107-05:00"
+    },
+    {
+      "id": 181,
+      "from_node_id": 232,
+      "to_node_id": 240,
+      "from_change_id": "654b0629-7882-42f4-a928-a9e8f4fdff5a",
+      "to_change_id": "1fa73c05-672c-4905-a96d-69746fb5f729",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T01:06:12.465774-05:00"
+    },
+    {
+      "id": 182,
+      "from_node_id": 213,
+      "to_node_id": 241,
+      "from_change_id": "e91aee09-9881-429a-a5e7-ef33875a903b",
+      "to_change_id": "f2877f7d-9659-4941-865e-12bdcaa30ded",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Quality check passed",
+      "created_at": "2025-12-11T01:06:19.860245-05:00"
     }
   ]
 }
