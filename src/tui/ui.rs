@@ -302,7 +302,6 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
     match modal {
         ModalContent::Commit { hash, node_title, commit_message, diff_lines, files } => {
             draw_commit_modal(frame, app, area, hash, node_title, commit_message, diff_lines, files);
-            return;
         }
         ModalContent::NodeDetail { node_id } => {
             let node_info = if let Some(node) = app.graph.nodes.iter().find(|n| n.id == *node_id) {
@@ -326,15 +325,12 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
         }
         ModalContent::GoalStory { goal_id } => {
             draw_goal_story_modal(frame, app, *goal_id, area);
-            return; // Uses its own sizing
         }
         ModalContent::FilePreview { path, content } => {
             draw_file_preview_modal(frame, app, area, path, content);
-            return;
         }
         ModalContent::FileDiff { path, diff } => {
             draw_diff_modal(frame, app, area, path, diff);
-            return;
         }
     }
 }

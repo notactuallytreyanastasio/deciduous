@@ -223,7 +223,7 @@ pub fn get_descendants(
 pub fn get_unique_branches(nodes: &[DecisionNode]) -> Vec<String> {
     let mut branches: Vec<String> = nodes
         .iter()
-        .filter_map(|n| super::types::get_branch(n))
+        .filter_map(super::types::get_branch)
         .collect();
     branches.sort();
     branches.dedup();

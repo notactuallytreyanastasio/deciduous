@@ -1154,7 +1154,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     if db_path.exists() {
         println!("   {} .deciduous/deciduous.db (already exists, preserving data)", "Skipping".yellow());
     } else {
-        println!("   {} {}", "Creating".green(), ".deciduous/deciduous.db");
+        println!("   {} .deciduous/deciduous.db", "Creating".green());
     }
 
     // Set the env var so Database::open() uses this path

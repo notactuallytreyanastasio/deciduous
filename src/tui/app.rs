@@ -624,8 +624,8 @@ impl App {
                         };
 
                         // Track current file for syntax detection
-                        if line.starts_with("+++ b/") {
-                            current_file = Some(line[6..].to_string());
+                        if let Some(stripped) = line.strip_prefix("+++ b/") {
+                            current_file = Some(stripped.to_string());
                             // Create highlighter for this file type
                             if let Some(ref path) = current_file {
                                 if let Some(syntax) = PS.find_syntax_for_file(path).ok().flatten() {
@@ -958,7 +958,7 @@ impl App {
     /// Get files for currently selected node
     pub fn get_current_files(&self) -> Vec<String> {
         self.selected_node()
-            .map(|n| types::get_files(n))
+            .map(types::get_files)
             .unwrap_or_default()
     }
 

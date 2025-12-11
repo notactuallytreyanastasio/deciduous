@@ -182,9 +182,7 @@ fn calculate_layout(
 
     // For orphan nodes (no edges at all), assign level 0
     for node in nodes {
-        if !levels.contains_key(&node.id) {
-            levels.insert(node.id, 0);
-        }
+        levels.entry(node.id).or_insert(0);
     }
 
     while let Some((node_id, level)) = queue.pop_front() {

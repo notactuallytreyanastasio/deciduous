@@ -15,7 +15,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     // Calculate popup size
     let max_file_len = picker.files.iter().map(|f| f.len()).max().unwrap_or(20);
-    let popup_width = (max_file_len + 10).min(60).max(30) as u16;
+    let popup_width = (max_file_len + 10).clamp(30, 60) as u16;
     let popup_height = (picker.files.len() + 4).min(20) as u16;
 
     let popup_area = Rect {

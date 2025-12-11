@@ -426,7 +426,7 @@ fn main() {
                             format!("{} nodes:", filtered.len())
                         };
                         println!("{}", header.cyan());
-                        println!("{:<5} {:<12} {:<10} {}", "ID", "TYPE", "STATUS", "TITLE");
+                        println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");
                         println!("{}", "-".repeat(70));
                         for n in filtered {
                             let type_colored = match n.node_type.as_str() {
@@ -454,7 +454,7 @@ fn main() {
                     if edges.is_empty() {
                         println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
                     } else {
-                        println!("{:<5} {:<6} {:<6} {:<12} {}", "ID", "FROM", "TO", "TYPE", "RATIONALE");
+                        println!("{:<5} {:<6} {:<6} {:<12} RATIONALE", "ID", "FROM", "TO", "TYPE");
                         println!("{}", "-".repeat(70));
                         for e in edges {
                             println!(

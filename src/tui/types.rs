@@ -146,7 +146,7 @@ pub fn is_edge_type(value: &str) -> bool {
 pub fn get_unique_branches(nodes: &[DecisionNode]) -> Vec<String> {
     let mut branches: Vec<String> = nodes
         .iter()
-        .filter_map(|n| get_branch(n))
+        .filter_map(get_branch)
         .collect();
     branches.sort();
     branches.dedup();
@@ -154,12 +154,12 @@ pub fn get_unique_branches(nodes: &[DecisionNode]) -> Vec<String> {
 }
 
 /// Get incoming edges for a node
-pub fn get_incoming_edges<'a>(node_id: i32, edges: &'a [DecisionEdge]) -> Vec<&'a DecisionEdge> {
+pub fn get_incoming_edges(node_id: i32, edges: &[DecisionEdge]) -> Vec<&DecisionEdge> {
     edges.iter().filter(|e| e.to_node_id == node_id).collect()
 }
 
 /// Get outgoing edges from a node
-pub fn get_outgoing_edges<'a>(node_id: i32, edges: &'a [DecisionEdge]) -> Vec<&'a DecisionEdge> {
+pub fn get_outgoing_edges(node_id: i32, edges: &[DecisionEdge]) -> Vec<&DecisionEdge> {
     edges.iter().filter(|e| e.from_node_id == node_id).collect()
 }
 
