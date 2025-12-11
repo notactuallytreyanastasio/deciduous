@@ -97,6 +97,28 @@
   - Show the decision chain that led to each feature
   - Include key prompts/feedback that drove changes
   - Generate changelog with decision context
+- [ ] **GitHub Actions CI/CD for releases**
+  - Automate the entire release pipeline via GitHub Actions
+  - Trigger: push tag matching `v*` pattern (e.g., `v0.9.0`)
+  - Pipeline steps:
+    1. Run `cargo test` and `cargo clippy`
+    2. Build release binaries for multiple platforms (linux, macos, windows)
+    3. Create GitHub Release with auto-generated notes
+    4. Publish to crates.io (`cargo publish`)
+    5. Upload platform binaries as release assets
+  - Workflow file: `.github/workflows/release.yml`
+  - Optional: Separate workflow for nightly/canary builds
+  - Consider: cargo-dist or release-plz for Rust-specific release automation
+- [ ] **Release checklist automation**
+  - `deciduous release prep v0.9.0` - prepare release locally
+    - Bump version in Cargo.toml
+    - Update CHANGELOG (if exists)
+    - Run tests and clippy
+    - Generate release notes from decision graph
+  - `deciduous release publish v0.9.0` - trigger the release
+    - Create and push git tag
+    - GitHub Actions takes over from there
+  - Fail-safes: block release if tests fail or graph has incomplete goals
 
 ### TUI PR Review Mode
 - [ ] **GitHub PR integration in TUI**
