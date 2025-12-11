@@ -463,20 +463,22 @@ impl Database {
 
         let has_change_id = columns.iter().any(|c| c.name == "change_id");
 
-        if has_change_id {
-            return Ok(false); // Already migrated
+        if !has_change_id {
+            // Add change_id column to decision_nodes
+            diesel::sql_query("ALTER TABLE decision_nodes ADD COLUMN change_id TEXT")
+                .execute(&mut conn)?;
         }
 
-        // Add change_id column to decision_nodes
-        diesel::sql_query("ALTER TABLE decision_nodes ADD COLUMN change_id TEXT")
-            .execute(&mut conn)?;
-
-        // Backfill change_id with UUIDs for existing nodes
+        // Always backfill any NULL change_ids (handles both new columns and stragglers)
         let nodes: Vec<NodeIdOnly> = diesel::sql_query(
             "SELECT id FROM decision_nodes WHERE change_id IS NULL"
         )
         .load(&mut conn)
         .unwrap_or_default();
+
+        if nodes.is_empty() && has_change_id {
+            return Ok(false); // Already fully migrated
+        }
 
         for node in nodes {
             let change_id = Uuid::new_v4().to_string();
