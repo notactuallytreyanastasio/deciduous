@@ -896,22 +896,15 @@ impl App {
 
         let path = &files[self.detail_file_index.min(files.len() - 1)];
 
-        // Read file content (first 100 lines)
+        // Read raw file content - UI will handle formatting and syntax highlighting
         let content = std::fs::read_to_string(path)
-            .map(|s| {
-                s.lines()
-                    .take(100)
-                    .enumerate()
-                    .map(|(i, line)| format!("{:4} │ {}", i + 1, line))
-                    .collect::<Vec<_>>()
-                    .join("\n")
-            })
             .unwrap_or_else(|e| format!("Error reading file: {}", e));
 
         self.modal = Some(ModalContent::FilePreview {
             path: path.clone(),
             content,
         });
+        self.modal_scroll = ModalScroll::default();
         self.focus = Focus::Modal;
     }
 
