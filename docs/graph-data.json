@@ -2738,6 +2738,83 @@
       "created_at": "2025-12-11T01:44:27.660593-05:00",
       "updated_at": "2025-12-11T01:44:27.660593-05:00",
       "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":85}"
+    },
+    {
+      "id": 250,
+      "change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "node_type": "goal",
+      "title": "Build rich TUI with DAG view and decision spelunker - vim nav, node-to-code jumping, branch filtering",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:53:07.720323-05:00",
+      "updated_at": "2025-12-11T01:53:07.720323-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 251,
+      "change_id": "a35d3ca4-8e14-49bd-bf40-055c0a6d5c4d",
+      "node_type": "observation",
+      "title": "User prompt: show commits full write up, show everything - commit message, body, node outcome, what led to it",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:53:18.998204-05:00",
+      "updated_at": "2025-12-11T01:53:18.998204-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90}"
+    },
+    {
+      "id": 252,
+      "change_id": "01b940b8-c779-43e8-98cc-fedc98e6f576",
+      "node_type": "observation",
+      "title": "User prompt: do not just do some half-assed hacked together syntax highlighter based on file type",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:53:24.311832-05:00",
+      "updated_at": "2025-12-11T01:53:24.311832-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 253,
+      "change_id": "39b0e2c5-1c92-4d8a-83e0-d873f565b269",
+      "node_type": "observation",
+      "title": "User prompt: split modal with diff underneath commit message, scroll independently by hitting j down into bottom section",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:53:29.974768-05:00",
+      "updated_at": "2025-12-11T01:53:29.974768-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90}"
+    },
+    {
+      "id": 254,
+      "change_id": "4e6014ac-88a1-4478-8434-160a5fdc3484",
+      "node_type": "observation",
+      "title": "User feedback: the show commit view is lagging like CRAZY SLOW - takes almost a second to move",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:53:35.213714-05:00",
+      "updated_at": "2025-12-11T01:53:35.213714-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":100}"
+    },
+    {
+      "id": 255,
+      "change_id": "90fc4474-3c09-4ca6-87a4-e6339cefbd22",
+      "node_type": "observation",
+      "title": "User feedback: these greys are stupid dark and unreadable try a diff theme",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:53:40.850870-05:00",
+      "updated_at": "2025-12-11T01:53:40.850870-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":100}"
+    },
+    {
+      "id": 256,
+      "change_id": "2de473ec-ae80-4190-b6a4-ac14a45ccdc2",
+      "node_type": "outcome",
+      "title": "TUI enhancements PR complete - split-view commit modal, syntax highlighting, branch filtering, vim navigation all working",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:56:14.661630-05:00",
+      "updated_at": "2025-12-11T01:56:14.661630-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -4808,6 +4885,160 @@
       "weight": 1.0,
       "rationale": "Re-add highlighting that was lost in performance fix",
       "created_at": "2025-12-11T01:40:45.911693-05:00"
+    },
+    {
+      "id": 189,
+      "from_node_id": 250,
+      "to_node_id": 191,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "42d35702-0c5c-416a-9fbe-281c5e69c269",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Refined goal from original TUI implementation",
+      "created_at": "2025-12-11T01:53:13.118820-05:00"
+    },
+    {
+      "id": 190,
+      "from_node_id": 251,
+      "to_node_id": 217,
+      "from_change_id": "a35d3ca4-8e14-49bd-bf40-055c0a6d5c4d",
+      "to_change_id": "ab361866-fca8-49e9-bed5-0b1bb726a135",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Prompt drove commit modal implementation",
+      "created_at": "2025-12-11T01:53:47.199561-05:00"
+    },
+    {
+      "id": 191,
+      "from_node_id": 252,
+      "to_node_id": 222,
+      "from_change_id": "01b940b8-c779-43e8-98cc-fedc98e6f576",
+      "to_change_id": "71f85145-b03f-405a-a506-6f8e7a0f2648",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Quality requirement drove syntect decision",
+      "created_at": "2025-12-11T01:53:47.208540-05:00"
+    },
+    {
+      "id": 192,
+      "from_node_id": 253,
+      "to_node_id": 244,
+      "from_change_id": "39b0e2c5-1c92-4d8a-83e0-d873f565b269",
+      "to_change_id": "bf73660e-0bc5-4931-8485-e912fad1aa9e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Prompt drove split-view modal design",
+      "created_at": "2025-12-11T01:53:47.388498-05:00"
+    },
+    {
+      "id": 193,
+      "from_node_id": 254,
+      "to_node_id": 246,
+      "from_change_id": "4e6014ac-88a1-4478-8434-160a5fdc3484",
+      "to_change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Bug report drove performance fix",
+      "created_at": "2025-12-11T01:53:47.396625-05:00"
+    },
+    {
+      "id": 194,
+      "from_node_id": 255,
+      "to_node_id": 249,
+      "from_change_id": "90fc4474-3c09-4ca6-87a4-e6339cefbd22",
+      "to_change_id": "8a2675ef-ebf5-4e8f-89b7-b45bb08b151d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Feedback drove theme change",
+      "created_at": "2025-12-11T01:53:47.404150-05:00"
+    },
+    {
+      "id": 195,
+      "from_node_id": 250,
+      "to_node_id": 251,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "a35d3ca4-8e14-49bd-bf40-055c0a6d5c4d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal drove commit modal requirement",
+      "created_at": "2025-12-11T01:56:21.322363-05:00"
+    },
+    {
+      "id": 196,
+      "from_node_id": 250,
+      "to_node_id": 252,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "01b940b8-c779-43e8-98cc-fedc98e6f576",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal included quality standards for highlighting",
+      "created_at": "2025-12-11T01:56:21.330871-05:00"
+    },
+    {
+      "id": 197,
+      "from_node_id": 250,
+      "to_node_id": 253,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "39b0e2c5-1c92-4d8a-83e0-d873f565b269",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal drove split-view design",
+      "created_at": "2025-12-11T01:56:21.340674-05:00"
+    },
+    {
+      "id": 198,
+      "from_node_id": 250,
+      "to_node_id": 254,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "4e6014ac-88a1-4478-8434-160a5fdc3484",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal exposed performance requirement",
+      "created_at": "2025-12-11T01:56:21.350112-05:00"
+    },
+    {
+      "id": 199,
+      "from_node_id": 250,
+      "to_node_id": 255,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "90fc4474-3c09-4ca6-87a4-e6339cefbd22",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal drove theme iteration",
+      "created_at": "2025-12-11T01:56:21.357414-05:00"
+    },
+    {
+      "id": 200,
+      "from_node_id": 249,
+      "to_node_id": 256,
+      "from_change_id": "8a2675ef-ebf5-4e8f-89b7-b45bb08b151d",
+      "to_change_id": "2de473ec-ae80-4190-b6a4-ac14a45ccdc2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Theme fix was final piece",
+      "created_at": "2025-12-11T01:56:27.176608-05:00"
+    },
+    {
+      "id": 201,
+      "from_node_id": 248,
+      "to_node_id": 256,
+      "from_change_id": "85d028f5-1550-4d37-817a-094b92622e52",
+      "to_change_id": "2de473ec-ae80-4190-b6a4-ac14a45ccdc2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Syntax highlighting restoration complete",
+      "created_at": "2025-12-11T01:56:27.184382-05:00"
+    },
+    {
+      "id": 202,
+      "from_node_id": 250,
+      "to_node_id": 256,
+      "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+      "to_change_id": "2de473ec-ae80-4190-b6a4-ac14a45ccdc2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal achieved",
+      "created_at": "2025-12-11T01:56:27.193060-05:00"
     }
   ]
 }
