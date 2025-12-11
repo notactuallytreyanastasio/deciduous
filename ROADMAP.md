@@ -67,6 +67,21 @@
   - Better hierarchical layout algorithm
   - Zoom and pan controls
 
+### Roadmap Manager Tool
+- [ ] **Link roadmap items to work**
+  - Roadmap items should link to decision graph nodes
+  - Track progress through the graph (goal -> decisions -> outcomes)
+  - Show completion status based on linked outcomes
+- [ ] **Work item integration** (future)
+  - Design with external ticketing in mind (JIRA, Linear, GitHub Issues)
+  - Roadmap items could link to external tickets
+  - Sync status bidirectionally
+  - Keep this extensible for enterprise workflows
+- [ ] **CLI commands**
+  - `deciduous roadmap list` - show roadmap items and their status
+  - `deciduous roadmap link <item> <node-id>` - link to graph node
+  - `deciduous roadmap status` - show completion based on linked nodes
+
 ### Release Tooling
 - [ ] **Automated release notes generation**
   - `deciduous release-notes --from v0.7.0 --to v0.8.0`
