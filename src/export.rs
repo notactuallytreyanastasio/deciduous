@@ -87,12 +87,14 @@ fn escape_dot(s: &str) -> String {
         .replace('\n', "\\n")
 }
 
-/// Truncate a string to max length
+/// Truncate a string to max length (Unicode-safe)
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len - 3])
+        let char_len = max_len.saturating_sub(3);
+        let truncated: String = s.chars().take(char_len).collect();
+        format!("{}...", truncated)
     }
 }
 

@@ -187,10 +187,11 @@ impl Database {
             patch.add_node(node);
         }
 
-        // Add edges where both endpoints are in the patch
+        // Add edges where BOTH endpoints are in the patch
+        // Note: We use AND, not OR, because applying a patch requires both nodes to exist
         for edge in &all_edges {
             if let (Some(ref from_cid), Some(ref to_cid)) = (&edge.from_change_id, &edge.to_change_id) {
-                if change_ids.contains(from_cid.as_str()) || change_ids.contains(to_cid.as_str()) {
+                if change_ids.contains(from_cid.as_str()) && change_ids.contains(to_cid.as_str()) {
                     patch.add_edge(edge);
                 }
             }

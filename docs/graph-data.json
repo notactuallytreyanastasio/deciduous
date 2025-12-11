@@ -2947,6 +2947,171 @@
       "created_at": "2025-12-11T02:12:28.559576-05:00",
       "updated_at": "2025-12-11T02:12:28.559576-05:00",
       "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":100}"
+    },
+    {
+      "id": 269,
+      "change_id": "9a2d122e-f481-4b12-a63a-34832c6ce9d0",
+      "node_type": "outcome",
+      "title": "PR #6 created for prompt display in TUI detail panel",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:14:56.880364-05:00",
+      "updated_at": "2025-12-11T02:14:56.880364-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":95}"
+    },
+    {
+      "id": 270,
+      "change_id": "39716fa5-70c6-47d7-acf6-9696873d0e5b",
+      "node_type": "goal",
+      "title": "Fix deciduous update destroying custom content",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:37:50.676404-05:00",
+      "updated_at": "2025-12-11T02:37:50.676404-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User: templates should be built FROM actual files, not the other way around. deciduous update was overwriting detailed command files with minimal templates\"}"
+    },
+    {
+      "id": 271,
+      "change_id": "30cd2c8b-ea2a-4a91-8abd-812faf205cae",
+      "node_type": "action",
+      "title": "Updated DECISION_MD template to match actual .claude/commands/decision.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:37:55.773046-05:00",
+      "updated_at": "2025-12-11T02:37:55.773046-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"src/init.rs\",\".claude/commands/decision.md\"]}"
+    },
+    {
+      "id": 272,
+      "change_id": "258571e9-9c2e-4624-8ab2-830ba8e9ba62",
+      "node_type": "action",
+      "title": "Updated CONTEXT_MD template to match actual .claude/commands/context.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:38:05.314810-05:00",
+      "updated_at": "2025-12-11T02:38:05.314810-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"src/init.rs\",\".claude/commands/context.md\"]}"
+    },
+    {
+      "id": 273,
+      "change_id": "cb5cf211-3af3-4448-add9-0db77d6dbce7",
+      "node_type": "outcome",
+      "title": "v0.8.2 released - templates now sync with actual files",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:42:15.022734-05:00",
+      "updated_at": "2025-12-11T02:42:15.022734-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"7713e44\",\"confidence\":100}"
+    },
+    {
+      "id": 274,
+      "change_id": "077be5aa-ce90-4b20-b4dc-db218c1c9fa2",
+      "node_type": "goal",
+      "title": "Fix Unicode truncate panics in TUI and export",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T12:39:03.765935-05:00",
+      "updated_at": "2025-12-11T12:39:03.765935-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"prompt\":\"User reported Unicode error about a checkmark being rendered - panic on multi-byte UTF-8 chars\"}"
+    },
+    {
+      "id": 275,
+      "change_id": "c05ea657-4987-484d-90be-3115ee0ab201",
+      "node_type": "decision",
+      "title": "Use character-based indexing instead of byte-based",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T12:39:11.361156-05:00",
+      "updated_at": "2025-12-11T12:39:11.361156-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":90}"
+    },
+    {
+      "id": 276,
+      "change_id": "c4304d93-a9b5-4ebb-8cd9-dba5e6164660",
+      "node_type": "action",
+      "title": "Fixed 4 truncate functions: tui/types.rs, timeline.rs, export.rs, main.rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T12:39:17.425374-05:00",
+      "updated_at": "2025-12-11T12:39:17.425374-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"files\":[\"src/tui/types.rs\",\"src/tui/views/timeline.rs\",\"src/export.rs\",\"src/main.rs\"]}"
+    },
+    {
+      "id": 277,
+      "change_id": "f0f3be6d-9077-4496-bb9b-d5bea02b8f7a",
+      "node_type": "action",
+      "title": "Added Unicode truncation test with emoji and checkmarks",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T12:39:23.926435-05:00",
+      "updated_at": "2025-12-11T12:39:23.926435-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"files\":[\"src/tui/types.rs\"]}"
+    },
+    {
+      "id": 278,
+      "change_id": "6434ec38-0b9a-44a7-b3fc-292141700fc3",
+      "node_type": "outcome",
+      "title": "All 24 tests pass - Unicode truncation safe",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T12:39:29.491695-05:00",
+      "updated_at": "2025-12-11T12:39:29.491695-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95}"
+    },
+    {
+      "id": 279,
+      "change_id": "ccf96e28-25ca-4385-8133-434857ad6a9f",
+      "node_type": "action",
+      "title": "Added Live Graph Diff Viewer and Live Graph Editor to roadmap",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T12:39:34.933194-05:00",
+      "updated_at": "2025-12-11T12:39:34.933194-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":90,\"files\":[\"ROADMAP.md\"]}"
+    },
+    {
+      "id": 280,
+      "change_id": "ab024b90-3e52-4595-bc5f-e1a6f858805e",
+      "node_type": "goal",
+      "title": "Fix patch edge export bug - edges reference missing nodes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T16:33:55.639320-05:00",
+      "updated_at": "2025-12-11T16:33:55.639320-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"prompt\":\"User applied patches and got missing node errors - edges were exported with OR logic but need AND logic\"}"
+    },
+    {
+      "id": 281,
+      "change_id": "fe64d54d-f57b-48ef-bded-338bea5e6012",
+      "node_type": "observation",
+      "title": "Bug: diff.rs line 193 uses OR - exports edges when either endpoint is in patch, but apply needs both",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T16:34:02.166274-05:00",
+      "updated_at": "2025-12-11T16:34:02.166274-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"files\":[\"src/diff.rs\"]}"
+    },
+    {
+      "id": 282,
+      "change_id": "86b9ff51-37cc-410d-a8f0-1b167ef89dc5",
+      "node_type": "action",
+      "title": "Fixed diff.rs: changed OR to AND for edge export filtering",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T16:36:15.463459-05:00",
+      "updated_at": "2025-12-11T16:36:15.463459-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"files\":[\"src/diff.rs\"]}"
+    },
+    {
+      "id": 283,
+      "change_id": "dbb5a405-021a-4b03-8434-797c3d1530f6",
+      "node_type": "action",
+      "title": "Added deciduous diff validate command to check patches for missing node refs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T16:36:21.684533-05:00",
+      "updated_at": "2025-12-11T16:36:21.684533-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"files\":[\"src/main.rs\"]}"
     }
   ],
   "edges": [
@@ -5292,6 +5457,149 @@
       "weight": 1.0,
       "rationale": "Getter implementation complete",
       "created_at": "2025-12-11T02:12:38.196158-05:00"
+    },
+    {
+      "id": 214,
+      "from_node_id": 261,
+      "to_node_id": 269,
+      "from_change_id": "32c66005-ae92-435f-807e-e75aca625f43",
+      "to_change_id": "9a2d122e-f481-4b12-a63a-34832c6ce9d0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created for review",
+      "created_at": "2025-12-11T02:15:03.265902-05:00"
+    },
+    {
+      "id": 215,
+      "from_node_id": 270,
+      "to_node_id": 271,
+      "from_change_id": "39716fa5-70c6-47d7-acf6-9696873d0e5b",
+      "to_change_id": "30cd2c8b-ea2a-4a91-8abd-812faf205cae",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing solution for template sync",
+      "created_at": "2025-12-11T02:38:00.746963-05:00"
+    },
+    {
+      "id": 216,
+      "from_node_id": 270,
+      "to_node_id": 272,
+      "from_change_id": "39716fa5-70c6-47d7-acf6-9696873d0e5b",
+      "to_change_id": "258571e9-9c2e-4624-8ab2-830ba8e9ba62",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing solution for template sync",
+      "created_at": "2025-12-11T02:38:10.424187-05:00"
+    },
+    {
+      "id": 217,
+      "from_node_id": 271,
+      "to_node_id": 273,
+      "from_change_id": "30cd2c8b-ea2a-4a91-8abd-812faf205cae",
+      "to_change_id": "cb5cf211-3af3-4448-add9-0db77d6dbce7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Template update led to release",
+      "created_at": "2025-12-11T02:42:21.356561-05:00"
+    },
+    {
+      "id": 218,
+      "from_node_id": 272,
+      "to_node_id": 273,
+      "from_change_id": "258571e9-9c2e-4624-8ab2-830ba8e9ba62",
+      "to_change_id": "cb5cf211-3af3-4448-add9-0db77d6dbce7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Template update led to release",
+      "created_at": "2025-12-11T02:42:21.363870-05:00"
+    },
+    {
+      "id": 219,
+      "from_node_id": 274,
+      "to_node_id": 275,
+      "from_change_id": "077be5aa-ce90-4b20-b4dc-db218c1c9fa2",
+      "to_change_id": "c05ea657-4987-484d-90be-3115ee0ab201",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Root cause: byte slicing panics on multi-byte UTF-8 boundaries",
+      "created_at": "2025-12-11T12:39:11.402870-05:00"
+    },
+    {
+      "id": 220,
+      "from_node_id": 275,
+      "to_node_id": 276,
+      "from_change_id": "c05ea657-4987-484d-90be-3115ee0ab201",
+      "to_change_id": "c4304d93-a9b5-4ebb-8cd9-dba5e6164660",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Changed s.len() to s.chars().count() and byte slicing to chars().take().collect()",
+      "created_at": "2025-12-11T12:39:17.433057-05:00"
+    },
+    {
+      "id": 221,
+      "from_node_id": 276,
+      "to_node_id": 277,
+      "from_change_id": "c4304d93-a9b5-4ebb-8cd9-dba5e6164660",
+      "to_change_id": "f0f3be6d-9077-4496-bb9b-d5bea02b8f7a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Test verifies emoji and special chars don't cause panic",
+      "created_at": "2025-12-11T12:39:23.935501-05:00"
+    },
+    {
+      "id": 222,
+      "from_node_id": 277,
+      "to_node_id": 278,
+      "from_change_id": "f0f3be6d-9077-4496-bb9b-d5bea02b8f7a",
+      "to_change_id": "6434ec38-0b9a-44a7-b3fc-292141700fc3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "cargo test confirms fix works",
+      "created_at": "2025-12-11T12:39:29.498942-05:00"
+    },
+    {
+      "id": 223,
+      "from_node_id": 278,
+      "to_node_id": 279,
+      "from_change_id": "6434ec38-0b9a-44a7-b3fc-292141700fc3",
+      "to_change_id": "ccf96e28-25ca-4385-8133-434857ad6a9f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "User requested new roadmap items",
+      "created_at": "2025-12-11T12:39:34.939592-05:00"
+    },
+    {
+      "id": 224,
+      "from_node_id": 280,
+      "to_node_id": 281,
+      "from_change_id": "ab024b90-3e52-4595-bc5f-e1a6f858805e",
+      "to_change_id": "fe64d54d-f57b-48ef-bded-338bea5e6012",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": null,
+      "created_at": "2025-12-11T16:34:02.175958-05:00"
+    },
+    {
+      "id": 225,
+      "from_node_id": 281,
+      "to_node_id": 282,
+      "from_change_id": "fe64d54d-f57b-48ef-bded-338bea5e6012",
+      "to_change_id": "86b9ff51-37cc-410d-a8f0-1b167ef89dc5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Edges now only exported when BOTH endpoints are in the patch",
+      "created_at": "2025-12-11T16:36:15.472291-05:00"
+    },
+    {
+      "id": 226,
+      "from_node_id": 282,
+      "to_node_id": 283,
+      "from_change_id": "86b9ff51-37cc-410d-a8f0-1b167ef89dc5",
+      "to_change_id": "dbb5a405-021a-4b03-8434-797c3d1530f6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Users can now pre-check patches before applying",
+      "created_at": "2025-12-11T16:36:21.692181-05:00"
     }
   ]
 }

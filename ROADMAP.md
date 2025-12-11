@@ -241,6 +241,12 @@
   - Example hook configurations for different workflow styles
 
 ### Editor Memories Integration
+- [ ] **Actually save memories correctly at runtime**
+  - Windsurf creates memories during runtime - need to patch into that flow
+  - Currently memories are static; need dynamic memory creation as decisions happen
+  - Investigate Windsurf's memory creation API/mechanism
+  - Hook into the runtime to persist decision context as memories are created
+  - Ensure memories reflect real-time decision graph state
 - [ ] **Leverage Claude Code and Windsurf memories**
   - Both editors have "memories" features that persist across sessions
   - Could store decision graph summaries, recent goals, key patterns
@@ -444,6 +450,43 @@
   - Export to formats compatible with BI tools (Metabase, Superset, etc.)
   - Built-in charts in TUI or web viewer
   - `deciduous report` to generate analytical summaries
+
+---
+
+### Live Graph Diff Viewer
+- [ ] **Real-time graph following**
+  - Diff viewer that "follows" the decision graph as nodes are written
+  - User sees live updates as AI creates/modifies nodes
+  - Stream-style view of graph changes in real-time
+  - Could use websocket or file watching to detect changes
+  - TUI mode: live refresh every N seconds or on file change
+  - Web mode: push updates via SSE or websocket
+- [ ] **Visualization of graph deltas**
+  - Show what nodes/edges were added, modified, deleted
+  - Highlight new nodes with a visual indicator
+  - Animate transitions between graph states
+  - Timeline scrubber to replay graph evolution
+- [ ] **Integration with editor workflows**
+  - Side panel in IDE showing live graph updates
+  - Works alongside Claude Code, Windsurf, Cursor
+  - Non-blocking: viewer runs in separate process/terminal
+
+### Live Graph Editor (Experimental)
+- [ ] **Bidirectional graph editing**
+  - Not just viewing - actually edit the graph live
+  - Add/modify/delete nodes through the viewer UI
+  - Changes sync back to SQLite database
+  - Potentially coordinate edits with running AI session
+- [ ] **Collaborative editing**
+  - Multiple users can edit graph simultaneously
+  - Operational transform or CRDT for conflict resolution
+  - Real-time cursor presence (see where others are editing)
+  - This is ambitious but could enable pair programming with AI
+- [ ] **Graph manipulation tools**
+  - Drag and drop nodes to reorganize
+  - Quick actions: merge nodes, split nodes, reparent
+  - Undo/redo support
+  - Validation: prevent invalid graph structures
 
 ---
 

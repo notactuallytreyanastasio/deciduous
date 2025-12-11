@@ -121,11 +121,14 @@ pub fn get_confidence_level(confidence: Option<i32>) -> Option<&'static str> {
 }
 
 /// Truncate string with ellipsis (mirrors truncate in TypeScript)
+/// Uses char indices to handle Unicode safely
 pub fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len.saturating_sub(3)])
+        let char_len = max_len.saturating_sub(3);
+        let truncated: String = s.chars().take(char_len).collect();
+        format!("{}...", truncated)
     }
 }
 
@@ -298,6 +301,21 @@ mod tests {
         assert_eq!(truncate("hello", 10), "hello");
         assert_eq!(truncate("hello world", 8), "hello...");
         assert_eq!(truncate("", 10), "");
+    }
+
+    #[test]
+    fn test_truncate_unicode() {
+        // Test with emoji - should not panic on multi-byte chars
+        assert_eq!(truncate("✅ Done", 10), "✅ Done");
+        // "✅ This is a long message" = 25 chars, truncate to 10 = 7 chars + "..."
+        // chars: ✅, ' ', T, h, i, s, ' ' = 7 chars -> "✅ This ..."
+        assert_eq!(truncate("✅ This is a long message", 10), "✅ This ...");
+        // Test with checkmark
+        assert_eq!(truncate("✓ Complete", 15), "✓ Complete");
+        // Test truncating emoji string (6 emoji = 6 chars, truncate to 5 = 2 chars + "...")
+        assert_eq!(truncate("🎉🎊🎁🎄🎅🎆", 5), "🎉🎊...");
+        // String exactly at limit should not be truncated
+        assert_eq!(truncate("🎉🎊🎁🎄🎅", 5), "🎉🎊🎁🎄🎅");
     }
 
     #[test]

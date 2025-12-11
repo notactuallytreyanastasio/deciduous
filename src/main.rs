@@ -269,6 +269,12 @@ enum DiffAction {
         #[arg(short, long)]
         path: Option<PathBuf>,
     },
+
+    /// Validate a patch file (check for missing node references)
+    Validate {
+        /// Patch file(s) to validate
+        files: Vec<PathBuf>,
+    },
 }
 
 fn main() {
@@ -887,6 +893,75 @@ fn main() {
                         }
                     }
                 }
+
+                DiffAction::Validate { files } => {
+                    use std::collections::HashSet;
+
+                    let mut any_errors = false;
+
+                    for file in &files {
+                        match deciduous::GraphPatch::load(file) {
+                            Ok(patch) => {
+                                // Collect all node change_ids in the patch
+                                let node_ids: HashSet<&str> = patch.nodes.iter()
+                                    .map(|n| n.change_id.as_str())
+                                    .collect();
+
+                                // Check each edge for missing nodes
+                                let mut missing_edges = Vec::new();
+                                for edge in &patch.edges {
+                                    let from_missing = !node_ids.contains(edge.from_change_id.as_str());
+                                    let to_missing = !node_ids.contains(edge.to_change_id.as_str());
+
+                                    if from_missing || to_missing {
+                                        let mut missing = Vec::new();
+                                        if from_missing {
+                                            missing.push(format!("from: {}", &edge.from_change_id[..8.min(edge.from_change_id.len())]));
+                                        }
+                                        if to_missing {
+                                            missing.push(format!("to: {}", &edge.to_change_id[..8.min(edge.to_change_id.len())]));
+                                        }
+                                        missing_edges.push((edge.edge_type.clone(), missing.join(", ")));
+                                    }
+                                }
+
+                                println!("{} {}", "Validating:".cyan(), file.display());
+                                println!("  Nodes: {}", patch.nodes.len());
+                                println!("  Edges: {} ({} valid, {} with missing refs)",
+                                    patch.edges.len(),
+                                    patch.edges.len() - missing_edges.len(),
+                                    missing_edges.len());
+
+                                if !missing_edges.is_empty() {
+                                    any_errors = true;
+                                    println!("  {} Edges referencing missing nodes:", "Warning:".yellow());
+                                    for (edge_type, missing) in &missing_edges {
+                                        println!("    - {} edge: missing {}", edge_type, missing);
+                                    }
+                                    println!();
+                                    println!("  {} This patch has edges that reference nodes not in the patch.", "Note:".cyan());
+                                    println!("  When applied, these edges will fail unless the referenced nodes");
+                                    println!("  already exist in the target database or are imported first.");
+                                    println!();
+                                    println!("  {} Re-export with all dependent nodes, or apply patches in order:", "Fix:".green());
+                                    println!("    1. Apply the patch containing the parent nodes first");
+                                    println!("    2. Then apply this patch");
+                                } else {
+                                    println!("  {} All edges reference nodes within the patch", "OK:".green());
+                                }
+                            }
+                            Err(e) => {
+                                any_errors = true;
+                                eprintln!("{} {}: {}", "Error:".red(), file.display(), e);
+                            }
+                        }
+                        println!();
+                    }
+
+                    if any_errors {
+                        std::process::exit(1);
+                    }
+                }
             }
         }
 
@@ -895,9 +970,11 @@ fn main() {
 }
 
 fn truncate(s: &str, max_len: usize) -> String {
-    if s.len() <= max_len {
+    if s.chars().count() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[..max_len - 3])
+        let char_len = max_len.saturating_sub(3);
+        let truncated: String = s.chars().take(char_len).collect();
+        format!("{}...", truncated)
     }
 }
