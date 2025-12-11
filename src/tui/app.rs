@@ -33,13 +33,30 @@ pub enum ModalContent {
         hash: String,
         node_title: String,
         commit_message: String,
-        diff_output: String,
-        files: Vec<String>,  // Files changed in this commit
+        diff_lines: Vec<StyledDiffLine>,  // Pre-rendered diff lines
+        files: Vec<String>,
     },
     NodeDetail { node_id: i32 },
     GoalStory { goal_id: i32 },
     FilePreview { path: String, content: String },
     FileDiff { path: String, diff: String },
+}
+
+/// Pre-rendered diff line with styling info
+#[derive(Debug, Clone)]
+pub struct StyledDiffLine {
+    pub line_type: DiffLineType,
+    pub content: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum DiffLineType {
+    Header,      // diff, index, +++, ---
+    Hunk,        // @@
+    Added,       // +
+    Removed,     // -
+    Context,     // space
+    Other,
 }
 
 /// Scrollable modal state
@@ -558,14 +575,38 @@ impl App {
                     })
                     .unwrap_or_default();
 
-                // Count diff lines for scroll bounds
-                let diff_line_count = diff_output.lines().count();
+                // Pre-process diff lines (classify only, syntax highlighting done in UI)
+                let diff_lines: Vec<StyledDiffLine> = diff_output
+                    .lines()
+                    .map(|line| {
+                        let line_type = if line.starts_with("@@") {
+                            DiffLineType::Hunk
+                        } else if line.starts_with("diff ") || line.starts_with("index ")
+                            || line.starts_with("+++") || line.starts_with("---") {
+                            DiffLineType::Header
+                        } else if line.starts_with('+') {
+                            DiffLineType::Added
+                        } else if line.starts_with('-') {
+                            DiffLineType::Removed
+                        } else if line.starts_with(' ') {
+                            DiffLineType::Context
+                        } else {
+                            DiffLineType::Other
+                        };
+                        StyledDiffLine {
+                            line_type,
+                            content: line.to_string(),
+                        }
+                    })
+                    .collect();
+
+                let diff_line_count = diff_lines.len();
 
                 self.modal = Some(ModalContent::Commit {
                     hash: commit,
                     node_title: node.title.clone(),
                     commit_message,
-                    diff_output,
+                    diff_lines,
                     files,
                 });
                 self.modal_scroll = ModalScroll::default();

@@ -2671,7 +2671,7 @@
       "status": "pending",
       "created_at": "2025-12-11T01:15:27.734428-05:00",
       "updated_at": "2025-12-11T01:15:27.734428-05:00",
-      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95,\"files\":[\"src/tui/app.rs\",\"src/tui/events.rs\",\"src/tui/ui.rs\"]}"
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95,\"files\":[\"src/tui/app.rs\",\"src/tui/events.rs\",\"src/tui/ui.rs\"],\"commit\":\"e521e42\"}"
     },
     {
       "id": 244,
@@ -2682,7 +2682,29 @@
       "status": "pending",
       "created_at": "2025-12-11T01:17:26.149589-05:00",
       "updated_at": "2025-12-11T01:17:26.149589-05:00",
-      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90,\"files\":[\"src/tui/app.rs\",\"src/tui/events.rs\",\"src/tui/ui.rs\"]}"
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90,\"files\":[\"src/tui/app.rs\",\"src/tui/events.rs\",\"src/tui/ui.rs\"],\"commit\":\"e521e42\"}"
+    },
+    {
+      "id": 245,
+      "change_id": "267ac2e0-ebec-4d20-8064-668792908a51",
+      "node_type": "outcome",
+      "title": "Syntax highlighting working for commit modal and file preview",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:22:14.628807-05:00",
+      "updated_at": "2025-12-11T01:22:14.628807-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 246,
+      "change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+      "node_type": "outcome",
+      "title": "Performance fix: pre-process diff lines when opening commit modal instead of every render frame",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:34:35.942184-05:00",
+      "updated_at": "2025-12-11T01:34:35.942184-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -4720,6 +4742,17 @@
       "weight": 1.0,
       "rationale": "Implementation complete, tested",
       "created_at": "2025-12-11T01:17:32.140160-05:00"
+    },
+    {
+      "id": 186,
+      "from_node_id": 245,
+      "to_node_id": 246,
+      "from_change_id": "267ac2e0-ebec-4d20-8064-668792908a51",
+      "to_change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fix performance issue caused by syntax highlighting on every frame",
+      "created_at": "2025-12-11T01:34:46.307322-05:00"
     }
   ]
 }

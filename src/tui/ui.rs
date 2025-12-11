@@ -300,8 +300,8 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Clear, popup_area);
 
     match modal {
-        ModalContent::Commit { hash, node_title, commit_message, diff_output, files } => {
-            draw_commit_modal(frame, app, area, hash, node_title, commit_message, diff_output, files);
+        ModalContent::Commit { hash, node_title, commit_message, diff_lines, files } => {
+            draw_commit_modal(frame, app, area, hash, node_title, commit_message, diff_lines, files);
             return;
         }
         ModalContent::NodeDetail { node_id } => {
@@ -571,7 +571,7 @@ fn draw_commit_modal(
     hash: &str,
     node_title: &str,
     commit_message: &str,
-    diff_output: &str,
+    diff_lines: &[super::app::StyledDiffLine],
     files: &[String],
 ) {
     let popup_width = (area.width as f32 * 0.9) as u16;
@@ -660,176 +660,31 @@ fn draw_commit_modal(
 
     frame.render_widget(top_widget, top_area);
 
-    // === Bottom section: Diff with syntax highlighting ===
+    // === Bottom section: Diff (pre-processed, no I/O during render) ===
     let bottom_border_color = if bottom_focused { Color::Cyan } else { Color::DarkGray };
 
-    let diff_lines: Vec<&str> = diff_output.lines().collect();
     let total_diff_lines = diff_lines.len();
-
     let scroll_offset = app.commit_modal.diff_scroll.min(total_diff_lines.saturating_sub(1));
 
-    // Build syntax highlighting maps for each file in the diff
-    let theme = &TS.themes["InspiredGitHub"];
-    let mut file_highlights: std::collections::HashMap<String, std::collections::HashMap<String, Vec<(SyntectStyle, String)>>> =
-        std::collections::HashMap::new();
-
-    // Pre-process: find all files in diff and build highlight maps
-    // We need both current file (for + lines) and old version (for - lines)
-    let mut old_file_highlights: std::collections::HashMap<String, std::collections::HashMap<String, Vec<(SyntectStyle, String)>>> =
-        std::collections::HashMap::new();
-
-    for line in &diff_lines {
-        if line.starts_with("+++ b/") {
-            let path = &line[6..];
-
-            let extension = std::path::Path::new(path)
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("txt");
-
-            let syntax = PS.find_syntax_by_extension(extension)
-                .unwrap_or_else(|| PS.find_syntax_plain_text());
-
-            // Read and highlight the CURRENT file (for + and context lines)
-            if let Ok(file_content) = std::fs::read_to_string(path) {
-                let mut highlighter = HighlightLines::new(syntax, theme);
-                let mut line_map: std::collections::HashMap<String, Vec<(SyntectStyle, String)>> =
-                    std::collections::HashMap::new();
-
-                for file_line in file_content.lines() {
-                    let code_with_newline = format!("{}\n", file_line);
-                    if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
-                        let owned: Vec<(SyntectStyle, String)> = highlighted
-                            .into_iter()
-                            .map(|(s, t)| (s, t.to_string()))
-                            .collect();
-                        line_map.insert(file_line.to_string(), owned);
-                    }
-                }
-                file_highlights.insert(path.to_string(), line_map);
+    // Convert pre-processed diff lines to styled Lines (fast - just color mapping)
+    use super::app::DiffLineType;
+    let styled_diff_lines: Vec<Line> = diff_lines.iter().map(|diff_line| {
+        match diff_line.line_type {
+            DiffLineType::Hunk => {
+                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Cyan)))
             }
-
-            // Get the OLD version of the file from git (for - lines)
-            // Use git show HEAD:<path> to get the committed version
-            if let Ok(output) = std::process::Command::new("git")
-                .args(["show", &format!("{}~1:{}", hash, path)])
-                .output()
-            {
-                if output.status.success() {
-                    let old_content = String::from_utf8_lossy(&output.stdout);
-                    let mut highlighter = HighlightLines::new(syntax, theme);
-                    let mut line_map: std::collections::HashMap<String, Vec<(SyntectStyle, String)>> =
-                        std::collections::HashMap::new();
-
-                    for file_line in old_content.lines() {
-                        let code_with_newline = format!("{}\n", file_line);
-                        if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
-                            let owned: Vec<(SyntectStyle, String)> = highlighted
-                                .into_iter()
-                                .map(|(s, t)| (s, t.to_string()))
-                                .collect();
-                            line_map.insert(file_line.to_string(), owned);
-                        }
-                    }
-                    old_file_highlights.insert(path.to_string(), line_map);
-                }
+            DiffLineType::Header => {
+                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Yellow)))
             }
-        }
-    }
-
-    // Build styled diff lines with syntax highlighting
-    let mut current_file: Option<String> = None;
-    let styled_diff_lines: Vec<Line> = diff_lines.iter().map(|line| {
-        // Track current file
-        if line.starts_with("+++ b/") {
-            current_file = Some(line[6..].to_string());
-        }
-
-        if line.starts_with("@@") {
-            // Hunk header - cyan
-            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)))
-        } else if line.starts_with("diff ") || line.starts_with("index ") || line.starts_with("+++") || line.starts_with("---") {
-            // Diff metadata - yellow
-            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)))
-        } else if line.starts_with('+') && line.len() > 1 {
-            // Added line - use syntax highlighting with green tint
-            let code = &line[1..];
-            let mut spans: Vec<Span> = vec![
-                Span::styled("+", Style::default().fg(Color::Green).bold())
-            ];
-
-            if let Some(ref path) = current_file {
-                if let Some(file_map) = file_highlights.get(path) {
-                    if let Some(highlighted) = file_map.get(code) {
-                        for (style, text) in highlighted {
-                            let fg = style.foreground;
-                            // Tint towards green while preserving syntax color
-                            let tinted = Color::Rgb(
-                                (fg.r as u16 * 6 / 10) as u8,
-                                ((fg.g as u16 * 6 / 10) + 90).min(255) as u8,
-                                (fg.b as u16 * 6 / 10) as u8,
-                            );
-                            spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
-                        }
-                        return Line::from(spans);
-                    }
-                }
+            DiffLineType::Added => {
+                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Green)))
             }
-            spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Green)));
-            Line::from(spans)
-        } else if line.starts_with('-') && line.len() > 1 {
-            // Removed line - use old file's syntax highlighting with red tint
-            let code = &line[1..];
-            let mut spans: Vec<Span> = vec![
-                Span::styled("-", Style::default().fg(Color::Red).bold())
-            ];
-
-            // Look up in old file highlights (properly context-aware)
-            if let Some(ref path) = current_file {
-                if let Some(file_map) = old_file_highlights.get(path) {
-                    if let Some(highlighted) = file_map.get(code) {
-                        for (style, text) in highlighted {
-                            let fg = style.foreground;
-                            // Tint towards red while preserving syntax color
-                            let tinted = Color::Rgb(
-                                ((fg.r as u16 * 6 / 10) + 90).min(255) as u8,
-                                (fg.g as u16 * 6 / 10) as u8,
-                                (fg.b as u16 * 6 / 10) as u8,
-                            );
-                            spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
-                        }
-                        return Line::from(spans);
-                    }
-                }
+            DiffLineType::Removed => {
+                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Red)))
             }
-            spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Red)));
-            Line::from(spans)
-        } else if line.starts_with(' ') && line.len() > 1 {
-            // Context line - use syntax highlighting normally
-            let code = &line[1..];
-            let mut spans: Vec<Span> = vec![
-                Span::styled(" ", Style::default())
-            ];
-
-            if let Some(ref path) = current_file {
-                if let Some(file_map) = file_highlights.get(path) {
-                    if let Some(highlighted) = file_map.get(code) {
-                        for (style, text) in highlighted {
-                            let ratatui_style = syntect_to_ratatui_style(*style);
-                            spans.push(Span::styled(text.clone(), ratatui_style));
-                        }
-                        return Line::from(spans);
-                    }
-                }
+            DiffLineType::Context | DiffLineType::Other => {
+                Line::from(Span::raw(diff_line.content.clone()))
             }
-            spans.push(Span::raw(code.to_string()));
-            Line::from(spans)
-        } else if line.starts_with('+') || line.starts_with('-') {
-            // Empty +/- line
-            let color = if line.starts_with('+') { Color::Green } else { Color::Red };
-            Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
-        } else {
-            Line::from(Span::raw(line.to_string()))
         }
     }).collect();
 
