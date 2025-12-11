@@ -363,7 +363,7 @@ fn draw_file_preview_modal(frame: &mut Frame, app: &App, area: Rect, path: &str,
     let syntax = PS.find_syntax_by_extension(extension)
         .unwrap_or_else(|| PS.find_syntax_plain_text());
 
-    let theme = &TS.themes["InspiredGitHub"];
+    let theme = &TS.themes["base16-mocha.dark"];
     let mut highlighter = HighlightLines::new(syntax, theme);
 
     let lines: Vec<&str> = content.lines().collect();
@@ -442,7 +442,7 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
     let syntax = PS.find_syntax_by_extension(extension)
         .unwrap_or_else(|| PS.find_syntax_plain_text());
 
-    let theme = &TS.themes["InspiredGitHub"];
+    let theme = &TS.themes["base16-mocha.dark"];
 
     // Read the actual file to build syntax highlighting state
     // This allows us to highlight diff lines with proper context

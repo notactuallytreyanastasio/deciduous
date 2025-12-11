@@ -58,6 +58,18 @@
   - Better hierarchical layout algorithm
   - Zoom and pan controls
 
+### TUI PR Review Mode
+- [ ] **GitHub PR integration in TUI**
+  - Pull in PR comments from GitHub API
+  - Show file-level and line-level comments alongside code
+  - Browse commits in PR context with associated comments
+  - Mark comments as resolved/addressed from TUI
+  - Reply to comments directly from TUI
+- [ ] **Code review workflow**
+  - Navigate between commented locations
+  - Jump from decision node to related PR/commit comments
+  - See review status and approval state
+
 ### TUI UX Polish
 - [ ] **Keyboard shortcut audit and redesign**
   - Analyze all current shortcuts for intuitiveness

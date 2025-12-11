@@ -593,7 +593,8 @@ impl App {
                     .unwrap_or_default();
 
                 // Pre-process diff lines with syntax highlighting (computed once, used many times)
-                let theme = &TS.themes["InspiredGitHub"];
+                // Use base16-mocha.dark for better visibility on dark terminals
+                let theme = &TS.themes["base16-mocha.dark"];
                 let mut current_file: Option<String> = None;
                 let mut highlighter: Option<HighlightLines> = None;
 

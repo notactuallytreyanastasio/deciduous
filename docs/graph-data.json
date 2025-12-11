@@ -2727,6 +2727,17 @@
       "created_at": "2025-12-11T01:40:44.266214-05:00",
       "updated_at": "2025-12-11T01:40:44.266214-05:00",
       "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90}"
+    },
+    {
+      "id": 249,
+      "change_id": "8a2675ef-ebf5-4e8f-89b7-b45bb08b151d",
+      "node_type": "action",
+      "title": "Switch theme from InspiredGitHub to base16-mocha.dark for better dark terminal visibility",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:44:27.660593-05:00",
+      "updated_at": "2025-12-11T01:44:27.660593-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":85}"
     }
   ],
   "edges": [
