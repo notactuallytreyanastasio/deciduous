@@ -465,7 +465,10 @@ fn syntect_to_ratatui_style(syntect_style: SyntectStyle) -> Style {
     Style::default().fg(Color::Rgb(fg.r, fg.g, fg.b))
 }
 
-/// Draw diff modal with +/- coloring
+/// Draw diff modal with syntax highlighting + diff coloring
+///
+/// This reads the actual file to build proper syntax state, then applies
+/// highlighting to the diff lines with the correct context.
 fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &str) {
     let popup_width = (area.width as f32 * 0.9) as u16;
     let popup_height = (area.height as f32 * 0.9) as u16;
@@ -479,22 +482,118 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
 
     frame.render_widget(Clear, popup_area);
 
-    let lines: Vec<&str> = diff.lines().collect();
-    let total_lines = lines.len();
+    // Get file extension for syntax detection
+    let extension = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("txt");
+
+    // Get syntax for this file type
+    let syntax = PS.find_syntax_by_extension(extension)
+        .unwrap_or_else(|| PS.find_syntax_plain_text());
+
+    let theme = &TS.themes["base16-ocean.dark"];
+
+    // Read the actual file to build syntax highlighting state
+    // This allows us to highlight diff lines with proper context
+    let file_lines: Vec<String> = std::fs::read_to_string(path)
+        .map(|s| s.lines().map(|l| l.to_string()).collect())
+        .unwrap_or_default();
+
+    // Pre-highlight the entire file to build a map of line -> styled spans
+    let mut file_highlighter = HighlightLines::new(syntax, theme);
+    let mut highlighted_file: std::collections::HashMap<String, Vec<(SyntectStyle, String)>> =
+        std::collections::HashMap::new();
+
+    for line in &file_lines {
+        let code_with_newline = format!("{}\n", line);
+        if let Ok(highlighted) = file_highlighter.highlight_line(&code_with_newline, &PS) {
+            let owned: Vec<(SyntectStyle, String)> = highlighted
+                .into_iter()
+                .map(|(s, t)| (s, t.to_string()))
+                .collect();
+            highlighted_file.insert(line.clone(), owned);
+        }
+    }
+
+    let diff_lines: Vec<&str> = diff.lines().collect();
+    let total_lines = diff_lines.len();
     let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
 
-    // Build styled lines for diff content
-    let styled_lines: Vec<Line> = lines.iter().map(|line| {
-        if line.starts_with('+') && !line.starts_with("+++") {
-            Line::from(Span::styled(*line, Style::default().fg(Color::Green)))
-        } else if line.starts_with('-') && !line.starts_with("---") {
-            Line::from(Span::styled(*line, Style::default().fg(Color::Red)))
-        } else if line.starts_with("@@") {
-            Line::from(Span::styled(*line, Style::default().fg(Color::Cyan)))
+    // Build styled lines with syntax highlighting + diff colors
+    let styled_lines: Vec<Line> = diff_lines.iter().map(|line| {
+        if line.starts_with("@@") {
+            // Hunk header - cyan
+            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)))
         } else if line.starts_with("diff ") || line.starts_with("index ") || line.starts_with("+++") || line.starts_with("---") {
-            Line::from(Span::styled(*line, Style::default().fg(Color::Yellow)))
+            // Diff metadata - yellow
+            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)))
+        } else if line.starts_with('+') && line.len() > 1 {
+            // Added line - use highlighted version with green tint
+            let code = &line[1..];
+            let mut spans: Vec<Span> = vec![
+                Span::styled("+", Style::default().fg(Color::Green).bold())
+            ];
+
+            if let Some(highlighted) = highlighted_file.get(code) {
+                for (style, text) in highlighted {
+                    let fg = style.foreground;
+                    // Tint towards green while preserving some syntax color
+                    let tinted = Color::Rgb(
+                        (fg.r as u16 * 6 / 10) as u8,
+                        ((fg.g as u16 * 6 / 10) + 90).min(255) as u8,
+                        (fg.b as u16 * 6 / 10) as u8,
+                    );
+                    spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                }
+            } else {
+                spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Green)));
+            }
+            Line::from(spans)
+        } else if line.starts_with('-') && line.len() > 1 {
+            // Removed line - use highlighted version with red tint
+            let code = &line[1..];
+            let mut spans: Vec<Span> = vec![
+                Span::styled("-", Style::default().fg(Color::Red).bold())
+            ];
+
+            if let Some(highlighted) = highlighted_file.get(code) {
+                for (style, text) in highlighted {
+                    let fg = style.foreground;
+                    // Tint towards red while preserving some syntax color
+                    let tinted = Color::Rgb(
+                        ((fg.r as u16 * 6 / 10) + 90).min(255) as u8,
+                        (fg.g as u16 * 6 / 10) as u8,
+                        (fg.b as u16 * 6 / 10) as u8,
+                    );
+                    spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                }
+            } else {
+                spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Red)));
+            }
+            Line::from(spans)
+        } else if line.starts_with(' ') && line.len() > 1 {
+            // Context line - use highlighted version normally
+            let code = &line[1..];
+            let mut spans: Vec<Span> = vec![
+                Span::styled(" ", Style::default())
+            ];
+
+            if let Some(highlighted) = highlighted_file.get(code) {
+                for (style, text) in highlighted {
+                    let ratatui_style = syntect_to_ratatui_style(*style);
+                    spans.push(Span::styled(text.clone(), ratatui_style));
+                }
+            } else {
+                spans.push(Span::raw(code.to_string()));
+            }
+            Line::from(spans)
+        } else if line.starts_with('+') || line.starts_with('-') {
+            // Empty +/- line
+            let color = if line.starts_with('+') { Color::Green } else { Color::Red };
+            Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
         } else {
-            Line::from(Span::raw(*line))
+            Line::from(Span::raw(line.to_string()))
         }
     }).collect();
 
@@ -509,7 +608,7 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
                 .border_style(Style::default().fg(Color::Cyan)),
         )
         .scroll((scroll_offset as u16, 0))
-        .style(Style::default().fg(Color::White).bg(Color::Black));
+        .style(Style::default().bg(Color::Black));
 
     frame.render_widget(modal_widget, popup_area);
 }
