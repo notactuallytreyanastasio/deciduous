@@ -31,6 +31,7 @@ pub fn handle_event(app: &mut App, key: KeyEvent) -> bool {
         Mode::Search => handle_search_mode(app, key),
         Mode::Normal => handle_normal_mode(app, key),
         Mode::Command => handle_command_mode(app, key),
+        Mode::BranchSearch => handle_branch_search_mode(app, key),
     }
 }
 
@@ -62,6 +63,34 @@ fn handle_command_mode(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
         KeyCode::Esc => {
             app.mode = Mode::Normal;
+        }
+        _ => {}
+    }
+    false
+}
+
+fn handle_branch_search_mode(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc => {
+            app.mode = Mode::Normal;
+            app.branch_search_query.clear();
+        }
+        KeyCode::Enter => {
+            app.select_branch_from_search();
+        }
+        KeyCode::Down | KeyCode::Tab => {
+            app.branch_search_next();
+        }
+        KeyCode::Up | KeyCode::BackTab => {
+            app.branch_search_prev();
+        }
+        KeyCode::Backspace => {
+            app.branch_search_query.pop();
+            app.update_branch_search();
+        }
+        KeyCode::Char(c) => {
+            app.branch_search_query.push(c);
+            app.update_branch_search();
         }
         _ => {}
     }
@@ -140,9 +169,11 @@ fn handle_timeline_keys(app: &mut App, key: KeyEvent) -> bool {
             app.toggle_detail();
         }
 
-        // Open files in editor
+        // Open files in editor (or toggle file browser if in detail mode)
         KeyCode::Char('o') => {
-            if let Some(node) = app.selected_node() {
+            if app.detail_in_files {
+                app.open_current_file();
+            } else if let Some(node) = app.selected_node() {
                 let files = App::get_files(node);
                 if !files.is_empty() {
                     app.show_file_picker(files);
@@ -157,14 +188,42 @@ fn handle_timeline_keys(app: &mut App, key: KeyEvent) -> bool {
             app.show_commit_modal();
         }
 
-        // Filter by branch
+        // Filter by branch (cycle)
         KeyCode::Char('b') => {
             app.cycle_branch_filter();
+        }
+
+        // Branch search (fuzzy)
+        KeyCode::Char('B') => {
+            app.enter_branch_search();
         }
 
         // Show goal story (hierarchy from goal to outcomes)
         KeyCode::Char('s') => {
             app.show_goal_story();
+        }
+
+        // Toggle file browser in detail panel
+        KeyCode::Char('F') => {
+            app.toggle_file_browser();
+        }
+
+        // File navigation when in file browser mode
+        KeyCode::Char('n') if app.detail_in_files => {
+            app.next_file();
+        }
+        KeyCode::Char('N') if app.detail_in_files => {
+            app.prev_file();
+        }
+
+        // Preview file content
+        KeyCode::Char('p') => {
+            app.show_file_preview();
+        }
+
+        // Show file diff
+        KeyCode::Char('d') if app.detail_in_files => {
+            app.show_file_diff();
         }
 
         // Refresh
@@ -271,16 +330,36 @@ fn handle_file_picker(app: &mut App, key: KeyEvent) -> bool {
 
 fn handle_modal(app: &mut App, key: KeyEvent) -> bool {
     match key.code {
-        KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
+        KeyCode::Esc | KeyCode::Char('q') => {
             app.close_modal();
         }
-        // In commit modal, 'o' could open in git
+        // Scrolling
+        KeyCode::Char('j') | KeyCode::Down => {
+            app.modal_scroll_down(1);
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.modal_scroll_up(1);
+        }
+        KeyCode::Char('d') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            app.modal_scroll_down(10);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            app.modal_scroll_up(10);
+        }
+        KeyCode::Char('g') => {
+            app.modal_scroll.offset = 0; // Jump to top
+        }
+        KeyCode::Char('G') => {
+            app.modal_scroll.offset = app.modal_scroll.total_lines.saturating_sub(10);
+        }
+        // Open file in editor (for file/diff modals)
         KeyCode::Char('o') => {
-            if let Some(ModalContent::Commit { ref hash, .. }) = app.modal {
-                // Set status to indicate we'd open git show
-                app.set_status(format!("git show {} (not implemented yet)", hash));
+            if app.get_modal_file_path().is_some() {
+                app.open_modal_file();
+                app.close_modal();
+            } else if let Some(ModalContent::Commit { ref hash, .. }) = app.modal {
+                app.set_status(format!("git show {} (use terminal)", hash));
             }
-            app.close_modal();
         }
         _ => {}
     }

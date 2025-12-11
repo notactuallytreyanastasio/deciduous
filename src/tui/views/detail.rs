@@ -209,12 +209,33 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         Style::default().fg(Color::DarkGray),
     )));
 
-    // Files
+    // Files - interactive list
     if !files.is_empty() {
+        let file_header = if app.detail_in_files {
+            format!("─── Files ({}/{}) [F:exit n/N:nav p:preview d:diff o:open] ───",
+                app.detail_file_index + 1, files.len())
+        } else {
+            format!("─── Files ({}) [F:browse p:preview] ───", files.len())
+        };
         lines.push(Line::from(Span::styled(
-            format!("Files: {}", files.join(", ")),
-            Style::default().fg(Color::Magenta),
+            file_header,
+            Style::default().fg(Color::Magenta).bold(),
         )));
+
+        for (i, file) in files.iter().enumerate() {
+            let is_selected = app.detail_in_files && i == app.detail_file_index;
+            let prefix = if is_selected { "▶ " } else { "  " };
+            let style = if is_selected {
+                Style::default().fg(Color::Black).bg(Color::Magenta)
+            } else {
+                Style::default().fg(Color::Magenta)
+            };
+            lines.push(Line::from(Span::styled(
+                format!("{}{}", prefix, file),
+                style,
+            )));
+        }
+        lines.push(Line::from(""));
     }
 
     // Commit - show full info from git

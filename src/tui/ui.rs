@@ -113,17 +113,44 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
         spans.push(Span::raw(" "));
     }
 
-    // Branch filter
-    spans.push(Span::raw("│ Branch: "));
-    let branch_text = app.branch_filter.as_deref().unwrap_or("All");
-    spans.push(Span::styled(
-        format!("[{}]", branch_text),
-        if app.branch_filter.is_some() {
-            Style::default().fg(Color::Black).bg(Color::Cyan)
+    // Branch filter or branch search
+    if app.mode == Mode::BranchSearch {
+        spans.push(Span::raw("│ Branch search: "));
+        spans.push(Span::styled(
+            &app.branch_search_query,
+            Style::default().fg(Color::Cyan),
+        ));
+        spans.push(Span::styled("_", Style::default().fg(Color::Cyan).rapid_blink()));
+
+        // Show matches
+        if !app.branch_search_matches.is_empty() {
+            spans.push(Span::raw(" → "));
+            let selected = &app.branch_search_matches[app.branch_search_index];
+            spans.push(Span::styled(
+                selected.clone(),
+                Style::default().fg(Color::Black).bg(Color::Cyan),
+            ));
+            if app.branch_search_matches.len() > 1 {
+                spans.push(Span::styled(
+                    format!(" ({}/{})", app.branch_search_index + 1, app.branch_search_matches.len()),
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
         } else {
-            Style::default().fg(Color::DarkGray)
-        },
-    ));
+            spans.push(Span::styled(" (no matches)", Style::default().fg(Color::Red)));
+        }
+    } else {
+        spans.push(Span::raw("│ Branch: "));
+        let branch_text = app.branch_filter.as_deref().unwrap_or("All");
+        spans.push(Span::styled(
+            format!("[{}]", branch_text),
+            if app.branch_filter.is_some() {
+                Style::default().fg(Color::Black).bg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            },
+        ));
+    }
 
     // Search indicator
     if app.mode == Mode::Search || !app.search_query.is_empty() {
@@ -146,7 +173,11 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     let keybinds = match app.current_view {
         View::Timeline => {
-            "j/k:move  Enter:detail  o:files  O:commit  s:story  /:search  f:type  b:branch  ?:help  q:quit"
+            if app.detail_in_files {
+                "n/N:files  p:preview  d:diff  o:open  F:exit  q:quit"
+            } else {
+                "j/k:move  o:files  O:commit  s:story  p:preview  F:browse  /:search  f:type  b:branch  q:quit"
+            }
         }
         View::Dag => {
             "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit"
@@ -278,14 +309,36 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
                 node_title, git_output
             );
 
-            let modal_widget = Paragraph::new(content)
+            let lines: Vec<&str> = content.lines().collect();
+            let total_lines = lines.len();
+            let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
+
+            // Style diff-like lines in the commit output
+            let styled_lines: Vec<Line> = lines.iter().map(|line| {
+                if line.starts_with('+') && !line.starts_with("+++") {
+                    Line::from(Span::styled(*line, Style::default().fg(Color::Green)))
+                } else if line.starts_with('-') && !line.starts_with("---") {
+                    Line::from(Span::styled(*line, Style::default().fg(Color::Red)))
+                } else if line.starts_with("@@") {
+                    Line::from(Span::styled(*line, Style::default().fg(Color::Cyan)))
+                } else if line.starts_with("diff ") || line.starts_with("index ") {
+                    Line::from(Span::styled(*line, Style::default().fg(Color::Yellow)))
+                } else {
+                    Line::from(Span::raw(*line))
+                }
+            }).collect();
+
+            let title_text = format!(" Commit: {} [j/k:scroll g/G:top/bot q:close] (line {}/{}) ",
+                hash, scroll_offset + 1, total_lines);
+
+            let modal_widget = Paragraph::new(styled_lines)
                 .block(
                     Block::default()
-                        .title(format!(" Commit: {} ", hash))
+                        .title(title_text)
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(Color::Yellow)),
                 )
-                .wrap(Wrap { trim: false })
+                .scroll((scroll_offset as u16, 0))
                 .style(Style::default().fg(Color::White).bg(Color::Black));
 
             frame.render_widget(modal_widget, large_area);
@@ -315,7 +368,63 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
             draw_goal_story_modal(frame, app, *goal_id, area);
             return; // Uses its own sizing
         }
+        ModalContent::FilePreview { path, content } => {
+            draw_file_modal(frame, app, area, "File Preview", path, content, Color::Magenta);
+            return;
+        }
+        ModalContent::FileDiff { path, diff } => {
+            draw_file_modal(frame, app, area, "File Diff", path, diff, Color::Cyan);
+            return;
+        }
     }
+}
+
+fn draw_file_modal(frame: &mut Frame, app: &App, area: Rect, title: &str, path: &str, content: &str, border_color: Color) {
+    let popup_width = (area.width as f32 * 0.9) as u16;
+    let popup_height = (area.height as f32 * 0.9) as u16;
+
+    let popup_area = Rect {
+        x: (area.width - popup_width) / 2,
+        y: (area.height - popup_height) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    let lines: Vec<&str> = content.lines().collect();
+    let total_lines = lines.len();
+    let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
+
+    // Build styled lines for diff content
+    let styled_lines: Vec<Line> = lines.iter().map(|line| {
+        if line.starts_with('+') && !line.starts_with("+++") {
+            Line::from(Span::styled(*line, Style::default().fg(Color::Green)))
+        } else if line.starts_with('-') && !line.starts_with("---") {
+            Line::from(Span::styled(*line, Style::default().fg(Color::Red)))
+        } else if line.starts_with("@@") {
+            Line::from(Span::styled(*line, Style::default().fg(Color::Cyan)))
+        } else if line.starts_with("diff ") || line.starts_with("index ") {
+            Line::from(Span::styled(*line, Style::default().fg(Color::Yellow)))
+        } else {
+            Line::from(Span::raw(*line))
+        }
+    }).collect();
+
+    let scroll_info = format!(" {} - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
+        title, path, scroll_offset + 1, total_lines);
+
+    let modal_widget = Paragraph::new(styled_lines)
+        .block(
+            Block::default()
+                .title(scroll_info)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(border_color)),
+        )
+        .scroll((scroll_offset as u16, 0))
+        .style(Style::default().fg(Color::White).bg(Color::Black));
+
+    frame.render_widget(modal_widget, popup_area);
 }
 
 fn draw_goal_story_modal(frame: &mut Frame, app: &App, goal_id: i32, area: Rect) {

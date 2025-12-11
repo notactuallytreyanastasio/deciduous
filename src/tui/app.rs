@@ -32,6 +32,15 @@ pub enum ModalContent {
     Commit { hash: String, node_title: String, git_output: String },
     NodeDetail { node_id: i32 },
     GoalStory { goal_id: i32 },
+    FilePreview { path: String, content: String },
+    FileDiff { path: String, diff: String },
+}
+
+/// Scrollable modal state
+#[derive(Debug, Clone, Default)]
+pub struct ModalScroll {
+    pub offset: usize,
+    pub total_lines: usize,
 }
 
 /// Input mode
@@ -40,6 +49,7 @@ pub enum Mode {
     Normal,
     Search,
     Command,
+    BranchSearch,
 }
 
 /// File picker state for multi-select
@@ -111,6 +121,9 @@ pub struct App {
     pub type_filter: Option<String>,
     pub branch_filter: Option<String>,
     pub search_query: String,
+    pub branch_search_query: String,
+    pub branch_search_matches: Vec<String>,
+    pub branch_search_index: usize,
 
     // UI state
     pub focus: Focus,
@@ -138,6 +151,14 @@ pub struct App {
 
     // Modal
     pub modal: Option<ModalContent>,
+    pub modal_scroll: ModalScroll,
+
+    // Detail panel file browser
+    pub detail_file_index: usize,
+    pub detail_in_files: bool,  // true when navigating files section
+
+    // Pending files to open in editor (set by app, consumed by main loop)
+    pub pending_editor_files: Option<Vec<String>>,
 }
 
 impl App {
@@ -170,6 +191,9 @@ impl App {
             type_filter: None,
             branch_filter: None,
             search_query: String::new(),
+            branch_search_query: String::new(),
+            branch_search_matches: vec![],
+            branch_search_index: 0,
             focus: Focus::List,
             mode: Mode::Normal,
             file_picker: None,
@@ -183,6 +207,10 @@ impl App {
             pending_g: false,
             status_message: None,
             modal: None,
+            modal_scroll: ModalScroll::default(),
+            detail_file_index: 0,
+            detail_in_files: false,
+            pending_editor_files: None,
         })
     }
 
@@ -306,13 +334,21 @@ impl App {
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.ensure_visible();
+            self.reset_file_browser(); // Reset file index when changing nodes
         }
+    }
+
+    /// Reset file browser state when changing nodes
+    fn reset_file_browser(&mut self) {
+        self.detail_file_index = 0;
+        self.detail_in_files = false;
     }
 
     pub fn move_down(&mut self) {
         if self.selected_index + 1 < self.filtered_nodes.len() {
             self.selected_index += 1;
             self.ensure_visible();
+            self.reset_file_browser(); // Reset file index when changing nodes
         }
     }
 
@@ -389,18 +425,18 @@ impl App {
         self.status_message = Some((message, Instant::now()));
     }
 
-    /// Open files in editor
+    /// Open files in editor - stores files to open, caller handles actual opening
     pub fn open_files(&mut self, files: Vec<String>) {
         if files.is_empty() {
             self.set_status("No files to open".to_string());
             return;
         }
+        self.pending_editor_files = Some(files);
+    }
 
-        let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
-
-        // We need to temporarily leave the TUI to open the editor
-        // This is handled by the caller
-        self.set_status(format!("Opening {} file(s) in {}", files.len(), editor));
+    /// Check if we have pending files to open in editor
+    pub fn take_pending_editor_files(&mut self) -> Option<Vec<String>> {
+        self.pending_editor_files.take()
     }
 
     /// Show file picker for multi-file selection
@@ -476,7 +512,35 @@ impl App {
     /// Close the modal
     pub fn close_modal(&mut self) {
         self.modal = None;
+        self.modal_scroll = ModalScroll::default();
         self.focus = Focus::List;
+    }
+
+    /// Scroll modal up
+    pub fn modal_scroll_up(&mut self, amount: usize) {
+        self.modal_scroll.offset = self.modal_scroll.offset.saturating_sub(amount);
+    }
+
+    /// Scroll modal down
+    pub fn modal_scroll_down(&mut self, amount: usize) {
+        let max_scroll = self.modal_scroll.total_lines.saturating_sub(10); // Leave some visible
+        self.modal_scroll.offset = (self.modal_scroll.offset + amount).min(max_scroll);
+    }
+
+    /// Get the current file path from modal (if it's a file modal)
+    pub fn get_modal_file_path(&self) -> Option<String> {
+        match &self.modal {
+            Some(ModalContent::FilePreview { path, .. }) => Some(path.clone()),
+            Some(ModalContent::FileDiff { path, .. }) => Some(path.clone()),
+            _ => None,
+        }
+    }
+
+    /// Open the file shown in the current modal
+    pub fn open_modal_file(&mut self) {
+        if let Some(path) = self.get_modal_file_path() {
+            self.pending_editor_files = Some(vec![path]);
+        }
     }
 
     /// Get unique branches from the graph
@@ -510,6 +574,60 @@ impl App {
         }
 
         self.apply_filters();
+    }
+
+    /// Enter branch search mode
+    pub fn enter_branch_search(&mut self) {
+        self.mode = Mode::BranchSearch;
+        self.branch_search_query.clear();
+        self.branch_search_matches = self.get_unique_branches();
+        self.branch_search_index = 0;
+    }
+
+    /// Update branch search matches based on query
+    pub fn update_branch_search(&mut self) {
+        let all_branches = self.get_unique_branches();
+        let query = self.branch_search_query.to_lowercase();
+
+        if query.is_empty() {
+            self.branch_search_matches = all_branches;
+        } else {
+            self.branch_search_matches = all_branches
+                .into_iter()
+                .filter(|b| b.to_lowercase().contains(&query))
+                .collect();
+        }
+        self.branch_search_index = 0;
+    }
+
+    /// Select the current branch from search results
+    pub fn select_branch_from_search(&mut self) {
+        if !self.branch_search_matches.is_empty() {
+            let selected = self.branch_search_matches[self.branch_search_index].clone();
+            self.branch_filter = Some(selected.clone());
+            self.apply_filters();
+            self.set_status(format!("Branch filter: {}", selected));
+        }
+        self.mode = Mode::Normal;
+        self.branch_search_query.clear();
+    }
+
+    /// Move to next match in branch search
+    pub fn branch_search_next(&mut self) {
+        if !self.branch_search_matches.is_empty() {
+            self.branch_search_index = (self.branch_search_index + 1) % self.branch_search_matches.len();
+        }
+    }
+
+    /// Move to previous match in branch search
+    pub fn branch_search_prev(&mut self) {
+        if !self.branch_search_matches.is_empty() {
+            if self.branch_search_index == 0 {
+                self.branch_search_index = self.branch_search_matches.len() - 1;
+            } else {
+                self.branch_search_index -= 1;
+            }
+        }
     }
 
     /// Show story for selected goal (or find parent goal if on another node type)
@@ -595,5 +713,116 @@ impl App {
     /// Get all goals in the graph
     pub fn get_goals(&self) -> Vec<&DecisionNode> {
         self.graph.nodes.iter().filter(|n| n.node_type == "goal").collect()
+    }
+
+    /// Get files for currently selected node
+    pub fn get_current_files(&self) -> Vec<String> {
+        self.selected_node()
+            .map(|n| types::get_files(n))
+            .unwrap_or_default()
+    }
+
+    /// Toggle file browser mode in detail panel
+    pub fn toggle_file_browser(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+        self.detail_in_files = !self.detail_in_files;
+        if self.detail_in_files {
+            self.detail_file_index = 0;
+            self.set_status(format!("File browser: {}/{}", 1, files.len()));
+        }
+    }
+
+    /// Move to next file in detail panel
+    pub fn next_file(&mut self) {
+        let files = self.get_current_files();
+        if !files.is_empty() && self.detail_file_index + 1 < files.len() {
+            self.detail_file_index += 1;
+            self.set_status(format!("File {}/{}: {}", self.detail_file_index + 1, files.len(), files[self.detail_file_index]));
+        }
+    }
+
+    /// Move to previous file in detail panel
+    pub fn prev_file(&mut self) {
+        if self.detail_file_index > 0 {
+            self.detail_file_index -= 1;
+            let files = self.get_current_files();
+            self.set_status(format!("File {}/{}: {}", self.detail_file_index + 1, files.len(), files[self.detail_file_index]));
+        }
+    }
+
+    /// Show file preview modal
+    pub fn show_file_preview(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+
+        let path = &files[self.detail_file_index.min(files.len() - 1)];
+
+        // Read file content (first 100 lines)
+        let content = std::fs::read_to_string(path)
+            .map(|s| {
+                s.lines()
+                    .take(100)
+                    .enumerate()
+                    .map(|(i, line)| format!("{:4} │ {}", i + 1, line))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .unwrap_or_else(|e| format!("Error reading file: {}", e));
+
+        self.modal = Some(ModalContent::FilePreview {
+            path: path.clone(),
+            content,
+        });
+        self.focus = Focus::Modal;
+    }
+
+    /// Show file diff modal
+    pub fn show_file_diff(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+
+        let path = &files[self.detail_file_index.min(files.len() - 1)];
+
+        // Get git diff for this file
+        let diff = std::process::Command::new("git")
+            .args(["diff", "HEAD~5..HEAD", "--", path])
+            .output()
+            .map(|o| {
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                if stdout.is_empty() {
+                    "No recent changes to this file".to_string()
+                } else {
+                    stdout.to_string()
+                }
+            })
+            .unwrap_or_else(|e| format!("Error running git diff: {}", e));
+
+        self.modal = Some(ModalContent::FileDiff {
+            path: path.clone(),
+            diff,
+        });
+        self.focus = Focus::Modal;
+    }
+
+    /// Open currently selected file in editor
+    pub fn open_current_file(&mut self) {
+        let files = self.get_current_files();
+        if files.is_empty() {
+            self.set_status("No files for this node".to_string());
+            return;
+        }
+
+        let path = files[self.detail_file_index.min(files.len() - 1)].clone();
+        self.open_files(vec![path]);
     }
 }

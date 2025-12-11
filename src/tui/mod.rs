@@ -54,7 +54,7 @@ pub fn run(db_path: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
     result
 }
 
-fn run_app_inner<B: Backend>(
+fn run_app_inner<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     db_path: Option<PathBuf>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -83,7 +83,7 @@ fn run_app_inner<B: Backend>(
     run_event_loop(terminal, &mut app, rx)
 }
 
-fn run_event_loop<B: Backend>(
+fn run_event_loop<B: Backend + std::io::Write>(
     terminal: &mut Terminal<B>,
     app: &mut App,
     file_change_rx: mpsc::Receiver<()>,
@@ -94,6 +94,12 @@ fn run_event_loop<B: Backend>(
     loop {
         // Draw the UI
         terminal.draw(|f| ui::draw(f, app))?;
+
+        // Check if we need to open files in editor
+        if let Some(files) = app.take_pending_editor_files() {
+            open_files_in_editor(terminal, &files)?;
+            app.set_status(format!("Opened {} file(s)", files.len()));
+        }
 
         // Handle input with timeout
         let timeout = tick_rate.saturating_sub(last_tick.elapsed());
@@ -126,4 +132,43 @@ fn run_event_loop<B: Backend>(
             last_tick = Instant::now();
         }
     }
+}
+
+/// Suspend the TUI, open files in editor, then resume
+fn open_files_in_editor<B: Backend + std::io::Write>(
+    terminal: &mut Terminal<B>,
+    files: &[String],
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::process::Command;
+
+    // Get editor from environment
+    let editor = std::env::var("EDITOR").unwrap_or_else(|_| "vim".to_string());
+
+    // Leave alternate screen temporarily
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::LeaveAlternateScreen
+    )?;
+    crossterm::terminal::disable_raw_mode()?;
+
+    // Open each file in editor
+    for file in files {
+        let status = Command::new(&editor)
+            .arg(file)
+            .status();
+
+        if let Err(e) = status {
+            eprintln!("Failed to open {}: {}", file, e);
+        }
+    }
+
+    // Re-enter TUI mode
+    crossterm::terminal::enable_raw_mode()?;
+    crossterm::execute!(
+        terminal.backend_mut(),
+        crossterm::terminal::EnterAlternateScreen
+    )?;
+    terminal.clear()?;
+
+    Ok(())
 }
