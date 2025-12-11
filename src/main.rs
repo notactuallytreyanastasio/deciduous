@@ -53,7 +53,7 @@ enum Command {
         #[arg(short, long)]
         confidence: Option<u8>,
 
-        /// Git commit hash to link this node to
+        /// Git commit hash to link this node to. Use "HEAD" to auto-detect current commit.
         #[arg(long)]
         commit: Option<String>,
 
@@ -334,10 +334,19 @@ fn main() {
                 branch.or_else(deciduous::get_current_git_branch)
             };
 
-            match db.create_node_full(&node_type, &title, description.as_deref(), confidence, commit.as_deref(), prompt.as_deref(), files.as_deref(), effective_branch.as_deref()) {
+            // Expand "HEAD" to actual commit hash
+            let effective_commit = commit.as_ref().and_then(|c| {
+                if c.eq_ignore_ascii_case("HEAD") {
+                    deciduous::get_current_git_commit()
+                } else {
+                    Some(c.clone())
+                }
+            });
+
+            match db.create_node_full(&node_type, &title, description.as_deref(), confidence, effective_commit.as_deref(), prompt.as_deref(), files.as_deref(), effective_branch.as_deref()) {
                 Ok(id) => {
                     let conf_str = confidence.map(|c| format!(" [confidence: {}%]", c)).unwrap_or_default();
-                    let commit_str = commit.as_ref().map(|c| format!(" [commit: {}]", &c[..7.min(c.len())])).unwrap_or_default();
+                    let commit_str = effective_commit.as_ref().map(|c| format!(" [commit: {}]", &c[..7.min(c.len())])).unwrap_or_default();
                     let prompt_str = if prompt.is_some() { " [prompt saved]" } else { "" };
                     let files_str = files.as_ref().map(|f| format!(" [files: {}]", f)).unwrap_or_default();
                     let branch_str = effective_branch.as_ref().map(|b| format!(" [branch: {}]", b)).unwrap_or_default();

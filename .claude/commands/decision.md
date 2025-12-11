@@ -43,7 +43,17 @@ Based on $ARGUMENTS:
 - `-f, --files "file1.rs,file2.rs"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
 - `--no-branch` - Skip branch auto-detection
-- `--commit <hash>` - Link to a git commit
+- `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
+
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
 
 ## CRITICAL: Capture User Prompts When Semantically Meaningful
 

@@ -104,6 +104,22 @@ deciduous graph           # Full graph as JSON
 deciduous sync            # Export to .deciduous/web/graph-data.json
 ```
 
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph using `--commit HEAD`!**
+
+```bash
+# AFTER committing code, log the action/outcome with --commit HEAD
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth feature" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+
+# For completed features, log the outcome
+deciduous add outcome "Auth feature merged" -c 95 --commit HEAD
+```
+
+The `--commit HEAD` flag auto-detects the current commit hash. This creates traceability between commits and decisions, visible in both TUI and web viewer.
+
 ### Confidence Levels
 
 - **90-100**: Certain, proven, tested

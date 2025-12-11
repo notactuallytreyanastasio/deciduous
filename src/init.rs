@@ -107,7 +107,17 @@ Based on $ARGUMENTS:
 - `-f, --files "file1.rs,file2.rs"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
 - `--no-branch` - Skip branch auto-detection
-- `--commit <hash>` - Link to a git commit
+- `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
+
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
 
 ## CRITICAL: Capture User Prompts When Semantically Meaningful
 
@@ -657,14 +667,26 @@ deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
 
-# Optional metadata
-# -p, --prompt "..."   Store the user prompt (use when semantically meaningful)
-# -f, --files "a.rs,b.rs"   Associate files
-# -b, --branch <name>   Git branch (auto-detected)
+# Metadata flags
+# -c, --confidence 0-100   Confidence level
+# -p, --prompt "..."       Store the user prompt (use when semantically meaningful)
+# -f, --files "a.rs,b.rs"  Associate files
+# -b, --branch <name>      Git branch (auto-detected)
+# --commit <hash|HEAD>     Link to git commit (use HEAD for current commit)
 
 # Branch filtering
 deciduous nodes --branch main
 deciduous nodes -b feature-auth
+```
+
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
 ### Branch-Based Grouping
@@ -787,10 +809,15 @@ deciduous add observation "Title" -c 80
 # -p, --prompt "..."   Store the user prompt that triggered this
 # -f, --files "a.rs,b.rs"   Associate files with this node
 # -b, --branch <name>   Git branch (auto-detected)
-# --commit <hash>   Link to a git commit
+# --commit <hash|HEAD>   Link to a git commit (use HEAD for current commit)
 
 # Example with prompt and files
 deciduous add goal "Add auth" -c 90 -p "User asked: add login feature" -f "src/auth.rs,src/routes.rs"
+
+# CRITICAL: After git commits, link them to the graph!
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD   # Auto-detects current commit
+deciduous link <goal_id> <action_id> -r "Implementation"
 
 # Filter by branch
 deciduous nodes --branch main

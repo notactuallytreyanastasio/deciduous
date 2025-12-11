@@ -72,15 +72,33 @@ deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
 
-# Optional metadata
-# -p, --prompt "..."   Store the user prompt (use when semantically meaningful)
-# -f, --files "a.rs,b.rs"   Associate files
-# -b, --branch <name>   Git branch (auto-detected)
+# Metadata flags
+# -c, --confidence 0-100   Confidence level
+# -p, --prompt "..."       Store the user prompt (use when semantically meaningful)
+# -f, --files "a.rs,b.rs"  Associate files
+# -b, --branch <name>      Git branch (auto-detected)
+# --commit <hash|HEAD>     Link to git commit (use HEAD for current commit)
 
 # Branch filtering
 deciduous nodes --branch main
 deciduous nodes -b feature-auth
 ```
+
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+# AFTER committing code, log an action/outcome with --commit HEAD
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth feature" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+
+# Or log the outcome of a completed feature
+deciduous add outcome "Auth feature merged" -c 95 --commit HEAD
+```
+
+This creates traceability between commits and decisions. The TUI and web viewer show commits linked to nodes.
 
 ### Branch-Based Grouping
 

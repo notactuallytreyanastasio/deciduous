@@ -65,6 +65,24 @@ pub fn get_current_git_branch() -> Option<String> {
         })
 }
 
+/// Get the current HEAD commit hash (short form, 7 chars)
+pub fn get_current_git_commit() -> Option<String> {
+    std::process::Command::new("git")
+        .args(["rev-parse", "--short", "HEAD"])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout)
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+            } else {
+                None
+            }
+        })
+}
+
 /// Walk up directory tree to find .deciduous folder (like git finds .git)
 /// Can be overridden with DECIDUOUS_DB_PATH env var
 fn get_db_path() -> std::path::PathBuf {

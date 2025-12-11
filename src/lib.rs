@@ -50,7 +50,7 @@ pub mod tui;
 pub use config::Config;
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
-    CURRENT_SCHEMA, get_current_git_branch, build_metadata_json,
+    CURRENT_SCHEMA, get_current_git_branch, get_current_git_commit, build_metadata_json,
 };
 pub use diff::{GraphPatch, PatchNode, PatchEdge, ApplyResult};
 pub use export::{graph_to_dot, generate_pr_writeup, filter_graph_from_roots, filter_graph_by_ids, parse_node_range, DotConfig, WriteupConfig};
