@@ -363,7 +363,7 @@ fn draw_file_preview_modal(frame: &mut Frame, app: &App, area: Rect, path: &str,
     let syntax = PS.find_syntax_by_extension(extension)
         .unwrap_or_else(|| PS.find_syntax_plain_text());
 
-    let theme = &TS.themes["base16-ocean.dark"];
+    let theme = &TS.themes["InspiredGitHub"];
     let mut highlighter = HighlightLines::new(syntax, theme);
 
     let lines: Vec<&str> = content.lines().collect();
@@ -442,7 +442,7 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
     let syntax = PS.find_syntax_by_extension(extension)
         .unwrap_or_else(|| PS.find_syntax_plain_text());
 
-    let theme = &TS.themes["base16-ocean.dark"];
+    let theme = &TS.themes["InspiredGitHub"];
 
     // Read the actual file to build syntax highlighting state
     // This allows us to highlight diff lines with proper context
@@ -669,7 +669,7 @@ fn draw_commit_modal(
     let scroll_offset = app.commit_modal.diff_scroll.min(total_diff_lines.saturating_sub(1));
 
     // Build syntax highlighting maps for each file in the diff
-    let theme = &TS.themes["base16-ocean.dark"];
+    let theme = &TS.themes["InspiredGitHub"];
     let mut file_highlights: std::collections::HashMap<String, std::collections::HashMap<String, Vec<(SyntectStyle, String)>>> =
         std::collections::HashMap::new();
 
