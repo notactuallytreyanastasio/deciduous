@@ -2815,6 +2815,138 @@
       "created_at": "2025-12-11T01:56:14.661630-05:00",
       "updated_at": "2025-12-11T01:56:14.661630-05:00",
       "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 257,
+      "change_id": "6a56c7e5-9a95-4543-b26e-ba727ed12af3",
+      "node_type": "outcome",
+      "title": "PR #5 merged to main - TUI enhancements complete",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:58:18.172313-05:00",
+      "updated_at": "2025-12-11T01:58:18.172313-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+    },
+    {
+      "id": 258,
+      "change_id": "c1eac4be-12a5-4544-8f4d-f4fe05160d89",
+      "node_type": "outcome",
+      "title": "v0.8.0 released - tag pushed, GitHub release created, published to crates.io",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:00:14.483762-05:00",
+      "updated_at": "2025-12-11T02:00:14.483762-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+    },
+    {
+      "id": 259,
+      "change_id": "1424c92d-0663-4e2a-b87b-a1d1cdf80935",
+      "node_type": "goal",
+      "title": "Test prompt display in TUI detail panel",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:10:24.978613-05:00",
+      "updated_at": "2025-12-11T02:10:24.978613-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":90,\"prompt\":\"This is a test prompt to verify that prompts are displayed correctly in the TUI detail panel. It should word-wrap nicely and show in light blue italics.\"}"
+    },
+    {
+      "id": 260,
+      "change_id": "514a37bc-a239-48ab-b590-4a6fc5eb04ac",
+      "node_type": "action",
+      "title": "Add prompt display to TUI detail panel",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:10:39.377792-05:00",
+      "updated_at": "2025-12-11T02:10:39.377792-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":85,\"prompt\":\"Go to main, make a new branch, begin work trying to get the prompt tracking baked into how we view things. You want to have the prompts with this be richly shown in the UI with the big piece they were associated with\"}"
+    },
+    {
+      "id": 261,
+      "change_id": "32c66005-ae92-435f-807e-e75aca625f43",
+      "node_type": "outcome",
+      "title": "Prompt display implemented in TUI detail panel - word-wrapped, light blue, italic styling",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:11:50.261135-05:00",
+      "updated_at": "2025-12-11T02:11:50.261135-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":90}"
+    },
+    {
+      "id": 262,
+      "change_id": "9a368daf-3315-4709-aff5-cc9324e07109",
+      "node_type": "goal",
+      "title": "Display user prompts in TUI detail panel for rich context",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:07.919724-05:00",
+      "updated_at": "2025-12-11T02:12:07.919724-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":95,\"prompt\":\"Go to main, make a new branch, begin work trying to get the prompt tracking baked into how we view things. You want to have the prompts with this be richly shown in the UI\"}"
+    },
+    {
+      "id": 263,
+      "change_id": "737a4982-ecf8-4b4c-8c40-08452a719ba3",
+      "node_type": "decision",
+      "title": "Where to store prompt data for nodes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:13.455145-05:00",
+      "updated_at": "2025-12-11T02:12:13.455145-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":90}"
+    },
+    {
+      "id": 264,
+      "change_id": "962bc9e8-e512-48dd-ab5d-4de45c7d9abb",
+      "node_type": "option",
+      "title": "Use existing metadata_json field - prompt already supported in schema",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:22.655888-05:00",
+      "updated_at": "2025-12-11T02:12:22.655888-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":95}"
+    },
+    {
+      "id": 265,
+      "change_id": "da35e86a-7499-4fc9-9ccf-7d0e3cb289bb",
+      "node_type": "action",
+      "title": "Add prompt section to detail.rs with word-wrap and light blue styling",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:22.689013-05:00",
+      "updated_at": "2025-12-11T02:12:22.689013-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":90}"
+    },
+    {
+      "id": 266,
+      "change_id": "1a0c570a-3eb8-4f5f-8a7a-ff81c410d050",
+      "node_type": "action",
+      "title": "Add get_prompt method to App struct delegating to types::get_prompt",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:22.705257-05:00",
+      "updated_at": "2025-12-11T02:12:22.705257-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":90}"
+    },
+    {
+      "id": 267,
+      "change_id": "b8a8346d-4fb1-4998-a500-7219f57e83e5",
+      "node_type": "action",
+      "title": "Add roadmap items: type unification, TUI refactor, roadmap manager tool",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:22.722247-05:00",
+      "updated_at": "2025-12-11T02:12:22.722247-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":85}"
+    },
+    {
+      "id": 268,
+      "change_id": "bdd1ab4b-6eba-4e2e-bae3-c0d0c34c3cd1",
+      "node_type": "observation",
+      "title": "Discovered prompt field already exists in NodeMetadata struct and CLI supports --prompt flag",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T02:12:28.559576-05:00",
+      "updated_at": "2025-12-11T02:12:28.559576-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":100}"
     }
   ],
   "edges": [
@@ -5039,6 +5171,127 @@
       "weight": 1.0,
       "rationale": "Goal achieved",
       "created_at": "2025-12-11T01:56:27.193060-05:00"
+    },
+    {
+      "id": 203,
+      "from_node_id": 256,
+      "to_node_id": 257,
+      "from_change_id": "2de473ec-ae80-4190-b6a4-ac14a45ccdc2",
+      "to_change_id": "6a56c7e5-9a95-4543-b26e-ba727ed12af3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR merged",
+      "created_at": "2025-12-11T01:58:23.587041-05:00"
+    },
+    {
+      "id": 204,
+      "from_node_id": 257,
+      "to_node_id": 258,
+      "from_change_id": "6a56c7e5-9a95-4543-b26e-ba727ed12af3",
+      "to_change_id": "c1eac4be-12a5-4544-8f4d-f4fe05160d89",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release completed",
+      "created_at": "2025-12-11T02:00:14.491834-05:00"
+    },
+    {
+      "id": 205,
+      "from_node_id": 260,
+      "to_node_id": 261,
+      "from_change_id": "514a37bc-a239-48ab-b590-4a6fc5eb04ac",
+      "to_change_id": "32c66005-ae92-435f-807e-e75aca625f43",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-11T02:11:56.049262-05:00"
+    },
+    {
+      "id": 206,
+      "from_node_id": 262,
+      "to_node_id": 263,
+      "from_change_id": "9a368daf-3315-4709-aff5-cc9324e07109",
+      "to_change_id": "737a4982-ecf8-4b4c-8c40-08452a719ba3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal requires deciding where to store prompts",
+      "created_at": "2025-12-11T02:12:38.141853-05:00"
+    },
+    {
+      "id": 207,
+      "from_node_id": 263,
+      "to_node_id": 264,
+      "from_change_id": "737a4982-ecf8-4b4c-8c40-08452a719ba3",
+      "to_change_id": "962bc9e8-e512-48dd-ab5d-4de45c7d9abb",
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "Existing metadata_json already supports prompts",
+      "created_at": "2025-12-11T02:12:38.149477-05:00"
+    },
+    {
+      "id": 208,
+      "from_node_id": 263,
+      "to_node_id": 268,
+      "from_change_id": "737a4982-ecf8-4b4c-8c40-08452a719ba3",
+      "to_change_id": "bdd1ab4b-6eba-4e2e-bae3-c0d0c34c3cd1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Research finding",
+      "created_at": "2025-12-11T02:12:38.156290-05:00"
+    },
+    {
+      "id": 209,
+      "from_node_id": 264,
+      "to_node_id": 265,
+      "from_change_id": "962bc9e8-e512-48dd-ab5d-4de45c7d9abb",
+      "to_change_id": "da35e86a-7499-4fc9-9ccf-7d0e3cb289bb",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implement UI display",
+      "created_at": "2025-12-11T02:12:38.164583-05:00"
+    },
+    {
+      "id": 210,
+      "from_node_id": 264,
+      "to_node_id": 266,
+      "from_change_id": "962bc9e8-e512-48dd-ab5d-4de45c7d9abb",
+      "to_change_id": "1a0c570a-3eb8-4f5f-8a7a-ff81c410d050",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implement App getter",
+      "created_at": "2025-12-11T02:12:38.173059-05:00"
+    },
+    {
+      "id": 211,
+      "from_node_id": 262,
+      "to_node_id": 267,
+      "from_change_id": "9a368daf-3315-4709-aff5-cc9324e07109",
+      "to_change_id": "b8a8346d-4fb1-4998-a500-7219f57e83e5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Roadmap updates for related work",
+      "created_at": "2025-12-11T02:12:38.181213-05:00"
+    },
+    {
+      "id": 212,
+      "from_node_id": 265,
+      "to_node_id": 261,
+      "from_change_id": "da35e86a-7499-4fc9-9ccf-7d0e3cb289bb",
+      "to_change_id": "32c66005-ae92-435f-807e-e75aca625f43",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "UI implementation complete",
+      "created_at": "2025-12-11T02:12:38.187721-05:00"
+    },
+    {
+      "id": 213,
+      "from_node_id": 266,
+      "to_node_id": 261,
+      "from_change_id": "1a0c570a-3eb8-4f5f-8a7a-ff81c410d050",
+      "to_change_id": "32c66005-ae92-435f-807e-e75aca625f43",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Getter implementation complete",
+      "created_at": "2025-12-11T02:12:38.196158-05:00"
     }
   ]
 }

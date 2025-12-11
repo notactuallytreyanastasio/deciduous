@@ -92,7 +92,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::from(""));
 
             // Word-wrap the prompt text for readability
-            let prompt_width = (inner_area.width as usize).saturating_sub(4);
+            let prompt_width = (inner_area.width as usize).saturating_sub(4).max(20);
             for line in p.lines() {
                 // Simple word wrap
                 let words: Vec<&str> = line.split_whitespace().collect();
