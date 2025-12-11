@@ -9,7 +9,7 @@ use syntect::highlighting::{ThemeSet, Style as SyntectStyle};
 use syntect::parsing::SyntaxSet;
 use syntect::easy::HighlightLines;
 
-use super::app::{App, Mode, View, ModalContent};
+use super::app::{App, Mode, View, ModalContent, ModalSection};
 use super::views::{timeline, dag, detail};
 use super::widgets::file_picker;
 
@@ -300,59 +300,9 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Clear, popup_area);
 
     match modal {
-        ModalContent::Commit { hash, node_title, git_output } => {
-            // Make commit modal much larger to show full git output
-            let large_width = (area.width as f32 * 0.9) as u16;
-            let large_height = (area.height as f32 * 0.9) as u16;
-
-            let large_area = Rect {
-                x: (area.width - large_width) / 2,
-                y: (area.height - large_height) / 2,
-                width: large_width,
-                height: large_height,
-            };
-
-            frame.render_widget(Clear, large_area);
-
-            let content = format!(
-                "Node: {}\n\n{}",
-                node_title, git_output
-            );
-
-            let lines: Vec<&str> = content.lines().collect();
-            let total_lines = lines.len();
-            let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
-
-            // Style diff-like lines in the commit output
-            let styled_lines: Vec<Line> = lines.iter().map(|line| {
-                if line.starts_with('+') && !line.starts_with("+++") {
-                    Line::from(Span::styled(*line, Style::default().fg(Color::Green)))
-                } else if line.starts_with('-') && !line.starts_with("---") {
-                    Line::from(Span::styled(*line, Style::default().fg(Color::Red)))
-                } else if line.starts_with("@@") {
-                    Line::from(Span::styled(*line, Style::default().fg(Color::Cyan)))
-                } else if line.starts_with("diff ") || line.starts_with("index ") {
-                    Line::from(Span::styled(*line, Style::default().fg(Color::Yellow)))
-                } else {
-                    Line::from(Span::raw(*line))
-                }
-            }).collect();
-
-            let title_text = format!(" Commit: {} [j/k:scroll g/G:top/bot q:close] (line {}/{}) ",
-                hash, scroll_offset + 1, total_lines);
-
-            let modal_widget = Paragraph::new(styled_lines)
-                .block(
-                    Block::default()
-                        .title(title_text)
-                        .borders(Borders::ALL)
-                        .border_style(Style::default().fg(Color::Yellow)),
-                )
-                .scroll((scroll_offset as u16, 0))
-                .style(Style::default().fg(Color::White).bg(Color::Black));
-
-            frame.render_widget(modal_widget, large_area);
-            return; // Skip the default popup_area
+        ModalContent::Commit { hash, node_title, commit_message, diff_output, files } => {
+            draw_commit_modal(frame, app, area, hash, node_title, commit_message, diff_output, files);
+            return;
         }
         ModalContent::NodeDetail { node_id } => {
             let node_info = if let Some(node) = app.graph.nodes.iter().find(|n| n.id == *node_id) {
@@ -611,6 +561,161 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
         .style(Style::default().bg(Color::Black));
 
     frame.render_widget(modal_widget, popup_area);
+}
+
+/// Draw commit modal with split view: commit info on top, diff on bottom
+fn draw_commit_modal(
+    frame: &mut Frame,
+    app: &App,
+    area: Rect,
+    hash: &str,
+    node_title: &str,
+    commit_message: &str,
+    diff_output: &str,
+    files: &[String],
+) {
+    let popup_width = (area.width as f32 * 0.9) as u16;
+    let popup_height = (area.height as f32 * 0.9) as u16;
+
+    let popup_area = Rect {
+        x: (area.width - popup_width) / 2,
+        y: (area.height - popup_height) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    // Calculate inner area (inside the outer border)
+    let inner_area = Rect {
+        x: popup_area.x + 1,
+        y: popup_area.y + 1,
+        width: popup_area.width.saturating_sub(2),
+        height: popup_area.height.saturating_sub(2),
+    };
+
+    // Calculate message lines height (commit message + header info)
+    let message_lines: Vec<&str> = commit_message.lines().collect();
+    // Header (3 lines) + message + files list + spacing
+    let files_display = if files.len() > 3 {
+        format!("{} (+{} more)", files.iter().take(3).cloned().collect::<Vec<_>>().join(", "), files.len() - 3)
+    } else {
+        files.join(", ")
+    };
+    let top_section_height = 6 + message_lines.len().min(8) as u16; // Max 8 lines of commit message
+
+    // Split into top (commit info) and bottom (diff) sections
+    let layout = Layout::vertical([
+        Constraint::Length(top_section_height),
+        Constraint::Min(5),  // Diff section takes the rest
+    ])
+    .split(inner_area);
+
+    let top_area = layout[0];
+    let bottom_area = layout[1];
+
+    // Determine which section is focused
+    let top_focused = app.commit_modal.section == ModalSection::Top;
+    let bottom_focused = app.commit_modal.section == ModalSection::Bottom;
+
+    // === Top section: Commit info ===
+    let top_border_color = if top_focused { Color::Cyan } else { Color::DarkGray };
+
+    let mut top_lines: Vec<Line> = vec![
+        Line::from(vec![
+            Span::styled("Commit: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(hash, Style::default().fg(Color::Yellow).bold()),
+        ]),
+        Line::from(vec![
+            Span::styled("Node: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(node_title, Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![
+            Span::styled("Files: ", Style::default().fg(Color::DarkGray)),
+            Span::styled(&files_display, Style::default().fg(Color::Magenta)),
+        ]),
+        Line::from(""),
+        Line::styled("─── Message ───", Style::default().fg(Color::DarkGray)),
+    ];
+
+    // Add commit message lines (capped at 8)
+    for line in message_lines.iter().take(8) {
+        top_lines.push(Line::from(Span::styled(*line, Style::default().fg(Color::White))));
+    }
+    if message_lines.len() > 8 {
+        top_lines.push(Line::from(Span::styled(
+            format!("... ({} more lines)", message_lines.len() - 8),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+
+    let top_widget = Paragraph::new(top_lines)
+        .block(
+            Block::default()
+                .title(format!(" Commit {} ", &hash[..7.min(hash.len())]))
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(top_border_color)),
+        )
+        .style(Style::default().bg(Color::Black));
+
+    frame.render_widget(top_widget, top_area);
+
+    // === Bottom section: Diff with syntax highlighting ===
+    let bottom_border_color = if bottom_focused { Color::Cyan } else { Color::DarkGray };
+
+    let diff_lines: Vec<&str> = diff_output.lines().collect();
+    let total_diff_lines = diff_lines.len();
+
+    // Update total lines in app for scrolling (we need mutable access, but we're rendering)
+    // This is a bit awkward - we'll set it when drawing
+    // For now, use the stored value
+    let scroll_offset = app.commit_modal.diff_scroll.min(total_diff_lines.saturating_sub(1));
+
+    // Build syntax-highlighted diff lines
+    let styled_diff_lines: Vec<Line> = diff_lines.iter().map(|line| {
+        if line.starts_with("@@") {
+            // Hunk header - cyan
+            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)))
+        } else if line.starts_with("diff ") || line.starts_with("index ") || line.starts_with("+++") || line.starts_with("---") {
+            // Diff metadata - yellow
+            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)))
+        } else if line.starts_with('+') {
+            // Added line - green
+            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Green)))
+        } else if line.starts_with('-') {
+            // Removed line - red
+            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Red)))
+        } else {
+            // Context line - white
+            Line::from(Span::raw(line.to_string()))
+        }
+    }).collect();
+
+    let scroll_info = format!(
+        " Diff [j/k:navigate g/G:top/bot q:close] (line {}/{}) ",
+        scroll_offset + 1,
+        total_diff_lines
+    );
+
+    let bottom_widget = Paragraph::new(styled_diff_lines)
+        .block(
+            Block::default()
+                .title(scroll_info)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(bottom_border_color)),
+        )
+        .scroll((scroll_offset as u16, 0))
+        .style(Style::default().bg(Color::Black));
+
+    frame.render_widget(bottom_widget, bottom_area);
+
+    // Draw outer border around the whole modal
+    let outer_border = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Blue))
+        .title(" Commit Details [q:close] ");
+
+    frame.render_widget(outer_border, popup_area);
 }
 
 fn draw_goal_story_modal(frame: &mut Frame, app: &App, goal_id: i32, area: Rect) {

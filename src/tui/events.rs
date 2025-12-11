@@ -334,6 +334,11 @@ fn handle_file_picker(app: &mut App, key: KeyEvent) -> bool {
 }
 
 fn handle_modal(app: &mut App, key: KeyEvent) -> bool {
+    // Check if we're in a commit modal - handle it specially
+    if matches!(app.modal, Some(ModalContent::Commit { .. })) {
+        return handle_commit_modal(app, key);
+    }
+
     match key.code {
         KeyCode::Esc | KeyCode::Char('q') => {
             app.close_modal();
@@ -362,9 +367,38 @@ fn handle_modal(app: &mut App, key: KeyEvent) -> bool {
             if app.get_modal_file_path().is_some() {
                 app.open_modal_file();
                 app.close_modal();
-            } else if let Some(ModalContent::Commit { ref hash, .. }) = app.modal {
-                app.set_status(format!("git show {} (use terminal)", hash));
             }
+        }
+        _ => {}
+    }
+    false
+}
+
+fn handle_commit_modal(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        KeyCode::Esc | KeyCode::Char('q') => {
+            app.close_modal();
+        }
+        // Navigation - j/k move between sections or scroll diff
+        KeyCode::Char('j') | KeyCode::Down => {
+            app.commit_modal_down(1);
+        }
+        KeyCode::Char('k') | KeyCode::Up => {
+            app.commit_modal_up(1);
+        }
+        // Page down/up in diff section
+        KeyCode::Char('d') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            app.commit_modal_page_down(10);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+            app.commit_modal_page_up(10);
+        }
+        // Jump to top/bottom
+        KeyCode::Char('g') => {
+            app.commit_modal_top();
+        }
+        KeyCode::Char('G') => {
+            app.commit_modal_bottom();
         }
         _ => {}
     }

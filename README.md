@@ -168,6 +168,53 @@ Same patch applied twice = no duplicates.
 
 ## Viewing the Graph
 
+### Terminal UI (TUI)
+
+```bash
+deciduous tui
+```
+
+A rich, vim-style terminal interface for browsing your decision graph.
+
+**Navigation:**
+| Key | Action |
+|-----|--------|
+| `j`/`k` | Move down/up in timeline |
+| `gg` | Jump to top |
+| `G` | Jump to bottom |
+| `Ctrl+d`/`Ctrl+u` | Page down/up |
+| `Enter` | Toggle detail panel |
+| `q` | Quit |
+
+**Filtering & Search:**
+| Key | Action |
+|-----|--------|
+| `/` | Search by title/description |
+| `f` | Cycle through type filters |
+| `b` | Cycle through branch filters |
+| `B` | Fuzzy branch search |
+| `R` | Toggle timeline order (newest/oldest first) |
+| `Ctrl+c` | Clear all filters |
+
+**File Operations:**
+| Key | Action |
+|-----|--------|
+| `o` | Open associated files in editor |
+| `O` | View commit details (split modal with diff) |
+| `F` | Toggle file browser in detail panel |
+| `n`/`N` | Next/previous file (when in file browser) |
+| `p` | Preview file content with syntax highlighting |
+| `d` | Show file diff with syntax highlighting |
+
+**Other:**
+| Key | Action |
+|-----|--------|
+| `s` | Show goal story (hierarchy view) |
+| `r` | Refresh graph from database |
+| `?` | Show help |
+
+The TUI includes syntax highlighting for file previews and diffs, using the same highlighting engine as `bat`.
+
 ### Web Viewer
 
 ```bash

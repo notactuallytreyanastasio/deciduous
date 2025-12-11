@@ -38,37 +38,48 @@
 - [ ] Integration with `git log` to annotate commits with decision context
 
 ### TUI Graph Viewer
-- [ ] `deciduous tui` command for terminal-based graph visualization
-- [ ] **Phase 1: Per-goal view**
-  - Show single goal's decision tree/flow
-  - `deciduous tui --goal 128` to focus on one goal chain
-  - Visualize: goal → decisions → options (chosen/rejected) → actions → outcomes
+- [x] `deciduous tui` command for terminal-based graph visualization
+- [x] Timeline view with vim-style navigation (j/k/gg/G)
+- [x] Detail panel with node info, connections, files
+- [x] File browser mode (F to toggle, n/N to navigate)
+- [x] File preview with syntax highlighting (p key)
+- [x] File diff viewer with syntax + diff coloring (d key)
+- [x] Commit modal with split view (O key)
+  - Top section: commit hash, node, files, message
+  - Bottom section: scrollable diff with j/k navigation
+- [x] Branch filtering (b to cycle, B for fuzzy search)
+- [x] Timeline order toggle (R for reverse chronological)
+- [x] Search (/ to filter by title/description)
+- [x] Goal story view (s to show goal hierarchy)
 - [ ] **Phase 2: Multi-goal chains**
   - Navigate between related goals
   - Show how goals connect and depend on each other
+- [ ] DAG view improvements (currently disabled)
+  - Better hierarchical layout algorithm
+  - Zoom and pan controls
 
-**Display challenges & ideas:**
-- Nodes have lots of text - need compact representations
-- Options to explore:
-  - **Collapsible nodes**: Show title only, expand on select for description/metadata
-  - **Truncation with preview**: `[goal] Add editor-spec...` → full text in side panel
-  - **Fish-eye/focus+context**: Selected node full size, neighbors shrink
-  - **Breadcrumb trail**: Show path to current node, collapse siblings
-  - **Split view**: Tree on left, detail panel on right (like ranger/nnn)
-  - **Vim-style navigation**: j/k to move, Enter to expand, q to quit
-
-**Rust TUI libraries to consider:**
-- `ratatui` (successor to tui-rs) - most popular, very flexible
-- `cursive` - higher-level, dialog-based
-- `crossterm` - low-level backend (works with ratatui)
-- `tui-tree-widget` - tree display component for ratatui
-- `tui-textarea` - for any input needs
-
-**Inspiration:**
-- `lazygit` - great example of complex TUI with panels
-- `gitui` - another git TUI with tree views
-- `diskonaut` - treemap visualization in terminal
-- `btm`/`bottom` - system monitor with good layout patterns
+### TUI UX Polish
+- [ ] **Keyboard shortcut audit and redesign**
+  - Analyze all current shortcuts for intuitiveness
+  - Ensure shortcuts are discoverable and memorable
+  - Consider user expectations from similar tools (vim, lazygit, ranger)
+  - Group related actions with similar key patterns
+- [ ] **Visual discoverability**
+  - Add context-sensitive help hints in footer
+  - Show available actions for current context
+  - Highlight keyboard shortcuts in help overlay
+  - Consider modal indicator showing current mode prominently
+- [ ] **Onboarding experience**
+  - First-run tutorial or guided tour
+  - Progressive disclosure of advanced features
+  - Cheat sheet generation (`deciduous tui --help-keys`)
+- [ ] **Settings system**
+  - `.deciduous/config.toml` for user preferences
+  - Timeline order default (newest-first vs oldest-first)
+  - Editor preference (`$EDITOR` fallback chain)
+  - Color theme selection
+  - Key binding customization
+  - Database path configuration
 
 ### LLM Critique & Analysis
 - [ ] `deciduous critique --goal <id>` - Have an LLM analyze a goal's decision chain

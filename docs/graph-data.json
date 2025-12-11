@@ -2650,6 +2650,39 @@
       "created_at": "2025-12-11T01:06:19.847172-05:00",
       "updated_at": "2025-12-11T01:06:19.847172-05:00",
       "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 242,
+      "change_id": "f154fb00-d414-4979-84ee-5c72759664e6",
+      "node_type": "action",
+      "title": "Fix diff highlighting to read whole file for proper syntax context",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:10:09.158029-05:00",
+      "updated_at": "2025-12-11T01:10:09.158029-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90,\"files\":[\"src/tui/ui.rs\"]}"
+    },
+    {
+      "id": 243,
+      "change_id": "c51a5ad9-ee22-4b69-bb9b-7814f085eb7e",
+      "node_type": "outcome",
+      "title": "Split-view commit modal with independent scrolling implemented",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:15:27.734428-05:00",
+      "updated_at": "2025-12-11T01:15:27.734428-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95,\"files\":[\"src/tui/app.rs\",\"src/tui/events.rs\",\"src/tui/ui.rs\"]}"
+    },
+    {
+      "id": 244,
+      "change_id": "bf73660e-0bc5-4931-8485-e912fad1aa9e",
+      "node_type": "action",
+      "title": "Implement split-view commit modal with diff section",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:17:26.149589-05:00",
+      "updated_at": "2025-12-11T01:17:26.149589-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90,\"files\":[\"src/tui/app.rs\",\"src/tui/events.rs\",\"src/tui/ui.rs\"]}"
     }
   ],
   "edges": [
@@ -4654,6 +4687,39 @@
       "weight": 1.0,
       "rationale": "Quality check passed",
       "created_at": "2025-12-11T01:06:19.860245-05:00"
+    },
+    {
+      "id": 183,
+      "from_node_id": 237,
+      "to_node_id": 242,
+      "from_change_id": "86754933-5b9d-4f40-988e-4eefa4877ca6",
+      "to_change_id": "f154fb00-d414-4979-84ee-5c72759664e6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Improvement to diff highlighting",
+      "created_at": "2025-12-11T01:10:09.167399-05:00"
+    },
+    {
+      "id": 184,
+      "from_node_id": 213,
+      "to_node_id": 244,
+      "from_change_id": "e91aee09-9881-429a-a5e7-ef33875a903b",
+      "to_change_id": "bf73660e-0bc5-4931-8485-e912fad1aa9e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Part of enhanced modals goal",
+      "created_at": "2025-12-11T01:17:32.132543-05:00"
+    },
+    {
+      "id": 185,
+      "from_node_id": 244,
+      "to_node_id": 243,
+      "from_change_id": "bf73660e-0bc5-4931-8485-e912fad1aa9e",
+      "to_change_id": "c51a5ad9-ee22-4b69-bb9b-7814f085eb7e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete, tested",
+      "created_at": "2025-12-11T01:17:32.140160-05:00"
     }
   ]
 }

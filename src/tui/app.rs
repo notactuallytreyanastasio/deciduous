@@ -29,7 +29,13 @@ pub enum Focus {
 /// Modal content types
 #[derive(Debug, Clone)]
 pub enum ModalContent {
-    Commit { hash: String, node_title: String, git_output: String },
+    Commit {
+        hash: String,
+        node_title: String,
+        commit_message: String,
+        diff_output: String,
+        files: Vec<String>,  // Files changed in this commit
+    },
     NodeDetail { node_id: i32 },
     GoalStory { goal_id: i32 },
     FilePreview { path: String, content: String },
@@ -41,6 +47,22 @@ pub enum ModalContent {
 pub struct ModalScroll {
     pub offset: usize,
     pub total_lines: usize,
+}
+
+/// Which section of split modal is focused
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ModalSection {
+    #[default]
+    Top,
+    Bottom,
+}
+
+/// State for commit modal with split sections
+#[derive(Debug, Clone, Default)]
+pub struct CommitModalState {
+    pub section: ModalSection,
+    pub diff_scroll: usize,
+    pub diff_total_lines: usize,
 }
 
 /// Input mode
@@ -153,6 +175,7 @@ pub struct App {
     // Modal
     pub modal: Option<ModalContent>,
     pub modal_scroll: ModalScroll,
+    pub commit_modal: CommitModalState,
 
     // Detail panel file browser
     pub detail_file_index: usize,
@@ -210,6 +233,7 @@ impl App {
             status_message: None,
             modal: None,
             modal_scroll: ModalScroll::default(),
+            commit_modal: CommitModalState::default(),
             detail_file_index: 0,
             detail_in_files: false,
             pending_editor_files: None,
@@ -507,18 +531,49 @@ impl App {
     pub fn show_commit_modal(&mut self) {
         if let Some(node) = self.selected_node() {
             if let Some(commit) = types::get_commit(node) {
-                // Run git show to get the full commit info
-                let git_output = std::process::Command::new("git")
-                    .args(["show", "--stat", &commit])
+                // Get commit message (without diff)
+                let commit_message = std::process::Command::new("git")
+                    .args(["log", "-1", "--format=%B", &commit])
+                    .output()
+                    .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+                    .unwrap_or_else(|e| format!("Failed to get commit message: {}", e));
+
+                // Get full diff
+                let diff_output = std::process::Command::new("git")
+                    .args(["show", "--format=", "-p", &commit])
                     .output()
                     .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                    .unwrap_or_else(|e| format!("Failed to run git show: {}", e));
+                    .unwrap_or_else(|e| format!("Failed to get diff: {}", e));
+
+                // Get list of changed files
+                let files: Vec<String> = std::process::Command::new("git")
+                    .args(["show", "--format=", "--name-only", &commit])
+                    .output()
+                    .map(|o| {
+                        String::from_utf8_lossy(&o.stdout)
+                            .lines()
+                            .filter(|l| !l.is_empty())
+                            .map(|l| l.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+
+                // Count diff lines for scroll bounds
+                let diff_line_count = diff_output.lines().count();
 
                 self.modal = Some(ModalContent::Commit {
                     hash: commit,
                     node_title: node.title.clone(),
-                    git_output,
+                    commit_message,
+                    diff_output,
+                    files,
                 });
+                self.modal_scroll = ModalScroll::default();
+                self.commit_modal = CommitModalState {
+                    section: ModalSection::Top,
+                    diff_scroll: 0,
+                    diff_total_lines: diff_line_count,
+                };
                 self.focus = Focus::Modal;
             } else {
                 self.set_status("No commit associated with this node".to_string());
@@ -542,6 +597,66 @@ impl App {
     pub fn modal_scroll_down(&mut self, amount: usize) {
         let max_scroll = self.modal_scroll.total_lines.saturating_sub(10); // Leave some visible
         self.modal_scroll.offset = (self.modal_scroll.offset + amount).min(max_scroll);
+    }
+
+    /// Navigate commit modal - move focus or scroll within section
+    pub fn commit_modal_down(&mut self, amount: usize) {
+        match self.commit_modal.section {
+            ModalSection::Top => {
+                // Move from top to bottom section
+                self.commit_modal.section = ModalSection::Bottom;
+            }
+            ModalSection::Bottom => {
+                // Scroll the diff section
+                let max_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
+                self.commit_modal.diff_scroll = (self.commit_modal.diff_scroll + amount).min(max_scroll);
+            }
+        }
+    }
+
+    /// Navigate commit modal up - scroll or move focus
+    pub fn commit_modal_up(&mut self, amount: usize) {
+        match self.commit_modal.section {
+            ModalSection::Top => {
+                // Already at top, do nothing
+            }
+            ModalSection::Bottom => {
+                if self.commit_modal.diff_scroll == 0 {
+                    // At top of diff, move focus back to top section
+                    self.commit_modal.section = ModalSection::Top;
+                } else {
+                    // Scroll diff up
+                    self.commit_modal.diff_scroll = self.commit_modal.diff_scroll.saturating_sub(amount);
+                }
+            }
+        }
+    }
+
+    /// Page down in commit modal diff section
+    pub fn commit_modal_page_down(&mut self, amount: usize) {
+        self.commit_modal.section = ModalSection::Bottom;
+        let max_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
+        self.commit_modal.diff_scroll = (self.commit_modal.diff_scroll + amount).min(max_scroll);
+    }
+
+    /// Page up in commit modal diff section
+    pub fn commit_modal_page_up(&mut self, amount: usize) {
+        self.commit_modal.diff_scroll = self.commit_modal.diff_scroll.saturating_sub(amount);
+        if self.commit_modal.diff_scroll == 0 {
+            self.commit_modal.section = ModalSection::Top;
+        }
+    }
+
+    /// Jump to top of commit modal
+    pub fn commit_modal_top(&mut self) {
+        self.commit_modal.section = ModalSection::Top;
+        self.commit_modal.diff_scroll = 0;
+    }
+
+    /// Jump to bottom of commit modal diff
+    pub fn commit_modal_bottom(&mut self) {
+        self.commit_modal.section = ModalSection::Bottom;
+        self.commit_modal.diff_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
     }
 
     /// Get the current file path from modal (if it's a file modal)
