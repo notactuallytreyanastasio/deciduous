@@ -4,9 +4,24 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use crossterm::event::{MouseEvent, MouseEventKind, MouseButton};
+use ratatui::style::Color;
+use syntect::highlighting::ThemeSet;
+use syntect::parsing::SyntaxSet;
+use syntect::easy::HighlightLines;
 
 use crate::{Database, DecisionGraph, DecisionNode, DecisionEdge};
 use super::types;
+
+// Lazy static syntax highlighting resources
+lazy_static::lazy_static! {
+    static ref PS: SyntaxSet = SyntaxSet::load_defaults_newlines();
+    static ref TS: ThemeSet = ThemeSet::load_defaults();
+}
+
+/// Convert syntect color to ratatui color
+fn syntect_to_ratatui_color(c: syntect::highlighting::Color) -> Color {
+    Color::Rgb(c.r, c.g, c.b)
+}
 
 /// Current view mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -47,6 +62,8 @@ pub enum ModalContent {
 pub struct StyledDiffLine {
     pub line_type: DiffLineType,
     pub content: String,
+    /// Pre-computed styled spans for syntax highlighting (computed once at modal open)
+    pub styled_spans: Vec<(ratatui::style::Color, String)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -575,10 +592,15 @@ impl App {
                     })
                     .unwrap_or_default();
 
-                // Pre-process diff lines (classify only, syntax highlighting done in UI)
+                // Pre-process diff lines with syntax highlighting (computed once, used many times)
+                let theme = &TS.themes["InspiredGitHub"];
+                let mut current_file: Option<String> = None;
+                let mut highlighter: Option<HighlightLines> = None;
+
                 let diff_lines: Vec<StyledDiffLine> = diff_output
                     .lines()
                     .map(|line| {
+                        // Classify line type
                         let line_type = if line.starts_with("@@") {
                             DiffLineType::Hunk
                         } else if line.starts_with("diff ") || line.starts_with("index ")
@@ -593,9 +615,47 @@ impl App {
                         } else {
                             DiffLineType::Other
                         };
+
+                        // Track current file for syntax detection
+                        if line.starts_with("+++ b/") {
+                            current_file = Some(line[6..].to_string());
+                            // Create highlighter for this file type
+                            if let Some(ref path) = current_file {
+                                if let Some(syntax) = PS.find_syntax_for_file(path).ok().flatten() {
+                                    highlighter = Some(HighlightLines::new(syntax, theme));
+                                } else {
+                                    highlighter = None;
+                                }
+                            }
+                        }
+
+                        // Compute styled spans for content lines
+                        let styled_spans = if matches!(line_type, DiffLineType::Added | DiffLineType::Removed | DiffLineType::Context) {
+                            // Strip the leading +/- or space for highlighting
+                            let code_content = if line.len() > 1 { &line[1..] } else { "" };
+
+                            if let Some(ref mut hl) = highlighter {
+                                // Use syntax highlighting
+                                if let Ok(ranges) = hl.highlight_line(code_content, &PS) {
+                                    ranges.iter().map(|(style, text)| {
+                                        let color = syntect_to_ratatui_color(style.foreground);
+                                        (color, text.to_string())
+                                    }).collect()
+                                } else {
+                                    vec![(Color::White, code_content.to_string())]
+                                }
+                            } else {
+                                vec![(Color::White, code_content.to_string())]
+                            }
+                        } else {
+                            // Headers/hunks - no syntax highlighting needed
+                            vec![]
+                        };
+
                         StyledDiffLine {
                             line_type,
                             content: line.to_string(),
+                            styled_spans,
                         }
                     })
                     .collect();

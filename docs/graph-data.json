@@ -2705,6 +2705,28 @@
       "created_at": "2025-12-11T01:34:35.942184-05:00",
       "updated_at": "2025-12-11T01:34:35.942184-05:00",
       "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 247,
+      "change_id": "90fa9939-ff13-4169-854b-854731088c2d",
+      "node_type": "outcome",
+      "title": "PR #5 created with comprehensive decision-driven writeup covering nodes 191-246",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:37:46.536591-05:00",
+      "updated_at": "2025-12-11T01:37:46.536591-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":95}"
+    },
+    {
+      "id": 248,
+      "change_id": "85d028f5-1550-4d37-817a-094b92622e52",
+      "node_type": "action",
+      "title": "Restore syntax highlighting with pre-computed spans at modal open time",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-11T01:40:44.266214-05:00",
+      "updated_at": "2025-12-11T01:40:44.266214-05:00",
+      "metadata_json": "{\"branch\":\"feature/tui-enhancements\",\"confidence\":90}"
     }
   ],
   "edges": [
@@ -4753,6 +4775,28 @@
       "weight": 1.0,
       "rationale": "Fix performance issue caused by syntax highlighting on every frame",
       "created_at": "2025-12-11T01:34:46.307322-05:00"
+    },
+    {
+      "id": 187,
+      "from_node_id": 246,
+      "to_node_id": 247,
+      "from_change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+      "to_change_id": "90fa9939-ff13-4169-854b-854731088c2d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Final PR writeup documenting all TUI enhancement work",
+      "created_at": "2025-12-11T01:37:48.025230-05:00"
+    },
+    {
+      "id": 188,
+      "from_node_id": 246,
+      "to_node_id": 248,
+      "from_change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+      "to_change_id": "85d028f5-1550-4d37-817a-094b92622e52",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Re-add highlighting that was lost in performance fix",
+      "created_at": "2025-12-11T01:40:45.911693-05:00"
     }
   ]
 }

@@ -666,7 +666,7 @@ fn draw_commit_modal(
     let total_diff_lines = diff_lines.len();
     let scroll_offset = app.commit_modal.diff_scroll.min(total_diff_lines.saturating_sub(1));
 
-    // Convert pre-processed diff lines to styled Lines (fast - just color mapping)
+    // Convert pre-processed diff lines to styled Lines using cached syntax highlighting
     use super::app::DiffLineType;
     let styled_diff_lines: Vec<Line> = diff_lines.iter().map(|diff_line| {
         match diff_line.line_type {
@@ -677,12 +677,49 @@ fn draw_commit_modal(
                 Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Yellow)))
             }
             DiffLineType::Added => {
-                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Green)))
+                // Show '+' in green, then syntax highlighted content
+                let mut spans = vec![Span::styled("+", Style::default().fg(Color::Green))];
+                if diff_line.styled_spans.is_empty() {
+                    // Fallback: just show content in green
+                    let content = if diff_line.content.len() > 1 { &diff_line.content[1..] } else { "" };
+                    spans.push(Span::styled(content.to_string(), Style::default().fg(Color::Green)));
+                } else {
+                    // Use pre-computed syntax highlighting with green background tint
+                    for (color, text) in &diff_line.styled_spans {
+                        spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                    }
+                }
+                Line::from(spans)
             }
             DiffLineType::Removed => {
-                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Red)))
+                // Show '-' in red, then syntax highlighted content
+                let mut spans = vec![Span::styled("-", Style::default().fg(Color::Red))];
+                if diff_line.styled_spans.is_empty() {
+                    // Fallback: just show content in red
+                    let content = if diff_line.content.len() > 1 { &diff_line.content[1..] } else { "" };
+                    spans.push(Span::styled(content.to_string(), Style::default().fg(Color::Red)));
+                } else {
+                    // Use pre-computed syntax highlighting
+                    for (color, text) in &diff_line.styled_spans {
+                        spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                    }
+                }
+                Line::from(spans)
             }
-            DiffLineType::Context | DiffLineType::Other => {
+            DiffLineType::Context => {
+                // Show ' ' then syntax highlighted content
+                let mut spans = vec![Span::raw(" ")];
+                if diff_line.styled_spans.is_empty() {
+                    let content = if diff_line.content.len() > 1 { &diff_line.content[1..] } else { "" };
+                    spans.push(Span::raw(content.to_string()));
+                } else {
+                    for (color, text) in &diff_line.styled_spans {
+                        spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                    }
+                }
+                Line::from(spans)
+            }
+            DiffLineType::Other => {
                 Line::from(Span::raw(diff_line.content.clone()))
             }
         }
