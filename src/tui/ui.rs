@@ -674,20 +674,24 @@ fn draw_commit_modal(
         std::collections::HashMap::new();
 
     // Pre-process: find all files in diff and build highlight maps
+    // We need both current file (for + lines) and old version (for - lines)
+    let mut old_file_highlights: std::collections::HashMap<String, std::collections::HashMap<String, Vec<(SyntectStyle, String)>>> =
+        std::collections::HashMap::new();
+
     for line in &diff_lines {
         if line.starts_with("+++ b/") {
             let path = &line[6..];
 
-            // Read and highlight the file if it exists
+            let extension = std::path::Path::new(path)
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("txt");
+
+            let syntax = PS.find_syntax_by_extension(extension)
+                .unwrap_or_else(|| PS.find_syntax_plain_text());
+
+            // Read and highlight the CURRENT file (for + and context lines)
             if let Ok(file_content) = std::fs::read_to_string(path) {
-                let extension = std::path::Path::new(path)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("txt");
-
-                let syntax = PS.find_syntax_by_extension(extension)
-                    .unwrap_or_else(|| PS.find_syntax_plain_text());
-
                 let mut highlighter = HighlightLines::new(syntax, theme);
                 let mut line_map: std::collections::HashMap<String, Vec<(SyntectStyle, String)>> =
                     std::collections::HashMap::new();
@@ -703,6 +707,32 @@ fn draw_commit_modal(
                     }
                 }
                 file_highlights.insert(path.to_string(), line_map);
+            }
+
+            // Get the OLD version of the file from git (for - lines)
+            // Use git show HEAD:<path> to get the committed version
+            if let Ok(output) = std::process::Command::new("git")
+                .args(["show", &format!("{}~1:{}", hash, path)])
+                .output()
+            {
+                if output.status.success() {
+                    let old_content = String::from_utf8_lossy(&output.stdout);
+                    let mut highlighter = HighlightLines::new(syntax, theme);
+                    let mut line_map: std::collections::HashMap<String, Vec<(SyntectStyle, String)>> =
+                        std::collections::HashMap::new();
+
+                    for file_line in old_content.lines() {
+                        let code_with_newline = format!("{}\n", file_line);
+                        if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
+                            let owned: Vec<(SyntectStyle, String)> = highlighted
+                                .into_iter()
+                                .map(|(s, t)| (s, t.to_string()))
+                                .collect();
+                            line_map.insert(file_line.to_string(), owned);
+                        }
+                    }
+                    old_file_highlights.insert(path.to_string(), line_map);
+                }
             }
         }
     }
@@ -748,35 +778,28 @@ fn draw_commit_modal(
             spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Green)));
             Line::from(spans)
         } else if line.starts_with('-') && line.len() > 1 {
-            // Removed line - use syntax highlighting with red tint
+            // Removed line - use old file's syntax highlighting with red tint
             let code = &line[1..];
             let mut spans: Vec<Span> = vec![
                 Span::styled("-", Style::default().fg(Color::Red).bold())
             ];
 
-            // For removed lines, we try to highlight based on the file extension
-            // but the line may not exist in current file, so we do inline highlighting
+            // Look up in old file highlights (properly context-aware)
             if let Some(ref path) = current_file {
-                let extension = std::path::Path::new(path)
-                    .extension()
-                    .and_then(|e| e.to_str())
-                    .unwrap_or("txt");
-                let syntax = PS.find_syntax_by_extension(extension)
-                    .unwrap_or_else(|| PS.find_syntax_plain_text());
-                let mut highlighter = HighlightLines::new(syntax, theme);
-                let code_with_newline = format!("{}\n", code);
-                if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
-                    for (style, text) in highlighted {
-                        let fg = style.foreground;
-                        // Tint towards red while preserving syntax color
-                        let tinted = Color::Rgb(
-                            ((fg.r as u16 * 6 / 10) + 90).min(255) as u8,
-                            (fg.g as u16 * 6 / 10) as u8,
-                            (fg.b as u16 * 6 / 10) as u8,
-                        );
-                        spans.push(Span::styled(text.to_string(), Style::default().fg(tinted)));
+                if let Some(file_map) = old_file_highlights.get(path) {
+                    if let Some(highlighted) = file_map.get(code) {
+                        for (style, text) in highlighted {
+                            let fg = style.foreground;
+                            // Tint towards red while preserving syntax color
+                            let tinted = Color::Rgb(
+                                ((fg.r as u16 * 6 / 10) + 90).min(255) as u8,
+                                (fg.g as u16 * 6 / 10) as u8,
+                                (fg.b as u16 * 6 / 10) as u8,
+                            );
+                            spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                        }
+                        return Line::from(spans);
                     }
-                    return Line::from(spans);
                 }
             }
             spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Red)));
@@ -810,13 +833,47 @@ fn draw_commit_modal(
         }
     }).collect();
 
-    let scroll_info = format!(
-        " Diff [j/k:navigate g/G:top/bot q:close] (line {}/{}) ",
-        scroll_offset + 1,
-        total_diff_lines
-    );
+    let scroll_info = if total_diff_lines == 0 {
+        " Diff [q:close] (no diff available) ".to_string()
+    } else {
+        format!(
+            " Diff [j/k:navigate g/G:top/bot q:close] (line {}/{}) ",
+            scroll_offset + 1,
+            total_diff_lines
+        )
+    };
 
-    let bottom_widget = Paragraph::new(styled_diff_lines)
+    // If diff is empty, show a helpful message
+    let display_lines = if styled_diff_lines.is_empty() {
+        vec![
+            Line::from(""),
+            Line::from(Span::styled(
+                "  No diff content available.",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(""),
+            Line::from(Span::styled(
+                "  This could mean:",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                "  • The commit hash doesn't exist in this repository",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                "  • The commit has no file changes (merge commit, etc.)",
+                Style::default().fg(Color::DarkGray),
+            )),
+            Line::from(Span::styled(
+                "  • Git couldn't be accessed",
+                Style::default().fg(Color::DarkGray),
+            )),
+        ]
+    } else {
+        styled_diff_lines
+    };
+
+    let bottom_widget = Paragraph::new(display_lines)
         .block(
             Block::default()
                 .title(scroll_info)
