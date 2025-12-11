@@ -393,6 +393,12 @@ impl App {
         types::get_branch(node)
     }
 
+    /// Parse metadata and extract prompt
+    /// Delegates to types::get_prompt for consistency
+    pub fn get_prompt(node: &DecisionNode) -> Option<String> {
+        types::get_prompt(node)
+    }
+
     // Navigation methods
     pub fn move_up(&mut self) {
         if self.selected_index > 0 {

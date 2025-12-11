@@ -95,6 +95,38 @@
   - Jump from decision node to related PR/commit comments
   - See review status and approval state
 
+### Type Unification (TUI + Web)
+- [ ] **Shared type definitions**
+  - Unify TUI types (src/tui/types.rs) with web types (web/src/types/graph.ts)
+  - Single source of truth for node/edge structures
+  - Consider code generation or shared schema
+- [ ] **Port TUI features to web viewer**
+  - Timeline view with vim-style navigation
+  - Commit modal with split-view diff
+  - Branch filtering and fuzzy search
+  - Goal story view
+- [ ] **Parallel development workflow**
+  - Changes to one should auto-update the other
+  - Shared test fixtures for both platforms
+  - Document the type mapping
+
+### TUI Architecture Refactor
+- [ ] **Functional core, imperative shell**
+  - Extract pure functions from app.rs for all state transformations
+  - Move all I/O to thin imperative shell at edges
+  - State transitions should be pure: `fn update(state: App, event: Event) -> App`
+- [ ] **Comprehensive test coverage**
+  - Unit tests for all pure state transformation functions
+  - Test navigation logic without terminal
+  - Test modal state machines
+  - Test filtering and search logic
+  - Property-based tests for state invariants
+- [ ] **TEA pattern enforcement**
+  - Strict Model/Update/View separation
+  - No side effects in view functions (already done, verify)
+  - Event handlers return new state, don't mutate
+  - Extract reusable update functions
+
 ### TUI UX Polish
 - [ ] **Keyboard shortcut audit and redesign**
   - Analyze all current shortcuts for intuitiveness
