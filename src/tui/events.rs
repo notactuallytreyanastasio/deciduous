@@ -198,6 +198,11 @@ fn handle_timeline_keys(app: &mut App, key: KeyEvent) -> bool {
             app.enter_branch_search();
         }
 
+        // Toggle timeline order
+        KeyCode::Char('R') => {
+            app.toggle_order();
+        }
+
         // Show goal story (hierarchy from goal to outcomes)
         KeyCode::Char('s') => {
             app.show_goal_story();

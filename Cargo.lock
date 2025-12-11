@@ -403,6 +403,7 @@ dependencies = [
  "colored",
  "crossterm",
  "diesel",
+ "lazy_static",
  "libsqlite3-sys",
  "notify",
  "ratatui 0.29.0",

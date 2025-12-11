@@ -73,6 +73,7 @@ notify = "6.1"
 # Syntax highlighting for TUI file preview
 syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
 syntect-tui = "3.0"
+lazy_static = "1.4"
 
 [profile.release]
 lto = true

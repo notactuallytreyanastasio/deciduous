@@ -5,9 +5,19 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
+use syntect::highlighting::{ThemeSet, Style as SyntectStyle};
+use syntect::parsing::SyntaxSet;
+use syntect::easy::HighlightLines;
+
 use super::app::{App, Mode, View, ModalContent};
 use super::views::{timeline, dag, detail};
 use super::widgets::file_picker;
+
+// Lazy static syntax highlighting resources
+lazy_static::lazy_static! {
+    static ref PS: SyntaxSet = SyntaxSet::load_defaults_newlines();
+    static ref TS: ThemeSet = ThemeSet::load_defaults();
+}
 
 /// Main draw function - orchestrates all rendering
 pub fn draw(frame: &mut Frame, app: &App) {
@@ -369,17 +379,18 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
             return; // Uses its own sizing
         }
         ModalContent::FilePreview { path, content } => {
-            draw_file_modal(frame, app, area, "File Preview", path, content, Color::Magenta);
+            draw_file_preview_modal(frame, app, area, path, content);
             return;
         }
         ModalContent::FileDiff { path, diff } => {
-            draw_file_modal(frame, app, area, "File Diff", path, diff, Color::Cyan);
+            draw_diff_modal(frame, app, area, path, diff);
             return;
         }
     }
 }
 
-fn draw_file_modal(frame: &mut Frame, app: &App, area: Rect, title: &str, path: &str, content: &str, border_color: Color) {
+/// Draw file preview modal with syntect syntax highlighting
+fn draw_file_preview_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, content: &str) {
     let popup_width = (area.width as f32 * 0.9) as u16;
     let popup_height = (area.height as f32 * 0.9) as u16;
 
@@ -392,7 +403,83 @@ fn draw_file_modal(frame: &mut Frame, app: &App, area: Rect, title: &str, path: 
 
     frame.render_widget(Clear, popup_area);
 
+    // Get file extension for syntax detection
+    let extension = std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("txt");
+
+    // Get syntax for this file type
+    let syntax = PS.find_syntax_by_extension(extension)
+        .unwrap_or_else(|| PS.find_syntax_plain_text());
+
+    let theme = &TS.themes["base16-ocean.dark"];
+    let mut highlighter = HighlightLines::new(syntax, theme);
+
     let lines: Vec<&str> = content.lines().collect();
+    let total_lines = lines.len();
+    let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
+
+    // Build syntax-highlighted lines - convert to owned spans
+    let styled_lines: Vec<Line> = lines.iter().enumerate().map(|(i, line)| {
+        let line_num = format!("{:4} │ ", i + 1);
+        let code_with_newline = format!("{}\n", line);
+
+        let mut spans: Vec<Span> = vec![
+            Span::styled(line_num, Style::default().fg(Color::DarkGray))
+        ];
+
+        // Highlight the line and convert syntect styles to ratatui styles
+        if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
+            for (style, text) in highlighted {
+                let ratatui_style = syntect_to_ratatui_style(style);
+                // Clone the text to make it owned
+                spans.push(Span::styled(text.to_string(), ratatui_style));
+            }
+        } else {
+            spans.push(Span::raw(line.to_string()));
+        }
+
+        Line::from(spans)
+    }).collect();
+
+    let scroll_info = format!(" File Preview - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
+        path, scroll_offset + 1, total_lines);
+
+    let modal_widget = Paragraph::new(styled_lines)
+        .block(
+            Block::default()
+                .title(scroll_info)
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Magenta)),
+        )
+        .scroll((scroll_offset as u16, 0))
+        .style(Style::default().bg(Color::Black));
+
+    frame.render_widget(modal_widget, popup_area);
+}
+
+/// Convert syntect Style to ratatui Style
+fn syntect_to_ratatui_style(syntect_style: SyntectStyle) -> Style {
+    let fg = syntect_style.foreground;
+    Style::default().fg(Color::Rgb(fg.r, fg.g, fg.b))
+}
+
+/// Draw diff modal with +/- coloring
+fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &str) {
+    let popup_width = (area.width as f32 * 0.9) as u16;
+    let popup_height = (area.height as f32 * 0.9) as u16;
+
+    let popup_area = Rect {
+        x: (area.width - popup_width) / 2,
+        y: (area.height - popup_height) / 2,
+        width: popup_width,
+        height: popup_height,
+    };
+
+    frame.render_widget(Clear, popup_area);
+
+    let lines: Vec<&str> = diff.lines().collect();
     let total_lines = lines.len();
     let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
 
@@ -404,22 +491,22 @@ fn draw_file_modal(frame: &mut Frame, app: &App, area: Rect, title: &str, path: 
             Line::from(Span::styled(*line, Style::default().fg(Color::Red)))
         } else if line.starts_with("@@") {
             Line::from(Span::styled(*line, Style::default().fg(Color::Cyan)))
-        } else if line.starts_with("diff ") || line.starts_with("index ") {
+        } else if line.starts_with("diff ") || line.starts_with("index ") || line.starts_with("+++") || line.starts_with("---") {
             Line::from(Span::styled(*line, Style::default().fg(Color::Yellow)))
         } else {
             Line::from(Span::raw(*line))
         }
     }).collect();
 
-    let scroll_info = format!(" {} - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
-        title, path, scroll_offset + 1, total_lines);
+    let scroll_info = format!(" File Diff - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
+        path, scroll_offset + 1, total_lines);
 
     let modal_widget = Paragraph::new(styled_lines)
         .block(
             Block::default()
                 .title(scroll_info)
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(border_color)),
+                .border_style(Style::default().fg(Color::Cyan)),
         )
         .scroll((scroll_offset as u16, 0))
         .style(Style::default().fg(Color::White).bg(Color::Black));

@@ -112,6 +112,7 @@ pub struct App {
     pub current_view: View,
     pub selected_index: usize,
     pub scroll_offset: usize,
+    pub reverse_order: bool,  // true = chronological (oldest first), false = newest first
 
     // Detail panel
     pub detail_expanded: bool,
@@ -186,6 +187,7 @@ impl App {
             current_view: View::Timeline,
             selected_index: 0,
             scroll_offset: 0,
+            reverse_order: false,  // Default: newest first
             detail_expanded: true,
             detail_scroll: 0,
             type_filter: None,
@@ -277,8 +279,12 @@ impl App {
             });
         }
 
-        // Sort by created_at descending
-        nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        // Sort by created_at (descending by default, ascending if reverse_order)
+        if self.reverse_order {
+            nodes.sort_by(|a, b| a.created_at.cmp(&b.created_at)); // Oldest first
+        } else {
+            nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // Newest first
+        }
 
         self.filtered_nodes = nodes;
 
@@ -464,6 +470,17 @@ impl App {
             }
         };
         self.apply_filters();
+    }
+
+    /// Toggle timeline order (chronological vs reverse-chronological)
+    pub fn toggle_order(&mut self) {
+        self.reverse_order = !self.reverse_order;
+        self.apply_filters();
+        if self.reverse_order {
+            self.set_status("Timeline: Chronological (oldest first)".to_string());
+        } else {
+            self.set_status("Timeline: Reverse-chronological (newest first)".to_string());
+        }
     }
 
     // DAG navigation
