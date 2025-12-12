@@ -365,6 +365,23 @@
 - [ ] **Memory/hook for sync**
   - Add to Claude Code memories: "If you modify .claude/commands or CLAUDE.md, also update src/init.rs templates"
   - Could be a pre-commit check or a deciduous hook
+- [ ] **FULLY AUTOMATE template sync** (Critical)
+  - **Goal: Never manually sync templates again**
+  - Build script or CI step that extracts actual file contents into init.rs
+  - Single source of truth: the actual `.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md` files
+  - `src/init.rs` templates are auto-generated from these files
+  - Options:
+    - `build.rs` script that reads files and generates template constants
+    - Pre-commit hook that regenerates init.rs template section
+    - CI check that fails if templates don't match actual files
+  - Include ALL tooling files:
+    - `.claude/commands/decision.md`
+    - `.claude/commands/context.md`
+    - `.windsurf/rules/decision.md`
+    - `.windsurf/rules/context.md`
+    - `CLAUDE.md`
+    - `AGENTS.md`
+  - Never have drift between what `deciduous init` creates and what the repo actually uses
 
 ---
 
