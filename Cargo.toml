@@ -80,6 +80,15 @@ lto = true
 codegen-units = 1
 strip = true
 
+# Treat warnings as errors - no code with warnings allowed
+[lints.rust]
+warnings = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+# Explicit exceptions (architectural choices, not bugs)
+too_many_arguments = "allow"
+
 [dev-dependencies]
 proptest = "1.7.0"
 serde_yaml = "0.9.34"

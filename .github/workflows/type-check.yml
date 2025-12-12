@@ -78,7 +78,7 @@ jobs:
         run: cargo test --lib -- proptests
 
       - name: Rust Clippy
-        run: cargo clippy -- -D warnings -A clippy::too_many_arguments
+        run: cargo clippy
 
       - name: Test Summary
         if: success()
