@@ -1,10 +1,10 @@
 [
   {
-    "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",
-    "short_hash": "6faecb3",
+    "hash": "72419744c7b228999ae9da6f3cf76e07d7afd929",
+    "short_hash": "7241974",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T17:44:35-05:00",
-    "message": "feat: complete types unification with ts-rs generation",
+    "date": "2025-12-12T17:57:46-05:00",
+    "message": "docs: update roadmap and agent instructions",
     "files_changed": 5
   },
   {
