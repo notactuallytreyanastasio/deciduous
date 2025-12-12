@@ -1,11 +1,51 @@
 [
   {
-    "hash": "75fcb3c3b28898c7f1c47877411128ab5685c684",
-    "short_hash": "75fcb3c",
+    "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",
+    "short_hash": "6faecb3",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T04:02:45-05:00",
-    "message": "release: v0.8.6 - git history export and DAG default view\n\nFeatures:\n- Git history export: commit messages now shown in web UI\n- DAG view is now the default landing page\n- Dynamic node count on landing page\n- AI Integration Files tutorial page\n\nFixes:\n- Terminal session spacing in tutorials\n\nDocs:\n- README restructured with why-first approach\n- Added roadmap items for URL state sharing and DAG+timeline split",
+    "date": "2025-12-12T17:44:35-05:00",
+    "message": "feat: complete types unification with ts-rs generation",
+    "files_changed": 5
+  },
+  {
+    "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",
+    "short_hash": "6faecb3",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T17:44:35-05:00",
+    "message": "feat: complete types unification with ts-rs generation",
+    "files_changed": 5
+  },
+  {
+    "hash": "d1c1467318d57bdd3a832e342b182197caa5e636",
+    "short_hash": "d1c1467",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T17:30:03-05:00",
+    "message": "feat: implement ts-rs derivation for core types",
+    "files_changed": 4
+  },
+  {
+    "hash": "3fe3f91a477f4dcf2846ca7354fb03729c8bd6aa",
+    "short_hash": "3fe3f91",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T17:27:03-05:00",
+    "message": "chore: add ts-rs dependency and initial generation test",
+    "files_changed": 3
+  },
+  {
+    "hash": "8d2c9f97830c620152195561b65febea60d2ab4b",
+    "short_hash": "8d2c9f9",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T09:37:16-05:00",
+    "message": "test: add 12 unit tests for audit commit association\n\n- 9 tests for keyword_match_score function\n- 3 tests for update_node_commit database method\n\nTotal test count: 179",
     "files_changed": 2
+  },
+  {
+    "hash": "17e904594856b68064946024c0ad30dc60df3b83",
+    "short_hash": "17e9045",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T09:23:47-05:00",
+    "message": "feat: add deciduous audit --associate-commits command\n\nImplements retroactive commit association for the decision graph:\n- New 'audit' command with --associate-commits flag\n- Matches node titles to commit messages using keyword overlap\n- Configurable min-score threshold (default 50%)\n- Dry-run mode to preview before applying\n- Auto-apply mode with --yes flag\n- Added update_node_commit() method to Database\n\nApplied audit to existing graph:\n- Linked 35 nodes to their commits\n- Nodes with commits: 31 → 66",
+    "files_changed": 6
   },
   {
     "hash": "7e3156c9ce9b220c607776cbb6d20f6ea77a0d66",
@@ -32,12 +72,52 @@
     "files_changed": 1
   },
   {
+    "hash": "920782b9878aa4919dd2ec1a58bfa5eb73e75f98",
+    "short_hash": "920782b",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T02:43:47-05:00",
+    "message": "release: v0.8.5 - DAG recency filtering",
+    "files_changed": 2
+  },
+  {
+    "hash": "876ea936deb1b1e201677e9e746b4bdeb1b526ed",
+    "short_hash": "876ea93",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T02:13:37-05:00",
+    "message": "docs: move DAG recency filtering to Web Viewer section",
+    "files_changed": 1
+  },
+  {
     "hash": "80c59885eaed258dc4b724274247d2018a0bf888",
     "short_hash": "80c5988",
     "author": "Bobby Nathan",
     "date": "2025-12-12T01:53:03-05:00",
     "message": "docs: reorganize landing page sections, add PR integration roadmap item\n\n- Move \"The Problem\" section to below elevator pitch for better flow\n- Move \"Real PRs Built With Deciduous\" to below dev process links\n- Reduce PR examples from 4 to 3 (keep #11, #3, #9)\n- Add roadmap item: Web Viewer - PR Integration (link PRs to branch-filtered graph views)",
     "files_changed": 2
+  },
+  {
+    "hash": "07e36cd3c4c4866317328ff6436c514df96047d9",
+    "short_hash": "07e36cd",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T18:42:35-05:00",
+    "message": "test: add 16 CLI integration tests\n\nComprehensive end-to-end tests for CLI workflow:\n\nNode operations:\n- test_add_and_list_nodes\n- test_add_node_with_all_metadata\n- test_add_all_node_types\n\nEdge operations:\n- test_link_nodes\n- test_link_with_edge_types\n\nStatus:\n- test_update_node_status\n\nExport:\n- test_graph_json_export\n- test_dot_export\n\nFiltering:\n- test_filter_nodes_by_type\n\nDiff/Patch:\n- test_diff_export_import\n- test_diff_dry_run\n\nError handling:\n- test_link_nonexistent_nodes\n- test_invalid_node_type\n\nBasic commands:\n- test_help_command\n- test_version_command\n- test_command_log\n\nTest count: 88 -> 105 (unit) + 16 (integration) = 105 total",
+    "files_changed": 3
+  },
+  {
+    "hash": "c75fa8ebc83ff8d758e917d261860d1c94b91bb2",
+    "short_hash": "c75fa8e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T18:38:07-05:00",
+    "message": "test: add 13 unit tests for db.rs pure functions\n\n- build_metadata_json: empty, single field, all fields, clamping\n- DecisionSchema: version_string, compatibility, is_newer_than\n- CURRENT_SCHEMA validation\n\nTest count: 75 -> 88",
+    "files_changed": 1
+  },
+  {
+    "hash": "d05d8cfd9bcfaa1b887ecc2861c35855ee287b85",
+    "short_hash": "d05d8cf",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T18:36:06-05:00",
+    "message": "test: add 10 unit tests for diff.rs patch module\n\n- GraphPatch creation and configuration\n- Node and edge addition to patches\n- JSON serialization/deserialization roundtrip\n- Edge case handling (missing change_ids, special characters)\n- ApplyResult default values\n\nTest count: 65 -> 75",
+    "files_changed": 1
   },
   {
     "hash": "4ef9ffba1a39c0a821373272563b669469d8afa8",
@@ -56,6 +136,14 @@
     "files_changed": 5
   },
   {
+    "hash": "a1e528a08e4bd9354aa539357388cbda256ecc18",
+    "short_hash": "a1e528a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T18:06:44-05:00",
+    "message": "fix: Unicode-safe truncation and patch export edge filtering\n\n- Fix truncate functions to use char-based indexing instead of bytes\n  Prevents panic on multi-byte UTF-8 chars (emoji, checkmarks, etc.)\n  Fixed in: tui/types.rs, timeline.rs, export.rs, main.rs\n\n- Fix patch export: edges now only included when BOTH endpoints in patch\n  Previously used OR logic which caused \"missing node\" errors on apply\n\n- Add `deciduous diff validate` command to pre-check patches\n  Reports edges with missing node references before applying\n\n- Add Live Graph Diff Viewer and Live Graph Editor to roadmap",
+    "files_changed": 7
+  },
+  {
     "hash": "f6d250b3a72d00c1f7128071d3b379b9b5128cc5",
     "short_hash": "f6d250b",
     "author": "Bobby Nathan",
@@ -69,6 +157,14 @@
     "author": "Bobby Nathan",
     "date": "2025-12-11T02:41:24-05:00",
     "message": "release: v0.8.2 - fix template sync, prevent content destruction",
+    "files_changed": 2
+  },
+  {
+    "hash": "04ad71307753eca39477069cc48fbf6b4da0bdae",
+    "short_hash": "04ad713",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T02:19:43-05:00",
+    "message": "release: v0.8.1 - prompt display in TUI detail panel",
     "files_changed": 2
   },
   {
@@ -128,6 +224,102 @@
     "files_changed": 11
   },
   {
+    "hash": "46cee5d01e620acf9f9d8b494354852690d7ff2f",
+    "short_hash": "46cee5d",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T16:31:09-05:00",
+    "message": "release: v0.5.3 - add update command, config file, FK error fix\n\nFeatures:\n- `deciduous update --claude/--windsurf` - update tooling files to latest\n- `.deciduous/config.toml` for branch settings (main_branches, auto_detect)\n- Better FK error messages on link command (shows which nodes missing)\n\nDocumentation:\n- Branch-based grouping docs added to all tooling files\n- Claude Code hooks roadmap section\n- Updated all templates with branch config docs",
+    "files_changed": 14
+  },
+  {
+    "hash": "313b360cffed5f2ce78bacf8cdb6b4222948f9c0",
+    "short_hash": "313b360",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T15:54:33-05:00",
+    "message": "release: v0.5.2 - graph integrity auditing\n\n- Add connection rules to all tooling (outcomes must link to actions, etc.)\n- Add audit checklist before every sync\n- Root goals are the only valid orphans\n- Emphasize that graph value is in CONNECTIONS, not just nodes",
+    "files_changed": 3
+  },
+  {
+    "hash": "dc78ab4f9aceb86483e60ce66c426c3389c13974",
+    "short_hash": "dc78ab4",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T15:45:39-05:00",
+    "message": "docs: add graph integrity auditing to all tooling\n\n- Emphasize that connections are the value, not just nodes\n- Add connection rules: outcomes link to actions, actions to goals, etc.\n- Root goals are the ONLY valid orphans\n- Add audit checklist before every sync\n- Update .claude/commands/, .windsurf/rules/, CLAUDE.md, and init templates",
+    "files_changed": 7
+  },
+  {
+    "hash": "f4d268e23ebd8b2010cf36bda11870287a6532d0",
+    "short_hash": "f4d268e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T15:33:00-05:00",
+    "message": "release: v0.5.1 - branch-scoped decision graphs\n\n- Add branch auto-detection on node creation (stored in metadata_json)\n- Add --branch and --no-branch flags to 'deciduous add' command\n- Add --branch filter to 'deciduous nodes' command\n- Add branch filter dropdown to web UI (filters all 4 tabs)\n- Update .claude/commands and .windsurf/rules with branch docs\n- Update init templates with branch documentation",
+    "files_changed": 14
+  },
+  {
+    "hash": "cc1903d92afea3c05c21fcac86364ca435d636f4",
+    "short_hash": "cc1903d",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:49:55-05:00",
+    "message": "feat: add --prompt and --files flags for node metadata tracking\n\n- Add --prompt flag to store the user prompt that triggered a decision\n- Add --files flag to associate files with nodes (comma-separated)\n- Prompts and files stored in metadata_json alongside confidence/commit\n- Update all init templates (CLAUDE.md, AGENTS.md, Windsurf rules)\n- Document new flags in slash commands and rules",
+    "files_changed": 6
+  },
+  {
+    "hash": "0a2e972d4b205717f613b82e0fb6a2274ecde8ac",
+    "short_hash": "0a2e972",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:41:43-05:00",
+    "message": "feat: add 30-second auto-refresh to web viewer when running locally\n\n- Add pollInterval option to useGraphData hook\n- Enable 30-second polling when running from deciduous serve (localhost)\n- No polling on static GitHub Pages (saves bandwidth)\n- Add code tracking and prompt viewing to roadmap",
+    "files_changed": 7
+  },
+  {
+    "hash": "c79b1c45b218c8c7ca62710a3e96da9ea6e71c64",
+    "short_hash": "c79b1c4",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:28:20-05:00",
+    "message": "fix: correct Windsurf rules YAML format and add activation reminder\n\n- Use proper Windsurf frontmatter: description, globs, alwaysApply\n- Add CLI warning to verify activation in Windsurf Customizations panel\n- Add prompt tracking to roadmap",
+    "files_changed": 5
+  },
+  {
+    "hash": "0c39233ef4c657630aa3292d5714e1e10a9cf600",
+    "short_hash": "0c39233",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:15:34-05:00",
+    "message": "release: v0.4.0 - editor-specific init flags",
+    "files_changed": 3
+  },
+  {
+    "hash": "eee087e5ae7b47081af6b3f5defe7ebee347776f",
+    "short_hash": "eee087e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:13:56-05:00",
+    "message": "fix: replace old losselot WASM workflow with simple pages deploy",
+    "files_changed": 2
+  },
+  {
+    "hash": "78640eb0e3e250e15dc20c0c95a7b09a11b9cd2d",
+    "short_hash": "78640eb",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T13:54:09-05:00",
+    "message": "feat: improve Windsurf rules with proper triggers and memories\n\n- deciduous.md: 'trigger: always' for continuous enforcement\n- context.md: 'trigger: model' for session recovery\n- memories.md: project-level memories Cascade auto-retrieves\n- Use XML tags for rule grouping per Windsurf best practices\n- Rename decision.md to deciduous.md for clarity",
+    "files_changed": 2
+  },
+  {
+    "hash": "77af7312c86f25170622cd70fdc8d7c091eb1ac3",
+    "short_hash": "77af731",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T13:40:01-05:00",
+    "message": "feat: add --claude and --windsurf flags to init command\n\nAdd editor-specific initialization support:\n\n- `deciduous init --claude` (default): Creates .claude/commands/ with\n  decision.md and context.md slash commands, appends workflow section\n  to CLAUDE.md\n\n- `deciduous init --windsurf`: Creates .windsurf/rules/ with\n  decision.md and context.md rules, appends workflow section to\n  AGENTS.md\n\nBoth editors share the same .deciduous/ database and docs/ for GitHub\nPages.\n\nFlags are mutually exclusive via Clap argument groups.\n\nAlso adds ROADMAP.md with backlog items for legacy cleanup.",
+    "files_changed": 4
+  },
+  {
+    "hash": "ab529c440b28a4727fb01432e7101302b1751dac",
+    "short_hash": "ab529c4",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T17:55:52-05:00",
+    "message": "Add React+TypeScript+Vite unified graph viewer (Phase A of Deciduous)\n\nThis is Phase A of extracting the decision graph tooling into a standalone\npackage called \"deciduous\". This commit adds a modern React web viewer that\ncombines all 4 existing graph views into a single tabbed interface.\n\n## Decision Context (from graph nodes 99-107)\n\n**Goal (node 99)**: Create Deciduous - extract decision graph tooling into\na standalone portable package that can be used in any project.\n\n**Key Decision (node 101)**: Web viewer architecture\n- Evaluated two options:\n  - Option A (node 102): Vanilla JS + D3 - no build step, embed in binary\n  - Option B (node 103): React + TypeScript + Vite - modern DX, type safety\n- **Chose Option B** because TypeScript types can mirror Diesel ORM exactly,\n  providing compile-time guarantees that frontend matches backend schemas.\n\n**Decision (node 100)**: Include full Claude tooling in deciduous init\n- Slash commands, CLAUDE.md workflow section, Makefile shortcuts\n- This ensures projects using deciduous get the full decision-tracking workflow\n\n## What's New\n\n### web/ - React + TypeScript + Vite Application\n- **4 Views Combined**: Chains, Timeline, Graph (D3 force), DAG (Dagre)\n- **TypeScript Types**: Mirror Diesel ORM exactly (DecisionNode, DecisionEdge)\n- **Shared Components**: Layout, DetailPanel, NodeBadge, TypeFilters\n- **Graph Processing**: BFS chain building, session grouping, path tracing\n- **Build**: Vite with React plugin, production bundle ~365KB\n\n### Types Matching Diesel ORM\n```typescript\n// These match src/db.rs Diesel models exactly\ntype NodeType = 'goal' | 'decision' | 'option' | 'action' | 'outcome' | 'observation';\ntype NodeStatus = 'pending' | 'active' | 'completed' | 'rejected';\ntype EdgeType = 'leads_to' | 'requires' | 'chosen' | 'rejected' | 'blocks' | 'enables';\n```\n\n### Makefile Additions\n- `make web` - Sync graph data and start dev server\n- `make web-dev` - Start development server (http://localhost:3001)\n- `make web-build` - Build production bundle\n- `make web-typecheck` - Run TypeScript type checking\n- `make web-sync` - Sync graph data to web/public/\n\n### README Updates\n- Documented web viewer commands\n- Added note: Makefile is the primary entrypoint for Claude skills\n\n## Files Added\n- web/.gitignore - Excludes node_modules, dist, .vite\n- web/package.json, tsconfig.json, vite.config.ts\n- web/src/types/graph.ts - TypeScript types matching Diesel\n- web/src/views/{ChainsView,TimelineView,GraphView,DagView}.tsx\n- web/src/components/{Layout,DetailPanel,NodeBadge,TypeFilters}.tsx\n- web/src/hooks/{useGraphData,useChains}.ts\n- web/src/utils/{graphProcessing,colors}.ts\n\n## Next Steps (Phases B-G)\n- Phase B: Fork losselot to deciduous repository\n- Phase C: Remove audio/WASM code, keep decision graph\n- Phase D: Restructure CLI for deciduous commands\n- Phase E: Add live viewing with file watcher and SSE\n- Phase F: Implement deciduous init with Claude tooling\n- Phase G: Create documentation site (GitHub Pages)",
+    "files_changed": 28
+  },
+  {
     "hash": "e6d548dd3aa86a3396f9426f78be470a658ef11f",
     "short_hash": "e6d548d",
     "author": "Bobby Nathan",
@@ -176,11 +368,83 @@
     "files_changed": 1
   },
   {
+    "hash": "29b126a2673d305bfe448c07c3c2d1302b2dfc9e",
+    "short_hash": "29b126a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T23:42:59-05:00",
+    "message": "Rewrite README with collapsible sections, add commit badges to modal\n\nREADME.md:\n- Complete rewrite focusing on dual nature: audio forensics + living museum\n- Added collapsible <details> sections for deep dives\n- Streamlined downloads table\n- Added \"The Story\" section explaining project evolution\n- Documented confidence weights and commit linking features\n\ndecision-modal.js:\n- Added getCommit() and commitBadge() functions\n- Commit badges now show in modal with links to GitHub\n- Consistent with demo/index.html styling\n\nGraph now at 77 nodes.",
+    "files_changed": 3
+  },
+  {
     "hash": "5a2ae237a4fd28d6430c6bfd99ea02285da3385e",
     "short_hash": "5a2ae23",
     "author": "Bobby Nathan",
     "date": "2025-12-05T23:37:07-05:00",
     "message": "Add TypeScript build system with type definitions and tests\n\n- Set up TypeScript compilation for docs/ frontend\n- Added type definitions mirroring Rust backend:\n  - graph.ts: DecisionNode, DecisionEdge, GraphData\n  - analysis.ts: AnalysisResult, BinaryAnalysis, SpectralAnalysis\n- Added 29 Vitest tests for type helper functions\n- Wired up CI to run typecheck and tests before deploy\n- Updated CLAUDE.md with frontend test instructions\n- Fixed Jekyll config to include wasm/ and exclude TS build files",
     "files_changed": 13
+  },
+  {
+    "hash": "d8e8e938ee3d9420b777864ed1c74c98528759e2",
+    "short_hash": "d8e8e93",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T23:32:29-05:00",
+    "message": "fix: Add wasm to Jekyll include list to fix 404 on prod\n\nJekyll was building but not including the wasm/ directory that gets\ncreated by the GitHub Actions workflow. Added explicit include directive.\n\nAlso excluded TypeScript source files (src/, package.json, tsconfig.json)\nfrom Jekyll build - these will be dev-only.",
+    "files_changed": 1
+  },
+  {
+    "hash": "030a33b0a64a2726f9de4e04e7cba66ec53c9977",
+    "short_hash": "030a33b",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T23:29:13-05:00",
+    "message": "Add confidence weights documentation to decision graph page\n\n- New section explaining 0-100 confidence scale\n- Color-coded badges (green/yellow/red)\n- Updated Makefile examples with C= parameter\n- Updated stats to reflect current node count",
+    "files_changed": 1
+  },
+  {
+    "hash": "5561ea212c1872f80c804177a1c60fec076a6410",
+    "short_hash": "5561ea2",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T22:44:23-05:00",
+    "message": "Simplify landing page - minimal design, clear links\n\n- Hero: one line value prop\n- Use It: 3 main entry points (browser, graph, CLI)\n- How It Works: brief explanation + verdict table\n- Quick Start: minimal install steps\n- Under the Hood: links to docs",
+    "files_changed": 2
+  },
+  {
+    "hash": "3785e5588119972db4dfe083e72ac16d2c0e31c8",
+    "short_hash": "3785e55",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T22:42:12-05:00",
+    "message": "Fix spectrogram not rendering - canvas needs visible parent\n\nCharts were being drawn before result div was made visible.\nCanvas getBoundingClientRect() returned 0 when parent is display:none.\nFix: show result first, then use requestAnimationFrame to draw charts.",
+    "files_changed": 1
+  },
+  {
+    "hash": "5cd0e092f29416b9c88dfae67b77a548861b4ca5",
+    "short_hash": "5cd0e09",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T21:36:34-05:00",
+    "message": "Add decision graph memory workflow and fix analyzer TDZ bug\n\n- CLAUDE.md: Prominent decision graph memory section at top\n- Makefile: Add sync-graph and deploy targets\n- docs/analyzer.html: Fix TDZ error (status const before initWasm)\n- docs/demo/graph-data.json: Export all 41 decisions\n- .claude/commands: Add sync-graph command, update context with memory loop\n\nThe decision graph now persists across sessions and deploys to\nGitHub Pages on every push. Claude logs all decisions during work\nand syncs before pushing.",
+    "files_changed": 6
+  },
+  {
+    "hash": "41ce8e7a0491379febe2cbc4e19307bf8d3451d0",
+    "short_hash": "41ce8e7",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T21:18:01-05:00",
+    "message": "fix: Add Jekyll build step to process markdown files\n\nThe workflow was deploying raw markdown - needed Jekyll to\nconvert .md files to HTML for the landing page.",
+    "files_changed": 1
+  },
+  {
+    "hash": "ca53428f7e26c818872d30553a9f514a0437608d",
+    "short_hash": "ca53428",
+    "author": "Bobby Grayson",
+    "date": "2025-12-05T21:13:00-05:00",
+    "message": "feat: GitHub Pages living museum site (#14)\n\n* feat: Add GitHub Pages living museum site\n\nA documentation site showcasing both the audio forensics tools and the\nAI-assisted development methodology used to build this project.\n\nSite structure:\n- Landing page with quick start and four pillars overview\n- Audio Analysis: CFCC, spectral analysis, detection explained\n- Decision Graph: Tour of the real graph with screenshots\n- Claude Tooling: Slash commands, context recovery, session continuity\n- Development Story: Timeline, what didn't work, lessons learned\n\nDemo includes:\n- Real losselot.db with 17 nodes from actual development\n- Interactive graph viewer loading real decision data\n- Screenshots of the graph UI in action\n\nThe decision graph documents real choices made during development,\nincluding the lo-fi detection algorithm decision (CFCC vs temporal\nvariance) and the site structure decision itself.\n\n* feat: Add client-side WASM analyzer\n\nPure Rust FFT analysis compiled to WebAssembly - no JS fallback.\nRuns the same 8192-sample windowed analysis as CLI: CFCC cliff\ndetection, cutoff variance, rolloff slope, ultrasonic energy.\n\n- wasm-analyzer/: Rust crate with rustfft, wasm-bindgen\n- docs/analyzer.html: Drag-drop UI, Web Audio API decoding\n- GitHub Actions workflow builds WASM on deploy",
+    "files_changed": 22
+  },
+  {
+    "hash": "a046a848ecf2f2700d93c6696118f71783812e01",
+    "short_hash": "a046a84",
+    "author": "Bobby Nathan",
+    "date": "2025-12-04T22:28:32-05:00",
+    "message": "Add direct download links at top of README",
+    "files_changed": 1
   }
 ]
