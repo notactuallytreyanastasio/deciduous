@@ -180,16 +180,9 @@
         }
         .demo-player-container {
             border-radius: 8px;
-            overflow: hidden;
+            overflow-x: auto;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             margin: 25px 0;
-            width: 100vw;
-            position: relative;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-        #demo-player {
-            width: 100%;
         }
 
         .workflow-section {
@@ -367,8 +360,6 @@ SESSION END -> Graph survives
                     autoPlay: false,
                     preload: true,
                     theme: 'asciinema',
-                    fit: 'width',
-                    terminalFontSize: 'small',
                     idleTimeLimit: 2,
                     speed: 1.33
                 });
