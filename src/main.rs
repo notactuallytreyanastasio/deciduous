@@ -1342,3 +1342,104 @@ fn export_git_history(nodes: &[deciduous::DecisionNode], output_dir: &std::path:
 
     Ok(commits.len())
 }
+
+// =============================================================================
+// Tests
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === keyword_match_score Tests ===
+
+    #[test]
+    fn test_keyword_match_exact() {
+        // Exact match should be 100%
+        let score = keyword_match_score(
+            "Add user authentication",
+            "feat: Add user authentication",
+        );
+        assert!((score - 1.0).abs() < 0.01, "Expected ~100%, got {}", score);
+    }
+
+    #[test]
+    fn test_keyword_match_partial() {
+        // Partial overlap
+        let score = keyword_match_score(
+            "Implement dark mode toggle",
+            "feat: add dark mode support",
+        );
+        // "dark" and "mode" match, "implement" and "toggle" don't
+        assert!(score > 0.3 && score < 0.8, "Expected partial match, got {}", score);
+    }
+
+    #[test]
+    fn test_keyword_match_no_overlap() {
+        let score = keyword_match_score(
+            "Fix database connection",
+            "feat: add new UI component",
+        );
+        assert!(score < 0.1, "Expected no match, got {}", score);
+    }
+
+    #[test]
+    fn test_keyword_match_ignores_stopwords() {
+        // Stopwords like "the", "a", "to" should be ignored
+        let score = keyword_match_score(
+            "the fix for the bug",
+            "a fix to the issue",
+        );
+        // Only "fix" matches, "bug" vs "issue" don't
+        assert!(score > 0.0, "Should have some match from 'fix'");
+    }
+
+    #[test]
+    fn test_keyword_match_case_insensitive() {
+        let score = keyword_match_score(
+            "ADD USER AUTH",
+            "add user auth",
+        );
+        assert!((score - 1.0).abs() < 0.01, "Should match case-insensitively");
+    }
+
+    #[test]
+    fn test_keyword_match_empty_title() {
+        let score = keyword_match_score("", "some commit message");
+        assert_eq!(score, 0.0, "Empty title should return 0");
+    }
+
+    #[test]
+    fn test_keyword_match_all_stopwords() {
+        let score = keyword_match_score("the a an", "the a an");
+        assert_eq!(score, 0.0, "All stopwords should return 0");
+    }
+
+    #[test]
+    fn test_keyword_match_special_chars() {
+        // Special characters are filtered, identical strings match
+        let score = keyword_match_score(
+            "fix: user-auth (v2)",
+            "fix: user-auth (v2)",
+        );
+        // Both strings normalize the same, should be 100%
+        assert!((score - 1.0).abs() < 0.01, "Same string should match 100%, got {}", score);
+
+        // Punctuation like colons is stripped
+        let score2 = keyword_match_score(
+            "fix bug",
+            "fix: bug",
+        );
+        assert!((score2 - 1.0).abs() < 0.01, "Punctuation should be ignored, got {}", score2);
+    }
+
+    #[test]
+    fn test_keyword_match_real_example() {
+        // Real example from the codebase
+        let score = keyword_match_score(
+            "Implemented --claude and --windsurf flags for init command",
+            "feat: add --claude and --windsurf flags to init command",
+        );
+        assert!(score > 0.7, "Real example should have high match, got {}", score);
+    }
+}

@@ -1248,4 +1248,85 @@ mod tests {
         assert!(CURRENT_SCHEMA.features.contains(&"decision_nodes"));
         assert!(CURRENT_SCHEMA.features.contains(&"decision_edges"));
     }
+
+    // === update_node_commit Tests ===
+
+    #[test]
+    fn test_update_node_commit_new_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(db_path.to_str().unwrap()).unwrap();
+
+        // Create a node without metadata
+        let node_id = db.create_node("action", "Test action", None, None, None).unwrap();
+
+        // Update with commit
+        db.update_node_commit(node_id, "abc123def456").unwrap();
+
+        // Verify
+        let nodes = db.get_all_nodes().unwrap();
+        let node = nodes.iter().find(|n| n.id == node_id).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
+        assert_eq!(meta.get("commit").unwrap(), "abc123def456");
+    }
+
+    #[test]
+    fn test_update_node_commit_preserves_existing_metadata() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(db_path.to_str().unwrap()).unwrap();
+
+        // Create a node with existing metadata (confidence and branch)
+        let node_id = db.create_node_full(
+            "action",
+            "Test action",
+            None,
+            Some(85),
+            None,
+            None,
+            None,
+            Some("feature-x"),
+        ).unwrap();
+
+        // Update with commit
+        db.update_node_commit(node_id, "def789").unwrap();
+
+        // Verify commit was added and other fields preserved
+        let nodes = db.get_all_nodes().unwrap();
+        let node = nodes.iter().find(|n| n.id == node_id).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
+
+        assert_eq!(meta.get("commit").unwrap(), "def789");
+        assert_eq!(meta.get("confidence").unwrap(), 85);
+        assert_eq!(meta.get("branch").unwrap(), "feature-x");
+    }
+
+    #[test]
+    fn test_update_node_commit_overwrites_existing_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(db_path.to_str().unwrap()).unwrap();
+
+        // Create a node with an existing commit
+        let node_id = db.create_node_full(
+            "outcome",
+            "Test outcome",
+            None,
+            None,
+            Some("old_commit_hash"),
+            None,
+            None,
+            None,
+        ).unwrap();
+
+        // Update with new commit
+        db.update_node_commit(node_id, "new_commit_hash").unwrap();
+
+        // Verify commit was overwritten
+        let nodes = db.get_all_nodes().unwrap();
+        let node = nodes.iter().find(|n| n.id == node_id).unwrap();
+        let meta: serde_json::Value = serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
+
+        assert_eq!(meta.get("commit").unwrap(), "new_commit_hash");
+    }
 }
