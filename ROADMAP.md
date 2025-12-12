@@ -123,6 +123,23 @@
 - [ ] `deciduous log` command to show commits with their linked nodes
 - [ ] Integration with `git log` to annotate commits with decision context
 
+### Web Viewer - URL State & Sharing
+- [ ] **Query param encoding for shareable state**
+  - Encode ALL view parameters in URL query string
+  - Branch filter, selected node, view type, expanded chains, etc.
+  - Copy URL → share with teammate → they see exact same view
+  - Support deep linking to specific nodes: `?node=42&branch=feature-x`
+  - Persist state across page refreshes
+  - "Copy link" button in UI for easy sharing
+
+### Web Viewer - DAG + Timeline Split View
+- [ ] **Split view showing DAG and Timeline together**
+  - DAG view on one side, Timeline on the other
+  - Selecting a node group in DAG highlights corresponding timeline entries
+  - Swap panels in/out - view decision flow and log simultaneously
+  - Useful for reviewing decision history while seeing structure
+  - Configurable split direction (horizontal/vertical)
+
 ### Web Viewer - PR Integration
 - [ ] **Link PRs to branch-filtered decision graph views**
   - Click a PR link → opens deciduous web viewer filtered to that branch's nodes
