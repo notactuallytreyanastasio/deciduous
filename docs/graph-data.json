@@ -4135,6 +4135,28 @@
       "created_at": "2025-12-12T03:08:14.796746-05:00",
       "updated_at": "2025-12-12T03:08:14.796746-05:00",
       "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User: add to roadmap a steve klabnik style user guide like his jj tutorial that goes through a real use-case live\"}"
+    },
+    {
+      "id": 377,
+      "change_id": "a13a982c-aebf-4ccc-840d-f5ccbe5e1f98",
+      "node_type": "action",
+      "title": "Fix DagView modal to show commit messages - modal doesn't use DetailPanel",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:13:23.404816-05:00",
+      "updated_at": "2025-12-12T03:13:23.404816-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":90,\"prompt\":\"User: I see the link but no commit message\\\\! We need that message.\"}"
+    },
+    {
+      "id": 378,
+      "change_id": "5346def6-eda3-4480-8b9a-2f8b75e09333",
+      "node_type": "outcome",
+      "title": "DagView modal now shows commit messages",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:14:59.597735-05:00",
+      "updated_at": "2025-12-12T03:14:59.597735-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"commit\":\"7e3156c\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -7613,6 +7635,28 @@
       "weight": 1.0,
       "rationale": "Documentation planning",
       "created_at": "2025-12-12T03:08:14.804245-05:00"
+    },
+    {
+      "id": 317,
+      "from_node_id": 375,
+      "to_node_id": 377,
+      "from_change_id": "297d3a98-a550-4d98-85d0-ee89c043a0c4",
+      "to_change_id": "a13a982c-aebf-4ccc-840d-f5ccbe5e1f98",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Bug discovered during testing",
+      "created_at": "2025-12-12T03:13:31.287711-05:00"
+    },
+    {
+      "id": 318,
+      "from_node_id": 377,
+      "to_node_id": 378,
+      "from_change_id": "a13a982c-aebf-4ccc-840d-f5ccbe5e1f98",
+      "to_change_id": "5346def6-eda3-4480-8b9a-2f8b75e09333",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fix completed",
+      "created_at": "2025-12-12T03:14:59.605603-05:00"
     }
   ]
 }

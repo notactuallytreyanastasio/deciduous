@@ -1047,9 +1047,10 @@ fn extract_commit_hashes(nodes: &[deciduous::DecisionNode]) -> Vec<String> {
 
 /// Get commit info from git for a given hash
 fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
-    // Get commit info: hash, author, date (ISO), subject line
+    // Get commit info: hash, author, date (ISO), full message body
+    // Use %x00 (null byte) as separator since message can have newlines
     let output = ProcessCommand::new("git")
-        .args(["log", "-1", "--format=%H%n%an%n%aI%n%s", hash])
+        .args(["log", "-1", "--format=%H%x00%an%x00%aI%x00%B", hash])
         .output()
         .ok()?;
 
@@ -1058,10 +1059,13 @@ fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let lines: Vec<&str> = stdout.trim().lines().collect();
-    if lines.len() < 4 {
+    let parts: Vec<&str> = stdout.trim().split('\x00').collect();
+    if parts.len() < 4 {
         return None;
     }
+
+    // Clean up the message - trim whitespace
+    let message = parts[3].trim().to_string();
 
     // Get files changed count
     let files_output = ProcessCommand::new("git")
@@ -1082,11 +1086,11 @@ fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
     });
 
     Some(GitCommit {
-        hash: lines[0].to_string(),
-        short_hash: lines[0].chars().take(7).collect(),
-        author: lines[1].to_string(),
-        date: lines[2].to_string(),
-        message: lines[3].to_string(),
+        hash: parts[0].to_string(),
+        short_hash: parts[0].chars().take(7).collect(),
+        author: parts[1].to_string(),
+        date: parts[2].to_string(),
+        message,
         files_changed,
     })
 }

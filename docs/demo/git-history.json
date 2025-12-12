@@ -1,18 +1,26 @@
 [
   {
-    "hash": "d699f36a6d38853bec4c0e9eebd53fa9d54919da",
-    "short_hash": "d699f36",
+    "hash": "2dec7adc35214b7152539fcf7bd150b9c962da5c",
+    "short_hash": "2dec7ad",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T02:57:43-05:00",
-    "message": "feat: export git history to JSON and show commit messages in web UI",
-    "files_changed": 10
+    "date": "2025-12-12T03:20:21-05:00",
+    "message": "fix: remove truncation from commit messages in TimelineView",
+    "files_changed": 2
+  },
+  {
+    "hash": "7e3156c9ce9b220c607776cbb6d20f6ea77a0d66",
+    "short_hash": "7e3156c",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T03:14:48-05:00",
+    "message": "fix: show commit messages in DagView modal",
+    "files_changed": 3
   },
   {
     "hash": "d699f36a6d38853bec4c0e9eebd53fa9d54919da",
     "short_hash": "d699f36",
     "author": "Bobby Nathan",
     "date": "2025-12-12T02:57:43-05:00",
-    "message": "feat: export git history to JSON and show commit messages in web UI",
+    "message": "feat: export git history to JSON and show commit messages in web UI\n\n- Add git-history.json export to 'deciduous sync' command\n- Extract commit hashes from nodes' metadata_json\n- Lookup commit info (hash, author, date, message, files_changed) via git log\n- Web UI: Display commit messages in ChainsView flow nodes\n- Web UI: Add linked commit section to DetailPanel with message and metadata\n- Pass gitHistory to TimelineView and ChainsView components\n\nCloses the gap between TUI and web UI for commit information display.",
     "files_changed": 10
   },
   {
@@ -20,7 +28,7 @@
     "short_hash": "84f4ca0",
     "author": "Bobby Nathan",
     "date": "2025-12-12T02:57:33-05:00",
-    "message": "docs: restructure README with why-first approach",
+    "message": "docs: restructure README with why-first approach\n\n- Lead with live demo links (GH Pages DAG view, asciinema demo)\n- Add 'Why Deciduous?' section emphasizing both human and AI benefits\n- Expand 'The Premises' with 8 core ideas:\n  - Structured thinking helps developers reason through decisions\n  - Complex PRs tell a story via the decision graph\n  - Both humans and AI can log and query decisions\n  - The graph is a shared workspace across sessions and teammates\n- Add 'Who Uses It' section for developer/AI/team use cases\n- Streamline Quick Start with editor-specific init commands\n- Update Viewing section to highlight PR review and story angles\n- Fix init description (Claude vs Windsurf creates different files)",
     "files_changed": 1
   },
   {
@@ -28,7 +36,7 @@
     "short_hash": "80c5988",
     "author": "Bobby Nathan",
     "date": "2025-12-12T01:53:03-05:00",
-    "message": "docs: reorganize landing page sections, add PR integration roadmap item",
+    "message": "docs: reorganize landing page sections, add PR integration roadmap item\n\n- Move \"The Problem\" section to below elevator pitch for better flow\n- Move \"Real PRs Built With Deciduous\" to below dev process links\n- Reduce PR examples from 4 to 3 (keep #11, #3, #9)\n- Add roadmap item: Web Viewer - PR Integration (link PRs to branch-filtered graph views)",
     "files_changed": 2
   },
   {
@@ -44,7 +52,7 @@
     "short_hash": "0331ae1",
     "author": "Bobby Nathan",
     "date": "2025-12-11T18:32:31-05:00",
-    "message": "refactor: TEA architecture for TUI with functional core",
+    "message": "refactor: TEA architecture for TUI with functional core\n\n- Add src/tui/state.rs: pure state transformations (14 tests)\n  - Navigation: move_selection_up/down, page_up/down, clamp_selection\n  - Filtering: filter_by_type/branch/search, apply_all_filters\n  - Graph traversal: find_root_goal, get_descendants\n  - Branch/type cycling helpers\n\n- Add src/tui/msg.rs: message types for all user actions (8 tests)\n  - Msg enum covering navigation, views, filters, modals, actions\n  - ViewKind enum with next/prev cycling\n  - key_to_msg pure function for input handling\n  - Helper predicates: is_quit, is_navigation, is_filter_change\n\n- Add src/tui/update.rs: pure update function (19 tests)\n  - TEA-style update: Msg -> Model -> (Model, Cmd)\n  - Cmd enum for side effects (Quit, ReloadGraph, OpenFiles, etc.)\n  - Model struct mirroring essential App state\n  - All state transitions are pure and testable\n\n- Fix export.rs: replace 47 writeln!().unwrap() with w!/wln! macros\n  - Writing to String never fails, but write! returns Result\n  - New macros make intent explicit and remove panic risk\n\nTest count: 24 -> 65 (+41 new tests)",
     "files_changed": 5
   },
   {
@@ -68,7 +76,7 @@
     "short_hash": "e521e42",
     "author": "Bobby Nathan",
     "date": "2025-12-11T01:18:52-05:00",
-    "message": "feat: split-view commit modal, TUI docs, roadmap update",
+    "message": "feat: split-view commit modal, TUI docs, roadmap update\n\n- Commit modal (O key) now shows split view with commit info on top, diff on bottom\n- Diff section scrolls independently with j/k navigation\n- Updated ROADMAP with completed TUI items and UX polish backlog\n- Added TUI documentation to README with keyboard shortcuts reference\n- Graph sync: 244 nodes, 185 edges",
     "files_changed": 6
   },
   {
@@ -76,7 +84,7 @@
     "short_hash": "101755b",
     "author": "Bobby Nathan",
     "date": "2025-12-11T01:04:23-05:00",
-    "message": "feat: syntect syntax highlighting, reverse timeline order",
+    "message": "feat: syntect syntax highlighting, reverse timeline order\n\n- Add proper syntect-based syntax highlighting for file preview modal\n- Convert syntect styles to ratatui RGB colors\n- Add shift-R to toggle timeline order (chronological vs reverse-chrono)\n- Initialize reverse_order field in App state\n- Lazy-load syntax highlighting resources with lazy_static",
     "files_changed": 5
   },
   {
@@ -84,7 +92,7 @@
     "short_hash": "40894d9",
     "author": "Bobby Nathan",
     "date": "2025-12-11T00:57:40-05:00",
-    "message": "feat: TUI enhancements - scrollable modals, branch search, file browser",
+    "message": "feat: TUI enhancements - scrollable modals, branch search, file browser\n\n- Add scrollable modals with j/k/g/G navigation for commit, diff, and file preview\n- Add diff syntax highlighting (+/- line coloring in green/red)\n- Add shift-B for fuzzy branch search with Tab/arrows to navigate matches\n- Add file browser mode (F key) with n/N to navigate, p to preview, d for diff, o to open\n- Add 'o' key in modals to open file in editor (suspends TUI)\n- Fix file index resetting when changing nodes\n- Add syntect + syntect-tui dependencies for future syntax highlighting",
     "files_changed": 7
   },
   {
@@ -116,7 +124,7 @@
     "short_hash": "32f0047",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
-    "message": "feat: add multi-user graph sync with diff/patch model",
+    "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
     "files_changed": 11
   },
   {
@@ -124,7 +132,7 @@
     "short_hash": "e6d548d",
     "author": "Bobby Nathan",
     "date": "2025-12-09T16:28:52-05:00",
-    "message": "Refactor Claude tooling for real-time decision graph logging",
+    "message": "Refactor Claude tooling for real-time decision graph logging\n\nCLAUDE.md:\n- Added MANDATORY workflow section at top\n- Behavioral triggers table (when to log what)\n- Explicit loop: log BEFORE code, sync BEFORE push\n- Emphasized \"user is watching live\"\n\ncontext.md:\n- Cleaner 3-step structure\n- Real-time logging reminder section\n- Memory loop diagram\n\ndecision.md:\n- Added trigger table with examples\n- Full example workflow showing proper order\n- \"LOG BEFORE YOU CODE\" rule emphasized\n\nGraph now at 99 nodes tracking this refactoring.",
     "files_changed": 4
   },
   {
@@ -156,7 +164,7 @@
     "short_hash": "da476ee",
     "author": "Bobby Nathan",
     "date": "2025-12-06T00:38:40-05:00",
-    "message": "Add spelunk page Spike C: narrative story mode",
+    "message": "Add spelunk page Spike C: narrative story mode\n\nA reading-focused walkthrough of the project's evolution:\n- Georgia serif typography for immersive reading\n- Chapters: Prologue, Beginning, Detection, Memory Problem, Living Museum\n- Decision cards pulled from graph-data.json with confidence badges\n- Commit links to GitHub for code traceability\n- Stats section showing graph metrics\n- Sticky TOC with scroll-aware highlighting\n- Mobile responsive design",
     "files_changed": 1
   },
   {
@@ -172,7 +180,7 @@
     "short_hash": "5a2ae23",
     "author": "Bobby Nathan",
     "date": "2025-12-05T23:37:07-05:00",
-    "message": "Add TypeScript build system with type definitions and tests",
+    "message": "Add TypeScript build system with type definitions and tests\n\n- Set up TypeScript compilation for docs/ frontend\n- Added type definitions mirroring Rust backend:\n  - graph.ts: DecisionNode, DecisionEdge, GraphData\n  - analysis.ts: AnalysisResult, BinaryAnalysis, SpectralAnalysis\n- Added 29 Vitest tests for type helper functions\n- Wired up CI to run typecheck and tests before deploy\n- Updated CLAUDE.md with frontend test instructions\n- Fixed Jekyll config to include wasm/ and exclude TS build files",
     "files_changed": 13
   }
 ]
