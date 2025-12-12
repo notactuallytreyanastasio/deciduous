@@ -418,6 +418,14 @@
     - `AGENTS.md`
   - Never have drift between what `deciduous init` creates and what the repo actually uses
 
+- [ ] **AUTOMATE web UI embed sync** (Critical)
+  - **Goal: `deciduous serve` always has latest web UI**
+  - `src/viewer.html` must stay in sync with `web/dist/index.html`
+  - Pre-commit hook: if any `web/src/**` files changed, rebuild and copy to viewer.html
+  - OR: `build.rs` that runs `npm run build` and embeds the result
+  - CI check: compare viewer.html hash with fresh build output
+  - Prevents embarrassing "cargo install shows old UI" bugs
+
 ---
 
 ## Backlog - Architecture & Quality
