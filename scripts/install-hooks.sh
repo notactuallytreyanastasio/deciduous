@@ -61,6 +61,49 @@ if [[ -n "$TYPE_FILES_STAGED" ]]; then
     fi
 fi
 
+# Check if web source files changed - demo must be rebuilt
+WEB_SRC_STAGED=$(git diff --cached --name-only | grep -E '^web/src/' || true)
+DEMO_STAGED=$(git diff --cached --name-only | grep -E '^docs/demo/index\.html$' || true)
+
+if [[ -n "$WEB_SRC_STAGED" ]]; then
+    echo "Web source files changed:"
+    echo "$WEB_SRC_STAGED"
+    echo ""
+
+    if [[ -z "$DEMO_STAGED" ]]; then
+        echo "ERROR: Web source changed but docs/demo/index.html not staged!"
+        echo ""
+        echo "You must rebuild and commit the demo:"
+        echo "  ./scripts/build-demo.sh"
+        echo "  git add docs/demo/index.html"
+        echo ""
+        exit 1
+    fi
+
+    # Verify the staged demo matches a fresh build
+    echo "Verifying demo build is current..."
+    TEMP_BUILD=$(mktemp)
+    (cd "$REPO_ROOT/web" && npm run build --silent 2>/dev/null)
+    cp "$REPO_ROOT/web/dist/index.html" "$TEMP_BUILD"
+
+    # Compare staged demo with fresh build
+    STAGED_DEMO=$(git show :docs/demo/index.html 2>/dev/null || cat "$REPO_ROOT/docs/demo/index.html")
+    FRESH_BUILD=$(cat "$TEMP_BUILD")
+    rm -f "$TEMP_BUILD"
+
+    if [[ "$STAGED_DEMO" != "$FRESH_BUILD" ]]; then
+        echo ""
+        echo "ERROR: Staged docs/demo/index.html doesn't match fresh build!"
+        echo ""
+        echo "Rebuild and re-stage:"
+        echo "  ./scripts/build-demo.sh"
+        echo "  git add docs/demo/index.html"
+        echo ""
+        exit 1
+    fi
+    echo "✓ Demo build is current"
+fi
+
 echo "Pre-commit checks passed."
 EOF
 chmod +x "$HOOKS_DIR/pre-commit"
@@ -132,5 +175,5 @@ echo ""
 echo "Git hooks installed successfully!"
 echo ""
 echo "Hooks installed:"
-echo "  - pre-commit: Runs clippy + validates type synchronization"
+echo "  - pre-commit: Runs clippy + validates types + enforces demo build sync"
 echo "  - pre-push: Full validation (types + tests + build) for main branch"
