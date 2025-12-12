@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#16213e"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Terminal window -->
+  <rect x="40" y="40" width="1120" height="500" rx="12" fill="#0d1117" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Terminal title bar -->
+  <rect x="40" y="40" width="1120" height="36" rx="12" fill="#161b22"/>
+  <rect x="40" y="64" width="1120" height="12" fill="#161b22"/>
+
+  <!-- Traffic lights -->
+  <circle cx="70" cy="58" r="7" fill="#ff5f56"/>
+  <circle cx="94" cy="58" r="7" fill="#ffbd2e"/>
+  <circle cx="118" cy="58" r="7" fill="#27ca40"/>
+
+  <!-- Terminal title -->
+  <text x="600" y="63" text-anchor="middle" fill="#8b949e" font-family="SF Mono, Monaco, monospace" font-size="13">deciduous — decision graph</text>
+
+  <!-- GOAL node (gold) - top center -->
+  <rect x="420" y="95" width="360" height="55" rx="8" fill="#1c1c1c" stroke="#d29922" stroke-width="3"/>
+  <text x="600" y="118" text-anchor="middle" fill="#d29922" font-family="SF Mono, Monaco, monospace" font-size="13" font-weight="bold">GOAL #1</text>
+  <text x="600" y="138" text-anchor="middle" fill="#c9d1d9" font-family="SF Mono, Monaco, monospace" font-size="12">Test lo-fi detection on charlie.flac</text>
+
+  <!-- DECISION node (blue) -->
+  <rect x="420" y="185" width="360" height="55" rx="8" fill="#1c1c1c" stroke="#0969da" stroke-width="3"/>
+  <text x="600" y="208" text-anchor="middle" fill="#0969da" font-family="SF Mono, Monaco, monospace" font-size="13" font-weight="bold">DECISION #2</text>
+  <text x="600" y="228" text-anchor="middle" fill="#c9d1d9" font-family="SF Mono, Monaco, monospace" font-size="12">Lo-fi detection approach</text>
+
+  <!-- OPTION A (purple, dashed - rejected) -->
+  <rect x="80" y="275" width="320" height="50" rx="8" fill="#1c1c1c" stroke="#8250df" stroke-width="2" stroke-dasharray="5,3"/>
+  <text x="240" y="298" text-anchor="middle" fill="#6e6e6e" font-family="SF Mono, Monaco, monospace" font-size="12" font-weight="bold">OPTION #3</text>
+  <text x="240" y="315" text-anchor="middle" fill="#6e6e6e" font-family="SF Mono, Monaco, monospace" font-size="11">Temporal Cutoff Variance</text>
+
+  <!-- OPTION B (purple, solid - chosen) -->
+  <rect x="800" y="275" width="320" height="50" rx="8" fill="#1c1c1c" stroke="#8250df" stroke-width="3"/>
+  <text x="960" y="298" text-anchor="middle" fill="#8250df" font-family="SF Mono, Monaco, monospace" font-size="12" font-weight="bold">OPTION #4</text>
+  <text x="960" y="315" text-anchor="middle" fill="#c9d1d9" font-family="SF Mono, Monaco, monospace" font-size="11">Cross-Frequency Coherence (CFCC)</text>
+
+  <!-- ACTION node (green) -->
+  <rect x="760" y="360" width="360" height="55" rx="8" fill="#1c1c1c" stroke="#2da44e" stroke-width="3"/>
+  <text x="940" y="383" text-anchor="middle" fill="#2da44e" font-family="SF Mono, Monaco, monospace" font-size="13" font-weight="bold">ACTION #7</text>
+  <text x="940" y="403" text-anchor="middle" fill="#c9d1d9" font-family="SF Mono, Monaco, monospace" font-size="12">Implemented CFCC in commit aa464b6</text>
+
+  <!-- OUTCOME node (teal) -->
+  <rect x="760" y="445" width="360" height="55" rx="8" fill="#1c1c1c" stroke="#1f6feb" stroke-width="3"/>
+  <text x="940" y="468" text-anchor="middle" fill="#1f6feb" font-family="SF Mono, Monaco, monospace" font-size="13" font-weight="bold">OUTCOME #8</text>
+  <text x="940" y="488" text-anchor="middle" fill="#c9d1d9" font-family="SF Mono, Monaco, monospace" font-size="12">157 tests pass, detects 25/29 transcodes</text>
+
+  <!-- OBSERVATION node (pink) - left side -->
+  <rect x="80" y="360" width="320" height="55" rx="8" fill="#1c1c1c" stroke="#bf3989" stroke-width="2"/>
+  <text x="240" y="383" text-anchor="middle" fill="#bf3989" font-family="SF Mono, Monaco, monospace" font-size="12" font-weight="bold">OBSERVATION #5</text>
+  <text x="240" y="403" text-anchor="middle" fill="#c9d1d9" font-family="SF Mono, Monaco, monospace" font-size="11">Requires per-window cutoff detection</text>
+
+  <!-- Connecting lines -->
+  <!-- Goal to Decision -->
+  <line x1="600" y1="150" x2="600" y2="185" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Decision to Options -->
+  <line x1="500" y1="240" x2="240" y2="275" stroke="#30363d" stroke-width="2" stroke-dasharray="5,3"/>
+  <line x1="700" y1="240" x2="960" y2="275" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Option A to Observation -->
+  <line x1="240" y1="325" x2="240" y2="360" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Option B to Action -->
+  <line x1="960" y1="325" x2="940" y2="360" stroke="#30363d" stroke-width="2"/>
+
+  <!-- Action to Outcome -->
+  <line x1="940" y1="415" x2="940" y2="445" stroke="#30363d" stroke-width="2"/>
+
+  <!-- "chosen" label on right path -->
+  <text x="840" y="310" fill="#2da44e" font-family="SF Mono, Monaco, monospace" font-size="10">chosen</text>
+
+  <!-- "rejected" label on left path -->
+  <text x="340" y="310" fill="#6e6e6e" font-family="SF Mono, Monaco, monospace" font-size="10">rejected</text>
+
+  <!-- Branding -->
+  <text x="600" y="570" text-anchor="middle" fill="#ffffff" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="700" letter-spacing="3">DECIDUOUS</text>
+  <text x="600" y="598" text-anchor="middle" fill="#8b949e" font-family="system-ui, -apple-system, sans-serif" font-size="15">Decision graph tooling for AI-assisted development</text>
+</svg>
