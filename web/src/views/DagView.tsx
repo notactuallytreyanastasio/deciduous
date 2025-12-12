@@ -39,7 +39,7 @@ interface DagreEdgeData {
 type ViewMode = 'recent' | 'all' | 'single';
 
 // Default number of recent chains to show
-const DEFAULT_RECENT_CHAINS = 1;
+const DEFAULT_RECENT_CHAINS = 3;
 
 /**
  * Get the most recent update time for a chain (max of all node updated_at times)
@@ -322,30 +322,32 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
 
   return (
     <div style={styles.container}>
-      {/* Controls */}
-      <div style={styles.controls}>
-        <h2 style={styles.title}>DAG View</h2>
+      {/* Top Bar - Recency Filter */}
+      <div style={styles.topBar}>
+        <div style={styles.topBarLeft}>
+          <span style={styles.topBarTitle}>Recency Filter</span>
+          <span style={styles.topBarSubtitle} title="Showing most recently active goal chains first. Each chain includes a goal and all its connected decisions, actions, and outcomes.">
+            Showing {Math.min(recentChainCount, goalChains.length)} of {goalChains.length} goal chains
+          </span>
+        </div>
 
-        {/* View Mode Indicator */}
-        <div style={styles.viewModeSection}>
-          <div style={styles.viewModeLabel}>
-            {viewMode === 'recent' && `Showing ${Math.min(recentChainCount, goalChains.length)} of ${goalChains.length} goal chains`}
-            {viewMode === 'all' && `Showing all ${sortedChains.length} chains`}
-            {viewMode === 'single' && 'Focused on single chain'}
-          </div>
-
+        <div style={styles.topBarCenter}>
           {viewMode === 'recent' && hiddenChainCount > 0 && (
-            <div style={styles.expandButtons}>
-              <button onClick={() => handleShowMore(1)} style={styles.expandBtn}>
-                +1
+            <>
+              <button
+                onClick={() => handleShowMore(1)}
+                style={styles.topBarBtn}
+                title="Show one more goal chain"
+              >
+                +1 Chain
               </button>
               {!expandInputVisible ? (
                 <button
                   onClick={() => setExpandInputVisible(true)}
-                  style={styles.expandBtn}
-                  title="Add custom number of chains"
+                  style={styles.topBarBtn}
+                  title="Add a specific number of chains"
                 >
-                  ...
+                  +N...
                 </button>
               ) : (
                 <div style={styles.expandInputRow}>
@@ -356,30 +358,59 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
                     value={expandInputValue}
                     onChange={e => setExpandInputValue(e.target.value)}
                     onKeyDown={e => e.key === 'Enter' && handleExpandSubmit()}
-                    placeholder="#"
-                    style={styles.expandInput}
+                    placeholder={String(hiddenChainCount)}
+                    style={styles.topBarInput}
                     autoFocus
                   />
-                  <button onClick={handleExpandSubmit} style={styles.expandBtn}>
+                  <button onClick={handleExpandSubmit} style={styles.topBarBtn}>
                     Add
                   </button>
                 </div>
               )}
-              <button onClick={handleShowAll} style={styles.expandBtn}>
-                All
+              <button
+                onClick={handleShowAll}
+                style={styles.topBarBtnSecondary}
+                title="Show all goal chains in the graph"
+              >
+                Show All ({goalChains.length})
               </button>
-            </div>
+            </>
           )}
-
-          {viewMode !== 'recent' && (
-            <button onClick={handleShowRecent} style={styles.expandBtn}>
-              Show recent only
+          {viewMode === 'all' && (
+            <button onClick={handleShowRecent} style={styles.topBarBtn}>
+              Show Recent Only
+            </button>
+          )}
+          {viewMode === 'single' && (
+            <button onClick={handleShowRecent} style={styles.topBarBtn}>
+              Back to Recent
             </button>
           )}
         </div>
 
+        <div style={styles.topBarRight}>
+          <span style={styles.topBarStat}>{visibleNodeIds.size} nodes</span>
+          <span style={styles.topBarStatDivider}>·</span>
+          <span style={styles.topBarStat}>{visibleChains.length} chains</span>
+        </div>
+      </div>
+
+      {/* Hidden chains indicator */}
+      {viewMode === 'recent' && hiddenChainCount > 0 && (
+        <div style={styles.hiddenIndicator}>
+          <span style={styles.hiddenIndicatorText}>
+            + {hiddenChainCount} older goal chain{hiddenChainCount !== 1 ? 's' : ''} not shown
+          </span>
+          <button onClick={handleShowAll} style={styles.hiddenIndicatorBtn}>
+            Show all
+          </button>
+        </div>
+      )}
+
+      {/* Side Controls */}
+      <div style={styles.controls}>
         <div style={styles.section}>
-          <label style={styles.label}>Focus Chain</label>
+          <label style={styles.label}>Jump to Chain</label>
           <select
             value={focusChainIndex ?? ''}
             onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
@@ -404,17 +435,6 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
           ))}
         </div>
 
-        <div style={styles.statsSection}>
-          <div style={styles.statItem}>
-            <span style={styles.statValue}>{visibleNodeIds.size}</span>
-            <span style={styles.statLabel}>visible nodes</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statValue}>{visibleChains.length}</span>
-            <span style={styles.statLabel}>chains shown</span>
-          </div>
-        </div>
-
         <div style={styles.zoomInfo}>
           Zoom: {Math.round(zoom * 100)}%
         </div>
@@ -425,34 +445,41 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
         <svg ref={svgRef} style={styles.svg} />
       </div>
 
-      {/* Detail Panel */}
+      {/* Detail Modal */}
       {selectedNode && (
-        <div style={styles.detailPanel}>
-          <button onClick={() => setSelectedNode(null)} style={styles.closeBtn}>×</button>
-
-          <div style={styles.detailHeader}>
-            <TypeBadge type={selectedNode.node_type} />
-            <ConfidenceBadge confidence={getConfidence(selectedNode)} />
-            <CommitBadge commit={getCommit(selectedNode)} />
-          </div>
-
-          <h3 style={styles.detailTitle}>{selectedNode.title}</h3>
-          <p style={styles.detailMeta}>
-            Node #{selectedNode.id} · {new Date(selectedNode.created_at).toLocaleString()}
-          </p>
-
-          {selectedNode.description && (
-            <div style={styles.detailSection}>
-              <p style={styles.description}>{selectedNode.description}</p>
+        <div style={styles.modalBackdrop} onClick={() => setSelectedNode(null)}>
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalHeaderLeft}>
+                <TypeBadge type={selectedNode.node_type} />
+                <ConfidenceBadge confidence={getConfidence(selectedNode)} />
+                <CommitBadge commit={getCommit(selectedNode)} />
+              </div>
+              <button onClick={() => setSelectedNode(null)} style={styles.modalCloseBtn}>×</button>
             </div>
-          )}
 
-          {/* Connections */}
-          <ConnectionsList
-            node={selectedNode}
-            graphData={graphData}
-            onSelectNode={handleSelectNodeById}
-          />
+            <h2 style={styles.modalTitle}>{selectedNode.title}</h2>
+            <p style={styles.modalMeta}>
+              Node #{selectedNode.id} · Created {new Date(selectedNode.created_at).toLocaleString()}
+            </p>
+
+            {selectedNode.description && (
+              <div style={styles.modalSection}>
+                <p style={styles.modalDescription}>{selectedNode.description}</p>
+              </div>
+            )}
+
+            {/* Connections - clickable to navigate */}
+            <ConnectionsList
+              node={selectedNode}
+              graphData={graphData}
+              onSelectNode={handleSelectNodeById}
+            />
+
+            <div style={styles.modalFooter}>
+              <span style={styles.modalHint}>Click connected nodes to navigate · Click outside or × to close</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -519,64 +546,125 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     height: '100%',
     display: 'flex',
+    flexDirection: 'column',
     position: 'relative',
     backgroundColor: '#0d1117',
   },
+  // Top Bar - Prominent recency filter controls
+  topBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '12px 20px',
+    backgroundColor: '#161b22',
+    borderBottom: '1px solid #30363d',
+    zIndex: 20,
+    flexShrink: 0,
+  },
+  topBarLeft: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: '12px',
+  },
+  topBarTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#58a6ff',
+  },
+  topBarSubtitle: {
+    fontSize: '13px',
+    color: '#8b949e',
+    cursor: 'help',
+  },
+  topBarCenter: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  topBarBtn: {
+    padding: '6px 12px',
+    backgroundColor: '#238636',
+    border: 'none',
+    borderRadius: '6px',
+    color: '#fff',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+  },
+  topBarBtnSecondary: {
+    padding: '6px 12px',
+    backgroundColor: '#30363d',
+    border: '1px solid #484f58',
+    borderRadius: '6px',
+    color: '#c9d1d9',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+  },
+  topBarInput: {
+    width: '50px',
+    padding: '5px 8px',
+    backgroundColor: '#0d1117',
+    border: '1px solid #238636',
+    borderRadius: '6px',
+    color: '#fff',
+    fontSize: '12px',
+    textAlign: 'center' as const,
+  },
+  topBarRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  topBarStat: {
+    fontSize: '12px',
+    color: '#8b949e',
+  },
+  topBarStatDivider: {
+    color: '#484f58',
+  },
+  // Hidden chains indicator - visual hint of more content
+  hiddenIndicator: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '12px',
+    padding: '8px 20px',
+    backgroundColor: '#1c2128',
+    borderBottom: '1px solid #30363d',
+    flexShrink: 0,
+  },
+  hiddenIndicatorText: {
+    fontSize: '12px',
+    color: '#f0883e',
+    fontStyle: 'italic',
+  },
+  hiddenIndicatorBtn: {
+    padding: '4px 10px',
+    backgroundColor: 'transparent',
+    border: '1px solid #f0883e',
+    borderRadius: '4px',
+    color: '#f0883e',
+    fontSize: '11px',
+    cursor: 'pointer',
+  },
+  // Side controls (simplified)
   controls: {
     position: 'absolute',
-    top: '20px',
+    top: '70px',
     left: '20px',
     backgroundColor: '#16213e',
     padding: '15px',
     borderRadius: '8px',
     zIndex: 10,
-    width: '220px',
-  },
-  title: {
-    fontSize: '16px',
-    margin: '0 0 15px 0',
-    color: '#eee',
-  },
-  viewModeSection: {
-    marginBottom: '15px',
-    padding: '10px',
-    backgroundColor: '#1a1a2e',
-    borderRadius: '6px',
-  },
-  viewModeLabel: {
-    fontSize: '11px',
-    color: '#8b949e',
-    marginBottom: '8px',
-  },
-  expandButtons: {
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
-  },
-  expandBtn: {
-    padding: '6px 10px',
-    backgroundColor: '#238636',
-    border: 'none',
-    borderRadius: '4px',
-    color: '#fff',
-    fontSize: '11px',
-    cursor: 'pointer',
-    transition: 'background-color 0.15s',
+    width: '180px',
   },
   expandInputRow: {
     display: 'flex',
     gap: '4px',
     alignItems: 'center',
-  },
-  expandInput: {
-    width: '40px',
-    padding: '5px 6px',
-    backgroundColor: '#1a1a2e',
-    border: '1px solid #238636',
-    borderRadius: '4px',
-    color: '#fff',
-    fontSize: '11px',
-    textAlign: 'center' as const,
   },
   section: {
     marginBottom: '15px',
@@ -619,24 +707,6 @@ const styles: Record<string, React.CSSProperties> = {
     height: '10px',
     borderRadius: '50%',
   },
-  statsSection: {
-    marginTop: '15px',
-    display: 'flex',
-    gap: '15px',
-  },
-  statItem: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
-  statValue: {
-    fontSize: '18px',
-    fontWeight: 'bold',
-    color: '#58a6ff',
-  },
-  statLabel: {
-    fontSize: '10px',
-    color: '#666',
-  },
   zoomInfo: {
     marginTop: '15px',
     fontSize: '11px',
@@ -644,77 +714,118 @@ const styles: Record<string, React.CSSProperties> = {
   },
   svgContainer: {
     flex: 1,
-    height: '100%',
+    position: 'relative',
+    minHeight: 0,
   },
   svg: {
     width: '100%',
     height: '100%',
   },
-  detailPanel: {
-    position: 'absolute',
-    top: '20px',
-    right: '20px',
-    bottom: '20px',
-    width: '300px',
-    backgroundColor: '#16213e',
-    borderRadius: '8px',
-    padding: '20px',
+  // Modal styles
+  modalBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 100,
+  },
+  modal: {
+    backgroundColor: '#161b22',
+    borderRadius: '12px',
+    padding: '24px',
+    width: '90%',
+    maxWidth: '600px',
+    maxHeight: '80vh',
     overflowY: 'auto',
-    zIndex: 10,
+    border: '1px solid #30363d',
+    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
   },
-  closeBtn: {
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    width: '28px',
-    height: '28px',
-    border: 'none',
-    background: '#333',
-    color: '#fff',
-    borderRadius: '4px',
-    fontSize: '18px',
-    cursor: 'pointer',
+  modalHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '16px',
   },
-  detailHeader: {
+  modalHeaderLeft: {
     display: 'flex',
     gap: '8px',
-    marginBottom: '10px',
     flexWrap: 'wrap',
   },
-  detailTitle: {
-    fontSize: '16px',
-    margin: '0 0 8px 0',
-    color: '#eee',
+  modalCloseBtn: {
+    width: '32px',
+    height: '32px',
+    border: 'none',
+    background: '#30363d',
+    color: '#8b949e',
+    borderRadius: '6px',
+    fontSize: '20px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background-color 0.15s',
   },
-  detailMeta: {
-    fontSize: '12px',
-    color: '#888',
+  modalTitle: {
+    fontSize: '20px',
+    fontWeight: 600,
+    margin: '0 0 8px 0',
+    color: '#e6edf3',
+  },
+  modalMeta: {
+    fontSize: '13px',
+    color: '#8b949e',
+    margin: '0 0 16px 0',
+  },
+  modalSection: {
+    marginBottom: '20px',
+    padding: '12px',
+    backgroundColor: '#0d1117',
+    borderRadius: '8px',
+  },
+  modalDescription: {
+    fontSize: '14px',
+    color: '#c9d1d9',
+    lineHeight: 1.6,
     margin: 0,
   },
+  modalFooter: {
+    marginTop: '20px',
+    paddingTop: '16px',
+    borderTop: '1px solid #30363d',
+  },
+  modalHint: {
+    fontSize: '12px',
+    color: '#6e7681',
+    fontStyle: 'italic',
+  },
+  // Connection styles (used inside modal)
   detailSection: {
-    marginTop: '15px',
+    marginTop: '16px',
   },
   sectionTitle: {
-    fontSize: '11px',
-    color: '#888',
-    margin: '0 0 8px 0',
+    fontSize: '12px',
+    color: '#8b949e',
+    margin: '0 0 10px 0',
     textTransform: 'uppercase',
-  },
-  description: {
-    fontSize: '13px',
-    color: '#ccc',
-    lineHeight: 1.5,
-    margin: 0,
+    fontWeight: 600,
   },
   connection: {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
-    padding: '6px 8px',
-    backgroundColor: '#1a1a2e',
-    borderRadius: '4px',
-    marginBottom: '4px',
+    gap: '8px',
+    padding: '10px 12px',
+    backgroundColor: '#0d1117',
+    borderRadius: '6px',
+    marginBottom: '6px',
     cursor: 'pointer',
-    fontSize: '11px',
+    fontSize: '13px',
+    color: '#c9d1d9',
+    transition: 'background-color 0.15s',
+    border: '1px solid transparent',
   },
 };
