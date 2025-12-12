@@ -1,11 +1,11 @@
 [
   {
-    "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",
-    "short_hash": "6faecb3",
+    "hash": "b84cde4f36658dce0d6b4d4143dc7bebb6c6e918",
+    "short_hash": "b84cde4",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T17:44:35-05:00",
-    "message": "feat: complete types unification with ts-rs generation",
-    "files_changed": 5
+    "date": "2025-12-12T17:58:37-05:00",
+    "message": "feat: add opencode editor support",
+    "files_changed": 2
   },
   {
     "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",

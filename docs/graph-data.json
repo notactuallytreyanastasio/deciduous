@@ -5081,6 +5081,72 @@
       "created_at": "2025-12-12T17:44:38.415672-05:00",
       "updated_at": "2025-12-12T17:44:38.415672-05:00",
       "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"commit\":\"6faecb3\"}"
+    },
+    {
+      "id": 463,
+      "change_id": "4a82d2d6-6cf6-4c7b-9a3f-b97d6b0988d5",
+      "node_type": "goal",
+      "title": "Release OpenCode support and Roadmap updates",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:12.667582-05:00",
+      "updated_at": "2025-12-12T17:57:12.667582-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"User request: merge opencode, merge roadmap, cut patch release\"}"
+    },
+    {
+      "id": 464,
+      "change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "node_type": "decision",
+      "title": "Separate OpenCode support from Types Unification",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:23.135248-05:00",
+      "updated_at": "2025-12-12T17:57:23.135248-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Keep PRs atomic. OpenCode support should be its own feature branch.\"}"
+    },
+    {
+      "id": 465,
+      "change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+      "node_type": "action",
+      "title": "Stash OpenCode changes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:26.569863-05:00",
+      "updated_at": "2025-12-12T17:57:26.569863-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Moving changes to a new branch later\"}"
+    },
+    {
+      "id": 466,
+      "change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+      "node_type": "action",
+      "title": "Commit Roadmap and AGENTS.md updates directly to branch",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:42.392696-05:00",
+      "updated_at": "2025-12-12T17:57:42.392696-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Roadmap updates can go in current branch/main, they are documentation\"}"
+    },
+    {
+      "id": 467,
+      "change_id": "33f7afc8-17ac-4cdf-8703-142d555aa56b",
+      "node_type": "outcome",
+      "title": "Docs merged to refactor branch",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:58:00.746865-05:00",
+      "updated_at": "2025-12-12T17:58:00.746865-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Roadmap and AGENTS.md now included in PR #21\"}"
+    },
+    {
+      "id": 468,
+      "change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+      "node_type": "outcome",
+      "title": "OpenCode support committed to new branch",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:58:47.259687-05:00",
+      "updated_at": "2025-12-12T17:58:47.259687-05:00",
+      "metadata_json": "{\"branch\":\"feat/opencode-support\",\"prompt\":\"Changes applied from stash to feat/opencode-support\"}"
     }
   ],
   "edges": [
@@ -9483,6 +9549,61 @@
       "weight": 1.0,
       "rationale": "Commit completed",
       "created_at": "2025-12-12T17:44:38.423244-05:00"
+    },
+    {
+      "id": 401,
+      "from_node_id": 463,
+      "to_node_id": 464,
+      "from_change_id": "4a82d2d6-6cf6-4c7b-9a3f-b97d6b0988d5",
+      "to_change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Separation of concerns",
+      "created_at": "2025-12-12T17:57:23.142943-05:00"
+    },
+    {
+      "id": 402,
+      "from_node_id": 464,
+      "to_node_id": 465,
+      "from_change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "to_change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Preparing to switch branches",
+      "created_at": "2025-12-12T17:57:26.582093-05:00"
+    },
+    {
+      "id": 403,
+      "from_node_id": 464,
+      "to_node_id": 466,
+      "from_change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "to_change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation updates can merge with type fix",
+      "created_at": "2025-12-12T17:57:42.400395-05:00"
+    },
+    {
+      "id": 404,
+      "from_node_id": 466,
+      "to_node_id": 467,
+      "from_change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+      "to_change_id": "33f7afc8-17ac-4cdf-8703-142d555aa56b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation included",
+      "created_at": "2025-12-12T17:58:00.754881-05:00"
+    },
+    {
+      "id": 405,
+      "from_node_id": 465,
+      "to_node_id": 468,
+      "from_change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+      "to_change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Stash restored",
+      "created_at": "2025-12-12T17:58:47.267843-05:00"
     }
   ]
 }
