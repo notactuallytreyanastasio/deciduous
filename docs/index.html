@@ -178,14 +178,20 @@
             margin-bottom: 20px;
         }
         .demo-player-container {
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            margin: 25px 0;
+            position: relative;
             width: 100vw;
-            max-width: 1200px;
-            margin-left: 50%;
-            transform: translateX(-50%);
+            left: calc(-50vw + 50%);
+            background: #1e1e1e;
+            padding: 20px 0;
+        }
+        .demo-player-container iframe {
+            display: block;
+            width: 90vw;
+            max-width: 1400px;
+            height: 70vh;
+            min-height: 500px;
+            margin: 0 auto;
+            border: 0;
         }
 
         .workflow-section {
@@ -315,12 +321,11 @@
             <h2>See It In Action</h2>
             <p>Watch a full session building with deciduous: initialization, decision logging, graph visualization, and context recovery.</p>
             <div class="demo-player-container">
-                <iframe src="https://asciinema.org/a/761574/iframe?speed=1.4&idleTimeLimit=2&theme=asciinema&preload=1"
+                <iframe src="https://asciinema.org/a/761574/iframe?speed=1.4&idleTimeLimit=2&theme=asciinema&preload=1&fit=width"
                     id="asciicast-iframe-761574"
                     name="asciicast-iframe-761574"
                     scrolling="no"
-                    allowfullscreen="true"
-                    style="width: 100%; height: 600px; border: 0; overflow: hidden;">
+                    allowfullscreen="true">
                 </iframe>
             </div>
         </section>
