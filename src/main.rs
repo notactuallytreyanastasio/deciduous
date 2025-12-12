@@ -515,10 +515,18 @@ fn main() {
                 Ok(graph) => {
                     match serde_json::to_string_pretty(&graph) {
                         Ok(json) => {
-                            match std::fs::write(&output_path, json) {
+                            match std::fs::write(&output_path, &json) {
                                 Ok(()) => {
                                     println!("{} graph to {}", "Exported".green(), output_path.display());
                                     println!("  {} nodes, {} edges", graph.nodes.len(), graph.edges.len());
+
+                                    // Also sync to docs/demo/ if it exists (for GitHub Pages demo)
+                                    let demo_path = PathBuf::from("docs/demo/graph-data.json");
+                                    if demo_path.parent().map(|p| p.exists()).unwrap_or(false) {
+                                        if let Err(e) = std::fs::write(&demo_path, &json) {
+                                            eprintln!("{} Also writing to demo/: {}", "Warning:".yellow(), e);
+                                        }
+                                    }
                                 }
                                 Err(e) => {
                                     eprintln!("{} Writing file: {}", "Error:".red(), e);
