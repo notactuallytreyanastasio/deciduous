@@ -1,10 +1,26 @@
 [
   {
-    "hash": "f71ecdaed12a84f28646a25e8cde729600671e57",
-    "short_hash": "f71ecda",
+    "hash": "d699f36a6d38853bec4c0e9eebd53fa9d54919da",
+    "short_hash": "d699f36",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T02:45:57-05:00",
-    "message": "feat: dynamically fetch node count on landing page",
+    "date": "2025-12-12T02:57:43-05:00",
+    "message": "feat: export git history to JSON and show commit messages in web UI",
+    "files_changed": 10
+  },
+  {
+    "hash": "d699f36a6d38853bec4c0e9eebd53fa9d54919da",
+    "short_hash": "d699f36",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T02:57:43-05:00",
+    "message": "feat: export git history to JSON and show commit messages in web UI",
+    "files_changed": 10
+  },
+  {
+    "hash": "84f4ca043aef3f91b4794cb968619423a67542d6",
+    "short_hash": "84f4ca0",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T02:57:33-05:00",
+    "message": "docs: restructure README with why-first approach",
     "files_changed": 1
   },
   {

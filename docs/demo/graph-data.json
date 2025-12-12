@@ -4036,6 +4036,105 @@
       "created_at": "2025-12-12T02:45:02.209991-05:00",
       "updated_at": "2025-12-12T02:45:02.209991-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+    },
+    {
+      "id": 368,
+      "change_id": "5f70cc68-41fa-4cf9-9afb-d899222d4e1f",
+      "node_type": "goal",
+      "title": "Revamp README with why-first structure",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:10.055758-05:00",
+      "updated_at": "2025-12-12T03:04:10.055758-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User asked: re-think the README now that GH pages is fleshed out - convey the why first, then premises, quick start, reference. Link to GH pages DAG and demo asciicast.\"}"
+    },
+    {
+      "id": 369,
+      "change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+      "node_type": "decision",
+      "title": "Structure README for why-first narrative",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:32.098490-05:00",
+      "updated_at": "2025-12-12T03:04:32.098490-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":90}"
+    },
+    {
+      "id": 370,
+      "change_id": "5a7fbcf7-9694-4f84-9d6f-7771dbdb231d",
+      "node_type": "action",
+      "title": "Add See It In Action section with demo links at top",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:33.367124-05:00",
+      "updated_at": "2025-12-12T03:04:33.367124-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
+    },
+    {
+      "id": 371,
+      "change_id": "1dbda898-98f3-4e2e-8af1-59f0b80e6dba",
+      "node_type": "action",
+      "title": "Expand Premises to 8 points covering human+AI benefits",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:35.260109-05:00",
+      "updated_at": "2025-12-12T03:04:35.260109-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User: go into how it helps programmer think, see PR flow, used by both dev and robot\"}"
+    },
+    {
+      "id": 372,
+      "change_id": "bb272286-d5bf-429e-b0a0-9e4ab478a9f4",
+      "node_type": "action",
+      "title": "Add Who Uses It section for dev/AI/team perspectives",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:36.630191-05:00",
+      "updated_at": "2025-12-12T03:04:36.630191-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
+    },
+    {
+      "id": 373,
+      "change_id": "4104ba5f-894e-4a91-9ec3-76f38e598bd7",
+      "node_type": "action",
+      "title": "Expand Web Viewer and TUI sections with full feature lists",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:39.110940-05:00",
+      "updated_at": "2025-12-12T03:04:39.110940-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User: make sure it mentions Web + TUI both with full functionalities\"}"
+    },
+    {
+      "id": 374,
+      "change_id": "df636272-b45f-48f3-b92e-0b2e36f5a239",
+      "node_type": "outcome",
+      "title": "README restructured - PR #17 created",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:04:41.325187-05:00",
+      "updated_at": "2025-12-12T03:04:41.325187-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"commit\":\"84f4ca0\",\"confidence\":95}"
+    },
+    {
+      "id": 375,
+      "change_id": "297d3a98-a550-4d98-85d0-ee89c043a0c4",
+      "node_type": "outcome",
+      "title": "Implemented git-history.json export and web UI commit message display",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:06:43.440388-05:00",
+      "updated_at": "2025-12-12T03:06:43.440388-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"commit\":\"d699f36\",\"confidence\":95}"
+    },
+    {
+      "id": 376,
+      "change_id": "359eea77-1997-46e4-9ecb-2e0f0a93d33c",
+      "node_type": "action",
+      "title": "Add Steve Klabnik-style user guide to roadmap as high priority",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:08:14.796746-05:00",
+      "updated_at": "2025-12-12T03:08:14.796746-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User: add to roadmap a steve klabnik style user guide like his jj tutorial that goes through a real use-case live\"}"
     }
   ],
   "edges": [
@@ -7426,6 +7525,94 @@
       "weight": 1.0,
       "rationale": "Release complete",
       "created_at": "2025-12-12T02:45:02.218457-05:00"
+    },
+    {
+      "id": 309,
+      "from_node_id": 368,
+      "to_node_id": 369,
+      "from_change_id": "5f70cc68-41fa-4cf9-9afb-d899222d4e1f",
+      "to_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Key structural decision",
+      "created_at": "2025-12-12T03:04:32.106463-05:00"
+    },
+    {
+      "id": 310,
+      "from_node_id": 369,
+      "to_node_id": 370,
+      "from_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+      "to_change_id": "5a7fbcf7-9694-4f84-9d6f-7771dbdb231d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Prominent demo links",
+      "created_at": "2025-12-12T03:04:33.374146-05:00"
+    },
+    {
+      "id": 311,
+      "from_node_id": 369,
+      "to_node_id": 371,
+      "from_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+      "to_change_id": "1dbda898-98f3-4e2e-8af1-59f0b80e6dba",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Core philosophy expansion",
+      "created_at": "2025-12-12T03:04:35.267577-05:00"
+    },
+    {
+      "id": 312,
+      "from_node_id": 369,
+      "to_node_id": 372,
+      "from_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+      "to_change_id": "bb272286-d5bf-429e-b0a0-9e4ab478a9f4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Clarify audience",
+      "created_at": "2025-12-12T03:04:36.638319-05:00"
+    },
+    {
+      "id": 313,
+      "from_node_id": 369,
+      "to_node_id": 373,
+      "from_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+      "to_change_id": "4104ba5f-894e-4a91-9ec3-76f38e598bd7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Interface documentation",
+      "created_at": "2025-12-12T03:04:39.119024-05:00"
+    },
+    {
+      "id": 314,
+      "from_node_id": 368,
+      "to_node_id": 374,
+      "from_change_id": "5f70cc68-41fa-4cf9-9afb-d899222d4e1f",
+      "to_change_id": "df636272-b45f-48f3-b92e-0b2e36f5a239",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-12T03:04:41.332348-05:00"
+    },
+    {
+      "id": 315,
+      "from_node_id": 77,
+      "to_node_id": 375,
+      "from_change_id": "dc955a4d-8aee-44d2-be3b-5c5f200444a9",
+      "to_change_id": "297d3a98-a550-4d98-85d0-ee89c043a0c4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "git-history.json export enables showing commit messages in web UI",
+      "created_at": "2025-12-12T03:07:03.642361-05:00"
+    },
+    {
+      "id": 316,
+      "from_node_id": 368,
+      "to_node_id": 375,
+      "from_change_id": "5f70cc68-41fa-4cf9-9afb-d899222d4e1f",
+      "to_change_id": "297d3a98-a550-4d98-85d0-ee89c043a0c4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation planning",
+      "created_at": "2025-12-12T03:08:14.804245-05:00"
     }
   ]
 }
