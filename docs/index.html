@@ -182,14 +182,12 @@
             border-radius: 8px;
             overflow: hidden;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            margin: 25px -100px;
-            width: calc(100% + 200px);
-        }
-        @media (max-width: 1100px) {
-            .demo-player-container {
-                margin: 25px -20px;
-                width: calc(100% + 40px);
-            }
+            margin: 25px 0;
+            width: 100vw;
+            position: relative;
+            left: 50%;
+            transform: translateX(-50%);
+            max-width: 1400px;
         }
         #demo-player {
             width: 100%;
