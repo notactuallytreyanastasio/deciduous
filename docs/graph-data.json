@@ -3838,6 +3838,182 @@
       "created_at": "2025-12-12T01:53:52.298626-05:00",
       "updated_at": "2025-12-12T01:53:52.298626-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"80c5988\",\"confidence\":95}"
+    },
+    {
+      "id": 350,
+      "change_id": "c9161d92-056d-4b97-8359-244ab42b7833",
+      "node_type": "goal",
+      "title": "DAG view lazy loading - show recent clusters first",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:16:00.561689-05:00",
+      "updated_at": "2025-12-12T02:16:00.561689-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":90,\"prompt\":\"User wants DAG to only show most recent 3-4 clusters by default, with ability to expand/load more with button clicks. Currently loads all 349 nodes which is overwhelming.\"}"
+    },
+    {
+      "id": 351,
+      "change_id": "0275e285-69e5-4d7c-8a5f-99cc13f4ce22",
+      "node_type": "decision",
+      "title": "How to filter DAG to recent chains",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:17:03.229831-05:00",
+      "updated_at": "2025-12-12T02:17:03.229831-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":85}"
+    },
+    {
+      "id": 352,
+      "change_id": "fb51ecdd-86e6-45a2-87d5-bd28b29083ec",
+      "node_type": "action",
+      "title": "Implemented DAG recency filtering in web view",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:24:22.682682-05:00",
+      "updated_at": "2025-12-12T02:24:22.682682-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 353,
+      "change_id": "b83af220-5a32-4e53-8dc2-c0cbc878eca4",
+      "node_type": "outcome",
+      "title": "PR #15 created with full implementation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:24:22.701253-05:00",
+      "updated_at": "2025-12-12T02:24:22.701253-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 354,
+      "change_id": "697c02a1-d9da-4331-bb4b-3e9e724aaf19",
+      "node_type": "decision",
+      "title": "Web vs TUI implementation order",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.579105-05:00",
+      "updated_at": "2025-12-12T02:26:45.579105-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":85}"
+    },
+    {
+      "id": 355,
+      "change_id": "fcf62642-471a-4521-9b65-b31db7d68679",
+      "node_type": "option",
+      "title": "Start with web DAG view",
+      "description": null,
+      "status": "completed",
+      "created_at": "2025-12-12T02:26:45.773671-05:00",
+      "updated_at": "2025-12-12T02:27:04.726539-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":90}"
+    },
+    {
+      "id": 356,
+      "change_id": "2b290504-9e68-44d0-bf14-49f06dc7bcef",
+      "node_type": "option",
+      "title": "Start with TUI DAG view",
+      "description": null,
+      "status": "rejected",
+      "created_at": "2025-12-12T02:26:45.798160-05:00",
+      "updated_at": "2025-12-12T02:27:04.735371-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":70}"
+    },
+    {
+      "id": 357,
+      "change_id": "9db4e6f0-96e3-4efc-b1e0-e5e82e2d4723",
+      "node_type": "action",
+      "title": "Add ViewMode state type for recent/all/single",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.817652-05:00",
+      "updated_at": "2025-12-12T02:26:45.817652-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 358,
+      "change_id": "b13e71cb-4989-4eb5-b254-b5fd391b6980",
+      "node_type": "action",
+      "title": "Implement getChainLastUpdated() for sorting",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.836122-05:00",
+      "updated_at": "2025-12-12T02:26:45.836122-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 359,
+      "change_id": "01d90c23-d5cc-4e58-88b3-1c80e7bf33dc",
+      "node_type": "action",
+      "title": "Implement sortChainsByRecency() function",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.854415-05:00",
+      "updated_at": "2025-12-12T02:26:45.854415-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 360,
+      "change_id": "8551fca5-755a-415e-a27a-38c50a3ada9c",
+      "node_type": "action",
+      "title": "Add expand controls UI with +N more buttons",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.872956-05:00",
+      "updated_at": "2025-12-12T02:26:45.872956-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":90}"
+    },
+    {
+      "id": 361,
+      "change_id": "d8635b08-e330-416c-a3c3-1f0f34e9c59c",
+      "node_type": "action",
+      "title": "Add Chain struct to Rust TUI state.rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.889971-05:00",
+      "updated_at": "2025-12-12T02:26:45.889971-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 362,
+      "change_id": "4a6292da-61ed-4ac7-849d-098781f06ca0",
+      "node_type": "action",
+      "title": "Implement build_chains() in Rust",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.905289-05:00",
+      "updated_at": "2025-12-12T02:26:45.905289-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 363,
+      "change_id": "754022e7-3cac-4bd5-a7ec-ffad34fed80e",
+      "node_type": "action",
+      "title": "Add 6 unit tests for chain recency functions",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.920655-05:00",
+      "updated_at": "2025-12-12T02:26:45.920655-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 364,
+      "change_id": "7d06b119-f17a-4fa1-878e-49f2251923a9",
+      "node_type": "observation",
+      "title": "TypeScript and Rust implementations mirror each other",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:26:45.943648-05:00",
+      "updated_at": "2025-12-12T02:26:45.943648-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":90}"
+    },
+    {
+      "id": 365,
+      "change_id": "a3fa3194-7bb9-4aa0-887b-0de099baa3e2",
+      "node_type": "action",
+      "title": "Refactor: default to 1 chain, +1 button with ... expand input",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:27:04.756652-05:00",
+      "updated_at": "2025-12-12T02:27:04.756652-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":90}"
     }
   ],
   "edges": [
@@ -7019,6 +7195,193 @@
       "weight": 1.0,
       "rationale": "Roadmap item added",
       "created_at": "2025-12-12T01:54:00.662111-05:00"
+    },
+    {
+      "id": 290,
+      "from_node_id": 351,
+      "to_node_id": 352,
+      "from_change_id": "0275e285-69e5-4d7c-8a5f-99cc13f4ce22",
+      "to_change_id": "fb51ecdd-86e6-45a2-87d5-bd28b29083ec",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Chose recency-based approach",
+      "created_at": "2025-12-12T02:24:29.203738-05:00"
+    },
+    {
+      "id": 291,
+      "from_node_id": 352,
+      "to_node_id": 353,
+      "from_change_id": "fb51ecdd-86e6-45a2-87d5-bd28b29083ec",
+      "to_change_id": "b83af220-5a32-4e53-8dc2-c0cbc878eca4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-12T02:24:29.211856-05:00"
+    },
+    {
+      "id": 292,
+      "from_node_id": 350,
+      "to_node_id": 351,
+      "from_change_id": "c9161d92-056d-4b97-8359-244ab42b7833",
+      "to_change_id": "0275e285-69e5-4d7c-8a5f-99cc13f4ce22",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Deciding implementation approach",
+      "created_at": "2025-12-12T02:24:34.543127-05:00"
+    },
+    {
+      "id": 293,
+      "from_node_id": 351,
+      "to_node_id": 354,
+      "from_change_id": "0275e285-69e5-4d7c-8a5f-99cc13f4ce22",
+      "to_change_id": "697c02a1-d9da-4331-bb4b-3e9e724aaf19",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Sub-decision on implementation order",
+      "created_at": "2025-12-12T02:26:55.796789-05:00"
+    },
+    {
+      "id": 294,
+      "from_node_id": 354,
+      "to_node_id": 355,
+      "from_change_id": "697c02a1-d9da-4331-bb4b-3e9e724aaf19",
+      "to_change_id": "fcf62642-471a-4521-9b65-b31db7d68679",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option A",
+      "created_at": "2025-12-12T02:26:55.805025-05:00"
+    },
+    {
+      "id": 295,
+      "from_node_id": 354,
+      "to_node_id": 356,
+      "from_change_id": "697c02a1-d9da-4331-bb4b-3e9e724aaf19",
+      "to_change_id": "2b290504-9e68-44d0-bf14-49f06dc7bcef",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option B",
+      "created_at": "2025-12-12T02:26:55.812980-05:00"
+    },
+    {
+      "id": 296,
+      "from_node_id": 355,
+      "to_node_id": 357,
+      "from_change_id": "fcf62642-471a-4521-9b65-b31db7d68679",
+      "to_change_id": "9db4e6f0-96e3-4efc-b1e0-e5e82e2d4723",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Web implementation starts",
+      "created_at": "2025-12-12T02:26:55.821893-05:00"
+    },
+    {
+      "id": 297,
+      "from_node_id": 357,
+      "to_node_id": 358,
+      "from_change_id": "9db4e6f0-96e3-4efc-b1e0-e5e82e2d4723",
+      "to_change_id": "b13e71cb-4989-4eb5-b254-b5fd391b6980",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Core sorting logic",
+      "created_at": "2025-12-12T02:26:55.829610-05:00"
+    },
+    {
+      "id": 298,
+      "from_node_id": 358,
+      "to_node_id": 359,
+      "from_change_id": "b13e71cb-4989-4eb5-b254-b5fd391b6980",
+      "to_change_id": "01d90c23-d5cc-4e58-88b3-1c80e7bf33dc",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Chain sorting",
+      "created_at": "2025-12-12T02:26:55.837490-05:00"
+    },
+    {
+      "id": 299,
+      "from_node_id": 359,
+      "to_node_id": 360,
+      "from_change_id": "01d90c23-d5cc-4e58-88b3-1c80e7bf33dc",
+      "to_change_id": "8551fca5-755a-415e-a27a-38c50a3ada9c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "UI controls",
+      "created_at": "2025-12-12T02:26:55.847252-05:00"
+    },
+    {
+      "id": 300,
+      "from_node_id": 355,
+      "to_node_id": 361,
+      "from_change_id": "fcf62642-471a-4521-9b65-b31db7d68679",
+      "to_change_id": "d8635b08-e330-416c-a3c3-1f0f34e9c59c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Rust utilities for TUI",
+      "created_at": "2025-12-12T02:26:55.856569-05:00"
+    },
+    {
+      "id": 301,
+      "from_node_id": 361,
+      "to_node_id": 362,
+      "from_change_id": "d8635b08-e330-416c-a3c3-1f0f34e9c59c",
+      "to_change_id": "4a6292da-61ed-4ac7-849d-098781f06ca0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Build chain function",
+      "created_at": "2025-12-12T02:26:55.865547-05:00"
+    },
+    {
+      "id": 302,
+      "from_node_id": 362,
+      "to_node_id": 363,
+      "from_change_id": "4a6292da-61ed-4ac7-849d-098781f06ca0",
+      "to_change_id": "754022e7-3cac-4bd5-a7ec-ffad34fed80e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Add tests",
+      "created_at": "2025-12-12T02:26:55.873945-05:00"
+    },
+    {
+      "id": 303,
+      "from_node_id": 363,
+      "to_node_id": 364,
+      "from_change_id": "754022e7-3cac-4bd5-a7ec-ffad34fed80e",
+      "to_change_id": "7d06b119-f17a-4fa1-878e-49f2251923a9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Pattern observation",
+      "created_at": "2025-12-12T02:26:55.882825-05:00"
+    },
+    {
+      "id": 304,
+      "from_node_id": 360,
+      "to_node_id": 352,
+      "from_change_id": "8551fca5-755a-415e-a27a-38c50a3ada9c",
+      "to_change_id": "fb51ecdd-86e6-45a2-87d5-bd28b29083ec",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Web implementation complete",
+      "created_at": "2025-12-12T02:26:55.891498-05:00"
+    },
+    {
+      "id": 305,
+      "from_node_id": 364,
+      "to_node_id": 352,
+      "from_change_id": "7d06b119-f17a-4fa1-878e-49f2251923a9",
+      "to_change_id": "fb51ecdd-86e6-45a2-87d5-bd28b29083ec",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Rust implementation complete",
+      "created_at": "2025-12-12T02:26:55.900206-05:00"
+    },
+    {
+      "id": 306,
+      "from_node_id": 360,
+      "to_node_id": 365,
+      "from_change_id": "8551fca5-755a-415e-a27a-38c50a3ada9c",
+      "to_change_id": "a3fa3194-7bb9-4aa0-887b-0de099baa3e2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "UX improvement based on feedback",
+      "created_at": "2025-12-12T02:27:04.763794-05:00"
     }
   ]
 }

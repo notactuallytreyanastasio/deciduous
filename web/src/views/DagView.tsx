@@ -4,8 +4,8 @@
  * Port of docs/demo/visual-graph.html - Dagre hierarchical layout.
  * Uses D3.js + Dagre for organized DAG visualization.
  *
- * Default: Shows only the most recent 4 goal chains for performance.
- * Use controls to expand to see more chains or all nodes.
+ * Default: Shows only the most recent goal chain for focus.
+ * Use controls to expand and see more chains.
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
@@ -39,7 +39,7 @@ interface DagreEdgeData {
 type ViewMode = 'recent' | 'all' | 'single';
 
 // Default number of recent chains to show
-const DEFAULT_RECENT_CHAINS = 4;
+const DEFAULT_RECENT_CHAINS = 1;
 
 /**
  * Get the most recent update time for a chain (max of all node updated_at times)
@@ -107,9 +107,22 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
     if (node) setSelectedNode(node);
   }, [graphData.nodes]);
 
-  const handleShowMore = useCallback(() => {
-    setRecentChainCount(prev => Math.min(prev + 4, goalChains.length));
+  // State for custom expand input
+  const [expandInputVisible, setExpandInputVisible] = useState(false);
+  const [expandInputValue, setExpandInputValue] = useState('');
+
+  const handleShowMore = useCallback((count: number = 1) => {
+    setRecentChainCount(prev => Math.min(prev + count, goalChains.length));
+    setExpandInputVisible(false);
+    setExpandInputValue('');
   }, [goalChains.length]);
+
+  const handleExpandSubmit = useCallback(() => {
+    const num = parseInt(expandInputValue, 10);
+    if (num > 0) {
+      handleShowMore(num);
+    }
+  }, [expandInputValue, handleShowMore]);
 
   const handleShowAll = useCallback(() => {
     setViewMode('all');
@@ -323,11 +336,37 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
 
           {viewMode === 'recent' && hiddenChainCount > 0 && (
             <div style={styles.expandButtons}>
-              <button onClick={handleShowMore} style={styles.expandBtn}>
-                +{Math.min(4, hiddenChainCount)} more
+              <button onClick={() => handleShowMore(1)} style={styles.expandBtn}>
+                +1
               </button>
+              {!expandInputVisible ? (
+                <button
+                  onClick={() => setExpandInputVisible(true)}
+                  style={styles.expandBtn}
+                  title="Add custom number of chains"
+                >
+                  ...
+                </button>
+              ) : (
+                <div style={styles.expandInputRow}>
+                  <input
+                    type="number"
+                    min="1"
+                    max={hiddenChainCount}
+                    value={expandInputValue}
+                    onChange={e => setExpandInputValue(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleExpandSubmit()}
+                    placeholder="#"
+                    style={styles.expandInput}
+                    autoFocus
+                  />
+                  <button onClick={handleExpandSubmit} style={styles.expandBtn}>
+                    Add
+                  </button>
+                </div>
+              )}
               <button onClick={handleShowAll} style={styles.expandBtn}>
-                Show all
+                All
               </button>
             </div>
           )}
@@ -523,6 +562,21 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     cursor: 'pointer',
     transition: 'background-color 0.15s',
+  },
+  expandInputRow: {
+    display: 'flex',
+    gap: '4px',
+    alignItems: 'center',
+  },
+  expandInput: {
+    width: '40px',
+    padding: '5px 6px',
+    backgroundColor: '#1a1a2e',
+    border: '1px solid #238636',
+    borderRadius: '4px',
+    color: '#fff',
+    fontSize: '11px',
+    textAlign: 'center' as const,
   },
   section: {
     marginBottom: '15px',
