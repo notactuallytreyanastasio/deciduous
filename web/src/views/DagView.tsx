@@ -3,6 +3,9 @@
  *
  * Port of docs/demo/visual-graph.html - Dagre hierarchical layout.
  * Uses D3.js + Dagre for organized DAG visualization.
+ *
+ * Default: Shows only the most recent 4 goal chains for performance.
+ * Use controls to expand to see more chains or all nodes.
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
@@ -10,7 +13,6 @@ import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain } from '../types/graph';
 import { getConfidence, getCommit, truncate } from '../types/graph';
-import { getDescendants } from '../utils/graphProcessing';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
 
@@ -34,6 +36,25 @@ interface DagreEdgeData {
   edge: DecisionEdge;
 }
 
+type ViewMode = 'recent' | 'all' | 'single';
+
+// Default number of recent chains to show
+const DEFAULT_RECENT_CHAINS = 4;
+
+/**
+ * Get the most recent update time for a chain (max of all node updated_at times)
+ */
+function getChainLastUpdated(chain: Chain): number {
+  return Math.max(...chain.nodes.map(n => new Date(n.updated_at).getTime()));
+}
+
+/**
+ * Sort chains by most recent activity (most recently updated nodes)
+ */
+function sortChainsByRecency(chains: Chain[]): Chain[] {
+  return [...chains].sort((a, b) => getChainLastUpdated(b) - getChainLastUpdated(a));
+}
+
 export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,13 +62,41 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
   const [focusChainIndex, setFocusChainIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
 
-  // Get the focused chain's nodes
-  const focusedNodeIds = useMemo(() => {
-    if (focusChainIndex === null) return null;
-    const chain = chains[focusChainIndex];
-    if (!chain) return null;
-    return getDescendants(chain.root.id, graphData);
-  }, [focusChainIndex, chains, graphData]);
+  // New state for recency filtering
+  const [viewMode, setViewMode] = useState<ViewMode>('recent');
+  const [recentChainCount, setRecentChainCount] = useState(DEFAULT_RECENT_CHAINS);
+
+  // Sort chains by recency for display
+  const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
+
+  // Get only goal chains (for the dropdown and recent filtering)
+  const goalChains = useMemo(() =>
+    sortedChains.filter(c => c.root.node_type === 'goal'),
+    [sortedChains]
+  );
+
+  // Determine which chains to show based on view mode
+  const visibleChains = useMemo(() => {
+    if (viewMode === 'single' && focusChainIndex !== null) {
+      return [chains[focusChainIndex]].filter(Boolean);
+    }
+    if (viewMode === 'recent') {
+      return goalChains.slice(0, recentChainCount);
+    }
+    return sortedChains; // 'all' mode
+  }, [viewMode, focusChainIndex, chains, goalChains, sortedChains, recentChainCount]);
+
+  // Get all visible node IDs from visible chains
+  const visibleNodeIds = useMemo(() => {
+    const ids = new Set<number>();
+    visibleChains.forEach(chain => {
+      chain.nodes.forEach(n => ids.add(n.id));
+    });
+    return ids;
+  }, [visibleChains]);
+
+  // Calculate how many chains are hidden
+  const hiddenChainCount = goalChains.length - (viewMode === 'recent' ? recentChainCount : 0);
 
   const handleSelectNode = useCallback((node: DecisionNode) => {
     setSelectedNode(node);
@@ -57,6 +106,30 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
     const node = graphData.nodes.find(n => n.id === id);
     if (node) setSelectedNode(node);
   }, [graphData.nodes]);
+
+  const handleShowMore = useCallback(() => {
+    setRecentChainCount(prev => Math.min(prev + 4, goalChains.length));
+  }, [goalChains.length]);
+
+  const handleShowAll = useCallback(() => {
+    setViewMode('all');
+  }, []);
+
+  const handleShowRecent = useCallback(() => {
+    setViewMode('recent');
+    setRecentChainCount(DEFAULT_RECENT_CHAINS);
+    setFocusChainIndex(null);
+  }, []);
+
+  const handleFocusChain = useCallback((index: number | null) => {
+    if (index === null) {
+      setViewMode('recent');
+      setFocusChainIndex(null);
+    } else {
+      setViewMode('single');
+      setFocusChainIndex(index);
+    }
+  }, []);
 
   // Build and render DAG
   useEffect(() => {
@@ -69,13 +142,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
 
     svg.selectAll('*').remove();
 
-    // Filter nodes if focusing on a chain
-    const visibleNodes = focusedNodeIds
-      ? graphData.nodes.filter(n => focusedNodeIds.has(n.id))
-      : graphData.nodes;
-
-    const visibleNodeIds = new Set(visibleNodes.map(n => n.id));
-
+    // Filter nodes based on visibility
+    const visibleNodes = graphData.nodes.filter(n => visibleNodeIds.has(n.id));
     const visibleEdges = graphData.edges.filter(
       e => visibleNodeIds.has(e.from_node_id) && visibleNodeIds.has(e.to_node_id)
     );
@@ -237,10 +305,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
     return () => {
       svg.on('.zoom', null);
     };
-  }, [graphData, focusedNodeIds, handleSelectNode]);
-
-  // Goals for chain selector
-  const goals = chains.filter(c => c.root.node_type === 'goal');
+  }, [graphData, visibleNodeIds, handleSelectNode]);
 
   return (
     <div style={styles.container}>
@@ -248,16 +313,42 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
       <div style={styles.controls}>
         <h2 style={styles.title}>DAG View</h2>
 
+        {/* View Mode Indicator */}
+        <div style={styles.viewModeSection}>
+          <div style={styles.viewModeLabel}>
+            {viewMode === 'recent' && `Showing ${Math.min(recentChainCount, goalChains.length)} of ${goalChains.length} goal chains`}
+            {viewMode === 'all' && `Showing all ${sortedChains.length} chains`}
+            {viewMode === 'single' && 'Focused on single chain'}
+          </div>
+
+          {viewMode === 'recent' && hiddenChainCount > 0 && (
+            <div style={styles.expandButtons}>
+              <button onClick={handleShowMore} style={styles.expandBtn}>
+                +{Math.min(4, hiddenChainCount)} more
+              </button>
+              <button onClick={handleShowAll} style={styles.expandBtn}>
+                Show all
+              </button>
+            </div>
+          )}
+
+          {viewMode !== 'recent' && (
+            <button onClick={handleShowRecent} style={styles.expandBtn}>
+              Show recent only
+            </button>
+          )}
+        </div>
+
         <div style={styles.section}>
           <label style={styles.label}>Focus Chain</label>
           <select
             value={focusChainIndex ?? ''}
-            onChange={e => setFocusChainIndex(e.target.value ? Number(e.target.value) : null)}
+            onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
             style={styles.select}
           >
-            <option value="">All Nodes</option>
-            {goals.map((chain, i) => (
-              <option key={i} value={chains.indexOf(chain)}>
+            <option value="">Recent Chains</option>
+            {goalChains.map((chain) => (
+              <option key={chain.root.id} value={chains.indexOf(chain)}>
                 {truncate(chain.root.title, 30)}
               </option>
             ))}
@@ -272,6 +363,17 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
               <span>{type}</span>
             </div>
           ))}
+        </div>
+
+        <div style={styles.statsSection}>
+          <div style={styles.statItem}>
+            <span style={styles.statValue}>{visibleNodeIds.size}</span>
+            <span style={styles.statLabel}>visible nodes</span>
+          </div>
+          <div style={styles.statItem}>
+            <span style={styles.statValue}>{visibleChains.length}</span>
+            <span style={styles.statLabel}>chains shown</span>
+          </div>
         </div>
 
         <div style={styles.zoomInfo}>
@@ -396,6 +498,32 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 0 15px 0',
     color: '#eee',
   },
+  viewModeSection: {
+    marginBottom: '15px',
+    padding: '10px',
+    backgroundColor: '#1a1a2e',
+    borderRadius: '6px',
+  },
+  viewModeLabel: {
+    fontSize: '11px',
+    color: '#8b949e',
+    marginBottom: '8px',
+  },
+  expandButtons: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
+  expandBtn: {
+    padding: '6px 10px',
+    backgroundColor: '#238636',
+    border: 'none',
+    borderRadius: '4px',
+    color: '#fff',
+    fontSize: '11px',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+  },
   section: {
     marginBottom: '15px',
   },
@@ -436,6 +564,24 @@ const styles: Record<string, React.CSSProperties> = {
     width: '10px',
     height: '10px',
     borderRadius: '50%',
+  },
+  statsSection: {
+    marginTop: '15px',
+    display: 'flex',
+    gap: '15px',
+  },
+  statItem: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  statValue: {
+    fontSize: '18px',
+    fontWeight: 'bold',
+    color: '#58a6ff',
+  },
+  statLabel: {
+    fontSize: '10px',
+    color: '#666',
   },
   zoomInfo: {
     marginTop: '15px',

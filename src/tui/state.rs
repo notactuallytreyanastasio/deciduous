@@ -146,6 +146,86 @@ pub fn clamp_selection(selected: usize, max: usize) -> usize {
 }
 
 // =============================================================================
+// Chain Types and Recency - For DAG view filtering
+// =============================================================================
+
+/// A chain is a goal node with all its descendants
+#[derive(Debug, Clone)]
+pub struct Chain {
+    /// The root goal node
+    pub root: DecisionNode,
+    /// All nodes in this chain (including root)
+    pub nodes: Vec<DecisionNode>,
+}
+
+impl Chain {
+    /// Get the most recent update time across all nodes in the chain
+    pub fn last_updated(&self) -> chrono::DateTime<chrono::Utc> {
+        self.nodes
+            .iter()
+            .filter_map(|n| chrono::DateTime::parse_from_rfc3339(&n.updated_at).ok())
+            .map(|dt| dt.with_timezone(&chrono::Utc))
+            .max()
+            .unwrap_or_else(|| chrono::Utc::now())
+    }
+
+    /// Get the most recent update timestamp as milliseconds (for sorting)
+    pub fn last_updated_millis(&self) -> i64 {
+        self.last_updated().timestamp_millis()
+    }
+}
+
+/// Build chains from graph data (goal roots with all descendants)
+pub fn build_chains(nodes: &[DecisionNode], edges: &[DecisionEdge]) -> Vec<Chain> {
+    // Find all goal nodes (these are chain roots)
+    let goal_nodes: Vec<_> = nodes
+        .iter()
+        .filter(|n| n.node_type == "goal")
+        .collect();
+
+    goal_nodes
+        .into_iter()
+        .map(|root| {
+            let descendants = get_descendants(root.id, nodes, edges);
+            let chain_nodes: Vec<DecisionNode> = descendants
+                .iter()
+                .filter_map(|(id, _depth)| nodes.iter().find(|n| n.id == *id))
+                .cloned()
+                .collect();
+
+            Chain {
+                root: root.clone(),
+                nodes: chain_nodes,
+            }
+        })
+        .collect()
+}
+
+/// Sort chains by recency (most recently updated first)
+pub fn sort_chains_by_recency(chains: &[Chain]) -> Vec<Chain> {
+    let mut sorted = chains.to_vec();
+    sorted.sort_by(|a, b| b.last_updated_millis().cmp(&a.last_updated_millis()));
+    sorted
+}
+
+/// Get the N most recent chains
+pub fn get_recent_chains(chains: &[Chain], count: usize) -> Vec<Chain> {
+    let sorted = sort_chains_by_recency(chains);
+    sorted.into_iter().take(count).collect()
+}
+
+/// Filter nodes to only those in the given chains
+pub fn filter_nodes_by_chains(chains: &[Chain]) -> HashSet<i32> {
+    let mut node_ids = HashSet::new();
+    for chain in chains {
+        for node in &chain.nodes {
+            node_ids.insert(node.id);
+        }
+    }
+    node_ids
+}
+
+// =============================================================================
 // Graph Traversal - Pure graph algorithms
 // =============================================================================
 
@@ -479,6 +559,121 @@ mod tests {
         assert!(descendants.iter().any(|(id, depth)| *id == 1 && *depth == 0));
         assert!(descendants.iter().any(|(id, depth)| *id == 2 && *depth == 1));
         assert!(descendants.iter().any(|(id, depth)| *id == 3 && *depth == 2));
+    }
+
+    // --- Chain Recency Tests ---
+
+    fn make_node_with_updated(id: i32, node_type: &str, title: &str, updated_at: &str) -> DecisionNode {
+        DecisionNode {
+            id,
+            change_id: format!("change-{}", id),
+            node_type: node_type.to_string(),
+            title: title.to_string(),
+            description: None,
+            status: "pending".to_string(),
+            created_at: "2024-12-10T12:00:00Z".to_string(),
+            updated_at: updated_at.to_string(),
+            metadata_json: None,
+        }
+    }
+
+    #[test]
+    fn test_build_chains() {
+        let nodes = vec![
+            make_node(1, "goal", "Goal 1", None),
+            make_node(2, "decision", "Decision", None),
+            make_node(3, "goal", "Goal 2", None),
+        ];
+        let edges = vec![
+            make_edge(1, 1, 2),
+        ];
+
+        let chains = build_chains(&nodes, &edges);
+        assert_eq!(chains.len(), 2); // Two goals = two chains
+        assert!(chains.iter().any(|c| c.root.id == 1));
+        assert!(chains.iter().any(|c| c.root.id == 3));
+
+        // Chain 1 should have 2 nodes (goal + decision)
+        let chain1 = chains.iter().find(|c| c.root.id == 1).unwrap();
+        assert_eq!(chain1.nodes.len(), 2);
+
+        // Chain 2 should have 1 node (just the goal)
+        let chain2 = chains.iter().find(|c| c.root.id == 3).unwrap();
+        assert_eq!(chain2.nodes.len(), 1);
+    }
+
+    #[test]
+    fn test_chain_last_updated() {
+        let nodes = vec![
+            make_node_with_updated(1, "goal", "Goal", "2024-12-10T12:00:00Z"),
+            make_node_with_updated(2, "action", "Action", "2024-12-12T14:00:00Z"), // More recent
+        ];
+        let edges = vec![make_edge(1, 1, 2)];
+
+        let chains = build_chains(&nodes, &edges);
+        let chain = &chains[0];
+
+        // Chain's last_updated should be the most recent node
+        let last = chain.last_updated();
+        assert!(last.to_rfc3339().contains("2024-12-12"));
+    }
+
+    #[test]
+    fn test_sort_chains_by_recency() {
+        let nodes = vec![
+            make_node_with_updated(1, "goal", "Old Goal", "2024-12-01T12:00:00Z"),
+            make_node_with_updated(2, "goal", "New Goal", "2024-12-15T12:00:00Z"),
+            make_node_with_updated(3, "goal", "Mid Goal", "2024-12-10T12:00:00Z"),
+        ];
+        let edges: Vec<DecisionEdge> = vec![];
+
+        let chains = build_chains(&nodes, &edges);
+        let sorted = sort_chains_by_recency(&chains);
+
+        // Most recent first
+        assert_eq!(sorted[0].root.id, 2); // New Goal
+        assert_eq!(sorted[1].root.id, 3); // Mid Goal
+        assert_eq!(sorted[2].root.id, 1); // Old Goal
+    }
+
+    #[test]
+    fn test_get_recent_chains() {
+        let nodes = vec![
+            make_node_with_updated(1, "goal", "G1", "2024-12-01T12:00:00Z"),
+            make_node_with_updated(2, "goal", "G2", "2024-12-15T12:00:00Z"),
+            make_node_with_updated(3, "goal", "G3", "2024-12-10T12:00:00Z"),
+            make_node_with_updated(4, "goal", "G4", "2024-12-12T12:00:00Z"),
+        ];
+        let edges: Vec<DecisionEdge> = vec![];
+
+        let chains = build_chains(&nodes, &edges);
+        let recent = get_recent_chains(&chains, 2);
+
+        assert_eq!(recent.len(), 2);
+        // Should be the two most recent
+        assert!(recent.iter().any(|c| c.root.id == 2));
+        assert!(recent.iter().any(|c| c.root.id == 4));
+    }
+
+    #[test]
+    fn test_filter_nodes_by_chains() {
+        let nodes = vec![
+            make_node(1, "goal", "Goal", None),
+            make_node(2, "decision", "Dec", None),
+            make_node(3, "action", "Act", None),
+        ];
+        let edges = vec![
+            make_edge(1, 1, 2),
+            make_edge(2, 2, 3),
+        ];
+
+        let chains = build_chains(&nodes, &edges);
+        let visible = filter_nodes_by_chains(&chains);
+
+        assert_eq!(visible.len(), 3);
+        assert!(visible.contains(&1));
+        assert!(visible.contains(&2));
+        assert!(visible.contains(&3));
     }
 
     // --- Branch/Type Cycling Tests ---

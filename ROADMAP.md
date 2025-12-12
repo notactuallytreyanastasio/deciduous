@@ -108,11 +108,11 @@
   - Automatically comment on PRs with link to branch-filtered graph
   - Badge showing number of decision nodes in the branch
   - One-click navigation from PR → decision graph explorer
-- [ ] **DAG recency filtering**
-  - Snap DAG to most recently touched branches/goals
-  - Show subgraphs that have had new connections written recently
-  - "Last 24h" / "Last week" / "This branch" quick filters
-  - Focus on active work areas, hide stale parts of the graph
+- [x] **DAG recency filtering** (December 2025)
+  - Default view shows only 4 most recently active goal chains
+  - Chains sorted by most recent node update time within the chain
+  - "Show more" and "Show all" controls to expand view
+  - Rust utility functions for TUI (`build_chains`, `sort_chains_by_recency`, `get_recent_chains`)
 
 ### TUI Enhancements
 - [ ] **Phase 2: Multi-goal chains**
