@@ -347,6 +347,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#24292f',
     marginTop: '10px',
     lineHeight: 1.5,
+    whiteSpace: 'pre-wrap',
   },
   commitMeta: {
     fontSize: '12px',

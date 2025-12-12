@@ -644,6 +644,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'flex-start',
     gap: '6px',
+    whiteSpace: 'pre-wrap',
   },
   commitIcon: {
     fontSize: '11px',
