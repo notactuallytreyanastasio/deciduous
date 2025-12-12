@@ -50,10 +50,15 @@ pub mod tui;
 pub use config::Config;
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
+    DecisionContext, DecisionSession,
     CURRENT_SCHEMA, get_current_git_branch, get_current_git_commit, build_metadata_json,
 };
 pub use diff::{GraphPatch, PatchNode, PatchEdge, ApplyResult};
 pub use export::{graph_to_dot, generate_pr_writeup, filter_graph_from_roots, filter_graph_by_ids, parse_node_range, DotConfig, WriteupConfig};
+
+// Re-export TS trait for downstream use
+#[cfg(feature = "ts-rs")]
+pub use ts_rs::TS;
 
 #[cfg(test)]
 mod tests {

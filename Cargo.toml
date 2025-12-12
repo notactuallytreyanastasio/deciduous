@@ -32,6 +32,11 @@ exclude = [
 name = "deciduous"
 path = "src/main.rs"
 
+[[bin]]
+name = "gen_types"
+path = "bin/gen_types.rs"
+required-features = ["ts-rs"]
+
 [lib]
 name = "deciduous"
 path = "src/lib.rs"
@@ -74,6 +79,7 @@ notify = "6.1"
 syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
 syntect-tui = "3.0"
 lazy_static = "1.4"
+ts-rs = { version = "10.1.0", optional = true }
 
 [profile.release]
 lto = true
@@ -93,3 +99,7 @@ too_many_arguments = "allow"
 proptest = "1.7.0"
 serde_yaml = "0.9.34"
 tempfile = "3.23.0"
+ts-rs = "10.1.0"
+
+[features]
+ts-rs = ["dep:ts-rs"]

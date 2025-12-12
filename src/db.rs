@@ -10,6 +10,8 @@ use diesel::sqlite::SqliteConnection;
 use serde_json::json;
 use std::path::Path;
 use uuid::Uuid;
+#[cfg(feature = "ts-rs")]
+use ts_rs::TS;
 
 /// Build metadata JSON from optional fields (confidence, commit, prompt, files, branch)
 pub fn build_metadata_json(
@@ -206,6 +208,8 @@ pub struct NewDecisionNode<'a> {
 
 /// Queryable decision node
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
 #[diesel(table_name = decision_nodes)]
 pub struct DecisionNode {
     pub id: i32,
@@ -235,6 +239,8 @@ pub struct NewDecisionEdge<'a> {
 
 /// Queryable decision edge
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
 #[diesel(table_name = decision_edges)]
 pub struct DecisionEdge {
     pub id: i32,
@@ -260,6 +266,8 @@ pub struct NewDecisionContext<'a> {
 
 /// Queryable decision context
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
 #[diesel(table_name = decision_context)]
 pub struct DecisionContext {
     pub id: i32,
@@ -282,6 +290,8 @@ pub struct NewDecisionSession<'a> {
 
 /// Queryable session
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
 #[diesel(table_name = decision_sessions)]
 pub struct DecisionSession {
     pub id: i32,
@@ -314,6 +324,8 @@ pub struct NewCommandLog<'a> {
 
 /// Queryable command log entry
 #[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
 #[diesel(table_name = command_log)]
 pub struct CommandLog {
     pub id: i32,

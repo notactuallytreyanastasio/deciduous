@@ -52,13 +52,14 @@ warn() {
 # File paths
 RUST_DB="$PROJECT_ROOT/src/db.rs"
 RUST_TUI_TYPES="$PROJECT_ROOT/src/tui/types.rs"
-TS_TYPES="$PROJECT_ROOT/web/src/types/graph.ts"
+TS_GRAPH_TYPES="$PROJECT_ROOT/web/src/types/graph.ts"
+TS_GENERATED_SCHEMA="$PROJECT_ROOT/web/src/types/generated/schema.ts"
 JSON_SCHEMA="$PROJECT_ROOT/schema/decision-graph.schema.json"
 
 # Check all required files exist
 check_files() {
     local missing=0
-    for file in "$RUST_DB" "$RUST_TUI_TYPES" "$TS_TYPES" "$JSON_SCHEMA"; do
+    for file in "$RUST_DB" "$RUST_TUI_TYPES" "$TS_GRAPH_TYPES" "$TS_GENERATED_SCHEMA" "$JSON_SCHEMA"; do
         if [[ ! -f "$file" ]]; then
             error "Missing file: $file"
             missing=1
@@ -82,7 +83,7 @@ extract_rust_node_types() {
 
 # Extract node types from TypeScript
 extract_ts_node_types() {
-    grep 'NODE_TYPES' "$TS_TYPES" | head -1 | \
+    grep 'NODE_TYPES' "$TS_GRAPH_TYPES" | head -1 | \
         sed "s/.*\[//" | sed "s/\].*//" | \
         tr ',' '\n' | \
         sed "s/.*'\([^']*\)'.*/\1/" | \
@@ -106,7 +107,7 @@ extract_rust_edge_types() {
 
 # Extract edge types from TypeScript
 extract_ts_edge_types() {
-    grep 'EDGE_TYPES' "$TS_TYPES" | head -1 | \
+    grep 'EDGE_TYPES' "$TS_GRAPH_TYPES" | head -1 | \
         sed "s/.*\[//" | sed "s/\].*//" | \
         tr ',' '\n' | \
         sed "s/.*'\([^']*\)'.*/\1/" | \
@@ -130,7 +131,7 @@ extract_rust_node_statuses() {
 
 # Extract node statuses from TypeScript
 extract_ts_node_statuses() {
-    grep 'NODE_STATUSES' "$TS_TYPES" | head -1 | \
+    grep 'NODE_STATUSES' "$TS_GRAPH_TYPES" | head -1 | \
         sed "s/.*\[//" | sed "s/\].*//" | \
         tr ',' '\n' | \
         sed "s/.*'\([^']*\)'.*/\1/" | \
@@ -150,7 +151,7 @@ check_change_id_field() {
             grep -q 'pub change_id:' "$RUST_DB" && echo "yes" || echo "no"
             ;;
         typescript)
-            grep -q 'change_id:' "$TS_TYPES" && echo "yes" || echo "no"
+            grep -q 'change_id:' "$TS_GENERATED_SCHEMA" && echo "yes" || echo "no"
             ;;
         schema)
             jq -e '.definitions.DecisionNode.properties.change_id' "$JSON_SCHEMA" >/dev/null 2>&1 && echo "yes" || echo "no"
@@ -170,7 +171,7 @@ check_edge_change_id_fields() {
             fi
             ;;
         typescript)
-            if grep -q 'from_change_id:' "$TS_TYPES" && grep -q 'to_change_id:' "$TS_TYPES"; then
+            if grep -q 'from_change_id:' "$TS_GENERATED_SCHEMA" && grep -q 'to_change_id:' "$TS_GENERATED_SCHEMA"; then
                 echo "yes"
             else
                 echo "no"
@@ -209,6 +210,17 @@ compare_types() {
 # Main validation
 main() {
     log "Validating type synchronization..."
+    log ""
+    log "${YELLOW}Running automatic type generation first...${NC}"
+    
+    # Run type generator (using cargo run for dev environment)
+    if cargo run --bin gen_types --features ts-rs >/dev/null 2>&1; then
+        success "Type generation successful"
+    else
+        error "Type generation failed"
+        exit 1
+    fi
+
     log ""
 
     check_files
