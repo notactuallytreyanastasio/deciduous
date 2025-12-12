@@ -43,6 +43,28 @@
 
 ## In Progress / High Priority
 
+### Narrative User Guide
+*A real, end-to-end tutorial that walks through an actual use case*
+- [ ] **Narrative-driven tutorial** (like the jj tutorial)
+  - Not a reference manual—a story
+  - Follow a real feature from inception to merged PR
+  - Show the decision graph evolving alongside the code
+  - Include the missteps, dead ends, and course corrections
+- [ ] **Cover the full workflow live**
+  - Start with `deciduous init` in a fresh project
+  - Log goals, make decisions, reject options, implement actions
+  - Show context recovery after a simulated "session break"
+  - Generate PR writeup from the graph
+  - Deploy to GitHub Pages
+- [ ] **Dual perspective: human and AI**
+  - Show the human developer using the TUI to review decisions
+  - Show the AI querying the graph to recover context
+  - Demonstrate handoff between sessions
+- [ ] **Publish as a dedicated guide**
+  - Standalone page on the GH Pages site
+  - Could also be an asciinema + written hybrid
+  - Link prominently from README
+
 ### Automated Graph Sync Workflow
 *Multi-user state management should be seamless*
 - [ ] **Default to diff/patch workflow for multi-user state management**
