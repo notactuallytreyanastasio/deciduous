@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deciduous - Decision Graph Tooling</title>
-    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -312,7 +311,7 @@
             <h2>See It In Action</h2>
             <p>Watch a full session building with deciduous: initialization, decision logging, graph visualization, and context recovery.</p>
             <div class="demo-player-container">
-                <div id="demo-player"></div>
+                <script src="https://asciinema.org/a/761574.js" id="asciicast-761574" async data-speed="1.4" data-idle-time-limit="2" data-theme="asciinema"></script>
             </div>
         </section>
 
@@ -348,31 +347,5 @@ SESSION END -> Graph survives
         </footer>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
-    <script>
-        // Fetch gzipped cast file and decompress
-        fetch('deciduous_demo_v2.cast.gz')
-            .then(response => {
-                if (!response.ok) throw new Error('Failed to fetch: ' + response.status);
-                return response.arrayBuffer();
-            })
-            .then(compressed => {
-                console.log('Fetched', compressed.byteLength, 'bytes');
-                const decompressed = pako.inflate(new Uint8Array(compressed), { to: 'string' });
-                console.log('Decompressed to', decompressed.length, 'chars');
-                const player = AsciinemaPlayer.create(decompressed, document.getElementById('demo-player'), {
-                    autoPlay: false,
-                    preload: true,
-                    idleTimeLimit: 2,
-                    speed: 1.33
-                });
-                console.log('Player created', player);
-            })
-            .catch(err => {
-                console.error('Failed to load demo:', err);
-                document.getElementById('demo-player').innerHTML = '<p style="color:red;padding:20px;">Failed to load demo: ' + err.message + '</p>';
-            });
-    </script>
 </body>
 </html>
