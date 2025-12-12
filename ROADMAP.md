@@ -377,6 +377,71 @@
   - Suggest: "Found 3 commits with no linked decisions - want to associate them?"
   - Help maintain commit-node linkage going forward
 
+### Commit Integrity & Dead Commit Detection
+*Git history rewrites (rebases, amends, force pushes) can orphan commit links in the decision graph*
+- [ ] **Detect dead/orphaned commit references**
+  - Nodes link to commits via SHA hash in `metadata_json`
+  - Rebases, amends, `git commit --amend`, `git rebase -i`, force pushes rewrite history
+  - Old commit SHAs become unreachable or deleted entirely
+  - Need to detect when a linked commit no longer exists in the repo
+- [ ] **`deciduous audit --check-commits` command**
+  - Scan all nodes with commit associations
+  - For each commit SHA, verify it exists: `git cat-file -t <sha>`
+  - Report: "Found 12 nodes linking to 5 dead commits"
+  - Show which nodes are affected and what the dead SHAs are
+  - `--verbose` mode: show node details and when commit was last seen
+- [ ] **Dead commit resolution strategies**
+  - **Option A: Find replacement commit**
+    - Use `git reflog` to trace where the old commit went
+    - If commit was amended, find the new SHA that replaced it
+    - If rebased, find equivalent commit in new history (by message/diff similarity)
+    - `deciduous audit --fix-commits --strategy=reflog`
+  - **Option B: Find by time proximity**
+    - Match node `created_at` timestamp to commits in the same time window
+    - Suggest candidate commits that were created around the same time
+    - `deciduous audit --fix-commits --strategy=time`
+  - **Option C: Find by content matching**
+    - Parse node title/description for keywords
+    - Match against commit messages in current history
+    - `deciduous audit --fix-commits --strategy=content`
+  - **Option D: Interactive resolution**
+    - Show dead commit, show candidate replacements
+    - User picks the right one or marks as "unrecoverable"
+    - `deciduous audit --fix-commits --interactive`
+  - **Option E: Mark as historical**
+    - Some commits are intentionally gone (squashed, abandoned)
+    - Mark node's commit as "historical" - preserves the SHA for reference but flags it as unreachable
+    - `deciduous audit --fix-commits --mark-historical`
+- [ ] **Prevention: hooks and warnings**
+  - **Pre-rebase hook**: Warn if rebase will orphan linked commits
+    - `deciduous hook pre-rebase` - scans commits about to be rewritten
+    - "Warning: 3 nodes link to commits in the rebase range"
+    - Option to auto-update links after rebase completes
+  - **Post-rewrite hook**: Auto-update commit links after rebase/amend
+    - Git provides `post-rewrite` hook with old→new SHA mapping
+    - `deciduous hook post-rewrite` - reads mapping, updates node metadata
+    - Transparent to user: links stay valid after history rewrites
+  - **Force push protection**
+    - Detect when `git push --force` is about to orphan remote-linked commits
+    - Warn before the push, not after
+- [ ] **Reflog integration**
+  - Git reflog preserves history of HEAD movements
+  - Even "deleted" commits exist in reflog for ~90 days
+  - `deciduous audit --check-commits --include-reflog` - also check reflog for dead commits
+  - Can recover links if commit still in reflog but not in branch history
+- [ ] **Commit ancestry tracking**
+  - Store not just commit SHA but also its parent SHA(s)
+  - If commit is rebased, can trace ancestry to find new location
+  - More robust than SHA-only linking
+- [ ] **Periodic health checks**
+  - `deciduous serve` and `deciduous tui` could show commit health status
+  - Badge/indicator: "3 dead commits" with link to audit
+  - Optional: auto-run audit on `deciduous sync`
+- [ ] **Documentation and best practices**
+  - Document which git operations can orphan commits
+  - Recommend: always `deciduous audit --check-commits` after rebasing
+  - Template updates: remind users about commit integrity after history rewrites
+
 ### Git Integration & Pre-commit Hook Awareness
 - [ ] Inspect and respect pre-commit hooks
   - Detect `.git/hooks/pre-commit` or `.husky/` hooks
@@ -435,6 +500,35 @@
     - `CLAUDE.md`
     - `AGENTS.md`
   - Never have drift between what `deciduous init` creates and what the repo actually uses
+
+### Graph Compaction & Summarization
+- [ ] **`deciduous summarize` command**
+  - Condense long chains of observations/actions into digestible summaries
+  - Prevent graph bloat while preserving meaningful history
+  - Create a "summary" node that replaces a chain of fine-grained nodes
+- [ ] **Summarization strategies**
+  - **Time-based**: Collapse all nodes from a session/day into summary
+  - **Chain-based**: Summarize linear chains of N+ observations/actions
+  - **Goal-based**: Summarize all activity under a completed goal
+  - **Manual selection**: User picks nodes to collapse into summary
+- [ ] **Summary node type**
+  - New node type `summary` or use `observation` with special metadata
+  - Store original node IDs in metadata for audit trail
+  - Link to original nodes (archived, not deleted) or store inline
+  - Preserve key decisions/outcomes, compress routine actions
+- [ ] **LLM-assisted summarization** (optional)
+  - Use Claude/GPT to generate meaningful summaries from node chains
+  - Extract key decisions, blockers encountered, lessons learned
+  - `deciduous summarize --llm` flag to enable
+  - Fallback: template-based summary without LLM
+- [ ] **Archive vs delete**
+  - Option to archive original nodes (hidden but recoverable)
+  - Or fully replace with summary (smaller DB, loses granularity)
+  - `--archive` vs `--replace` modes
+- [ ] **Automatic summarization suggestions**
+  - `deciduous audit --suggest-summaries`
+  - Identify chains that are good candidates for compaction
+  - "Found 47 observations in a linear chain - summarize?"
 
 ---
 

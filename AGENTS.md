@@ -250,3 +250,148 @@ Only commit if ALL pass.
 ---
 
 **Live graph**: https://notactuallytreyanastasio.github.io/deciduous/
+
+## Decision Graph Workflow
+
+**THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
+
+### The Core Rule
+
+```
+BEFORE you do something -> Log what you're ABOUT to do
+AFTER it succeeds/fails -> Log the outcome
+CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
+```
+
+### Behavioral Triggers - MUST LOG WHEN:
+
+| Trigger | Log Type | Example |
+|---------|----------|---------|
+| User asks for a new feature | `goal` **with -p** | "Add dark mode" |
+| Choosing between approaches | `decision` | "Choose state management" |
+| About to write/edit code | `action` | "Implementing Redux store" |
+| Something worked or failed | `outcome` | "Redux integration successful" |
+| Notice something interesting | `observation` | "Existing code uses hooks" |
+
+### CRITICAL: Capture User Prompts When Semantically Meaningful
+
+**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+
+```bash
+# New feature request - capture the prompt on the goal
+deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+
+# Downstream work links back - no prompt needed (it flows via edges)
+deciduous add decision "Choose auth method" -c 75
+deciduous link <goal_id> <decision_id> -r "Deciding approach"
+
+# BUT if the user gives new direction mid-stream, capture that too
+deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+```
+
+**When to capture prompts:**
+- Root `goal` nodes: YES - the original request
+- Major direction changes: YES - when user redirects the work
+- Routine downstream nodes: NO - they inherit context via edges
+
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and flow through the graph via connections.
+
+### ⚠️ CRITICAL: Maintain Connections
+
+**The graph's value is in its CONNECTIONS, not just nodes.**
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The goal/decision that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action |
+
+**Root `goal` nodes are the ONLY valid orphans.**
+
+### Quick Commands
+
+```bash
+deciduous add goal "Title" -c 90
+deciduous add action "Title" -c 85
+deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
+deciduous serve   # View live (auto-refreshes every 30s)
+deciduous sync    # Export for static hosting
+
+# Optional metadata
+# -p, --prompt "..."   Store the user prompt
+# -f, --files "a.rs,b.rs"   Associate files
+# -b, --branch <name>   Git branch (auto-detected)
+# --commit HEAD   Link to current git commit
+
+# Branch filtering
+deciduous nodes --branch main
+deciduous nodes -b feature-auth
+```
+
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
+
+The `--commit HEAD` flag captures the commit hash. The web viewer shows commit messages alongside nodes.
+
+### Git History & Deployment
+
+```bash
+# Export graph AND git history for web viewer
+deciduous sync
+
+# Creates docs/graph-data.json and docs/git-history.json
+```
+
+Deploy to GitHub Pages: `deciduous sync` > push > Settings > Pages > /docs folder
+
+### Branch-Based Grouping
+
+Nodes are auto-tagged with the current git branch. Configure in `.deciduous/config.toml`:
+```toml
+[branch]
+main_branches = ["main", "master"]
+auto_detect = true
+```
+
+### Audit Checklist (Before Every Sync)
+
+1. Does every **outcome** link to what caused it?
+2. Does every **action** link to why you did it?
+3. Any **dangling outcomes** without parents?
+
+### Session Start Checklist
+
+Every new session, run:
+
+```bash
+deciduous nodes    # What decisions exist?
+deciduous edges    # How are they connected?
+git status         # Current state
+git log -10        # Recent commits
+```
+
+### Multi-User Sync
+
+Share decisions across teammates:
+
+```bash
+# Export your branch's decisions
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate.json
+```
+
+PR workflow: Export patch → commit patch file → PR → teammates apply.

@@ -49,3 +49,6 @@ deciduous.db
 
 # Proptest regressions (local test failures)
 proptest-regressions/
+
+# Deciduous database (local)
+.deciduous/
