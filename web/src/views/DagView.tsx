@@ -11,14 +11,21 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import dagre from 'dagre';
-import type { DecisionNode, DecisionEdge, GraphData, Chain } from '../types/graph';
-import { getConfidence, getCommit, truncate } from '../types/graph';
+import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
+import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
 
 interface DagViewProps {
   graphData: GraphData;
   chains: Chain[];
+  gitHistory?: GitCommit[];
+}
+
+// Look up commit info from gitHistory by hash
+function getCommitInfo(hash: string | null, gitHistory: GitCommit[]): GitCommit | null {
+  if (!hash || gitHistory.length === 0) return null;
+  return gitHistory.find(c => c.hash === hash || c.short_hash === hash || c.hash.startsWith(hash)) ?? null;
 }
 
 // Dagre node data type
@@ -55,7 +62,7 @@ function sortChainsByRecency(chains: Chain[]): Chain[] {
   return [...chains].sort((a, b) => getChainLastUpdated(b) - getChainLastUpdated(a));
 }
 
-export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
+export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory = [] }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
@@ -463,6 +470,36 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains }) => {
               Node #{selectedNode.id} · Created {new Date(selectedNode.created_at).toLocaleString()}
             </p>
 
+            {/* Commit Message Section */}
+            {(() => {
+              const commitHash = getCommit(selectedNode);
+              const commitInfo = getCommitInfo(commitHash, gitHistory);
+              if (!commitHash) return null;
+              return (
+                <div style={styles.commitSection}>
+                  <a
+                    href={githubCommitUrl(commitHash, 'notactuallytreyanastasio/deciduous')}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.commitLink}
+                  >
+                    {shortCommit(commitHash)}
+                  </a>
+                  {commitInfo ? (
+                    <>
+                      <div style={styles.commitMessage}>{commitInfo.message}</div>
+                      <div style={styles.commitMeta}>
+                        by {commitInfo.author} · {new Date(commitInfo.date).toLocaleDateString()}
+                        {commitInfo.files_changed && ` · ${commitInfo.files_changed} files changed`}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={styles.commitMeta}>Commit details not available</div>
+                  )}
+                </div>
+              );
+            })()}
+
             {selectedNode.description && (
               <div style={styles.modalSection}>
                 <p style={styles.modalDescription}>{selectedNode.description}</p>
@@ -792,6 +829,34 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#c9d1d9',
     lineHeight: 1.6,
     margin: 0,
+  },
+  commitSection: {
+    backgroundColor: '#161b22',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    borderLeft: '3px solid #3b82f6',
+    marginBottom: '16px',
+  },
+  commitLink: {
+    fontFamily: 'monospace',
+    fontSize: '13px',
+    color: '#58a6ff',
+    textDecoration: 'none',
+    backgroundColor: '#388bfd1a',
+    padding: '2px 8px',
+    borderRadius: '4px',
+  },
+  commitMessage: {
+    fontSize: '15px',
+    color: '#e6edf3',
+    marginTop: '10px',
+    lineHeight: 1.5,
+    fontWeight: 500,
+  },
+  commitMeta: {
+    fontSize: '12px',
+    color: '#8b949e',
+    marginTop: '6px',
   },
   modalFooter: {
     marginTop: '20px',
