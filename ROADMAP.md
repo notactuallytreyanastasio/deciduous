@@ -97,6 +97,10 @@
 *Make compaction restore actually work reliably*
 - [ ] `/context` command fully restores working state after context loss
 - [ ] Query decision graph for recent goals, decisions, actions in progress
+- [ ] **Sort nodes by recency** - most recently updated nodes first
+  - Use `updated_at` timestamp for sorting
+  - Show N most recent chains (like DAG view recency filtering)
+  - Recent activity is most relevant for context recovery
 - [ ] Show what was being worked on, what's complete, what's pending
 - [ ] Include recent git activity, uncommitted changes, branch state
 - [ ] Pull in relevant prompts from history if available
