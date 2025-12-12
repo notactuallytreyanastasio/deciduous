@@ -324,6 +324,24 @@
   - Graph nodes can link back to roadmap items
   - Track completion: roadmap item is "done" when linked outcome exists
 
+### Retroactive Commit Association
+- [ ] **Audit existing nodes and associate with git commits**
+  - Many early nodes were created without `--commit` flag
+  - Cross-reference node `created_at` timestamps with `git log` dates
+  - Match node titles/descriptions to commit messages
+  - `deciduous audit --associate-commits` command to suggest matches
+  - Interactive mode: show node + candidate commits, let user confirm
+  - Batch mode: auto-associate high-confidence matches (>90% title similarity)
+- [ ] **Backfill script for existing graphs**
+  - One-time migration to enrich old nodes with commit data
+  - Parse commit messages for keywords matching node titles
+  - Use time windows (node created within N minutes of commit)
+  - Generate report of associations made
+- [ ] **Ongoing commit detection**
+  - When running `deciduous sync`, detect recent commits without linked nodes
+  - Suggest: "Found 3 commits with no linked decisions - want to associate them?"
+  - Help maintain commit-node linkage going forward
+
 ### Git Integration & Pre-commit Hook Awareness
 - [ ] Inspect and respect pre-commit hooks
   - Detect `.git/hooks/pre-commit` or `.husky/` hooks
