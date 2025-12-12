@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What is Deciduous? - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title active">Introduction</a>
+                <ul>
+                    <li><a href="what-is-deciduous.html" class="active">What is Deciduous?</a></li>
+                    <li><a href="how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+                <ul>
+                    <li><a href="../hello-world/installing.html">Installing</a></li>
+                    <li><a href="../hello-world/initializing.html">Initializing</a></li>
+                    <li><a href="../hello-world/first-nodes.html">Your First Nodes</a></li>
+                    <li><a href="../hello-world/connecting.html">Connecting Nodes</a></li>
+                    <li><a href="../hello-world/viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+                <ul>
+                    <li><a href="../workflows/claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="../workflows/session-recovery.html">Session Recovery</a></li>
+                    <li><a href="../workflows/pr-documentation.html">PR Documentation</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+                <ul>
+                    <li><a href="../viewing/tui.html">The Terminal UI</a></li>
+                    <li><a href="../viewing/web.html">The Web Viewer</a></li>
+                    <li><a href="../viewing/cli.html">CLI Queries</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+                <ul>
+                    <li><a href="../sharing/multi-user.html">The Multi-User Problem</a></li>
+                    <li><a href="../sharing/patches.html">Exporting Patches</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>What is Deciduous and Why Should I Care?</h1>
+
+            <p>Here's a scenario you've probably experienced:</p>
+
+            <p>You're three months into a project. Someone asks why you chose PostgreSQL over MongoDB. You vaguely remember there was a good reason, something about transactions and the data model, but the specifics? Gone. The Claude session where you worked through the tradeoffs? Long compacted. The Slack thread? Buried. You shrug and say "it made sense at the time."</p>
+
+            <p>This is the <em>decision evaporation problem</em>, and it's gotten dramatically worse with AI-assisted development.</p>
+
+            <h2>The AI Context Problem</h2>
+
+            <p>When you work with Claude (or any LLM), you make dozens of decisions per session. Claude might explore three authentication approaches, reject two, and implement one. It considers error handling strategies, weighs library choices, evaluates architectural patterns. All of this reasoning happens, informs your code, and then... disappears when the context window compacts or the session ends.</p>
+
+            <p>You're left with:</p>
+            <ul>
+                <li>Code that works (hopefully)</li>
+                <li>No record of what was considered</li>
+                <li>No memory of why alternatives were rejected</li>
+                <li>No way to recover context in a new session</li>
+            </ul>
+
+            <p><strong>Deciduous solves this.</strong></p>
+
+            <h2>What Deciduous Does</h2>
+
+            <p>Deciduous is a decision graph tool that captures every goal, decision, option, action, and outcome as you work. It stores them in a queryable SQLite database that survives session boundaries. When Claude's context compacts, the graph remains. When you start a new session six months later, you can query "what did we decide about authentication?" and get the full reasoning back.</p>
+
+            <p>But here's what makes it genuinely useful: <strong>it's designed to be logged in real-time by Claude itself.</strong> The workflow isn't "write documentation after the fact." It's "Claude logs decisions as it makes them, and those decisions become the documentation."</p>
+
+            <p>This means:</p>
+
+            <ul>
+                <li><strong>Context survives compaction.</strong> When Claude runs <code>/context</code> at session start, it queries the graph and recovers reasoning it never saw.</li>
+                <li><strong>PRs explain themselves.</strong> Generate decision visualizations and writeups directly from the graph.</li>
+                <li><strong>Institutional knowledge persists.</strong> Six months later, anyone can trace why things were built the way they were.</li>
+                <li><strong>LLM output becomes reviewable.</strong> Instead of just seeing code, you see the decision flow that produced it.</li>
+            </ul>
+
+            <h2>A Quick Example</h2>
+
+            <p>Here's what a decision flow looks like in deciduous:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; Add rate limiting to the API</span>
+
+I'll implement rate limiting. Let me log this to the decision graph first.
+
+<span class="command">deciduous add goal "Add rate limiting" -c 90 -p "User: Add rate limiting to the API"</span>
+<span class="output">Created node #47: goal "Add rate limiting"</span>
+
+Now I need to decide on the approach...
+
+<span class="command">deciduous add decision "Choose rate limiting strategy" -c 75</span>
+<span class="output">Created node #48: decision "Choose rate limiting strategy"</span>
+
+<span class="command">deciduous add option "Redis-based sliding window" -c 80</span>
+<span class="output">Created node #49: option "Redis-based sliding window"</span>
+
+<span class="command">deciduous add option "In-memory token bucket" -c 70</span>
+<span class="output">Created node #50: option "In-memory token bucket"</span>
+
+Looking at your infrastructure, I recommend Redis since you're already using it for sessions.
+
+<span class="command">deciduous add action "Implementing Redis rate limiter" -c 85</span>
+<span class="command">deciduous link 48 51 --edge-type chosen -r "Redis already in stack, scales across instances"</span>
+
+<em>[Claude implements the feature...]</em>
+
+<span class="command">deciduous add outcome "Rate limiting working" -c 95 --commit HEAD</span>
+<span class="command">deciduous sync</span>
+                </div>
+            </div>
+
+            <p>Now this decision chain is permanently recorded. Next week, next month, next year&mdash;anyone can query the graph to understand not just <em>what</em> was built, but <em>why</em>.</p>
+
+            <h2>The Core Insight</h2>
+
+            <p>The insight behind deciduous is simple:</p>
+
+            <div class="info-box tip">
+                <strong>Decisions are more valuable than documentation.</strong>
+                <p>Documentation describes what exists. A decision graph captures <em>why</em> it exists, what alternatives were considered, and what tradeoffs were made. This is the knowledge that actually helps future developers (and future AI sessions).</p>
+            </div>
+
+            <p>When an AI assistant logs decisions in real-time, you get documentation as a side effect of the development process&mdash;not as an afterthought.</p>
+
+            <h2>Why "Deciduous"?</h2>
+
+            <p>Deciduous trees shed their leaves seasonally but their structure persists. Like Claude's context, the leaves (working memory) fall away&mdash;but the decision graph (trunk and branches) remains, ready to support new growth.</p>
+
+            <div class="page-nav">
+                <a href="../index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Introduction</span>
+                </a>
+                <a href="how-to-read.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">How to Read This Tutorial</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

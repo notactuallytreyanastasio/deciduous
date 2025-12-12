@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Web Viewer - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Viewing the Graph</a>
+                <ul>
+                    <li><a href="tui.html">The Terminal UI</a></li>
+                    <li><a href="web.html" class="active">The Web Viewer</a></li>
+                    <li><a href="cli.html">CLI Queries</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The Web Viewer</h1>
+
+            <p>The web viewer provides visual exploration with multiple visualization modes.</p>
+
+            <h2>Starting the Server</h2>
+
+            <pre><span class="cmd">$ deciduous serve</span>
+<span class="output">Starting graph viewer at http://localhost:3000
+Auto-refresh enabled (30 second interval)
+Press Ctrl+C to stop</span></pre>
+
+            <p>Open <a href="http://localhost:3000">http://localhost:3000</a> in your browser.</p>
+
+            <h2>Four Visualization Modes</h2>
+
+            <p>The web viewer has four views, accessible via tabs in the navigation:</p>
+
+            <h3>1. Chains View</h3>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: web-chains-view.png]</span>
+                <div class="caption">The Chains view showing connected decision flows</div>
+            </div>
+
+            <p>The default view organizes nodes into decision chains. Chains are computed by following edges from root goals through decisions to outcomes.</p>
+
+            <p><strong>Best for:</strong> Seeing the logical flow of decisions</p>
+
+            <h3>2. Timeline View</h3>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: web-timeline-view.png]</span>
+                <div class="caption">The Timeline view with type filters and search</div>
+            </div>
+
+            <p>A chronological list of all nodes, similar to the TUI but with clickable interactions.</p>
+
+            <p><strong>Features:</strong></p>
+            <ul>
+                <li>Filter by node type</li>
+                <li>Filter by branch (dropdown in stats bar)</li>
+                <li>Search by title</li>
+                <li>Click to expand details</li>
+                <li>Git commits interleaved (if git-history.json exists)</li>
+            </ul>
+
+            <p><strong>Best for:</strong> Chronological exploration, finding recent work</p>
+
+            <h3>3. Graph View</h3>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: web-graph-view.png]</span>
+                <div class="caption">The Graph view showing nodes and edges as a network</div>
+            </div>
+
+            <p>An interactive force-directed graph visualization.</p>
+
+            <p><strong>Features:</strong></p>
+            <ul>
+                <li>Drag nodes to reposition</li>
+                <li>Zoom and pan</li>
+                <li>Click nodes to highlight connections</li>
+                <li>Color-coded by node type</li>
+            </ul>
+
+            <p><strong>Best for:</strong> Seeing the overall structure, finding clusters</p>
+
+            <h3>4. DAG View</h3>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: web-dag-view.png]</span>
+                <div class="caption">The DAG view showing hierarchical decision flow</div>
+            </div>
+
+            <p>A hierarchical directed acyclic graph view that emphasizes parent-child relationships.</p>
+
+            <p><strong>Best for:</strong> Seeing decision hierarchies, understanding flow from goals to outcomes</p>
+
+            <h2>Branch Filtering</h2>
+
+            <p>In the stats bar at the top, there's a branch dropdown. Select a branch to filter all views to show only nodes from that branch.</p>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: web-branch-filter.png]</span>
+                <div class="caption">The web viewer with branch filter dropdown active</div>
+            </div>
+
+            <h2>Git History Integration</h2>
+
+            <p>The Timeline and DAG views can show git commits alongside decision nodes. To enable this:</p>
+
+            <pre><span class="comment"># Generate git history JSON</span>
+<span class="cmd">$ git log --pretty=format:'{"hash":"%H","short":"%h","message":"%s","date":"%aI"}' \
+    | head -100 > docs/git-history.json</span>
+
+<span class="comment"># Then sync the graph</span>
+<span class="cmd">$ deciduous sync</span></pre>
+
+            <h2>Deploying to GitHub Pages</h2>
+
+            <p>The <code>docs/</code> directory is ready for GitHub Pages deployment:</p>
+
+            <ol>
+                <li>Run <code>deciduous sync</code> to export graph to JSON</li>
+                <li>Push to GitHub</li>
+                <li>Go to <strong>Settings &gt; Pages</strong></li>
+                <li>Set source to <strong>Deploy from branch</strong></li>
+                <li>Select branch and <code>/docs</code> folder</li>
+            </ol>
+
+            <p>Your graph will be live at <code>https://&lt;username&gt;.github.io/&lt;repo&gt;/</code></p>
+
+            <h2>Local vs GitHub Pages</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Feature</th>
+                        <th>Local (<code>deciduous serve</code>)</th>
+                        <th>GitHub Pages</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Auto-refresh</td>
+                        <td>Every 30 seconds</td>
+                        <td>Manual (push to update)</td>
+                    </tr>
+                    <tr>
+                        <td>Data source</td>
+                        <td>Live from database</td>
+                        <td>Static JSON files</td>
+                    </tr>
+                    <tr>
+                        <td>Sharing</td>
+                        <td>Local only</td>
+                        <td>Public URL</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="page-nav">
+                <a href="tui.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The Terminal UI</span>
+                </a>
+                <a href="cli.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">CLI Queries</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

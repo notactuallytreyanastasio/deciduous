@@ -341,10 +341,36 @@
         }
         footer a { color: #0969da; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
+
+        .top-nav {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #d0d7de;
+        }
+        .top-nav a {
+            color: #57606a;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.15s;
+        }
+        .top-nav a:hover {
+            color: #0969da;
+        }
     </style>
 </head>
 <body>
     <div class="container">
+        <nav class="top-nav">
+            <a href="tutorial/">Tutorial</a>
+            <a href="demo/">Live Graph</a>
+            <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+            <a href="https://crates.io/crates/deciduous">crates.io</a>
+        </nav>
+
         <header>
             <h1>DECIDUOUS</h1>
             <p class="tagline">Decision graph tooling for AI-assisted development.</p>
@@ -453,6 +479,7 @@
 
         <div class="buttons">
             <a href="demo/" class="btn btn-primary">Browse the Graph</a>
+            <a href="tutorial/" class="btn btn-secondary">Tutorial</a>
             <a href="https://github.com/notactuallytreyanastasio/deciduous" class="btn btn-secondary">View on GitHub</a>
             <a href="https://crates.io/crates/deciduous" class="btn btn-secondary">crates.io</a>
         </div>

@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installing Deciduous - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Hello, World!</a>
+                <ul>
+                    <li><a href="installing.html" class="active">Installing</a></li>
+                    <li><a href="initializing.html">Initializing</a></li>
+                    <li><a href="first-nodes.html">Your First Nodes</a></li>
+                    <li><a href="connecting.html">Connecting Nodes</a></li>
+                    <li><a href="viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Installing Deciduous</h1>
+
+            <p>Deciduous is distributed as a Rust binary via <a href="https://crates.io/crates/deciduous">crates.io</a>.</p>
+
+            <h2>Via Cargo</h2>
+
+            <p>If you have Rust installed, run:</p>
+
+            <pre><span class="cmd">$ cargo install deciduous</span>
+<span class="output">    Updating crates.io index
+  Downloaded deciduous v0.3.5
+   Compiling deciduous v0.3.5
+    Finished release [optimized] target(s) in 45.23s
+  Installing ~/.cargo/bin/deciduous
+   Installed package `deciduous v0.3.5`</span></pre>
+
+            <p>Verify it's installed:</p>
+
+            <pre><span class="cmd">$ deciduous --version</span>
+<span class="output">deciduous 0.3.5</span></pre>
+
+            <h2>Don't Have Rust?</h2>
+
+            <p>Install Rust first via <a href="https://rustup.rs">rustup</a>:</p>
+
+            <pre><span class="cmd">$ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh</span></pre>
+
+            <p>Then restart your terminal and run <code>cargo install deciduous</code>.</p>
+
+            <h2>Optional: Graphviz</h2>
+
+            <p>If you want to generate PNG visualizations of your decision graphs (for PRs, documentation, etc.), install graphviz:</p>
+
+            <pre><span class="comment"># macOS</span>
+<span class="cmd">$ brew install graphviz</span>
+
+<span class="comment"># Ubuntu/Debian</span>
+<span class="cmd">$ apt install graphviz</span>
+
+<span class="comment"># Arch</span>
+<span class="cmd">$ pacman -S graphviz</span></pre>
+
+            <p>This enables the <code>--png</code> flag on <code>deciduous dot</code>. If graphviz isn't installed, that flag will fail with a helpful error message.</p>
+
+            <div class="info-box">
+                <strong>Note</strong>
+                <p>Graphviz is optional. All core deciduous functionality works without it. You only need it if you want to export graphs as PNG images.</p>
+            </div>
+
+            <h2>Verify Installation</h2>
+
+            <p>Let's make sure everything is working:</p>
+
+            <pre><span class="cmd">$ deciduous --help</span>
+<span class="output">Decision graph tooling for AI-assisted development
+
+Usage: deciduous &lt;COMMAND&gt;
+
+Commands:
+  init      Initialize deciduous in current directory
+  add       Add a new node to the decision graph
+  link      Add an edge between nodes
+  nodes     List all nodes
+  edges     List all edges
+  serve     Start the graph viewer server
+  tui       Launch the terminal user interface
+  ...</span></pre>
+
+            <p>You should see a list of available commands. If you see this, you're ready to go!</p>
+
+            <div class="page-nav">
+                <a href="index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Hello, World!</span>
+                </a>
+                <a href="initializing.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Initializing in Your Project</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

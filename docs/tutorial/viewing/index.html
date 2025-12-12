@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Viewing the Graph - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Viewing the Graph</a>
+                <ul>
+                    <li><a href="tui.html">The Terminal UI</a></li>
+                    <li><a href="web.html">The Web Viewer</a></li>
+                    <li><a href="cli.html">CLI Queries</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Viewing the Graph</h1>
+            <p class="lead">Deciduous provides three interfaces for exploring your decision graph, each suited to different needs.</p>
+
+            <h2>Three Ways to View</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Interface</th>
+                        <th>Best For</th>
+                        <th>Command</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Terminal UI (TUI)</strong></td>
+                        <td>Keyboard-driven exploration, file jumping</td>
+                        <td><code>deciduous tui</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>Web Viewer</strong></td>
+                        <td>Visual exploration, sharing, GitHub Pages</td>
+                        <td><code>deciduous serve</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>CLI</strong></td>
+                        <td>Quick queries, scripting, piping</td>
+                        <td><code>deciduous nodes</code>, etc.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>When to Use Each</h2>
+
+            <h3>Use the TUI when:</h3>
+            <ul>
+                <li>You're already in the terminal</li>
+                <li>You want vim-style navigation</li>
+                <li>You need to jump to files associated with nodes</li>
+                <li>You want syntax-highlighted file previews</li>
+            </ul>
+
+            <h3>Use the Web Viewer when:</h3>
+            <ul>
+                <li>You want visual graph representations</li>
+                <li>You're sharing with others (GitHub Pages)</li>
+                <li>You want to explore interactively with mouse</li>
+                <li>You need multiple visualization modes</li>
+            </ul>
+
+            <h3>Use the CLI when:</h3>
+            <ul>
+                <li>You need quick answers</li>
+                <li>You're scripting or piping output</li>
+                <li>Claude is querying the graph</li>
+                <li>You want to filter by branch/type</li>
+            </ul>
+
+            <div class="next-section">
+                <span>Let's start with the most feature-rich option:</span>
+                <a href="tui.html" class="btn">The Terminal UI &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="../workflows/pr-documentation.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">PR Documentation</span>
+                </a>
+                <a href="tui.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">The Terminal UI</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

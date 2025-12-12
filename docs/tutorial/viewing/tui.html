@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Terminal UI - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Viewing the Graph</a>
+                <ul>
+                    <li><a href="tui.html" class="active">The Terminal UI</a></li>
+                    <li><a href="web.html">The Web Viewer</a></li>
+                    <li><a href="cli.html">CLI Queries</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The Terminal UI (TUI)</h1>
+
+            <p>The TUI is a rich, vim-style interface for exploring your decision graph without leaving the terminal.</p>
+
+            <pre><span class="cmd">$ deciduous tui</span></pre>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: tui-overview.png]</span>
+                <div class="caption">The TUI main screen with timeline list and detail panel</div>
+            </div>
+
+            <h2>Layout</h2>
+
+            <p>The TUI has two main areas:</p>
+
+            <ul>
+                <li><strong>Left:</strong> Timeline list of nodes</li>
+                <li><strong>Right:</strong> Detail panel for the selected node</li>
+            </ul>
+
+            <p>Press <kbd>Enter</kbd> to toggle the detail panel open/closed.</p>
+
+            <h2>Navigation</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><kbd>j</kbd> / <kbd>k</kbd></td>
+                        <td>Move down / up</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>gg</kbd></td>
+                        <td>Jump to top</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>G</kbd></td>
+                        <td>Jump to bottom</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Ctrl+d</kbd> / <kbd>Ctrl+u</kbd></td>
+                        <td>Page down / up</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Enter</kbd></td>
+                        <td>Toggle detail panel</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>q</kbd></td>
+                        <td>Quit</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Filtering & Search</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><kbd>/</kbd></td>
+                        <td>Search by title</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>f</kbd></td>
+                        <td>Cycle through type filters (goal, decision, action...)</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>b</kbd></td>
+                        <td>Cycle through branch filters</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>B</kbd></td>
+                        <td>Fuzzy branch search</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>R</kbd></td>
+                        <td>Toggle sort order (newest/oldest first)</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>Ctrl+c</kbd></td>
+                        <td>Clear all filters</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: tui-search.png]</span>
+                <div class="caption">The TUI with search active, filtering nodes containing "auth"</div>
+            </div>
+
+            <h2>File Operations</h2>
+
+            <p>The TUI can jump directly to files associated with nodes:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><kbd>o</kbd></td>
+                        <td>Open associated files in $EDITOR</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>O</kbd></td>
+                        <td>View commit details (if node has linked commit)</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>F</kbd></td>
+                        <td>Toggle file browser in detail panel</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>n</kbd> / <kbd>N</kbd></td>
+                        <td>Next / previous file (when in file browser)</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>p</kbd></td>
+                        <td>Preview file with syntax highlighting</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>d</kbd></td>
+                        <td>Show file diff with syntax highlighting</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: tui-file-preview.png]</span>
+                <div class="caption">The TUI showing syntax-highlighted file preview</div>
+            </div>
+
+            <h2>The Detail Panel</h2>
+
+            <p>When you press <kbd>Enter</kbd> on a node, the detail panel shows:</p>
+
+            <ul>
+                <li>Node type and confidence score (color-coded)</li>
+                <li>Full title and description</li>
+                <li>User prompt (if captured with <code>-p</code>)</li>
+                <li>Associated files</li>
+                <li>Linked git commit</li>
+                <li>Incoming and outgoing edges with rationales</li>
+            </ul>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: tui-detail-panel.png]</span>
+                <div class="caption">The detail panel showing a decision node with connections and prompt</div>
+            </div>
+
+            <h2>Other Commands</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Key</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><kbd>s</kbd></td>
+                        <td>Show goal story (hierarchy from root)</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>r</kbd></td>
+                        <td>Refresh graph from database</td>
+                    </tr>
+                    <tr>
+                        <td><kbd>?</kbd></td>
+                        <td>Show help</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Auto-Refresh</h2>
+
+            <p>The TUI watches the database file and auto-refreshes when it changes. If you add nodes in another terminal, they'll appear automatically.</p>
+
+            <h2>Specifying Database Path</h2>
+
+            <p>By default, the TUI auto-discovers the database. To specify a different path:</p>
+
+            <pre><span class="cmd">$ deciduous tui -d /path/to/.deciduous/deciduous.db</span></pre>
+
+            <div class="page-nav">
+                <a href="index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Viewing the Graph</span>
+                </a>
+                <a href="web.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">The Web Viewer</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

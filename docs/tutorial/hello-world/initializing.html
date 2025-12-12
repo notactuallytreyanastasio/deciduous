@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Initializing in Your Project - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Hello, World!</a>
+                <ul>
+                    <li><a href="installing.html">Installing</a></li>
+                    <li><a href="initializing.html" class="active">Initializing</a></li>
+                    <li><a href="first-nodes.html">Your First Nodes</a></li>
+                    <li><a href="connecting.html">Connecting Nodes</a></li>
+                    <li><a href="viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Initializing in Your Project</h1>
+
+            <p>Navigate to your project directory and run <code>deciduous init</code>:</p>
+
+            <pre><span class="cmd">$ cd my-project</span>
+<span class="cmd">$ deciduous init</span>
+<span class="output">Created .deciduous/deciduous.db (SQLite database)
+Created .deciduous/config.toml (configuration)
+Created .claude/commands/context.md (Claude slash command)
+Created .claude/commands/decision.md (Claude slash command)
+Created docs/ (web viewer, deployable to GitHub Pages)
+Created CLAUDE.md (project instructions)
+Added .deciduous/deciduous.db to .gitignore
+
+Deciduous initialized! Next steps:
+  1. Run 'deciduous serve' to start the web viewer
+  2. Use 'deciduous add goal "Your goal" -c 90' to create nodes
+  3. Tell Claude to use /context at session start</span></pre>
+
+            <h2>What Got Created</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>.deciduous/deciduous.db</code></td>
+                        <td>SQLite database storing your graph (gitignored)</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/config.toml</code></td>
+                        <td>Configuration file</td>
+                    </tr>
+                    <tr>
+                        <td><code>.claude/commands/</code></td>
+                        <td>Slash commands for Claude Code</td>
+                    </tr>
+                    <tr>
+                        <td><code>docs/</code></td>
+                        <td>Static web viewer (deploy to GitHub Pages)</td>
+                    </tr>
+                    <tr>
+                        <td><code>CLAUDE.md</code></td>
+                        <td>Instructions for Claude about the workflow</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>The Database is Local</h2>
+
+            <p>Notice that <code>.deciduous/deciduous.db</code> was added to <code>.gitignore</code>. This is intentional.</p>
+
+            <div class="info-box">
+                <strong>Why is the database gitignored?</strong>
+                <p>SQLite databases don't merge well in git. Each developer keeps their own local copy. Decisions are shared via the patch system (covered in <a href="../sharing/index.html">Sharing with Others</a>).</p>
+            </div>
+
+            <p>This means:</p>
+            <ul>
+                <li>Your decision graph is local to your machine</li>
+                <li>It won't cause merge conflicts</li>
+                <li>Team members share decisions via exportable patches</li>
+            </ul>
+
+            <h2>Claude Code Integration</h2>
+
+            <p>The <code>.claude/commands/</code> directory contains slash commands that Claude Code will recognize:</p>
+
+            <ul>
+                <li><code>/context</code> &mdash; Recover context from the decision graph at session start</li>
+                <li><code>/decision</code> &mdash; Manage the decision graph (add nodes, link, etc.)</li>
+            </ul>
+
+            <p>The <code>CLAUDE.md</code> file contains instructions that Claude will follow, including the decision logging workflow. When you start a Claude Code session in this project, it will know how to use deciduous.</p>
+
+            <h2>Web Viewer Setup</h2>
+
+            <p>The <code>docs/</code> directory contains a static web viewer. You have two options for viewing it:</p>
+
+            <h3>Option 1: Local Server (Development)</h3>
+
+            <pre><span class="cmd">$ deciduous serve</span>
+<span class="output">Starting graph viewer at http://localhost:3000
+Auto-refresh enabled (30 second interval)
+Press Ctrl+C to stop</span></pre>
+
+            <p>This serves the graph with live updates as you add nodes.</p>
+
+            <h3>Option 2: GitHub Pages (Sharing)</h3>
+
+            <p>The <code>docs/</code> folder is ready to deploy to GitHub Pages:</p>
+
+            <ol>
+                <li>Push your repo to GitHub</li>
+                <li>Go to <strong>Settings &gt; Pages</strong></li>
+                <li>Set source to <strong>Deploy from a branch</strong></li>
+                <li>Select the <strong>gh-pages</strong> branch (or <strong>main</strong> + <code>/docs</code> folder)</li>
+            </ol>
+
+            <p>Before deploying, run <code>deciduous sync</code> to export your graph to JSON.</p>
+
+            <div class="page-nav">
+                <a href="installing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Installing Deciduous</span>
+                </a>
+                <a href="first-nodes.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Your First Nodes</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

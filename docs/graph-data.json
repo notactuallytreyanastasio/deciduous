@@ -4157,6 +4157,116 @@
       "created_at": "2025-12-12T03:14:59.597735-05:00",
       "updated_at": "2025-12-12T03:14:59.597735-05:00",
       "metadata_json": "{\"branch\":\"feature/git-history-export\",\"commit\":\"7e3156c\",\"confidence\":95}"
+    },
+    {
+      "id": 379,
+      "change_id": "ece83909-e5d2-48a3-9c65-f0c1f18df09e",
+      "node_type": "goal",
+      "title": "Create narrative tutorial for deciduous",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:40:51.972027-05:00",
+      "updated_at": "2025-12-12T03:40:51.972027-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User asked: Create a tutorial like the jujutsu tutorial site for deciduous\"}"
+    },
+    {
+      "id": 380,
+      "change_id": "784f4d63-9a15-4d4b-b8a6-d766488408b4",
+      "node_type": "decision",
+      "title": "Choose tutorial structure and format",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:40:53.597582-05:00",
+      "updated_at": "2025-12-12T03:40:53.597582-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":85}"
+    },
+    {
+      "id": 381,
+      "change_id": "c89b043e-fb67-4536-885b-77d7a4ce8297",
+      "node_type": "option",
+      "title": "Markdown document in docs/",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:03.208870-05:00",
+      "updated_at": "2025-12-12T03:41:03.208870-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":60}"
+    },
+    {
+      "id": 382,
+      "change_id": "0a84ade0-4dcc-4f98-883c-f317f42a6a6a",
+      "node_type": "option",
+      "title": "HTML pages as GitHub Pages site",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:04.245889-05:00",
+      "updated_at": "2025-12-12T03:41:04.245889-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":85}"
+    },
+    {
+      "id": 383,
+      "change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+      "node_type": "action",
+      "title": "Implementing HTML tutorial site with jujutsu-style structure",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:15.395728-05:00",
+      "updated_at": "2025-12-12T03:41:15.395728-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":90}"
+    },
+    {
+      "id": 384,
+      "change_id": "b0b66903-864a-4db5-9fa5-460fc99e8bb8",
+      "node_type": "observation",
+      "title": "Studied jujutsu tutorial structure: progressive chapters, conversational tone, terminal examples",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:24.392112-05:00",
+      "updated_at": "2025-12-12T03:41:24.392112-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":90}"
+    },
+    {
+      "id": 385,
+      "change_id": "218c53e9-3623-4969-a2b4-763b85092c55",
+      "node_type": "action",
+      "title": "Created 7 chapters: Intro, Hello World, Workflows, Viewing, Sharing, Advanced, Reference",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:25.379796-05:00",
+      "updated_at": "2025-12-12T03:41:25.379796-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
+    },
+    {
+      "id": 386,
+      "change_id": "433f2878-a4ab-4c29-8891-a95d5954408a",
+      "node_type": "action",
+      "title": "Added AI-generated warning banner to all 23 tutorial pages",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:37.694550-05:00",
+      "updated_at": "2025-12-12T03:41:37.694550-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95,\"prompt\":\"User asked: add AI generated warning banner on every page\"}"
+    },
+    {
+      "id": 387,
+      "change_id": "1d15f000-ca50-4b86-b42a-659f499879ed",
+      "node_type": "action",
+      "title": "Added top navigation bar and Tutorial link to landing page",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:38.583798-05:00",
+      "updated_at": "2025-12-12T03:41:38.583798-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
+    },
+    {
+      "id": 388,
+      "change_id": "4a068563-7378-422c-8d88-8b86939d8406",
+      "node_type": "outcome",
+      "title": "Tutorial site complete with 23 pages, 7 chapters, warning banners, and landing page integration",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T03:41:48.783189-05:00",
+      "updated_at": "2025-12-12T03:41:48.783189-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -7657,6 +7767,116 @@
       "weight": 1.0,
       "rationale": "Fix completed",
       "created_at": "2025-12-12T03:14:59.605603-05:00"
+    },
+    {
+      "id": 319,
+      "from_node_id": 379,
+      "to_node_id": 380,
+      "from_change_id": "ece83909-e5d2-48a3-9c65-f0c1f18df09e",
+      "to_change_id": "784f4d63-9a15-4d4b-b8a6-d766488408b4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Need to decide how to structure the tutorial",
+      "created_at": "2025-12-12T03:41:01.601521-05:00"
+    },
+    {
+      "id": 320,
+      "from_node_id": 380,
+      "to_node_id": 381,
+      "from_change_id": "784f4d63-9a15-4d4b-b8a6-d766488408b4",
+      "to_change_id": "c89b043e-fb67-4536-885b-77d7a4ce8297",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Simple but not integrated with GH Pages site",
+      "created_at": "2025-12-12T03:41:12.941248-05:00"
+    },
+    {
+      "id": 321,
+      "from_node_id": 380,
+      "to_node_id": 382,
+      "from_change_id": "784f4d63-9a15-4d4b-b8a6-d766488408b4",
+      "to_change_id": "0a84ade0-4dcc-4f98-883c-f317f42a6a6a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Matches existing site, deployable, interactive navigation",
+      "created_at": "2025-12-12T03:41:14.297024-05:00"
+    },
+    {
+      "id": 322,
+      "from_node_id": 380,
+      "to_node_id": 383,
+      "from_change_id": "784f4d63-9a15-4d4b-b8a6-d766488408b4",
+      "to_change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+      "edge_type": "chosen",
+      "weight": 1.0,
+      "rationale": "User requested it be part of GH Pages site, matches jujutsu tutorial format",
+      "created_at": "2025-12-12T03:41:23.634057-05:00"
+    },
+    {
+      "id": 323,
+      "from_node_id": 383,
+      "to_node_id": 384,
+      "from_change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+      "to_change_id": "b0b66903-864a-4db5-9fa5-460fc99e8bb8",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Research informed implementation approach",
+      "created_at": "2025-12-12T03:41:34.076621-05:00"
+    },
+    {
+      "id": 324,
+      "from_node_id": 383,
+      "to_node_id": 385,
+      "from_change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+      "to_change_id": "218c53e9-3623-4969-a2b4-763b85092c55",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implemented chapter structure",
+      "created_at": "2025-12-12T03:41:35.836843-05:00"
+    },
+    {
+      "id": 325,
+      "from_node_id": 385,
+      "to_node_id": 386,
+      "from_change_id": "218c53e9-3623-4969-a2b4-763b85092c55",
+      "to_change_id": "433f2878-a4ab-4c29-8891-a95d5954408a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "User requested warning banner",
+      "created_at": "2025-12-12T03:41:46.887776-05:00"
+    },
+    {
+      "id": 326,
+      "from_node_id": 385,
+      "to_node_id": 387,
+      "from_change_id": "218c53e9-3623-4969-a2b4-763b85092c55",
+      "to_change_id": "1d15f000-ca50-4b86-b42a-659f499879ed",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "User requested tutorial link at top of landing page",
+      "created_at": "2025-12-12T03:41:47.736597-05:00"
+    },
+    {
+      "id": 327,
+      "from_node_id": 386,
+      "to_node_id": 388,
+      "from_change_id": "433f2878-a4ab-4c29-8891-a95d5954408a",
+      "to_change_id": "4a068563-7378-422c-8d88-8b86939d8406",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Warning banners complete",
+      "created_at": "2025-12-12T03:41:55.530054-05:00"
+    },
+    {
+      "id": 328,
+      "from_node_id": 387,
+      "to_node_id": 388,
+      "from_change_id": "1d15f000-ca50-4b86-b42a-659f499879ed",
+      "to_change_id": "4a068563-7378-422c-8d88-8b86939d8406",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Landing page integration complete",
+      "created_at": "2025-12-12T03:41:56.573996-05:00"
     }
   ]
 }

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connecting Nodes - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Hello, World!</a>
+                <ul>
+                    <li><a href="installing.html">Installing</a></li>
+                    <li><a href="initializing.html">Initializing</a></li>
+                    <li><a href="first-nodes.html">Your First Nodes</a></li>
+                    <li><a href="connecting.html" class="active">Connecting Nodes</a></li>
+                    <li><a href="viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Connecting Nodes</h1>
+
+            <p>Nodes without connections are just a list. Let's turn them into a proper graph.</p>
+
+            <h2>The Link Command</h2>
+
+            <p>Use <code>deciduous link</code> to create edges between nodes:</p>
+
+            <pre><span class="cmd">$ deciduous link 1 2 -r "Need to decide approach"</span>
+<span class="output">Created edge: #1 -> #2 (leads_to) "Need to decide approach"</span></pre>
+
+            <p>This creates an edge from node #1 (our goal) to node #2 (our decision), with a rationale explaining why they're connected.</p>
+
+            <h2>Building the Decision Flow</h2>
+
+            <p>Let's connect all our nodes:</p>
+
+            <pre><span class="comment"># Connect decision to its options</span>
+<span class="cmd">$ deciduous link 2 3 -r "Stateless, scales well"</span>
+<span class="output">Created edge: #2 -> #3 (leads_to) "Stateless, scales well"</span>
+
+<span class="cmd">$ deciduous link 2 4 -r "Simpler but requires server state"</span>
+<span class="output">Created edge: #2 -> #4 (leads_to) "Simpler but requires server state"</span></pre>
+
+            <p>Now let's say we chose JWT. We'll create an action and link it with the <code>chosen</code> edge type:</p>
+
+            <pre><span class="cmd">$ deciduous add action "Implementing JWT authentication" -c 85</span>
+<span class="output">Created node #5: action "Implementing JWT authentication"</span>
+
+<span class="cmd">$ deciduous link 2 5 --edge-type chosen -r "Stateless preferred for microservices"</span>
+<span class="output">Created edge: #2 -> #5 (chosen) "Stateless preferred for microservices"</span></pre>
+
+            <p>And when implementation is complete:</p>
+
+            <pre><span class="cmd">$ deciduous add outcome "JWT auth working, tests passing" -c 95</span>
+<span class="output">Created node #6: outcome "JWT auth working, tests passing"</span>
+
+<span class="cmd">$ deciduous link 5 6 -r "Implementation complete"</span>
+<span class="output">Created edge: #5 -> #6 (leads_to) "Implementation complete"</span></pre>
+
+            <h2>Viewing the Graph</h2>
+
+            <p>Let's see all our edges:</p>
+
+            <pre><span class="cmd">$ deciduous edges</span>
+<span class="output">From  To   Type       Rationale
+────────────────────────────────────────────────────────────────
+1     2    leads_to   Need to decide approach
+2     3    leads_to   Stateless, scales well
+2     4    leads_to   Simpler but requires server state
+2     5    chosen     Stateless preferred for microservices
+5     6    leads_to   Implementation complete</span></pre>
+
+            <p>Now we have a complete decision chain:</p>
+
+            <p><strong>Goal</strong> &rarr; <strong>Decision</strong> &rarr; <strong>Options</strong> + <strong>Chosen Action</strong> &rarr; <strong>Outcome</strong></p>
+
+            <h2>Edge Types</h2>
+
+            <p>Deciduous supports several edge types to capture different relationships:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Meaning</th>
+                        <th>When to Use</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>leads_to</code></td>
+                        <td>Natural progression</td>
+                        <td>Default for most connections</td>
+                    </tr>
+                    <tr>
+                        <td><code>chosen</code></td>
+                        <td>Selected this option</td>
+                        <td>When picking an option to implement</td>
+                    </tr>
+                    <tr>
+                        <td><code>rejected</code></td>
+                        <td>Did not select</td>
+                        <td>When explicitly rejecting an option</td>
+                    </tr>
+                    <tr>
+                        <td><code>requires</code></td>
+                        <td>Dependency</td>
+                        <td>When one thing needs another first</td>
+                    </tr>
+                    <tr>
+                        <td><code>blocks</code></td>
+                        <td>Preventing progress</td>
+                        <td>When something is blocked</td>
+                    </tr>
+                    <tr>
+                        <td><code>enables</code></td>
+                        <td>Makes possible</td>
+                        <td>When one thing unlocks another</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>The Connection Rules</h2>
+
+            <div class="info-box tip">
+                <strong>Golden Rule</strong>
+                <p>Every node (except root goals) should connect to something. Orphan nodes lose the context that makes them valuable.</p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Node Type</th>
+                        <th>Should Connect To</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="node-goal">goal</span></td>
+                        <td>Can be root (no parent needed)</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-decision">decision</span></td>
+                        <td>Parent goal or decision</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-option">option</span></td>
+                        <td>Parent decision</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-action">action</span></td>
+                        <td>Parent decision (with <code>chosen</code> edge)</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-outcome">outcome</span></td>
+                        <td>Parent action or goal</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-observation">observation</span></td>
+                        <td>Related node (any type)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Connect Immediately</h2>
+
+            <p>The best practice is to link nodes immediately after creating them. Don't create a bunch of nodes and then try to remember how they connect later.</p>
+
+            <pre><span class="comment"># Good: Create and connect immediately</span>
+<span class="cmd">$ deciduous add action "Implementing JWT" -c 85</span>
+<span class="cmd">$ deciduous link 2 5 --edge-type chosen -r "Best for our architecture"</span>
+
+<span class="comment"># Bad: Creating nodes without connecting</span>
+<span class="cmd">$ deciduous add action "Implementing JWT" -c 85</span>
+<span class="cmd">$ deciduous add action "Adding tests" -c 80</span>
+<span class="cmd">$ deciduous add outcome "Feature complete" -c 95</span>
+<span class="comment"># ... now you have to remember how they all connect</span></pre>
+
+            <div class="page-nav">
+                <a href="first-nodes.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Your First Nodes</span>
+                </a>
+                <a href="viewing.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Viewing the Graph</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

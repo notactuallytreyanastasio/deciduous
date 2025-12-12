@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your First Nodes - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Hello, World!</a>
+                <ul>
+                    <li><a href="installing.html">Installing</a></li>
+                    <li><a href="initializing.html">Initializing</a></li>
+                    <li><a href="first-nodes.html" class="active">Your First Nodes</a></li>
+                    <li><a href="connecting.html">Connecting Nodes</a></li>
+                    <li><a href="viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Your First Nodes</h1>
+
+            <p>Let's create some nodes to see how the decision graph works.</p>
+
+            <h2>Creating a Goal</h2>
+
+            <p>Every decision chain starts with a <span class="node-goal">goal</span>&mdash;the high-level objective you're trying to achieve:</p>
+
+            <pre><span class="cmd">$ deciduous add goal "Implement user authentication" -c 90</span>
+<span class="output">Created node #1: goal "Implement user authentication"</span></pre>
+
+            <p>What just happened?</p>
+
+            <ul>
+                <li>We created a <strong>goal</strong> node (a high-level objective)</li>
+                <li>The title is "Implement user authentication"</li>
+                <li>The <code>-c 90</code> sets <strong>confidence</strong> to 90% (we're pretty sure this is what we want)</li>
+                <li>It was assigned ID <strong>#1</strong></li>
+            </ul>
+
+            <h2>Adding a Decision</h2>
+
+            <p>A <span class="node-decision">decision</span> represents a choice point&mdash;somewhere you need to pick between options:</p>
+
+            <pre><span class="cmd">$ deciduous add decision "Choose authentication method" -c 75</span>
+<span class="output">Created node #2: decision "Choose authentication method"</span></pre>
+
+            <p>The confidence is lower (75%) because we haven't decided yet.</p>
+
+            <h2>Adding Options</h2>
+
+            <p>An <span class="node-option">option</span> represents something you're considering:</p>
+
+            <pre><span class="cmd">$ deciduous add option "JWT tokens" -c 80</span>
+<span class="output">Created node #3: option "JWT tokens"</span>
+
+<span class="cmd">$ deciduous add option "Session cookies" -c 70</span>
+<span class="output">Created node #4: option "Session cookies"</span></pre>
+
+            <p>Now we have two options to consider.</p>
+
+            <h2>Viewing What We Have</h2>
+
+            <p>Let's see all our nodes:</p>
+
+            <pre><span class="cmd">$ deciduous nodes</span>
+<span class="output">ID  Type        Title                            Status   Confidence
+─────────────────────────────────────────────────────────────────────
+1   goal        Implement user authentication    active   90
+2   decision    Choose authentication method     active   75
+3   option      JWT tokens                       active   80
+4   option      Session cookies                  active   70</span></pre>
+
+            <p>We have four nodes, but there's a problem: <strong>they're not connected</strong>.</p>
+
+            <h2>The Connection Problem</h2>
+
+            <p>Right now, our nodes are just floating in space. The decision graph's value comes from showing <em>relationships</em>:</p>
+
+            <ul>
+                <li>Which goal does this decision belong to?</li>
+                <li>Which decision do these options relate to?</li>
+                <li>What led to what?</li>
+            </ul>
+
+            <div class="info-box warning">
+                <strong>Important</strong>
+                <p>A decision graph without edges is just a list. The edges are what make it useful. Always connect your nodes!</p>
+            </div>
+
+            <p>Let's fix that in the next section.</p>
+
+            <h2>Node Types Quick Reference</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Purpose</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="node-goal">goal</span></td>
+                        <td>High-level objective</td>
+                        <td>"Add user authentication"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-decision">decision</span></td>
+                        <td>Choice point</td>
+                        <td>"Choose auth method"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-option">option</span></td>
+                        <td>Approach considered</td>
+                        <td>"Use JWT tokens"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-action">action</span></td>
+                        <td>Implementation step</td>
+                        <td>"Adding JWT middleware"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-outcome">outcome</span></td>
+                        <td>Result</td>
+                        <td>"Auth working in prod"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-observation">observation</span></td>
+                        <td>Discovery or insight</td>
+                        <td>"Existing code uses sessions"</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="page-nav">
+                <a href="initializing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Initializing</span>
+                </a>
+                <a href="connecting.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Connecting Nodes</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>
