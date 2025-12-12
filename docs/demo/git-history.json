@@ -1,10 +1,10 @@
 [
   {
-    "hash": "2dec7adc35214b7152539fcf7bd150b9c962da5c",
-    "short_hash": "2dec7ad",
+    "hash": "75fcb3c3b28898c7f1c47877411128ab5685c684",
+    "short_hash": "75fcb3c",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T03:20:21-05:00",
-    "message": "fix: remove truncation from commit messages in TimelineView",
+    "date": "2025-12-12T04:02:45-05:00",
+    "message": "release: v0.8.6 - git history export and DAG default view\n\nFeatures:\n- Git history export: commit messages now shown in web UI\n- DAG view is now the default landing page\n- Dynamic node count on landing page\n- AI Integration Files tutorial page\n\nFixes:\n- Terminal session spacing in tutorials\n\nDocs:\n- README restructured with why-first approach\n- Added roadmap items for URL state sharing and DAG+timeline split",
     "files_changed": 2
   },
   {
