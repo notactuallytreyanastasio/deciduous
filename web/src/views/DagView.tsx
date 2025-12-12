@@ -345,63 +345,79 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         <div style={styles.topBarCenter}>
           {viewMode === 'recent' && (
             <>
-              {/* Show -1 button when more than 1 chain is shown */}
-              {recentChainCount > 1 && (
+              {/* -1 button - disabled when only 1 chain shown */}
+              <button
+                onClick={() => handleShowLess(1)}
+                style={{
+                  ...styles.topBarBtnDanger,
+                  ...(recentChainCount <= 1 ? styles.topBarBtnDisabled : {}),
+                }}
+                disabled={recentChainCount <= 1}
+                title={recentChainCount <= 1 ? "Already showing minimum" : "Show one fewer goal chain"}
+              >
+                −1 Chain
+              </button>
+
+              {/* +1 button - disabled when all chains shown */}
+              <button
+                onClick={() => handleShowMore(1)}
+                style={{
+                  ...styles.topBarBtn,
+                  ...(hiddenChainCount <= 0 ? styles.topBarBtnDisabled : {}),
+                }}
+                disabled={hiddenChainCount <= 0}
+                title={hiddenChainCount <= 0 ? "All chains shown" : "Show one more goal chain"}
+              >
+                +1 Chain
+              </button>
+
+              {/* +N button - disabled when all chains shown */}
+              {!expandInputVisible ? (
                 <button
-                  onClick={() => handleShowLess(1)}
-                  style={styles.topBarBtnDanger}
-                  title="Show one fewer goal chain"
+                  onClick={() => setExpandInputVisible(true)}
+                  style={{
+                    ...styles.topBarBtn,
+                    ...(hiddenChainCount <= 0 ? styles.topBarBtnDisabled : {}),
+                  }}
+                  disabled={hiddenChainCount <= 0}
+                  title={hiddenChainCount <= 0 ? "All chains shown" : "Add a specific number of chains"}
                 >
-                  −1 Chain
+                  +N...
                 </button>
-              )}
-              {/* Show +1 button when there are more chains to show */}
-              {hiddenChainCount > 0 && (
-                <>
-                  <button
-                    onClick={() => handleShowMore(1)}
-                    style={styles.topBarBtn}
-                    title="Show one more goal chain"
-                  >
-                    +1 Chain
+              ) : (
+                <div style={styles.expandInputRow}>
+                  <input
+                    type="number"
+                    min="1"
+                    max={hiddenChainCount}
+                    value={expandInputValue}
+                    onChange={e => setExpandInputValue(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleExpandSubmit()}
+                    placeholder={String(hiddenChainCount)}
+                    style={styles.topBarInput}
+                    autoFocus
+                  />
+                  <button onClick={handleExpandSubmit} style={styles.topBarBtn}>
+                    Add
                   </button>
-                  {!expandInputVisible ? (
-                    <button
-                      onClick={() => setExpandInputVisible(true)}
-                      style={styles.topBarBtn}
-                      title="Add a specific number of chains"
-                    >
-                      +N...
-                    </button>
-                  ) : (
-                    <div style={styles.expandInputRow}>
-                      <input
-                        type="number"
-                        min="1"
-                        max={hiddenChainCount}
-                        value={expandInputValue}
-                        onChange={e => setExpandInputValue(e.target.value)}
-                        onKeyDown={e => e.key === 'Enter' && handleExpandSubmit()}
-                        placeholder={String(hiddenChainCount)}
-                        style={styles.topBarInput}
-                        autoFocus
-                      />
-                      <button onClick={handleExpandSubmit} style={styles.topBarBtn}>
-                        Add
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    onClick={handleShowAll}
-                    style={styles.topBarBtnSecondary}
-                    title="Show all goal chains in the graph"
-                  >
-                    Show All ({goalChains.length})
-                  </button>
-                </>
+                </div>
               )}
-              {/* When showing all in recent mode, just show reset button */}
-              {hiddenChainCount <= 0 && recentChainCount > DEFAULT_RECENT_CHAINS && (
+
+              {/* Show All button - disabled when all chains shown */}
+              <button
+                onClick={handleShowAll}
+                style={{
+                  ...styles.topBarBtnSecondary,
+                  ...(hiddenChainCount <= 0 ? styles.topBarBtnDisabled : {}),
+                }}
+                disabled={hiddenChainCount <= 0}
+                title={hiddenChainCount <= 0 ? "All chains shown" : "Show all goal chains in the graph"}
+              >
+                Show All ({goalChains.length})
+              </button>
+
+              {/* Reset button - only when expanded beyond default */}
+              {recentChainCount > DEFAULT_RECENT_CHAINS && (
                 <button onClick={handleShowRecent} style={styles.topBarBtnSecondary}>
                   Reset to {DEFAULT_RECENT_CHAINS}
                 </button>
@@ -675,6 +691,10 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background-color 0.15s',
+  },
+  topBarBtnDisabled: {
+    opacity: 0.5,
+    cursor: 'not-allowed',
   },
   topBarInput: {
     width: '50px',
