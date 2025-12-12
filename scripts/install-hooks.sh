@@ -20,13 +20,22 @@ echo "Installing git hooks..."
 cat > "$HOOKS_DIR/pre-commit" << 'EOF'
 #!/usr/bin/env bash
 #
-# pre-commit hook - Validate types before committing
+# pre-commit hook - Run clippy and validate types before committing
 #
 
 set -euo pipefail
 
 # Get the root of the repository
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Run clippy first (catches lint errors)
+echo "Running clippy..."
+if ! cargo clippy --quiet 2>&1; then
+    echo ""
+    echo "ERROR: Clippy found issues. Commit aborted."
+    echo "Run 'cargo clippy' to see details."
+    exit 1
+fi
 
 echo "Running type validation..."
 if ! "$REPO_ROOT/scripts/validate-types.sh"; then
@@ -123,5 +132,5 @@ echo ""
 echo "Git hooks installed successfully!"
 echo ""
 echo "Hooks installed:"
-echo "  - pre-commit: Validates type synchronization"
+echo "  - pre-commit: Runs clippy + validates type synchronization"
 echo "  - pre-push: Full validation (types + tests + build) for main branch"
