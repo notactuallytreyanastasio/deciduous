@@ -1,20 +1,10 @@
-name: Type Synchronization Check
+name: CI
 
 on:
   push:
     branches: [main, master]
-    paths:
-      - 'src/db.rs'
-      - 'src/tui/types.rs'
-      - 'web/src/types/graph.ts'
-      - 'schema/decision-graph.schema.json'
   pull_request:
     branches: [main, master]
-    paths:
-      - 'src/db.rs'
-      - 'src/tui/types.rs'
-      - 'web/src/types/graph.ts'
-      - 'schema/decision-graph.schema.json'
   workflow_dispatch:
 
 jobs:
@@ -78,11 +68,27 @@ jobs:
           cache: 'npm'
           cache-dependency-path: web/package-lock.json
 
-      - name: Rust Tests
-        run: cargo test
+      - name: Rust Unit Tests
+        run: cargo test --lib
+
+      - name: Rust Integration Tests
+        run: cargo test --test cli_integration
+
+      - name: Rust Property Tests (proptest)
+        run: cargo test --lib -- proptests
 
       - name: Rust Clippy
         run: cargo clippy -- -D warnings -A clippy::too_many_arguments
+
+      - name: Test Summary
+        if: success()
+        run: |
+          echo "## Test Results ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All tests passed:" >> $GITHUB_STEP_SUMMARY
+          echo "- Unit tests" >> $GITHUB_STEP_SUMMARY
+          echo "- Integration tests" >> $GITHUB_STEP_SUMMARY
+          echo "- Property-based tests (proptest)" >> $GITHUB_STEP_SUMMARY
 
       - name: Install Web Dependencies
         working-directory: web
