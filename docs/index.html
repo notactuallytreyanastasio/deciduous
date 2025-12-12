@@ -352,17 +352,25 @@ SESSION END -> Graph survives
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script>
-        AsciinemaPlayer.create('deciduous_demo.cast', document.getElementById('demo-player'), {
-            cols: 120,
-            rows: 30,
-            autoPlay: false,
-            preload: true,
-            theme: 'asciinema',
-            fit: 'width',
-            idleTimeLimit: 2,
-            speed: 1.5
-        });
+        // Fetch gzipped cast file and decompress
+        fetch('deciduous_demo_v2.cast.gz')
+            .then(response => response.arrayBuffer())
+            .then(compressed => {
+                const decompressed = pako.inflate(new Uint8Array(compressed), { to: 'string' });
+                AsciinemaPlayer.create({ data: decompressed }, document.getElementById('demo-player'), {
+                    cols: 120,
+                    rows: 30,
+                    autoPlay: false,
+                    preload: true,
+                    theme: 'asciinema',
+                    fit: 'width',
+                    idleTimeLimit: 2,
+                    speed: 1.5
+                });
+            })
+            .catch(err => console.error('Failed to load demo:', err));
     </script>
 </body>
 </html>
