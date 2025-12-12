@@ -3662,6 +3662,182 @@
       "created_at": "2025-12-12T00:16:19.266449-05:00",
       "updated_at": "2025-12-12T00:16:19.266449-05:00",
       "metadata_json": "{\"branch\":\"feature/type-unification-tui-web\",\"confidence\":100}"
+    },
+    {
+      "id": 334,
+      "change_id": "bbc41af7-9f95-44f6-840a-aa30e422f7e3",
+      "node_type": "goal",
+      "title": "Add asciinema demo to GitHub Pages",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:38.522089-05:00",
+      "updated_at": "2025-12-12T01:19:38.522089-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":90,\"prompt\":\"User asked to add deciduous_demo file as playable asciinema on the site\"}"
+    },
+    {
+      "id": 335,
+      "change_id": "35369cf5-b586-4770-b3e6-02e6f57810e5",
+      "node_type": "decision",
+      "title": "How to handle asciicast v3 format",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:45.764121-05:00",
+      "updated_at": "2025-12-12T01:19:45.764121-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":85}"
+    },
+    {
+      "id": 336,
+      "change_id": "b1e3bd68-bb89-4259-9acd-a048cbd851e3",
+      "node_type": "action",
+      "title": "Convert v3 to v2 format with absolute timestamps",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:45.782847-05:00",
+      "updated_at": "2025-12-12T01:19:45.782847-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":90}"
+    },
+    {
+      "id": 337,
+      "change_id": "235a5864-0f89-411a-915c-38be358d5510",
+      "node_type": "decision",
+      "title": "How to reduce 13MB file size",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:45.803790-05:00",
+      "updated_at": "2025-12-12T01:19:45.803790-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":85}"
+    },
+    {
+      "id": 338,
+      "change_id": "c5bd80fa-f989-41b2-8707-3e5facce59f9",
+      "node_type": "action",
+      "title": "Gzip compression - 13MB to 184KB",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:45.823598-05:00",
+      "updated_at": "2025-12-12T01:19:45.823598-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":95}"
+    },
+    {
+      "id": 339,
+      "change_id": "a9946f62-5182-4662-869f-f12d66c9c009",
+      "node_type": "observation",
+      "title": "Original 245-column terminal causes TUI rendering glitches when scaled",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:54.278817-05:00",
+      "updated_at": "2025-12-12T01:19:54.278817-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":95}"
+    },
+    {
+      "id": 340,
+      "change_id": "e8dc3ec8-3c8c-446f-b2f1-1f900c69ef48",
+      "node_type": "action",
+      "title": "Re-record at 122x30 terminal size",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:54.298104-05:00",
+      "updated_at": "2025-12-12T01:19:54.298104-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":90,\"prompt\":\"User re-recorded demo with smaller terminal\"}"
+    },
+    {
+      "id": 341,
+      "change_id": "01524fca-4152-496d-9d6a-7d1c0cab5676",
+      "node_type": "observation",
+      "title": "122 columns still too wide for page - needs horizontal scroll or narrower recording",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:19:54.318274-05:00",
+      "updated_at": "2025-12-12T01:19:54.318274-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":80}"
+    },
+    {
+      "id": 342,
+      "change_id": "5d5a0d9e-4c05-4f92-82f7-0ffed3c2faf2",
+      "node_type": "action",
+      "title": "Add PR preview GitHub Action workflow",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:20:08.726812-05:00",
+      "updated_at": "2025-12-12T01:20:08.726812-05:00",
+      "metadata_json": "{\"branch\":\"feature/asciinema-demo\",\"confidence\":85}"
+    },
+    {
+      "id": 343,
+      "change_id": "0ec4546a-7a91-4943-af7d-bddd529227b2",
+      "node_type": "goal",
+      "title": "Improve landing page organization and add roadmap item",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:53:24.102854-05:00",
+      "updated_at": "2025-12-12T01:53:24.102854-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User requested: move Real PRs section below dev links, move The Problem below elevator pitch, add roadmap item for PR-to-graph linking\"}"
+    },
+    {
+      "id": 344,
+      "change_id": "e3a73b3d-5812-4920-a6ea-1d5a541ad03f",
+      "node_type": "action",
+      "title": "Reorganize landing page sections",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:53:28.879866-05:00",
+      "updated_at": "2025-12-12T01:53:28.879866-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"80c5988\",\"confidence\":95,\"files\":[\"docs/index.html\"]}"
+    },
+    {
+      "id": 345,
+      "change_id": "d0de6a61-f050-4131-9dce-675a7bbdb941",
+      "node_type": "decision",
+      "title": "Which PR to remove from examples",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:53:33.633162-05:00",
+      "updated_at": "2025-12-12T01:53:33.633162-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 346,
+      "change_id": "a351e78a-b57a-4533-ba81-536c3d913ef4",
+      "node_type": "option",
+      "title": "Remove #9 TEA Architecture Refactor",
+      "description": null,
+      "status": "rejected",
+      "created_at": "2025-12-12T01:53:39.027376-05:00",
+      "updated_at": "2025-12-12T01:54:05.547336-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":50}"
+    },
+    {
+      "id": 347,
+      "change_id": "2850fe7b-4609-4a9c-96e9-765241bf4f26",
+      "node_type": "option",
+      "title": "Remove #4 TUI PR",
+      "description": null,
+      "status": "completed",
+      "created_at": "2025-12-12T01:53:43.398122-05:00",
+      "updated_at": "2025-12-12T01:54:05.557673-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 348,
+      "change_id": "99bafd03-01c8-4c88-9f5c-e04851253a0f",
+      "node_type": "action",
+      "title": "Add PR-to-graph linking roadmap item",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:53:48.026705-05:00",
+      "updated_at": "2025-12-12T01:53:48.026705-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"80c5988\",\"confidence\":95,\"files\":[\"ROADMAP.md\"]}"
+    },
+    {
+      "id": 349,
+      "change_id": "c1bd42a8-2371-43d3-8c30-8f7c5e1eb7f0",
+      "node_type": "outcome",
+      "title": "Landing page reorganized and roadmap updated",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T01:53:52.298626-05:00",
+      "updated_at": "2025-12-12T01:53:52.298626-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"80c5988\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -6678,6 +6854,171 @@
       "weight": 1.0,
       "rationale": "Both branches complete",
       "created_at": "2025-12-12T00:16:19.286033-05:00"
+    },
+    {
+      "id": 275,
+      "from_node_id": 334,
+      "to_node_id": 335,
+      "from_change_id": "bbc41af7-9f95-44f6-840a-aa30e422f7e3",
+      "to_change_id": "35369cf5-b586-4770-b3e6-02e6f57810e5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Format compatibility issue",
+      "created_at": "2025-12-12T01:20:02.273662-05:00"
+    },
+    {
+      "id": 276,
+      "from_node_id": 335,
+      "to_node_id": 336,
+      "from_change_id": "35369cf5-b586-4770-b3e6-02e6f57810e5",
+      "to_change_id": "b1e3bd68-bb89-4259-9acd-a048cbd851e3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Chosen solution",
+      "created_at": "2025-12-12T01:20:02.281417-05:00"
+    },
+    {
+      "id": 277,
+      "from_node_id": 334,
+      "to_node_id": 337,
+      "from_change_id": "bbc41af7-9f95-44f6-840a-aa30e422f7e3",
+      "to_change_id": "235a5864-0f89-411a-915c-38be358d5510",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Performance concern",
+      "created_at": "2025-12-12T01:20:02.294066-05:00"
+    },
+    {
+      "id": 278,
+      "from_node_id": 337,
+      "to_node_id": 338,
+      "from_change_id": "235a5864-0f89-411a-915c-38be358d5510",
+      "to_change_id": "c5bd80fa-f989-41b2-8707-3e5facce59f9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Chosen solution",
+      "created_at": "2025-12-12T01:20:02.302234-05:00"
+    },
+    {
+      "id": 279,
+      "from_node_id": 334,
+      "to_node_id": 339,
+      "from_change_id": "bbc41af7-9f95-44f6-840a-aa30e422f7e3",
+      "to_change_id": "a9946f62-5182-4662-869f-f12d66c9c009",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Discovered during implementation",
+      "created_at": "2025-12-12T01:20:02.309965-05:00"
+    },
+    {
+      "id": 280,
+      "from_node_id": 339,
+      "to_node_id": 340,
+      "from_change_id": "a9946f62-5182-4662-869f-f12d66c9c009",
+      "to_change_id": "e8dc3ec8-3c8c-446f-b2f1-1f900c69ef48",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Required fix",
+      "created_at": "2025-12-12T01:20:02.322572-05:00"
+    },
+    {
+      "id": 281,
+      "from_node_id": 340,
+      "to_node_id": 341,
+      "from_change_id": "e8dc3ec8-3c8c-446f-b2f1-1f900c69ef48",
+      "to_change_id": "01524fca-4152-496d-9d6a-7d1c0cab5676",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Still not resolved",
+      "created_at": "2025-12-12T01:20:02.331068-05:00"
+    },
+    {
+      "id": 282,
+      "from_node_id": 334,
+      "to_node_id": 342,
+      "from_change_id": "bbc41af7-9f95-44f6-840a-aa30e422f7e3",
+      "to_change_id": "5d5a0d9e-4c05-4f92-82f7-0ffed3c2faf2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Additional feature",
+      "created_at": "2025-12-12T01:20:08.736295-05:00"
+    },
+    {
+      "id": 283,
+      "from_node_id": 343,
+      "to_node_id": 344,
+      "from_change_id": "0ec4546a-7a91-4943-af7d-bddd529227b2",
+      "to_change_id": "e3a73b3d-5812-4920-a6ea-1d5a541ad03f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Reorganize page sections",
+      "created_at": "2025-12-12T01:54:00.612311-05:00"
+    },
+    {
+      "id": 284,
+      "from_node_id": 343,
+      "to_node_id": 345,
+      "from_change_id": "0ec4546a-7a91-4943-af7d-bddd529227b2",
+      "to_change_id": "d0de6a61-f050-4131-9dce-675a7bbdb941",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Decide which PR to cut",
+      "created_at": "2025-12-12T01:54:00.620173-05:00"
+    },
+    {
+      "id": 285,
+      "from_node_id": 343,
+      "to_node_id": 348,
+      "from_change_id": "0ec4546a-7a91-4943-af7d-bddd529227b2",
+      "to_change_id": "99bafd03-01c8-4c88-9f5c-e04851253a0f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Add roadmap feature",
+      "created_at": "2025-12-12T01:54:00.628598-05:00"
+    },
+    {
+      "id": 286,
+      "from_node_id": 345,
+      "to_node_id": 346,
+      "from_change_id": "d0de6a61-f050-4131-9dce-675a7bbdb941",
+      "to_change_id": "a351e78a-b57a-4533-ba81-536c3d913ef4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Initially removed",
+      "created_at": "2025-12-12T01:54:00.637268-05:00"
+    },
+    {
+      "id": 287,
+      "from_node_id": 345,
+      "to_node_id": 347,
+      "from_change_id": "d0de6a61-f050-4131-9dce-675a7bbdb941",
+      "to_change_id": "2850fe7b-4609-4a9c-96e9-765241bf4f26",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "User preferred to keep #9",
+      "created_at": "2025-12-12T01:54:00.646557-05:00"
+    },
+    {
+      "id": 288,
+      "from_node_id": 344,
+      "to_node_id": 349,
+      "from_change_id": "e3a73b3d-5812-4920-a6ea-1d5a541ad03f",
+      "to_change_id": "c1bd42a8-2371-43d3-8c30-8f7c5e1eb7f0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Page sections reorganized",
+      "created_at": "2025-12-12T01:54:00.653654-05:00"
+    },
+    {
+      "id": 289,
+      "from_node_id": 348,
+      "to_node_id": 349,
+      "from_change_id": "99bafd03-01c8-4c88-9f5c-e04851253a0f",
+      "to_change_id": "c1bd42a8-2371-43d3-8c30-8f7c5e1eb7f0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Roadmap item added",
+      "created_at": "2025-12-12T01:54:00.662111-05:00"
     }
   ]
 }
