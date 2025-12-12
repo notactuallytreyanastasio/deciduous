@@ -290,6 +290,8 @@ pre code {
     line-height: 1.6;
     color: #f6f8fa;
     overflow-x: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
 }
 
 .terminal-body .user-input {

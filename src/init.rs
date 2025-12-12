@@ -689,6 +689,26 @@ deciduous add action "Implemented auth" -c 90 --commit HEAD
 deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
+The `--commit HEAD` flag captures the commit hash and links it to the node. The web viewer will show commit messages, authors, and dates.
+
+### Git History & Deployment
+
+```bash
+# Export graph AND git history for web viewer
+deciduous sync
+
+# This creates:
+# - docs/graph-data.json (decision graph)
+# - docs/git-history.json (commit info for linked nodes)
+```
+
+To deploy to GitHub Pages:
+1. `deciduous sync` to export
+2. Push to GitHub
+3. Settings > Pages > Deploy from branch > /docs folder
+
+Your graph will be live at `https://<user>.github.io/<repo>/`
+
 ### Branch-Based Grouping
 
 Nodes are auto-tagged with the current git branch. Configure in `.deciduous/config.toml`:
@@ -816,8 +836,11 @@ deciduous add goal "Add auth" -c 90 -p "User asked: add login feature" -f "src/a
 
 # CRITICAL: After git commits, link them to the graph!
 git commit -m "feat: add auth"
-deciduous add action "Implemented auth" -c 90 --commit HEAD   # Auto-detects current commit
+deciduous add action "Implemented auth" -c 90 --commit HEAD
 deciduous link <goal_id> <action_id> -r "Implementation"
+
+# Export graph AND git history for web viewer
+deciduous sync  # Creates docs/graph-data.json and docs/git-history.json
 
 # Filter by branch
 deciduous nodes --branch main
@@ -1078,11 +1101,35 @@ deciduous sync    # Export for static hosting
 # -p, --prompt "..."   Store the user prompt
 # -f, --files "a.rs,b.rs"   Associate files
 # -b, --branch <name>   Git branch (auto-detected)
+# --commit HEAD   Link to current git commit
 
 # Branch filtering
 deciduous nodes --branch main
 deciduous nodes -b feature-auth
 ```
+
+### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
+
+The `--commit HEAD` flag captures the commit hash. The web viewer shows commit messages alongside nodes.
+
+### Git History & Deployment
+
+```bash
+# Export graph AND git history for web viewer
+deciduous sync
+
+# Creates docs/graph-data.json and docs/git-history.json
+```
+
+Deploy to GitHub Pages: `deciduous sync` > push > Settings > Pages > /docs folder
 
 ### Branch-Based Grouping
 

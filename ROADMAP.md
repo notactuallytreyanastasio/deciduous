@@ -97,6 +97,10 @@
 *Make compaction restore actually work reliably*
 - [ ] `/context` command fully restores working state after context loss
 - [ ] Query decision graph for recent goals, decisions, actions in progress
+- [ ] **Sort nodes by recency** - most recently updated nodes first
+  - Use `updated_at` timestamp for sorting
+  - Show N most recent chains (like DAG view recency filtering)
+  - Recent activity is most relevant for context recovery
 - [ ] Show what was being worked on, what's complete, what's pending
 - [ ] Include recent git activity, uncommitted changes, branch state
 - [ ] Pull in relevant prompts from history if available
@@ -320,6 +324,24 @@
   - Graph nodes can link back to roadmap items
   - Track completion: roadmap item is "done" when linked outcome exists
 
+### Retroactive Commit Association
+- [ ] **Audit existing nodes and associate with git commits**
+  - Many early nodes were created without `--commit` flag
+  - Cross-reference node `created_at` timestamps with `git log` dates
+  - Match node titles/descriptions to commit messages
+  - `deciduous audit --associate-commits` command to suggest matches
+  - Interactive mode: show node + candidate commits, let user confirm
+  - Batch mode: auto-associate high-confidence matches (>90% title similarity)
+- [ ] **Backfill script for existing graphs**
+  - One-time migration to enrich old nodes with commit data
+  - Parse commit messages for keywords matching node titles
+  - Use time windows (node created within N minutes of commit)
+  - Generate report of associations made
+- [ ] **Ongoing commit detection**
+  - When running `deciduous sync`, detect recent commits without linked nodes
+  - Suggest: "Found 3 commits with no linked decisions - want to associate them?"
+  - Help maintain commit-node linkage going forward
+
 ### Git Integration & Pre-commit Hook Awareness
 - [ ] Inspect and respect pre-commit hooks
   - Detect `.git/hooks/pre-commit` or `.husky/` hooks
@@ -361,6 +383,23 @@
 - [ ] **Memory/hook for sync**
   - Add to Claude Code memories: "If you modify .claude/commands or CLAUDE.md, also update src/init.rs templates"
   - Could be a pre-commit check or a deciduous hook
+- [ ] **FULLY AUTOMATE template sync** (Critical)
+  - **Goal: Never manually sync templates again**
+  - Build script or CI step that extracts actual file contents into init.rs
+  - Single source of truth: the actual `.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md` files
+  - `src/init.rs` templates are auto-generated from these files
+  - Options:
+    - `build.rs` script that reads files and generates template constants
+    - Pre-commit hook that regenerates init.rs template section
+    - CI check that fails if templates don't match actual files
+  - Include ALL tooling files:
+    - `.claude/commands/decision.md`
+    - `.claude/commands/context.md`
+    - `.windsurf/rules/decision.md`
+    - `.windsurf/rules/context.md`
+    - `CLAUDE.md`
+    - `AGENTS.md`
+  - Never have drift between what `deciduous init` creates and what the repo actually uses
 
 ---
 
