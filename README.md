@@ -1,16 +1,67 @@
 # Deciduous
 
-**Persistent decision memory for AI coding assistants.** When Claude's context compacts, your reasoning survives.
+**Decision graph tooling for AI-assisted development.** Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
 
-## The Problem
+---
 
-Claude Code loses context. Sessions end. Memory compacts. Six months later, nobody remembers *why* you chose approach A over approach B. The decisions that shaped your codebase evaporate.
+## See It In Action
 
-## The Solution
+**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 340+ decisions from building deciduous itself
 
-Deciduous creates a persistent, queryable graph of every decision made during development. When a new Claude session starts—or when context compacts mid-session—Claude can query the graph to recover reasoning it never saw.
+**[Watch the Demo](https://asciinema.org/a/761574)** — Full session: initialization, decision logging, graph visualization, context recovery
 
-This isn't documentation written after the fact. It's a real-time record of *how* software gets built, captured as decisions happen.
+---
+
+## Why Deciduous?
+
+LLMs generate complex code fast. Reviewing it, understanding it, and maintaining it? That's on you.
+
+**The problem:** Sessions end. Memory compacts. Decisions evaporate. Six months later, no one—human or AI—remembers *why* you chose approach A over approach B.
+
+**The solution:** Deciduous creates a persistent, queryable graph of every decision made during development. Both you and your AI assistant can query past reasoning, see what was tried, understand what was rejected and why.
+
+This isn't documentation written after the fact. It's a real-time record of *how* software gets built, captured as decisions happen—by whoever is making them.
+
+---
+
+## The Premises
+
+1. **Decisions are the unit of institutional knowledge.** Code tells you *what*, but decisions tell you *why*. Six months from now, you won't remember why you chose Redis over Postgres for that cache. The graph will.
+
+2. **Structured thinking produces better outcomes.** The act of logging a decision—naming it, assigning confidence, connecting it to goals—forces you to think it through. It's rubber duck debugging for architecture.
+
+3. **Real-time logging beats retroactive documentation.** Capture reasoning in the moment, not reconstructed from memory. By the time you write the post-hoc docs, you've already forgotten the options you rejected.
+
+4. **Graphs beat documents.** Decisions connect—goals spawn decisions, decisions spawn actions, actions produce outcomes. A graph captures these relationships. You can trace any outcome back to the goal that spawned it.
+
+5. **Complex PRs tell a story.** A 50-file PR is incomprehensible as a diff. But as a decision graph? You can see the goal, the key decisions, the rejected approaches, and how each file change connects to the larger purpose. Reviewers can understand *why*, not just *what*.
+
+6. **Context loss is inevitable.** Sessions end. Memory compacts. The graph survives. When you come back to a project after months away, the graph is your memory.
+
+7. **Humans and AI assistants both benefit.** You can query the graph to remember your own reasoning. The LLM can query it to understand decisions made before its context window. Either of you can log decisions. The graph doesn't care who's typing—it just preserves the reasoning.
+
+8. **The graph is a shared workspace.** When the LLM makes a choice, you can see it. When you make a choice, the LLM can query it. Decisions flow between sessions, between humans and AI, between teammates.
+
+---
+
+## Who Uses It
+
+**You, the developer:**
+- Think through decisions more carefully by structuring them
+- Remember why you made choices months later
+- Review complex PRs by understanding the decision flow, not just the diff
+- Onboard to unfamiliar codebases by reading the decision history
+
+**Your AI assistant:**
+- Recover context after session boundaries or compaction
+- Understand decisions made before its context window
+- Build on previous reasoning instead of starting fresh
+- Leave a queryable trail for future sessions
+
+**Your team:**
+- Share decision context across PRs via patch files
+- Review PRs with full visibility into the reasoning
+- Build institutional knowledge that survives employee turnover
 
 ---
 
@@ -26,200 +77,87 @@ cargo install deciduous
 
 ```bash
 cd your-project
-deciduous init
+deciduous init           # For Claude Code (default)
+deciduous init --windsurf # For Windsurf/Cascade
 ```
 
 This creates:
 - `.deciduous/deciduous.db` — SQLite database for the graph
-- `.claude/commands/` — Slash commands for Claude Code
-- `.windsurf/rules/` — Rules for Windsurf/Cascade
+- `.claude/commands/` or `.windsurf/rules/` — Editor-specific tooling
 - `docs/` — Static web viewer (deployable to GitHub Pages)
-- `CLAUDE.md` — Project instructions with the logging workflow
+- `CLAUDE.md` or `AGENTS.md` — Project instructions with the logging workflow
 
-### 3. Start using with Claude
-
-Tell Claude to use the decision graph, or just start working—the CLAUDE.md instructions will guide it.
-
----
-
-## What It Does
-
-**For context compaction:**
-- Claude logs decisions to a SQLite database as it works
-- When context compacts, the graph survives
-- New sessions run `/context` to query past decisions
-- Claude picks up where it left off, with full reasoning intact
-
-**For long-term decision tracking:**
-- Every goal, decision, action, and outcome is timestamped and linked
-- Confidence scores (0-100) show certainty at decision time
-- Edge types capture relationships: `chosen`, `rejected`, `requires`, `blocks`
-- The graph is queryable: "What did we decide about auth?" "Why did we reject Redux?"
-
-**For multi-user collaboration:**
-- Export decision patches to share with teammates
-- Import patches from others (idempotent—safe to apply multiple times)
-- Each node has a globally unique ID for conflict-free merging
-
-**For PR generation:**
-- Generate decision graph visualizations for PRs
-- Auto-generate writeups from the graph
-- Show reviewers *why* you made the choices you made
-
----
-
-## Usage Flow
-
-### Session Start
-
-Claude runs `/context` to recover past decisions:
-
-```
-> /context
-
-Current branch: feature/auth
-Decision graph shows:
-- Goal #12: "Add user authentication" (confidence: 90)
-  └─> Decision #13: "Choose auth method" (confidence: 75)
-        ├─> Option #14: "JWT tokens" (chosen)
-        └─> Option #15: "Session cookies" (rejected: "stateless preferred")
-
-Last action: #18 "Implementing JWT refresh flow"
-Status: in_progress
-```
-
-### During Work
-
-Claude logs decisions in real-time:
+### 3. Start using
 
 ```bash
-# Starting a new feature - capture the user's prompt on the root goal
-deciduous add goal "Add rate limiting" -c 90 -p "User asked: can we add rate limiting to the API?"
+# Log a decision
+deciduous add goal "Add user authentication" -c 90
 
-# Making a choice (downstream nodes don't need prompts - they flow via edges)
+# Connect decisions
+deciduous add decision "Choose auth method" -c 75
+deciduous link 1 2 -r "Deciding implementation approach"
+
+# View the graph
+deciduous serve          # Local web viewer
+deciduous tui            # Terminal UI
+deciduous sync           # Export for GitHub Pages
+```
+
+### 4. Deploy to GitHub Pages
+
+```bash
+git add docs/
+git push
+```
+
+Enable Pages: **Settings > Pages > Source > Deploy from branch > `gh-pages`**
+
+Your graph will be live at `https://<user>.github.io/<repo>/`
+
+---
+
+## The Workflow
+
+```
+SESSION START
+    |
+Run /context → Query past decisions
+    |
+DO WORK → Log BEFORE each action
+    |
+AFTER CHANGES → Log outcomes, link nodes
+    |
+BEFORE PUSH → deciduous sync
+    |
+SESSION END → Graph survives
+```
+
+### During a session
+
+```bash
+# Starting a new feature
+deciduous add goal "Add rate limiting" -c 90 -p "User asked: add rate limiting"
+
+# Making a choice
 deciduous add decision "Choose rate limiter approach" -c 75
-deciduous link 20 21 -r "Deciding implementation"
+deciduous link 1 2 -r "Deciding implementation"
 deciduous add option "Redis-based" -c 80
-deciduous add option "In-memory with sliding window" -c 70
+deciduous add option "In-memory sliding window" -c 70
 
 # Implementing
 deciduous add action "Implementing Redis rate limiter" -c 85
-deciduous link 21 23 --edge-type chosen -r "Scales across instances"
-
-# If user gives new direction mid-stream, capture that prompt too
-deciduous add action "Switch to token bucket" -c 85 -p "User said: actually use token bucket algorithm"
+deciduous link 2 5 --edge-type chosen -r "Scales across instances"
 
 # Recording outcome
 deciduous add outcome "Rate limiting working in prod" -c 95
-deciduous link 23 24 -r "Implementation complete"
+deciduous link 5 6 -r "Implementation complete"
 ```
-
-**When to use `--prompt`:** Capture user prompts on root goals and when the user redirects work mid-stream. Routine downstream nodes inherit context via edges.
-
-### Before Push
-
-```bash
-deciduous sync   # Export graph to JSON for the web viewer
-```
-
-### PR Time
-
-```bash
-# Generate branch-specific visualization
-deciduous dot --auto --nodes 20-24
-
-# Generate PR writeup
-deciduous writeup --auto -t "Add rate limiting" --nodes 20-24
-```
-
----
-
-## Multi-User Sync
-
-Share decisions across team members working on the same codebase.
-
-### The Problem
-
-Each user has a local `.deciduous/deciduous.db` (gitignored). How do you share decisions?
-
-### The Solution
-
-Export/import patches using globally unique change IDs (inspired by jj/Jujutsu):
-
-```bash
-# Export your branch's decisions
-deciduous diff export --branch feature-x -o .deciduous/patches/alice-feature.json
-
-# Apply patches from teammates (idempotent)
-deciduous diff apply .deciduous/patches/*.json
-
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/bob.json
-
-# Check available patches
-deciduous diff status
-```
-
-### PR Workflow
-
-1. Create nodes while working
-2. Export: `deciduous diff export --branch my-feature -o .deciduous/patches/my-feature.json`
-3. Commit the patch file (NOT the database)
-4. Open PR with patch file included
-5. Teammates apply: `deciduous diff apply .deciduous/patches/my-feature.json`
-
-Same patch applied twice = no duplicates.
 
 ---
 
 ## Viewing the Graph
 
-### Terminal UI (TUI)
-
-```bash
-deciduous tui
-```
-
-A rich, vim-style terminal interface for browsing your decision graph.
-
-**Navigation:**
-| Key | Action |
-|-----|--------|
-| `j`/`k` | Move down/up in timeline |
-| `gg` | Jump to top |
-| `G` | Jump to bottom |
-| `Ctrl+d`/`Ctrl+u` | Page down/up |
-| `Enter` | Toggle detail panel |
-| `q` | Quit |
-
-**Filtering & Search:**
-| Key | Action |
-|-----|--------|
-| `/` | Search by title/description |
-| `f` | Cycle through type filters |
-| `b` | Cycle through branch filters |
-| `B` | Fuzzy branch search |
-| `R` | Toggle timeline order (newest/oldest first) |
-| `Ctrl+c` | Clear all filters |
-
-**File Operations:**
-| Key | Action |
-|-----|--------|
-| `o` | Open associated files in editor |
-| `O` | View commit details (split modal with diff) |
-| `F` | Toggle file browser in detail panel |
-| `n`/`N` | Next/previous file (when in file browser) |
-| `p` | Preview file content with syntax highlighting |
-| `d` | Show file diff with syntax highlighting |
-
-**Other:**
-| Key | Action |
-|-----|--------|
-| `s` | Show goal story (hierarchy view) |
-| `r` | Refresh graph from database |
-| `?` | Show help |
-
-The TUI includes syntax highlighting for file previews and diffs, using the same highlighting engine as `bat`.
+Two full-featured interfaces for browsing the graph—use whichever fits your workflow.
 
 ### Web Viewer
 
@@ -227,26 +165,39 @@ The TUI includes syntax highlighting for file previews and diffs, using the same
 deciduous serve --port 3000
 ```
 
-Or deploy to GitHub Pages (workflow included with `deciduous init`).
-
-**Four visualization modes:**
+A browser-based interface with four visualization modes, branch filtering, and auto-refresh. Deploy to GitHub Pages for shareable, always-up-to-date graphs.
 
 | View | Purpose |
 |------|---------|
-| **Chains** | Decision chains with flow visualization |
-| **Timeline** | Chronological view of all nodes |
-| **Graph** | Force-directed interactive graph |
-| **DAG** | Hierarchical directed acyclic graph |
+| **Chains** | Decision chains organized by session—see the story of a feature |
+| **Timeline** | Chronological view merged with git commits—trace decisions to code |
+| **Graph** | Force-directed interactive visualization—explore connections, zoom, pan |
+| **DAG** | Hierarchical goal→decision→outcome flow—understand structure at a glance |
 
-### CLI Queries
+Features: branch dropdown filter, node search, stats bar with counts, click-to-expand details, recency sorting, responsive layout.
+
+### Terminal UI
 
 ```bash
-deciduous nodes              # List all nodes
-deciduous nodes -b feature-x # Filter by branch
-deciduous edges              # List all connections
-deciduous graph              # Full graph as JSON
-deciduous commands           # Recent command history
+deciduous tui
 ```
+
+A rich terminal interface for when you're already in the shell. Vim-style navigation, syntax-highlighted file previews, and integrated git diffs.
+
+| Key | Action |
+|-----|--------|
+| `j`/`k`, `gg`/`G` | Navigate timeline |
+| `Enter` | Toggle detail panel with connections, metadata, prompts |
+| `/` | Search by title or description |
+| `f` | Filter by node type (goal, decision, action, etc.) |
+| `b`/`B` | Filter by branch / fuzzy branch search |
+| `o` | Open associated files in your editor |
+| `O` | View linked commit with full diff |
+| `p`/`d` | Preview file content / show file diff (syntax highlighted) |
+| `s` | Show goal story—hierarchical view from goal to outcomes |
+| `?` | Help |
+
+Features: auto-refresh on database changes, file browser panel, commit detail modal, syntax highlighting via the same engine as `bat`.
 
 ---
 
@@ -272,15 +223,32 @@ deciduous commands           # Recent command history
 | `blocks` | Preventing progress |
 | `enables` | Makes something possible |
 
-## Confidence Scores
+---
 
-| Range | Meaning |
-|-------|---------|
-| 90-100 | Certain, proven, tested |
-| 70-89 | High confidence, standard approach |
-| 50-69 | Moderate, some unknowns |
-| 30-49 | Experimental, might change |
-| 0-29 | Speculative, likely to revisit |
+## Multi-User Sync
+
+Share decisions across teammates working on the same codebase.
+
+Each node has both a local ID and a globally unique `change_id` (UUID). Export patches to share:
+
+```bash
+# Export your branch's decisions
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent—safe to re-apply)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate.json
+```
+
+### PR Workflow
+
+1. Create nodes while working
+2. Export: `deciduous diff export --branch my-feature -o .deciduous/patches/my-feature.json`
+3. Commit the patch file (not the database)
+4. Open PR with patch file included
+5. Teammates apply after pulling
 
 ---
 
@@ -288,7 +256,9 @@ deciduous commands           # Recent command history
 
 ```bash
 # Initialize
-deciduous init
+deciduous init               # Claude Code
+deciduous init --windsurf    # Windsurf/Cascade
+deciduous update             # Update tooling to latest version
 
 # Add nodes
 deciduous add goal "Title" -c 90
@@ -298,39 +268,40 @@ deciduous add action "Title" -c 85
 deciduous add outcome "Title" -c 95
 deciduous add observation "Title" -c 70
 
-# Optional metadata (use -p when semantically meaningful)
-deciduous add goal "Title" -c 90 -p "User prompt" -f "src/file.rs"  # Root goal with prompt
-deciduous add action "Title" -c 85 -p "User redirect"               # When user changes direction
-deciduous add goal "Title" -b feature-x    # Override branch
-deciduous add goal "Title" --no-branch     # No branch tag
+# Node metadata
+-c, --confidence <0-100>     # Confidence level
+-p, --prompt "..."           # User prompt that triggered this
+-f, --files "a.rs,b.rs"      # Associated files
+-b, --branch <name>          # Git branch (auto-detected)
+--commit <hash|HEAD>         # Link to git commit
 
 # Connect nodes
-deciduous link 1 2 -r "Reason"
-deciduous link 1 2 --edge-type chosen -r "Selected this"
+deciduous link <from> <to> -r "reason"
+deciduous link 1 2 --edge-type chosen -r "Selected this approach"
 
 # Query
-deciduous nodes
-deciduous nodes -b main                    # Filter by branch
-deciduous edges
-deciduous graph
-deciduous commands
-
-# Multi-user sync
-deciduous diff export -o patch.json --branch feature-x
-deciduous diff apply .deciduous/patches/*.json
-deciduous diff apply --dry-run patch.json
-deciduous diff status
-deciduous migrate                          # Add change_id columns
+deciduous nodes              # List all nodes
+deciduous nodes -b main      # Filter by branch
+deciduous edges              # List connections
+deciduous graph              # Full graph as JSON
+deciduous commands           # Recent command history
 
 # Visualize
-deciduous serve
-deciduous dot --png -o graph.dot
-deciduous dot --auto --nodes 1-11
+deciduous serve              # Web viewer
+deciduous tui                # Terminal UI
+deciduous dot --png          # Generate PNG (requires graphviz)
+deciduous dot --auto         # Branch-specific filename
 
 # Export
-deciduous sync
-deciduous writeup -t "Title" --nodes 1-11
-deciduous backup
+deciduous sync               # Export to docs/graph-data.json
+deciduous writeup -t "Title" # Generate PR writeup
+deciduous backup             # Create database backup
+
+# Multi-user sync
+deciduous diff export -o patch.json
+deciduous diff apply patches/*.json
+deciduous diff status
+deciduous migrate            # Add change_id columns
 ```
 
 ---
@@ -346,35 +317,21 @@ main_branches = ["main", "master"]
 auto_detect = true
 ```
 
-**Usage:**
 ```bash
 deciduous nodes --branch main        # Filter by branch
-deciduous nodes -b feature-auth
 deciduous add goal "Work" -b other   # Override auto-detection
 deciduous add goal "Note" --no-branch # No branch tag
 ```
-
-The web UI has a branch dropdown filter in the stats bar.
 
 ---
 
 ## GitHub Pages Deployment
 
-`deciduous init` creates a GitHub workflow that:
-1. Deploys your graph viewer to GitHub Pages on push
-2. Cleans up branch-specific PNGs after PR merge
+`deciduous init` creates GitHub workflows that:
+1. Deploy your graph viewer to GitHub Pages on push to main
+2. Clean up branch-specific PNGs after PR merge
 
 Enable Pages: **Settings > Pages > Source > Deploy from branch > `gh-pages`**
-
-Your graph will be live at `https://<username>.github.io/<repo>/`
-
----
-
-## Live Example
-
-See a real decision graph: **[deciduous_example](https://notactuallytreyanastasio.github.io/deciduous_example/graph/)**
-
-This shows 50+ decision nodes tracking a complete project with goals flowing through decisions to outcomes.
 
 ---
 
@@ -387,7 +344,7 @@ cargo build --release
 ./target/release/deciduous --help
 ```
 
-**Optional dependency:** graphviz (for `--png` flag)
+**Optional:** graphviz for PNG export
 ```bash
 brew install graphviz    # macOS
 apt install graphviz     # Ubuntu/Debian
@@ -395,12 +352,6 @@ apt install graphviz     # Ubuntu/Debian
 
 ---
 
-## Why "Deciduous"?
+## Why "deciduous"?
 
-Deciduous trees shed their leaves seasonally but their structure persists. Like Claude's context, the leaves (working memory) fall away—but the decision graph (trunk and branches) remains, ready to support new growth.
-
----
-
-## License
-
-MIT
+It almost has the word "decision" in it, and they're trees.
