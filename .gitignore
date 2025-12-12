@@ -41,3 +41,11 @@ web/node_modules/
 # Database
 deciduous.db
 *.db
+
+# Deciduous database (local) - but track patches for sharing
+.deciduous/*
+!.deciduous/patches/
+!.deciduous/config.toml
+
+# Proptest regressions (local test failures)
+proptest-regressions/

@@ -396,11 +396,11 @@ fn main() {
                         // Filter by branch if specified
                         let branch_match = match &branch {
                             Some(b) => {
-                                n.metadata_json.as_ref().map_or(false, |meta| {
+                                n.metadata_json.as_ref().is_some_and(|meta| {
                                     serde_json::from_str::<serde_json::Value>(meta)
                                         .ok()
-                                        .and_then(|v| v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()))
-                                        .map_or(false, |node_branch| node_branch == *b)
+                                        .and_then(|v| v.get("branch").and_then(|br| br.as_str()).map(|s| s.to_string()))
+                                        .is_some_and(|node_branch| node_branch == *b)
                                 })
                             }
                             None => true,
@@ -420,13 +420,12 @@ fn main() {
                             println!("No nodes found. Add one with: deciduous add goal \"My goal\"");
                         }
                     } else {
-                        let header = if branch.is_some() {
-                            format!("Nodes on branch '{}' ({} total):", branch.as_ref().unwrap(), filtered.len())
-                        } else {
-                            format!("{} nodes:", filtered.len())
+                        let header = match &branch {
+                            Some(b) => format!("Nodes on branch '{}' ({} total):", b, filtered.len()),
+                            None => format!("{} nodes:", filtered.len()),
                         };
                         println!("{}", header.cyan());
-                        println!("{:<5} {:<12} {:<10} {}", "ID", "TYPE", "STATUS", "TITLE");
+                        println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");
                         println!("{}", "-".repeat(70));
                         for n in filtered {
                             let type_colored = match n.node_type.as_str() {
@@ -454,7 +453,7 @@ fn main() {
                     if edges.is_empty() {
                         println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
                     } else {
-                        println!("{:<5} {:<6} {:<6} {:<12} {}", "ID", "FROM", "TO", "TYPE", "RATIONALE");
+                        println!("{:<5} {:<6} {:<6} {:<12} RATIONALE", "ID", "FROM", "TO", "TYPE");
                         println!("{}", "-".repeat(70));
                         for e in edges {
                             println!(

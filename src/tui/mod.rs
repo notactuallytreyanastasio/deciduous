@@ -9,8 +9,11 @@
 
 pub mod app;
 pub mod events;
+pub mod msg;    // TEA message types (what happened)
+pub mod state;  // Pure state transformations (functional core)
 pub mod types;
 pub mod ui;
+pub mod update; // TEA update function (state transitions)
 pub mod views;
 pub mod widgets;
 

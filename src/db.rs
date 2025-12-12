@@ -1052,3 +1052,165 @@ pub struct DecisionGraph {
     pub nodes: Vec<DecisionNode>,
     pub edges: Vec<DecisionEdge>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === build_metadata_json Tests ===
+
+    #[test]
+    fn test_build_metadata_empty() {
+        let result = build_metadata_json(None, None, None, None, None);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_build_metadata_confidence_only() {
+        let result = build_metadata_json(Some(85), None, None, None, None);
+        assert!(result.is_some());
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(json.get("confidence").unwrap(), 85);
+    }
+
+    #[test]
+    fn test_build_metadata_confidence_clamped() {
+        let result = build_metadata_json(Some(150), None, None, None, None);
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        // Should be clamped to 100
+        assert_eq!(json.get("confidence").unwrap(), 100);
+    }
+
+    #[test]
+    fn test_build_metadata_commit() {
+        let result = build_metadata_json(None, Some("abc123"), None, None, None);
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(json.get("commit").unwrap(), "abc123");
+    }
+
+    #[test]
+    fn test_build_metadata_prompt() {
+        let result = build_metadata_json(None, None, Some("User asked: do X"), None, None);
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(json.get("prompt").unwrap(), "User asked: do X");
+    }
+
+    #[test]
+    fn test_build_metadata_files() {
+        let result = build_metadata_json(None, None, None, Some("a.rs, b.rs, c.rs"), None);
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        let files = json.get("files").unwrap().as_array().unwrap();
+        assert_eq!(files.len(), 3);
+        assert_eq!(files[0], "a.rs");
+        assert_eq!(files[1], "b.rs");
+        assert_eq!(files[2], "c.rs");
+    }
+
+    #[test]
+    fn test_build_metadata_branch() {
+        let result = build_metadata_json(None, None, None, None, Some("feature-x"));
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+        assert_eq!(json.get("branch").unwrap(), "feature-x");
+    }
+
+    #[test]
+    fn test_build_metadata_all_fields() {
+        let result = build_metadata_json(
+            Some(90),
+            Some("def456"),
+            Some("User prompt"),
+            Some("x.rs"),
+            Some("main"),
+        );
+        let json: serde_json::Value = serde_json::from_str(&result.unwrap()).unwrap();
+
+        assert_eq!(json.get("confidence").unwrap(), 90);
+        assert_eq!(json.get("commit").unwrap(), "def456");
+        assert_eq!(json.get("prompt").unwrap(), "User prompt");
+        assert_eq!(json.get("branch").unwrap(), "main");
+        assert!(json.get("files").unwrap().as_array().is_some());
+    }
+
+    // === DecisionSchema Tests ===
+
+    #[test]
+    fn test_schema_version_string() {
+        let schema = DecisionSchema {
+            major: 1,
+            minor: 2,
+            patch: 3,
+            name: "test",
+            features: &[],
+        };
+        assert_eq!(schema.version_string(), "1.2.3");
+    }
+
+    #[test]
+    fn test_schema_compatibility_same_major() {
+        let schema1 = DecisionSchema {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            name: "test",
+            features: &[],
+        };
+        let schema2 = DecisionSchema {
+            major: 1,
+            minor: 5,
+            patch: 3,
+            name: "test",
+            features: &[],
+        };
+        assert!(schema1.is_compatible_with(&schema2));
+    }
+
+    #[test]
+    fn test_schema_incompatibility_different_major() {
+        let schema1 = DecisionSchema {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            name: "test",
+            features: &[],
+        };
+        let schema2 = DecisionSchema {
+            major: 2,
+            minor: 0,
+            patch: 0,
+            name: "test",
+            features: &[],
+        };
+        assert!(!schema1.is_compatible_with(&schema2));
+    }
+
+    #[test]
+    fn test_schema_is_newer_than() {
+        let old = DecisionSchema {
+            major: 1,
+            minor: 0,
+            patch: 0,
+            name: "test",
+            features: &[],
+        };
+        let new = DecisionSchema {
+            major: 1,
+            minor: 1,
+            patch: 0,
+            name: "test",
+            features: &[],
+        };
+        assert!(new.is_newer_than(&old));
+        assert!(!old.is_newer_than(&new));
+        assert!(!old.is_newer_than(&old));
+    }
+
+    // === Current Schema Tests ===
+
+    #[test]
+    fn test_current_schema() {
+        assert_eq!(CURRENT_SCHEMA.major, 1);
+        assert_eq!(CURRENT_SCHEMA.name, "decision-graph");
+        assert!(CURRENT_SCHEMA.features.contains(&"decision_nodes"));
+        assert!(CURRENT_SCHEMA.features.contains(&"decision_edges"));
+    }
+}

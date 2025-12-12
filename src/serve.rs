@@ -100,3 +100,73 @@ fn get_command_log() -> Vec<crate::db::CommandLog> {
         Err(_) => vec![],
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // === ApiResponse Tests ===
+
+    #[test]
+    fn test_api_response_success() {
+        let response: ApiResponse<String> = ApiResponse::success("hello".to_string());
+        assert!(response.ok);
+        assert_eq!(response.data, Some("hello".to_string()));
+        assert!(response.error.is_none());
+    }
+
+    #[test]
+    fn test_api_response_success_with_vec() {
+        let data = vec![1, 2, 3];
+        let response: ApiResponse<Vec<i32>> = ApiResponse::success(data.clone());
+        assert!(response.ok);
+        assert_eq!(response.data, Some(data));
+    }
+
+    #[test]
+    fn test_api_response_serializes_to_json() {
+        let response: ApiResponse<String> = ApiResponse::success("test".to_string());
+        let json = serde_json::to_string(&response).unwrap();
+
+        assert!(json.contains("\"ok\":true"));
+        assert!(json.contains("\"data\":\"test\""));
+        assert!(json.contains("\"error\":null"));
+    }
+
+    #[test]
+    fn test_api_response_with_complex_data() {
+        #[derive(Serialize, PartialEq, Debug)]
+        struct TestData {
+            name: String,
+            count: u32,
+        }
+
+        let data = TestData {
+            name: "test".to_string(),
+            count: 42,
+        };
+        let response = ApiResponse::success(data);
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("\"name\":\"test\""));
+        assert!(json.contains("\"count\":42"));
+    }
+
+    // === Graph Viewer HTML Tests ===
+
+    #[test]
+    fn test_viewer_html_is_valid() {
+        // The embedded viewer should be valid HTML
+        assert!(GRAPH_VIEWER_HTML.contains("<!DOCTYPE html>") || GRAPH_VIEWER_HTML.contains("<html"));
+        assert!(GRAPH_VIEWER_HTML.contains("</html>"));
+    }
+
+    #[test]
+    fn test_viewer_html_has_react() {
+        // The embedded viewer should have React components
+        assert!(
+            GRAPH_VIEWER_HTML.contains("React") || GRAPH_VIEWER_HTML.contains("react"),
+            "Viewer should include React"
+        );
+    }
+}

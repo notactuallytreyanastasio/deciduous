@@ -308,43 +308,15 @@ impl App {
     }
 
     /// Apply current filters to the node list
+    /// Delegates to pure function in state.rs
     pub fn apply_filters(&mut self) {
-        let mut nodes: Vec<DecisionNode> = self.graph.nodes.clone();
-
-        // Type filter
-        if let Some(ref type_filter) = self.type_filter {
-            nodes.retain(|n| &n.node_type == type_filter);
-        }
-
-        // Branch filter
-        if let Some(ref branch_filter) = self.branch_filter {
-            nodes.retain(|n| {
-                types::get_branch(n)
-                    .map(|b| b == *branch_filter)
-                    .unwrap_or(false)
-            });
-        }
-
-        // Search filter
-        if !self.search_query.is_empty() {
-            let query = self.search_query.to_lowercase();
-            nodes.retain(|n| {
-                n.title.to_lowercase().contains(&query)
-                    || n.description
-                        .as_ref()
-                        .map(|d| d.to_lowercase().contains(&query))
-                        .unwrap_or(false)
-            });
-        }
-
-        // Sort by created_at (descending by default, ascending if reverse_order)
-        if self.reverse_order {
-            nodes.sort_by(|a, b| a.created_at.cmp(&b.created_at)); // Oldest first
-        } else {
-            nodes.sort_by(|a, b| b.created_at.cmp(&a.created_at)); // Newest first
-        }
-
-        self.filtered_nodes = nodes;
+        self.filtered_nodes = super::state::apply_all_filters(
+            &self.graph.nodes,
+            self.type_filter.as_deref(),
+            self.branch_filter.as_deref(),
+            &self.search_query,
+            self.reverse_order,
+        );
 
         // Adjust selection if needed
         if self.selected_index >= self.filtered_nodes.len() && !self.filtered_nodes.is_empty() {
@@ -357,11 +329,13 @@ impl App {
         self.filtered_nodes.get(self.selected_index)
     }
 
-    /// Get edges for a node
+    /// Get edges for a node (incoming, outgoing)
+    /// Delegates to pure functions in types.rs
     pub fn get_node_edges(&self, node_id: i32) -> (Vec<&DecisionEdge>, Vec<&DecisionEdge>) {
-        let incoming: Vec<_> = self.graph.edges.iter().filter(|e| e.to_node_id == node_id).collect();
-        let outgoing: Vec<_> = self.graph.edges.iter().filter(|e| e.from_node_id == node_id).collect();
-        (incoming, outgoing)
+        (
+            types::get_incoming_edges(node_id, &self.graph.edges),
+            types::get_outgoing_edges(node_id, &self.graph.edges),
+        )
     }
 
     /// Get node by ID
@@ -624,8 +598,8 @@ impl App {
                         };
 
                         // Track current file for syntax detection
-                        if line.starts_with("+++ b/") {
-                            current_file = Some(line[6..].to_string());
+                        if let Some(stripped) = line.strip_prefix("+++ b/") {
+                            current_file = Some(stripped.to_string());
                             // Create highlighter for this file type
                             if let Some(ref path) = current_file {
                                 if let Some(syntax) = PS.find_syntax_for_file(path).ok().flatten() {
@@ -889,65 +863,20 @@ impl App {
     }
 
     /// Find the root goal by traversing incoming edges
+    /// Delegates to pure function in state.rs
     pub fn find_root_goal(&self, start_id: i32) -> Option<i32> {
-        let mut visited = std::collections::HashSet::new();
-        let mut current = start_id;
-
-        loop {
-            if visited.contains(&current) {
-                return None; // Cycle detected
-            }
-            visited.insert(current);
-
-            // Check if current node is a goal
-            if let Some(node) = self.get_node_by_id(current) {
-                if node.node_type == "goal" {
-                    return Some(current);
-                }
-            }
-
-            // Find incoming edges to traverse up
-            let incoming: Vec<_> = self.graph.edges.iter()
-                .filter(|e| e.to_node_id == current)
-                .collect();
-
-            if incoming.is_empty() {
-                return None; // No parent
-            }
-
-            // Take the first incoming edge (could be smarter about this)
-            current = incoming[0].from_node_id;
-        }
+        super::state::find_root_goal(start_id, &self.graph.nodes, &self.graph.edges)
     }
 
     /// Get all descendant nodes from a goal (BFS traversal)
+    /// Delegates to pure function in state.rs and enriches with node references
     pub fn get_goal_descendants(&self, goal_id: i32) -> Vec<(i32, &DecisionNode, usize)> {
-        let mut result = Vec::new();
-        let mut queue = std::collections::VecDeque::new();
-        let mut visited = std::collections::HashSet::new();
-
-        // Start with the goal itself at depth 0
-        queue.push_back((goal_id, 0usize));
-
-        while let Some((node_id, depth)) = queue.pop_front() {
-            if visited.contains(&node_id) {
-                continue;
-            }
-            visited.insert(node_id);
-
-            if let Some(node) = self.get_node_by_id(node_id) {
-                result.push((node_id, node, depth));
-
-                // Add all children (outgoing edges)
-                for edge in &self.graph.edges {
-                    if edge.from_node_id == node_id && !visited.contains(&edge.to_node_id) {
-                        queue.push_back((edge.to_node_id, depth + 1));
-                    }
-                }
-            }
-        }
-
-        result
+        super::state::get_descendants(goal_id, &self.graph.nodes, &self.graph.edges)
+            .into_iter()
+            .filter_map(|(node_id, depth)| {
+                self.get_node_by_id(node_id).map(|node| (node_id, node, depth))
+            })
+            .collect()
     }
 
     /// Get all goals in the graph
@@ -958,7 +887,7 @@ impl App {
     /// Get files for currently selected node
     pub fn get_current_files(&self) -> Vec<String> {
         self.selected_node()
-            .map(|n| types::get_files(n))
+            .map(types::get_files)
             .unwrap_or_default()
     }
 

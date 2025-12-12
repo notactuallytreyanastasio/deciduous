@@ -6,6 +6,24 @@ use crate::db::{DecisionEdge, DecisionGraph, DecisionNode};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
+// Helper macro for infallible String writes
+// Writing to String never fails, but write! returns Result
+// This macro makes intent clear and silences the warning
+macro_rules! w {
+    ($dst:expr, $($arg:tt)*) => {
+        let _ = write!($dst, $($arg)*);
+    };
+}
+
+macro_rules! wln {
+    ($dst:expr) => {
+        let _ = writeln!($dst);
+    };
+    ($dst:expr, $($arg:tt)*) => {
+        let _ = writeln!($dst, $($arg)*);
+    };
+}
+
 /// Configuration for DOT export
 #[derive(Debug, Clone)]
 pub struct DotConfig {
@@ -122,46 +140,45 @@ pub fn graph_to_dot(graph: &DecisionGraph, config: &DotConfig) -> String {
     let mut dot = String::new();
 
     // Graph header
-    writeln!(dot, "digraph DecisionGraph {{").unwrap();
-    writeln!(dot, "  rankdir={};", config.rankdir).unwrap();
-    writeln!(dot, "  node [fontname=\"Arial\" fontsize=10];").unwrap();
-    writeln!(dot, "  edge [fontname=\"Arial\" fontsize=9];").unwrap();
+    wln!(dot, "digraph DecisionGraph {{");
+    wln!(dot, "  rankdir={};", config.rankdir);
+    wln!(dot, "  node [fontname=\"Arial\" fontsize=10];");
+    wln!(dot, "  edge [fontname=\"Arial\" fontsize=9];");
 
     if let Some(title) = &config.title {
-        writeln!(dot, "  label=\"{}\";", escape_dot(title)).unwrap();
-        writeln!(dot, "  labelloc=t;").unwrap();
-        writeln!(dot, "  fontsize=14;").unwrap();
+        wln!(dot, "  label=\"{}\";", escape_dot(title));
+        wln!(dot, "  labelloc=t;");
+        wln!(dot, "  fontsize=14;");
     }
-    writeln!(dot).unwrap();
+    wln!(dot);
 
     // Nodes
     for node in &graph.nodes {
         let mut label = String::new();
 
         if config.show_ids {
-            write!(label, "[{}] ", node.id).unwrap();
+            w!(label, "[{}] ", node.id);
         }
 
         label.push_str(&truncate(&node.title, 40));
 
         if config.show_confidence {
             if let Some(conf) = extract_confidence(&node.metadata_json) {
-                write!(label, "\\n({}%)", conf).unwrap();
+                w!(label, "\\n({}%)", conf);
             }
         }
 
-        writeln!(
+        wln!(
             dot,
             "  {} [label=\"{}\" shape=\"{}\" fillcolor=\"{}\" style=\"filled\"];",
             node.id,
             escape_dot(&label),
             node_shape(&node.node_type),
             node_color(&node.node_type)
-        )
-        .unwrap();
+        );
     }
 
-    writeln!(dot).unwrap();
+    wln!(dot);
 
     // Edges
     for edge in &graph.edges {
@@ -177,17 +194,16 @@ pub fn graph_to_dot(graph: &DecisionGraph, config: &DotConfig) -> String {
             }
         }
 
-        writeln!(
+        wln!(
             dot,
             "  {} -> {} [{}];",
             edge.from_node_id,
             edge.to_node_id,
             attrs.join(" ")
-        )
-        .unwrap();
+        );
     }
 
-    writeln!(dot, "}}").unwrap();
+    wln!(dot, "}}");
 
     dot
 }
@@ -307,7 +323,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
     let mut writeup = String::new();
 
     // Title
-    writeln!(writeup, "## Summary\n").unwrap();
+    wln!(writeup, "## Summary\n");
 
     // Goals section
     let goals: Vec<&DecisionNode> = filtered
@@ -318,12 +334,12 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
 
     if !goals.is_empty() {
         for goal in &goals {
-            writeln!(writeup, "**Goal:** {}", goal.title).unwrap();
+            wln!(writeup, "**Goal:** {}", goal.title);
             if let Some(desc) = &goal.description {
-                writeln!(writeup, "\n{}\n", desc).unwrap();
+                wln!(writeup, "\n{}\n", desc);
             }
         }
-        writeln!(writeup).unwrap();
+        wln!(writeup);
     }
 
     // Decisions section
@@ -334,10 +350,10 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         .collect();
 
     if !decisions.is_empty() {
-        writeln!(writeup, "## Key Decisions\n").unwrap();
+        wln!(writeup, "## Key Decisions\n");
 
         for decision in &decisions {
-            writeln!(writeup, "### {}\n", decision.title).unwrap();
+            wln!(writeup, "### {}\n", decision.title);
 
             // Find options for this decision
             let decision_options: Vec<&DecisionNode> = filtered
@@ -353,7 +369,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                 .collect();
 
             if !decision_options.is_empty() {
-                writeln!(writeup, "**Options considered:**\n").unwrap();
+                wln!(writeup, "**Options considered:**\n");
                 for opt in &decision_options {
                     let marker = if filtered.edges.iter().any(|e| {
                         e.from_node_id == decision.id
@@ -364,9 +380,9 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                     } else {
                         "[ ]"
                     };
-                    writeln!(writeup, "- {} {}", marker, opt.title).unwrap();
+                    wln!(writeup, "- {} {}", marker, opt.title);
                 }
-                writeln!(writeup).unwrap();
+                wln!(writeup);
             }
 
             // Find observations related to this decision
@@ -383,11 +399,11 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                 .collect();
 
             if !observations.is_empty() {
-                writeln!(writeup, "**Observations:**\n").unwrap();
+                wln!(writeup, "**Observations:**\n");
                 for obs in &observations {
-                    writeln!(writeup, "- {}", obs.title).unwrap();
+                    wln!(writeup, "- {}", obs.title);
                 }
-                writeln!(writeup).unwrap();
+                wln!(writeup);
             }
         }
     }
@@ -400,7 +416,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         .collect();
 
     if !actions.is_empty() {
-        writeln!(writeup, "## Implementation\n").unwrap();
+        wln!(writeup, "## Implementation\n");
 
         for action in &actions {
             let commit = extract_commit(&action.metadata_json);
@@ -409,9 +425,9 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                 .map(|c| format!(" `{}`", &c[..7.min(c.len())]))
                 .unwrap_or_default();
 
-            writeln!(writeup, "- {}{}", action.title, commit_badge).unwrap();
+            wln!(writeup, "- {}{}", action.title, commit_badge);
         }
-        writeln!(writeup).unwrap();
+        wln!(writeup);
     }
 
     // Outcomes section
@@ -422,7 +438,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         .collect();
 
     if !outcomes.is_empty() {
-        writeln!(writeup, "## Outcomes\n").unwrap();
+        wln!(writeup, "## Outcomes\n");
 
         for outcome in &outcomes {
             let confidence = extract_confidence(&outcome.metadata_json);
@@ -430,14 +446,14 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                 .map(|c| format!(" ({}% confidence)", c))
                 .unwrap_or_default();
 
-            writeln!(writeup, "- {}{}", outcome.title, conf_badge).unwrap();
+            wln!(writeup, "- {}{}", outcome.title, conf_badge);
         }
-        writeln!(writeup).unwrap();
+        wln!(writeup);
     }
 
     // DOT graph section
     if config.include_dot {
-        writeln!(writeup, "## Decision Graph\n").unwrap();
+        wln!(writeup, "## Decision Graph\n");
 
         // Build image URL if PNG filename provided
         let image_url = config.png_filename.as_ref().map(|filename| {
@@ -454,14 +470,14 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
 
         // If image URL available, show the PNG image
         if let Some(url) = &image_url {
-            writeln!(writeup, "![Decision Graph]({})\n", url).unwrap();
+            wln!(writeup, "![Decision Graph]({})\n", url);
 
             // Put DOT source in collapsible details
-            writeln!(writeup, "<details>").unwrap();
-            writeln!(writeup, "<summary>DOT source (click to expand)</summary>\n").unwrap();
+            wln!(writeup, "<details>");
+            wln!(writeup, "<summary>DOT source (click to expand)</summary>\n");
         }
 
-        writeln!(writeup, "```dot").unwrap();
+        wln!(writeup, "```dot");
         let dot_config = DotConfig {
             title: Some(config.title.clone()),
             show_ids: true,
@@ -469,19 +485,19 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
             show_confidence: true,
             rankdir: "TB".to_string(),
         };
-        write!(writeup, "{}", graph_to_dot(&filtered, &dot_config)).unwrap();
-        writeln!(writeup, "```\n").unwrap();
+        w!(writeup, "{}", graph_to_dot(&filtered, &dot_config));
+        wln!(writeup, "```\n");
 
         if image_url.is_some() {
-            writeln!(writeup, "</details>\n").unwrap();
+            wln!(writeup, "</details>\n");
         } else {
-            writeln!(writeup, "*Render with: `dot -Tpng graph.dot -o graph.png`*\n").unwrap();
+            wln!(writeup, "*Render with: `dot -Tpng graph.dot -o graph.png`*\n");
         }
     }
 
     // Test plan section
     if config.include_test_plan {
-        writeln!(writeup, "## Test Plan\n").unwrap();
+        wln!(writeup, "## Test Plan\n");
 
         // Generate test plan from outcomes
         let test_items: Vec<String> = outcomes
@@ -491,26 +507,25 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
             .collect();
 
         if test_items.is_empty() {
-            writeln!(writeup, "- [ ] Verify implementation").unwrap();
-            writeln!(writeup, "- [ ] Run test suite").unwrap();
+            wln!(writeup, "- [ ] Verify implementation");
+            wln!(writeup, "- [ ] Run test suite");
         } else {
             for item in test_items {
-                writeln!(writeup, "{}", item).unwrap();
+                wln!(writeup, "{}", item);
             }
         }
-        writeln!(writeup).unwrap();
+        wln!(writeup);
     }
 
     // Decision graph reference
     if !filtered.nodes.is_empty() {
         let node_ids: Vec<String> = filtered.nodes.iter().map(|n| n.id.to_string()).collect();
-        writeln!(writeup, "## Decision Graph Reference\n").unwrap();
-        writeln!(
+        wln!(writeup, "## Decision Graph Reference\n");
+        wln!(
             writeup,
             "This PR corresponds to deciduous nodes: {}\n",
             node_ids.join(", ")
-        )
-        .unwrap();
+        );
     }
 
     writeup
@@ -639,5 +654,252 @@ mod tests {
     fn test_extract_commit() {
         let meta = Some(r#"{"commit":"abc1234"}"#.to_string());
         assert_eq!(extract_commit(&meta), Some("abc1234".to_string()));
+    }
+
+    // === Additional Helper Function Tests ===
+
+    #[test]
+    fn test_node_shape() {
+        assert_eq!(node_shape("goal"), "house");
+        assert_eq!(node_shape("decision"), "diamond");
+        assert_eq!(node_shape("option"), "parallelogram");
+        assert_eq!(node_shape("action"), "box");
+        assert_eq!(node_shape("outcome"), "ellipse");
+        assert_eq!(node_shape("observation"), "note");
+        assert_eq!(node_shape("unknown"), "box"); // default
+    }
+
+    #[test]
+    fn test_node_color() {
+        assert_eq!(node_color("goal"), "#FFE4B5");
+        assert_eq!(node_color("decision"), "#E6E6FA");
+        assert_eq!(node_color("option"), "#E0FFFF");
+        assert_eq!(node_color("action"), "#90EE90");
+        assert_eq!(node_color("outcome"), "#87CEEB");
+        assert_eq!(node_color("observation"), "#DDA0DD");
+        assert_eq!(node_color("unknown"), "#F5F5F5"); // default: white smoke
+    }
+
+    #[test]
+    fn test_edge_style() {
+        assert_eq!(edge_style("leads_to"), "solid"); // default
+        assert_eq!(edge_style("chosen"), "bold");
+        assert_eq!(edge_style("rejected"), "dashed");
+        assert_eq!(edge_style("blocks"), "dotted");
+        assert_eq!(edge_style("unknown"), "solid"); // default
+    }
+
+    #[test]
+    fn test_edge_color() {
+        assert_eq!(edge_color("leads_to"), "#333333"); // default
+        assert_eq!(edge_color("chosen"), "#228B22"); // forest green
+        assert_eq!(edge_color("rejected"), "#DC143C"); // crimson
+        assert_eq!(edge_color("blocks"), "#FF4500"); // orange red
+        assert_eq!(edge_color("enables"), "#4169E1"); // royal blue
+        assert_eq!(edge_color("unknown"), "#333333"); // default
+    }
+
+    #[test]
+    fn test_escape_dot() {
+        assert_eq!(escape_dot("hello"), "hello");
+        assert_eq!(escape_dot("hello \"world\""), "hello \\\"world\\\"");
+        assert_eq!(escape_dot("line1\nline2"), "line1\\nline2");
+        assert_eq!(escape_dot("back\\slash"), "back\\\\slash");
+    }
+
+    #[test]
+    fn test_truncate() {
+        assert_eq!(truncate("hello", 10), "hello");
+        assert_eq!(truncate("hello world", 8), "hello...");
+        assert_eq!(truncate("hi", 2), "hi");
+        assert_eq!(truncate("hello", 5), "hello");
+    }
+
+    #[test]
+    fn test_truncate_unicode() {
+        // Unicode-safe truncation
+        assert_eq!(truncate("🎉🎊🎁", 10), "🎉🎊🎁");
+        let result = truncate("🎉🎊🎁🎄🎅🎆", 5);
+        assert!(result.ends_with("...") || result.chars().count() <= 5);
+    }
+
+    // === DOT Config Tests ===
+
+    #[test]
+    fn test_dot_config_default() {
+        let config = DotConfig::default();
+        assert!(config.show_rationale);
+        assert!(config.show_confidence);
+        assert!(config.show_ids);
+        assert_eq!(config.rankdir, "TB");
+        assert!(config.title.is_none());
+    }
+
+    #[test]
+    fn test_dot_with_title() {
+        let graph = sample_graph();
+        let config = DotConfig {
+            title: Some("My Graph".to_string()),
+            ..Default::default()
+        };
+        let dot = graph_to_dot(&graph, &config);
+
+        assert!(dot.contains("label=\"My Graph\""));
+        assert!(dot.contains("labelloc=t"));
+    }
+
+    #[test]
+    fn test_dot_with_custom_rankdir() {
+        let graph = sample_graph();
+        let config = DotConfig {
+            rankdir: "LR".to_string(),
+            ..Default::default()
+        };
+        let dot = graph_to_dot(&graph, &config);
+
+        assert!(dot.contains("rankdir=LR"));
+    }
+
+    // === Filter Tests ===
+
+    #[test]
+    fn test_filter_graph_empty_roots() {
+        let graph = sample_graph();
+        let filtered = filter_graph_from_roots(&graph, &[]);
+
+        // Empty roots should return empty graph
+        assert!(filtered.nodes.is_empty());
+        assert!(filtered.edges.is_empty());
+    }
+
+    #[test]
+    fn test_filter_graph_single_node() {
+        let graph = sample_graph();
+        // Filter starting from node 3 (leaf)
+        let filtered = filter_graph_from_roots(&graph, &[3]);
+
+        assert_eq!(filtered.nodes.len(), 1);
+        assert_eq!(filtered.edges.len(), 0);
+    }
+
+    #[test]
+    fn test_filter_graph_nonexistent_root() {
+        let graph = sample_graph();
+        let filtered = filter_graph_from_roots(&graph, &[999]);
+
+        assert!(filtered.nodes.is_empty());
+    }
+
+    // === Extract Tests ===
+
+    #[test]
+    fn test_extract_confidence_invalid_json() {
+        let meta = Some("not json".to_string());
+        assert_eq!(extract_confidence(&meta), None);
+    }
+
+    #[test]
+    fn test_extract_confidence_missing_field() {
+        let meta = Some(r#"{"branch":"main"}"#.to_string());
+        assert_eq!(extract_confidence(&meta), None);
+    }
+
+    #[test]
+    fn test_extract_commit_invalid_json() {
+        let meta = Some("not json".to_string());
+        assert_eq!(extract_commit(&meta), None);
+    }
+
+    // === Writeup Config Tests ===
+
+    #[test]
+    fn test_writeup_without_dot() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "No DOT".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: true,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        assert!(!writeup.contains("```dot"));
+        // Note: "## Decision Graph Reference" is always present, but "## Decision Graph\n" is not
+        assert!(!writeup.contains("## Decision Graph\n"));
+    }
+
+    #[test]
+    fn test_writeup_without_test_plan() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "No Test Plan".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: false,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        assert!(!writeup.contains("## Test Plan"));
+    }
+
+    #[test]
+    fn test_writeup_with_png() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "With PNG".to_string(),
+            root_ids: vec![],
+            include_dot: true,
+            include_test_plan: false,
+            png_filename: Some("docs/graph.png".to_string()),
+            github_repo: Some("owner/repo".to_string()),
+            git_branch: Some("main".to_string()),
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        assert!(writeup.contains("![Decision Graph]"));
+        assert!(writeup.contains("raw.githubusercontent.com"));
+        assert!(writeup.contains("<details>")); // DOT in collapsible
+    }
+
+    // === Empty Graph Tests ===
+
+    #[test]
+    fn test_dot_empty_graph() {
+        let graph = DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        };
+        let config = DotConfig::default();
+        let dot = graph_to_dot(&graph, &config);
+
+        assert!(dot.contains("digraph DecisionGraph"));
+        assert!(dot.contains("}"));
+    }
+
+    #[test]
+    fn test_writeup_empty_graph() {
+        let graph = DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        };
+        let config = WriteupConfig {
+            title: "Empty".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: false,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        // Should still produce valid output
+        assert!(writeup.contains("## Summary"));
     }
 }

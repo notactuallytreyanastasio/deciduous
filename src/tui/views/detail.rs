@@ -101,7 +101,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
                 for word in words {
                     if current_line.is_empty() {
                         current_line = format!("  {}", word);
-                    } else if current_line.len() + word.len() + 1 <= prompt_width {
+                    } else if current_line.len() + word.len() < prompt_width {
                         current_line.push(' ');
                         current_line.push_str(word);
                     } else {

@@ -1154,7 +1154,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     if db_path.exists() {
         println!("   {} .deciduous/deciduous.db (already exists, preserving data)", "Skipping".yellow());
     } else {
-        println!("   {} {}", "Creating".green(), ".deciduous/deciduous.db");
+        println!("   {} .deciduous/deciduous.db", "Creating".green());
     }
 
     // Set the env var so Database::open() uses this path
@@ -1502,4 +1502,249 @@ fn add_to_gitignore(cwd: &Path) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    // === Editor Enum Tests ===
+
+    #[test]
+    fn test_editor_equality() {
+        assert_eq!(Editor::Claude, Editor::Claude);
+        assert_eq!(Editor::Windsurf, Editor::Windsurf);
+        assert_ne!(Editor::Claude, Editor::Windsurf);
+    }
+
+    #[test]
+    fn test_editor_debug() {
+        assert_eq!(format!("{:?}", Editor::Claude), "Claude");
+        assert_eq!(format!("{:?}", Editor::Windsurf), "Windsurf");
+    }
+
+    // === Template Content Tests ===
+
+    #[test]
+    fn test_default_config_is_valid_toml() {
+        // Ensure the DEFAULT_CONFIG constant is valid TOML
+        let result: Result<toml::Value, _> = toml::from_str(DEFAULT_CONFIG);
+        assert!(result.is_ok(), "DEFAULT_CONFIG should be valid TOML");
+    }
+
+    #[test]
+    fn test_decision_md_has_required_frontmatter() {
+        assert!(DECISION_MD.starts_with("---"), "decision.md should start with frontmatter");
+        assert!(DECISION_MD.contains("description:"), "decision.md should have description");
+        assert!(DECISION_MD.contains("allowed-tools:"), "decision.md should have allowed-tools");
+    }
+
+    #[test]
+    fn test_context_md_has_required_frontmatter() {
+        assert!(CONTEXT_MD.starts_with("---"), "context.md should start with frontmatter");
+        assert!(CONTEXT_MD.contains("description:"), "context.md should have description");
+    }
+
+    #[test]
+    fn test_claude_md_section_contains_workflow() {
+        assert!(CLAUDE_MD_SECTION.contains("Decision Graph Workflow"));
+        assert!(CLAUDE_MD_SECTION.contains("deciduous add"));
+        assert!(CLAUDE_MD_SECTION.contains("deciduous link"));
+    }
+
+    #[test]
+    fn test_windsurf_rule_has_required_frontmatter() {
+        assert!(WINDSURF_DECIDUOUS_RULE.starts_with("---"), "windsurf rule should start with frontmatter");
+        assert!(WINDSURF_DECIDUOUS_RULE.contains("alwaysApply:"), "windsurf rule should have alwaysApply");
+    }
+
+    // === File Helper Tests (with tempdir) ===
+
+    #[test]
+    fn test_create_dir_if_missing_creates_new() {
+        let temp = TempDir::new().unwrap();
+        let new_dir = temp.path().join("new_dir");
+
+        assert!(!new_dir.exists());
+        create_dir_if_missing(&new_dir).unwrap();
+        assert!(new_dir.exists());
+    }
+
+    #[test]
+    fn test_create_dir_if_missing_skips_existing() {
+        let temp = TempDir::new().unwrap();
+        // temp.path() already exists
+        let result = create_dir_if_missing(temp.path());
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_write_file_if_missing_creates_new() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("test.txt");
+
+        assert!(!file_path.exists());
+        write_file_if_missing(&file_path, "hello world", "test.txt").unwrap();
+        assert!(file_path.exists());
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "hello world");
+    }
+
+    #[test]
+    fn test_write_file_if_missing_preserves_existing() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("test.txt");
+
+        // Create file with original content
+        fs::write(&file_path, "original").unwrap();
+
+        // Try to write new content - should be skipped
+        write_file_if_missing(&file_path, "new content", "test.txt").unwrap();
+
+        // Should still have original content
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "original");
+    }
+
+    #[test]
+    fn test_write_file_overwrite_replaces_existing() {
+        let temp = TempDir::new().unwrap();
+        let file_path = temp.path().join("test.txt");
+
+        // Create file with original content
+        fs::write(&file_path, "original").unwrap();
+
+        // Overwrite with new content
+        write_file_overwrite(&file_path, "new content", "test.txt").unwrap();
+
+        // Should have new content
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "new content");
+    }
+
+    #[test]
+    fn test_add_to_gitignore_creates_new() {
+        let temp = TempDir::new().unwrap();
+        let gitignore_path = temp.path().join(".gitignore");
+
+        add_to_gitignore(temp.path()).unwrap();
+
+        assert!(gitignore_path.exists());
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(content.contains(".deciduous/"));
+    }
+
+    #[test]
+    fn test_add_to_gitignore_appends_to_existing() {
+        let temp = TempDir::new().unwrap();
+        let gitignore_path = temp.path().join(".gitignore");
+
+        // Create existing gitignore
+        fs::write(&gitignore_path, "node_modules/\n*.log").unwrap();
+
+        add_to_gitignore(temp.path()).unwrap();
+
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(content.contains("node_modules/"));
+        assert!(content.contains(".deciduous/"));
+    }
+
+    #[test]
+    fn test_add_to_gitignore_skips_if_present() {
+        let temp = TempDir::new().unwrap();
+        let gitignore_path = temp.path().join(".gitignore");
+
+        // Create gitignore with .deciduous/ already present
+        let original = "node_modules/\n.deciduous/\n*.log";
+        fs::write(&gitignore_path, original).unwrap();
+
+        add_to_gitignore(temp.path()).unwrap();
+
+        // Content should be unchanged
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert_eq!(content, original);
+    }
+
+    #[test]
+    fn test_append_config_md_creates_new() {
+        let temp = TempDir::new().unwrap();
+        let md_path = temp.path().join("CLAUDE.md");
+
+        append_config_md(&md_path, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+
+        assert!(md_path.exists());
+        let content = fs::read_to_string(&md_path).unwrap();
+        assert!(content.contains("Decision Graph Workflow"));
+    }
+
+    #[test]
+    fn test_append_config_md_appends_to_existing() {
+        let temp = TempDir::new().unwrap();
+        let md_path = temp.path().join("CLAUDE.md");
+
+        // Create existing file
+        fs::write(&md_path, "# My Project\n\nSome instructions.").unwrap();
+
+        append_config_md(&md_path, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+
+        let content = fs::read_to_string(&md_path).unwrap();
+        assert!(content.contains("# My Project"));
+        assert!(content.contains("Decision Graph Workflow"));
+    }
+
+    #[test]
+    fn test_append_config_md_skips_if_present() {
+        let temp = TempDir::new().unwrap();
+        let md_path = temp.path().join("CLAUDE.md");
+
+        // Create file with workflow section already
+        let original = "# My Project\n\n## Decision Graph Workflow\n\nAlready here.";
+        fs::write(&md_path, original).unwrap();
+
+        append_config_md(&md_path, CLAUDE_MD_SECTION, "CLAUDE.md").unwrap();
+
+        // Should be unchanged
+        let content = fs::read_to_string(&md_path).unwrap();
+        assert_eq!(content, original);
+    }
+
+    #[test]
+    fn test_replace_config_md_section_replaces_existing() {
+        let temp = TempDir::new().unwrap();
+        let md_path = temp.path().join("CLAUDE.md");
+
+        // Create file with old workflow section
+        let original = r#"# My Project
+
+## Decision Graph Workflow
+
+Old workflow content here.
+More old content.
+
+## Other Section
+
+This should be preserved."#;
+        fs::write(&md_path, original).unwrap();
+
+        let new_section = "\n## Decision Graph Workflow\n\nNew workflow content!\n";
+        replace_config_md_section(&md_path, new_section, "CLAUDE.md").unwrap();
+
+        let content = fs::read_to_string(&md_path).unwrap();
+        assert!(content.contains("New workflow content!"));
+        assert!(!content.contains("Old workflow content"));
+        assert!(content.contains("## Other Section"));
+        assert!(content.contains("This should be preserved"));
+    }
+
+    // === Workflow YAML Tests ===
+
+    #[test]
+    fn test_cleanup_workflow_is_valid_yaml() {
+        let result: Result<serde_yaml::Value, _> = serde_yaml::from_str(CLEANUP_WORKFLOW);
+        assert!(result.is_ok(), "CLEANUP_WORKFLOW should be valid YAML");
+    }
+
+    #[test]
+    fn test_deploy_workflow_is_valid_yaml() {
+        let result: Result<serde_yaml::Value, _> = serde_yaml::from_str(DEPLOY_PAGES_WORKFLOW);
+        assert!(result.is_ok(), "DEPLOY_PAGES_WORKFLOW should be valid YAML");
+    }
 }

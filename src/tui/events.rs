@@ -60,11 +60,8 @@ fn handle_search_mode(app: &mut App, key: KeyEvent) -> bool {
 }
 
 fn handle_command_mode(app: &mut App, key: KeyEvent) -> bool {
-    match key.code {
-        KeyCode::Esc => {
-            app.mode = Mode::Normal;
-        }
-        _ => {}
+    if key.code == KeyCode::Esc {
+        app.mode = Mode::Normal;
     }
     false
 }
