@@ -166,7 +166,7 @@ impl Chain {
             .filter_map(|n| chrono::DateTime::parse_from_rfc3339(&n.updated_at).ok())
             .map(|dt| dt.with_timezone(&chrono::Utc))
             .max()
-            .unwrap_or_else(|| chrono::Utc::now())
+            .unwrap_or_else(chrono::Utc::now)
     }
 
     /// Get the most recent update timestamp as milliseconds (for sorting)
@@ -204,7 +204,7 @@ pub fn build_chains(nodes: &[DecisionNode], edges: &[DecisionEdge]) -> Vec<Chain
 /// Sort chains by recency (most recently updated first)
 pub fn sort_chains_by_recency(chains: &[Chain]) -> Vec<Chain> {
     let mut sorted = chains.to_vec();
-    sorted.sort_by(|a, b| b.last_updated_millis().cmp(&a.last_updated_millis()));
+    sorted.sort_by_key(|c| std::cmp::Reverse(c.last_updated_millis()));
     sorted
 }
 
