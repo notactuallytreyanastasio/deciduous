@@ -5169,6 +5169,17 @@
       "created_at": "2025-12-12T17:59:24.756241-05:00",
       "updated_at": "2025-12-12T17:59:24.756241-05:00",
       "metadata_json": "{\"branch\":\"main\",\"prompt\":\"Preparing patch release\"}"
+    },
+    {
+      "id": 471,
+      "change_id": "832339c2-74ea-46d4-9bf4-4cd45f49dbd3",
+      "node_type": "action",
+      "title": "Remove obsolete ts_gen.rs test",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T18:00:09.752685-05:00",
+      "updated_at": "2025-12-12T18:00:09.752685-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"prompt\":\"Fixing build failure during push: obsolete test file required feature not enabled by default\"}"
     }
   ],
   "edges": [
@@ -9648,6 +9659,17 @@
       "weight": 1.0,
       "rationale": "Release prep",
       "created_at": "2025-12-12T17:59:24.768660-05:00"
+    },
+    {
+      "id": 408,
+      "from_node_id": 470,
+      "to_node_id": 471,
+      "from_change_id": "a0a09167-e452-44ee-ae3b-47eef79718d2",
+      "to_change_id": "832339c2-74ea-46d4-9bf4-4cd45f49dbd3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing release build",
+      "created_at": "2025-12-12T18:00:09.763875-05:00"
     }
   ]
 }
