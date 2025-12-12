@@ -42,6 +42,7 @@ pub mod config;
 pub mod db;
 pub mod diff;
 pub mod export;
+pub mod import;
 pub mod init;
 pub mod schema;
 pub mod serve;

@@ -75,6 +75,9 @@ syntect = { version = "5.2", default-features = false, features = ["default-fanc
 syntect-tui = "3.0"
 lazy_static = "1.4"
 
+# Cross-platform paths
+dirs = "5.0"
+
 [profile.release]
 lto = true
 codegen-units = 1

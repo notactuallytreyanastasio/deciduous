@@ -220,6 +220,25 @@ enum Command {
     /// Migrate database to add change_id columns (for multi-user sync)
     Migrate,
 
+    /// Import decisions from Claude Code session transcripts
+    Import {
+        /// List available sessions without importing
+        #[arg(long)]
+        list: bool,
+
+        /// Import a specific session by ID (UUID)
+        #[arg(long)]
+        session: Option<String>,
+
+        /// Import all sessions
+        #[arg(long)]
+        all: bool,
+
+        /// Show what would be done without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Launch the terminal user interface
     Tui {
         /// Optional database path (default: auto-discover)
@@ -311,6 +330,71 @@ fn main() {
         if let Err(e) = deciduous::tui::run(db) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
+        }
+        return;
+    }
+
+    // Handle Import separately - it invokes Claude CLI
+    if let Command::Import { list, session, all, dry_run } = args.command {
+        let cwd = std::env::current_dir().unwrap_or_default();
+
+        match deciduous::import::find_session_files(&cwd) {
+            Ok(sessions) => {
+                if sessions.is_empty() {
+                    println!("{} No Claude sessions found for this project.", "Info:".cyan());
+                    return;
+                }
+
+                if list {
+                    println!("{} Available sessions:", "Claude Code".cyan());
+                    println!("{:<40} {:<20} {:>10}", "SESSION ID", "MODIFIED", "SIZE");
+                    println!("{}", "-".repeat(75));
+                    for s in &sessions {
+                        println!("{:<40} {:<20} {:>10}",
+                            s.session_id(),
+                            s.modified_str(),
+                            format!("{:.1} KB", s.size as f64 / 1024.0));
+                    }
+                    return;
+                }
+
+                // Determine which sessions to import
+                let to_import: Vec<_> = if all {
+                    sessions
+                } else if let Some(ref id) = session {
+                    sessions.into_iter()
+                        .filter(|s| s.session_id().starts_with(id))
+                        .collect()
+                } else {
+                    // Default: import the most recent session
+                    sessions.into_iter().take(1).collect()
+                };
+
+                if to_import.is_empty() {
+                    if let Some(ref id) = session {
+                        eprintln!("{} No session found matching '{}'", "Error:".red(), id);
+                    } else {
+                        eprintln!("{} No sessions to import", "Error:".red());
+                    }
+                    std::process::exit(1);
+                }
+
+                for s in &to_import {
+                    println!("{} session: {} ({})",
+                        if dry_run { "Would import".cyan() } else { "Importing".green() },
+                        s.session_id(),
+                        s.modified_str());
+
+                    if let Err(e) = deciduous::import::import_session(&s.path, dry_run) {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
         }
         return;
     }
@@ -891,6 +975,7 @@ fn main() {
         }
 
         Command::Tui { .. } => unreachable!(), // Handled above
+        Command::Import { .. } => unreachable!(), // Handled above
     }
 }
 
