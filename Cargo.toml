@@ -32,6 +32,11 @@ exclude = [
 name = "deciduous"
 path = "src/main.rs"
 
+[[bin]]
+name = "gen_types"
+path = "bin/gen_types.rs"
+required-features = ["ts-rs"]
+
 [lib]
 name = "deciduous"
 path = "src/lib.rs"

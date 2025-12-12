@@ -43,37 +43,23 @@ export interface NodeMetadata {
 // Core Types - Match Diesel models exactly
 // =============================================================================
 
-/**
- * Decision node - represents a point in the decision graph
- * Matches: src/db.rs DecisionNode struct
- */
-export interface DecisionNode {
-  id: number;
-  change_id: string;  // UUID for sync across machines
+import {
+  DecisionNode as GeneratedDecisionNode,
+  DecisionEdge as GeneratedDecisionEdge,
+} from './generated/schema';
+
+// Re-export generated types as the source of truth
+// Note: We extend the generated types to ensure string fields match our specific unions (NodeType/EdgeType)
+export interface DecisionNode extends Omit<GeneratedDecisionNode, 'node_type' | 'status'> {
   node_type: NodeType;
-  title: string;
-  description: string | null;
   status: NodeStatus;
-  created_at: string;  // ISO 8601 timestamp from SQLite TEXT
-  updated_at: string;  // ISO 8601 timestamp from SQLite TEXT
-  metadata_json: string | null;  // JSON string containing NodeMetadata
 }
 
-/**
- * Decision edge - connects two nodes with a relationship
- * Matches: src/db.rs DecisionEdge struct
- */
-export interface DecisionEdge {
-  id: number;
-  from_node_id: number;
-  to_node_id: number;
-  from_change_id: string | null;  // Source node change_id (for sync)
-  to_change_id: string | null;    // Target node change_id (for sync)
+export interface DecisionEdge extends Omit<GeneratedDecisionEdge, 'edge_type'> {
   edge_type: EdgeType;
-  weight: number | null;  // SQLite REAL, defaults to 1.0
-  rationale: string | null;
-  created_at: string;  // ISO 8601 timestamp
 }
+
+export type { DecisionContext, DecisionSession, CommandLog } from './generated/schema';
 
 /**
  * Full graph data structure as exported by `losselot db graph`
