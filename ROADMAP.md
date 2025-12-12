@@ -108,6 +108,11 @@
   - Automatically comment on PRs with link to branch-filtered graph
   - Badge showing number of decision nodes in the branch
   - One-click navigation from PR → decision graph explorer
+- [ ] **DAG recency filtering**
+  - Snap DAG to most recently touched branches/goals
+  - Show subgraphs that have had new connections written recently
+  - "Last 24h" / "Last week" / "This branch" quick filters
+  - Focus on active work areas, hide stale parts of the graph
 
 ### TUI Enhancements
 - [ ] **Phase 2: Multi-goal chains**
@@ -116,9 +121,6 @@
 - [ ] **DAG view improvements** (currently disabled)
   - Better hierarchical layout algorithm
   - Zoom and pan controls
-  - Snap DAG by recency - filter to most recently touched branches/goals
-  - Show subgraphs that have had new connections written recently
-  - "Last 24h" / "Last week" / "This branch" quick filters
 - [ ] **Settings system** (partially done)
   - [x] `.deciduous/config.toml` exists with branch settings
   - [ ] Timeline order default (newest-first vs oldest-first)
