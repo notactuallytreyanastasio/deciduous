@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Claude Code Workflow - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Real-World Workflows</a>
+                <ul>
+                    <li><a href="claude-code.html" class="active">The Claude Code Workflow</a></li>
+                    <li><a href="session-recovery.html">Session Recovery</a></li>
+                    <li><a href="pr-documentation.html">PR Documentation</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The Claude Code Workflow</h1>
+
+            <p>Let's see what a real Claude Code session looks like with deciduous.</p>
+
+            <h2>A Complete Session</h2>
+
+            <p>Here's a realistic session where a user asks Claude to add rate limiting:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; Add rate limiting to the API endpoints</span>
+
+I'll implement rate limiting for your API. Let me first log this goal to the
+decision graph.
+
+<span class="command">deciduous add goal "Add rate limiting to API" -c 90 \
+    -p "User asked: Add rate limiting to the API endpoints"</span>
+<span class="output">Created node #47: goal "Add rate limiting to API"</span>
+
+Now I need to decide on the approach. Let me log this decision point:
+
+<span class="command">deciduous add decision "Choose rate limiting strategy" -c 75</span>
+<span class="output">Created node #48: decision "Choose rate limiting strategy"</span>
+
+<span class="command">deciduous link 47 48 -r "Deciding implementation approach"</span>
+<span class="output">Created edge: #47 -> #48 (leads_to)</span>
+
+I see a few options here:
+
+<span class="command">deciduous add option "Redis-based with sliding window" -c 80</span>
+<span class="output">Created node #49: option "Redis-based with sliding window"</span>
+
+<span class="command">deciduous add option "In-memory with token bucket" -c 70</span>
+<span class="output">Created node #50: option "In-memory with token bucket"</span>
+
+<span class="command">deciduous link 48 49 -r "Scales across instances, persistent"</span>
+<span class="command">deciduous link 48 50 -r "Simpler, but single-instance only"</span>
+
+Looking at your infrastructure (I see you're using Redis for sessions already),
+I recommend Redis-based rate limiting. This will scale across your multiple
+API instances.
+
+<span class="command">deciduous add action "Implementing Redis rate limiter" -c 85</span>
+<span class="output">Created node #51: action "Implementing Redis rate limiter"</span>
+
+<span class="command">deciduous link 48 51 --edge-type chosen \
+    -r "Redis already in stack, needs horizontal scaling"</span>
+<span class="output">Created edge: #48 -> #51 (chosen)</span>
+
+Now let me implement this...
+
+<em>[Claude writes the rate limiter code, creates middleware, adds tests...]</em>
+
+Rate limiting is implemented! Let me record the outcome:
+
+<span class="command">git add -A && git commit -m "feat: add Redis-based rate limiting"</span>
+<span class="output">[feature/rate-limiting abc123] feat: add Redis-based rate limiting
+ 4 files changed, 187 insertions(+)</span>
+
+<span class="command">deciduous add outcome "Rate limiting working, 429s returned correctly" \
+    -c 95 --commit HEAD</span>
+<span class="output">Created node #52: outcome "Rate limiting working" [commit: abc123]</span>
+
+<span class="command">deciduous link 51 52 -r "Implementation verified with tests"</span>
+<span class="output">Created edge: #51 -> #52 (leads_to)</span>
+
+<span class="command">deciduous sync</span>
+<span class="output">Exported graph to docs/graph-data.json</span>
+
+Done! I've added Redis-based rate limiting with sliding window to all API endpoints.
+The decision graph has been updated so future sessions will know:
+- Why we chose Redis over in-memory (horizontal scaling)
+- The commit where this was implemented
+- The full decision chain from goal to outcome
+                </div>
+            </div>
+
+            <h2>What Just Happened</h2>
+
+            <p>Let's break down the key patterns:</p>
+
+            <h3>1. Log the Goal First</h3>
+
+            <p>Claude immediately creates a <span class="node-goal">goal</span> node with <code>-p</code> to capture the user's original request:</p>
+
+            <pre><span class="cmd">deciduous add goal "Add rate limiting" -c 90 -p "User asked: ..."</span></pre>
+
+            <p>The <code>-p</code> flag captures the prompt that triggered this work. This is crucial for future context recovery.</p>
+
+            <h3>2. Decisions Before Code</h3>
+
+            <p>Before writing any code, Claude logs the <span class="node-decision">decision</span> point and the <span class="node-option">options</span> being considered:</p>
+
+            <pre><span class="cmd">deciduous add decision "Choose rate limiting strategy" -c 75</span>
+<span class="cmd">deciduous add option "Redis-based with sliding window" -c 80</span>
+<span class="cmd">deciduous add option "In-memory with token bucket" -c 70</span></pre>
+
+            <p>This captures the reasoning <em>before</em> it happens, when the context is fresh.</p>
+
+            <h3>3. Mark Chosen Actions</h3>
+
+            <p>When Claude picks an approach, it uses the <code>chosen</code> edge type:</p>
+
+            <pre><span class="cmd">deciduous link 48 51 --edge-type chosen -r "Redis already in stack"</span></pre>
+
+            <p>This makes it clear which option was selected and why.</p>
+
+            <h3>4. Link Commits to Outcomes</h3>
+
+            <p>After committing, Claude links the <span class="node-outcome">outcome</span> to the git commit:</p>
+
+            <pre><span class="cmd">deciduous add outcome "Rate limiting working" -c 95 --commit HEAD</span></pre>
+
+            <p>This creates traceability between decisions and code.</p>
+
+            <h3>5. Sync Before Push</h3>
+
+            <p>Finally, <code>deciduous sync</code> exports the graph for the web viewer:</p>
+
+            <pre><span class="cmd">deciduous sync</span></pre>
+
+            <h2>The Complete Decision Chain</h2>
+
+            <p>After this session, the graph contains:</p>
+
+            <pre><span class="cmd">$ deciduous edges</span>
+<span class="output">From  To   Type       Rationale
+────────────────────────────────────────────────────────────────
+47    48   leads_to   Deciding implementation approach
+48    49   leads_to   Scales across instances, persistent
+48    50   leads_to   Simpler, but single-instance only
+48    51   chosen     Redis already in stack, needs horizontal scaling
+51    52   leads_to   Implementation verified with tests</span></pre>
+
+            <p>Anyone (human or AI) can now query this to understand:</p>
+            <ul>
+                <li><strong>What</strong> was the goal?</li>
+                <li><strong>What</strong> options were considered?</li>
+                <li><strong>Why</strong> was Redis chosen over in-memory?</li>
+                <li><strong>Where</strong> is the code? (commit abc123)</li>
+            </ul>
+
+            <h2>The Workflow Summary</h2>
+
+            <div class="info-box tip">
+                <strong>The Claude Code Workflow</strong>
+                <ol style="margin-top: 10px; margin-bottom: 0;">
+                    <li>User makes a request</li>
+                    <li>Claude logs a <span class="node-goal">goal</span> with the prompt (<code>-p</code>)</li>
+                    <li>Claude logs the <span class="node-decision">decision</span> point</li>
+                    <li>Claude logs <span class="node-option">options</span> being considered</li>
+                    <li>Claude implements the chosen approach</li>
+                    <li>Claude logs the <span class="node-action">action</span> with <code>--edge-type chosen</code></li>
+                    <li>Claude commits and logs the <span class="node-outcome">outcome</span> with <code>--commit HEAD</code></li>
+                    <li>Claude runs <code>deciduous sync</code></li>
+                </ol>
+            </div>
+
+            <h2>Mid-Stream Direction Changes</h2>
+
+            <p>Sometimes the user changes direction during implementation. Capture this:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session (Direction Change)</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; Actually, use the token bucket algorithm instead of sliding window</span>
+
+Got it! Let me capture this direction change and adjust.
+
+<span class="command">deciduous add action "Switching to token bucket algorithm" -c 85 \
+    -p "User said: Actually, use the token bucket algorithm instead"</span>
+<span class="output">Created node #53: action "Switching to token bucket algorithm"</span>
+
+<span class="command">deciduous link 51 53 -r "User requested algorithm change"</span>
+<span class="output">Created edge: #51 -> #53 (leads_to)</span>
+
+Now I'll update the implementation to use token bucket...
+                </div>
+            </div>
+
+            <p>The <code>-p</code> flag captures when the user redirects work mid-stream. This preserves the context of <em>why</em> the approach changed.</p>
+
+            <div class="page-nav">
+                <a href="index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Real-World Workflows</span>
+                </a>
+                <a href="session-recovery.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Session Recovery</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

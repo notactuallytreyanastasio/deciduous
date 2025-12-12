@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Topics - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Advanced Topics</h1>
+            <p class="lead">Power features for getting the most out of deciduous.</p>
+
+            <h2>Branch-Based Grouping</h2>
+
+            <p>Nodes are automatically tagged with the current git branch. This enables filtering by feature/PR.</p>
+
+            <h3>Configuration</h3>
+
+            <p>Configure which branches are "main" (not feature branches) in <code>.deciduous/config.toml</code>:</p>
+
+            <pre>[branch]
+main_branches = ["main", "master", "develop"]
+auto_detect = true</pre>
+
+            <h3>Filtering by Branch</h3>
+
+            <pre><span class="cmd">$ deciduous nodes --branch feature/auth</span>
+<span class="cmd">$ deciduous nodes -b main</span></pre>
+
+            <h3>Override Auto-Detection</h3>
+
+            <pre><span class="comment"># Force a specific branch</span>
+<span class="cmd">$ deciduous add goal "Feature work" -b feature-x</span>
+
+<span class="comment"># Skip branch tagging entirely</span>
+<span class="cmd">$ deciduous add goal "Universal note" --no-branch</span></pre>
+
+            <p>In the web UI, use the branch dropdown in the stats bar to filter all views.</p>
+
+            <h2>Linking Commits to Decisions</h2>
+
+            <p>Link nodes to git commits for traceability:</p>
+
+            <pre><span class="cmd">$ git commit -m "feat: add OAuth login"</span>
+<span class="cmd">$ deciduous add action "Implemented OAuth login" -c 90 --commit HEAD</span>
+<span class="output">Created node #53: action "Implemented OAuth login" [commit: abc123]</span></pre>
+
+            <p>The <code>--commit HEAD</code> flag captures the current commit hash. You can also specify a specific hash:</p>
+
+            <pre><span class="cmd">$ deciduous add outcome "Feature deployed" -c 95 --commit abc123def456</span></pre>
+
+            <p>In the TUI, press <kbd>O</kbd> to view commit details for a node with a linked commit.</p>
+
+            <h2>Confidence Scores</h2>
+
+            <p>Confidence scores (0-100) indicate certainty at decision time:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Range</th>
+                        <th>Meaning</th>
+                        <th>When to Use</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>90-100</td>
+                        <td>Certain</td>
+                        <td>Proven, tested, standard approach</td>
+                    </tr>
+                    <tr>
+                        <td>70-89</td>
+                        <td>High</td>
+                        <td>Good approach, minor unknowns</td>
+                    </tr>
+                    <tr>
+                        <td>50-69</td>
+                        <td>Moderate</td>
+                        <td>Reasonable but some questions</td>
+                    </tr>
+                    <tr>
+                        <td>30-49</td>
+                        <td>Experimental</td>
+                        <td>Might need to revisit</td>
+                    </tr>
+                    <tr>
+                        <td>0-29</td>
+                        <td>Speculative</td>
+                        <td>Exploring, likely to change</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>Confidence is displayed color-coded in the TUI and web viewer:</p>
+            <ul>
+                <li><strong style="color: green;">Green:</strong> 90+</li>
+                <li><strong style="color: #d4a72c;">Yellow:</strong> 70-89</li>
+                <li><strong style="color: red;">Red:</strong> Below 70</li>
+            </ul>
+
+            <h2>Capturing User Prompts</h2>
+
+            <p>Use <code>--prompt</code> / <code>-p</code> to capture the user request that triggered a decision:</p>
+
+            <pre><span class="cmd">$ deciduous add goal "Add dark mode" -c 90 \
+    -p "User asked: can we add a dark mode toggle to settings?"</span></pre>
+
+            <h3>When to Capture Prompts</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Situation</th>
+                        <th>Capture?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>New feature request (root goal)</td>
+                        <td><strong>Yes</strong></td>
+                    </tr>
+                    <tr>
+                        <td>User changes direction mid-stream</td>
+                        <td><strong>Yes</strong></td>
+                    </tr>
+                    <tr>
+                        <td>Routine downstream decisions</td>
+                        <td>No (inherits via edges)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>Prompts are displayed in:</p>
+            <ul>
+                <li>TUI detail panel (under "Prompt" section)</li>
+                <li>Web viewer node details</li>
+                <li><code>deciduous writeup</code> output</li>
+            </ul>
+
+            <h2>Associating Files</h2>
+
+            <p>Link nodes to specific files:</p>
+
+            <pre><span class="cmd">$ deciduous add action "Implementing auth middleware" -c 85 \
+    -f "src/auth/middleware.rs,src/auth/mod.rs"</span></pre>
+
+            <p>In the TUI, press <kbd>o</kbd> to open associated files in your <code>$EDITOR</code>.</p>
+
+            <div class="next-section">
+                <span>Full command reference:</span>
+                <a href="../reference/index.html" class="btn">Plumbing Reference &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="../sharing/pr-workflow.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The PR Workflow</span>
+                </a>
+                <a href="../reference/index.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Plumbing Reference</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

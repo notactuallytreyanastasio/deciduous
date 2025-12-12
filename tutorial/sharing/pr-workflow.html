@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The PR Workflow - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Sharing with Others</a>
+                <ul>
+                    <li><a href="multi-user.html">The Multi-User Problem</a></li>
+                    <li><a href="patches.html">Exporting Patches</a></li>
+                    <li><a href="pr-workflow.html" class="active">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The PR Workflow</h1>
+
+            <p>Here's the recommended workflow for integrating decision patches into your PR process.</p>
+
+            <h2>While Working on a Feature</h2>
+
+            <p>Create nodes as you normally would:</p>
+
+            <pre><span class="cmd">$ deciduous add goal "Add OAuth login" -c 90 -p "User asked for OAuth"</span>
+<span class="cmd">$ deciduous add decision "Choose OAuth provider" -c 75</span>
+<span class="comment">... continue working and logging decisions ...</span></pre>
+
+            <h2>Before Opening the PR</h2>
+
+            <h3>Step 1: Export Your Decisions</h3>
+
+            <pre><span class="cmd">$ deciduous diff export \
+    --branch $(git rev-parse --abbrev-ref HEAD) \
+    -o .deciduous/patches/$(whoami)-$(git rev-parse --abbrev-ref HEAD).json</span>
+<span class="output">Exported 12 nodes and 11 edges to .deciduous/patches/alice-feature-oauth.json</span></pre>
+
+            <h3>Step 2: Generate Visualization (Optional)</h3>
+
+            <pre><span class="cmd">$ deciduous dot --auto --png --nodes 60-72</span>
+<span class="output">Generated docs/decision-graph-feature-oauth.png</span></pre>
+
+            <h3>Step 3: Commit the Patch and Graph</h3>
+
+            <pre><span class="cmd">$ git add .deciduous/patches/ docs/decision-graph-*.png</span>
+<span class="cmd">$ git commit -m "docs: add decision graph and patch for OAuth feature"</span></pre>
+
+            <h3>Step 4: Push and Create PR</h3>
+
+            <pre><span class="cmd">$ git push -u origin feature/oauth</span>
+
+<span class="cmd">$ gh pr create --title "Add OAuth Login" \
+    --body "$(deciduous writeup --auto -t 'Add OAuth Login' --nodes 60-72)"</span></pre>
+
+            <h2>For PR Reviewers</h2>
+
+            <p>After pulling the branch:</p>
+
+            <pre><span class="cmd">$ git checkout feature/oauth</span>
+<span class="cmd">$ git pull</span>
+
+<span class="comment"># Apply the patch to get the decisions in your local database</span>
+<span class="cmd">$ deciduous diff apply .deciduous/patches/alice-feature-oauth.json</span>
+<span class="output">Applied 12 nodes (12 new, 0 existing)</span>
+
+<span class="comment"># Now you can explore with TUI or web viewer</span>
+<span class="cmd">$ deciduous tui</span></pre>
+
+            <p>Reviewers now have full context on <em>why</em> decisions were made, not just <em>what</em> code changed.</p>
+
+            <h2>After PR Merge</h2>
+
+            <p>When the PR merges to main, teammates pull and apply:</p>
+
+            <pre><span class="cmd">$ git pull origin main</span>
+<span class="cmd">$ deciduous diff apply .deciduous/patches/*.json</span>
+<span class="output">Applied alice-feature-oauth.json: 12 nodes (12 new)
+Applied bob-refactor.json: 8 nodes (8 existing, already applied)</span></pre>
+
+            <p>Because patches are idempotent, teammates who already applied a patch (during review) won't get duplicates.</p>
+
+            <h2>Continuous Application</h2>
+
+            <p>Some teams add this to their workflow (e.g., in a git hook or CI):</p>
+
+            <pre><span class="comment"># After every pull, apply all patches</span>
+<span class="cmd">$ git pull && deciduous diff apply .deciduous/patches/*.json</span></pre>
+
+            <p>This ensures everyone's local database stays in sync.</p>
+
+            <h2>Complete Example Timeline</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Who</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Day 1</td>
+                        <td>Alice</td>
+                        <td>Creates nodes while implementing OAuth</td>
+                    </tr>
+                    <tr>
+                        <td>Day 2</td>
+                        <td>Alice</td>
+                        <td>Exports patch, opens PR</td>
+                    </tr>
+                    <tr>
+                        <td>Day 2</td>
+                        <td>Bob</td>
+                        <td>Reviews PR, applies patch to understand context</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>Alice</td>
+                        <td>Addresses review feedback, updates patch</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>Bob</td>
+                        <td>Re-applies patch (idempotent), approves PR</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>-</td>
+                        <td>PR merges</td>
+                    </tr>
+                    <tr>
+                        <td>Day 4</td>
+                        <td>Carol</td>
+                        <td>Pulls main, applies patches, has full context</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-box tip">
+                <strong>Best Practice</strong>
+                <p>Name patch files descriptively: <code>&lt;author&gt;-&lt;branch&gt;.json</code>. This makes it clear who created the patch and what it's for.</p>
+            </div>
+
+            <div class="next-section">
+                <span>Ready for power features?</span>
+                <a href="../advanced/index.html" class="btn">Advanced Topics &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="patches.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Exporting Patches</span>
+                </a>
+                <a href="../advanced/index.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Advanced Topics</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

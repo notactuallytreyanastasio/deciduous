@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLI Queries - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Viewing the Graph</a>
+                <ul>
+                    <li><a href="tui.html">The Terminal UI</a></li>
+                    <li><a href="web.html">The Web Viewer</a></li>
+                    <li><a href="cli.html" class="active">CLI Queries</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>CLI Queries</h1>
+
+            <p>For quick queries and scripting, use the CLI commands directly.</p>
+
+            <h2>Listing Nodes</h2>
+
+            <pre><span class="cmd">$ deciduous nodes</span>
+<span class="output">ID  Type        Title                            Status   Confidence
+─────────────────────────────────────────────────────────────────────
+1   goal        Implement user authentication    active   90
+2   decision    Choose authentication method     active   75
+3   option      JWT tokens                       active   80
+4   option      Session cookies                  active   70
+5   action      Implementing JWT authentication  active   85
+6   outcome     JWT auth working, tests passing  active   95</span></pre>
+
+            <h3>Filter by Branch</h3>
+
+            <pre><span class="cmd">$ deciduous nodes --branch feature/auth</span>
+<span class="cmd">$ deciduous nodes -b main</span></pre>
+
+            <h3>Filter by Type</h3>
+
+            <pre><span class="cmd">$ deciduous nodes --node-type goal</span>
+<span class="cmd">$ deciduous nodes -t decision</span></pre>
+
+            <h2>Listing Edges</h2>
+
+            <pre><span class="cmd">$ deciduous edges</span>
+<span class="output">From  To   Type       Rationale
+────────────────────────────────────────────────────────────────
+1     2    leads_to   Need to decide approach
+2     3    leads_to   Stateless, scales well
+2     4    leads_to   Simpler but requires server state
+2     5    chosen     Stateless preferred for microservices
+5     6    leads_to   Implementation complete</span></pre>
+
+            <h2>Exporting the Full Graph</h2>
+
+            <pre><span class="cmd">$ deciduous graph > graph.json</span></pre>
+
+            <p>This exports the complete graph as JSON, useful for:</p>
+            <ul>
+                <li>Backup</li>
+                <li>External processing</li>
+                <li>Integration with other tools</li>
+            </ul>
+
+            <h2>Recent Commands</h2>
+
+            <pre><span class="cmd">$ deciduous commands</span>
+<span class="output">2024-01-15 10:30:00  deciduous add goal "Add rate limiting" -c 90
+2024-01-15 10:30:15  deciduous add decision "Choose strategy" -c 75
+2024-01-15 10:30:30  deciduous link 47 48 -r "Deciding approach"
+...</span></pre>
+
+            <p>This shows what deciduous commands were recently run, helpful for debugging or auditing.</p>
+
+            <h2>Syncing for Web Viewer</h2>
+
+            <pre><span class="cmd">$ deciduous sync</span>
+<span class="output">Exported graph to docs/graph-data.json</span></pre>
+
+            <p>Run this before deploying to GitHub Pages or after adding nodes when using the static web viewer.</p>
+
+            <h2>Combining with Unix Tools</h2>
+
+            <p>The CLI output is designed to work with standard Unix tools:</p>
+
+            <pre><span class="comment"># Count nodes by type</span>
+<span class="cmd">$ deciduous nodes | awk '{print $2}' | sort | uniq -c</span>
+<span class="output">   5 action
+   8 decision
+  12 goal
+   3 observation
+   7 option
+   4 outcome</span>
+
+<span class="comment"># Find all goal nodes</span>
+<span class="cmd">$ deciduous nodes | grep "goal"</span>
+
+<span class="comment"># Find edges involving node 47</span>
+<span class="cmd">$ deciduous edges | grep "47"</span>
+
+<span class="comment"># Export just node IDs</span>
+<span class="cmd">$ deciduous nodes | awk 'NR>2 {print $1}'</span></pre>
+
+            <h2>For Claude Code Usage</h2>
+
+            <p>Claude typically uses CLI queries for context recovery:</p>
+
+            <pre><span class="cmd">$ deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)</span>
+<span class="cmd">$ deciduous edges</span>
+<span class="cmd">$ deciduous commands | tail -10</span></pre>
+
+            <p>These commands give Claude a quick overview of the current state.</p>
+
+            <div class="next-section">
+                <span>Next: sharing decisions with teammates</span>
+                <a href="../sharing/index.html" class="btn">Sharing with Others &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="web.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The Web Viewer</span>
+                </a>
+                <a href="../sharing/index.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Sharing with Others</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>
