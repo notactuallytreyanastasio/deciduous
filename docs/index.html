@@ -353,18 +353,26 @@ SESSION END -> Graph survives
     <script>
         // Fetch gzipped cast file and decompress
         fetch('deciduous_demo_v2.cast.gz')
-            .then(response => response.arrayBuffer())
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to fetch: ' + response.status);
+                return response.arrayBuffer();
+            })
             .then(compressed => {
+                console.log('Fetched', compressed.byteLength, 'bytes');
                 const decompressed = pako.inflate(new Uint8Array(compressed), { to: 'string' });
-                AsciinemaPlayer.create({ data: decompressed }, document.getElementById('demo-player'), {
+                console.log('Decompressed to', decompressed.length, 'chars');
+                const player = AsciinemaPlayer.create(decompressed, document.getElementById('demo-player'), {
                     autoPlay: false,
                     preload: true,
-                    theme: 'asciinema',
                     idleTimeLimit: 2,
                     speed: 1.33
                 });
+                console.log('Player created', player);
             })
-            .catch(err => console.error('Failed to load demo:', err));
+            .catch(err => {
+                console.error('Failed to load demo:', err);
+                document.getElementById('demo-player').innerHTML = '<p style="color:red;padding:20px;">Failed to load demo: ' + err.message + '</p>';
+            });
     </script>
 </body>
 </html>
