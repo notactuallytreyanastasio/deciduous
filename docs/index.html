@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Deciduous - Decision Graph Tooling</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.css" />
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -163,6 +164,30 @@
         .node-type.outcome h3 { color: #1f6feb; }
         .node-type.observation h3 { color: #bf3989; }
 
+        .demo-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
+        }
+        .demo-section h2 {
+            border: none;
+            padding-bottom: 0;
+            margin-bottom: 20px;
+        }
+        .demo-section p {
+            color: #57606a;
+            margin-bottom: 20px;
+        }
+        .demo-player-container {
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            margin: 25px 0;
+        }
+        #demo-player {
+            width: 100%;
+        }
+
         .workflow-section {
             margin-top: 50px;
             padding-top: 30px;
@@ -286,6 +311,14 @@
             </div>
         </section>
 
+        <section class="demo-section">
+            <h2>See It In Action</h2>
+            <p>Watch a full session building with deciduous: initialization, decision logging, graph visualization, and context recovery.</p>
+            <div class="demo-player-container">
+                <div id="demo-player"></div>
+            </div>
+        </section>
+
         <section class="workflow-section">
             <h2>The Workflow</h2>
             <div class="workflow">
@@ -317,5 +350,19 @@ SESSION END -> Graph survives
             MIT License
         </footer>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/asciinema-player@3.8.1/dist/bundle/asciinema-player.min.js"></script>
+    <script>
+        AsciinemaPlayer.create('deciduous_demo.cast', document.getElementById('demo-player'), {
+            cols: 120,
+            rows: 30,
+            autoPlay: false,
+            preload: true,
+            theme: 'asciinema',
+            fit: 'width',
+            idleTimeLimit: 2,
+            speed: 1.5
+        });
+    </script>
 </body>
 </html>
