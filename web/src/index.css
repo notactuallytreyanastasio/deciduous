@@ -1,4 +1,4 @@
-/* Global styles */
+/* Global styles - Light Theme matching landing page */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -12,8 +12,8 @@ html, body, #root {
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background-color: #1a1a2e;
-  color: #eee;
+  background-color: #ffffff;
+  color: #24292f;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -32,21 +32,21 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #1a1a2e;
+  background: #f6f8fa;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #333;
+  background: #d0d7de;
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #444;
+  background: #afb8c1;
 }
 
 /* Links */
 a {
-  color: #00d9ff;
+  color: #0969da;
   text-decoration: none;
 }
 
@@ -56,11 +56,11 @@ a:hover {
 
 /* Focus styles */
 :focus-visible {
-  outline: 2px solid #00d9ff;
+  outline: 2px solid #0969da;
   outline-offset: 2px;
 }
 
 /* Selection */
 ::selection {
-  background: #00d9ff33;
+  background: #0969da33;
 }

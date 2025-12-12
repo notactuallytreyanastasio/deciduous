@@ -52,16 +52,17 @@ const styles: Record<string, React.CSSProperties> = {
   button: {
     padding: '6px 12px',
     fontSize: '11px',
-    border: 'none',
+    border: '1px solid #d0d7de',
     borderLeft: '3px solid transparent',
-    backgroundColor: '#1a1a2e',
-    color: '#888',
+    backgroundColor: '#ffffff',
+    color: '#57606a',
     borderRadius: '4px',
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
   buttonActive: {
-    backgroundColor: '#0f3460',
-    color: '#00d9ff',
+    backgroundColor: '#ddf4ff',
+    color: '#0969da',
+    borderColor: '#0969da',
   },
 };

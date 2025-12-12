@@ -131,13 +131,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
 const styles: Record<string, React.CSSProperties> = {
   container: {
     minHeight: '100vh',
-    backgroundColor: '#1a1a2e',
-    color: '#eee',
+    backgroundColor: '#ffffff',
+    color: '#24292f',
     fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   },
   header: {
-    backgroundColor: '#16213e',
-    borderBottom: '1px solid #0f3460',
+    backgroundColor: '#f6f8fa',
+    borderBottom: '1px solid #d0d7de',
     padding: '0 20px',
   },
   headerContent: {
@@ -151,11 +151,12 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: '20px',
     margin: 0,
-    color: '#00d9ff',
+    color: '#24292f',
+    fontWeight: 700,
   },
   subtitle: {
     fontSize: '12px',
-    color: '#888',
+    color: '#57606a',
     margin: '4px 0 0 0',
   },
   nav: {
@@ -166,22 +167,23 @@ const styles: Record<string, React.CSSProperties> = {
   tab: {
     padding: '10px 20px',
     fontSize: '13px',
-    color: '#888',
+    color: '#57606a',
     textDecoration: 'none',
     borderRadius: '6px 6px 0 0',
     backgroundColor: 'transparent',
     transition: 'all 0.2s',
   },
   tabActive: {
-    backgroundColor: '#1a1a2e',
-    color: '#00d9ff',
+    backgroundColor: '#ffffff',
+    color: '#0969da',
+    fontWeight: 600,
   },
   navLinks: {
     display: 'flex',
     gap: '15px',
   },
   link: {
-    color: '#888',
+    color: '#57606a',
     textDecoration: 'none',
     fontSize: '13px',
   },
@@ -189,7 +191,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '20px',
     padding: '12px 20px',
-    backgroundColor: '#16213e',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
     margin: '15px',
     borderRadius: '8px',
     maxWidth: '1800px',
@@ -203,17 +206,17 @@ const styles: Record<string, React.CSSProperties> = {
   statNum: {
     fontSize: '20px',
     fontWeight: 'bold',
-    color: '#00d9ff',
+    color: '#0969da',
   },
   statLabel: {
     fontSize: '10px',
-    color: '#888',
+    color: '#57606a',
     textTransform: 'uppercase',
   },
   branchSelect: {
-    backgroundColor: '#1a1a2e',
-    color: '#00d9ff',
-    border: '1px solid #0f3460',
+    backgroundColor: '#ffffff',
+    color: '#24292f',
+    border: '1px solid #d0d7de',
     borderRadius: '4px',
     padding: '6px 10px',
     fontSize: '12px',

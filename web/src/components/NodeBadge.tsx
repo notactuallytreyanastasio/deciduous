@@ -89,8 +89,8 @@ export const CommitBadge: React.FC<CommitBadgeProps> = ({
     borderRadius: '4px',
     fontWeight: 500,
     fontFamily: 'monospace',
-    backgroundColor: '#3b82f633',
-    color: '#60a5fa',
+    backgroundColor: '#ddf4ff',
+    color: '#0969da',
     textDecoration: 'none',
     transition: 'all 0.2s',
   };
@@ -103,12 +103,12 @@ export const CommitBadge: React.FC<CommitBadgeProps> = ({
       style={styles}
       title={`View commit ${short}`}
       onMouseOver={(e) => {
-        e.currentTarget.style.backgroundColor = '#3b82f655';
-        e.currentTarget.style.color = '#93c5fd';
+        e.currentTarget.style.backgroundColor = '#b6e3ff';
+        e.currentTarget.style.color = '#0550ae';
       }}
       onMouseOut={(e) => {
-        e.currentTarget.style.backgroundColor = '#3b82f633';
-        e.currentTarget.style.color = '#60a5fa';
+        e.currentTarget.style.backgroundColor = '#ddf4ff';
+        e.currentTarget.style.color = '#0969da';
       }}
     >
       {short}
@@ -132,8 +132,9 @@ export const EdgeBadge: React.FC<EdgeBadgeProps> = ({ type }) => {
     fontSize: '10px',
     padding: '2px 6px',
     borderRadius: '3px',
-    backgroundColor: isChosen ? '#22c55e' : isRejected ? '#ef4444' : '#333',
-    color: isChosen ? '#000' : '#fff',
+    backgroundColor: isChosen ? '#dafbe1' : isRejected ? '#ffebe9' : '#f6f8fa',
+    color: isChosen ? '#1a7f37' : isRejected ? '#cf222e' : '#57606a',
+    border: `1px solid ${isChosen ? '#1a7f37' : isRejected ? '#cf222e' : '#d0d7de'}`,
   };
 
   return <span style={styles}>{type}</span>;
@@ -170,11 +171,11 @@ interface StatusBadgeProps {
 }
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  const colors: Record<string, { bg: string; text: string }> = {
-    pending: { bg: '#6b728033', text: '#9ca3af' },
-    active: { bg: '#3b82f633', text: '#60a5fa' },
-    completed: { bg: '#22c55e33', text: '#4ade80' },
-    rejected: { bg: '#ef444433', text: '#f87171' },
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
+    pending: { bg: '#f6f8fa', text: '#57606a', border: '#d0d7de' },
+    active: { bg: '#ddf4ff', text: '#0969da', border: '#54aeff' },
+    completed: { bg: '#dafbe1', text: '#1a7f37', border: '#4ac26b' },
+    rejected: { bg: '#ffebe9', text: '#cf222e', border: '#ff8182' },
   };
 
   const c = colors[status] || colors.pending;
@@ -185,6 +186,7 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
     borderRadius: '10px',
     backgroundColor: c.bg,
     color: c.text,
+    border: `1px solid ${c.border}`,
   };
 
   return <span style={styles}>{status}</span>;

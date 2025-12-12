@@ -380,8 +380,8 @@ const ChainFlowView: React.FC<ChainFlowViewProps> = ({
                 onClick={() => onSelectNode(node.id)}
                 style={{
                   ...styles.flowNode,
-                  borderColor: isSelected ? '#00d9ff' : '#0f3460',
-                  backgroundColor: isSelected ? '#1c2844' : '#16213e',
+                  borderColor: isSelected ? '#0969da' : '#d0d7de',
+                  backgroundColor: isSelected ? '#ddf4ff' : '#ffffff',
                 }}
               >
                 <div style={{
@@ -430,8 +430,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sidebar: {
     width: '380px',
-    backgroundColor: '#16213e',
-    borderRight: '1px solid #0f3460',
+    backgroundColor: '#f6f8fa',
+    borderRight: '1px solid #d0d7de',
     display: 'flex',
     flexDirection: 'column',
     flexShrink: 0,
@@ -440,21 +440,22 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     padding: '10px',
     gap: '5px',
-    borderBottom: '1px solid #0f3460',
+    borderBottom: '1px solid #d0d7de',
   },
   viewBtn: {
     flex: 1,
     padding: '8px',
-    border: 'none',
-    backgroundColor: '#1a1a2e',
-    color: '#888',
+    border: '1px solid #d0d7de',
+    backgroundColor: '#ffffff',
+    color: '#57606a',
     borderRadius: '4px',
     cursor: 'pointer',
     fontSize: '12px',
   },
   viewBtnActive: {
-    backgroundColor: '#0f3460',
-    color: '#00d9ff',
+    backgroundColor: '#0969da',
+    color: '#ffffff',
+    borderColor: '#0969da',
   },
   sidebarContent: {
     flex: 1,
@@ -466,14 +467,15 @@ const styles: Record<string, React.CSSProperties> = {
   chainItem: {
     padding: '10px 12px',
     margin: '4px 0',
-    backgroundColor: '#252547',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
     borderRadius: '6px',
     cursor: 'pointer',
     borderLeft: '3px solid transparent',
   },
   chainItemSelected: {
-    borderLeftColor: '#00d9ff',
-    backgroundColor: '#2d2d5a',
+    borderLeftColor: '#0969da',
+    backgroundColor: '#ddf4ff',
   },
   chainSummary: {
     display: 'flex',
@@ -484,10 +486,11 @@ const styles: Record<string, React.CSSProperties> = {
   chainTitle: {
     fontSize: '13px',
     flex: 1,
+    color: '#24292f',
   },
   chainStats: {
     fontSize: '10px',
-    color: '#666',
+    color: '#6e7781',
   },
   chainTypes: {
     display: 'flex',
@@ -500,11 +503,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
   },
   sessionGroup: {
-    borderBottom: '1px solid #0f3460',
+    borderBottom: '1px solid #d0d7de',
   },
   sessionHeader: {
     padding: '12px 15px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#ffffff',
     cursor: 'pointer',
     display: 'flex',
     alignItems: 'center',
@@ -517,18 +520,20 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    color: '#666',
+    color: '#6e7781',
     transition: 'transform 0.2s',
   },
   sessionTitle: {
     flex: 1,
     fontSize: '13px',
     fontWeight: 600,
+    color: '#24292f',
   },
   sessionCount: {
     fontSize: '11px',
-    color: '#666',
-    backgroundColor: '#0f3460',
+    color: '#57606a',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
     padding: '2px 8px',
     borderRadius: '10px',
   },
@@ -538,24 +543,26 @@ const styles: Record<string, React.CSSProperties> = {
   nodeItem: {
     padding: '12px',
     marginBottom: '8px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
     borderRadius: '6px',
     cursor: 'pointer',
     borderLeft: '4px solid transparent',
   },
   nodeItemSelected: {
-    borderLeftColor: '#00d9ff',
-    backgroundColor: '#252547',
+    borderLeftColor: '#0969da',
+    backgroundColor: '#ddf4ff',
   },
   nodeTitle: {
     fontSize: '14px',
     lineHeight: 1.4,
     marginTop: '6px',
+    color: '#24292f',
   },
   detailPanel: {
     flex: 1,
     overflowY: 'auto',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#ffffff',
   },
   chainFlow: {
     maxWidth: '700px',
@@ -568,10 +575,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '20px',
     marginTop: '8px',
     marginBottom: '8px',
+    color: '#24292f',
   },
   chainFlowMeta: {
     fontSize: '12px',
-    color: '#666',
+    color: '#6e7781',
   },
   flowTimeline: {
     position: 'relative',
@@ -579,7 +587,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   flowEdgeLabel: {
     fontSize: '11px',
-    color: '#4ade80',
+    color: '#1a7f37',
     margin: '-10px 0 10px 0',
     paddingLeft: '5px',
     fontWeight: 500,
@@ -588,9 +596,9 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     marginBottom: '20px',
     padding: '15px',
-    backgroundColor: '#16213e',
+    backgroundColor: '#ffffff',
     borderRadius: '8px',
-    border: '1px solid #0f3460',
+    border: '1px solid #d0d7de',
     cursor: 'pointer',
     transition: 'all 0.2s',
   },
@@ -614,21 +622,21 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '14px',
     fontWeight: 500,
     flex: 1,
-    color: '#eee',
+    color: '#24292f',
   },
   flowNodeTime: {
     fontSize: '10px',
-    color: '#888',
+    color: '#6e7781',
   },
   flowNodeDesc: {
     fontSize: '12px',
-    color: '#aaa',
+    color: '#57606a',
     lineHeight: 1.5,
   },
   commitMessage: {
     fontSize: '12px',
-    color: '#60a5fa',
-    backgroundColor: '#3b82f615',
+    color: '#0969da',
+    backgroundColor: '#ddf4ff',
     padding: '6px 10px',
     borderRadius: '4px',
     marginBottom: '6px',
@@ -644,10 +652,10 @@ const styles: Record<string, React.CSSProperties> = {
   navLinks: {
     marginTop: '20px',
     paddingTop: '20px',
-    borderTop: '1px solid #333',
+    borderTop: '1px solid #d0d7de',
   },
   link: {
-    color: '#00d9ff',
+    color: '#0969da',
     textDecoration: 'none',
     marginRight: '20px',
     fontSize: '13px',

@@ -151,7 +151,7 @@ export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
       .append('text')
       .attr('dy', 30)
       .attr('text-anchor', 'middle')
-      .attr('fill', '#888')
+      .attr('fill', '#57606a')
       .attr('font-size', '10px')
       .text(d => truncate(d.title, 20));
 
@@ -370,13 +370,14 @@ const styles: Record<string, React.CSSProperties> = {
     height: '100%',
     display: 'flex',
     position: 'relative',
-    backgroundColor: '#0d1117',
+    backgroundColor: '#ffffff',
   },
   controls: {
     position: 'absolute',
     top: '20px',
     left: '20px',
-    backgroundColor: '#16213e',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
     padding: '15px',
     borderRadius: '8px',
     zIndex: 10,
@@ -385,16 +386,16 @@ const styles: Record<string, React.CSSProperties> = {
   title: {
     fontSize: '16px',
     margin: '0 0 12px 0',
-    color: '#eee',
+    color: '#24292f',
   },
   search: {
     width: '100%',
     padding: '8px 12px',
     marginTop: '12px',
-    backgroundColor: '#1a1a2e',
-    border: '1px solid #333',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
     borderRadius: '4px',
-    color: '#eee',
+    color: '#24292f',
     fontSize: '13px',
   },
   legend: {
@@ -408,7 +409,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
     fontSize: '11px',
-    color: '#888',
+    color: '#57606a',
   },
   legendDot: {
     width: '10px',
@@ -429,7 +430,8 @@ const styles: Record<string, React.CSSProperties> = {
     right: '20px',
     bottom: '20px',
     width: '350px',
-    backgroundColor: '#16213e',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
     borderRadius: '8px',
     padding: '20px',
     overflowY: 'auto',
@@ -442,8 +444,8 @@ const styles: Record<string, React.CSSProperties> = {
     width: '28px',
     height: '28px',
     border: 'none',
-    background: '#333',
-    color: '#fff',
+    background: '#f6f8fa',
+    color: '#57606a',
     borderRadius: '4px',
     fontSize: '18px',
     cursor: 'pointer',
@@ -457,11 +459,11 @@ const styles: Record<string, React.CSSProperties> = {
   detailTitle: {
     fontSize: '16px',
     margin: '0 0 8px 0',
-    color: '#eee',
+    color: '#24292f',
   },
   detailMeta: {
     fontSize: '12px',
-    color: '#888',
+    color: '#6e7781',
     margin: 0,
   },
   detailSection: {
@@ -469,13 +471,13 @@ const styles: Record<string, React.CSSProperties> = {
   },
   sectionTitle: {
     fontSize: '12px',
-    color: '#888',
+    color: '#57606a',
     margin: '0 0 10px 0',
     textTransform: 'uppercase',
   },
   description: {
     fontSize: '13px',
-    color: '#ccc',
+    color: '#57606a',
     lineHeight: 1.5,
     margin: 0,
   },
@@ -484,25 +486,29 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '8px',
     padding: '8px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
     borderRadius: '4px',
     marginBottom: '6px',
     cursor: 'pointer',
     fontSize: '12px',
+    color: '#24292f',
   },
   connection: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     padding: '8px',
-    backgroundColor: '#1a1a2e',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
     borderRadius: '4px',
     marginBottom: '6px',
     cursor: 'pointer',
     fontSize: '12px',
+    color: '#24292f',
   },
   rationale: {
-    color: '#666',
+    color: '#6e7781',
     fontSize: '11px',
     marginLeft: 'auto',
   },
