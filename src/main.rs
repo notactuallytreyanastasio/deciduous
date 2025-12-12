@@ -527,6 +527,28 @@ fn main() {
                                             eprintln!("{} Also writing to demo/: {}", "Warning:".yellow(), e);
                                         }
                                     }
+
+                                    // Export git history for linked commits
+                                    if let Some(output_dir) = output_path.parent() {
+                                        match export_git_history(&graph.nodes, output_dir) {
+                                            Ok(count) => {
+                                                if count > 0 {
+                                                    println!("{} git-history.json ({} commits)", "Exported".green(), count);
+                                                }
+                                                // Also sync to docs/demo/ if it exists
+                                                let demo_dir = PathBuf::from("docs/demo");
+                                                if demo_dir.exists() {
+                                                    if let Err(e) = export_git_history(&graph.nodes, &demo_dir) {
+                                                        eprintln!("{} Also writing git history to demo/: {}", "Warning:".yellow(), e);
+                                                    }
+                                                }
+                                            }
+                                            Err(e) => {
+                                                // Non-fatal: git history is optional
+                                                eprintln!("{} Exporting git history: {}", "Warning:".yellow(), e);
+                                            }
+                                        }
+                                    }
                                 }
                                 Err(e) => {
                                     eprintln!("{} Writing file: {}", "Error:".red(), e);
@@ -993,4 +1015,99 @@ fn truncate(s: &str, max_len: usize) -> String {
         let truncated: String = s.chars().take(char_len).collect();
         format!("{}...", truncated)
     }
+}
+
+/// Git commit info for timeline view (matches web/src/types/graph.ts GitCommit)
+#[derive(serde::Serialize)]
+struct GitCommit {
+    hash: String,
+    short_hash: String,
+    author: String,
+    date: String,
+    message: String,
+    files_changed: Option<u32>,
+}
+
+/// Extract all unique commit hashes from nodes' metadata_json
+fn extract_commit_hashes(nodes: &[deciduous::DecisionNode]) -> Vec<String> {
+    let mut hashes = std::collections::HashSet::new();
+    for node in nodes {
+        if let Some(ref meta_json) = node.metadata_json {
+            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_json) {
+                if let Some(commit) = meta.get("commit").and_then(|c| c.as_str()) {
+                    if !commit.is_empty() {
+                        hashes.insert(commit.to_string());
+                    }
+                }
+            }
+        }
+    }
+    hashes.into_iter().collect()
+}
+
+/// Get commit info from git for a given hash
+fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
+    // Get commit info: hash, author, date (ISO), subject line
+    let output = ProcessCommand::new("git")
+        .args(["log", "-1", "--format=%H%n%an%n%aI%n%s", hash])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.trim().lines().collect();
+    if lines.len() < 4 {
+        return None;
+    }
+
+    // Get files changed count
+    let files_output = ProcessCommand::new("git")
+        .args(["diff-tree", "--no-commit-id", "--name-only", "-r", hash])
+        .output()
+        .ok();
+
+    let files_changed = files_output.and_then(|o| {
+        if o.status.success() {
+            let count = String::from_utf8_lossy(&o.stdout)
+                .trim()
+                .lines()
+                .count();
+            Some(count as u32)
+        } else {
+            None
+        }
+    });
+
+    Some(GitCommit {
+        hash: lines[0].to_string(),
+        short_hash: lines[0].chars().take(7).collect(),
+        author: lines[1].to_string(),
+        date: lines[2].to_string(),
+        message: lines[3].to_string(),
+        files_changed,
+    })
+}
+
+/// Generate git-history.json for all commits linked to nodes
+fn export_git_history(nodes: &[deciduous::DecisionNode], output_dir: &std::path::Path) -> Result<usize, Box<dyn std::error::Error>> {
+    let hashes = extract_commit_hashes(nodes);
+    let mut commits: Vec<GitCommit> = Vec::new();
+
+    for hash in &hashes {
+        if let Some(commit) = get_git_commit_info(hash) {
+            commits.push(commit);
+        }
+    }
+
+    // Sort by date (newest first)
+    commits.sort_by(|a, b| b.date.cmp(&a.date));
+
+    let json = serde_json::to_string_pretty(&commits)?;
+    let output_path = output_dir.join("git-history.json");
+    std::fs::write(&output_path, &json)?;
+
+    Ok(commits.len())
 }

@@ -6,7 +6,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import type { DecisionNode, GraphData, Chain, Session } from '../types/graph';
+import type { DecisionNode, GraphData, Chain, Session, GitCommit } from '../types/graph';
 import { getConfidence, getCommit, truncate, getDuration } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge } from '../components/NodeBadge';
 import { DetailPanel } from '../components/DetailPanel';
@@ -16,6 +16,14 @@ interface ChainsViewProps {
   graphData: GraphData;
   chains: Chain[];
   sessions: Session[];
+  gitHistory?: GitCommit[];
+}
+
+// Look up commit message from gitHistory by hash
+function getCommitMessage(hash: string | null, gitHistory: GitCommit[]): string | null {
+  if (!hash || gitHistory.length === 0) return null;
+  const commit = gitHistory.find(c => c.hash === hash || c.short_hash === hash);
+  return commit?.message ?? null;
 }
 
 type SidebarView = 'chains' | 'sessions' | 'all';
@@ -24,6 +32,7 @@ export const ChainsView: React.FC<ChainsViewProps> = ({
   graphData,
   chains,
   sessions,
+  gitHistory = [],
 }) => {
   const [sidebarView, setSidebarView] = useState<SidebarView>('chains');
   const [selectedChainIndex, setSelectedChainIndex] = useState<number | null>(null);
@@ -116,12 +125,14 @@ export const ChainsView: React.FC<ChainsViewProps> = ({
             edgeMap={edgeMap}
             selectedNode={selectedNode}
             onSelectNode={handleSelectNodeInChain}
+            gitHistory={gitHistory}
           />
         ) : (
           <DetailPanel
             node={selectedNode}
             graphData={graphData}
             onSelectNode={handleSelectNode}
+            gitHistory={gitHistory}
           />
         )}
       </div>
@@ -323,6 +334,7 @@ interface ChainFlowViewProps {
   edgeMap: Map<number, Chain['edges'][0]>;
   selectedNode: DecisionNode | null;
   onSelectNode: (id: number) => void;
+  gitHistory: GitCommit[];
 }
 
 const ChainFlowView: React.FC<ChainFlowViewProps> = ({
@@ -330,6 +342,7 @@ const ChainFlowView: React.FC<ChainFlowViewProps> = ({
   edgeMap,
   selectedNode,
   onSelectNode,
+  gitHistory,
 }) => {
   const duration = getDuration(
     chain.nodes[0].created_at,
@@ -356,6 +369,7 @@ const ChainFlowView: React.FC<ChainFlowViewProps> = ({
           });
           const conf = getConfidence(node);
           const commit = getCommit(node);
+          const commitMsg = getCommitMessage(commit, gitHistory);
 
           return (
             <React.Fragment key={node.id}>
@@ -382,6 +396,11 @@ const ChainFlowView: React.FC<ChainFlowViewProps> = ({
                   <span style={styles.flowNodeTitle}>{node.title}</span>
                   <span style={styles.flowNodeTime}>{time}</span>
                 </div>
+                {commitMsg && (
+                  <div style={styles.commitMessage}>
+                    <span style={styles.commitIcon}>📝</span> {commitMsg}
+                  </div>
+                )}
                 {node.description && (
                   <div style={styles.flowNodeDesc}>{node.description}</div>
                 )}
@@ -605,6 +624,22 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#aaa',
     lineHeight: 1.5,
+  },
+  commitMessage: {
+    fontSize: '12px',
+    color: '#60a5fa',
+    backgroundColor: '#3b82f615',
+    padding: '6px 10px',
+    borderRadius: '4px',
+    marginBottom: '6px',
+    marginTop: '4px',
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '6px',
+  },
+  commitIcon: {
+    fontSize: '11px',
+    flexShrink: 0,
   },
   navLinks: {
     marginTop: '20px',

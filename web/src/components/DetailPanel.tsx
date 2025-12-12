@@ -6,8 +6,8 @@
  */
 
 import React from 'react';
-import type { DecisionNode, GraphData } from '../types/graph';
-import { getPrompt, getFiles, getBranch } from '../types/graph';
+import type { DecisionNode, GraphData, GitCommit } from '../types/graph';
+import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl } from '../types/graph';
 import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
 
 interface DetailPanelProps {
@@ -16,6 +16,13 @@ interface DetailPanelProps {
   onSelectNode: (id: number) => void;
   onClose?: () => void;
   repo?: string;
+  gitHistory?: GitCommit[];
+}
+
+// Look up commit info from gitHistory by hash
+function getCommitInfo(hash: string | null, gitHistory: GitCommit[]): GitCommit | null {
+  if (!hash || gitHistory.length === 0) return null;
+  return gitHistory.find(c => c.hash === hash || c.short_hash === hash) ?? null;
 }
 
 export const DetailPanel: React.FC<DetailPanelProps> = ({
@@ -23,7 +30,8 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   graphData,
   onSelectNode,
   onClose,
-  repo = 'notactuallytreyanastasio/losselot',
+  repo = 'notactuallytreyanastasio/deciduous',
+  gitHistory = [],
 }) => {
   if (!node) {
     return (
@@ -44,6 +52,8 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   const prompt = getPrompt(node);
   const files = getFiles(node);
   const branch = getBranch(node);
+  const commitHash = getCommit(node);
+  const commitInfo = getCommitInfo(commitHash, gitHistory);
 
   const getNodeTitle = (id: number): string => {
     const n = graphData.nodes.find(n => n.id === id);
@@ -98,6 +108,31 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Branch</h3>
           <span style={styles.branchTag}>{branch}</span>
+        </div>
+      )}
+
+      {commitHash && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Linked Commit</h3>
+          <div style={styles.commitSection}>
+            <a
+              href={githubCommitUrl(commitHash, repo)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.commitHash}
+            >
+              {shortCommit(commitHash)}
+            </a>
+            {commitInfo && (
+              <>
+                <div style={styles.commitMessage}>{commitInfo.message}</div>
+                <div style={styles.commitMeta}>
+                  by {commitInfo.author} · {new Date(commitInfo.date).toLocaleDateString()}
+                  {commitInfo.files_changed && ` · ${commitInfo.files_changed} files`}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -287,5 +322,31 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     fontSize: '12px',
     fontFamily: 'monospace',
+  },
+  commitSection: {
+    backgroundColor: '#16213e',
+    padding: '15px',
+    borderRadius: '6px',
+    borderLeft: '3px solid #3b82f6',
+  },
+  commitHash: {
+    fontFamily: 'monospace',
+    fontSize: '13px',
+    color: '#60a5fa',
+    textDecoration: 'none',
+    backgroundColor: '#3b82f620',
+    padding: '3px 8px',
+    borderRadius: '4px',
+  },
+  commitMessage: {
+    fontSize: '14px',
+    color: '#eee',
+    marginTop: '10px',
+    lineHeight: 1.5,
+  },
+  commitMeta: {
+    fontSize: '12px',
+    color: '#888',
+    marginTop: '8px',
   },
 };

@@ -115,6 +115,7 @@ export const App: React.FC = () => {
                 graphData={filteredGraphData!}
                 chains={chains}
                 sessions={sessions}
+                gitHistory={gitHistory}
               />
             }
           />

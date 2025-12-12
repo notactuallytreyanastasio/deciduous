@@ -4014,6 +4014,28 @@
       "created_at": "2025-12-12T02:27:04.756652-05:00",
       "updated_at": "2025-12-12T02:27:04.756652-05:00",
       "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":90}"
+    },
+    {
+      "id": 366,
+      "change_id": "90004c23-aaf9-4eba-984b-3c63cc36bd84",
+      "node_type": "action",
+      "title": "Redesign DAG view - prominent top bar, 3 default chains, modal detail",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:40:10.947404-05:00",
+      "updated_at": "2025-12-12T02:40:10.947404-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+    },
+    {
+      "id": 367,
+      "change_id": "0de8ad57-90d9-4c83-bd59-d7b36cd8d1f5",
+      "node_type": "outcome",
+      "title": "Released v0.8.5 - DAG recency filtering",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T02:45:02.209991-05:00",
+      "updated_at": "2025-12-12T02:45:02.209991-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
     }
   ],
   "edges": [
@@ -7382,6 +7404,28 @@
       "weight": 1.0,
       "rationale": "UX improvement based on feedback",
       "created_at": "2025-12-12T02:27:04.763794-05:00"
+    },
+    {
+      "id": 307,
+      "from_node_id": 365,
+      "to_node_id": 366,
+      "from_change_id": "a3fa3194-7bb9-4aa0-887b-0de099baa3e2",
+      "to_change_id": "90004c23-aaf9-4eba-984b-3c63cc36bd84",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "UI polish iteration",
+      "created_at": "2025-12-12T02:40:10.955136-05:00"
+    },
+    {
+      "id": 308,
+      "from_node_id": 366,
+      "to_node_id": 367,
+      "from_change_id": "90004c23-aaf9-4eba-984b-3c63cc36bd84",
+      "to_change_id": "0de8ad57-90d9-4c83-bd59-d7b36cd8d1f5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release complete",
+      "created_at": "2025-12-12T02:45:02.218457-05:00"
     }
   ]
 }

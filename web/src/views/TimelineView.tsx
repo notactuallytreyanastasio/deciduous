@@ -123,6 +123,7 @@ export const TimelineView: React.FC<TimelineViewProps> = ({
           graphData={graphData}
           onSelectNode={handleSelectNode}
           onClose={() => setSelectedNode(null)}
+          gitHistory={gitHistory}
         />
       </div>
     </div>

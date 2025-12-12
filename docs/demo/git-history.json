@@ -1,0 +1,162 @@
+[
+  {
+    "hash": "f71ecdaed12a84f28646a25e8cde729600671e57",
+    "short_hash": "f71ecda",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T02:45:57-05:00",
+    "message": "feat: dynamically fetch node count on landing page",
+    "files_changed": 1
+  },
+  {
+    "hash": "80c59885eaed258dc4b724274247d2018a0bf888",
+    "short_hash": "80c5988",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T01:53:03-05:00",
+    "message": "docs: reorganize landing page sections, add PR integration roadmap item",
+    "files_changed": 2
+  },
+  {
+    "hash": "4ef9ffba1a39c0a821373272563b669469d8afa8",
+    "short_hash": "4ef9ffb",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T18:33:52-05:00",
+    "message": "docs: add decision graph for maintenance PR",
+    "files_changed": 2
+  },
+  {
+    "hash": "0331ae1034efd9a658b3b4b63f4c3b9279f901a4",
+    "short_hash": "0331ae1",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T18:32:31-05:00",
+    "message": "refactor: TEA architecture for TUI with functional core",
+    "files_changed": 5
+  },
+  {
+    "hash": "f6d250b3a72d00c1f7128071d3b379b9b5128cc5",
+    "short_hash": "f6d250b",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T08:54:58-05:00",
+    "message": "docs: reorganize roadmap with full detail, mark completed items",
+    "files_changed": 1
+  },
+  {
+    "hash": "7713e440f02c80a373b42bbd35f0b116f84f5bbe",
+    "short_hash": "7713e44",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T02:41:24-05:00",
+    "message": "release: v0.8.2 - fix template sync, prevent content destruction",
+    "files_changed": 2
+  },
+  {
+    "hash": "e521e4286b814522ae78be73a95c3437d521197d",
+    "short_hash": "e521e42",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T01:18:52-05:00",
+    "message": "feat: split-view commit modal, TUI docs, roadmap update",
+    "files_changed": 6
+  },
+  {
+    "hash": "101755be56839c519e2db12159a2de609d7e8cac",
+    "short_hash": "101755b",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T01:04:23-05:00",
+    "message": "feat: syntect syntax highlighting, reverse timeline order",
+    "files_changed": 5
+  },
+  {
+    "hash": "40894d9d55eefef6d4a87375de59b4ce3447752e",
+    "short_hash": "40894d9",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T00:57:40-05:00",
+    "message": "feat: TUI enhancements - scrollable modals, branch search, file browser",
+    "files_changed": 7
+  },
+  {
+    "hash": "5380e3fbae74af93bf6b57dca2698661b3b0bac0",
+    "short_hash": "5380e3f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T00:20:12-05:00",
+    "message": "fix: ensure terminal cleanup runs even on TUI error",
+    "files_changed": 7
+  },
+  {
+    "hash": "227c12abc9e581b32011c9115347b1694d373c95",
+    "short_hash": "227c12a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T00:17:54-05:00",
+    "message": "fix: always backfill NULL change_ids on database open",
+    "files_changed": 3
+  },
+  {
+    "hash": "2f46078c464b998c24f5198e2fef51a2bbcc7488",
+    "short_hash": "2f46078",
+    "author": "Bobby Nathan",
+    "date": "2025-12-11T00:11:43-05:00",
+    "message": "release: v0.7.0 - terminal user interface (TUI)",
+    "files_changed": 2
+  },
+  {
+    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
+    "short_hash": "32f0047",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T18:03:55-05:00",
+    "message": "feat: add multi-user graph sync with diff/patch model",
+    "files_changed": 11
+  },
+  {
+    "hash": "e6d548dd3aa86a3396f9426f78be470a658ef11f",
+    "short_hash": "e6d548d",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T16:28:52-05:00",
+    "message": "Refactor Claude tooling for real-time decision graph logging",
+    "files_changed": 4
+  },
+  {
+    "hash": "304cbc69c9d7aac01573596c01bb54c2d889f6a9",
+    "short_hash": "304cbc6",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T13:40:21-05:00",
+    "message": "Switch homepage to light color scheme",
+    "files_changed": 1
+  },
+  {
+    "hash": "3937619332dae8b4a70e02a72437d63657d69593",
+    "short_hash": "3937619",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T12:53:42-05:00",
+    "message": "Rewrite homepage: standalone HTML, no sidebar, clean layout",
+    "files_changed": 2
+  },
+  {
+    "hash": "9b263ade08242fc3562b6ae8763aa860f4b49ca3",
+    "short_hash": "9b263ad",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T12:43:13-05:00",
+    "message": "Redesign homepage: full-width GIF, vertical nav with all spelunk pages",
+    "files_changed": 1
+  },
+  {
+    "hash": "da476ee055a6478fcc1c0553424b22e3179de73f",
+    "short_hash": "da476ee",
+    "author": "Bobby Nathan",
+    "date": "2025-12-06T00:38:40-05:00",
+    "message": "Add spelunk page Spike C: narrative story mode",
+    "files_changed": 1
+  },
+  {
+    "hash": "7b137decf39a0b356b3d5d36a9c2ab37a3b1cfd9",
+    "short_hash": "7b137de",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T23:53:28-05:00",
+    "message": "Fix homepage - use pure HTML to avoid Jekyll markdown mangling",
+    "files_changed": 1
+  },
+  {
+    "hash": "5a2ae237a4fd28d6430c6bfd99ea02285da3385e",
+    "short_hash": "5a2ae23",
+    "author": "Bobby Nathan",
+    "date": "2025-12-05T23:37:07-05:00",
+    "message": "Add TypeScript build system with type definitions and tests",
+    "files_changed": 13
+  }
+]
