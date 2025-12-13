@@ -10,7 +10,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::easy::HighlightLines;
 
 use super::app::{App, Mode, View, ModalContent, ModalSection};
-use super::views::{timeline, dag, detail};
+use super::views::{timeline, dag, detail, roadmap};
 use super::widgets::file_picker;
 
 // Lazy static syntax highlighting resources
@@ -58,6 +58,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Dag => {
             dag::draw(frame, app, main_layout[2]);
         }
+        View::Roadmap => {
+            roadmap::draw(frame, &app.roadmap_state, main_layout[2]);
+        }
     }
 
     // Draw footer
@@ -81,6 +84,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     let view_name = match app.current_view {
         View::Timeline => "Timeline",
         View::Dag => "DAG",
+        View::Roadmap => "Roadmap",
     };
 
     let node_count = app.filtered_nodes.len();
@@ -191,6 +195,9 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         }
         View::Dag => {
             "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit"
+        }
+        View::Roadmap => {
+            "j/k:move  r:refresh  Tab:Timeline  ?:help  q:quit"
         }
     };
 
