@@ -43,6 +43,7 @@ pub mod db;
 pub mod diff;
 pub mod export;
 pub mod init;
+pub mod roadmap;
 pub mod schema;
 pub mod serve;
 pub mod tui;

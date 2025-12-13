@@ -82,3 +82,54 @@ diesel::table! {
         decision_node_id -> Nullable<Integer>,
     }
 }
+
+// ============================================================================
+// Roadmap Board Tables
+// ============================================================================
+
+diesel::table! {
+    roadmap_items (id) {
+        id -> Integer,
+        change_id -> Text,
+        title -> Text,
+        description -> Nullable<Text>,
+        section -> Nullable<Text>,
+        parent_id -> Nullable<Integer>,
+        checkbox_state -> Text,
+        github_issue_number -> Nullable<Integer>,
+        github_issue_state -> Nullable<Text>,
+        outcome_node_id -> Nullable<Integer>,
+        outcome_change_id -> Nullable<Text>,
+        markdown_line_start -> Nullable<Integer>,
+        markdown_line_end -> Nullable<Integer>,
+        content_hash -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+        last_synced_at -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    roadmap_sync_state (id) {
+        id -> Integer,
+        roadmap_path -> Text,
+        roadmap_content_hash -> Nullable<Text>,
+        github_repo -> Nullable<Text>,
+        last_github_sync -> Nullable<Text>,
+        last_markdown_parse -> Nullable<Text>,
+        conflict_count -> Integer,
+    }
+}
+
+diesel::table! {
+    roadmap_conflicts (id) {
+        id -> Integer,
+        item_change_id -> Text,
+        conflict_type -> Text,
+        local_value -> Nullable<Text>,
+        remote_value -> Nullable<Text>,
+        resolution -> Nullable<Text>,
+        detected_at -> Text,
+        resolved_at -> Nullable<Text>,
+    }
+}
