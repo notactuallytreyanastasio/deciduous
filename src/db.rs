@@ -342,6 +342,113 @@ pub struct CommandLog {
 }
 
 // ============================================================================
+// Roadmap Board Models
+// ============================================================================
+
+/// Insertable roadmap item
+#[derive(Insertable)]
+#[diesel(table_name = roadmap_items)]
+pub struct NewRoadmapItem<'a> {
+    pub change_id: &'a str,
+    pub title: &'a str,
+    pub description: Option<&'a str>,
+    pub section: Option<&'a str>,
+    pub parent_id: Option<i32>,
+    pub checkbox_state: &'a str,
+    pub github_issue_number: Option<i32>,
+    pub github_issue_state: Option<&'a str>,
+    pub outcome_node_id: Option<i32>,
+    pub outcome_change_id: Option<&'a str>,
+    pub markdown_line_start: Option<i32>,
+    pub markdown_line_end: Option<i32>,
+    pub content_hash: Option<&'a str>,
+    pub created_at: &'a str,
+    pub updated_at: &'a str,
+    pub last_synced_at: Option<&'a str>,
+}
+
+/// Queryable roadmap item
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = roadmap_items)]
+pub struct RoadmapItem {
+    pub id: i32,
+    pub change_id: String,
+    pub title: String,
+    pub description: Option<String>,
+    pub section: Option<String>,
+    pub parent_id: Option<i32>,
+    pub checkbox_state: String,
+    pub github_issue_number: Option<i32>,
+    pub github_issue_state: Option<String>,
+    pub outcome_node_id: Option<i32>,
+    pub outcome_change_id: Option<String>,
+    pub markdown_line_start: Option<i32>,
+    pub markdown_line_end: Option<i32>,
+    pub content_hash: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    pub last_synced_at: Option<String>,
+}
+
+/// Insertable roadmap sync state
+#[derive(Insertable)]
+#[diesel(table_name = roadmap_sync_state)]
+pub struct NewRoadmapSyncState<'a> {
+    pub roadmap_path: &'a str,
+    pub roadmap_content_hash: Option<&'a str>,
+    pub github_repo: Option<&'a str>,
+    pub last_github_sync: Option<&'a str>,
+    pub last_markdown_parse: Option<&'a str>,
+    pub conflict_count: i32,
+}
+
+/// Queryable roadmap sync state
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = roadmap_sync_state)]
+pub struct RoadmapSyncState {
+    pub id: i32,
+    pub roadmap_path: String,
+    pub roadmap_content_hash: Option<String>,
+    pub github_repo: Option<String>,
+    pub last_github_sync: Option<String>,
+    pub last_markdown_parse: Option<String>,
+    pub conflict_count: i32,
+}
+
+/// Insertable roadmap conflict
+#[derive(Insertable)]
+#[diesel(table_name = roadmap_conflicts)]
+pub struct NewRoadmapConflict<'a> {
+    pub item_change_id: &'a str,
+    pub conflict_type: &'a str,
+    pub local_value: Option<&'a str>,
+    pub remote_value: Option<&'a str>,
+    pub resolution: Option<&'a str>,
+    pub detected_at: &'a str,
+    pub resolved_at: Option<&'a str>,
+}
+
+/// Queryable roadmap conflict
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = roadmap_conflicts)]
+pub struct RoadmapConflict {
+    pub id: i32,
+    pub item_change_id: String,
+    pub conflict_type: String,
+    pub local_value: Option<String>,
+    pub remote_value: Option<String>,
+    pub resolution: Option<String>,
+    pub detected_at: String,
+    pub resolved_at: Option<String>,
+}
+
+// ============================================================================
 // Helper structs for raw SQL queries
 // ============================================================================
 
@@ -646,6 +753,57 @@ impl Database {
             )
         "#).execute(&mut conn)?;
 
+        // Roadmap Board Tables
+        diesel::sql_query(r#"
+            CREATE TABLE IF NOT EXISTS roadmap_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                change_id TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                description TEXT,
+                section TEXT,
+                parent_id INTEGER,
+                checkbox_state TEXT NOT NULL DEFAULT 'none',
+                github_issue_number INTEGER,
+                github_issue_state TEXT,
+                outcome_node_id INTEGER,
+                outcome_change_id TEXT,
+                markdown_line_start INTEGER,
+                markdown_line_end INTEGER,
+                content_hash TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                last_synced_at TEXT,
+                FOREIGN KEY (parent_id) REFERENCES roadmap_items(id),
+                FOREIGN KEY (outcome_node_id) REFERENCES decision_nodes(id)
+            )
+        "#).execute(&mut conn)?;
+
+        diesel::sql_query(r#"
+            CREATE TABLE IF NOT EXISTS roadmap_sync_state (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                roadmap_path TEXT NOT NULL,
+                roadmap_content_hash TEXT,
+                github_repo TEXT,
+                last_github_sync TEXT,
+                last_markdown_parse TEXT,
+                conflict_count INTEGER NOT NULL DEFAULT 0
+            )
+        "#).execute(&mut conn)?;
+
+        diesel::sql_query(r#"
+            CREATE TABLE IF NOT EXISTS roadmap_conflicts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                item_change_id TEXT NOT NULL,
+                conflict_type TEXT NOT NULL,
+                local_value TEXT,
+                remote_value TEXT,
+                resolution TEXT,
+                detected_at TEXT NOT NULL,
+                resolved_at TEXT,
+                FOREIGN KEY (item_change_id) REFERENCES roadmap_items(change_id)
+            )
+        "#).execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)").execute(&mut conn)?;
@@ -655,6 +813,13 @@ impl Database {
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_command_started_at ON command_log(started_at)").execute(&mut conn)?;
+
+        // Roadmap indexes
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_change_id ON roadmap_items(change_id)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_section ON roadmap_items(section)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_github_issue ON roadmap_items(github_issue_number)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -1076,6 +1241,360 @@ impl Database {
             .limit(limit)
             .load::<CommandLog>(&mut conn)?;
         Ok(commands)
+    }
+
+    // ========================================================================
+    // Roadmap Board Operations
+    // ========================================================================
+
+    /// Create a new roadmap item
+    pub fn create_roadmap_item(
+        &self,
+        title: &str,
+        description: Option<&str>,
+        section: Option<&str>,
+        parent_id: Option<i32>,
+        checkbox_state: &str,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+        let change_id = Uuid::new_v4().to_string();
+
+        let new_item = NewRoadmapItem {
+            change_id: &change_id,
+            title,
+            description,
+            section,
+            parent_id,
+            checkbox_state,
+            github_issue_number: None,
+            github_issue_state: None,
+            outcome_node_id: None,
+            outcome_change_id: None,
+            markdown_line_start: None,
+            markdown_line_end: None,
+            content_hash: None,
+            created_at: &now,
+            updated_at: &now,
+            last_synced_at: None,
+        };
+
+        diesel::insert_into(roadmap_items::table)
+            .values(&new_item)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
+            .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Create a roadmap item with full metadata (for sync operations)
+    pub fn create_roadmap_item_full(
+        &self,
+        change_id: &str,
+        title: &str,
+        description: Option<&str>,
+        section: Option<&str>,
+        parent_id: Option<i32>,
+        checkbox_state: &str,
+        github_issue_number: Option<i32>,
+        github_issue_state: Option<&str>,
+        outcome_node_id: Option<i32>,
+        outcome_change_id: Option<&str>,
+        markdown_line_start: Option<i32>,
+        markdown_line_end: Option<i32>,
+        content_hash: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_item = NewRoadmapItem {
+            change_id,
+            title,
+            description,
+            section,
+            parent_id,
+            checkbox_state,
+            github_issue_number,
+            github_issue_state,
+            outcome_node_id,
+            outcome_change_id,
+            markdown_line_start,
+            markdown_line_end,
+            content_hash,
+            created_at: &now,
+            updated_at: &now,
+            last_synced_at: None,
+        };
+
+        diesel::insert_into(roadmap_items::table)
+            .values(&new_item)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
+            .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Get all roadmap items
+    pub fn get_all_roadmap_items(&self) -> Result<Vec<RoadmapItem>> {
+        let mut conn = self.get_conn()?;
+        let items = roadmap_items::table
+            .order(roadmap_items::created_at.asc())
+            .load::<RoadmapItem>(&mut conn)?;
+        Ok(items)
+    }
+
+    /// Get roadmap items by section
+    pub fn get_roadmap_items_by_section(&self, section: &str) -> Result<Vec<RoadmapItem>> {
+        let mut conn = self.get_conn()?;
+        let items = roadmap_items::table
+            .filter(roadmap_items::section.eq(section))
+            .order(roadmap_items::created_at.asc())
+            .load::<RoadmapItem>(&mut conn)?;
+        Ok(items)
+    }
+
+    /// Get a roadmap item by change_id
+    pub fn get_roadmap_item_by_change_id(&self, change_id: &str) -> Result<Option<RoadmapItem>> {
+        let mut conn = self.get_conn()?;
+        let item = roadmap_items::table
+            .filter(roadmap_items::change_id.eq(change_id))
+            .first::<RoadmapItem>(&mut conn)
+            .optional()?;
+        Ok(item)
+    }
+
+    /// Update a roadmap item's GitHub issue info
+    pub fn update_roadmap_item_github(
+        &self,
+        item_id: i32,
+        issue_number: Option<i32>,
+        issue_state: Option<&str>,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(roadmap_items::table.filter(roadmap_items::id.eq(item_id)))
+            .set((
+                roadmap_items::github_issue_number.eq(issue_number),
+                roadmap_items::github_issue_state.eq(issue_state),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Link a roadmap item to a decision graph outcome node
+    pub fn link_roadmap_to_outcome(
+        &self,
+        item_id: i32,
+        outcome_node_id: i32,
+        outcome_change_id: &str,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(roadmap_items::table.filter(roadmap_items::id.eq(item_id)))
+            .set((
+                roadmap_items::outcome_node_id.eq(Some(outcome_node_id)),
+                roadmap_items::outcome_change_id.eq(Some(outcome_change_id)),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Unlink a roadmap item from its outcome node
+    pub fn unlink_roadmap_from_outcome(&self, item_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(roadmap_items::table.filter(roadmap_items::id.eq(item_id)))
+            .set((
+                roadmap_items::outcome_node_id.eq(None::<i32>),
+                roadmap_items::outcome_change_id.eq(None::<String>),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Update a roadmap item's checkbox state
+    pub fn update_roadmap_item_checkbox(&self, item_id: i32, checkbox_state: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(roadmap_items::table.filter(roadmap_items::id.eq(item_id)))
+            .set((
+                roadmap_items::checkbox_state.eq(checkbox_state),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Update last synced timestamp for a roadmap item
+    pub fn update_roadmap_item_synced(&self, item_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(roadmap_items::table.filter(roadmap_items::id.eq(item_id)))
+            .set((
+                roadmap_items::last_synced_at.eq(Some(&now)),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Get or create roadmap sync state
+    pub fn get_or_create_sync_state(&self, roadmap_path: &str) -> Result<RoadmapSyncState> {
+        let mut conn = self.get_conn()?;
+
+        // Try to find existing state
+        let existing = roadmap_sync_state::table
+            .filter(roadmap_sync_state::roadmap_path.eq(roadmap_path))
+            .first::<RoadmapSyncState>(&mut conn)
+            .optional()?;
+
+        if let Some(state) = existing {
+            return Ok(state);
+        }
+
+        // Create new state
+        let new_state = NewRoadmapSyncState {
+            roadmap_path,
+            roadmap_content_hash: None,
+            github_repo: None,
+            last_github_sync: None,
+            last_markdown_parse: None,
+            conflict_count: 0,
+        };
+
+        diesel::insert_into(roadmap_sync_state::table)
+            .values(&new_state)
+            .execute(&mut conn)?;
+
+        roadmap_sync_state::table
+            .filter(roadmap_sync_state::roadmap_path.eq(roadmap_path))
+            .first::<RoadmapSyncState>(&mut conn)
+            .map_err(|e| e.into())
+    }
+
+    /// Update sync state after a sync operation
+    pub fn update_sync_state(
+        &self,
+        state_id: i32,
+        content_hash: Option<&str>,
+        github_repo: Option<&str>,
+        github_synced: bool,
+        markdown_parsed: bool,
+        conflict_count: i32,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let last_github = if github_synced { Some(now.clone()) } else { None };
+        let last_parse = if markdown_parsed { Some(now) } else { None };
+
+        diesel::update(roadmap_sync_state::table.filter(roadmap_sync_state::id.eq(state_id)))
+            .set((
+                roadmap_sync_state::roadmap_content_hash.eq(content_hash),
+                roadmap_sync_state::github_repo.eq(github_repo),
+                roadmap_sync_state::last_github_sync.eq(last_github),
+                roadmap_sync_state::last_markdown_parse.eq(last_parse),
+                roadmap_sync_state::conflict_count.eq(conflict_count),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Create a conflict record
+    pub fn create_roadmap_conflict(
+        &self,
+        item_change_id: &str,
+        conflict_type: &str,
+        local_value: Option<&str>,
+        remote_value: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_conflict = NewRoadmapConflict {
+            item_change_id,
+            conflict_type,
+            local_value,
+            remote_value,
+            resolution: None,
+            detected_at: &now,
+            resolved_at: None,
+        };
+
+        diesel::insert_into(roadmap_conflicts::table)
+            .values(&new_conflict)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
+            .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Get all unresolved conflicts
+    pub fn get_unresolved_conflicts(&self) -> Result<Vec<RoadmapConflict>> {
+        let mut conn = self.get_conn()?;
+        let conflicts = roadmap_conflicts::table
+            .filter(roadmap_conflicts::resolution.is_null())
+            .order(roadmap_conflicts::detected_at.desc())
+            .load::<RoadmapConflict>(&mut conn)?;
+        Ok(conflicts)
+    }
+
+    /// Resolve a conflict
+    pub fn resolve_roadmap_conflict(&self, conflict_id: i32, resolution: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(roadmap_conflicts::table.filter(roadmap_conflicts::id.eq(conflict_id)))
+            .set((
+                roadmap_conflicts::resolution.eq(Some(resolution)),
+                roadmap_conflicts::resolved_at.eq(Some(&now)),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Delete a roadmap item by ID
+    pub fn delete_roadmap_item(&self, item_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::delete(roadmap_items::table.filter(roadmap_items::id.eq(item_id)))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Check if a roadmap item is complete (has outcome AND issue closed)
+    pub fn check_roadmap_item_completion(&self, item_id: i32) -> Result<(bool, bool, bool)> {
+        let mut conn = self.get_conn()?;
+
+        let item = roadmap_items::table
+            .filter(roadmap_items::id.eq(item_id))
+            .first::<RoadmapItem>(&mut conn)?;
+
+        let has_outcome = item.outcome_change_id.is_some();
+        let issue_closed = item.github_issue_state.as_deref() == Some("closed");
+        let is_complete = has_outcome && issue_closed;
+
+        Ok((is_complete, has_outcome, issue_closed))
     }
 }
 
