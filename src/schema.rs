@@ -82,3 +82,26 @@ diesel::table! {
         decision_node_id -> Nullable<Integer>,
     }
 }
+
+diesel::table! {
+    roadmap_items (id) {
+        id -> Integer,
+        change_id -> Text,
+        section -> Text,
+        title -> Text,
+        description -> Nullable<Text>,
+        status -> Text,
+        scope -> Nullable<Text>,
+        tags -> Nullable<Text>,
+        github_issue_number -> Nullable<Integer>,
+        github_issue_url -> Nullable<Text>,
+        github_issue_state -> Nullable<Text>,
+        linked_node_id -> Nullable<Integer>,
+        priority -> Nullable<Integer>,
+        parent_item_id -> Nullable<Integer>,
+        source_line -> Nullable<Integer>,
+        created_at -> Text,
+        updated_at -> Text,
+        synced_at -> Nullable<Text>,
+    }
+}

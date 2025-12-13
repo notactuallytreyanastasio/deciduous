@@ -253,6 +253,70 @@ enum Command {
         #[arg(short, long)]
         db: Option<PathBuf>,
     },
+
+    /// Manage roadmap items
+    Roadmap {
+        #[command(subcommand)]
+        action: RoadmapAction,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum RoadmapAction {
+    /// Parse ROADMAP.md and import items to database
+    Parse {
+        /// Path to ROADMAP.md file (default: ROADMAP.md)
+        #[arg(short, long, default_value = "ROADMAP.md")]
+        file: PathBuf,
+
+        /// Replace existing items (otherwise upsert)
+        #[arg(long)]
+        replace: bool,
+    },
+
+    /// List roadmap items
+    List {
+        /// Filter by section
+        #[arg(short, long)]
+        section: Option<String>,
+
+        /// Filter by status (pending, completed)
+        #[arg(long)]
+        status: Option<String>,
+
+        /// Show items with GitHub issues only
+        #[arg(long)]
+        with_issues: bool,
+    },
+
+    /// Sync roadmap items with GitHub issues
+    Sync {
+        /// GitHub repository (auto-detected from git remote)
+        #[arg(short, long)]
+        repo: Option<String>,
+
+        /// Label to apply to created issues
+        #[arg(short, long, default_value = "roadmap")]
+        label: String,
+
+        /// Create missing issues
+        #[arg(long)]
+        create: bool,
+
+        /// Show what would be done without making changes
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Export roadmap items to JSON
+    Export {
+        /// Output file (default: stdout)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+    },
+
+    /// Show roadmap summary
+    Summary,
 }
 
 #[derive(Subcommand, Debug)]
@@ -578,6 +642,28 @@ fn main() {
                                                 // Non-fatal: git history is optional
                                                 eprintln!("{} Exporting git history: {}", "Warning:".yellow(), e);
                                             }
+                                        }
+                                    }
+
+                                    // Export roadmap data if any exists
+                                    match deciduous::export_roadmap_json(&db) {
+                                        Ok(roadmap_json) => {
+                                            // Check if there are any items (not empty array)
+                                            if roadmap_json.contains("\"id\":") {
+                                                let roadmap_path = PathBuf::from("docs/roadmap/roadmap-data.json");
+                                                if let Some(parent) = roadmap_path.parent() {
+                                                    std::fs::create_dir_all(parent).ok();
+                                                }
+                                                if let Err(e) = std::fs::write(&roadmap_path, &roadmap_json) {
+                                                    eprintln!("{} Exporting roadmap: {}", "Warning:".yellow(), e);
+                                                } else {
+                                                    println!("{} roadmap-data.json", "Exported".green());
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            // Non-fatal: roadmap is optional
+                                            eprintln!("{} Exporting roadmap: {}", "Warning:".yellow(), e);
                                         }
                                     }
                                 }
@@ -1162,6 +1248,157 @@ fn main() {
             }
 
             println!("\n{} {} linked, {} failed", "Done:".green(), applied, failed);
+        }
+
+        Command::Roadmap { action } => {
+            match action {
+                RoadmapAction::Parse { file, replace } => {
+                    if !file.exists() {
+                        eprintln!("{} File not found: {}", "Error:".red(), file.display());
+                        std::process::exit(1);
+                    }
+
+                    match deciduous::parse_roadmap(&file) {
+                        Ok(roadmap) => {
+                            println!("{} {} items from {} ({} sections)",
+                                "Parsed".cyan(),
+                                roadmap.total_items,
+                                file.display(),
+                                roadmap.sections.len());
+
+                            match deciduous::import_roadmap_to_db(&db, &roadmap, replace) {
+                                Ok((created, updated)) => {
+                                    println!("{} {} created, {} updated",
+                                        "Imported:".green(), created, updated);
+                                }
+                                Err(e) => {
+                                    eprintln!("{} {}", "Error:".red(), e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RoadmapAction::List { section, status, with_issues } => {
+                    let items = match db.get_all_roadmap_items() {
+                        Ok(items) => items,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let filtered: Vec<_> = items.into_iter()
+                        .filter(|i| section.as_ref().map_or(true, |s| i.section == *s))
+                        .filter(|i| status.as_ref().map_or(true, |s| i.status == *s))
+                        .filter(|i| !with_issues || i.github_issue_number.is_some())
+                        .collect();
+
+                    if filtered.is_empty() {
+                        println!("No roadmap items found. Run: deciduous roadmap parse");
+                    } else {
+                        println!("{} roadmap items:\n", filtered.len());
+                        let mut current_section = String::new();
+
+                        for item in filtered {
+                            if item.section != current_section {
+                                current_section = item.section.clone();
+                                println!("\n{}", current_section.cyan().bold());
+                                println!("{}", "-".repeat(current_section.len()));
+                            }
+
+                            let status_icon = if item.status == "completed" { "[x]".green() } else { "[ ]".white() };
+                            let issue_str = item.github_issue_number
+                                .map(|n| format!(" #{}", n).blue().to_string())
+                                .unwrap_or_default();
+
+                            println!("  {} {}{}", status_icon, item.title, issue_str);
+                        }
+                    }
+                }
+
+                RoadmapAction::Sync { repo, label, create, dry_run } => {
+                    let repo = repo.or_else(deciduous::get_github_repo);
+                    let repo = match repo {
+                        Some(r) => r,
+                        None => {
+                            eprintln!("{} Could not detect GitHub repo. Use --repo owner/repo", "Error:".red());
+                            std::process::exit(1);
+                        }
+                    };
+
+                    println!("{} Syncing with {}, label: {}", "GitHub:".cyan(), repo, label);
+                    if dry_run {
+                        println!("{} Dry run - no changes will be made", "Note:".yellow());
+                    }
+
+                    match deciduous::sync_with_github(&db, &repo, &label, create, dry_run) {
+                        Ok(result) => {
+                            println!("\n{}", "Sync complete:".green());
+                            println!("  Created: {}", result.created);
+                            println!("  Updated: {}", result.updated);
+                            println!("  Unchanged: {}", result.unchanged);
+
+                            if !result.errors.is_empty() {
+                                println!("\n{}", "Errors:".red());
+                                for err in &result.errors {
+                                    println!("  - {}", err);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RoadmapAction::Export { output } => {
+                    match deciduous::export_roadmap_json(&db) {
+                        Ok(json) => {
+                            if let Some(path) = output {
+                                if let Err(e) = std::fs::write(&path, &json) {
+                                    eprintln!("{} {}", "Error:".red(), e);
+                                    std::process::exit(1);
+                                }
+                                println!("{} roadmap to {}", "Exported".green(), path.display());
+                            } else {
+                                println!("{}", json);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RoadmapAction::Summary => {
+                    match db.get_roadmap_summary() {
+                        Ok(summary) => {
+                            println!("{}", "Roadmap Summary".cyan().bold());
+                            println!("{}", "=".repeat(20));
+                            println!("Total items: {}", summary.total_items);
+                            println!("Completed: {}", summary.completed_items);
+                            println!("With GitHub issues: {}", summary.items_with_issues);
+
+                            if summary.total_items > 0 {
+                                let pct = (summary.completed_items as f64 / summary.total_items as f64) * 100.0;
+                                println!("Progress: {:.1}%", pct);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
         }
     }
 }

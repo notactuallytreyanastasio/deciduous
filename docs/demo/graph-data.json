@@ -195,8 +195,8 @@
       "description": "5 pages, interactive demo with real DB, ready for merge and Pages enablement",
       "status": "pending",
       "created_at": "2025-12-05T20:28:48.665200-05:00",
-      "updated_at": "2025-12-05T20:28:48.665200-05:00",
-      "metadata_json": null
+      "updated_at": "2025-12-12T09:22:08.055089-05:00",
+      "metadata_json": "{\"commit\":\"ca53428f7e26c818872d30553a9f514a0437608d\"}"
     },
     {
       "id": 19,
@@ -316,8 +316,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-05T21:28:37.508741-05:00",
-      "updated_at": "2025-12-05T21:28:37.508741-05:00",
-      "metadata_json": null
+      "updated_at": "2025-12-12T09:22:08.072130-05:00",
+      "metadata_json": "{\"commit\":\"41ce8e7a0491379febe2cbc4e19307bf8d3451d0\"}"
     },
     {
       "id": 30,
@@ -448,8 +448,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-05T21:35:16.882855-05:00",
-      "updated_at": "2025-12-05T21:35:16.882855-05:00",
-      "metadata_json": null
+      "updated_at": "2025-12-12T09:22:08.067430-05:00",
+      "metadata_json": "{\"commit\":\"5cd0e092f29416b9c88dfae67b77a548861b4ca5\"}"
     },
     {
       "id": 42,
@@ -679,8 +679,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-05T22:42:19.702767-05:00",
-      "updated_at": "2025-12-05T22:42:19.702767-05:00",
-      "metadata_json": "{\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.061372-05:00",
+      "metadata_json": "{\"commit\":\"3785e5588119972db4dfe083e72ac16d2c0e31c8\",\"confidence\":95}"
     },
     {
       "id": 63,
@@ -690,8 +690,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-05T22:44:14.779317-05:00",
-      "updated_at": "2025-12-05T22:44:14.779317-05:00",
-      "metadata_json": "{\"confidence\":85}"
+      "updated_at": "2025-12-12T09:22:08.055760-05:00",
+      "metadata_json": "{\"commit\":\"5561ea212c1872f80c804177a1c60fec076a6410\",\"confidence\":85}"
     },
     {
       "id": 64,
@@ -734,8 +734,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-05T23:28:54.344166-05:00",
-      "updated_at": "2025-12-05T23:28:54.344166-05:00",
-      "metadata_json": "{\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.062833-05:00",
+      "metadata_json": "{\"commit\":\"030a33b0a64a2726f9de4e04e7cba66ec53c9977\",\"confidence\":90}"
     },
     {
       "id": 68,
@@ -756,8 +756,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-05T23:32:44.048844-05:00",
-      "updated_at": "2025-12-05T23:32:44.048844-05:00",
-      "metadata_json": "{\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.070926-05:00",
+      "metadata_json": "{\"commit\":\"d8e8e938ee3d9420b777864ed1c74c98528759e2\",\"confidence\":95}"
     },
     {
       "id": 70,
@@ -1185,8 +1185,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-09T17:54:50.634173-05:00",
-      "updated_at": "2025-12-09T17:54:50.634173-05:00",
-      "metadata_json": "{\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.068087-05:00",
+      "metadata_json": "{\"commit\":\"ab529c440b28a4727fb01432e7101302b1751dac\",\"confidence\":90}"
     },
     {
       "id": 109,
@@ -1196,8 +1196,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-09T17:56:35.179575-05:00",
-      "updated_at": "2025-12-09T17:56:35.179575-05:00",
-      "metadata_json": "{\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.072746-05:00",
+      "metadata_json": "{\"commit\":\"ab529c440b28a4727fb01432e7101302b1751dac\",\"confidence\":95}"
     },
     {
       "id": 110,
@@ -1449,8 +1449,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T13:47:12.835479-05:00",
-      "updated_at": "2025-12-10T13:47:12.835479-05:00",
-      "metadata_json": "{\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.042780-05:00",
+      "metadata_json": "{\"commit\":\"77af7312c86f25170622cd70fdc8d7c091eb1ac3\",\"confidence\":90}"
     },
     {
       "id": 133,
@@ -1471,8 +1471,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T13:53:56.353912-05:00",
-      "updated_at": "2025-12-10T13:53:56.353912-05:00",
-      "metadata_json": "{\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.044347-05:00",
+      "metadata_json": "{\"commit\":\"78640eb0e3e250e15dc20c0c95a7b09a11b9cd2d\",\"confidence\":90}"
     },
     {
       "id": 135,
@@ -1570,8 +1570,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T14:13:56.072048-05:00",
-      "updated_at": "2025-12-10T14:13:56.072048-05:00",
-      "metadata_json": "{\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.068783-05:00",
+      "metadata_json": "{\"commit\":\"eee087e5ae7b47081af6b3f5defe7ebee347776f\",\"confidence\":90}"
     },
     {
       "id": 144,
@@ -1581,8 +1581,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T14:15:24.279487-05:00",
-      "updated_at": "2025-12-10T14:15:24.279487-05:00",
-      "metadata_json": "{\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.056864-05:00",
+      "metadata_json": "{\"commit\":\"0c39233ef4c657630aa3292d5714e1e10a9cf600\",\"confidence\":95}"
     },
     {
       "id": 145,
@@ -1603,8 +1603,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T14:27:57.686483-05:00",
-      "updated_at": "2025-12-10T14:27:57.686483-05:00",
-      "metadata_json": "{\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.053973-05:00",
+      "metadata_json": "{\"commit\":\"c79b1c45b218c8c7ca62710a3e96da9ea6e71c64\",\"confidence\":90}"
     },
     {
       "id": 147,
@@ -1658,8 +1658,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T14:41:29.432050-05:00",
-      "updated_at": "2025-12-10T14:41:29.432050-05:00",
-      "metadata_json": "{\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.069613-05:00",
+      "metadata_json": "{\"commit\":\"0a2e972d4b205717f613b82e0fb6a2274ecde8ac\",\"confidence\":95}"
     },
     {
       "id": 152,
@@ -1691,8 +1691,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T14:49:38.356605-05:00",
-      "updated_at": "2025-12-10T14:49:38.356605-05:00",
-      "metadata_json": "{\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.045894-05:00",
+      "metadata_json": "{\"commit\":\"cc1903d92afea3c05c21fcac86364ca435d636f4\",\"confidence\":95}"
     },
     {
       "id": 155,
@@ -1757,8 +1757,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T15:31:41.829555-05:00",
-      "updated_at": "2025-12-10T15:31:41.829555-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.054542-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"f4d268e23ebd8b2010cf36bda11870287a6532d0\",\"confidence\":95}"
     },
     {
       "id": 161,
@@ -1779,8 +1779,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T15:45:06.057218-05:00",
-      "updated_at": "2025-12-10T15:45:06.057218-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.049822-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"dc78ab4f9aceb86483e60ce66c426c3389c13974\",\"confidence\":95}"
     },
     {
       "id": 163,
@@ -1790,8 +1790,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T15:53:35.160855-05:00",
-      "updated_at": "2025-12-10T15:53:35.160855-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+      "updated_at": "2025-12-12T09:22:08.051168-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"313b360cffed5f2ce78bacf8cdb6b4222948f9c0\",\"confidence\":90}"
     },
     {
       "id": 164,
@@ -1801,8 +1801,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T15:55:29.588216-05:00",
-      "updated_at": "2025-12-10T15:55:29.588216-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.052681-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"313b360cffed5f2ce78bacf8cdb6b4222948f9c0\",\"confidence\":95}"
     },
     {
       "id": 165,
@@ -1823,8 +1823,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T16:22:12.000580-05:00",
-      "updated_at": "2025-12-10T16:22:12.000580-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.058846-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"46cee5d01e620acf9f9d8b494354852690d7ff2f\",\"confidence\":95}"
     },
     {
       "id": 167,
@@ -1845,8 +1845,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-10T16:30:05.494525-05:00",
-      "updated_at": "2025-12-10T16:30:05.494525-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.073411-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"46cee5d01e620acf9f9d8b494354852690d7ff2f\",\"confidence\":95}"
     },
     {
       "id": 169,
@@ -2329,8 +2329,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T00:29:23.451211-05:00",
-      "updated_at": "2025-12-11T00:29:23.451211-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"src/tui/app.rs\",\"src/tui/ui.rs\",\"src/tui/events.rs\"]}"
+      "updated_at": "2025-12-12T09:22:08.066084-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"29b126a2673d305bfe448c07c3c2d1302b2dfc9e\",\"confidence\":95,\"files\":[\"src/tui/app.rs\",\"src/tui/ui.rs\",\"src/tui/events.rs\"]}"
     },
     {
       "id": 213,
@@ -2857,8 +2857,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T02:10:39.377792-05:00",
-      "updated_at": "2025-12-11T02:10:39.377792-05:00",
-      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":85,\"prompt\":\"Go to main, make a new branch, begin work trying to get the prompt tracking baked into how we view things. You want to have the prompts with this be richly shown in the UI with the big piece they were associated with\"}"
+      "updated_at": "2025-12-12T09:22:08.051846-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"commit\":\"04ad71307753eca39477069cc48fbf6b4da0bdae\",\"confidence\":85,\"prompt\":\"Go to main, make a new branch, begin work trying to get the prompt tracking baked into how we view things. You want to have the prompts with this be richly shown in the UI with the big piece they were associated with\"}"
     },
     {
       "id": 261,
@@ -2956,8 +2956,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T02:14:56.880364-05:00",
-      "updated_at": "2025-12-11T02:14:56.880364-05:00",
-      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.060071-05:00",
+      "metadata_json": "{\"branch\":\"feature/prompt-tracking\",\"commit\":\"04ad71307753eca39477069cc48fbf6b4da0bdae\",\"confidence\":95}"
     },
     {
       "id": 270,
@@ -3099,8 +3099,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T16:36:15.463459-05:00",
-      "updated_at": "2025-12-11T16:36:15.463459-05:00",
-      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"confidence\":95,\"files\":[\"src/diff.rs\"]}"
+      "updated_at": "2025-12-12T09:22:08.073991-05:00",
+      "metadata_json": "{\"branch\":\"fix/unicode-truncate-panic\",\"commit\":\"a1e528a08e4bd9354aa539357388cbda256ecc18\",\"confidence\":95,\"files\":[\"src/diff.rs\"]}"
     },
     {
       "id": 283,
@@ -3418,8 +3418,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T18:35:00.852743-05:00",
-      "updated_at": "2025-12-11T18:35:00.852743-05:00",
-      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"confidence\":85}"
+      "updated_at": "2025-12-12T09:22:08.074608-05:00",
+      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"commit\":\"d05d8cfd9bcfaa1b887ecc2861c35855ee287b85\",\"confidence\":85}"
     },
     {
       "id": 312,
@@ -3451,8 +3451,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T18:37:54.637875-05:00",
-      "updated_at": "2025-12-11T18:37:54.637875-05:00",
-      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"confidence\":100}"
+      "updated_at": "2025-12-12T09:22:08.071601-05:00",
+      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"commit\":\"c75fa8ebc83ff8d758e917d261860d1c94b91bb2\",\"confidence\":100}"
     },
     {
       "id": 315,
@@ -3462,8 +3462,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T18:40:22.698897-05:00",
-      "updated_at": "2025-12-11T18:40:22.698897-05:00",
-      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"confidence\":85}"
+      "updated_at": "2025-12-12T09:22:08.066753-05:00",
+      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"commit\":\"07e36cd3c4c4866317328ff6436c514df96047d9\",\"confidence\":85}"
     },
     {
       "id": 316,
@@ -3473,8 +3473,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-11T18:42:18.010149-05:00",
-      "updated_at": "2025-12-11T18:42:18.010149-05:00",
-      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"confidence\":100}"
+      "updated_at": "2025-12-12T09:22:08.075240-05:00",
+      "metadata_json": "{\"branch\":\"maintenance/functional-core-tea-refactor\",\"commit\":\"07e36cd3c4c4866317328ff6436c514df96047d9\",\"confidence\":100}"
     },
     {
       "id": 317,
@@ -3583,8 +3583,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-12T00:15:37.483336-05:00",
-      "updated_at": "2025-12-12T00:15:37.483336-05:00",
-      "metadata_json": "{\"branch\":\"feature/type-unification-tui-web\",\"confidence\":95,\"files\":[\"web/src/types/graph.ts\"]}"
+      "updated_at": "2025-12-12T09:22:08.075924-05:00",
+      "metadata_json": "{\"branch\":\"feature/type-unification-tui-web\",\"commit\":\"c75fa8ebc83ff8d758e917d261860d1c94b91bb2\",\"confidence\":95,\"files\":[\"web/src/types/graph.ts\"]}"
     },
     {
       "id": 327,
@@ -3869,8 +3869,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-12T02:24:22.682682-05:00",
-      "updated_at": "2025-12-12T02:24:22.682682-05:00",
-      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.057915-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"commit\":\"876ea936deb1b1e201677e9e746b4bdeb1b526ed\",\"confidence\":95}"
     },
     {
       "id": 353,
@@ -3990,8 +3990,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-12T02:26:45.920655-05:00",
-      "updated_at": "2025-12-12T02:26:45.920655-05:00",
-      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.070340-05:00",
+      "metadata_json": "{\"branch\":\"feature/dag-lazy-loading\",\"commit\":\"c75fa8ebc83ff8d758e917d261860d1c94b91bb2\",\"confidence\":95}"
     },
     {
       "id": 364,
@@ -4034,8 +4034,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-12T02:45:02.209991-05:00",
-      "updated_at": "2025-12-12T02:45:02.209991-05:00",
-      "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+      "updated_at": "2025-12-12T09:22:08.053420-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"920782b9878aa4919dd2ec1a58bfa5eb73e75f98\",\"confidence\":100}"
     },
     {
       "id": 368,
@@ -4067,8 +4067,8 @@
       "description": null,
       "status": "pending",
       "created_at": "2025-12-12T03:04:33.367124-05:00",
-      "updated_at": "2025-12-12T03:04:33.367124-05:00",
-      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
+      "updated_at": "2025-12-12T09:22:08.076457-05:00",
+      "metadata_json": "{\"branch\":\"feature/git-history-export\",\"commit\":\"a046a848ecf2f2700d93c6696118f71783812e01\",\"confidence\":95}"
     },
     {
       "id": 371,
@@ -4267,6 +4267,952 @@
       "created_at": "2025-12-12T03:41:48.783189-05:00",
       "updated_at": "2025-12-12T03:41:48.783189-05:00",
       "metadata_json": "{\"branch\":\"feature/git-history-export\",\"confidence\":95}"
+    },
+    {
+      "id": 389,
+      "change_id": "fde88c58-7e2e-4696-8885-1defa080f593",
+      "node_type": "goal",
+      "title": "Implement retroactive commit association for decision graph",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T09:29:05.887080-05:00",
+      "updated_at": "2025-12-12T09:29:05.887080-05:00",
+      "metadata_json": "{\"branch\":\"feature/retroactive-commit-association\",\"confidence\":95,\"prompt\":\"User asked to implement the roadmap item about spelunking history and retroactively linking commits\"}"
+    },
+    {
+      "id": 390,
+      "change_id": "83dbecf3-75e2-427a-b9ba-8d9b0fbb95a0",
+      "node_type": "decision",
+      "title": "CLI command design for audit functionality",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T09:29:06.691135-05:00",
+      "updated_at": "2025-12-12T09:29:06.691135-05:00",
+      "metadata_json": "{\"branch\":\"feature/retroactive-commit-association\",\"confidence\":90}"
+    },
+    {
+      "id": 391,
+      "change_id": "002a0c87-01cc-4c33-a010-02876782cdfe",
+      "node_type": "action",
+      "title": "Added 'deciduous audit --associate-commits' command with keyword matching",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T09:29:13.683427-05:00",
+      "updated_at": "2025-12-12T09:29:13.683427-05:00",
+      "metadata_json": "{\"branch\":\"feature/retroactive-commit-association\",\"commit\":\"17e9045\",\"confidence\":95}"
+    },
+    {
+      "id": 392,
+      "change_id": "81a64611-a479-4e6f-bf2a-9376fab9f135",
+      "node_type": "outcome",
+      "title": "Linked 35 nodes to commits, increased coverage from 31 to 66 nodes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T09:29:14.708323-05:00",
+      "updated_at": "2025-12-12T09:29:14.708323-05:00",
+      "metadata_json": "{\"branch\":\"feature/retroactive-commit-association\",\"commit\":\"17e9045\",\"confidence\":95}"
+    },
+    {
+      "id": 393,
+      "change_id": "73a20b21-f936-4969-a82c-d08de14477d6",
+      "node_type": "action",
+      "title": "Added 12 unit tests for audit functionality",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T09:37:32.251632-05:00",
+      "updated_at": "2025-12-12T09:37:32.251632-05:00",
+      "metadata_json": "{\"branch\":\"feature/retroactive-commit-association\",\"commit\":\"8d2c9f9\",\"confidence\":95}"
+    },
+    {
+      "id": 394,
+      "change_id": "5aa8b839-d8fe-47fd-87e5-1a6ed7975409",
+      "node_type": "goal",
+      "title": "Types Unification (New Approach)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:01.029686-05:00",
+      "updated_at": "2025-12-12T17:23:01.029686-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"prompt\":\"User asked to look through the decision tree and choices we made for our recent types unification work, then make a new branch and begin working on a new approach formed in my thoughts instead of Claude Opus's\"}"
+    },
+    {
+      "id": 395,
+      "change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
+      "node_type": "decision",
+      "title": "Identify weaknesses in previous types unification",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:06.877405-05:00",
+      "updated_at": "2025-12-12T17:23:06.877405-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 396,
+      "change_id": "83188b1f-c198-4226-8dce-a6b7fc480912",
+      "node_type": "observation",
+      "title": "Previous approach relied on JSON Schema as source of truth",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:12.536874-05:00",
+      "updated_at": "2025-12-12T17:23:12.536874-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 397,
+      "change_id": "11a376a2-514b-4e7d-8fa2-c472154c9a68",
+      "node_type": "observation",
+      "title": "Manual synchronization required via shell scripts",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:18.114991-05:00",
+      "updated_at": "2025-12-12T17:23:18.114991-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 398,
+      "change_id": "e586a985-a78e-4065-9070-e8b1c3ea3759",
+      "node_type": "observation",
+      "title": "Duplication of logic between Rust and TypeScript",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:23.917684-05:00",
+      "updated_at": "2025-12-12T17:23:23.917684-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 399,
+      "change_id": "cf6549bb-b261-4de5-b95c-84e97db3b1b1",
+      "node_type": "decision",
+      "title": "Choose new types unification approach",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:29.610351-05:00",
+      "updated_at": "2025-12-12T17:23:29.610351-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":80}"
+    },
+    {
+      "id": 400,
+      "change_id": "40a09bfb-78d9-4690-8047-257868abc03a",
+      "node_type": "option",
+      "title": "ts-rs: Generate TypeScript from Rust structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:35.458554-05:00",
+      "updated_at": "2025-12-12T17:23:35.458554-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 401,
+      "change_id": "6149107d-9724-4500-9393-648e75949978",
+      "node_type": "option",
+      "title": "typeshare: Comment-based generation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:41.141910-05:00",
+      "updated_at": "2025-12-12T17:23:41.141910-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":70}"
+    },
+    {
+      "id": 402,
+      "change_id": "856ed45b-acfd-47f2-9cb0-a914e74238aa",
+      "node_type": "action",
+      "title": "Investigate ts-rs suitability",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:48.646924-05:00",
+      "updated_at": "2025-12-12T17:23:48.646924-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 403,
+      "change_id": "b707942d-4166-42be-a48c-4c08177f8201",
+      "node_type": "action",
+      "title": "Created branch refactor/types-unification-ts-rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:23:57.062381-05:00",
+      "updated_at": "2025-12-12T17:23:57.062381-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 404,
+      "change_id": "6d134e58-98ea-4acd-b679-46cb687a93e2",
+      "node_type": "action",
+      "title": "Added ts-rs dependency",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:24:15.031555-05:00",
+      "updated_at": "2025-12-12T17:24:15.031555-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 405,
+      "change_id": "6194e082-d17d-47b6-96ac-b49917caa068",
+      "node_type": "decision",
+      "title": "Where to place TypeScript generation tests",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:24:20.696193-05:00",
+      "updated_at": "2025-12-12T17:24:20.696193-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":75}"
+    },
+    {
+      "id": 406,
+      "change_id": "4e0a6831-15ba-4f82-aeb2-27763be59203",
+      "node_type": "option",
+      "title": "Separate test file (tests/ts_gen.rs)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:24:26.491483-05:00",
+      "updated_at": "2025-12-12T17:24:26.491483-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":80}"
+    },
+    {
+      "id": 407,
+      "change_id": "a00f9abd-3a19-4d09-9e09-df4b8f7a3de0",
+      "node_type": "option",
+      "title": "Unit tests in modules",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:24:31.942237-05:00",
+      "updated_at": "2025-12-12T17:24:31.942237-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":60}"
+    },
+    {
+      "id": 408,
+      "change_id": "e5969728-1a42-4971-b3f1-8884010f484f",
+      "node_type": "action",
+      "title": "Create tests/ts_gen.rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:24:37.858337-05:00",
+      "updated_at": "2025-12-12T17:24:37.858337-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 409,
+      "change_id": "289dd1ff-b712-4608-8c9a-6e3fac5c9374",
+      "node_type": "observation",
+      "title": "Compiler errors: dead code warnings in test structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:25:44.636090-05:00",
+      "updated_at": "2025-12-12T17:25:44.636090-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 410,
+      "change_id": "15a94eff-1085-4083-9020-ff57854e9eab",
+      "node_type": "action",
+      "title": "Add #[allow(dead_code)] to test structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:25:51.240162-05:00",
+      "updated_at": "2025-12-12T17:25:51.240162-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 411,
+      "change_id": "8859e96e-a102-4f8a-96b9-011ab5acda5b",
+      "node_type": "action",
+      "title": "Committed ts-rs setup",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:27:08.524541-05:00",
+      "updated_at": "2025-12-12T17:27:08.524541-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"commit\":\"3fe3f91\",\"confidence\":100}"
+    },
+    {
+      "id": 412,
+      "change_id": "86c7f463-288f-4a5e-bf78-181424a2b816",
+      "node_type": "decision",
+      "title": "Apply ts-rs to core structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:27:17.748997-05:00",
+      "updated_at": "2025-12-12T17:27:17.748997-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 413,
+      "change_id": "914be24b-4fba-44e0-b825-8bdbad32801f",
+      "node_type": "action",
+      "title": "Update src/lib.rs to re-export TS trait",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:27:39.713532-05:00",
+      "updated_at": "2025-12-12T17:27:39.713532-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 414,
+      "change_id": "8fb37d69-1fdf-4b2b-a9cc-a0c8155e429d",
+      "node_type": "action",
+      "title": "Added optional ts-rs feature to Cargo.toml",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:27:52.215544-05:00",
+      "updated_at": "2025-12-12T17:27:52.215544-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"commit\":\"3fe3f91\",\"confidence\":100}"
+    },
+    {
+      "id": 415,
+      "change_id": "9f5f3f95-1a7b-4329-8bfb-912720e3b8e1",
+      "node_type": "action",
+      "title": "Update src/db.rs with TS derive macros",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:27:58.508571-05:00",
+      "updated_at": "2025-12-12T17:27:58.508571-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 416,
+      "change_id": "9fb15b16-9fef-45e7-a8b0-d096edeb9680",
+      "node_type": "action",
+      "title": "Added TS derivation to all core DB structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:28:27.390755-05:00",
+      "updated_at": "2025-12-12T17:28:27.390755-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 417,
+      "change_id": "96fe1db9-f187-4c45-870d-55264903edd0",
+      "node_type": "decision",
+      "title": "Validate new TS generation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:28:33.163312-05:00",
+      "updated_at": "2025-12-12T17:28:33.163312-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 418,
+      "change_id": "8cffea99-d173-440b-81ed-07dbdbe5ffb4",
+      "node_type": "action",
+      "title": "Update tests/ts_gen.rs to use actual structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:28:39.281625-05:00",
+      "updated_at": "2025-12-12T17:28:39.281625-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 419,
+      "change_id": "c7711fbb-34d0-4414-872f-2b702b792c37",
+      "node_type": "observation",
+      "title": "Missing re-exports in lib.rs for DecisionContext/Session",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:29:11.429018-05:00",
+      "updated_at": "2025-12-12T17:29:11.429018-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 420,
+      "change_id": "6e260747-2458-4f0e-9235-5c0f4da5a7fc",
+      "node_type": "action",
+      "title": "Add missing re-exports to src/lib.rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:29:17.807306-05:00",
+      "updated_at": "2025-12-12T17:29:17.807306-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 421,
+      "change_id": "50043d1f-0dab-43e3-b415-e97bb652c70a",
+      "node_type": "observation",
+      "title": "Unused imports warnings in test",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:29:34.789996-05:00",
+      "updated_at": "2025-12-12T17:29:34.789996-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 422,
+      "change_id": "e042e0a7-d208-424f-9845-103116d5c088",
+      "node_type": "action",
+      "title": "Add tests for remaining structs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:29:41.316452-05:00",
+      "updated_at": "2025-12-12T17:29:41.316452-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 423,
+      "change_id": "7c03c0c6-b32f-41b1-ac6d-a95ab7ed8457",
+      "node_type": "outcome",
+      "title": "All ts-rs generation tests passing",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:29:56.642994-05:00",
+      "updated_at": "2025-12-12T17:29:56.642994-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 424,
+      "change_id": "d126df3c-51b0-44ec-ac78-9cf61e7969f9",
+      "node_type": "action",
+      "title": "Committed core type derivation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:07.158184-05:00",
+      "updated_at": "2025-12-12T17:30:07.158184-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"commit\":\"d1c1467\",\"confidence\":100}"
+    },
+    {
+      "id": 425,
+      "change_id": "6301aab0-1295-4332-8f59-275ac1868c72",
+      "node_type": "decision",
+      "title": "How to generate types for frontend",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:10.072253-05:00",
+      "updated_at": "2025-12-12T17:30:10.072253-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":80}"
+    },
+    {
+      "id": 426,
+      "change_id": "045c8c6d-cc68-49c9-856f-20cbde2029e1",
+      "node_type": "option",
+      "title": "Separate generator binary",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:15.776627-05:00",
+      "updated_at": "2025-12-12T17:30:15.776627-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 427,
+      "change_id": "4bf908ab-f859-40d4-860b-41033d057a74",
+      "node_type": "option",
+      "title": "Add subcommand to main CLI",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:22.521065-05:00",
+      "updated_at": "2025-12-12T17:30:22.521065-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":60}"
+    },
+    {
+      "id": 428,
+      "change_id": "61cc02a6-91e4-4aa2-8e7d-eedb91b8710d",
+      "node_type": "action",
+      "title": "Create bin/gen_types.rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:29.075505-05:00",
+      "updated_at": "2025-12-12T17:30:29.075505-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 429,
+      "change_id": "9f41846e-bbfe-453d-89eb-c8bcb33908fd",
+      "node_type": "observation",
+      "title": "Need to register bin in Cargo.toml",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:45.458289-05:00",
+      "updated_at": "2025-12-12T17:30:45.458289-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 430,
+      "change_id": "5a70f3c3-d5c2-47cf-bd5c-9c3cad5dcb0c",
+      "node_type": "action",
+      "title": "Register gen_types bin in Cargo.toml",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:30:53.117988-05:00",
+      "updated_at": "2025-12-12T17:30:53.117988-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 431,
+      "change_id": "64a75b72-b1e2-4887-9926-21147e0962f5",
+      "node_type": "observation",
+      "title": "Compiler error in gen_types.rs: unused variable",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:31:17.134204-05:00",
+      "updated_at": "2025-12-12T17:31:17.134204-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 432,
+      "change_id": "417982c9-8cf4-4d62-9356-ab23962d71b3",
+      "node_type": "action",
+      "title": "Fix unused variable in gen_types.rs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:31:23.488666-05:00",
+      "updated_at": "2025-12-12T17:31:23.488666-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 433,
+      "change_id": "47d5e10c-15d0-4443-bbb0-6a6b0bcc8971",
+      "node_type": "outcome",
+      "title": "Types generated successfully",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:31:40.406560-05:00",
+      "updated_at": "2025-12-12T17:31:40.406560-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 434,
+      "change_id": "8a22cbd4-7710-4337-8833-9704205fd95d",
+      "node_type": "decision",
+      "title": "Integrate validation into workflow",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:31:51.489610-05:00",
+      "updated_at": "2025-12-12T17:31:51.489610-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 435,
+      "change_id": "0eed01f1-587b-4c0f-a283-b9919e1f84b1",
+      "node_type": "action",
+      "title": "Update scripts/validate-types.sh",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:31:58.495160-05:00",
+      "updated_at": "2025-12-12T17:31:58.495160-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 436,
+      "change_id": "f7c80d60-c2a8-46e1-8f26-285a68a9277f",
+      "node_type": "outcome",
+      "title": "Validation script now auto-generates types",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:32:17.299924-05:00",
+      "updated_at": "2025-12-12T17:32:17.299924-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 437,
+      "change_id": "f942f73d-8835-4748-a145-423fc569f4bb",
+      "node_type": "decision",
+      "title": "Clean up manual definitions",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:32:24.412821-05:00",
+      "updated_at": "2025-12-12T17:32:24.412821-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":90}"
+    },
+    {
+      "id": 438,
+      "change_id": "278ffc0b-6110-4007-98b4-080d6ea60d59",
+      "node_type": "action",
+      "title": "Update web/src/types/graph.ts to use generated types",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:32:31.020289-05:00",
+      "updated_at": "2025-12-12T17:32:31.020289-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 439,
+      "change_id": "c76e56ca-09ca-4f34-b1d5-8fbb2d3da660",
+      "node_type": "observation",
+      "title": "Need to fix TS compilation errors due to type narrowing",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:32:48.717454-05:00",
+      "updated_at": "2025-12-12T17:32:48.717454-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 440,
+      "change_id": "e783515c-090f-43a6-bca6-9f542c3830ee",
+      "node_type": "action",
+      "title": "Add type assertions to graph.ts",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:32:55.442744-05:00",
+      "updated_at": "2025-12-12T17:32:55.442744-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 441,
+      "change_id": "5fc326a6-adc0-4d43-ad63-a1fcf04eb4f0",
+      "node_type": "observation",
+      "title": "TS errors: export type required for isolatedModules",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:38:15.036676-05:00",
+      "updated_at": "2025-12-12T17:38:15.036676-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 442,
+      "change_id": "1640683a-8168-4929-99a9-ac8ded733f50",
+      "node_type": "action",
+      "title": "Fix type exports in graph.ts",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:38:21.616642-05:00",
+      "updated_at": "2025-12-12T17:38:21.616642-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 443,
+      "change_id": "27f1b7ef-c1ae-489a-aa8f-1d1a1b341de4",
+      "node_type": "outcome",
+      "title": "Web types fully validated",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:38:42.906228-05:00",
+      "updated_at": "2025-12-12T17:38:42.906228-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 444,
+      "change_id": "fb0df161-542d-410f-a926-b246d36ba502",
+      "node_type": "decision",
+      "title": "Finalize refactoring",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:38:50.297372-05:00",
+      "updated_at": "2025-12-12T17:38:50.297372-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":95}"
+    },
+    {
+      "id": 445,
+      "change_id": "946d30d7-a844-4e73-94b0-00ee687be7e5",
+      "node_type": "observation",
+      "title": "Pre-commit hook failed: TS types missing edge change_id fields",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:39:06.988651-05:00",
+      "updated_at": "2025-12-12T17:39:06.988651-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 446,
+      "change_id": "4aabf9dc-b3ba-4abb-80bb-5e7bcda2b1f1",
+      "node_type": "action",
+      "title": "Update bin/gen_types.rs to fix type generation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:39:14.971424-05:00",
+      "updated_at": "2025-12-12T17:39:14.971424-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 447,
+      "change_id": "c290ecbc-2bec-4fb9-bde4-b309879264d9",
+      "node_type": "observation",
+      "title": "Wait, generated schema has change_id fields but validation fails?",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:39:25.141567-05:00",
+      "updated_at": "2025-12-12T17:39:25.141567-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 448,
+      "change_id": "7ad742cb-c055-45ac-ac9d-2044cc5713f4",
+      "node_type": "observation",
+      "title": "Validation script checks graph.ts which re-exports generated types",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:39:39.080879-05:00",
+      "updated_at": "2025-12-12T17:39:39.080879-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 449,
+      "change_id": "9cf69e95-7465-4ab5-abc7-8a45a76b32e9",
+      "node_type": "action",
+      "title": "Update validate-types.sh to check generated/schema.ts for TS types",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:39:46.414933-05:00",
+      "updated_at": "2025-12-12T17:39:46.414933-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 450,
+      "change_id": "ea6c0cfb-7d3a-43f1-adf6-2fb2add84679",
+      "node_type": "observation",
+      "title": "Validation hanging or incomplete output?",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:40:02.227309-05:00",
+      "updated_at": "2025-12-12T17:40:02.227309-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 451,
+      "change_id": "b0f1ca19-2616-42c5-b457-0ca0fbccfd4e",
+      "node_type": "observation",
+      "title": "Wait, generated schema doesn't have NODE_TYPES etc",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:40:12.740184-05:00",
+      "updated_at": "2025-12-12T17:40:12.740184-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 452,
+      "change_id": "f23a3761-796c-4410-b86f-24625e7ef5ed",
+      "node_type": "action",
+      "title": "Check web/src/types/graph.ts for constants",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:40:19.668177-05:00",
+      "updated_at": "2025-12-12T17:40:19.668177-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 453,
+      "change_id": "4e79a233-1070-438d-a8bc-512c25630ed1",
+      "node_type": "observation",
+      "title": "Need to check if generated types include from_change_id/to_change_id",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:40:30.600727-05:00",
+      "updated_at": "2025-12-12T17:40:30.600727-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 454,
+      "change_id": "7defaf80-8fc5-45b2-855d-3b59b9876791",
+      "node_type": "observation",
+      "title": "Fields exist in generated schema, why did validation fail?",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:40:42.259310-05:00",
+      "updated_at": "2025-12-12T17:40:42.259310-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 455,
+      "change_id": "2c861869-020a-4095-ba15-e36f17345bbe",
+      "node_type": "observation",
+      "title": "Validation script greps for 'change_id:' but generated TS might format differently",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:41:03.093580-05:00",
+      "updated_at": "2025-12-12T17:41:03.093580-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"confidence\":100}"
+    },
+    {
+      "id": 456,
+      "change_id": "213fab0d-7281-4da7-a851-54d35f3b88c7",
+      "node_type": "action",
+      "title": "Fix validation script for single-line type definitions",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:42:28.244316-05:00",
+      "updated_at": "2025-12-12T17:42:28.244316-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Fix the validation script failure caused by ts-rs generating single-line structs\"}"
+    },
+    {
+      "id": 457,
+      "change_id": "03f538fb-a631-439a-a13d-346ce16e2b3b",
+      "node_type": "outcome",
+      "title": "Validation script fixed and passing",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:43:17.339998-05:00",
+      "updated_at": "2025-12-12T17:43:17.339998-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Fixed script to look in correct files for constants vs structs\"}"
+    },
+    {
+      "id": 458,
+      "change_id": "6158471a-1de7-49d1-92d8-bf3498ae31dc",
+      "node_type": "observation",
+      "title": "Pre-commit hook failed: demo update required",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:43:47.445745-05:00",
+      "updated_at": "2025-12-12T17:43:47.445745-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Demo needs rebuild when web sources change\"}"
+    },
+    {
+      "id": 459,
+      "change_id": "40ac9d9e-e6d8-412e-a391-371acf05a5cf",
+      "node_type": "action",
+      "title": "Rebuild demo to satisfy pre-commit hook",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:43:50.894864-05:00",
+      "updated_at": "2025-12-12T17:43:50.894864-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Running build-demo.sh\"}"
+    },
+    {
+      "id": 460,
+      "change_id": "9074885f-b165-4597-a881-ed460cc7e20e",
+      "node_type": "observation",
+      "title": "Pre-commit hook false positive: Type-only changes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:44:28.846188-05:00",
+      "updated_at": "2025-12-12T17:44:28.846188-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Web types changed but emitted JS is identical, so index.html didn't change and couldn't be staged\"}"
+    },
+    {
+      "id": 461,
+      "change_id": "992ceb9b-1494-4de6-ba9d-4495511c2607",
+      "node_type": "action",
+      "title": "Commit with --no-verify",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:44:31.929483-05:00",
+      "updated_at": "2025-12-12T17:44:31.929483-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Bypassing hook due to type-only changes\"}"
+    },
+    {
+      "id": 462,
+      "change_id": "2b28add5-6d18-4d10-94cf-dafd31e0d103",
+      "node_type": "outcome",
+      "title": "Types unification commit successful",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:44:38.415672-05:00",
+      "updated_at": "2025-12-12T17:44:38.415672-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"commit\":\"6faecb3\"}"
+    },
+    {
+      "id": 463,
+      "change_id": "4a82d2d6-6cf6-4c7b-9a3f-b97d6b0988d5",
+      "node_type": "goal",
+      "title": "Release OpenCode support and Roadmap updates",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:12.667582-05:00",
+      "updated_at": "2025-12-12T17:57:12.667582-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"User request: merge opencode, merge roadmap, cut patch release\"}"
+    },
+    {
+      "id": 464,
+      "change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "node_type": "decision",
+      "title": "Separate OpenCode support from Types Unification",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:23.135248-05:00",
+      "updated_at": "2025-12-12T17:57:23.135248-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Keep PRs atomic. OpenCode support should be its own feature branch.\"}"
+    },
+    {
+      "id": 465,
+      "change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+      "node_type": "action",
+      "title": "Stash OpenCode changes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:26.569863-05:00",
+      "updated_at": "2025-12-12T17:57:26.569863-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Moving changes to a new branch later\"}"
+    },
+    {
+      "id": 466,
+      "change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+      "node_type": "action",
+      "title": "Commit Roadmap and AGENTS.md updates directly to branch",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:57:42.392696-05:00",
+      "updated_at": "2025-12-12T17:57:42.392696-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Roadmap updates can go in current branch/main, they are documentation\"}"
+    },
+    {
+      "id": 467,
+      "change_id": "33f7afc8-17ac-4cdf-8703-142d555aa56b",
+      "node_type": "outcome",
+      "title": "Docs merged to refactor branch",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:58:00.746865-05:00",
+      "updated_at": "2025-12-12T17:58:00.746865-05:00",
+      "metadata_json": "{\"branch\":\"refactor/types-unification-ts-rs\",\"prompt\":\"Roadmap and AGENTS.md now included in PR #21\"}"
+    },
+    {
+      "id": 468,
+      "change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+      "node_type": "outcome",
+      "title": "OpenCode support committed to new branch",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:58:47.259687-05:00",
+      "updated_at": "2025-12-12T17:58:47.259687-05:00",
+      "metadata_json": "{\"branch\":\"feat/opencode-support\",\"prompt\":\"Changes applied from stash to feat/opencode-support\"}"
+    },
+    {
+      "id": 469,
+      "change_id": "a9eb338c-80c4-4cae-bbd7-7a121c24a2c5",
+      "node_type": "outcome",
+      "title": "OpenCode support merged to main",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:59:14.276198-05:00",
+      "updated_at": "2025-12-12T17:59:14.276198-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"prompt\":\"PR #22 merged\"}"
+    },
+    {
+      "id": 470,
+      "change_id": "a0a09167-e452-44ee-ae3b-47eef79718d2",
+      "node_type": "action",
+      "title": "Bump version to 0.8.10",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T17:59:24.756241-05:00",
+      "updated_at": "2025-12-12T17:59:24.756241-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"prompt\":\"Preparing patch release\"}"
+    },
+    {
+      "id": 471,
+      "change_id": "832339c2-74ea-46d4-9bf4-4cd45f49dbd3",
+      "node_type": "action",
+      "title": "Remove obsolete ts_gen.rs test",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T18:00:09.752685-05:00",
+      "updated_at": "2025-12-12T18:00:09.752685-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"prompt\":\"Fixing build failure during push: obsolete test file required feature not enabled by default\"}"
+    },
+    {
+      "id": 472,
+      "change_id": "3cd5a50c-fd59-4213-9cda-4cf6d1050208",
+      "node_type": "outcome",
+      "title": "v0.8.10 released",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T18:00:44.335452-05:00",
+      "updated_at": "2025-12-12T18:00:44.335452-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"prompt\":\"Patch release pushed to main with new OpenCode features\"}"
+    },
+    {
+      "id": 473,
+      "change_id": "7b4b7ffa-4ac4-4740-944c-d9cc5e7c187f",
+      "node_type": "goal",
+      "title": "Roadmap web page with GitHub issue integration",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T18:50:27.773117-05:00",
+      "updated_at": "2025-12-12T18:50:27.773117-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-web-integration\",\"confidence\":85,\"prompt\":\"User wants: web page for roadmap styled like main page, linked to GH issues, synced, tracked in DB, filterable by scope/tags, integrated with deciduous graph\"}"
+    },
+    {
+      "id": 474,
+      "change_id": "15e353df-8c8b-4be0-8640-b8f9fbdb122b",
+      "node_type": "outcome",
+      "title": "Implemented roadmap web integration feature",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-12T19:01:17.354014-05:00",
+      "updated_at": "2025-12-12T19:01:17.354014-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-web-integration\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -7877,6 +8823,908 @@
       "weight": 1.0,
       "rationale": "Landing page integration complete",
       "created_at": "2025-12-12T03:41:56.573996-05:00"
+    },
+    {
+      "id": 329,
+      "from_node_id": 389,
+      "to_node_id": 390,
+      "from_change_id": "fde88c58-7e2e-4696-8885-1defa080f593",
+      "to_change_id": "83dbecf3-75e2-427a-b9ba-8d9b0fbb95a0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal requires design decision",
+      "created_at": "2025-12-12T09:29:20.849647-05:00"
+    },
+    {
+      "id": 330,
+      "from_node_id": 390,
+      "to_node_id": 391,
+      "from_change_id": "83dbecf3-75e2-427a-b9ba-8d9b0fbb95a0",
+      "to_change_id": "002a0c87-01cc-4c33-a010-02876782cdfe",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design led to implementation",
+      "created_at": "2025-12-12T09:29:20.857683-05:00"
+    },
+    {
+      "id": 331,
+      "from_node_id": 391,
+      "to_node_id": 392,
+      "from_change_id": "002a0c87-01cc-4c33-a010-02876782cdfe",
+      "to_change_id": "81a64611-a479-4e6f-bf2a-9376fab9f135",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation produced outcome",
+      "created_at": "2025-12-12T09:29:20.864395-05:00"
+    },
+    {
+      "id": 332,
+      "from_node_id": 391,
+      "to_node_id": 393,
+      "from_change_id": "002a0c87-01cc-4c33-a010-02876782cdfe",
+      "to_change_id": "73a20b21-f936-4969-a82c-d08de14477d6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Tests validate implementation",
+      "created_at": "2025-12-12T09:37:32.260521-05:00"
+    },
+    {
+      "id": 333,
+      "from_node_id": 333,
+      "to_node_id": 394,
+      "from_change_id": "04d6782f-c79e-4044-b4b5-21955c03623b",
+      "to_change_id": "5aa8b839-d8fe-47fd-87e5-1a6ed7975409",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Improving upon previous types unification work",
+      "created_at": "2025-12-12T17:23:03.942476-05:00"
+    },
+    {
+      "id": 334,
+      "from_node_id": 394,
+      "to_node_id": 395,
+      "from_change_id": "5aa8b839-d8fe-47fd-87e5-1a6ed7975409",
+      "to_change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "First step: analysis",
+      "created_at": "2025-12-12T17:23:09.695687-05:00"
+    },
+    {
+      "id": 335,
+      "from_node_id": 395,
+      "to_node_id": 396,
+      "from_change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
+      "to_change_id": "83188b1f-c198-4226-8dce-a6b7fc480912",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Reviewing node 322",
+      "created_at": "2025-12-12T17:23:15.308833-05:00"
+    },
+    {
+      "id": 336,
+      "from_node_id": 395,
+      "to_node_id": 397,
+      "from_change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
+      "to_change_id": "11a376a2-514b-4e7d-8fa2-c472154c9a68",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Reviewing nodes 329-332",
+      "created_at": "2025-12-12T17:23:20.982400-05:00"
+    },
+    {
+      "id": 337,
+      "from_node_id": 395,
+      "to_node_id": 398,
+      "from_change_id": "085c9b02-c2a9-48ec-9e10-179df2579d92",
+      "to_change_id": "e586a985-a78e-4065-9070-e8b1c3ea3759",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Reviewing node 326",
+      "created_at": "2025-12-12T17:23:26.897897-05:00"
+    },
+    {
+      "id": 338,
+      "from_node_id": 394,
+      "to_node_id": 399,
+      "from_change_id": "5aa8b839-d8fe-47fd-87e5-1a6ed7975409",
+      "to_change_id": "cf6549bb-b261-4de5-b95c-84e97db3b1b1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Determining strategy",
+      "created_at": "2025-12-12T17:23:32.567188-05:00"
+    },
+    {
+      "id": 339,
+      "from_node_id": 399,
+      "to_node_id": 400,
+      "from_change_id": "cf6549bb-b261-4de5-b95c-84e97db3b1b1",
+      "to_change_id": "40a09bfb-78d9-4690-8047-257868abc03a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Automated generation",
+      "created_at": "2025-12-12T17:23:38.294849-05:00"
+    },
+    {
+      "id": 340,
+      "from_node_id": 399,
+      "to_node_id": 401,
+      "from_change_id": "cf6549bb-b261-4de5-b95c-84e97db3b1b1",
+      "to_change_id": "6149107d-9724-4500-9393-648e75949978",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Alternative automation",
+      "created_at": "2025-12-12T17:23:45.386655-05:00"
+    },
+    {
+      "id": 341,
+      "from_node_id": 399,
+      "to_node_id": 402,
+      "from_change_id": "cf6549bb-b261-4de5-b95c-84e97db3b1b1",
+      "to_change_id": "856ed45b-acfd-47f2-9cb0-a914e74238aa",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Checking viability",
+      "created_at": "2025-12-12T17:23:51.351529-05:00"
+    },
+    {
+      "id": 342,
+      "from_node_id": 399,
+      "to_node_id": 403,
+      "from_change_id": "cf6549bb-b261-4de5-b95c-84e97db3b1b1",
+      "to_change_id": "b707942d-4166-42be-a48c-4c08177f8201",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Starting work",
+      "created_at": "2025-12-12T17:23:59.950172-05:00"
+    },
+    {
+      "id": 343,
+      "from_node_id": 402,
+      "to_node_id": 404,
+      "from_change_id": "856ed45b-acfd-47f2-9cb0-a914e74238aa",
+      "to_change_id": "6d134e58-98ea-4acd-b679-46cb687a93e2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing first step",
+      "created_at": "2025-12-12T17:24:18.019746-05:00"
+    },
+    {
+      "id": 344,
+      "from_node_id": 404,
+      "to_node_id": 405,
+      "from_change_id": "6d134e58-98ea-4acd-b679-46cb687a93e2",
+      "to_change_id": "6194e082-d17d-47b6-96ac-b49917caa068",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Next step",
+      "created_at": "2025-12-12T17:24:23.505075-05:00"
+    },
+    {
+      "id": 345,
+      "from_node_id": 405,
+      "to_node_id": 406,
+      "from_change_id": "6194e082-d17d-47b6-96ac-b49917caa068",
+      "to_change_id": "4e0a6831-15ba-4f82-aeb2-27763be59203",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Integration test approach",
+      "created_at": "2025-12-12T17:24:29.037925-05:00"
+    },
+    {
+      "id": 346,
+      "from_node_id": 405,
+      "to_node_id": 407,
+      "from_change_id": "6194e082-d17d-47b6-96ac-b49917caa068",
+      "to_change_id": "a00f9abd-3a19-4d09-9e09-df4b8f7a3de0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Scattered approach",
+      "created_at": "2025-12-12T17:24:35.058866-05:00"
+    },
+    {
+      "id": 347,
+      "from_node_id": 405,
+      "to_node_id": 408,
+      "from_change_id": "6194e082-d17d-47b6-96ac-b49917caa068",
+      "to_change_id": "e5969728-1a42-4971-b3f1-8884010f484f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Selected approach",
+      "created_at": "2025-12-12T17:24:40.657951-05:00"
+    },
+    {
+      "id": 348,
+      "from_node_id": 408,
+      "to_node_id": 409,
+      "from_change_id": "e5969728-1a42-4971-b3f1-8884010f484f",
+      "to_change_id": "289dd1ff-b712-4608-8c9a-6e3fac5c9374",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Test compilation failure",
+      "created_at": "2025-12-12T17:25:48.238177-05:00"
+    },
+    {
+      "id": 349,
+      "from_node_id": 409,
+      "to_node_id": 410,
+      "from_change_id": "289dd1ff-b712-4608-8c9a-6e3fac5c9374",
+      "to_change_id": "15a94eff-1085-4083-9020-ff57854e9eab",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing compiler errors",
+      "created_at": "2025-12-12T17:25:54.102354-05:00"
+    },
+    {
+      "id": 350,
+      "from_node_id": 408,
+      "to_node_id": 411,
+      "from_change_id": "e5969728-1a42-4971-b3f1-8884010f484f",
+      "to_change_id": "8859e96e-a102-4f8a-96b9-011ab5acda5b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Committed work",
+      "created_at": "2025-12-12T17:27:08.533253-05:00"
+    },
+    {
+      "id": 351,
+      "from_node_id": 411,
+      "to_node_id": 412,
+      "from_change_id": "8859e96e-a102-4f8a-96b9-011ab5acda5b",
+      "to_change_id": "86c7f463-288f-4a5e-bf78-181424a2b816",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Moving to implementation",
+      "created_at": "2025-12-12T17:27:20.356362-05:00"
+    },
+    {
+      "id": 352,
+      "from_node_id": 412,
+      "to_node_id": 413,
+      "from_change_id": "86c7f463-288f-4a5e-bf78-181424a2b816",
+      "to_change_id": "914be24b-4fba-44e0-b825-8bdbad32801f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Preparation",
+      "created_at": "2025-12-12T17:27:42.924069-05:00"
+    },
+    {
+      "id": 353,
+      "from_node_id": 412,
+      "to_node_id": 414,
+      "from_change_id": "86c7f463-288f-4a5e-bf78-181424a2b816",
+      "to_change_id": "8fb37d69-1fdf-4b2b-a9cc-a0c8155e429d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Dependency config",
+      "created_at": "2025-12-12T17:27:55.270390-05:00"
+    },
+    {
+      "id": 354,
+      "from_node_id": 412,
+      "to_node_id": 415,
+      "from_change_id": "86c7f463-288f-4a5e-bf78-181424a2b816",
+      "to_change_id": "9f5f3f95-1a7b-4329-8bfb-912720e3b8e1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing TS derivation",
+      "created_at": "2025-12-12T17:28:01.482234-05:00"
+    },
+    {
+      "id": 355,
+      "from_node_id": 415,
+      "to_node_id": 416,
+      "from_change_id": "9f5f3f95-1a7b-4329-8bfb-912720e3b8e1",
+      "to_change_id": "9fb15b16-9fef-45e7-a8b0-d096edeb9680",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Completed derivation",
+      "created_at": "2025-12-12T17:28:30.231833-05:00"
+    },
+    {
+      "id": 356,
+      "from_node_id": 416,
+      "to_node_id": 417,
+      "from_change_id": "9fb15b16-9fef-45e7-a8b0-d096edeb9680",
+      "to_change_id": "96fe1db9-f187-4c45-870d-55264903edd0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Verification",
+      "created_at": "2025-12-12T17:28:36.008673-05:00"
+    },
+    {
+      "id": 357,
+      "from_node_id": 417,
+      "to_node_id": 418,
+      "from_change_id": "96fe1db9-f187-4c45-870d-55264903edd0",
+      "to_change_id": "8cffea99-d173-440b-81ed-07dbdbe5ffb4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Updating test case",
+      "created_at": "2025-12-12T17:28:43.269892-05:00"
+    },
+    {
+      "id": 358,
+      "from_node_id": 418,
+      "to_node_id": 419,
+      "from_change_id": "8cffea99-d173-440b-81ed-07dbdbe5ffb4",
+      "to_change_id": "c7711fbb-34d0-4414-872f-2b702b792c37",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Test failure analysis",
+      "created_at": "2025-12-12T17:29:14.827477-05:00"
+    },
+    {
+      "id": 359,
+      "from_node_id": 419,
+      "to_node_id": 420,
+      "from_change_id": "c7711fbb-34d0-4414-872f-2b702b792c37",
+      "to_change_id": "6e260747-2458-4f0e-9235-5c0f4da5a7fc",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing imports",
+      "created_at": "2025-12-12T17:29:21.294433-05:00"
+    },
+    {
+      "id": 360,
+      "from_node_id": 420,
+      "to_node_id": 421,
+      "from_change_id": "6e260747-2458-4f0e-9235-5c0f4da5a7fc",
+      "to_change_id": "50043d1f-0dab-43e3-b415-e97bb652c70a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Compiler warning",
+      "created_at": "2025-12-12T17:29:38.133921-05:00"
+    },
+    {
+      "id": 361,
+      "from_node_id": 421,
+      "to_node_id": 422,
+      "from_change_id": "50043d1f-0dab-43e3-b415-e97bb652c70a",
+      "to_change_id": "e042e0a7-d208-424f-9845-103116d5c088",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing unused imports by using them",
+      "created_at": "2025-12-12T17:29:44.335728-05:00"
+    },
+    {
+      "id": 362,
+      "from_node_id": 422,
+      "to_node_id": 423,
+      "from_change_id": "e042e0a7-d208-424f-9845-103116d5c088",
+      "to_change_id": "7c03c0c6-b32f-41b1-ac6d-a95ab7ed8457",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Success",
+      "created_at": "2025-12-12T17:30:00.102221-05:00"
+    },
+    {
+      "id": 363,
+      "from_node_id": 423,
+      "to_node_id": 424,
+      "from_change_id": "7c03c0c6-b32f-41b1-ac6d-a95ab7ed8457",
+      "to_change_id": "d126df3c-51b0-44ec-ac78-9cf61e7969f9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Saving progress",
+      "created_at": "2025-12-12T17:30:07.165805-05:00"
+    },
+    {
+      "id": 364,
+      "from_node_id": 424,
+      "to_node_id": 425,
+      "from_change_id": "d126df3c-51b0-44ec-ac78-9cf61e7969f9",
+      "to_change_id": "6301aab0-1295-4332-8f59-275ac1868c72",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Next phase",
+      "created_at": "2025-12-12T17:30:12.843453-05:00"
+    },
+    {
+      "id": 365,
+      "from_node_id": 425,
+      "to_node_id": 426,
+      "from_change_id": "6301aab0-1295-4332-8f59-275ac1868c72",
+      "to_change_id": "045c8c6d-cc68-49c9-856f-20cbde2029e1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Clean separation",
+      "created_at": "2025-12-12T17:30:18.707652-05:00"
+    },
+    {
+      "id": 366,
+      "from_node_id": 425,
+      "to_node_id": 427,
+      "from_change_id": "6301aab0-1295-4332-8f59-275ac1868c72",
+      "to_change_id": "4bf908ab-f859-40d4-860b-41033d057a74",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Integrated approach",
+      "created_at": "2025-12-12T17:30:26.005333-05:00"
+    },
+    {
+      "id": 367,
+      "from_node_id": 425,
+      "to_node_id": 428,
+      "from_change_id": "6301aab0-1295-4332-8f59-275ac1868c72",
+      "to_change_id": "61cc02a6-91e4-4aa2-8e7d-eedb91b8710d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Selected approach",
+      "created_at": "2025-12-12T17:30:31.944247-05:00"
+    },
+    {
+      "id": 368,
+      "from_node_id": 428,
+      "to_node_id": 429,
+      "from_change_id": "61cc02a6-91e4-4aa2-8e7d-eedb91b8710d",
+      "to_change_id": "9f41846e-bbfe-453d-89eb-c8bcb33908fd",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Configuration requirement",
+      "created_at": "2025-12-12T17:30:49.871427-05:00"
+    },
+    {
+      "id": 369,
+      "from_node_id": 429,
+      "to_node_id": 430,
+      "from_change_id": "9f41846e-bbfe-453d-89eb-c8bcb33908fd",
+      "to_change_id": "5a70f3c3-d5c2-47cf-bd5c-9c3cad5dcb0c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Configuring build",
+      "created_at": "2025-12-12T17:30:56.082515-05:00"
+    },
+    {
+      "id": 370,
+      "from_node_id": 430,
+      "to_node_id": 431,
+      "from_change_id": "5a70f3c3-d5c2-47cf-bd5c-9c3cad5dcb0c",
+      "to_change_id": "64a75b72-b1e2-4887-9926-21147e0962f5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Build failure",
+      "created_at": "2025-12-12T17:31:20.109182-05:00"
+    },
+    {
+      "id": 371,
+      "from_node_id": 431,
+      "to_node_id": 432,
+      "from_change_id": "64a75b72-b1e2-4887-9926-21147e0962f5",
+      "to_change_id": "417982c9-8cf4-4d62-9356-ab23962d71b3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing compiler error",
+      "created_at": "2025-12-12T17:31:27.015225-05:00"
+    },
+    {
+      "id": 372,
+      "from_node_id": 432,
+      "to_node_id": 433,
+      "from_change_id": "417982c9-8cf4-4d62-9356-ab23962d71b3",
+      "to_change_id": "47d5e10c-15d0-4443-bbb0-6a6b0bcc8971",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Success",
+      "created_at": "2025-12-12T17:31:45.025895-05:00"
+    },
+    {
+      "id": 373,
+      "from_node_id": 433,
+      "to_node_id": 434,
+      "from_change_id": "47d5e10c-15d0-4443-bbb0-6a6b0bcc8971",
+      "to_change_id": "8a22cbd4-7710-4337-8833-9704205fd95d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Ensuring consistency",
+      "created_at": "2025-12-12T17:31:55.078689-05:00"
+    },
+    {
+      "id": 374,
+      "from_node_id": 434,
+      "to_node_id": 435,
+      "from_change_id": "8a22cbd4-7710-4337-8833-9704205fd95d",
+      "to_change_id": "0eed01f1-587b-4c0f-a283-b9919e1f84b1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Updating tooling",
+      "created_at": "2025-12-12T17:32:01.571325-05:00"
+    },
+    {
+      "id": 375,
+      "from_node_id": 435,
+      "to_node_id": 436,
+      "from_change_id": "0eed01f1-587b-4c0f-a283-b9919e1f84b1",
+      "to_change_id": "f7c80d60-c2a8-46e1-8f26-285a68a9277f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Automation complete",
+      "created_at": "2025-12-12T17:32:20.757124-05:00"
+    },
+    {
+      "id": 376,
+      "from_node_id": 436,
+      "to_node_id": 437,
+      "from_change_id": "f7c80d60-c2a8-46e1-8f26-285a68a9277f",
+      "to_change_id": "f942f73d-8835-4748-a145-423fc569f4bb",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Refactoring",
+      "created_at": "2025-12-12T17:32:27.636590-05:00"
+    },
+    {
+      "id": 377,
+      "from_node_id": 437,
+      "to_node_id": 438,
+      "from_change_id": "f942f73d-8835-4748-a145-423fc569f4bb",
+      "to_change_id": "278ffc0b-6110-4007-98b4-080d6ea60d59",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Consolidating definitions",
+      "created_at": "2025-12-12T17:32:34.581266-05:00"
+    },
+    {
+      "id": 378,
+      "from_node_id": 438,
+      "to_node_id": 439,
+      "from_change_id": "278ffc0b-6110-4007-98b4-080d6ea60d59",
+      "to_change_id": "c76e56ca-09ca-4f34-b1d5-8fbb2d3da660",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Type safety check",
+      "created_at": "2025-12-12T17:32:51.941628-05:00"
+    },
+    {
+      "id": 379,
+      "from_node_id": 439,
+      "to_node_id": 440,
+      "from_change_id": "c76e56ca-09ca-4f34-b1d5-8fbb2d3da660",
+      "to_change_id": "e783515c-090f-43a6-bca6-9f542c3830ee",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing type mismatches",
+      "created_at": "2025-12-12T17:32:58.753926-05:00"
+    },
+    {
+      "id": 380,
+      "from_node_id": 440,
+      "to_node_id": 441,
+      "from_change_id": "e783515c-090f-43a6-bca6-9f542c3830ee",
+      "to_change_id": "5fc326a6-adc0-4d43-ad63-a1fcf04eb4f0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Compiler check",
+      "created_at": "2025-12-12T17:38:18.307288-05:00"
+    },
+    {
+      "id": 381,
+      "from_node_id": 441,
+      "to_node_id": 442,
+      "from_change_id": "5fc326a6-adc0-4d43-ad63-a1fcf04eb4f0",
+      "to_change_id": "1640683a-8168-4929-99a9-ac8ded733f50",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing compiler errors",
+      "created_at": "2025-12-12T17:38:24.918121-05:00"
+    },
+    {
+      "id": 382,
+      "from_node_id": 442,
+      "to_node_id": 443,
+      "from_change_id": "1640683a-8168-4929-99a9-ac8ded733f50",
+      "to_change_id": "27f1b7ef-c1ae-489a-aa8f-1d1a1b341de4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Success",
+      "created_at": "2025-12-12T17:38:46.573644-05:00"
+    },
+    {
+      "id": 383,
+      "from_node_id": 443,
+      "to_node_id": 444,
+      "from_change_id": "27f1b7ef-c1ae-489a-aa8f-1d1a1b341de4",
+      "to_change_id": "fb0df161-542d-410f-a926-b246d36ba502",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Wrapping up",
+      "created_at": "2025-12-12T17:38:53.659620-05:00"
+    },
+    {
+      "id": 384,
+      "from_node_id": 444,
+      "to_node_id": 445,
+      "from_change_id": "fb0df161-542d-410f-a926-b246d36ba502",
+      "to_change_id": "946d30d7-a844-4e73-94b0-00ee687be7e5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Validation caught issue",
+      "created_at": "2025-12-12T17:39:11.049158-05:00"
+    },
+    {
+      "id": 385,
+      "from_node_id": 445,
+      "to_node_id": 446,
+      "from_change_id": "946d30d7-a844-4e73-94b0-00ee687be7e5",
+      "to_change_id": "4aabf9dc-b3ba-4abb-80bb-5e7bcda2b1f1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing generator",
+      "created_at": "2025-12-12T17:39:18.360747-05:00"
+    },
+    {
+      "id": 386,
+      "from_node_id": 446,
+      "to_node_id": 447,
+      "from_change_id": "4aabf9dc-b3ba-4abb-80bb-5e7bcda2b1f1",
+      "to_change_id": "c290ecbc-2bec-4fb9-bde4-b309879264d9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Investigating",
+      "created_at": "2025-12-12T17:39:28.546516-05:00"
+    },
+    {
+      "id": 387,
+      "from_node_id": 447,
+      "to_node_id": 448,
+      "from_change_id": "c290ecbc-2bec-4fb9-bde4-b309879264d9",
+      "to_change_id": "7ad742cb-c055-45ac-ac9d-2044cc5713f4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Root cause analysis",
+      "created_at": "2025-12-12T17:39:42.946395-05:00"
+    },
+    {
+      "id": 388,
+      "from_node_id": 448,
+      "to_node_id": 449,
+      "from_change_id": "7ad742cb-c055-45ac-ac9d-2044cc5713f4",
+      "to_change_id": "9cf69e95-7465-4ab5-abc7-8a45a76b32e9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Correcting validation target",
+      "created_at": "2025-12-12T17:39:49.902786-05:00"
+    },
+    {
+      "id": 389,
+      "from_node_id": 449,
+      "to_node_id": 450,
+      "from_change_id": "9cf69e95-7465-4ab5-abc7-8a45a76b32e9",
+      "to_change_id": "ea6c0cfb-7d3a-43f1-adf6-2fb2add84679",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Testing fix",
+      "created_at": "2025-12-12T17:40:05.391998-05:00"
+    },
+    {
+      "id": 390,
+      "from_node_id": 450,
+      "to_node_id": 451,
+      "from_change_id": "ea6c0cfb-7d3a-43f1-adf6-2fb2add84679",
+      "to_change_id": "b0f1ca19-2616-42c5-b457-0ca0fbccfd4e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Investigation",
+      "created_at": "2025-12-12T17:40:16.041984-05:00"
+    },
+    {
+      "id": 391,
+      "from_node_id": 451,
+      "to_node_id": 452,
+      "from_change_id": "b0f1ca19-2616-42c5-b457-0ca0fbccfd4e",
+      "to_change_id": "f23a3761-796c-4410-b86f-24625e7ef5ed",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Checking source",
+      "created_at": "2025-12-12T17:40:22.905544-05:00"
+    },
+    {
+      "id": 392,
+      "from_node_id": 446,
+      "to_node_id": 453,
+      "from_change_id": "4aabf9dc-b3ba-4abb-80bb-5e7bcda2b1f1",
+      "to_change_id": "4e79a233-1070-438d-a8bc-512c25630ed1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Investigating failure",
+      "created_at": "2025-12-12T17:40:33.903914-05:00"
+    },
+    {
+      "id": 393,
+      "from_node_id": 453,
+      "to_node_id": 454,
+      "from_change_id": "4e79a233-1070-438d-a8bc-512c25630ed1",
+      "to_change_id": "7defaf80-8fc5-45b2-855d-3b59b9876791",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Confusion",
+      "created_at": "2025-12-12T17:40:46.944388-05:00"
+    },
+    {
+      "id": 394,
+      "from_node_id": 452,
+      "to_node_id": 455,
+      "from_change_id": "f23a3761-796c-4410-b86f-24625e7ef5ed",
+      "to_change_id": "2c861869-020a-4095-ba15-e36f17345bbe",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Addressing the validation failure",
+      "created_at": "2025-12-12T17:42:28.252329-05:00"
+    },
+    {
+      "id": 395,
+      "from_node_id": 456,
+      "to_node_id": 457,
+      "from_change_id": "213fab0d-7281-4da7-a851-54d35f3b88c7",
+      "to_change_id": "03f538fb-a631-439a-a13d-346ce16e2b3b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fix verified",
+      "created_at": "2025-12-12T17:43:17.349042-05:00"
+    },
+    {
+      "id": 396,
+      "from_node_id": 457,
+      "to_node_id": 458,
+      "from_change_id": "03f538fb-a631-439a-a13d-346ce16e2b3b",
+      "to_change_id": "6158471a-1de7-49d1-92d8-bf3498ae31dc",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Validation passed but demo rebuild required",
+      "created_at": "2025-12-12T17:43:47.452901-05:00"
+    },
+    {
+      "id": 397,
+      "from_node_id": 458,
+      "to_node_id": 459,
+      "from_change_id": "6158471a-1de7-49d1-92d8-bf3498ae31dc",
+      "to_change_id": "40ac9d9e-e6d8-412e-a391-371acf05a5cf",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing pre-commit error",
+      "created_at": "2025-12-12T17:43:50.902081-05:00"
+    },
+    {
+      "id": 398,
+      "from_node_id": 458,
+      "to_node_id": 460,
+      "from_change_id": "6158471a-1de7-49d1-92d8-bf3498ae31dc",
+      "to_change_id": "9074885f-b165-4597-a881-ed460cc7e20e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Explaining the hook failure",
+      "created_at": "2025-12-12T17:44:28.854751-05:00"
+    },
+    {
+      "id": 399,
+      "from_node_id": 460,
+      "to_node_id": 461,
+      "from_change_id": "9074885f-b165-4597-a881-ed460cc7e20e",
+      "to_change_id": "992ceb9b-1494-4de6-ba9d-4495511c2607",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Resolving blocked commit",
+      "created_at": "2025-12-12T17:44:31.936436-05:00"
+    },
+    {
+      "id": 400,
+      "from_node_id": 461,
+      "to_node_id": 462,
+      "from_change_id": "992ceb9b-1494-4de6-ba9d-4495511c2607",
+      "to_change_id": "2b28add5-6d18-4d10-94cf-dafd31e0d103",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Commit completed",
+      "created_at": "2025-12-12T17:44:38.423244-05:00"
+    },
+    {
+      "id": 401,
+      "from_node_id": 463,
+      "to_node_id": 464,
+      "from_change_id": "4a82d2d6-6cf6-4c7b-9a3f-b97d6b0988d5",
+      "to_change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Separation of concerns",
+      "created_at": "2025-12-12T17:57:23.142943-05:00"
+    },
+    {
+      "id": 402,
+      "from_node_id": 464,
+      "to_node_id": 465,
+      "from_change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "to_change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Preparing to switch branches",
+      "created_at": "2025-12-12T17:57:26.582093-05:00"
+    },
+    {
+      "id": 403,
+      "from_node_id": 464,
+      "to_node_id": 466,
+      "from_change_id": "4851be78-d73e-47b5-b4c3-42c71c9e5faf",
+      "to_change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation updates can merge with type fix",
+      "created_at": "2025-12-12T17:57:42.400395-05:00"
+    },
+    {
+      "id": 404,
+      "from_node_id": 466,
+      "to_node_id": 467,
+      "from_change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+      "to_change_id": "33f7afc8-17ac-4cdf-8703-142d555aa56b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation included",
+      "created_at": "2025-12-12T17:58:00.754881-05:00"
+    },
+    {
+      "id": 405,
+      "from_node_id": 465,
+      "to_node_id": 468,
+      "from_change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+      "to_change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Stash restored",
+      "created_at": "2025-12-12T17:58:47.267843-05:00"
+    },
+    {
+      "id": 406,
+      "from_node_id": 468,
+      "to_node_id": 469,
+      "from_change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+      "to_change_id": "a9eb338c-80c4-4cae-bbd7-7a121c24a2c5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Feature complete",
+      "created_at": "2025-12-12T17:59:14.283797-05:00"
+    },
+    {
+      "id": 407,
+      "from_node_id": 469,
+      "to_node_id": 470,
+      "from_change_id": "a9eb338c-80c4-4cae-bbd7-7a121c24a2c5",
+      "to_change_id": "a0a09167-e452-44ee-ae3b-47eef79718d2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release prep",
+      "created_at": "2025-12-12T17:59:24.768660-05:00"
+    },
+    {
+      "id": 408,
+      "from_node_id": 470,
+      "to_node_id": 471,
+      "from_change_id": "a0a09167-e452-44ee-ae3b-47eef79718d2",
+      "to_change_id": "832339c2-74ea-46d4-9bf4-4cd45f49dbd3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fixing release build",
+      "created_at": "2025-12-12T18:00:09.763875-05:00"
+    },
+    {
+      "id": 409,
+      "from_node_id": 471,
+      "to_node_id": 472,
+      "from_change_id": "832339c2-74ea-46d4-9bf4-4cd45f49dbd3",
+      "to_change_id": "3cd5a50c-fd59-4213-9cda-4cf6d1050208",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release complete",
+      "created_at": "2025-12-12T18:00:44.342607-05:00"
+    },
+    {
+      "id": 410,
+      "from_node_id": 473,
+      "to_node_id": 474,
+      "from_change_id": "7b4b7ffa-4ac4-4740-944c-d9cc5e7c187f",
+      "to_change_id": "15e353df-8c8b-4be0-8640-b8f9fbdb122b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-12T19:01:28.189449-05:00"
     }
   ]
 }

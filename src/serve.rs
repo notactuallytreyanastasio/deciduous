@@ -2,8 +2,9 @@
 //!
 //! `deciduous serve` → starts server, opens browser, shows graph
 
-use crate::db::{Database, DecisionGraph};
+use crate::db::{Database, DecisionGraph, RoadmapItem, RoadmapSummary};
 use serde::Serialize;
+use std::collections::HashMap;
 use tiny_http::{Header, Method, Request, Response, Server};
 
 #[derive(Serialize)]
@@ -79,6 +80,16 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             request.respond(response)
         }
 
+        // API: Get roadmap items
+        (&Method::Get, "/api/roadmap") => {
+            let roadmap = get_roadmap_data();
+            let json = serde_json::to_string(&ApiResponse::success(roadmap))?;
+
+            let response = Response::from_string(json)
+                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            request.respond(response)
+        }
+
         // 404
         _ => {
             let response = Response::from_string("Not found").with_status_code(404);
@@ -98,6 +109,49 @@ fn get_command_log() -> Vec<crate::db::CommandLog> {
     match Database::open() {
         Ok(db) => db.get_recent_commands(100).unwrap_or_default(),
         Err(_) => vec![],
+    }
+}
+
+#[derive(Serialize)]
+struct RoadmapData {
+    items: Vec<RoadmapItem>,
+    sections: HashMap<String, Vec<RoadmapItem>>,
+    summary: RoadmapSummary,
+}
+
+fn get_roadmap_data() -> RoadmapData {
+    match Database::open() {
+        Ok(db) => {
+            let items = db.get_all_roadmap_items().unwrap_or_default();
+            let summary = db.get_roadmap_summary().unwrap_or(RoadmapSummary {
+                total_items: 0,
+                completed_items: 0,
+                items_with_issues: 0,
+            });
+
+            // Group items by section
+            let mut sections: HashMap<String, Vec<RoadmapItem>> = HashMap::new();
+            for item in &items {
+                sections.entry(item.section.clone())
+                    .or_default()
+                    .push(item.clone());
+            }
+
+            RoadmapData {
+                items,
+                sections,
+                summary,
+            }
+        }
+        Err(_) => RoadmapData {
+            items: vec![],
+            sections: HashMap::new(),
+            summary: RoadmapSummary {
+                total_items: 0,
+                completed_items: 0,
+                items_with_issues: 0,
+            },
+        },
     }
 }
 

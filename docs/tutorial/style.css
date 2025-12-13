@@ -7,27 +7,29 @@
     padding: 0;
 }
 
-/* AI Generated Warning Banner */
+/* Notice Banner (subtle, matches main page style) */
 .ai-warning-banner {
-    background: linear-gradient(135deg, #ff6b6b 0%, #ffa500 100%);
-    color: white;
-    padding: 12px 20px;
+    background: #f6f8fa;
+    color: #57606a;
+    padding: 10px 20px;
     text-align: center;
-    font-weight: 600;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     z-index: 1000;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    border-bottom: 1px solid #d0d7de;
 }
 .ai-warning-banner a {
-    color: white;
+    color: #0969da;
+    text-decoration: none;
+}
+.ai-warning-banner a:hover {
     text-decoration: underline;
 }
 body {
-    padding-top: 48px; /* Make room for fixed banner */
+    padding-top: 40px; /* Make room for fixed banner */
 }
 
 :root {

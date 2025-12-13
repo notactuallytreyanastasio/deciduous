@@ -43,6 +43,7 @@ pub mod db;
 pub mod diff;
 pub mod export;
 pub mod init;
+pub mod roadmap;
 pub mod schema;
 pub mod serve;
 pub mod tui;
@@ -50,11 +51,12 @@ pub mod tui;
 pub use config::Config;
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
-    DecisionContext, DecisionSession,
+    DecisionContext, DecisionSession, RoadmapItem, RoadmapSummary,
     CURRENT_SCHEMA, get_current_git_branch, get_current_git_commit, build_metadata_json,
 };
 pub use diff::{GraphPatch, PatchNode, PatchEdge, ApplyResult};
 pub use export::{graph_to_dot, generate_pr_writeup, filter_graph_from_roots, filter_graph_by_ids, parse_node_range, DotConfig, WriteupConfig};
+pub use roadmap::{parse_roadmap, parse_roadmap_content, import_roadmap_to_db, sync_with_github, export_roadmap_json, get_github_repo, ParsedRoadmap, SyncResult, GitHubIssue};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]
