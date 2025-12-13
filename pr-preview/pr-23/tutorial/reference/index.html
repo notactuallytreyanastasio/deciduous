@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plumbing Reference - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Plumbing Reference</h1>
+            <p class="lead">Complete reference for all deciduous commands, node types, and edge types.</p>
+
+            <h2>Quick Reference Card</h2>
+
+            <pre><span class="comment"># Initialize</span>
+deciduous init
+
+<span class="comment"># Add nodes</span>
+deciduous add goal "Title" -c 90 -p "User prompt"
+deciduous add decision "Title" -c 75
+deciduous add option "Title" -c 70
+deciduous add action "Title" -c 85 --commit HEAD
+deciduous add outcome "Title" -c 95
+deciduous add observation "Title" -c 80
+
+<span class="comment"># Connect nodes</span>
+deciduous link FROM TO -r "Reason"
+deciduous link FROM TO --edge-type chosen -r "Why chosen"
+
+<span class="comment"># View graph</span>
+deciduous nodes                    <span class="comment"># List nodes</span>
+deciduous nodes -b feature/auth    <span class="comment"># Filter by branch</span>
+deciduous edges                    <span class="comment"># List edges</span>
+deciduous tui                      <span class="comment"># Terminal UI</span>
+deciduous serve                    <span class="comment"># Web viewer</span>
+
+<span class="comment"># Export</span>
+deciduous sync                     <span class="comment"># JSON for web</span>
+deciduous dot --png                <span class="comment"># PNG visualization</span>
+deciduous writeup -t "Title"       <span class="comment"># PR markdown</span>
+
+<span class="comment"># Multi-user sync</span>
+deciduous diff export -o patch.json --branch feature-x
+deciduous diff apply .deciduous/patches/*.json
+deciduous diff status</pre>
+
+            <h2>All Commands</h2>
+
+            <h3><code>deciduous init</code></h3>
+            <p>Initialize deciduous in the current directory.</p>
+            <p>Creates <code>.deciduous/</code>, <code>.claude/commands/</code>, <code>docs/</code>, and <code>CLAUDE.md</code>.</p>
+
+            <h3><code>deciduous update</code></h3>
+            <p>Update tooling files to latest version (overwrites slash commands, web viewer).</p>
+
+            <h3><code>deciduous add</code></h3>
+            <pre>deciduous add &lt;NODE_TYPE&gt; &lt;TITLE&gt; [OPTIONS]
+
+Arguments:
+  NODE_TYPE   goal | decision | option | action | outcome | observation
+  TITLE       Title of the node
+
+Options:
+  -d, --description   Optional description
+  -c, --confidence    Confidence level (0-100)
+  -p, --prompt        User prompt that triggered this
+  -f, --files         Associated files (comma-separated)
+  -b, --branch        Git branch (auto-detected)
+  --no-branch         Skip branch auto-detection
+  --commit            Link to git commit (use HEAD for current)</pre>
+
+            <h3><code>deciduous link</code></h3>
+            <pre>deciduous link &lt;FROM&gt; &lt;TO&gt; [OPTIONS]
+
+Arguments:
+  FROM   Source node ID
+  TO     Target node ID
+
+Options:
+  -r, --rationale     Rationale for connection
+  -t, --edge-type     Edge type (default: leads_to)</pre>
+
+            <h3><code>deciduous status</code></h3>
+            <pre>deciduous status &lt;ID&gt; &lt;STATUS&gt;
+
+Arguments:
+  ID       Node ID
+  STATUS   active | completed | abandoned</pre>
+
+            <h3><code>deciduous nodes</code></h3>
+            <pre>deciduous nodes [OPTIONS]
+
+Options:
+  -b, --branch        Filter by git branch
+  -t, --node-type     Filter by node type</pre>
+
+            <h3><code>deciduous edges</code></h3>
+            <p>List all edges with their types and rationales.</p>
+
+            <h3><code>deciduous graph</code></h3>
+            <p>Export full graph as JSON to stdout.</p>
+
+            <h3><code>deciduous serve</code></h3>
+            <pre>deciduous serve [OPTIONS]
+
+Options:
+  -p, --port    Port number (default: 3000)</pre>
+
+            <h3><code>deciduous tui</code></h3>
+            <pre>deciduous tui [OPTIONS]
+
+Options:
+  -d, --db    Database path (default: auto-discover)</pre>
+
+            <h3><code>deciduous sync</code></h3>
+            <p>Export graph to <code>docs/graph-data.json</code> for static hosting.</p>
+
+            <h3><code>deciduous backup</code></h3>
+            <p>Create a timestamped database backup in <code>.deciduous/backups/</code>.</p>
+
+            <h3><code>deciduous commands</code></h3>
+            <p>Show recent deciduous command log.</p>
+
+            <h3><code>deciduous dot</code></h3>
+            <pre>deciduous dot [OPTIONS]
+
+Options:
+  -o, --output     Output file (default: stdout)
+  -r, --roots      Root node IDs for BFS traversal
+  -n, --nodes      Specific nodes (e.g., "1-11" or "1,3,5")
+  -t, --title      Graph title
+  --rankdir        Direction: TB or LR
+  --png            Generate PNG (requires graphviz)
+  --auto           Auto-generate branch-specific filename</pre>
+
+            <h3><code>deciduous writeup</code></h3>
+            <pre>deciduous writeup [OPTIONS]
+
+Options:
+  -t, --title         PR title
+  -r, --roots         Root node IDs
+  -n, --nodes         Specific nodes
+  -o, --output        Output file (default: stdout)
+  --png               PNG file to embed
+  --auto              Auto-detect PNG from branch
+  --no-dot            Skip DOT graph section
+  --no-test-plan      Skip test plan section</pre>
+
+            <h3><code>deciduous diff export</code></h3>
+            <pre>deciduous diff export [OPTIONS]
+
+Options:
+  -o, --output    Output file (required)
+  -b, --branch    Filter by branch
+  -n, --nodes     Specific nodes
+  --author        Author name</pre>
+
+            <h3><code>deciduous diff apply</code></h3>
+            <pre>deciduous diff apply [OPTIONS] &lt;FILES...&gt;
+
+Options:
+  --dry-run    Preview without applying</pre>
+
+            <h3><code>deciduous diff status</code></h3>
+            <p>List available patches in <code>.deciduous/patches/</code>.</p>
+
+            <h3><code>deciduous migrate</code></h3>
+            <p>Add <code>change_id</code> columns for multi-user sync (run once when upgrading).</p>
+
+            <h2>Node Types</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Purpose</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="node-goal">goal</span></td>
+                        <td>High-level objective</td>
+                        <td>"Add user authentication"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-decision">decision</span></td>
+                        <td>Choice point</td>
+                        <td>"Choose auth method"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-option">option</span></td>
+                        <td>Approach considered</td>
+                        <td>"Use JWT tokens"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-action">action</span></td>
+                        <td>Implementation step</td>
+                        <td>"Adding JWT middleware"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-outcome">outcome</span></td>
+                        <td>Result</td>
+                        <td>"Auth working in prod"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-observation">observation</span></td>
+                        <td>Discovery or insight</td>
+                        <td>"Existing code uses sessions"</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Edge Types</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Meaning</th>
+                        <th>Usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>leads_to</code></td>
+                        <td>Natural progression</td>
+                        <td>Default for most connections</td>
+                    </tr>
+                    <tr>
+                        <td><code>chosen</code></td>
+                        <td>Selected option</td>
+                        <td>decision &rarr; action</td>
+                    </tr>
+                    <tr>
+                        <td><code>rejected</code></td>
+                        <td>Not selected</td>
+                        <td>decision &rarr; option (with reason)</td>
+                    </tr>
+                    <tr>
+                        <td><code>requires</code></td>
+                        <td>Dependency</td>
+                        <td>When one thing needs another first</td>
+                    </tr>
+                    <tr>
+                        <td><code>blocks</code></td>
+                        <td>Preventing progress</td>
+                        <td>When something is blocked</td>
+                    </tr>
+                    <tr>
+                        <td><code>enables</code></td>
+                        <td>Makes possible</td>
+                        <td>When one thing unlocks another</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Configuration</h2>
+
+            <p>Configuration lives in <code>.deciduous/config.toml</code>:</p>
+
+            <pre>[branch]
+<span class="comment"># Branches that are NOT considered "feature branches"</span>
+main_branches = ["main", "master", "develop"]
+
+<span class="comment"># Auto-detect git branch when creating nodes</span>
+auto_detect = true</pre>
+
+            <h2>Environment Variables</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Purpose</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>EDITOR</code></td>
+                        <td>Editor for TUI file opening</td>
+                        <td>vim</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>TUI Keyboard Shortcuts</h2>
+
+            <h3>Navigation</h3>
+            <table>
+                <tbody>
+                    <tr><td><kbd>j</kbd>/<kbd>k</kbd></td><td>Up/Down</td></tr>
+                    <tr><td><kbd>gg</kbd>/<kbd>G</kbd></td><td>Top/Bottom</td></tr>
+                    <tr><td><kbd>Ctrl+d</kbd>/<kbd>Ctrl+u</kbd></td><td>Page Down/Up</td></tr>
+                    <tr><td><kbd>Enter</kbd></td><td>Toggle detail</td></tr>
+                    <tr><td><kbd>q</kbd></td><td>Quit</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Filtering</h3>
+            <table>
+                <tbody>
+                    <tr><td><kbd>/</kbd></td><td>Search</td></tr>
+                    <tr><td><kbd>f</kbd></td><td>Filter type</td></tr>
+                    <tr><td><kbd>b</kbd></td><td>Filter branch</td></tr>
+                    <tr><td><kbd>B</kbd></td><td>Fuzzy branch search</td></tr>
+                    <tr><td><kbd>R</kbd></td><td>Toggle sort order</td></tr>
+                    <tr><td><kbd>Ctrl+c</kbd></td><td>Clear filters</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Files</h3>
+            <table>
+                <tbody>
+                    <tr><td><kbd>o</kbd></td><td>Open files in editor</td></tr>
+                    <tr><td><kbd>O</kbd></td><td>View commit details</td></tr>
+                    <tr><td><kbd>F</kbd></td><td>Toggle file browser</td></tr>
+                    <tr><td><kbd>p</kbd></td><td>Preview file</td></tr>
+                    <tr><td><kbd>d</kbd></td><td>Show diff</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Other</h3>
+            <table>
+                <tbody>
+                    <tr><td><kbd>s</kbd></td><td>Goal story</td></tr>
+                    <tr><td><kbd>r</kbd></td><td>Refresh</td></tr>
+                    <tr><td><kbd>?</kbd></td><td>Help</td></tr>
+                </tbody>
+            </table>
+
+            <div class="hero-box" style="margin-top: 40px;">
+                <p><strong>You've completed the tutorial!</strong></p>
+                <p>You now know how to use deciduous for persistent decision memory in AI-assisted development. Start logging decisions, and they'll survive context loss forever.</p>
+                <p style="margin-bottom: 0;"><a href="../../demo/">Browse the live graph</a> to see deciduous tracking its own development.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="../advanced/index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Advanced Topics</span>
+                </a>
+                <a href="../../" class="next">
+                    <span class="label">Back to</span>
+                    <span class="title">Deciduous Home</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

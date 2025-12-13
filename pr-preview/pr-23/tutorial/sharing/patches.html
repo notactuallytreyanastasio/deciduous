@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exporting Patches - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Sharing with Others</a>
+                <ul>
+                    <li><a href="multi-user.html">The Multi-User Problem</a></li>
+                    <li><a href="patches.html" class="active">Exporting Patches</a></li>
+                    <li><a href="pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Exporting and Applying Patches</h1>
+
+            <h2>Exporting a Patch</h2>
+
+            <p>Export decisions from your current branch:</p>
+
+            <pre><span class="cmd">$ deciduous diff export --branch feature/auth -o .deciduous/patches/alice-auth.json</span>
+<span class="output">Exported 12 nodes and 11 edges to .deciduous/patches/alice-auth.json</span></pre>
+
+            <h3>Export Options</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Option</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>-o, --output</code></td>
+                        <td>Output file path (required)</td>
+                    </tr>
+                    <tr>
+                        <td><code>-b, --branch</code></td>
+                        <td>Filter nodes by branch</td>
+                    </tr>
+                    <tr>
+                        <td><code>-n, --nodes</code></td>
+                        <td>Specific node IDs (e.g., "47-52" or "47,48,51")</td>
+                    </tr>
+                    <tr>
+                        <td><code>--author</code></td>
+                        <td>Author name for the patch</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Examples</h3>
+
+            <pre><span class="comment"># Export by branch</span>
+<span class="cmd">$ deciduous diff export --branch feature/auth -o .deciduous/patches/auth.json</span>
+
+<span class="comment"># Export specific nodes</span>
+<span class="cmd">$ deciduous diff export --nodes 47-52 -o .deciduous/patches/rate-limiting.json</span>
+
+<span class="comment"># Export with author</span>
+<span class="cmd">$ deciduous diff export --nodes 47-52 --author alice -o .deciduous/patches/alice-feature.json</span>
+
+<span class="comment"># Auto-name based on branch and user</span>
+<span class="cmd">$ deciduous diff export \
+    --branch $(git rev-parse --abbrev-ref HEAD) \
+    -o .deciduous/patches/$(whoami)-$(git rev-parse --abbrev-ref HEAD).json</span></pre>
+
+            <h2>Patch File Format</h2>
+
+            <p>Patches are JSON files:</p>
+
+            <pre>{
+  "version": "1.0",
+  "author": "alice",
+  "branch": "feature/auth",
+  "exported_at": "2024-01-15T10:30:00Z",
+  "nodes": [
+    {
+      "change_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "node_type": "goal",
+      "title": "Add user authentication",
+      "description": null,
+      "status": "active",
+      "confidence": 90,
+      "metadata_json": "{\"branch\":\"feature/auth\",\"prompt\":\"...\"}"
+    }
+  ],
+  "edges": [
+    {
+      "from_change_id": "a1b2c3d4-...",
+      "to_change_id": "e5f6g7h8-...",
+      "edge_type": "leads_to",
+      "rationale": "Need to decide approach"
+    }
+  ]
+}</pre>
+
+            <h2>Applying Patches</h2>
+
+            <p>Apply patches from teammates:</p>
+
+            <pre><span class="cmd">$ deciduous diff apply .deciduous/patches/bob-refactor.json</span>
+<span class="output">Applied 8 nodes (3 new, 5 existing)
+Applied 7 edges (4 new, 3 existing)</span></pre>
+
+            <h3>Apply Multiple Patches</h3>
+
+            <pre><span class="cmd">$ deciduous diff apply .deciduous/patches/*.json</span>
+<span class="output">Applied alice-auth.json: 12 nodes, 11 edges
+Applied bob-refactor.json: 8 nodes, 7 edges
+Applied carol-perf.json: 5 nodes, 4 edges</span></pre>
+
+            <h3>Dry Run (Preview)</h3>
+
+            <p>Preview what would happen without actually applying:</p>
+
+            <pre><span class="cmd">$ deciduous diff apply --dry-run .deciduous/patches/bob-refactor.json</span>
+<span class="output">Would apply:
+  - 8 nodes (3 new, 5 already exist)
+  - 7 edges (4 new, 3 already exist)
+No changes made (dry run)</span></pre>
+
+            <h2>Checking Available Patches</h2>
+
+            <pre><span class="cmd">$ deciduous diff status</span>
+<span class="output">Available patches in .deciduous/patches/:
+  alice-auth.json          12 nodes, exported 2024-01-15
+  bob-refactor.json        8 nodes, exported 2024-01-14
+  carol-perf.json          5 nodes, exported 2024-01-13</span></pre>
+
+            <h2>Where to Store Patches</h2>
+
+            <p>The convention is <code>.deciduous/patches/</code>:</p>
+
+            <pre>.deciduous/
+├── deciduous.db      # gitignored
+├── config.toml
+└── patches/          # committed to git
+    ├── alice-auth.json
+    ├── bob-refactor.json
+    └── carol-perf.json</pre>
+
+            <p>The <code>patches/</code> directory is tracked in git; the database is not.</p>
+
+            <div class="page-nav">
+                <a href="multi-user.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The Multi-User Problem</span>
+                </a>
+                <a href="pr-workflow.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">The PR Workflow</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

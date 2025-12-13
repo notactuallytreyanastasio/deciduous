@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Recovery - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Real-World Workflows</a>
+                <ul>
+                    <li><a href="claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="session-recovery.html" class="active">Session Recovery</a></li>
+                    <li><a href="pr-documentation.html">PR Documentation</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Session Recovery</h1>
+
+            <p>Context compaction is inevitable. Sessions end. But the decision graph survives.</p>
+
+            <h2>The Problem</h2>
+
+            <p>When you start a new Claude session&mdash;or when the context window compacts&mdash;Claude loses memory of previous work. Without deciduous, this means:</p>
+
+            <ul>
+                <li>No memory of what decisions were made</li>
+                <li>No knowledge of rejected alternatives</li>
+                <li>No understanding of <em>why</em> things were done a certain way</li>
+            </ul>
+
+            <p>With deciduous, Claude can query the graph and recover all of this.</p>
+
+            <h2>The /context Command</h2>
+
+            <p>At the start of a new session, the user (or Claude) runs <code>/context</code>:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session (New Session)</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; /context</span>
+
+Let me recover context from the decision graph...
+
+<span class="command">deciduous nodes --branch feature/rate-limiting</span>
+<span class="output">ID  Type      Title                              Status   Confidence
+─────────────────────────────────────────────────────────────────────
+47  goal      Add rate limiting to API           active   90
+48  decision  Choose rate limiting strategy      active   75
+49  option    Redis-based with sliding window    active   80
+50  option    In-memory with token bucket        active   70
+51  action    Implementing Redis rate limiter    active   85
+52  outcome   Rate limiting working              active   95</span>
+
+<span class="command">deciduous edges</span>
+<span class="output">From  To   Type       Rationale
+────────────────────────────────────────────────────────────────
+47    48   leads_to   Deciding implementation approach
+48    49   leads_to   Scales across instances, persistent
+48    50   leads_to   Simpler, but single-instance only
+48    51   chosen     Redis already in stack, needs horizontal scaling
+51    52   leads_to   Implementation verified with tests</span>
+
+<span class="command">git log --oneline -5</span>
+<span class="output">abc123 feat: add Redis-based rate limiting
+def456 fix: user validation edge case
+...</span>
+
+<strong>Context Recovered:</strong>
+
+• <strong>Current branch:</strong> feature/rate-limiting
+• <strong>Goal:</strong> Add rate limiting to the API
+• <strong>Decision made:</strong> Redis-based sliding window approach
+• <strong>Rationale:</strong> Redis already in use, needed to scale horizontally
+• <strong>Rejected:</strong> In-memory token bucket (single-instance only)
+• <strong>Status:</strong> Implementation complete (commit abc123)
+
+The rate limiting feature appears complete. What would you like to work on next?
+                </div>
+            </div>
+
+            <h2>What Gets Recovered</h2>
+
+            <p>From the decision graph, Claude can recover:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Information</th>
+                        <th>Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Goals being worked on</td>
+                        <td><span class="node-goal">goal</span> nodes</td>
+                    </tr>
+                    <tr>
+                        <td>Decisions made</td>
+                        <td><span class="node-decision">decision</span> nodes + <code>chosen</code> edges</td>
+                    </tr>
+                    <tr>
+                        <td>Alternatives rejected</td>
+                        <td><span class="node-option">option</span> nodes + edge rationales</td>
+                    </tr>
+                    <tr>
+                        <td>Why decisions were made</td>
+                        <td>Edge rationales (<code>-r</code>)</td>
+                    </tr>
+                    <tr>
+                        <td>User's original request</td>
+                        <td><code>-p</code> prompt on <span class="node-goal">goal</span> nodes</td>
+                    </tr>
+                    <tr>
+                        <td>Current status</td>
+                        <td><span class="node-outcome">outcome</span> nodes + linked commits</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Branch-Scoped Context</h2>
+
+            <p>When working on a feature branch, filter context to that branch:</p>
+
+            <pre><span class="cmd">$ deciduous nodes --branch feature/auth</span></pre>
+
+            <p>This shows only decisions relevant to the current feature, reducing noise from other work.</p>
+
+            <h2>The Recovery Loop</h2>
+
+            <p>Here's the full session lifecycle:</p>
+
+            <pre style="line-height: 1.8;">SESSION START
+    │
+    ▼
+Run /context → Query decision graph
+    │
+    ▼
+Claude reports: goals, decisions, status
+    │
+    ▼
+DO WORK → Log as you go (goals, decisions, actions)
+    │
+    ▼
+BEFORE PUSH → deciduous sync
+    │
+    ▼
+SESSION END → Graph survives
+    │
+    ▼
+(New session starts, repeat)</pre>
+
+            <p>The graph acts as persistent memory that bridges session boundaries.</p>
+
+            <h2>Context Mid-Session</h2>
+
+            <p>You can also run <code>/context</code> mid-session if Claude seems to have lost track:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Mid-Session Context Recovery</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; Wait, what were we doing? Run /context</span>
+
+Let me check the decision graph...
+
+<span class="command">deciduous nodes | head -20</span>
+<span class="command">deciduous commands | tail -10</span>
+
+I see we were working on rate limiting. The last action was "Implementing
+Redis rate limiter" and we completed it with outcome #52. The commit is abc123.
+
+Would you like to continue with something else, or is there more to do on rate limiting?
+                </div>
+            </div>
+
+            <h2>Recovering from Compaction</h2>
+
+            <p>When context compacts during a long session, the decision graph provides continuity:</p>
+
+            <div class="info-box">
+                <strong>What Context Compaction Means</strong>
+                <p>Long Claude sessions may "compact" older messages to make room for new ones. This is normal, but it means Claude loses the detailed reasoning from earlier in the session. The decision graph preserves it.</p>
+            </div>
+
+            <p>Even after compaction, Claude can query the graph to recall:</p>
+            <ul>
+                <li>What goal started this work</li>
+                <li>What decisions were made earlier</li>
+                <li>What the rationale was</li>
+            </ul>
+
+            <h2>The Audit Step</h2>
+
+            <p>Part of context recovery includes checking for orphan nodes:</p>
+
+            <pre><span class="comment"># Find nodes without incoming edges (potential orphans)</span>
+<span class="cmd">$ deciduous edges | cut -d'>' -f2 | sort -u > /tmp/has_parent.txt</span>
+<span class="cmd">$ deciduous nodes | awk '{print $1}' | while read id; do
+    grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+  done</span></pre>
+
+            <p>Root <span class="node-goal">goal</span> nodes are valid orphans. But <span class="node-outcome">outcome</span> or <span class="node-action">action</span> nodes without parents indicate missing connections that should be fixed.</p>
+
+            <div class="page-nav">
+                <a href="claude-code.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The Claude Code Workflow</span>
+                </a>
+                <a href="pr-documentation.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">PR Documentation</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

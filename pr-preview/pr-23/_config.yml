@@ -1,0 +1,19 @@
+title: Deciduous
+description: Decision graph tooling for AI-assisted development
+url: "https://notactuallytreyanastasio.github.io"
+baseurl: "/deciduous"
+
+# Exclude from Jekyll processing - these are static files
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+
+# Don't process the demo folder - it's a pre-built React app
+keep_files:
+  - demo
+
+# Markdown settings
+markdown: kramdown
+highlighter: rouge

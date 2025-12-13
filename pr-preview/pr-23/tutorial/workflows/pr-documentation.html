@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PR Documentation - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Real-World Workflows</a>
+                <ul>
+                    <li><a href="claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="session-recovery.html">Session Recovery</a></li>
+                    <li><a href="pr-documentation.html" class="active">PR Documentation</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>PR Documentation</h1>
+
+            <p>One of the most powerful uses of deciduous is generating PR documentation directly from your decision graph.</p>
+
+            <h2>The Problem</h2>
+
+            <p>Writing good PR descriptions is tedious. You have to:</p>
+            <ul>
+                <li>Summarize what changed</li>
+                <li>Explain why those changes were made</li>
+                <li>Mention what alternatives were considered</li>
+                <li>Provide enough context for reviewers</li>
+            </ul>
+
+            <p>If you've been logging decisions to the graph, this information already exists. Why write it again?</p>
+
+            <h2>Generating a Writeup</h2>
+
+            <p>The <code>deciduous writeup</code> command generates PR documentation from your graph:</p>
+
+            <pre><span class="cmd">$ deciduous writeup -t "Add Rate Limiting" --nodes 47-52</span>
+<span class="output">## Summary
+
+- **Goal:** Add rate limiting to protect API endpoints from abuse
+- **Approach chosen:** Redis-based sliding window rate limiter
+- **Rationale:** Redis already in stack, need to scale across instances
+
+### Decision Flow
+
+1. **Goal #47:** Add rate limiting to API
+   - Confidence: 90%
+   - Prompt: "User asked: Add rate limiting to the API endpoints"
+
+2. **Decision #48:** Choose rate limiting strategy
+   - Confidence: 75%
+
+3. **Options considered:**
+   - **#49 Redis-based with sliding window** (chosen)
+     - Rationale: Scales across instances, persistent
+   - **#50 In-memory with token bucket** (rejected)
+     - Rationale: Simpler, but single-instance only
+
+4. **Action #51:** Implementing Redis rate limiter
+   - Rationale for choice: Redis already in stack, needs horizontal scaling
+
+5. **Outcome #52:** Rate limiting working, 429s returned correctly
+   - Linked commit: abc123
+
+## Test Plan
+
+- [ ] Verify rate limits apply correctly
+- [ ] Test 429 responses when limit exceeded
+- [ ] Confirm limits reset after window expires</span></pre>
+
+            <h2>Adding Visualizations</h2>
+
+            <p>Generate a graph visualization to include in the PR:</p>
+
+            <pre><span class="comment"># Generate PNG with auto branch-specific filename</span>
+<span class="cmd">$ deciduous dot --auto --png --nodes 47-52</span>
+<span class="output">Generated docs/decision-graph-feature-rate-limiting.dot
+Generated docs/decision-graph-feature-rate-limiting.png (via graphviz)</span></pre>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: dot-graph-example.png]</span>
+                <div class="caption">A DOT-generated PNG showing the rate limiting decision flow</div>
+            </div>
+
+            <p>The <code>--auto</code> flag creates branch-specific filenames, preventing merge conflicts when multiple PRs have graphs.</p>
+
+            <h2>The Full PR Workflow</h2>
+
+            <pre><span class="comment"># 1. Generate the visualization</span>
+<span class="cmd">$ deciduous dot --auto --png --nodes 47-52</span>
+
+<span class="comment"># 2. Commit the graph files</span>
+<span class="cmd">$ git add docs/decision-graph-*.png docs/decision-graph-*.dot</span>
+<span class="cmd">$ git commit -m "docs: add decision graph for rate limiting"</span>
+
+<span class="comment"># 3. Push</span>
+<span class="cmd">$ git push</span>
+
+<span class="comment"># 4. Create PR with generated writeup</span>
+<span class="cmd">$ gh pr create --title "Add Rate Limiting" \
+    --body "$(deciduous writeup --auto -t 'Add Rate Limiting' --nodes 47-52)"</span></pre>
+
+            <h2>Writeup Options</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Option</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>-t, --title</code></td>
+                        <td>PR title</td>
+                    </tr>
+                    <tr>
+                        <td><code>-n, --nodes</code></td>
+                        <td>Node IDs to include (e.g., "47-52" or "47,48,51")</td>
+                    </tr>
+                    <tr>
+                        <td><code>-r, --roots</code></td>
+                        <td>Root node IDs (traverses children automatically)</td>
+                    </tr>
+                    <tr>
+                        <td><code>-o, --output</code></td>
+                        <td>Output file (default: stdout)</td>
+                    </tr>
+                    <tr>
+                        <td><code>--png</code></td>
+                        <td>PNG file to embed in writeup</td>
+                    </tr>
+                    <tr>
+                        <td><code>--auto</code></td>
+                        <td>Auto-detect PNG from branch name</td>
+                    </tr>
+                    <tr>
+                        <td><code>--no-dot</code></td>
+                        <td>Skip DOT graph section</td>
+                    </tr>
+                    <tr>
+                        <td><code>--no-test-plan</code></td>
+                        <td>Skip test plan section</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Real PR Examples</h2>
+
+            <p>See deciduous PRs with decision graphs included:</p>
+
+            <ul>
+                <li><a href="https://github.com/notactuallytreyanastasio/deciduous/pull/11">#11: Type Unification</a> &mdash; 14 tracked decisions</li>
+                <li><a href="https://github.com/notactuallytreyanastasio/deciduous/pull/3">#3: Multi-User Graph Sync</a> &mdash; jj-inspired patch model</li>
+                <li><a href="https://github.com/notactuallytreyanastasio/deciduous/pull/9">#9: TEA Architecture Refactor</a> &mdash; Elm Architecture refactor</li>
+            </ul>
+
+            <h2>Updating Existing PRs</h2>
+
+            <p>To update a PR body with new writeup content:</p>
+
+            <pre><span class="cmd">$ gh pr edit 123 --body "$(deciduous writeup --auto -t 'My PR' --nodes 47-52)"</span></pre>
+
+            <div class="info-box tip">
+                <strong>Best Practice</strong>
+                <p>Include the graph visualization in your PR. Reviewers can see the decision flow at a glance, making it much easier to understand why changes were made.</p>
+            </div>
+
+            <div class="next-section">
+                <span>Next up: exploring all the ways to view your graph</span>
+                <a href="../viewing/index.html" class="btn">Viewing the Graph &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="session-recovery.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Session Recovery</span>
+                </a>
+                <a href="../viewing/index.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Viewing the Graph</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>
