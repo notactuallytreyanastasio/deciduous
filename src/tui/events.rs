@@ -114,6 +114,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) -> bool {
     match app.current_view {
         View::Timeline => handle_timeline_keys(app, key),
         View::Dag => handle_dag_keys(app, key),
+        View::Roadmap => handle_roadmap_keys(app, key),
     }
 }
 
@@ -283,6 +284,36 @@ fn handle_dag_keys(app: &mut App, key: KeyEvent) -> bool {
             } else {
                 app.show_refresh_indicator();
             }
+        }
+
+        KeyCode::Esc => {}
+
+        _ => {}
+    }
+    false
+}
+
+fn handle_roadmap_keys(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        // Quit
+        KeyCode::Char('q') => return true,
+
+        // Help
+        KeyCode::Char('?') => {
+            app.show_help = true;
+        }
+
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => app.roadmap_state.move_down(),
+        KeyCode::Char('k') | KeyCode::Up => app.roadmap_state.move_up(),
+
+        // Switch view
+        KeyCode::Tab => app.toggle_view(),
+
+        // Refresh roadmap items
+        KeyCode::Char('r') => {
+            app.load_roadmap_items();
+            app.set_status("Roadmap refreshed".to_string());
         }
 
         KeyCode::Esc => {}
