@@ -42,6 +42,7 @@ pub mod config;
 pub mod db;
 pub mod diff;
 pub mod export;
+pub mod github;
 pub mod init;
 pub mod roadmap;
 pub mod schema;
