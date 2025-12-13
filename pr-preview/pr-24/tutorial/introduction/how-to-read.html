@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How to Read This Tutorial - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title active">Introduction</a>
+                <ul>
+                    <li><a href="what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="how-to-read.html" class="active">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+                <ul>
+                    <li><a href="../hello-world/installing.html">Installing</a></li>
+                    <li><a href="../hello-world/initializing.html">Initializing</a></li>
+                    <li><a href="../hello-world/first-nodes.html">Your First Nodes</a></li>
+                    <li><a href="../hello-world/connecting.html">Connecting Nodes</a></li>
+                    <li><a href="../hello-world/viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+                <ul>
+                    <li><a href="../workflows/claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="../workflows/session-recovery.html">Session Recovery</a></li>
+                    <li><a href="../workflows/pr-documentation.html">PR Documentation</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+                <ul>
+                    <li><a href="../viewing/tui.html">The Terminal UI</a></li>
+                    <li><a href="../viewing/web.html">The Web Viewer</a></li>
+                    <li><a href="../viewing/cli.html">CLI Queries</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>How to Read This Tutorial</h1>
+
+            <p>This tutorial is structured progressively, with each section building on the previous ones.</p>
+
+            <h2>Tutorial Structure</h2>
+
+            <ol>
+                <li><strong>Hello, World!</strong> gets you from zero to a working decision graph in about five minutes.</li>
+                <li><strong>Real-World Workflows</strong> shows how deciduous actually gets used with Claude Code, including realistic terminal sessions.</li>
+                <li><strong>Viewing the Graph</strong> covers the three ways to explore your decisions: TUI, web viewer, and CLI.</li>
+                <li><strong>Sharing with Others</strong> explains the multi-user sync system for teams.</li>
+                <li><strong>Advanced Topics</strong> covers branch grouping, commit linking, and other power features.</li>
+                <li><strong>Plumbing Reference</strong> documents every command in detail.</li>
+            </ol>
+
+            <p>You can read straight through, or jump to the section you need. The <strong>Hello, World!</strong> section is recommended for everyone to establish the basics.</p>
+
+            <h2>Conventions</h2>
+
+            <h3>Terminal Commands</h3>
+
+            <p>Commands you type are shown with a <code>$</code> prefix:</p>
+
+            <pre><span class="cmd">$ deciduous add goal "Add user authentication" -c 90</span>
+<span class="output">Created node #1: goal "Add user authentication"</span></pre>
+
+            <p>Lines without the <code>$</code> are output from the command.</p>
+
+            <h3>Claude Code Sessions</h3>
+
+            <p>When showing Claude Code sessions, I use a terminal-style box:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; Add a rate limiter to the API</span>
+
+I'll add rate limiting to protect your API endpoints. Let me first log this goal to the decision graph.
+
+<span class="command">deciduous add goal "Add rate limiting" -c 90</span>
+<span class="output">Created node #47: goal "Add rate limiting"</span>
+
+Now let me explore the options...
+                </div>
+            </div>
+
+            <p>The <code>&gt;</code> indicates your input to Claude. The rest is Claude's response and actions.</p>
+
+            <h3>Screenshots</h3>
+
+            <p>Screenshots are indicated with placeholders:</p>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: tui-timeline-view.png]</span>
+                <div class="caption">The TUI timeline view showing nodes filtered by branch</div>
+            </div>
+
+            <p>These placeholders mark where actual screenshots should be added.</p>
+
+            <h3>Info Boxes</h3>
+
+            <div class="info-box">
+                <strong>Note</strong>
+                <p>Blue boxes contain additional information or context.</p>
+            </div>
+
+            <div class="info-box warning">
+                <strong>Warning</strong>
+                <p>Yellow boxes indicate important warnings or gotchas.</p>
+            </div>
+
+            <div class="info-box tip">
+                <strong>Tip</strong>
+                <p>Green boxes contain helpful tips and best practices.</p>
+            </div>
+
+            <h3>Keyboard Shortcuts</h3>
+
+            <p>Keyboard shortcuts are shown in boxes: <kbd>j</kbd> <kbd>k</kbd> <kbd>Enter</kbd></p>
+
+            <h3>Node Types</h3>
+
+            <p>Node types are color-coded throughout:</p>
+            <ul>
+                <li><span class="node-goal"><strong>goal</strong></span> &mdash; High-level objectives</li>
+                <li><span class="node-decision"><strong>decision</strong></span> &mdash; Choice points</li>
+                <li><span class="node-option"><strong>option</strong></span> &mdash; Approaches considered</li>
+                <li><span class="node-action"><strong>action</strong></span> &mdash; Implementation steps</li>
+                <li><span class="node-outcome"><strong>outcome</strong></span> &mdash; Results</li>
+                <li><span class="node-observation"><strong>observation</strong></span> &mdash; Discoveries and insights</li>
+            </ul>
+
+            <h2>Prerequisites</h2>
+
+            <p>This tutorial assumes you:</p>
+            <ul>
+                <li>Are comfortable with the command line</li>
+                <li>Have <a href="https://www.rust-lang.org/tools/install">Rust installed</a> (for <code>cargo install</code>)</li>
+                <li>Optionally use Claude Code or another AI coding assistant</li>
+            </ul>
+
+            <p>No prior knowledge of decision graphs or graph databases is needed.</p>
+
+            <h2>Getting Help</h2>
+
+            <p>If you get stuck:</p>
+            <ul>
+                <li>Run <code>deciduous --help</code> for command documentation</li>
+                <li>Check the <a href="../reference/index.html">Plumbing Reference</a> for detailed command info</li>
+                <li>Open an issue on <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a></li>
+            </ul>
+
+            <div class="next-section">
+                <span>Let's get started!</span>
+                <a href="../hello-world/index.html" class="btn">Hello, World! &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="what-is-deciduous.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">What is Deciduous?</span>
+                </a>
+                <a href="../hello-world/index.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Hello, World!</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

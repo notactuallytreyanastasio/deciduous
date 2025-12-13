@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Multi-User Problem - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Sharing with Others</a>
+                <ul>
+                    <li><a href="multi-user.html" class="active">The Multi-User Problem</a></li>
+                    <li><a href="patches.html">Exporting Patches</a></li>
+                    <li><a href="pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The Multi-User Problem</h1>
+
+            <p>To understand the patch system, let's first understand why it's needed.</p>
+
+            <h2>Why Not Just Commit the Database?</h2>
+
+            <p>The naive approach would be to track <code>.deciduous/deciduous.db</code> in git. This doesn't work well:</p>
+
+            <ul>
+                <li><strong>Binary files don't merge.</strong> When two people add nodes, git can't merge the databases.</li>
+                <li><strong>ID conflicts.</strong> Alice's node #47 and Bob's node #47 are different nodes.</li>
+                <li><strong>Large diffs.</strong> SQLite files change in non-obvious ways, creating noisy diffs.</li>
+            </ul>
+
+            <h2>The Dual-ID Solution</h2>
+
+            <p>Deciduous solves this with a dual-ID model (inspired by <a href="https://github.com/martinvonz/jj">jj/Jujutsu</a>):</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Scope</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>id</code></td>
+                        <td>Local</td>
+                        <td>SQLite auto-increment, different on each machine</td>
+                    </tr>
+                    <tr>
+                        <td><code>change_id</code></td>
+                        <td>Global</td>
+                        <td>UUID assigned at creation, same everywhere</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>When you create a node:</p>
+
+            <pre><span class="cmd">$ deciduous add goal "Add authentication" -c 90</span>
+<span class="output">Created node #47: goal "Add authentication"</span>
+<span class="comment"># Internally: id=47, change_id=a1b2c3d4-e5f6-7890-abcd-ef1234567890</span></pre>
+
+            <p>The <code>id</code> (#47) is local. The <code>change_id</code> (UUID) is global.</p>
+
+            <h2>How Patches Work</h2>
+
+            <p>When you export a patch, it contains the <code>change_id</code>, not the <code>id</code>:</p>
+
+            <pre>{
+  "nodes": [
+    {
+      "change_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "node_type": "goal",
+      "title": "Add authentication",
+      "confidence": 90
+    }
+  ]
+}</pre>
+
+            <p>When a teammate applies this patch:</p>
+            <ul>
+                <li>Their database might assign it <code>id=123</code> (different local ID)</li>
+                <li>But the <code>change_id</code> stays the same</li>
+                <li>Edges reference <code>change_id</code>, so connections are preserved</li>
+            </ul>
+
+            <h2>Idempotent Application</h2>
+
+            <p>Patches are <strong>idempotent</strong>&mdash;you can apply them multiple times safely:</p>
+
+            <pre><span class="cmd">$ deciduous diff apply alice-auth.json</span>
+<span class="output">Applied 5 nodes (5 new, 0 existing)</span>
+
+<span class="cmd">$ deciduous diff apply alice-auth.json</span>
+<span class="output">Applied 5 nodes (0 new, 5 existing)</span></pre>
+
+            <p>The second application recognizes the nodes by their <code>change_id</code> and skips them.</p>
+
+            <h2>Migration</h2>
+
+            <p>If you're upgrading from an older deciduous version, run:</p>
+
+            <pre><span class="cmd">$ deciduous migrate</span>
+<span class="output">Added change_id column to nodes table
+Added change_id columns to edges table
+Generated UUIDs for 47 existing nodes
+Generated UUIDs for 52 existing edges</span></pre>
+
+            <p>This adds <code>change_id</code> columns and generates UUIDs for existing data.</p>
+
+            <div class="page-nav">
+                <a href="index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Sharing with Others</span>
+                </a>
+                <a href="patches.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Exporting Patches</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

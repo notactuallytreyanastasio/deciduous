@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Integration Files - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Hello, World!</a>
+                <ul>
+                    <li><a href="installing.html">Installing</a></li>
+                    <li><a href="initializing.html">Initializing</a></li>
+                    <li><a href="ai-integration.html" class="active">AI Integration Files</a></li>
+                    <li><a href="first-nodes.html">Your First Nodes</a></li>
+                    <li><a href="connecting.html">Connecting Nodes</a></li>
+                    <li><a href="viewing.html">Viewing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>AI Integration Files</h1>
+
+            <p class="lead">When you run <code>deciduous init</code>, it generates files that teach your AI assistant how to use the decision graph. These files are the secret sauce that makes the workflow loop automatic.</p>
+
+            <h2>The Problem They Solve</h2>
+
+            <p>AI assistants don't have persistent memory across sessions. When a session ends or context compacts, they forget:</p>
+
+            <ul>
+                <li>What decisions were made and why</li>
+                <li>What options were considered but rejected</li>
+                <li>The reasoning behind architectural choices</li>
+                <li>What was tried before and failed</li>
+            </ul>
+
+            <p>The generated files solve this by:</p>
+
+            <ol>
+                <li><strong>Teaching</strong> the AI about deciduous commands</li>
+                <li><strong>Enforcing</strong> real-time logging as work happens</li>
+                <li><strong>Enabling</strong> context recovery at session start</li>
+            </ol>
+
+            <h2>For Claude Code Users</h2>
+
+            <p>Run <code>deciduous init</code> (or <code>deciduous init --claude</code>) to generate:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>.claude/commands/decision.md</code></td>
+                        <td>Slash command for managing the graph</td>
+                    </tr>
+                    <tr>
+                        <td><code>.claude/commands/context.md</code></td>
+                        <td>Slash command for context recovery</td>
+                    </tr>
+                    <tr>
+                        <td><code>CLAUDE.md</code></td>
+                        <td>Project instructions with workflow rules</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>CLAUDE.md &mdash; The Behavioral Contract</h3>
+
+            <p><code>CLAUDE.md</code> is read by Claude Code at session start. It contains the <strong>Decision Graph Workflow</strong> section that defines when and how to log:</p>
+
+            <pre><span class="comment">## Decision Graph Workflow</span>
+
+<span class="comment">**THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**</span>
+
+### The Core Rule
+
+```
+BEFORE you do something -> Log what you're ABOUT to do
+AFTER it succeeds/fails -> Log the outcome
+CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
+```</pre>
+
+            <p>This section also includes:</p>
+
+            <ul>
+                <li><strong>Behavioral triggers</strong> &mdash; when to log goals, decisions, actions, outcomes</li>
+                <li><strong>Connection rules</strong> &mdash; what must link to what</li>
+                <li><strong>Session start checklist</strong> &mdash; what to do at the beginning of each session</li>
+                <li><strong>Audit checklist</strong> &mdash; how to verify graph integrity</li>
+            </ul>
+
+            <div class="info-box tip">
+                <strong>Customize It</strong>
+                <p>You can edit <code>CLAUDE.md</code> to add project-specific rules. The Decision Graph Workflow section will be preserved when you run <code>deciduous update</code>.</p>
+            </div>
+
+            <h3>/decision &mdash; The Graph Manager</h3>
+
+            <p>The <code>/decision</code> slash command provides a quick interface for graph operations:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Using /decision</div>
+                <div class="terminal-body">
+<span class="user-input">/decision add goal "Implement caching" -p "User asked for better performance"</span>
+<span class="output">Created node #47: goal "Implement caching"</span>
+
+<span class="user-input">/decision add decision "Choose caching strategy"</span>
+<span class="output">Created node #48: decision "Choose caching strategy"</span>
+
+<span class="user-input">/decision link 47 48 -r "Need to decide approach"</span>
+<span class="output">Created edge: #47 -> #48 (leads_to)</span>
+
+<span class="user-input">/decision nodes</span>
+<span class="output">ID  Type        Title                    Status   Confidence
+───────────────────────────────────────────────────────────────
+47  goal        Implement caching        active   90
+48  decision    Choose caching strategy  active   75</span>
+                </div>
+            </div>
+
+            <p>The command maps to deciduous CLI operations:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Slash Command</th>
+                        <th>Runs</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/decision nodes</code></td>
+                        <td><code>deciduous nodes</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>/decision add goal "X"</code></td>
+                        <td><code>deciduous add goal "X" -c 90</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>/decision link 1 2 "reason"</code></td>
+                        <td><code>deciduous link 1 2 -r "reason"</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>/decision sync</code></td>
+                        <td><code>deciduous sync</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>/context &mdash; The Memory Restorer</h3>
+
+            <p>The <code>/context</code> slash command recovers context at session start:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Using /context at Session Start</div>
+                <div class="terminal-body">
+<span class="user-input">/context</span>
+
+I'll query the decision graph to recover context...
+
+<span class="command">deciduous nodes</span>
+<span class="output">ID  Type        Title                          Status   Confidence
+─────────────────────────────────────────────────────────────────────
+47  goal        Implement caching              active   90
+48  decision    Choose caching strategy        active   75
+49  option      Redis caching                  active   80
+50  option      In-memory LRU                  active   70</span>
+
+<span class="command">deciduous edges</span>
+<span class="output">From  To   Type       Rationale
+────────────────────────────────────────────────
+47    48   leads_to   Need to decide approach
+48    49   leads_to   Scales across instances
+48    50   leads_to   Simpler, single-node only</span>
+
+<span class="command">git status</span>
+<span class="output">On branch feature/caching
+Changes not staged for commit:
+  modified:   src/cache.rs</span>
+
+<strong>Context Recovered:</strong>
+- Working on caching feature (branch: feature/caching)
+- Goal: Implement caching (#47)
+- Active decision: Choose caching strategy (#48)
+- Two options being considered: Redis vs in-memory LRU
+- Uncommitted changes to src/cache.rs
+
+<strong>Suggested next steps:</strong>
+1. Review the options and make a decision
+2. Log the chosen approach with --edge-type chosen
+3. Continue implementation
+                </div>
+            </div>
+
+            <h2>For Windsurf Users</h2>
+
+            <p>Run <code>deciduous init --windsurf</code> to generate:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>.windsurf/rules/deciduous.md</code></td>
+                        <td>Always On rule for decision logging</td>
+                    </tr>
+                    <tr>
+                        <td><code>.windsurf/rules/context.md</code></td>
+                        <td>Model-triggered rule for context recovery</td>
+                    </tr>
+                    <tr>
+                        <td><code>.windsurf/memories.md</code></td>
+                        <td>Auto-retrieved project memories</td>
+                    </tr>
+                    <tr>
+                        <td><code>AGENTS.md</code></td>
+                        <td>Project instructions with workflow rules</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Rules vs Memories</h3>
+
+            <p>Windsurf uses two types of AI guidance:</p>
+
+            <ul>
+                <li><strong>Rules</strong> (<code>.windsurf/rules/</code>) &mdash; Instructions that Cascade follows. Can be "Always On" or "Model-triggered".</li>
+                <li><strong>Memories</strong> (<code>.windsurf/memories.md</code>) &mdash; Facts about the project that Cascade auto-retrieves when relevant.</li>
+            </ul>
+
+            <p>The <code>deciduous.md</code> rule is marked "Always On" so Cascade will always follow the decision logging workflow.</p>
+
+            <div class="info-box warning">
+                <strong>Important: Verify Rule Activation</strong>
+                <p>After running <code>deciduous init --windsurf</code>, open Windsurf's Customizations panel and verify that <code>deciduous.md</code> is set to "Always On".</p>
+            </div>
+
+            <h3>AGENTS.md</h3>
+
+            <p><code>AGENTS.md</code> is the Windsurf equivalent of <code>CLAUDE.md</code>. It contains the same Decision Graph Workflow section, formatted for Cascade.</p>
+
+            <h2>The Workflow Loop</h2>
+
+            <p>These files enforce a continuous loop:</p>
+
+            <pre>SESSION START
+    │
+    ▼
+Run /context → See past decisions
+    │
+    ▼
+AUDIT → Fix any orphan nodes first!
+    │
+    ▼
+DO WORK → Log BEFORE each action
+    │
+    ▼
+CONNECT → Link new nodes immediately
+    │
+    ▼
+AFTER CHANGES → Log outcomes, observations
+    │
+    ▼
+AUDIT AGAIN → Any new orphans?
+    │
+    ▼
+BEFORE PUSH → deciduous sync
+    │
+    ▼
+PUSH → Live graph updates
+    │
+    ▼
+SESSION END → Final audit
+    │
+    ▼
+(repeat)</pre>
+
+            <h2>Git History Integration</h2>
+
+            <p>The Timeline and DAG views can show git commits alongside decision nodes. This creates traceability between decisions and code.</p>
+
+            <h3>Linking Commits to Nodes</h3>
+
+            <p>After every git commit, link it to the decision graph:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Linking Commits</div>
+                <div class="terminal-body">
+<span class="command">git commit -m "feat: add Redis caching"</span>
+<span class="output">[feature/caching abc123] feat: add Redis caching
+ 3 files changed, 87 insertions(+)</span>
+
+<span class="command">deciduous add action "Implemented Redis caching" -c 90 --commit HEAD</span>
+<span class="output">Created node #51: action "Implemented Redis caching" [commit: abc123]</span>
+
+<span class="command">deciduous link 48 51 --edge-type chosen -r "Redis chosen for horizontal scaling"</span>
+<span class="output">Created edge: #48 -> #51 (chosen)</span>
+                </div>
+            </div>
+
+            <p>The <code>--commit HEAD</code> flag automatically captures the current commit hash and links it to the node.</p>
+
+            <h3>Exporting Git History</h3>
+
+            <p>When you run <code>deciduous sync</code>, it also exports git history for commits linked to nodes:</p>
+
+            <pre><span class="cmd">$ deciduous sync</span>
+<span class="output">Exported graph to docs/graph-data.json
+Exported git history to docs/git-history.json</span></pre>
+
+            <p>The web viewer reads this file to show commit messages, authors, dates, and file counts alongside your decision nodes.</p>
+
+            <h3>Deploying to GitHub Pages</h3>
+
+            <p>The <code>docs/</code> directory is ready for GitHub Pages:</p>
+
+            <ol>
+                <li>Run <code>deciduous sync</code> to export graph and git history</li>
+                <li>Push to GitHub</li>
+                <li>Go to <strong>Settings &gt; Pages</strong></li>
+                <li>Set source to <strong>Deploy from branch</strong></li>
+                <li>Select your branch and <code>/docs</code> folder</li>
+            </ol>
+
+            <p>Your graph will be live at <code>https://&lt;username&gt;.github.io/&lt;repo&gt;/</code></p>
+
+            <div class="info-box tip">
+                <strong>GitHub Action Included</strong>
+                <p><code>deciduous init</code> also creates <code>.github/workflows/deploy-pages.yml</code> which automatically deploys to GitHub Pages when you push to main.</p>
+            </div>
+
+            <h2>Keeping Files Updated</h2>
+
+            <p>As deciduous evolves, the generated files may get new features. Update them with:</p>
+
+            <pre><span class="comment"># For Claude Code</span>
+<span class="cmd">$ deciduous update</span>
+
+<span class="comment"># For Windsurf</span>
+<span class="cmd">$ deciduous update --windsurf</span></pre>
+
+            <p>This overwrites the slash commands/rules with the latest versions while preserving your custom additions to <code>CLAUDE.md</code> or <code>AGENTS.md</code>.</p>
+
+            <h2>What Makes This Work</h2>
+
+            <div class="info-box">
+                <strong>The Key Insight</strong>
+                <p>AI assistants are excellent at following explicit instructions. By embedding the decision logging workflow directly into the files they read at session start, we make the workflow <em>automatic</em>.</p>
+                <p>You don't have to remember to log decisions&mdash;your AI assistant does it for you.</p>
+            </div>
+
+            <p>The combination of:</p>
+
+            <ul>
+                <li><strong>CLAUDE.md / AGENTS.md</strong> &mdash; behavioral rules</li>
+                <li><strong>Slash commands / Rules</strong> &mdash; quick access to operations</li>
+                <li><strong>/context</strong> &mdash; memory restoration at session start</li>
+            </ul>
+
+            <p>Creates a system where decisions are logged in real-time, survive context loss, and are automatically recovered in new sessions.</p>
+
+            <div class="page-nav">
+                <a href="initializing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Initializing</span>
+                </a>
+                <a href="first-nodes.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Your First Nodes</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

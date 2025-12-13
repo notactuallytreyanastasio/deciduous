@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-World Workflows - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Real-World Workflows</a>
+                <ul>
+                    <li><a href="claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="session-recovery.html">Session Recovery</a></li>
+                    <li><a href="pr-documentation.html">PR Documentation</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Real-World Workflows</h1>
+            <p class="lead">This is where deciduous gets interesting. Let's see how it works with Claude Code in practice.</p>
+
+            <h2>The Core Insight</h2>
+
+            <p>Manually running <code>deciduous add</code> commands is tedious. The real power of deciduous comes when <strong>Claude does the logging automatically</strong> as part of its normal workflow.</p>
+
+            <p>When you run <code>deciduous init</code>, it creates:</p>
+
+            <ul>
+                <li><code>CLAUDE.md</code> &mdash; Instructions telling Claude about the decision graph workflow</li>
+                <li><code>.claude/commands/context.md</code> &mdash; A <code>/context</code> slash command for session recovery</li>
+                <li><code>.claude/commands/decision.md</code> &mdash; A <code>/decision</code> slash command for graph management</li>
+            </ul>
+
+            <p>This means Claude knows about deciduous and will use it.</p>
+
+            <h2>Three Key Workflows</h2>
+
+            <p>This chapter covers the three main workflows:</p>
+
+            <ol>
+                <li><strong>The Claude Code Workflow</strong> &mdash; Claude logging decisions in real-time as it works</li>
+                <li><strong>Session Recovery</strong> &mdash; Using <code>/context</code> to recover state after compaction or new sessions</li>
+                <li><strong>PR Documentation</strong> &mdash; Generating visualizations and writeups from the graph</li>
+            </ol>
+
+            <h2>The Key Rule</h2>
+
+            <div class="info-box tip">
+                <strong>Log BEFORE you code, not after.</strong>
+                <p>The decision graph captures what you're <em>about to do</em> and <em>why</em>, not what you <em>did</em>. This keeps the record accurate and captures the reasoning that would otherwise be lost.</p>
+            </div>
+
+            <p>This is the fundamental pattern:</p>
+
+            <pre><span class="comment"># About to implement something</span>
+<span class="cmd">$ deciduous add action "Implementing rate limiter" -c 85</span>
+
+<span class="comment"># ... do the implementation ...</span>
+
+<span class="comment"># Record the outcome</span>
+<span class="cmd">$ deciduous add outcome "Rate limiter working" -c 95 --commit HEAD</span></pre>
+
+            <p>Let's see this in practice.</p>
+
+            <div class="next-section">
+                <span>Let's see a real Claude Code session:</span>
+                <a href="claude-code.html" class="btn">The Claude Code Workflow &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="../hello-world/viewing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Viewing the Graph</span>
+                </a>
+                <a href="claude-code.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">The Claude Code Workflow</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

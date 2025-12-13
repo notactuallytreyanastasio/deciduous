@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sharing with Others - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../index.html" class="toc-title">Introduction</a>
+            </div>
+            <div class="toc-section">
+                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+            </div>
+            <div class="toc-section">
+                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+            </div>
+            <div class="toc-section">
+                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+            </div>
+            <div class="toc-section">
+                <a href="index.html" class="toc-title active">Sharing with Others</a>
+                <ul>
+                    <li><a href="multi-user.html">The Multi-User Problem</a></li>
+                    <li><a href="patches.html">Exporting Patches</a></li>
+                    <li><a href="pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Sharing with Others</h1>
+            <p class="lead">Each developer has a local database. Here's how to share decisions across a team.</p>
+
+            <h2>The Challenge</h2>
+
+            <p>The decision graph lives in <code>.deciduous/deciduous.db</code>, which is gitignored. This is intentional&mdash;SQLite databases don't merge well in git.</p>
+
+            <p>But teams need to share decisions. When Alice makes architectural choices on her branch, Bob should be able to see them. When that branch merges, everyone should have the context.</p>
+
+            <h2>The Solution: Patches</h2>
+
+            <p>Deciduous uses a jj-inspired patch model. Instead of sharing the database, you share <strong>patches</strong>&mdash;JSON files containing nodes and edges.</p>
+
+            <p>Each node has two IDs:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID Type</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>id</code> (integer)</td>
+                        <td>Local database primary key, different on each machine</td>
+                    </tr>
+                    <tr>
+                        <td><code>change_id</code> (UUID)</td>
+                        <td>Globally unique, stable across all databases</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>Patches use the <code>change_id</code> to identify nodes. When you apply a patch, nodes are matched by their UUID, not their local ID.</p>
+
+            <h2>The Workflow</h2>
+
+            <ol>
+                <li><strong>Export</strong> your branch's decisions as a patch file</li>
+                <li><strong>Commit</strong> the patch file (not the database)</li>
+                <li><strong>Teammates</strong> pull and apply the patch</li>
+                <li><strong>Idempotent</strong>&mdash;applying the same patch twice is safe</li>
+            </ol>
+
+            <h2>What's in This Chapter</h2>
+
+            <ul>
+                <li><a href="multi-user.html">The Multi-User Problem</a> &mdash; Understanding why this approach is needed</li>
+                <li><a href="patches.html">Exporting Patches</a> &mdash; How to export and apply patches</li>
+                <li><a href="pr-workflow.html">The PR Workflow</a> &mdash; Integrating patches into your PR process</li>
+            </ul>
+
+            <div class="next-section">
+                <span>Let's understand the problem first:</span>
+                <a href="multi-user.html" class="btn">The Multi-User Problem &rarr;</a>
+            </div>
+
+            <div class="page-nav">
+                <a href="../viewing/cli.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">CLI Queries</span>
+                </a>
+                <a href="multi-user.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">The Multi-User Problem</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>
