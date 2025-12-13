@@ -1388,6 +1388,56 @@ impl Database {
         Ok(())
     }
 
+    /// Update a roadmap item's GitHub issue info by finding it by title (first match)
+    pub fn update_roadmap_item_github_by_title(
+        &self,
+        title: &str,
+        issue_number: i32,
+        issue_state: &str,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let affected = diesel::update(roadmap_items::table.filter(roadmap_items::title.eq(title)))
+            .set((
+                roadmap_items::github_issue_number.eq(Some(issue_number)),
+                roadmap_items::github_issue_state.eq(Some(issue_state)),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        if affected == 0 {
+            return Err(DbError::Validation(format!("No roadmap item found with title: {}", title)));
+        }
+
+        Ok(())
+    }
+
+    /// Update a roadmap item's GitHub issue info by change_id (unique key)
+    pub fn update_roadmap_item_github_by_change_id(
+        &self,
+        change_id: &str,
+        issue_number: i32,
+        issue_state: &str,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let affected = diesel::update(roadmap_items::table.filter(roadmap_items::change_id.eq(change_id)))
+            .set((
+                roadmap_items::github_issue_number.eq(Some(issue_number)),
+                roadmap_items::github_issue_state.eq(Some(issue_state)),
+                roadmap_items::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        if affected == 0 {
+            return Err(DbError::Validation(format!("No roadmap item found with change_id: {}", change_id)));
+        }
+
+        Ok(())
+    }
+
     /// Link a roadmap item to a decision graph outcome node
     pub fn link_roadmap_to_outcome(
         &self,
@@ -1453,6 +1503,16 @@ impl Database {
             .execute(&mut conn)?;
 
         Ok(())
+    }
+
+    /// Get roadmap sync state (returns None if not initialized)
+    pub fn get_roadmap_sync_state(&self, roadmap_path: &str) -> Result<Option<RoadmapSyncState>> {
+        let mut conn = self.get_conn()?;
+        let state = roadmap_sync_state::table
+            .filter(roadmap_sync_state::roadmap_path.eq(roadmap_path))
+            .first::<RoadmapSyncState>(&mut conn)
+            .optional()?;
+        Ok(state)
     }
 
     /// Get or create roadmap sync state
