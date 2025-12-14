@@ -310,6 +310,66 @@ pub struct WriteupConfig {
     pub github_repo: Option<String>,
     /// Git branch name (auto-detected if not provided)
     pub git_branch: Option<String>,
+    /// Base branch for diff (e.g., "main")
+    pub base_branch: Option<String>,
+    /// Generate enhanced writeup with more context
+    pub enhanced: bool,
+}
+
+/// Extract user prompt from metadata_json
+fn extract_prompt(metadata: &Option<String>) -> Option<String> {
+    metadata.as_ref().and_then(|m| {
+        serde_json::from_str::<serde_json::Value>(m)
+            .ok()
+            .and_then(|v| v.get("prompt").and_then(|p| p.as_str().map(|s| s.to_string())))
+    })
+}
+
+/// Extract files from metadata_json
+fn extract_files(metadata: &Option<String>) -> Option<Vec<String>> {
+    metadata.as_ref().and_then(|m| {
+        serde_json::from_str::<serde_json::Value>(m)
+            .ok()
+            .and_then(|v| v.get("files").and_then(|f| {
+                f.as_array().map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+            }))
+    })
+}
+
+/// Get git diff stat for files changed
+fn get_git_diff_stat(base_branch: &str) -> Option<String> {
+    std::process::Command::new("git")
+        .args(["diff", "--stat", base_branch])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok()
+            } else {
+                None
+            }
+        })
+}
+
+/// Get list of changed files from git
+fn get_changed_files(base_branch: &str) -> Vec<String> {
+    std::process::Command::new("git")
+        .args(["diff", "--name-only", base_branch])
+        .output()
+        .ok()
+        .and_then(|output| {
+            if output.status.success() {
+                String::from_utf8(output.stdout).ok()
+            } else {
+                None
+            }
+        })
+        .map(|s| s.lines().map(|l| l.to_string()).collect())
+        .unwrap_or_default()
 }
 
 /// Generate a PR writeup from a decision graph
@@ -321,6 +381,11 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
     };
 
     let mut writeup = String::new();
+
+    // Enhanced mode generates a richer writeup
+    if config.enhanced {
+        return generate_enhanced_writeup(&filtered, config);
+    }
 
     // Title
     wln!(writeup, "## Summary\n");
@@ -531,6 +596,295 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
     writeup
 }
 
+/// Generate an enhanced PR writeup with more context and structure
+fn generate_enhanced_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> String {
+    let mut writeup = String::new();
+
+    // Collect node types
+    let goals: Vec<&DecisionNode> = graph.nodes.iter().filter(|n| n.node_type == "goal").collect();
+    let decisions: Vec<&DecisionNode> = graph.nodes.iter().filter(|n| n.node_type == "decision").collect();
+    let actions: Vec<&DecisionNode> = graph.nodes.iter().filter(|n| n.node_type == "action").collect();
+    let outcomes: Vec<&DecisionNode> = graph.nodes.iter().filter(|n| n.node_type == "outcome").collect();
+    let observations: Vec<&DecisionNode> = graph.nodes.iter().filter(|n| n.node_type == "observation").collect();
+
+    // ==========================================================================
+    // SUMMARY
+    // ==========================================================================
+    wln!(writeup, "## Summary\n");
+
+    // Extract the main goal(s)
+    if !goals.is_empty() {
+        for goal in &goals {
+            wln!(writeup, "{}", goal.title);
+            if let Some(desc) = &goal.description {
+                wln!(writeup, "\n{}", desc);
+            }
+        }
+        wln!(writeup);
+    }
+
+    // ==========================================================================
+    // THE PROBLEM / STORY
+    // ==========================================================================
+    // Try to find user prompts that triggered this work
+    let prompts: Vec<String> = goals
+        .iter()
+        .chain(actions.iter())
+        .filter_map(|n| extract_prompt(&n.metadata_json))
+        .collect();
+
+    if !prompts.is_empty() || !observations.is_empty() {
+        wln!(writeup, "## The Problem\n");
+
+        if !prompts.is_empty() {
+            for prompt in &prompts {
+                wln!(writeup, "> {}\n", prompt);
+            }
+        }
+
+        if !observations.is_empty() {
+            wln!(writeup, "**Observations:**\n");
+            for obs in &observations {
+                wln!(writeup, "- {}", obs.title);
+            }
+            wln!(writeup);
+        }
+    }
+
+    // ==========================================================================
+    // DECISIONS MADE
+    // ==========================================================================
+    if !decisions.is_empty() {
+        wln!(writeup, "## Decisions Made\n");
+
+        for decision in &decisions {
+            wln!(writeup, "### {}\n", decision.title);
+
+            // Find options for this decision
+            let options: Vec<&DecisionNode> = graph
+                .nodes
+                .iter()
+                .filter(|n| {
+                    n.node_type == "option"
+                        && graph.edges.iter().any(|e| e.from_node_id == decision.id && e.to_node_id == n.id)
+                })
+                .collect();
+
+            if !options.is_empty() {
+                for opt in &options {
+                    let is_chosen = graph.edges.iter().any(|e| {
+                        e.from_node_id == decision.id && e.to_node_id == opt.id && e.edge_type == "chosen"
+                    });
+                    let marker = if is_chosen { "✓" } else { "✗" };
+                    let style = if is_chosen { "**" } else { "" };
+                    wln!(writeup, "- {} {}{}{}", marker, style, opt.title, style);
+
+                    // Add rationale if chosen
+                    if is_chosen {
+                        if let Some(edge) = graph.edges.iter().find(|e| {
+                            e.from_node_id == decision.id && e.to_node_id == opt.id
+                        }) {
+                            if let Some(rationale) = &edge.rationale {
+                                wln!(writeup, "  - *{}*", rationale);
+                            }
+                        }
+                    }
+                }
+                wln!(writeup);
+            }
+        }
+    }
+
+    // ==========================================================================
+    // WHAT THIS PR ADDS
+    // ==========================================================================
+    if !actions.is_empty() {
+        wln!(writeup, "## What This PR Adds\n");
+
+        for action in &actions {
+            let commit = extract_commit(&action.metadata_json);
+            let commit_str = commit
+                .as_ref()
+                .map(|c| format!(" [`{}`]", &c[..7.min(c.len())]))
+                .unwrap_or_default();
+
+            wln!(writeup, "### {}{}\n", action.title, commit_str);
+
+            if let Some(desc) = &action.description {
+                wln!(writeup, "{}\n", desc);
+            }
+
+            // Show associated files
+            if let Some(files) = extract_files(&action.metadata_json) {
+                if !files.is_empty() {
+                    wln!(writeup, "**Files:** {}\n", files.join(", "));
+                }
+            }
+        }
+    }
+
+    // ==========================================================================
+    // FILES CHANGED (from git)
+    // ==========================================================================
+    if let Some(base) = &config.base_branch {
+        let changed_files = get_changed_files(base);
+        if !changed_files.is_empty() {
+            wln!(writeup, "## Files Changed\n");
+            wln!(writeup, "| File | Type |");
+            wln!(writeup, "|------|------|");
+            for file in &changed_files {
+                let file_type = if file.ends_with(".rs") {
+                    "Rust"
+                } else if file.ends_with(".tsx") || file.ends_with(".ts") {
+                    "TypeScript"
+                } else if file.ends_with(".html") {
+                    "HTML"
+                } else if file.ends_with(".json") {
+                    "JSON"
+                } else if file.ends_with(".md") {
+                    "Markdown"
+                } else if file.ends_with(".toml") {
+                    "TOML"
+                } else {
+                    "Other"
+                };
+                wln!(writeup, "| `{}` | {} |", file, file_type);
+            }
+            wln!(writeup);
+
+            // Show diff stat summary
+            if let Some(stat) = get_git_diff_stat(base) {
+                let lines: Vec<&str> = stat.lines().collect();
+                if let Some(summary) = lines.last() {
+                    wln!(writeup, "*{}*\n", summary.trim());
+                }
+            }
+        }
+    }
+
+    // ==========================================================================
+    // OUTCOMES
+    // ==========================================================================
+    if !outcomes.is_empty() {
+        wln!(writeup, "## Outcomes\n");
+        for outcome in &outcomes {
+            let confidence = extract_confidence(&outcome.metadata_json);
+            let conf_str = confidence.map(|c| format!(" ({}%)", c)).unwrap_or_default();
+            let status_emoji = match outcome.status.as_str() {
+                "completed" => "✓",
+                "pending" => "⏳",
+                "rejected" => "✗",
+                _ => "•",
+            };
+            wln!(writeup, "- {} {}{}", status_emoji, outcome.title, conf_str);
+        }
+        wln!(writeup);
+    }
+
+    // ==========================================================================
+    // DECISION GRAPH CONTEXT
+    // ==========================================================================
+    if !graph.nodes.is_empty() {
+        wln!(writeup, "## Decision Graph Context\n");
+
+        // List node IDs by type
+        if !goals.is_empty() {
+            let ids: Vec<String> = goals.iter().map(|n| format!("#{}", n.id)).collect();
+            wln!(writeup, "- **Goals:** {}", ids.join(", "));
+        }
+        if !decisions.is_empty() {
+            let ids: Vec<String> = decisions.iter().map(|n| format!("#{}", n.id)).collect();
+            wln!(writeup, "- **Decisions:** {}", ids.join(", "));
+        }
+        if !actions.is_empty() {
+            let ids: Vec<String> = actions.iter().map(|n| format!("#{}", n.id)).collect();
+            wln!(writeup, "- **Actions:** {}", ids.join(", "));
+        }
+        wln!(writeup);
+    }
+
+    // ==========================================================================
+    // QUESTIONS TO CONSIDER
+    // ==========================================================================
+    wln!(writeup, "## Questions to Consider\n");
+    wln!(writeup, "### Before Merging\n");
+    wln!(writeup, "<!-- TODO: Add specific questions about this change -->\n");
+    wln!(writeup, "1. ...\n");
+    wln!(writeup, "### Future Improvements\n");
+    wln!(writeup, "<!-- TODO: Add ideas for follow-up work -->\n");
+    wln!(writeup, "1. ...\n");
+
+    // ==========================================================================
+    // TEST PLAN
+    // ==========================================================================
+    if config.include_test_plan {
+        wln!(writeup, "## Test Plan\n");
+
+        // Generate from outcomes
+        let completed_outcomes: Vec<&DecisionNode> = outcomes
+            .iter()
+            .filter(|o| o.status == "completed")
+            .cloned()
+            .collect();
+
+        if completed_outcomes.is_empty() {
+            wln!(writeup, "- [ ] Verify implementation");
+            wln!(writeup, "- [ ] Run test suite");
+            wln!(writeup, "- [ ] Manual testing");
+        } else {
+            for outcome in completed_outcomes {
+                wln!(writeup, "- [x] {}", outcome.title);
+            }
+        }
+        wln!(writeup);
+    }
+
+    // ==========================================================================
+    // DECISION GRAPH DOT (if enabled)
+    // ==========================================================================
+    if config.include_dot {
+        wln!(writeup, "## Decision Graph\n");
+
+        // Build image URL if PNG filename provided
+        let image_url = config.png_filename.as_ref().map(|filename| {
+            if let (Some(repo), Some(branch)) = (&config.github_repo, &config.git_branch) {
+                format!("https://raw.githubusercontent.com/{}/{}/{}", repo, branch, filename)
+            } else {
+                filename.clone()
+            }
+        });
+
+        if let Some(url) = &image_url {
+            wln!(writeup, "![Decision Graph]({})\n", url);
+            wln!(writeup, "<details>");
+            wln!(writeup, "<summary>DOT source</summary>\n");
+        }
+
+        wln!(writeup, "```dot");
+        let dot_config = DotConfig {
+            title: Some(config.title.clone()),
+            show_ids: true,
+            show_rationale: false,
+            show_confidence: true,
+            rankdir: "TB".to_string(),
+        };
+        w!(writeup, "{}", graph_to_dot(graph, &dot_config));
+        wln!(writeup, "```\n");
+
+        if image_url.is_some() {
+            wln!(writeup, "</details>\n");
+        }
+    }
+
+    // ==========================================================================
+    // FOOTER
+    // ==========================================================================
+    wln!(writeup, "---\n");
+    wln!(writeup, "🤖 Generated with [Claude Code](https://claude.com/claude-code)");
+
+    writeup
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -632,6 +986,8 @@ mod tests {
             png_filename: None,
             github_repo: None,
             git_branch: None,
+            base_branch: None,
+            enhanced: false,
         };
         let writeup = generate_pr_writeup(&graph, &config);
 
@@ -823,6 +1179,8 @@ mod tests {
             png_filename: None,
             github_repo: None,
             git_branch: None,
+            base_branch: None,
+            enhanced: false,
         };
         let writeup = generate_pr_writeup(&graph, &config);
 
@@ -842,6 +1200,8 @@ mod tests {
             png_filename: None,
             github_repo: None,
             git_branch: None,
+            base_branch: None,
+            enhanced: false,
         };
         let writeup = generate_pr_writeup(&graph, &config);
 
@@ -859,6 +1219,8 @@ mod tests {
             png_filename: Some("docs/graph.png".to_string()),
             github_repo: Some("owner/repo".to_string()),
             git_branch: Some("main".to_string()),
+            base_branch: None,
+            enhanced: false,
         };
         let writeup = generate_pr_writeup(&graph, &config);
 
@@ -896,10 +1258,35 @@ mod tests {
             png_filename: None,
             github_repo: None,
             git_branch: None,
+            base_branch: None,
+            enhanced: false,
         };
         let writeup = generate_pr_writeup(&graph, &config);
 
         // Should still produce valid output
         assert!(writeup.contains("## Summary"));
+    }
+
+    #[test]
+    fn test_enhanced_writeup() {
+        let graph = sample_graph();
+        let config = WriteupConfig {
+            title: "Enhanced PR".to_string(),
+            root_ids: vec![],
+            include_dot: false,
+            include_test_plan: true,
+            png_filename: None,
+            github_repo: None,
+            git_branch: None,
+            base_branch: None,
+            enhanced: true,
+        };
+        let writeup = generate_pr_writeup(&graph, &config);
+
+        // Enhanced writeup has different sections
+        assert!(writeup.contains("## Summary"));
+        assert!(writeup.contains("## Questions to Consider"));
+        assert!(writeup.contains("## Decision Graph Context"));
+        assert!(writeup.contains("🤖 Generated with"));
     }
 }

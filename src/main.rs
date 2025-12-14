@@ -217,6 +217,14 @@ enum Command {
         /// Skip test plan section
         #[arg(long)]
         no_test_plan: bool,
+
+        /// Generate enhanced writeup with more context (story, files changed, questions)
+        #[arg(long)]
+        enhanced: bool,
+
+        /// Base branch for git diff (e.g., "main")
+        #[arg(long)]
+        base: Option<String>,
     },
 
     /// Export or apply graph diff patches for multi-user sync
@@ -749,7 +757,7 @@ fn main() {
             }
         }
 
-        Command::Writeup { title, roots, nodes, output, png, auto, no_dot, no_test_plan } => {
+        Command::Writeup { title, roots, nodes, output, png, auto, no_dot, no_test_plan, enhanced, base } => {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -815,6 +823,8 @@ fn main() {
                         png_filename,
                         github_repo,
                         git_branch,
+                        base_branch: base.or_else(|| Some("main".to_string())),
+                        enhanced,
                     };
 
                     let writeup = generate_pr_writeup(&filtered_graph, &config);
