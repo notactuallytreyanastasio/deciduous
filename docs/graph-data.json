@@ -5521,6 +5521,28 @@
       "created_at": "2025-12-13T18:55:31.366191-05:00",
       "updated_at": "2025-12-13T18:55:31.366191-05:00",
       "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":90}"
+    },
+    {
+      "id": 503,
+      "change_id": "c59442dc-2c4a-4385-8fd6-6d76ddc053e2",
+      "node_type": "action",
+      "title": "Implementing Phase 7: Web Roadmap View",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T18:56:21.157107-05:00",
+      "updated_at": "2025-12-13T18:56:21.157107-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":85}"
+    },
+    {
+      "id": 504,
+      "change_id": "21b5b63f-56a6-424b-af2f-5f31bd24d922",
+      "node_type": "outcome",
+      "title": "Phase 7 complete: Web Roadmap view with filtering",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T18:59:30.571108-05:00",
+      "updated_at": "2025-12-13T18:59:30.571108-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":90}"
     }
   ],
   "edges": [
@@ -10330,6 +10352,28 @@
       "weight": 1.0,
       "rationale": "Phase 6 implementation complete",
       "created_at": "2025-12-13T18:55:31.373747-05:00"
+    },
+    {
+      "id": 438,
+      "from_node_id": 476,
+      "to_node_id": 503,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "c59442dc-2c4a-4385-8fd6-6d76ddc053e2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 7 implementation",
+      "created_at": "2025-12-13T18:56:21.166150-05:00"
+    },
+    {
+      "id": 439,
+      "from_node_id": 503,
+      "to_node_id": 504,
+      "from_change_id": "c59442dc-2c4a-4385-8fd6-6d76ddc053e2",
+      "to_change_id": "21b5b63f-56a6-424b-af2f-5f31bd24d922",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 7 implementation complete",
+      "created_at": "2025-12-13T18:59:30.599535-05:00"
     }
   ]
 }
