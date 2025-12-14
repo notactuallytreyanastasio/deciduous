@@ -217,7 +217,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_help_overlay(frame: &mut Frame, area: Rect) {
     // Center the help popup
     let popup_width = 60.min(area.width.saturating_sub(4));
-    let popup_height = 22.min(area.height.saturating_sub(4));
+    let popup_height = 32.min(area.height.saturating_sub(4));
 
     let popup_area = Rect {
         x: (area.width - popup_width) / 2,
@@ -242,7 +242,7 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
   /            Search
   f            Cycle type filter
   Ctrl+c       Clear all filters
-  Tab          Switch to DAG view
+  Tab          Switch view
   r            Refresh
   q            Quit
 
@@ -251,7 +251,15 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
   h/j/k/l      Pan view
   +/-          Zoom in/out
   0            Reset zoom
-  Tab          Switch to Timeline
+
+  Roadmap View
+  ─────────────────────────────────
+  j/k, ↑/↓     Move up/down
+  Enter        Toggle detail panel
+  o            Open GitHub issue
+  c            Toggle checkbox
+  Shift+Tab    Toggle Active/Completed
+  r            Refresh
 
   Press ? or Esc to close
 "#;
