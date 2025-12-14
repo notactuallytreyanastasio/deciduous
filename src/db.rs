@@ -345,6 +345,59 @@ pub struct CommandLog {
 // Roadmap Board Models
 // ============================================================================
 
+/// Checkbox state enum for type safety
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+pub enum CheckboxState {
+    /// Section header or item without checkbox
+    None,
+    /// Unchecked checkbox: - [ ]
+    Unchecked,
+    /// Checked checkbox: - [x]
+    Checked,
+}
+
+impl CheckboxState {
+    /// Convert to database string representation
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CheckboxState::None => "none",
+            CheckboxState::Unchecked => "unchecked",
+            CheckboxState::Checked => "checked",
+        }
+    }
+
+    /// Parse from database string representation
+    pub fn parse(s: &str) -> Self {
+        match s.to_lowercase().as_str() {
+            "checked" => CheckboxState::Checked,
+            "unchecked" => CheckboxState::Unchecked,
+            _ => CheckboxState::None,
+        }
+    }
+
+    /// Convert from boolean (for checkbox items)
+    pub fn from_bool(checked: bool) -> Self {
+        if checked {
+            CheckboxState::Checked
+        } else {
+            CheckboxState::Unchecked
+        }
+    }
+
+    /// Check if this represents a checked state
+    pub fn is_checked(&self) -> bool {
+        matches!(self, CheckboxState::Checked)
+    }
+}
+
+impl std::fmt::Display for CheckboxState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
 /// Insertable roadmap item
 #[derive(Insertable)]
 #[diesel(table_name = roadmap_items)]
@@ -390,6 +443,18 @@ pub struct RoadmapItem {
     pub created_at: String,
     pub updated_at: String,
     pub last_synced_at: Option<String>,
+}
+
+impl RoadmapItem {
+    /// Get the checkbox state as a typed enum
+    pub fn checkbox(&self) -> CheckboxState {
+        CheckboxState::parse(&self.checkbox_state)
+    }
+
+    /// Check if this item is completed (checkbox checked)
+    pub fn is_checked(&self) -> bool {
+        self.checkbox().is_checked()
+    }
 }
 
 /// Insertable roadmap sync state
