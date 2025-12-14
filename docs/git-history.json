@@ -1,18 +1,10 @@
 [
   {
-    "hash": "70b1e0f244d936f1769a28c3e69b448825462f13",
-    "short_hash": "70b1e0f",
+    "hash": "bc541a82d7940e7c2e0cffc3e7bcbefa80f9c2c6",
+    "short_hash": "bc541a8",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T00:28:24-05:00",
-    "message": "docs: add roadmap item for fixing decision nodes on GH Pages",
-    "files_changed": 1
-  },
-  {
-    "hash": "f04dc1e5a3613d9747d35cfc72b17393593f8a2a",
-    "short_hash": "f04dc1e",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T00:13:13-05:00",
-    "message": "docs: add GitHub Pages fixes to roadmap",
+    "date": "2025-12-13T19:00:15-05:00",
+    "message": "docs: sync decision graph",
     "files_changed": 1
   },
   {
