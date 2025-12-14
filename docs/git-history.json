@@ -1,11 +1,43 @@
 [
   {
-    "hash": "f05fd9f655c601727385fdcc5b331e21bc17ef96",
-    "short_hash": "f05fd9f",
+    "hash": "bc541a82d7940e7c2e0cffc3e7bcbefa80f9c2c6",
+    "short_hash": "bc541a8",
     "author": "Bobby Nathan",
-    "date": "2025-12-12T18:00:14-05:00",
-    "message": "chore: remove obsolete ts_gen test",
+    "date": "2025-12-13T19:00:15-05:00",
+    "message": "docs: sync decision graph",
     "files_changed": 1
+  },
+  {
+    "hash": "a2daa6ac9e3d72c48eec39feb737af1cb1cfe41b",
+    "short_hash": "a2daa6a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-13T18:42:44-05:00",
+    "message": "feat(roadmap): Phase 3 - GitHub CLI integration\n\nAdd gh CLI wrapper for GitHub issue operations:\n- Create, update, close, reopen issues\n- Get issue details and comments\n- Search issues by title or label\n- Auto-detect repo from git remote\n\nUses gh CLI instead of direct API to avoid token complexity.\n\nDecision Graph: Action #497",
+    "files_changed": 2
+  },
+  {
+    "hash": "8638a7dc617d07946e41dae4ab12a7e6a3fa346c",
+    "short_hash": "8638a7d",
+    "author": "Bobby Nathan",
+    "date": "2025-12-13T18:40:31-05:00",
+    "message": "feat: roadmap board system - Phase 1 & 2\n\nPhase 1: Database Layer\n- Add roadmap_items, roadmap_sync_state, roadmap_conflicts tables\n- Add Diesel schema definitions and models\n- Implement CRUD operations for roadmap items and conflicts\n- Add sync state management for bidirectional sync\n\nPhase 2: ROADMAP.md Parser\n- Parse markdown sections (## and ###) with metadata\n- Extract checkbox items with state (checked/unchecked)\n- Parse/generate HTML comment metadata for sync\n- Compute content hashes for change detection\n- Generate GitHub issue body from roadmap sections\n\nDecision Graph: Goal #476, Action #493, #495",
+    "files_changed": 6
+  },
+  {
+    "hash": "9ea0ded71056d0f51c144c8870cc1dd30d409e2e",
+    "short_hash": "9ea0ded",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T20:29:34-05:00",
+    "message": "feat: add roadmap web page with GitHub issue integration\n\n- Add roadmap_items table to database schema for tracking roadmap items\n- Create roadmap module (src/roadmap.rs) with:\n  - ROADMAP.md parser extracting checklist items, sections, status\n  - Scope extraction (Critical, Extended, etc.)\n  - Auto-tagging based on keywords\n  - GitHub issue sync via gh CLI\n  - JSON export for web viewer\n- Add CLI commands: deciduous roadmap {parse,list,sync,export,summary}\n- Add /api/roadmap endpoint to serve.rs for local development\n- Create docs/roadmap/index.html web page:\n  - Styled consistently with main page (clean, white, no colors)\n  - Summary stats with progress bar\n  - Filterable by section, status, GitHub issues\n  - Searchable\n  - Works with both API and static JSON\n- Update deciduous sync to export roadmap-data.json\n- Add Roadmap link to main page navigation\n- Update tutorial styling: remove colorful banner, use subtle gray notice",
+    "files_changed": 15
+  },
+  {
+    "hash": "7dd695e53f00bc32254d3f4d873f31af831e74ca",
+    "short_hash": "7dd695e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T18:00:26-05:00",
+    "message": "docs: sync graph",
+    "files_changed": 2
   },
   {
     "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",

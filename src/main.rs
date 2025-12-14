@@ -387,6 +387,21 @@ enum RoadmapAction {
         #[arg(short, long)]
         path: Option<PathBuf>,
     },
+
+    /// Audit completion status of roadmap items
+    Check {
+        /// Path to ROADMAP.md (default: ROADMAP.md)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
+
+        /// Show only incomplete items
+        #[arg(long)]
+        incomplete: bool,
+
+        /// Show only complete items
+        #[arg(long)]
+        complete: bool,
+    },
 }
 
 fn main() {
@@ -1736,6 +1751,105 @@ fn main() {
                         Err(_) => {
                             println!("\n{} No items in database yet", "Items:".dimmed());
                         }
+                    }
+                }
+
+                RoadmapAction::Check { path: _, incomplete, complete } => {
+                    // Get all roadmap items from database
+                    let items = match db.get_all_roadmap_items() {
+                        Ok(i) => i,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    if items.is_empty() {
+                        println!("{} No roadmap items in database", "Status:".yellow());
+                        println!("Run 'deciduous roadmap init' first");
+                        return;
+                    }
+
+                    // Check completion for each item
+                    let mut complete_count = 0;
+                    let mut incomplete_count = 0;
+                    let mut results: Vec<(String, bool, bool, bool, bool)> = Vec::new();
+
+                    for item in &items {
+                        match db.check_roadmap_item_completion(item.id) {
+                            Ok((is_complete, has_outcome, issue_closed)) => {
+                                let checkbox_checked = item.checkbox_state == "checked";
+
+                                if is_complete && checkbox_checked {
+                                    complete_count += 1;
+                                } else {
+                                    incomplete_count += 1;
+                                }
+
+                                results.push((
+                                    item.title.clone(),
+                                    is_complete && checkbox_checked,
+                                    checkbox_checked,
+                                    has_outcome,
+                                    issue_closed,
+                                ));
+                            }
+                            Err(e) => {
+                                eprintln!("{} Checking {}: {}", "Warning:".yellow(), item.title, e);
+                            }
+                        }
+                    }
+
+                    // Print header
+                    println!("{}", "Roadmap Completion Audit".cyan().bold());
+                    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    println!();
+
+                    // Print results based on filters
+                    for (title, is_complete, checkbox, outcome, issue) in &results {
+                        // Apply filters
+                        if incomplete && *is_complete {
+                            continue;
+                        }
+                        if complete && !*is_complete {
+                            continue;
+                        }
+
+                        let status_icon = if *is_complete {
+                            "✓".green()
+                        } else {
+                            "○".yellow()
+                        };
+
+                        let checkbox_icon = if *checkbox { "☑".green() } else { "☐".dimmed() };
+                        let outcome_icon = if *outcome { "⚡".green() } else { "⚡".dimmed() };
+                        let issue_icon = if *issue { "🔒".green() } else { "🔓".dimmed() };
+
+                        println!("{} {} {} {} {}",
+                            status_icon,
+                            checkbox_icon,
+                            outcome_icon,
+                            issue_icon,
+                            truncate(title, 60));
+                    }
+
+                    // Print summary
+                    println!();
+                    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+                    println!();
+                    println!("{}", "Legend:".dimmed());
+                    println!("  {} = checkbox checked    {} = outcome linked    {} = issue closed",
+                        "☑".green(), "⚡".green(), "🔒".green());
+                    println!();
+                    println!("{}", "Summary:".cyan());
+                    println!("  {} {} complete", "✓".green(), complete_count);
+                    println!("  {} {} incomplete", "○".yellow(), incomplete_count);
+                    println!("  {} total items", items.len());
+
+                    if incomplete_count > 0 {
+                        println!();
+                        println!("{} Completion requires: checkbox ☑ AND outcome ⚡ AND issue closed 🔒",
+                            "Note:".dimmed());
                     }
                 }
             }
