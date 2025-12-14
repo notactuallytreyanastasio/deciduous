@@ -13,6 +13,7 @@ import { ChainsView } from './views/ChainsView';
 import { TimelineView } from './views/TimelineView';
 import { GraphView } from './views/GraphView';
 import { DagView } from './views/DagView';
+import { RoadmapView } from './views/RoadmapView';
 import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
 // Detect if running from deciduous serve (localhost) vs static file (GitHub Pages)
@@ -142,6 +143,12 @@ export const App: React.FC = () => {
             path="/graph"
             element={
               <GraphView graphData={filteredGraphData!} />
+            }
+          />
+          <Route
+            path="/roadmap"
+            element={
+              <RoadmapView graphData={filteredGraphData!} />
             }
           />
           {/* Fallback redirect */}

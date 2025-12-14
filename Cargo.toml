@@ -60,6 +60,10 @@ chrono = "0.4"
 # UUID generation for change_id
 uuid = { version = "1.0", features = ["v4"] }
 
+# Roadmap parsing
+regex = "1.10"
+sha2 = "0.10"
+
 # SQLite ORM with migrations
 diesel = { version = "2.2", features = ["sqlite", "r2d2", "64-column-tables"] }
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
