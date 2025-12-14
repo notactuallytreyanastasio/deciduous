@@ -11,3 +11,9 @@ export type DecisionSession = { id: number, name: string | null, started_at: str
 
 export type CommandLog = { id: number, command: string, description: string | null, working_dir: string | null, exit_code: number | null, stdout: string | null, stderr: string | null, started_at: string, completed_at: string | null, duration_ms: number | null, decision_node_id: number | null, };
 
+export type RoadmapItem = { id: number, change_id: string, title: string, description: string | null, section: string | null, parent_id: number | null, checkbox_state: string, github_issue_number: number | null, github_issue_state: string | null, outcome_node_id: number | null, outcome_change_id: string | null, markdown_line_start: number | null, markdown_line_end: number | null, content_hash: string | null, created_at: string, updated_at: string, last_synced_at: string | null, };
+
+export type RoadmapSyncState = { id: number, roadmap_path: string, roadmap_content_hash: string | null, github_repo: string | null, last_github_sync: string | null, last_markdown_parse: string | null, conflict_count: number, };
+
+export type RoadmapConflict = { id: number, item_change_id: string, conflict_type: string, local_value: string | null, remote_value: string | null, resolution: string | null, detected_at: string, resolved_at: string | null, };
+
