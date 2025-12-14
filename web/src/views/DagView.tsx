@@ -72,8 +72,10 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // New state for recency filtering
   const [viewMode, setViewMode] = useState<ViewMode>('recent');
   const [recentChainCount, setRecentChainCount] = useState(DEFAULT_RECENT_CHAINS);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
+  // Detect mobile for responsive defaults
+  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [isFullscreen, setIsFullscreen] = useState(!isMobile); // Fullscreen by default on desktop only
+  const [isControlsCollapsed, setIsControlsCollapsed] = useState(isMobile); // Collapsed by default on mobile
 
   // Sort chains by recency for display
   const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
@@ -697,6 +699,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderBottom: '1px solid #d0d7de',
     zIndex: 20,
     flexShrink: 0,
+    flexWrap: 'wrap',
+    gap: '8px',
   },
   topBarLeft: {
     display: 'flex',
