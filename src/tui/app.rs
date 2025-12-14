@@ -462,6 +462,13 @@ impl App {
         }
     }
 
+    /// Toggle checkbox state for a roadmap item
+    pub fn toggle_roadmap_checkbox(&mut self, item_id: i32, new_state: &str) -> Result<(), String> {
+        self.db
+            .update_roadmap_item_checkbox(item_id, new_state)
+            .map_err(|e| e.to_string())
+    }
+
     pub fn toggle_detail(&mut self) {
         self.detail_expanded = !self.detail_expanded;
     }
