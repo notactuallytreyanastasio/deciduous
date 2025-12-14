@@ -72,6 +72,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // New state for recency filtering
   const [viewMode, setViewMode] = useState<ViewMode>('recent');
   const [recentChainCount, setRecentChainCount] = useState(DEFAULT_RECENT_CHAINS);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isControlsCollapsed, setIsControlsCollapsed] = useState(false);
 
   // Sort chains by recency for display
   const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
@@ -144,6 +146,25 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     setRecentChainCount(DEFAULT_RECENT_CHAINS);
     setFocusChainIndex(null);
   }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen(prev => !prev);
+  }, []);
+
+  const toggleControls = useCallback(() => {
+    setIsControlsCollapsed(prev => !prev);
+  }, []);
+
+  // Handle Escape key to exit fullscreen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        setIsFullscreen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isFullscreen]);
 
   const handleFocusChain = useCallback((index: number | null) => {
     if (index === null) {
@@ -332,9 +353,15 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   }, [graphData, visibleNodeIds, handleSelectNode]);
 
   return (
-    <div style={styles.container}>
+    <div style={{
+      ...styles.container,
+      ...(isFullscreen ? styles.fullscreenContainer : {}),
+    }}>
       {/* Top Bar - Recency Filter */}
-      <div style={styles.topBar}>
+      <div style={{
+        ...styles.topBar,
+        ...(isFullscreen ? styles.fullscreenTopBar : {}),
+      }}>
         <div style={styles.topBarLeft}>
           <span style={styles.topBarTitle}>Recency Filter</span>
           <span style={styles.topBarSubtitle} title="Showing most recently active goal chains first. Each chain includes a goal and all its connected decisions, actions, and outcomes.">
@@ -440,6 +467,13 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           <span style={styles.topBarStat}>{visibleNodeIds.size} nodes</span>
           <span style={styles.topBarStatDivider}>·</span>
           <span style={styles.topBarStat}>{visibleChains.length} chains</span>
+          <button
+            onClick={toggleFullscreen}
+            style={styles.fullscreenBtn}
+            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
+          >
+            {isFullscreen ? '⤓' : '⤢'}
+          </button>
         </div>
       </div>
 
@@ -456,36 +490,52 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       )}
 
       {/* Side Controls */}
-      <div style={styles.controls}>
-        <div style={styles.section}>
-          <label style={styles.label}>Jump to Chain</label>
-          <select
-            value={focusChainIndex ?? ''}
-            onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
-            style={styles.select}
-          >
-            <option value="">Recent Chains</option>
-            {goalChains.map((chain) => (
-              <option key={chain.root.id} value={chains.indexOf(chain)}>
-                {truncate(chain.root.title, 30)}
-              </option>
-            ))}
-          </select>
-        </div>
+      <div style={{
+        ...styles.controls,
+        ...(isControlsCollapsed ? styles.controlsCollapsed : {}),
+        ...(isFullscreen ? styles.controlsFullscreen : {}),
+      }}>
+        <button
+          onClick={toggleControls}
+          style={styles.collapseBtn}
+          title={isControlsCollapsed ? 'Show controls' : 'Hide controls'}
+        >
+          {isControlsCollapsed ? '☰' : '✕'}
+        </button>
 
-        <div style={styles.legend}>
-          <div style={styles.legendTitle}>Node Types</div>
-          {Object.entries(NODE_COLORS).map(([type, color]) => (
-            <div key={type} style={styles.legendItem}>
-              <div style={{ ...styles.legendDot, backgroundColor: color }} />
-              <span>{type}</span>
+        {!isControlsCollapsed && (
+          <>
+            <div style={styles.section}>
+              <label style={styles.label}>Jump to Chain</label>
+              <select
+                value={focusChainIndex ?? ''}
+                onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
+                style={styles.select}
+              >
+                <option value="">Recent Chains</option>
+                {goalChains.map((chain) => (
+                  <option key={chain.root.id} value={chains.indexOf(chain)}>
+                    {truncate(chain.root.title, 30)}
+                  </option>
+                ))}
+              </select>
             </div>
-          ))}
-        </div>
 
-        <div style={styles.zoomInfo}>
-          Zoom: {Math.round(zoom * 100)}%
-        </div>
+            <div style={styles.legend}>
+              <div style={styles.legendTitle}>Node Types</div>
+              {Object.entries(NODE_COLORS).map(([type, color]) => (
+                <div key={type} style={styles.legendItem}>
+                  <div style={{ ...styles.legendDot, backgroundColor: color }} />
+                  <span>{type}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={styles.zoomInfo}>
+              Zoom: {Math.round(zoom * 100)}%
+            </div>
+          </>
+        )}
       </div>
 
       {/* SVG Container */}
@@ -628,6 +678,15 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     backgroundColor: '#ffffff',
   },
+  fullscreenContainer: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
+    height: '100vh',
+  },
   // Top Bar - Prominent recency filter controls
   topBar: {
     display: 'flex',
@@ -718,6 +777,20 @@ const styles: Record<string, React.CSSProperties> = {
   topBarStatDivider: {
     color: '#d0d7de',
   },
+  fullscreenBtn: {
+    marginLeft: '12px',
+    padding: '6px 10px',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    color: '#24292f',
+    fontSize: '14px',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+  },
+  fullscreenTopBar: {
+    padding: '8px 20px',
+  },
   // Hidden chains indicator - visual hint of more content
   hiddenIndicator: {
     display: 'flex',
@@ -755,6 +828,30 @@ const styles: Record<string, React.CSSProperties> = {
     zIndex: 10,
     width: '180px',
     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+    transition: 'width 0.2s, padding 0.2s',
+  },
+  controlsCollapsed: {
+    width: '40px',
+    padding: '8px',
+    overflow: 'hidden',
+  },
+  controlsFullscreen: {
+    top: '60px',
+  },
+  collapseBtn: {
+    width: '24px',
+    height: '24px',
+    padding: 0,
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '4px',
+    color: '#57606a',
+    fontSize: '14px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: '10px',
   },
   expandInputRow: {
     display: 'flex',
