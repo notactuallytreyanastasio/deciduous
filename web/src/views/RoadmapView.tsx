@@ -3,76 +3,198 @@
  *
  * Displays roadmap items with sync status indicators.
  * Shows checkbox state, GitHub issue links, and outcome connections.
+ *
+ * Keyboard shortcuts:
+ * - j/k or Arrow keys: Navigate items
+ * - o: Open GitHub issue in browser
+ * - Tab: Toggle between Active/Completed views
+ * - Enter: Toggle detail panel
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import type { GraphData, DecisionNode } from '../types/graph';
 import type { RoadmapItem } from '../types/generated/schema';
 import { DetailPanel } from '../components/DetailPanel';
+
+// =============================================================================
+// Types
+// =============================================================================
 
 interface RoadmapViewProps {
   graphData: GraphData;
   roadmapItems?: RoadmapItem[];
 }
 
-type FilterType = 'all' | 'with-issues' | 'without-issues' | 'completed';
+type ViewMode = 'active' | 'completed';
+
+// =============================================================================
+// Pure Functions (Functional Core)
+// =============================================================================
+
+/** Check if an item is complete (checkbox + outcome + issue closed) */
+function isItemComplete(item: RoadmapItem): boolean {
+  const checkboxChecked = item.checkbox_state === 'checked';
+  const hasOutcome = item.outcome_change_id !== null && item.outcome_change_id !== undefined;
+  const issueClosed = item.github_issue_state === 'closed';
+  return checkboxChecked && hasOutcome && issueClosed;
+}
+
+/** Check if an item is partially complete */
+function isItemPartial(item: RoadmapItem): boolean {
+  const checkboxChecked = item.checkbox_state === 'checked';
+  const hasOutcome = item.outcome_change_id !== null && item.outcome_change_id !== undefined;
+  const issueClosed = item.github_issue_state === 'closed';
+  return (checkboxChecked || hasOutcome || issueClosed) && !isItemComplete(item);
+}
+
+/** Filter items by view mode */
+function filterByMode(items: RoadmapItem[], mode: ViewMode): RoadmapItem[] {
+  return items.filter(item => {
+    const complete = isItemComplete(item);
+    return mode === 'active' ? !complete : complete;
+  });
+}
+
+/** Count items by status */
+function countByStatus(items: RoadmapItem[]): { active: number; completed: number } {
+  const completed = items.filter(isItemComplete).length;
+  return { active: items.length - completed, completed };
+}
+
+/** Get GitHub issue URL */
+function getIssueUrl(item: RoadmapItem): string | null {
+  if (!item.github_issue_number) return null;
+  return `https://github.com/notactuallytreyanastasio/deciduous/issues/${item.github_issue_number}`;
+}
+
+// =============================================================================
+// Component
+// =============================================================================
 
 export const RoadmapView: React.FC<RoadmapViewProps> = ({
   graphData,
   roadmapItems = [],
 }) => {
-  const [filter, setFilter] = useState<FilterType>('all');
-  const [selectedSection, setSelectedSection] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('active');
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [showDetail, setShowDetail] = useState(false);
   const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
 
-  // Get unique sections
-  const sections = useMemo(() => {
-    const sectionSet = new Set<string>();
-    roadmapItems.forEach(item => {
-      if (item.section) sectionSet.add(item.section);
-    });
-    return Array.from(sectionSet).sort();
-  }, [roadmapItems]);
+  // Filter and count items
+  const filteredItems = useMemo(() => filterByMode(roadmapItems, viewMode), [roadmapItems, viewMode]);
+  const counts = useMemo(() => countByStatus(roadmapItems), [roadmapItems]);
 
-  // Filter items
-  const filteredItems = useMemo(() => {
-    let items = roadmapItems;
+  // Get selected item
+  const selectedItem = filteredItems[selectedIndex] ?? null;
 
-    // Section filter
-    if (selectedSection) {
-      items = items.filter(item => item.section === selectedSection);
+  // Clamp selection when items change
+  useEffect(() => {
+    if (selectedIndex >= filteredItems.length) {
+      setSelectedIndex(Math.max(0, filteredItems.length - 1));
+    }
+  }, [filteredItems.length, selectedIndex]);
+
+  // Open issue in browser
+  const openSelectedIssue = useCallback(() => {
+    if (selectedItem) {
+      const url = getIssueUrl(selectedItem);
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    }
+  }, [selectedItem]);
+
+  // State for status message
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
+  // Clear status message after 3 seconds
+  useEffect(() => {
+    if (statusMessage) {
+      const timer = setTimeout(() => setStatusMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [statusMessage]);
+
+  // Toggle checkbox via API (only works when running locally with deciduous serve)
+  const toggleCheckbox = useCallback(async () => {
+    if (!selectedItem) {
+      setStatusMessage('No item selected');
+      return;
     }
 
-    // Type filter
-    switch (filter) {
-      case 'with-issues':
-        items = items.filter(item => item.github_issue_number !== undefined);
-        break;
-      case 'without-issues':
-        items = items.filter(item => item.github_issue_number === undefined);
-        break;
-      case 'completed':
-        items = items.filter(item =>
-          item.checkbox_state === 'checked' &&
-          item.github_issue_state === 'closed' &&
-          item.outcome_node_id !== undefined
-        );
-        break;
+    const newState = selectedItem.checkbox_state === 'checked' ? 'unchecked' : 'checked';
+
+    try {
+      const response = await fetch('/api/roadmap/checkbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          item_id: selectedItem.id,
+          checkbox_state: newState,
+        }),
+      });
+
+      if (response.ok) {
+        setStatusMessage(`Item marked as ${newState}`);
+        // Reload the page to refresh data (simple approach)
+        window.location.reload();
+      } else {
+        const data = await response.json();
+        setStatusMessage(data.error || 'Failed to update');
+      }
+    } catch {
+      setStatusMessage('API not available (requires deciduous serve)');
     }
+  }, [selectedItem]);
 
-    return items;
-  }, [roadmapItems, selectedSection, filter]);
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't handle if typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
 
-  // Group items by section
-  const groupedItems = useMemo(() => {
-    const groups: Record<string, RoadmapItem[]> = {};
-    filteredItems.forEach(item => {
-      const section = item.section || 'Uncategorized';
-      if (!groups[section]) groups[section] = [];
-      groups[section].push(item);
-    });
-    return groups;
-  }, [filteredItems]);
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex(i => Math.min(i + 1, filteredItems.length - 1));
+          break;
+        case 'k':
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex(i => Math.max(i - 1, 0));
+          break;
+        case 'o':
+          e.preventDefault();
+          openSelectedIssue();
+          break;
+        case 'c':
+          e.preventDefault();
+          toggleCheckbox();
+          break;
+        case 'Tab':
+          e.preventDefault();
+          setViewMode(m => m === 'active' ? 'completed' : 'active');
+          setSelectedIndex(0);
+          break;
+        case 'Enter':
+          e.preventDefault();
+          setShowDetail(d => !d);
+          break;
+        case 'Escape':
+          if (showDetail) {
+            e.preventDefault();
+            setShowDetail(false);
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredItems.length, openSelectedIssue, toggleCheckbox, showDetail]);
 
   const handleSelectOutcome = (outcomeId: number) => {
     const node = graphData.nodes.find(n => n.id === outcomeId);
@@ -98,99 +220,94 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
       <div style={styles.sidebar}>
         <h2 style={styles.title}>Roadmap</h2>
 
-        {/* Filters */}
+        {/* View Mode Toggle */}
         <div style={styles.filterSection}>
-          <label style={styles.filterLabel}>Status</label>
+          <label style={styles.filterLabel}>View Mode</label>
           <div style={styles.filterButtons}>
-            {(['all', 'with-issues', 'without-issues', 'completed'] as FilterType[]).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                style={{
-                  ...styles.filterBtn,
-                  ...(filter === f ? styles.filterBtnActive : {}),
-                }}
-              >
-                {f.replace('-', ' ').replace(/^\w/, c => c.toUpperCase())}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Section filter */}
-        {sections.length > 0 && (
-          <div style={styles.filterSection}>
-            <label style={styles.filterLabel}>Section</label>
-            <select
-              value={selectedSection || ''}
-              onChange={e => setSelectedSection(e.target.value || null)}
-              style={styles.select}
+            <button
+              onClick={() => { setViewMode('active'); setSelectedIndex(0); }}
+              style={{
+                ...styles.filterBtn,
+                ...(viewMode === 'active' ? styles.filterBtnActive : {}),
+              }}
             >
-              <option value="">All Sections</option>
-              {sections.map(s => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Stats */}
-        <div style={styles.stats}>
-          <div style={styles.statItem}>
-            <span style={styles.statNum}>{filteredItems.length}</span>
-            <span style={styles.statLabel}>Items</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statNum}>
-              {filteredItems.filter(i => i.github_issue_number).length}
-            </span>
-            <span style={styles.statLabel}>With Issues</span>
-          </div>
-          <div style={styles.statItem}>
-            <span style={styles.statNum}>
-              {filteredItems.filter(i => i.checkbox_state === 'checked').length}
-            </span>
-            <span style={styles.statLabel}>Completed</span>
+              Active ({counts.active})
+            </button>
+            <button
+              onClick={() => { setViewMode('completed'); setSelectedIndex(0); }}
+              style={{
+                ...styles.filterBtn,
+                ...(viewMode === 'completed' ? styles.filterBtnActive : {}),
+              }}
+            >
+              Completed ({counts.completed})
+            </button>
           </div>
         </div>
+
+        {/* Keyboard hints */}
+        <div style={styles.hints}>
+          <div style={styles.hintItem}><kbd>j/k</kbd> Navigate</div>
+          <div style={styles.hintItem}><kbd>o</kbd> Open issue</div>
+          <div style={styles.hintItem}><kbd>c</kbd> Toggle checkbox</div>
+          <div style={styles.hintItem}><kbd>Tab</kbd> Toggle view</div>
+          <div style={styles.hintItem}><kbd>Enter</kbd> Detail panel</div>
+        </div>
+
+        {/* Status message */}
+        {statusMessage && (
+          <div style={styles.statusMessage}>{statusMessage}</div>
+        )}
       </div>
 
       {/* Main content */}
       <div style={styles.content}>
-        {Object.entries(groupedItems).map(([section, items]) => (
-          <div key={section} style={styles.sectionGroup}>
-            <h3 style={styles.sectionTitle}>{section}</h3>
-            <div style={styles.itemList}>
-              {items.map(item => (
-                <RoadmapItemCard
-                  key={item.id}
-                  item={item}
-                  onSelectOutcome={handleSelectOutcome}
-                />
-              ))}
-            </div>
-          </div>
-        ))}
-
-        {filteredItems.length === 0 && (
+        {filteredItems.length === 0 ? (
           <div style={styles.emptyFiltered}>
-            No items match your filters
+            {viewMode === 'active'
+              ? 'No active items. Press Tab to view completed.'
+              : 'No completed items. Press Tab to view active.'}
+          </div>
+        ) : (
+          <div style={styles.itemList}>
+            {filteredItems.map((item, index) => (
+              <RoadmapItemCard
+                key={item.id}
+                item={item}
+                isSelected={index === selectedIndex}
+                onClick={() => setSelectedIndex(index)}
+                onSelectOutcome={handleSelectOutcome}
+                onOpenIssue={() => {
+                  const url = getIssueUrl(item);
+                  if (url) window.open(url, '_blank', 'noopener,noreferrer');
+                }}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Detail panel for linked nodes */}
-      <div style={styles.detailPanel}>
-        <DetailPanel
-          node={selectedNode}
-          graphData={graphData}
-          onSelectNode={(id) => {
-            const node = graphData.nodes.find(n => n.id === id);
-            if (node) setSelectedNode(node);
-          }}
-          onClose={() => setSelectedNode(null)}
-        />
-      </div>
+      {/* Detail panel */}
+      {showDetail && selectedItem && (
+        <div style={styles.detailSidebar}>
+          <ItemDetailPanel item={selectedItem} onClose={() => setShowDetail(false)} />
+        </div>
+      )}
+
+      {/* Node detail panel for linked outcomes */}
+      {selectedNode && (
+        <div style={styles.detailPanel}>
+          <DetailPanel
+            node={selectedNode}
+            graphData={graphData}
+            onSelectNode={(id) => {
+              const node = graphData.nodes.find(n => n.id === id);
+              if (node) setSelectedNode(node);
+            }}
+            onClose={() => setSelectedNode(null)}
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -201,46 +318,73 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
 
 interface RoadmapItemCardProps {
   item: RoadmapItem;
+  isSelected: boolean;
+  onClick: () => void;
   onSelectOutcome: (id: number) => void;
+  onOpenIssue: () => void;
 }
 
-const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({ item, onSelectOutcome }) => {
-  const isComplete = item.checkbox_state === 'checked' &&
-    item.github_issue_state === 'closed' &&
-    item.outcome_node_id !== undefined;
+const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({
+  item,
+  isSelected,
+  onClick,
+  onSelectOutcome,
+  onOpenIssue
+}) => {
+  const complete = isItemComplete(item);
+  const partial = isItemPartial(item);
 
   return (
-    <div style={{
-      ...styles.card,
-      ...(isComplete ? styles.cardComplete : {}),
-    }}>
+    <div
+      style={{
+        ...styles.card,
+        ...(complete ? styles.cardComplete : {}),
+        ...(isSelected ? styles.cardSelected : {}),
+      }}
+      onClick={onClick}
+    >
       <div style={styles.cardHeader}>
         {/* Checkbox */}
-        <span style={styles.checkbox}>
+        <span style={{
+          ...styles.checkbox,
+          color: item.checkbox_state === 'checked' ? '#1a7f37' : '#6e7781',
+        }}>
           {item.checkbox_state === 'checked' ? '☑' : '☐'}
         </span>
 
+        {/* Outcome indicator */}
+        <span style={{
+          ...styles.outcomeIcon,
+          color: item.outcome_change_id ? '#9a6700' : '#d0d7de',
+        }}>
+          ⚡
+        </span>
+
         {/* Title */}
-        <span style={styles.cardTitle}>{item.title}</span>
+        <span style={{
+          ...styles.cardTitle,
+          color: complete ? '#1a7f37' : partial ? '#9a6700' : '#24292f',
+        }}>
+          {item.title}
+        </span>
 
         {/* Badges */}
         <div style={styles.badges}>
           {item.github_issue_number && (
-            <a
-              href={`https://github.com/notactuallytreyanastasio/deciduous/issues/${item.github_issue_number}`}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              onClick={(e) => { e.stopPropagation(); onOpenIssue(); }}
               style={{
                 ...styles.issueBadge,
                 ...(item.github_issue_state === 'closed' ? styles.issueClosed : styles.issueOpen),
               }}
+              title="Click or press 'o' to open issue"
             >
               #{item.github_issue_number}
-            </a>
+            </button>
           )}
           {item.outcome_node_id && (
             <button
-              onClick={() => onSelectOutcome(item.outcome_node_id!)}
+              onClick={(e) => { e.stopPropagation(); onSelectOutcome(item.outcome_node_id!); }}
               style={styles.outcomeBadge}
             >
               ⚡ Outcome
@@ -249,16 +393,87 @@ const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({ item, onSelectOutcome
         </div>
       </div>
 
+      {item.section && (
+        <div style={styles.cardSection}>{item.section}</div>
+      )}
+
       {item.description && (
         <p style={styles.cardDesc}>{item.description}</p>
       )}
 
-      {/* Completion status */}
-      {isComplete && (
+      {complete && (
         <div style={styles.completeBadge}>
           ✓ Complete
         </div>
       )}
+    </div>
+  );
+};
+
+// =============================================================================
+// Item Detail Panel
+// =============================================================================
+
+interface ItemDetailPanelProps {
+  item: RoadmapItem;
+  onClose: () => void;
+}
+
+const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({ item, onClose }) => {
+  const complete = isItemComplete(item);
+
+  return (
+    <div style={styles.detailContent}>
+      <div style={styles.detailHeader}>
+        <h3 style={styles.detailTitle}>{item.title}</h3>
+        <button onClick={onClose} style={styles.closeBtn}>×</button>
+      </div>
+
+      {item.section && (
+        <div style={styles.detailRow}>
+          <span style={styles.detailLabel}>Section:</span>
+          <span>{item.section}</span>
+        </div>
+      )}
+
+      {item.description && (
+        <div style={styles.detailRow}>
+          <span style={styles.detailLabel}>Description:</span>
+          <p style={styles.detailDesc}>{item.description}</p>
+        </div>
+      )}
+
+      <div style={styles.detailDivider}>Completion Status</div>
+
+      <div style={styles.statusRow}>
+        <span style={{ color: item.checkbox_state === 'checked' ? '#1a7f37' : '#cf222e' }}>
+          {item.checkbox_state === 'checked' ? '☑' : '☐'} Checkbox: {item.checkbox_state}
+        </span>
+      </div>
+
+      <div style={styles.statusRow}>
+        <span style={{ color: item.outcome_change_id ? '#1a7f37' : '#cf222e' }}>
+          ⚡ Outcome: {item.outcome_change_id ? `Linked (${item.outcome_change_id.slice(0, 8)})` : 'Not linked'}
+        </span>
+      </div>
+
+      <div style={styles.statusRow}>
+        <span style={{ color: item.github_issue_state === 'closed' ? '#1a7f37' : '#cf222e' }}>
+          {item.github_issue_state === 'closed' ? '🔒' : '🔓'} Issue: {
+            item.github_issue_number
+              ? `#${item.github_issue_number} (${item.github_issue_state || 'unknown'})`
+              : 'No issue'
+          }
+        </span>
+      </div>
+
+      <div style={{
+        ...styles.overallStatus,
+        backgroundColor: complete ? '#dafbe1' : '#fff8c5',
+        color: complete ? '#1a7f37' : '#9a6700',
+      }}>
+        {complete ? '✓ COMPLETE' : '○ INCOMPLETE'}
+      </div>
     </div>
   );
 };
@@ -274,7 +489,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 0,
   },
   sidebar: {
-    width: '220px',
+    width: '200px',
     padding: '20px',
     backgroundColor: '#f6f8fa',
     borderRight: '1px solid #d0d7de',
@@ -315,52 +530,21 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#ffffff',
     borderColor: '#0969da',
   },
-  select: {
-    width: '100%',
-    padding: '8px',
-    fontSize: '12px',
-    border: '1px solid #d0d7de',
-    borderRadius: '4px',
-    backgroundColor: '#ffffff',
-  },
-  stats: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '8px',
+  hints: {
     marginTop: '20px',
     paddingTop: '20px',
     borderTop: '1px solid #d0d7de',
   },
-  statItem: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statNum: {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#24292f',
-  },
-  statLabel: {
-    fontSize: '12px',
+  hintItem: {
+    fontSize: '11px',
     color: '#6e7781',
+    marginBottom: '6px',
   },
   content: {
-    flex: 2,
+    flex: 1,
     overflowY: 'auto',
     padding: '20px',
     backgroundColor: '#ffffff',
-  },
-  sectionGroup: {
-    marginBottom: '24px',
-  },
-  sectionTitle: {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#6e7781',
-    margin: '0 0 12px 0',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
   },
   itemList: {
     display: 'flex',
@@ -372,7 +556,12 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#ffffff',
     border: '1px solid #d0d7de',
     borderRadius: '6px',
-    transition: 'border-color 0.2s',
+    cursor: 'pointer',
+    transition: 'border-color 0.2s, background-color 0.2s',
+  },
+  cardSelected: {
+    borderColor: '#0969da',
+    backgroundColor: '#f0f7ff',
   },
   cardComplete: {
     backgroundColor: '#f0fdf4',
@@ -385,12 +574,20 @@ const styles: Record<string, React.CSSProperties> = {
   },
   checkbox: {
     fontSize: '16px',
-    color: '#57606a',
+  },
+  outcomeIcon: {
+    fontSize: '14px',
   },
   cardTitle: {
     flex: 1,
     fontSize: '14px',
-    color: '#24292f',
+    fontWeight: 500,
+  },
+  cardSection: {
+    fontSize: '11px',
+    color: '#6e7781',
+    marginTop: '4px',
+    marginLeft: '40px',
   },
   badges: {
     display: 'flex',
@@ -400,7 +597,8 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     padding: '2px 8px',
     borderRadius: '10px',
-    textDecoration: 'none',
+    border: 'none',
+    cursor: 'pointer',
     fontWeight: 500,
   },
   issueOpen: {
@@ -423,20 +621,85 @@ const styles: Record<string, React.CSSProperties> = {
   cardDesc: {
     fontSize: '12px',
     color: '#57606a',
-    margin: '8px 0 0 24px',
+    margin: '8px 0 0 40px',
     lineHeight: 1.4,
   },
   completeBadge: {
     marginTop: '8px',
-    marginLeft: '24px',
+    marginLeft: '40px',
     fontSize: '11px',
     color: '#1a7f37',
     fontWeight: 500,
   },
-  detailPanel: {
-    flex: 1,
-    minWidth: '300px',
+  detailSidebar: {
+    width: '300px',
     borderLeft: '1px solid #d0d7de',
+    backgroundColor: '#ffffff',
+    flexShrink: 0,
+  },
+  detailPanel: {
+    width: '300px',
+    borderLeft: '1px solid #d0d7de',
+    flexShrink: 0,
+  },
+  detailContent: {
+    padding: '16px',
+  },
+  detailHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: '16px',
+  },
+  detailTitle: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#24292f',
+    margin: 0,
+  },
+  closeBtn: {
+    background: 'none',
+    border: 'none',
+    fontSize: '20px',
+    cursor: 'pointer',
+    color: '#6e7781',
+    padding: '0 4px',
+  },
+  detailRow: {
+    marginBottom: '12px',
+  },
+  detailLabel: {
+    fontSize: '11px',
+    color: '#6e7781',
+    textTransform: 'uppercase',
+    display: 'block',
+    marginBottom: '4px',
+  },
+  detailDesc: {
+    fontSize: '13px',
+    color: '#24292f',
+    margin: 0,
+    lineHeight: 1.5,
+  },
+  detailDivider: {
+    fontSize: '11px',
+    color: '#6e7781',
+    textTransform: 'uppercase',
+    margin: '16px 0 12px 0',
+    paddingTop: '12px',
+    borderTop: '1px solid #d0d7de',
+  },
+  statusRow: {
+    fontSize: '13px',
+    marginBottom: '8px',
+  },
+  overallStatus: {
+    marginTop: '16px',
+    padding: '8px 12px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontWeight: 600,
+    textAlign: 'center',
   },
   empty: {
     display: 'flex',
@@ -455,5 +718,14 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: 'center',
     color: '#6e7781',
     padding: '40px',
+  },
+  statusMessage: {
+    marginTop: '12px',
+    padding: '8px 12px',
+    backgroundColor: '#ddf4ff',
+    color: '#0969da',
+    borderRadius: '4px',
+    fontSize: '12px',
+    textAlign: 'center',
   },
 };

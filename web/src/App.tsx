@@ -27,12 +27,14 @@ export const App: React.FC = () => {
   const {
     graphData,
     gitHistory,
+    roadmapItems,
     loading,
     error,
     lastUpdated,
   } = useGraphData({
     graphUrl: isLocalServer ? '/api/graph' : './graph-data.json',
     gitHistoryUrl: './git-history.json',
+    roadmapUrl: isLocalServer ? '/api/roadmap' : './roadmap-items.json',
     enableSSE: false, // Disable SSE until deciduous serve is implemented
     pollInterval: isLocalServer ? 30000 : 0, // 30-second refresh for local server only
   });
@@ -148,7 +150,7 @@ export const App: React.FC = () => {
           <Route
             path="/roadmap"
             element={
-              <RoadmapView graphData={filteredGraphData!} />
+              <RoadmapView graphData={filteredGraphData!} roadmapItems={roadmapItems} />
             }
           />
           {/* Fallback redirect */}
