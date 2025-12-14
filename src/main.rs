@@ -338,6 +338,10 @@ enum RoadmapAction {
         /// Create GitHub issues for new sections
         #[arg(long, default_value = "true")]
         create_issues: bool,
+
+        /// Skip completed sections (only sync active/backlog items)
+        #[arg(long)]
+        skip_completed: bool,
     },
 
     /// List roadmap items with status
@@ -1352,7 +1356,7 @@ fn main() {
                     println!("  Metadata comments added to {}", roadmap_path.display());
                 }
 
-                RoadmapAction::Sync { path, repo, execute, create_issues } => {
+                RoadmapAction::Sync { path, repo, execute, create_issues, skip_completed } => {
                     let dry_run = !execute;  // Default is dry-run mode
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
@@ -1394,9 +1398,32 @@ fn main() {
                         }
                     };
 
+                    // Build a map of which level-2 section each level-3 section belongs to
+                    let mut parent_section_name: Option<String> = None;
+                    let mut section_parents: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
+                    for section in &parsed.sections {
+                        if section.level == 2 {
+                            parent_section_name = Some(section.title.clone());
+                        } else if section.level == 3 {
+                            if let Some(ref parent) = parent_section_name {
+                                section_parents.insert(section.change_id.clone(), parent.clone());
+                            }
+                        }
+                    }
+
                     // Only sync level 3 sections (actual items, not parent headers)
+                    // Optionally skip sections under "Completed"
                     let syncable_sections: Vec<&RoadmapSection> = parsed.sections.iter()
                         .filter(|s| s.level == 3)
+                        .filter(|s| {
+                            if skip_completed {
+                                let parent = section_parents.get(&s.change_id);
+                                !matches!(parent.map(|p| p.as_str()), Some("Completed"))
+                            } else {
+                                true
+                            }
+                        })
                         .collect();
 
                     if dry_run {
@@ -1418,16 +1445,40 @@ fn main() {
                         }
                     }
 
+                    // Build a lookup of existing issue numbers from the database
+                    let db_issue_numbers: std::collections::HashMap<String, (i32, Option<String>)> = match db.get_all_roadmap_items() {
+                        Ok(items) => items.iter()
+                            .filter_map(|item| {
+                                item.github_issue_number.map(|num| {
+                                    (item.title.clone(), (num, item.github_issue_state.clone()))
+                                })
+                            })
+                            .collect(),
+                        Err(_) => std::collections::HashMap::new(),
+                    };
+
                     let mut created = 0;
                     let mut updated = 0;
                     let mut skipped = 0;
 
+                    // Track new issue numbers for writing back to ROADMAP.md
+                    let mut new_issue_numbers: std::collections::HashMap<String, (i32, String)> = std::collections::HashMap::new();
+
                     for section in &syncable_sections {
-                        // Check if section already has an issue
-                        if section.github_issue_number.is_some() {
+                        // Check if section already has an issue (from ROADMAP.md or database)
+                        let issue_from_db = db_issue_numbers.get(&section.title);
+                        let existing_issue = section.github_issue_number.or_else(|| issue_from_db.map(|(num, _)| *num));
+
+                        if let Some(issue_num) = existing_issue {
                             // Update existing issue
-                            let issue_num = section.github_issue_number.unwrap();
                             let body = generate_issue_body(section);
+
+                            // Track for writing back to ROADMAP.md (issue from db needs to go into metadata)
+                            if section.github_issue_number.is_none() {
+                                if let Some((_, state)) = issue_from_db {
+                                    new_issue_numbers.insert(section.change_id.clone(), (issue_num, state.clone().unwrap_or_else(|| "open".to_string())));
+                                }
+                            }
 
                             if dry_run {
                                 println!("  {} Would update issue #{}: {}", "[DRY]".yellow(), issue_num, section.title);
@@ -1455,6 +1506,9 @@ fn main() {
                                     Ok(issue) => {
                                         println!("  {} Created issue #{}: {}", "✓".green(), issue.number, section.title);
                                         created += 1;
+
+                                        // Track new issue for writing back
+                                        new_issue_numbers.insert(section.change_id.clone(), (issue.number, issue.state.clone()));
 
                                         // Update database with issue number
                                         if let Err(e) = db.update_roadmap_item_github_by_title(&section.title, issue.number, &issue.state) {
@@ -1489,9 +1543,21 @@ fn main() {
                     }
 
                     // Write updated roadmap with issue metadata
-                    if !dry_run && created > 0 {
+                    if !dry_run && !new_issue_numbers.is_empty() {
+                        // Create updated sections with new issue numbers
+                        let updated_sections: Vec<RoadmapSection> = parsed.sections.iter().map(|s| {
+                            if let Some((issue_num, state)) = new_issue_numbers.get(&s.change_id) {
+                                let mut updated = s.clone();
+                                updated.github_issue_number = Some(*issue_num);
+                                updated.github_issue_state = Some(state.clone());
+                                updated
+                            } else {
+                                s.clone()
+                            }
+                        }).collect();
+
                         let content = std::fs::read_to_string(&roadmap_path).unwrap_or_default();
-                        match write_roadmap_with_metadata(&roadmap_path, &parsed.sections, &content) {
+                        match write_roadmap_with_metadata(&roadmap_path, &updated_sections, &content) {
                             Ok(updated_content) => {
                                 if let Err(e) = std::fs::write(&roadmap_path, &updated_content) {
                                     eprintln!("{} Writing roadmap: {}", "Warning:".yellow(), e);
