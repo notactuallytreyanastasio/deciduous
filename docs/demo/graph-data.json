@@ -5587,6 +5587,83 @@
       "created_at": "2025-12-13T19:08:12.276044-05:00",
       "updated_at": "2025-12-13T19:08:12.276044-05:00",
       "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":95}"
+    },
+    {
+      "id": 509,
+      "change_id": "696b8859-d56f-4ad8-9314-cdea3f60b8f8",
+      "node_type": "action",
+      "title": "Refactoring TUI roadmap view - hide completed, add detail modal, TEA pattern",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T10:25:38.915493-05:00",
+      "updated_at": "2025-12-14T10:25:38.915493-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":85}"
+    },
+    {
+      "id": 510,
+      "change_id": "3346804a-7c95-4374-b192-782e2e0eb3e3",
+      "node_type": "outcome",
+      "title": "TUI roadmap refactored with TEA architecture: Active/Completed toggle via Shift+Tab, detail panel via Enter, functional core with tests",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T10:29:06.409830-05:00",
+      "updated_at": "2025-12-14T10:29:06.409830-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":95}"
+    },
+    {
+      "id": 511,
+      "change_id": "0298b4f2-35a6-4210-bb80-9c2b6f558a4e",
+      "node_type": "outcome",
+      "title": "Roadmap view unified across TUI/Web: Active/Completed toggle, o opens issues, c toggles checkbox, API endpoint for updates",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T11:27:00.884013-05:00",
+      "updated_at": "2025-12-14T11:27:00.884013-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":95}"
+    },
+    {
+      "id": 512,
+      "change_id": "47688034-e918-4e11-93d7-4da549c0f050",
+      "node_type": "action",
+      "title": "Fix roadmap sync to write issue numbers back to ROADMAP.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T12:36:28.304930-05:00",
+      "updated_at": "2025-12-14T12:36:28.304930-05:00",
+      "metadata_json": "{\"branch\":\"feat/web-roadmap-api\",\"confidence\":90}"
+    },
+    {
+      "id": 513,
+      "change_id": "de3de2f2-ee49-4b03-b73a-0865df7b45a8",
+      "node_type": "action",
+      "title": "Add --skip-completed flag to roadmap sync",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T12:36:34.743660-05:00",
+      "updated_at": "2025-12-14T12:36:34.743660-05:00",
+      "metadata_json": "{\"branch\":\"feat/web-roadmap-api\",\"confidence\":90}"
+    },
+    {
+      "id": 514,
+      "change_id": "742dc907-43ff-47fb-a825-9d4a57dd11c1",
+      "node_type": "action",
+      "title": "Add database lookup for existing issue numbers in sync",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T12:36:34.764274-05:00",
+      "updated_at": "2025-12-14T12:36:34.764274-05:00",
+      "metadata_json": "{\"branch\":\"feat/web-roadmap-api\",\"confidence\":90}"
+    },
+    {
+      "id": 515,
+      "change_id": "f97829a6-247e-4d52-a209-ede9ee542c10",
+      "node_type": "outcome",
+      "title": "Roadmap sync now writes issue metadata to ROADMAP.md and prevents duplicates",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-14T12:36:34.782425-05:00",
+      "updated_at": "2025-12-14T12:36:34.782425-05:00",
+      "metadata_json": "{\"branch\":\"feat/web-roadmap-api\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -10462,6 +10539,105 @@
       "weight": 1.0,
       "rationale": "Phase 9 implementation complete",
       "created_at": "2025-12-13T19:08:17.302332-05:00"
+    },
+    {
+      "id": 444,
+      "from_node_id": 476,
+      "to_node_id": 509,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "696b8859-d56f-4ad8-9314-cdea3f60b8f8",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "TUI roadmap UX improvements and architecture refactor",
+      "created_at": "2025-12-14T10:25:44.802390-05:00"
+    },
+    {
+      "id": 445,
+      "from_node_id": 509,
+      "to_node_id": 510,
+      "from_change_id": "696b8859-d56f-4ad8-9314-cdea3f60b8f8",
+      "to_change_id": "3346804a-7c95-4374-b192-782e2e0eb3e3",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "TEA refactoring complete",
+      "created_at": "2025-12-14T10:29:11.937391-05:00"
+    },
+    {
+      "id": 446,
+      "from_node_id": 510,
+      "to_node_id": 511,
+      "from_change_id": "3346804a-7c95-4374-b192-782e2e0eb3e3",
+      "to_change_id": "0298b4f2-35a6-4210-bb80-9c2b6f558a4e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Added cross-platform roadmap features",
+      "created_at": "2025-12-14T11:27:06.439082-05:00"
+    },
+    {
+      "id": 447,
+      "from_node_id": 476,
+      "to_node_id": 512,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "47688034-e918-4e11-93d7-4da549c0f050",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Sync fix for roadmap board",
+      "created_at": "2025-12-14T12:36:53.162372-05:00"
+    },
+    {
+      "id": 448,
+      "from_node_id": 476,
+      "to_node_id": 513,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "de3de2f2-ee49-4b03-b73a-0865df7b45a8",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Skip completed flag",
+      "created_at": "2025-12-14T12:36:53.171222-05:00"
+    },
+    {
+      "id": 449,
+      "from_node_id": 476,
+      "to_node_id": 514,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "742dc907-43ff-47fb-a825-9d4a57dd11c1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "DB lookup for duplicates",
+      "created_at": "2025-12-14T12:36:53.180151-05:00"
+    },
+    {
+      "id": 450,
+      "from_node_id": 512,
+      "to_node_id": 515,
+      "from_change_id": "47688034-e918-4e11-93d7-4da549c0f050",
+      "to_change_id": "f97829a6-247e-4d52-a209-ede9ee542c10",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Sync fixes complete",
+      "created_at": "2025-12-14T12:36:53.191157-05:00"
+    },
+    {
+      "id": 451,
+      "from_node_id": 513,
+      "to_node_id": 515,
+      "from_change_id": "de3de2f2-ee49-4b03-b73a-0865df7b45a8",
+      "to_change_id": "f97829a6-247e-4d52-a209-ede9ee542c10",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Skip completed complete",
+      "created_at": "2025-12-14T12:36:53.201285-05:00"
+    },
+    {
+      "id": 452,
+      "from_node_id": 514,
+      "to_node_id": 515,
+      "from_change_id": "742dc907-43ff-47fb-a825-9d4a57dd11c1",
+      "to_change_id": "f97829a6-247e-4d52-a209-ede9ee542c10",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "DB lookup complete",
+      "created_at": "2025-12-14T12:36:53.208928-05:00"
     }
   ]
 }
