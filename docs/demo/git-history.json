@@ -1,11 +1,11 @@
 [
   {
-    "hash": "bc541a82d7940e7c2e0cffc3e7bcbefa80f9c2c6",
-    "short_hash": "bc541a8",
+    "hash": "99feec2e50af7d24d6909e64a2b0219a58175bee",
+    "short_hash": "99feec2",
     "author": "Bobby Nathan",
-    "date": "2025-12-13T19:00:15-05:00",
-    "message": "docs: sync decision graph",
-    "files_changed": 1
+    "date": "2025-12-14T11:36:11-05:00",
+    "message": "feat(web): add roadmap API and React integration\n\n- Add GET /api/roadmap endpoint to serve.rs\n- Add POST /api/roadmap/checkbox endpoint for toggle\n- Update useGraphData hook to fetch roadmap items\n- Pass roadmapItems through App.tsx to RoadmapView\n- Rewrite RoadmapView.tsx with:\n  - Active/Completed toggle (Tab key)\n  - Keyboard navigation (j/k, o, c, Enter, Escape)\n  - Click to toggle checkbox\n  - Status message display\n  - API integration for checkbox updates\n\nWorks with both dev server and bundled viewer (deciduous serve)\nBundled viewer rebuilt for GitHub Pages and deciduous serve",
+    "files_changed": 7
   },
   {
     "hash": "a2daa6ac9e3d72c48eec39feb737af1cb1cfe41b",
