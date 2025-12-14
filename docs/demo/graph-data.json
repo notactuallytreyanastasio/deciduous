@@ -5532,6 +5532,61 @@
       "created_at": "2025-12-13T18:56:21.157107-05:00",
       "updated_at": "2025-12-13T18:56:21.157107-05:00",
       "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":85}"
+    },
+    {
+      "id": 504,
+      "change_id": "21b5b63f-56a6-424b-af2f-5f31bd24d922",
+      "node_type": "outcome",
+      "title": "Phase 7 complete: Web Roadmap view with filtering",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T18:59:30.571108-05:00",
+      "updated_at": "2025-12-13T18:59:30.571108-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":90}"
+    },
+    {
+      "id": 505,
+      "change_id": "1d9ccb32-5c2b-44ad-8662-9fd1e5b4dbee",
+      "node_type": "action",
+      "title": "Implementing Phase 8: Unify types across Rust/TUI/Web",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T19:00:25.144802-05:00",
+      "updated_at": "2025-12-13T19:00:25.144802-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":85}"
+    },
+    {
+      "id": 506,
+      "change_id": "824ccbd6-5de1-429e-8d12-73a6a923610b",
+      "node_type": "outcome",
+      "title": "Phase 8 complete: Types unified across Rust/TUI/Web via ts-rs type generator",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T19:05:49.511725-05:00",
+      "updated_at": "2025-12-13T19:05:49.511725-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":95}"
+    },
+    {
+      "id": 507,
+      "change_id": "ae4848ad-1a94-4e69-afb8-eaafc20d5696",
+      "node_type": "action",
+      "title": "Implementing Phase 9: Completion detection",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T19:06:04.004166-05:00",
+      "updated_at": "2025-12-13T19:06:04.004166-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":85}"
+    },
+    {
+      "id": 508,
+      "change_id": "9655008c-237e-4b0d-935c-a1b50ce5a0f6",
+      "node_type": "outcome",
+      "title": "Phase 9 complete: Added 'roadmap check' command for completion audit",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-13T19:08:12.276044-05:00",
+      "updated_at": "2025-12-13T19:08:12.276044-05:00",
+      "metadata_json": "{\"branch\":\"feat/roadmap-board-system\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -10352,6 +10407,61 @@
       "weight": 1.0,
       "rationale": "Phase 7 implementation",
       "created_at": "2025-12-13T18:56:21.166150-05:00"
+    },
+    {
+      "id": 439,
+      "from_node_id": 503,
+      "to_node_id": 504,
+      "from_change_id": "c59442dc-2c4a-4385-8fd6-6d76ddc053e2",
+      "to_change_id": "21b5b63f-56a6-424b-af2f-5f31bd24d922",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 7 implementation complete",
+      "created_at": "2025-12-13T18:59:30.599535-05:00"
+    },
+    {
+      "id": 440,
+      "from_node_id": 476,
+      "to_node_id": 505,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "1d9ccb32-5c2b-44ad-8662-9fd1e5b4dbee",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 8 implementation",
+      "created_at": "2025-12-13T19:00:25.155911-05:00"
+    },
+    {
+      "id": 441,
+      "from_node_id": 505,
+      "to_node_id": 506,
+      "from_change_id": "1d9ccb32-5c2b-44ad-8662-9fd1e5b4dbee",
+      "to_change_id": "824ccbd6-5de1-429e-8d12-73a6a923610b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 8 implementation complete",
+      "created_at": "2025-12-13T19:05:55.209410-05:00"
+    },
+    {
+      "id": 442,
+      "from_node_id": 476,
+      "to_node_id": 507,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "ae4848ad-1a94-4e69-afb8-eaafc20d5696",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 9 implementation for roadmap board",
+      "created_at": "2025-12-13T19:06:10.229304-05:00"
+    },
+    {
+      "id": 443,
+      "from_node_id": 507,
+      "to_node_id": 508,
+      "from_change_id": "ae4848ad-1a94-4e69-afb8-eaafc20d5696",
+      "to_change_id": "9655008c-237e-4b0d-935c-a1b50ce5a0f6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Phase 9 implementation complete",
+      "created_at": "2025-12-13T19:08:17.302332-05:00"
     }
   ]
 }

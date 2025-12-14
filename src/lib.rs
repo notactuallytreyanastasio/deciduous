@@ -53,6 +53,7 @@ pub use config::Config;
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
     DecisionContext, DecisionSession,
+    RoadmapItem, RoadmapSyncState, RoadmapConflict,
     CURRENT_SCHEMA, get_current_git_branch, get_current_git_commit, build_metadata_json,
 };
 pub use diff::{GraphPatch, PatchNode, PatchEdge, ApplyResult};
