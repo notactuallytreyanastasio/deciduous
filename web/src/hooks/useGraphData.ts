@@ -6,12 +6,15 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { GraphData, GitCommit } from '../types/graph';
+import type { RoadmapItem } from '../types/generated/schema';
 
 interface UseGraphDataOptions {
   /** Path to graph-data.json (default: '/graph-data.json' or '/api/graph') */
   graphUrl?: string;
   /** Path to git-history.json (optional, for timeline view) */
   gitHistoryUrl?: string;
+  /** Path to roadmap-items.json (optional, for roadmap view) */
+  roadmapUrl?: string;
   /** Enable SSE live updates (requires deciduous serve) */
   enableSSE?: boolean;
   /** SSE endpoint (default: '/api/events') */
@@ -23,6 +26,7 @@ interface UseGraphDataOptions {
 interface UseGraphDataResult {
   graphData: GraphData | null;
   gitHistory: GitCommit[];
+  roadmapItems: RoadmapItem[];
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
@@ -43,6 +47,7 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
   const {
     graphUrl = detectGraphUrl(),
     gitHistoryUrl,
+    roadmapUrl,
     enableSSE = false,
     sseUrl = '/api/events',
     pollInterval = 0,
@@ -50,6 +55,7 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
 
   const [graphData, setGraphData] = useState<GraphData | null>(null);
   const [gitHistory, setGitHistory] = useState<GitCommit[]>([]);
+  const [roadmapItems, setRoadmapItems] = useState<RoadmapItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -98,13 +104,33 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
   }, [gitHistoryUrl]);
 
   /**
+   * Fetch roadmap items (optional, for roadmap view)
+   */
+  const fetchRoadmap = useCallback(async () => {
+    if (!roadmapUrl) return;
+
+    try {
+      const response = await fetch(roadmapUrl);
+      if (response.ok) {
+        const json = await response.json();
+        // Handle both API response {ok, data, error} and direct array format
+        const data: RoadmapItem[] = json.data ?? json;
+        setRoadmapItems(data);
+      }
+      // Don't treat missing roadmap as an error
+    } catch (err) {
+      console.warn('Could not load roadmap items:', err);
+    }
+  }, [roadmapUrl]);
+
+  /**
    * Refresh data manually
    */
   const refresh = useCallback(async () => {
     setLoading(true);
-    await Promise.all([fetchGraph(), fetchGitHistory()]);
+    await Promise.all([fetchGraph(), fetchGitHistory(), fetchRoadmap()]);
     setLoading(false);
-  }, [fetchGraph, fetchGitHistory]);
+  }, [fetchGraph, fetchGitHistory, fetchRoadmap]);
 
   /**
    * Initial data load
@@ -114,7 +140,7 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
 
     const load = async () => {
       setLoading(true);
-      await Promise.all([fetchGraph(), fetchGitHistory()]);
+      await Promise.all([fetchGraph(), fetchGitHistory(), fetchRoadmap()]);
       if (mounted) setLoading(false);
     };
 
@@ -123,7 +149,7 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
     return () => {
       mounted = false;
     };
-  }, [fetchGraph, fetchGitHistory]);
+  }, [fetchGraph, fetchGitHistory, fetchRoadmap]);
 
   /**
    * SSE subscription for live updates
@@ -183,6 +209,7 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
   return {
     graphData,
     gitHistory,
+    roadmapItems,
     loading,
     error,
     lastUpdated,
