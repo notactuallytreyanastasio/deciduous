@@ -7,21 +7,8 @@
 
 import React, { useState, useMemo } from 'react';
 import type { GraphData, DecisionNode } from '../types/graph';
+import type { RoadmapItem } from '../types/generated/schema';
 import { DetailPanel } from '../components/DetailPanel';
-
-// Roadmap item interface (mirrors Rust RoadmapItem)
-interface RoadmapItem {
-  id: number;
-  change_id: string;
-  title: string;
-  description?: string;
-  section?: string;
-  checkbox_state: 'checked' | 'unchecked' | 'none';
-  github_issue_number?: number;
-  github_issue_state?: 'open' | 'closed';
-  outcome_node_id?: number;
-  outcome_change_id?: string;
-}
 
 interface RoadmapViewProps {
   graphData: GraphData;
