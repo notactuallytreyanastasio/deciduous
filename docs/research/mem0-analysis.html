@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mem0 Analysis - Deciduous Research</title>
+    <style>
+        :root {
+            --bg: #1a1b26;
+            --surface: #24283b;
+            --surface-hover: #2a2f42;
+            --text: #c0caf5;
+            --muted: #565f89;
+            --accent: #7aa2f7;
+            --green: #9ece6a;
+            --orange: #ff9e64;
+            --red: #f7768e;
+            --purple: #bb9af7;
+            --cyan: #7dcfff;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.7;
+            padding: 2rem;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        a { color: var(--accent); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .back-link {
+            color: var(--muted);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 2rem;
+        }
+        .back-link:hover { color: var(--accent); text-decoration: none; }
+
+        h1 {
+            color: var(--accent);
+            font-size: 2.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .meta {
+            color: var(--muted);
+            margin-bottom: 2rem;
+            font-style: italic;
+        }
+
+        hr {
+            border: none;
+            border-top: 1px solid var(--surface);
+            margin: 2rem 0;
+        }
+
+        h2 {
+            color: var(--text);
+            font-size: 1.5rem;
+            margin: 2rem 0 1rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        h3 {
+            color: var(--cyan);
+            font-size: 1.25rem;
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        h4 {
+            color: var(--purple);
+            font-size: 1.1rem;
+            margin: 1rem 0 0.5rem;
+        }
+
+        p { margin-bottom: 1rem; }
+
+        .summary-box {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            border-left: 4px solid var(--accent);
+        }
+
+        .summary-box h2 {
+            margin-top: 0;
+            border: none;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+            font-size: 0.9rem;
+        }
+
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border: 1px solid var(--surface);
+        }
+
+        th {
+            background: var(--surface);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        tr:nth-child(even) { background: var(--surface); }
+
+        code {
+            background: var(--surface);
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 0.875em;
+        }
+
+        pre {
+            background: var(--surface);
+            padding: 1rem;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-left: 3px solid var(--muted);
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .feature-section {
+            background: var(--surface);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .feature-section h3 {
+            margin-top: 0;
+        }
+
+        .priority-tag {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 0.5rem;
+        }
+
+        .p1 { background: var(--red); color: var(--bg); }
+        .p2 { background: var(--orange); color: var(--bg); }
+        .p3 { background: var(--green); color: var(--bg); }
+
+        .skip-tag {
+            background: var(--muted);
+            color: var(--bg);
+        }
+
+        ul, ol {
+            margin: 1rem 0 1rem 1.5rem;
+        }
+
+        li { margin-bottom: 0.5rem; }
+
+        .architecture-diagram {
+            background: var(--surface);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'SF Mono', Consolas, monospace;
+            font-size: 0.8rem;
+            overflow-x: auto;
+            white-space: pre;
+            line-height: 1.4;
+        }
+
+        blockquote {
+            border-left: 4px solid var(--purple);
+            padding-left: 1rem;
+            margin: 1rem 0;
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        .key-insight {
+            background: linear-gradient(135deg, var(--surface) 0%, #2d3250 100%);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            padding: 1rem 1.5rem;
+            margin: 1.5rem 0;
+        }
+
+        .key-insight strong {
+            color: var(--accent);
+        }
+
+        footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--surface);
+            color: var(--muted);
+            font-size: 0.875rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <a href="index.html" class="back-link">← Back to Research</a>
+
+    <h1>Mem0 Analysis: What Can Deciduous Learn?</h1>
+    <p class="meta">December 2024 - Competitive Analysis</p>
+
+    <p>This document analyzes <a href="https://github.com/mem0ai/mem0">mem0</a>, a memory layer for AI agents, to identify features that could enhance Deciduous.</p>
+
+    <hr>
+
+    <div class="summary-box">
+        <h2>Executive Summary</h2>
+        <p><strong>Mem0</strong> and <strong>Deciduous</strong> solve related but distinct problems in the AI development tooling space:</p>
+
+        <table>
+            <tr><th>Aspect</th><th>Mem0</th><th>Deciduous</th></tr>
+            <tr><td><strong>Core Purpose</strong></td><td>Persistent memory for AI conversations</td><td>Decision graph for AI-assisted development</td></tr>
+            <tr><td><strong>Primary User</strong></td><td>AI agents/applications</td><td>Human developers + AI assistants</td></tr>
+            <tr><td><strong>Data Model</strong></td><td>Vector embeddings + semantic memory</td><td>Typed graph nodes + explicit edges</td></tr>
+            <tr><td><strong>Query Style</strong></td><td>Semantic/similarity search</td><td>Graph traversal + filtering</td></tr>
+            <tr><td><strong>Persistence</strong></td><td>Per-user/session memories</td><td>Per-project decision history</td></tr>
+        </table>
+
+        <div class="key-insight">
+            <strong>Key Insight:</strong> Mem0 focuses on <em>implicit</em> knowledge extraction (LLM infers what to remember), while Deciduous focuses on <em>explicit</em> decision tracking (developer/AI logs what happened).
+        </div>
+    </div>
+
+    <h2>What Mem0 Does Well</h2>
+
+    <div class="feature-section">
+        <h3>1. Automatic Memory Extraction</h3>
+        <p>Mem0 uses an LLM to automatically extract "facts" from conversations:</p>
+        <pre><code># User says: "I prefer dark mode and use vim keybindings"
+m.add("I prefer dark mode and use vim keybindings", user_id="alice")
+
+# Mem0 automatically extracts:
+# - Preference: dark mode
+# - Tool preference: vim keybindings</code></pre>
+
+        <p><strong>Contrast with Deciduous:</strong> We require explicit logging:</p>
+        <pre><code>deciduous add observation "User prefers dark mode" -c 90
+deciduous add observation "User prefers vim keybindings" -c 90</code></pre>
+    </div>
+
+    <div class="feature-section">
+        <h3>2. Multi-Level Memory Hierarchy</h3>
+        <p>Mem0 organizes memories into three tiers:</p>
+        <ol>
+            <li><strong>User Memory</strong> - Long-term preferences/facts about a person</li>
+            <li><strong>Session Memory</strong> - Context within a specific conversation</li>
+            <li><strong>Agent Memory</strong> - System-level configuration and behavior</li>
+        </ol>
+        <p>This enables scoped retrieval: "What does Alice prefer?" vs "What happened in this session?"</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>3. Semantic Search + Filtering</h3>
+        <pre><code># Find memories semantically related to "authentication"
+results = m.search("authentication", user_id="alice")
+
+# With metadata filters
+results = m.search("auth", filters={"category": "security"})</code></pre>
+    </div>
+
+    <div class="feature-section">
+        <h3>4. Graph Memory (Experimental)</h3>
+        <p>Mem0 recently added graph-based memory that tracks entity relationships:</p>
+        <pre><code>Alice --[works_at]--> Acme Corp
+Alice --[prefers]--> Dark Mode
+Acme Corp --[uses]--> Python</code></pre>
+        <p>This enables multi-hop queries: "What tech stack does Alice's company use?"</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>5. MCP Integration (OpenMemory)</h3>
+        <p>Mem0's "OpenMemory" provides an MCP server that works with Claude Desktop, Cursor, Windsurf:</p>
+        <pre><code># Start OpenMemory server
+openmemory serve
+
+# Any MCP client can now:
+# - add_memories
+# - search_memory
+# - list_memories</code></pre>
+    </div>
+
+    <hr>
+
+    <h2>What Deciduous Does Better</h2>
+
+    <div class="feature-section">
+        <h3>1. Structured Decision Reasoning</h3>
+        <p>Deciduous captures the <em>why</em> behind decisions with explicit node types:</p>
+        <pre><code>Goal -> Decision -> Option (chosen/rejected) -> Action -> Outcome</code></pre>
+        <p>Mem0 stores facts; Deciduous stores reasoning chains.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>2. Git Integration</h3>
+        <pre><code>git commit -m "feat: add auth"
+deciduous add action "Implemented auth" --commit HEAD
+deciduous link 5 6 -r "Implementation of goal"</code></pre>
+        <p>Mem0 has no native VCS awareness.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>3. Visual Graph Exploration</h3>
+        <p>Deciduous provides:</p>
+        <ul>
+            <li>Interactive web viewer (<code>deciduous serve</code>)</li>
+            <li>Terminal UI (<code>deciduous tui</code>)</li>
+            <li>DOT/PNG export for documentation</li>
+            <li>PR writeup generation</li>
+        </ul>
+        <p>Mem0's UI is primarily for memory management, not exploration.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>4. Multi-User Sync via Patches</h3>
+        <pre><code>deciduous diff export --branch feature-x -o patches/my-work.json
+# Teammate applies
+deciduous diff apply patches/my-work.json</code></pre>
+        <p>Mem0's multi-user story is cloud-based (managed platform).</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>5. Explicit Confidence Levels</h3>
+        <pre><code>deciduous add decision "Choose auth method" -c 75
+deciduous add action "Implementing JWT" -c 90</code></pre>
+        <p>Confidence is first-class in Deciduous; Mem0 memories are binary (exists or not).</p>
+    </div>
+
+    <hr>
+
+    <h2>Features Worth Adopting</h2>
+
+    <div class="feature-section">
+        <h3>Semantic Search <span class="priority-tag p1">P1</span></h3>
+        <h4>The Problem</h4>
+        <p><code>deciduous nodes</code> only supports exact filtering. Finding related decisions requires manual graph traversal.</p>
+
+        <h4>Proposed</h4>
+        <pre><code># Search nodes by semantic similarity
+deciduous search "authentication security"
+
+# Returns:
+# - Goal #12: Implement user auth (similarity: 0.92)
+# - Decision #15: Choose auth method (similarity: 0.87)
+# - Observation #23: JWT tokens expire after 1hr (similarity: 0.71)</code></pre>
+
+        <h4>Implementation Options</h4>
+        <ol>
+            <li><strong>SQLite FTS5</strong> - Full-text search, no external deps</li>
+            <li><strong>Local embeddings</strong> - Use <code>sentence-transformers</code> or similar</li>
+            <li><strong>Hybrid</strong> - FTS for keywords, embeddings for semantic</li>
+        </ol>
+    </div>
+
+    <div class="feature-section">
+        <h3>MCP Server <span class="priority-tag p1">P1</span></h3>
+        <h4>The Problem</h4>
+        <p>Deciduous only works via CLI. Other tools (Claude Desktop, Cursor) can't access the decision graph.</p>
+
+        <h4>Proposed</h4>
+        <p><code>deciduous mcp</code> command that exposes:</p>
+        <pre><code>// MCP Tools
+add_node(type, title, confidence, prompt?)
+link_nodes(from, to, rationale)
+search_graph(query)
+get_context(goal_id?)  // Returns relevant subgraph</code></pre>
+
+        <p><strong>Use Case:</strong> Claude Desktop could automatically log decisions to your project's graph.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>Session/Conversation Scoping <span class="priority-tag p2">P2</span></h3>
+        <h4>The Problem</h4>
+        <p>All nodes exist at the project level. Long-running projects accumulate hundreds of nodes.</p>
+
+        <h4>Proposed</h4>
+        <pre><code># Start a scoped session
+deciduous session start "Implementing auth"
+
+# All nodes auto-tagged with session
+deciduous add action "Writing login form"  # Auto-linked to session
+
+# End session, creating an outcome
+deciduous session end "Auth implemented successfully"</code></pre>
+
+        <h4>Benefits</h4>
+        <ul>
+            <li>Easier to filter: <code>deciduous nodes --session auth-123</code></li>
+            <li>Natural grouping for PR writeups</li>
+            <li>Context recovery: "Show me what happened in the auth session"</li>
+        </ul>
+    </div>
+
+    <div class="feature-section">
+        <h3>Automatic Observation Extraction <span class="priority-tag p2">P2</span></h3>
+        <h4>The Problem</h4>
+        <p>Currently, logging observations requires manual effort. AI assistants often discover useful context but don't log it.</p>
+
+        <h4>Proposed</h4>
+        <pre><code># New command: auto-extract observations from a transcript
+deciduous infer --from transcript.md
+
+# Or integrate into Claude Code hooks
+# On conversation end, extract key observations automatically</code></pre>
+
+        <h4>Implementation Notes</h4>
+        <ul>
+            <li>Use local LLM or API call to extract facts</li>
+            <li>Present extracted observations for human approval</li>
+            <li>Auto-link to current goal/action context</li>
+        </ul>
+    </div>
+
+    <div class="feature-section">
+        <h3>Node Tags/Categories <span class="priority-tag p3">P3</span></h3>
+        <h4>The Problem</h4>
+        <p>Node types are fixed (goal, decision, action, etc.). No way to add custom categorization.</p>
+
+        <h4>Proposed</h4>
+        <pre><code>deciduous add observation "Rate limit is 100 req/min" --tags api,limits,important
+deciduous nodes --tag important</code></pre>
+    </div>
+
+    <hr>
+
+    <h2>Features to Skip</h2>
+
+    <div class="feature-section">
+        <h3>Cloud-Hosted Backend <span class="priority-tag skip-tag">SKIP</span></h3>
+        <p>Deciduous is local-first by design. Adding a cloud option would fragment the user experience.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>Multi-Tenant User Scoping <span class="priority-tag skip-tag">SKIP</span></h3>
+        <p>Deciduous is per-project, not per-user. The project <em>is</em> the scope.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>Automatic Memory Updates <span class="priority-tag skip-tag">SKIP</span></h3>
+        <p>Mem0 uses LLM to decide when to UPDATE or DELETE memories. This is risky for decision tracking where history should be immutable.</p>
+    </div>
+
+    <div class="feature-section">
+        <h3>Vector Store Abstraction <span class="priority-tag skip-tag">SKIP</span></h3>
+        <p>Mem0 supports Pinecone, Weaviate, Qdrant, etc. For Deciduous, SQLite + local embeddings is sufficient.</p>
+    </div>
+
+    <hr>
+
+    <h2>Implementation Roadmap</h2>
+
+    <table>
+        <tr><th>Feature</th><th>Complexity</th><th>Value</th><th>Priority</th></tr>
+        <tr><td>Semantic Search (FTS5)</td><td>Low</td><td>High</td><td><span class="priority-tag p1">P1</span></td></tr>
+        <tr><td>MCP Server</td><td>Medium</td><td>High</td><td><span class="priority-tag p1">P1</span></td></tr>
+        <tr><td>Session Scoping</td><td>Low</td><td>Medium</td><td><span class="priority-tag p2">P2</span></td></tr>
+        <tr><td>Auto-Extract Observations</td><td>Medium</td><td>Medium</td><td><span class="priority-tag p2">P2</span></td></tr>
+        <tr><td>Node Tags</td><td>Low</td><td>Medium</td><td><span class="priority-tag p3">P3</span></td></tr>
+        <tr><td>Semantic Search (Embeddings)</td><td>High</td><td>Medium</td><td><span class="priority-tag p3">P3</span></td></tr>
+    </table>
+
+    <hr>
+
+    <h2>Appendix: Mem0 Architecture</h2>
+
+    <div class="architecture-diagram">┌─────────────────────────────────────────────────────────────┐
+│                        Mem0 Client                          │
+│  (Python/TypeScript SDK or REST API)                        │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    Memory Engine                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │ Embeddings   │  │ LLM (fact    │  │ Reranker     │       │
+│  │ (OpenAI/     │  │ extraction)  │  │ (optional)   │       │
+│  │ local)       │  │              │  │              │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+┌─────────────────────────▼───────────────────────────────────┐
+│                    Storage Layer                             │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │ Vector Store │  │ Graph Store  │  │ SQLite       │       │
+│  │ (semantic)   │  │ (relations)  │  │ (history)    │       │
+│  └──────────────┘  └──────────────┘  └──────────────┘       │
+└─────────────────────────────────────────────────────────────┘</div>
+
+    <h3>Key Modules</h3>
+    <ul>
+        <li><code>mem0/memory/main.py</code> - Core Memory class with add/search/update/delete</li>
+        <li><code>mem0/graphs/</code> - Entity relationship tracking</li>
+        <li><code>mem0/embeddings/</code> - Vector embedding providers</li>
+        <li><code>mem0/vector_stores/</code> - Storage backend abstraction</li>
+        <li><code>openmemory/</code> - MCP server implementation</li>
+    </ul>
+
+    <hr>
+
+    <h2>Conclusion</h2>
+
+    <p>Mem0 excels at <strong>implicit memory</strong> for AI agents - automatically extracting and retrieving relevant context. Deciduous excels at <strong>explicit reasoning</strong> - capturing the decision process with full traceability.</p>
+
+    <p>The most valuable features to adopt are:</p>
+    <ol>
+        <li><strong>Semantic search</strong> - Find related decisions without exact keywords</li>
+        <li><strong>MCP server</strong> - Let other AI tools interact with the graph</li>
+        <li><strong>Session scoping</strong> - Group related work for easier navigation</li>
+    </ol>
+
+    <p>These additions would make Deciduous more discoverable and integrable while preserving its core strength: the explicit, auditable decision graph.</p>
+
+    <footer>
+        <p>Analysis conducted December 2024. See the <a href="https://github.com/mem0ai/mem0">mem0 repository</a> for current documentation.</p>
+        <p style="margin-top: 0.5rem;"><a href="../index.html">Deciduous</a> - Decision graph tooling for AI-assisted development</p>
+    </footer>
+</body>
+</html>
