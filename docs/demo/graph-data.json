@@ -6247,28 +6247,6 @@
       "created_at": "2025-12-15T12:14:56.481450-05:00",
       "updated_at": "2025-12-15T12:14:56.481450-05:00",
       "metadata_json": "{\"branch\":\"feature/graph-search\",\"confidence\":90}"
-    },
-    {
-      "id": 570,
-      "change_id": "2cf7e03b-4094-4a11-b5b7-5c4d9f52027d",
-      "node_type": "outcome",
-      "title": "Commit created: feat(web): add search functionality to DAG viewer",
-      "description": null,
-      "status": "pending",
-      "created_at": "2025-12-15T12:16:42.410647-05:00",
-      "updated_at": "2025-12-15T12:16:42.410647-05:00",
-      "metadata_json": "{\"branch\":\"feature/graph-search\",\"commit\":\"d29cfc5\",\"confidence\":95}"
-    },
-    {
-      "id": 571,
-      "change_id": "350cbd5a-40aa-452f-b2b7-297efc68e894",
-      "node_type": "outcome",
-      "title": "PR #98 created: feat(web): Add search functionality to DAG viewer",
-      "description": null,
-      "status": "pending",
-      "created_at": "2025-12-15T12:17:37.880889-05:00",
-      "updated_at": "2025-12-15T12:17:37.880889-05:00",
-      "metadata_json": "{\"branch\":\"feature/graph-search\",\"commit\":\"049ff12\",\"confidence\":100}"
     }
   ],
   "edges": [
@@ -11738,28 +11716,6 @@
       "weight": 1.0,
       "rationale": "Finalizing feature",
       "created_at": "2025-12-15T12:14:56.489073-05:00"
-    },
-    {
-      "id": 498,
-      "from_node_id": 569,
-      "to_node_id": 570,
-      "from_change_id": "67e4a6ca-383c-45f9-b825-91abdaacaebc",
-      "to_change_id": "2cf7e03b-4094-4a11-b5b7-5c4d9f52027d",
-      "edge_type": "leads_to",
-      "weight": 1.0,
-      "rationale": "Feature committed",
-      "created_at": "2025-12-15T12:16:42.418331-05:00"
-    },
-    {
-      "id": 499,
-      "from_node_id": 570,
-      "to_node_id": 571,
-      "from_change_id": "2cf7e03b-4094-4a11-b5b7-5c4d9f52027d",
-      "to_change_id": "350cbd5a-40aa-452f-b2b7-297efc68e894",
-      "edge_type": "leads_to",
-      "weight": 1.0,
-      "rationale": "PR submitted for review",
-      "created_at": "2025-12-15T12:17:37.888329-05:00"
     }
   ]
 }
