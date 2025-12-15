@@ -11,6 +11,7 @@ use syntect::easy::HighlightLines;
 
 use crate::{Database, DecisionGraph, DecisionNode, DecisionEdge};
 use super::types;
+use super::views::roadmap::RoadmapState;
 
 // Lazy static syntax highlighting resources
 lazy_static::lazy_static! {
@@ -28,6 +29,7 @@ fn syntect_to_ratatui_color(c: syntect::highlighting::Color) -> Color {
 pub enum View {
     Timeline,
     Dag,
+    Roadmap,
 }
 
 /// Current input focus
@@ -217,6 +219,9 @@ pub struct App {
 
     // Pending files to open in editor (set by app, consumed by main loop)
     pub pending_editor_files: Option<Vec<String>>,
+
+    // Roadmap view state
+    pub roadmap_state: RoadmapState,
 }
 
 impl App {
@@ -271,6 +276,7 @@ impl App {
             detail_file_index: 0,
             detail_in_files: false,
             pending_editor_files: None,
+            roadmap_state: RoadmapState::new(),
         })
     }
 
@@ -433,12 +439,34 @@ impl App {
     }
 
     pub fn toggle_view(&mut self) {
-        // DAG view disabled for now - needs layout improvements
-        // self.current_view = match self.current_view {
-        //     View::Timeline => View::Dag,
-        //     View::Dag => View::Timeline,
-        // };
-        self.set_status("DAG view temporarily disabled".to_string());
+        self.current_view = match self.current_view {
+            View::Timeline => {
+                // Load roadmap items when switching to roadmap view
+                self.load_roadmap_items();
+                View::Roadmap
+            }
+            View::Roadmap => View::Timeline,
+            View::Dag => View::Timeline, // DAG view disabled
+        };
+    }
+
+    /// Load roadmap items from database
+    pub fn load_roadmap_items(&mut self) {
+        match self.db.get_all_roadmap_items() {
+            Ok(items) => {
+                self.roadmap_state.set_items(items);
+            }
+            Err(e) => {
+                self.set_status(format!("Failed to load roadmap: {}", e));
+            }
+        }
+    }
+
+    /// Toggle checkbox state for a roadmap item
+    pub fn toggle_roadmap_checkbox(&mut self, item_id: i32, new_state: &str) -> Result<(), String> {
+        self.db
+            .update_roadmap_item_checkbox(item_id, new_state)
+            .map_err(|e| e.to_string())
     }
 
     pub fn toggle_detail(&mut self) {

@@ -114,6 +114,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) -> bool {
     match app.current_view {
         View::Timeline => handle_timeline_keys(app, key),
         View::Dag => handle_dag_keys(app, key),
+        View::Roadmap => handle_roadmap_keys(app, key),
     }
 }
 
@@ -286,6 +287,95 @@ fn handle_dag_keys(app: &mut App, key: KeyEvent) -> bool {
         }
 
         KeyCode::Esc => {}
+
+        _ => {}
+    }
+    false
+}
+
+fn handle_roadmap_keys(app: &mut App, key: KeyEvent) -> bool {
+    match key.code {
+        // Quit
+        KeyCode::Char('q') => return true,
+
+        // Help
+        KeyCode::Char('?') => {
+            app.show_help = true;
+        }
+
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => app.roadmap_state.move_down(),
+        KeyCode::Char('k') | KeyCode::Up => app.roadmap_state.move_up(),
+
+        // Toggle detail panel (Enter)
+        KeyCode::Enter => {
+            app.roadmap_state.toggle_detail();
+        }
+
+        // Toggle between Active/Completed view (Shift+Tab)
+        KeyCode::BackTab => {
+            app.roadmap_state.toggle_mode();
+            let mode_name = match app.roadmap_state.view_mode {
+                super::views::roadmap::RoadmapViewMode::Active => "Active",
+                super::views::roadmap::RoadmapViewMode::Completed => "Completed",
+            };
+            app.set_status(format!("Switched to {} items", mode_name));
+        }
+
+        // Switch view (Tab cycles through main views)
+        KeyCode::Tab => app.toggle_view(),
+
+        // Refresh roadmap items
+        KeyCode::Char('r') => {
+            app.load_roadmap_items();
+            app.set_status("Roadmap refreshed".to_string());
+        }
+
+        // Open GitHub issue in browser
+        KeyCode::Char('o') => {
+            if let Some(url) = app.roadmap_state.selected_issue_url() {
+                // Open URL in default browser
+                #[cfg(target_os = "macos")]
+                let result = std::process::Command::new("open").arg(&url).spawn();
+                #[cfg(target_os = "linux")]
+                let result = std::process::Command::new("xdg-open").arg(&url).spawn();
+                #[cfg(target_os = "windows")]
+                let result = std::process::Command::new("cmd")
+                    .args(["/C", "start", "", &url])
+                    .spawn();
+
+                match result {
+                    Ok(_) => app.set_status(format!("Opened {}", url)),
+                    Err(e) => app.set_status(format!("Failed to open browser: {}", e)),
+                }
+            } else {
+                app.set_status("No GitHub issue linked to this item".to_string());
+            }
+        }
+
+        // Toggle checkbox state (mark complete/incomplete)
+        KeyCode::Char('c') => {
+            if let Some((item_id, current_state)) = app.roadmap_state.selected_item_checkbox_info() {
+                let new_state = if current_state == "checked" { "unchecked" } else { "checked" };
+                match app.toggle_roadmap_checkbox(item_id, new_state) {
+                    Ok(()) => {
+                        app.load_roadmap_items();
+                        let action = if new_state == "checked" { "checked" } else { "unchecked" };
+                        app.set_status(format!("Item marked as {}", action));
+                    }
+                    Err(e) => app.set_status(format!("Failed to update: {}", e)),
+                }
+            } else {
+                app.set_status("No item selected".to_string());
+            }
+        }
+
+        // Close detail panel
+        KeyCode::Esc => {
+            if app.roadmap_state.show_detail {
+                app.roadmap_state.show_detail = false;
+            }
+        }
 
         _ => {}
     }

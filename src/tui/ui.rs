@@ -10,7 +10,7 @@ use syntect::parsing::SyntaxSet;
 use syntect::easy::HighlightLines;
 
 use super::app::{App, Mode, View, ModalContent, ModalSection};
-use super::views::{timeline, dag, detail};
+use super::views::{timeline, dag, detail, roadmap};
 use super::widgets::file_picker;
 
 // Lazy static syntax highlighting resources
@@ -58,6 +58,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Dag => {
             dag::draw(frame, app, main_layout[2]);
         }
+        View::Roadmap => {
+            roadmap::draw(frame, &app.roadmap_state, main_layout[2]);
+        }
     }
 
     // Draw footer
@@ -81,6 +84,7 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
     let view_name = match app.current_view {
         View::Timeline => "Timeline",
         View::Dag => "DAG",
+        View::Roadmap => "Roadmap",
     };
 
     let node_count = app.filtered_nodes.len();
@@ -192,6 +196,9 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         View::Dag => {
             "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit"
         }
+        View::Roadmap => {
+            "j/k:move  r:refresh  Tab:Timeline  ?:help  q:quit"
+        }
     };
 
     // Show status message if present, otherwise show keybinds
@@ -210,7 +217,7 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_help_overlay(frame: &mut Frame, area: Rect) {
     // Center the help popup
     let popup_width = 60.min(area.width.saturating_sub(4));
-    let popup_height = 22.min(area.height.saturating_sub(4));
+    let popup_height = 32.min(area.height.saturating_sub(4));
 
     let popup_area = Rect {
         x: (area.width - popup_width) / 2,
@@ -235,7 +242,7 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
   /            Search
   f            Cycle type filter
   Ctrl+c       Clear all filters
-  Tab          Switch to DAG view
+  Tab          Switch view
   r            Refresh
   q            Quit
 
@@ -244,7 +251,15 @@ fn draw_help_overlay(frame: &mut Frame, area: Rect) {
   h/j/k/l      Pan view
   +/-          Zoom in/out
   0            Reset zoom
-  Tab          Switch to Timeline
+
+  Roadmap View
+  ─────────────────────────────────
+  j/k, ↑/↓     Move up/down
+  Enter        Toggle detail panel
+  o            Open GitHub issue
+  c            Toggle checkbox
+  Shift+Tab    Toggle Active/Completed
+  r            Refresh
 
   Press ? or Esc to close
 "#;
