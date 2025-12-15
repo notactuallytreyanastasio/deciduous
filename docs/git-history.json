@@ -1,10 +1,10 @@
 [
   {
-    "hash": "b694e16274f3317495d9a29e3a1ccaf75c20e64c",
-    "short_hash": "b694e16",
+    "hash": "152407543c992cd6491e395340833690fefc4545",
+    "short_hash": "1524075",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T02:26:38-05:00",
-    "message": "feat(docs): expand story page with full timeline detail and elevator pitch\n\n- Feature Explosion, Bug Gauntlet, WASM Analyzer, Spelunking Experiments\n- Full Feature Cascade with 12 TUI features listed\n- Performance Crisis, Technical Debt Reckoning, all release notes\n- Added elevator pitch blurb at top\n- All node/commit references preserved from React component",
+    "date": "2025-12-15T02:28:49-05:00",
+    "message": "docs: expand elevator pitch with dev process, PR workflow, querying, team sync",
     "files_changed": 1
   },
   {
