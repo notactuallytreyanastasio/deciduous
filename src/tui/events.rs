@@ -100,8 +100,12 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) -> bool {
         app.pending_g = false;
         match key.code {
             KeyCode::Char('g') => {
-                // gg - jump to top
-                app.jump_to_top();
+                // gg - jump to top (view-specific)
+                match app.current_view {
+                    View::Timeline => app.jump_to_top(),
+                    View::Roadmap => app.roadmap_state.jump_to_top(),
+                    View::Dag => {} // DAG doesn't have a selection to jump
+                }
                 return false;
             }
             _ => {
@@ -306,6 +310,26 @@ fn handle_roadmap_keys(app: &mut App, key: KeyEvent) -> bool {
         // Navigation
         KeyCode::Char('j') | KeyCode::Down => app.roadmap_state.move_down(),
         KeyCode::Char('k') | KeyCode::Up => app.roadmap_state.move_up(),
+
+        // Jump to top (gg - handled via pending_g in normal_mode)
+        KeyCode::Char('g') => {
+            app.pending_g = true;
+        }
+
+        // Jump to bottom (G)
+        KeyCode::Char('G') => {
+            app.roadmap_state.jump_to_bottom();
+        }
+
+        // Page navigation
+        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.roadmap_state.page_down(10);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.roadmap_state.page_up(10);
+        }
+        KeyCode::PageDown => app.roadmap_state.page_down(10),
+        KeyCode::PageUp => app.roadmap_state.page_up(10),
 
         // Toggle detail panel (Enter)
         KeyCode::Enter => {

@@ -321,6 +321,13 @@ enum RoadmapAction {
         path: Option<PathBuf>,
     },
 
+    /// Refresh roadmap items (clears and re-parses ROADMAP.md, preserving decision graph)
+    Refresh {
+        /// Path to ROADMAP.md (default: ROADMAP.md)
+        #[arg(short, long)]
+        path: Option<PathBuf>,
+    },
+
     /// Sync ROADMAP.md with GitHub Issues (dry-run by default, use --execute to apply)
     Sync {
         /// Path to ROADMAP.md (default: ROADMAP.md)
@@ -1292,37 +1299,41 @@ fn main() {
                         std::process::exit(1);
                     }
 
-                    // Track current parent section for grouping
-                    let mut current_parent: Option<String> = None;
+                    // Track current level-2 parent section for grouping
+                    let mut current_l2_parent: Option<String> = None;
 
                     // Store sections in database
                     for section in &parsed.sections {
-                        // Level 2 headers are parent sections (e.g., "In Progress")
-                        // Level 3 headers are items under those sections
-                        let parent_section = if section.level == 2 {
-                            current_parent = Some(section.title.clone());
-                            None
+                        // Level 2 headers (## Section) are top-level groupings
+                        // Level 3 headers (### Subsection) contain the actual tasks
+                        let (section_parent, items_section) = if section.level == 2 {
+                            current_l2_parent = Some(section.title.clone());
+                            // Level 2 sections have no parent, their items go under them
+                            (None, Some(section.title.as_str()))
                         } else {
-                            current_parent.as_deref()
+                            // Level 3 sections belong to the current L2 parent
+                            // Their items belong directly to this L3 section
+                            (current_l2_parent.as_deref(), Some(section.title.as_str()))
                         };
 
+                        // Create the section header entry (checkbox_state = "none")
                         if let Err(e) = db.create_roadmap_item(
                             &section.title,
                             section.description.as_deref(),
-                            parent_section,
+                            section_parent,
                             None, // parent_id - we don't track hierarchy by ID yet
                             "none",
                         ) {
                             eprintln!("{} Creating roadmap item: {}", "Warning:".yellow(), e);
                         }
 
-                        // Also create items for checkboxes
+                        // Create items for checkboxes - they belong to THIS section
                         for item in &section.items {
                             let state = if item.checked { "checked" } else { "unchecked" };
                             if let Err(e) = db.create_roadmap_item(
                                 &item.text,
                                 None,
-                                parent_section,
+                                items_section, // Items belong to the section that contains them
                                 None, // parent_id
                                 state,
                             ) {
@@ -1335,6 +1346,75 @@ fn main() {
                     let total_items: usize = parsed.sections.iter().map(|s| s.items.len()).sum();
                     println!("{} Initialized {} sections with {} items", "Success:".green(), parsed.sections.len(), total_items);
                     println!("  Metadata comments added to {}", roadmap_path.display());
+                }
+
+                RoadmapAction::Refresh { path } => {
+                    let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
+
+                    if !roadmap_path.exists() {
+                        eprintln!("{} File not found: {}", "Error:".red(), roadmap_path.display());
+                        std::process::exit(1);
+                    }
+
+                    // Clear existing roadmap items
+                    let cleared = match db.clear_roadmap_items() {
+                        Ok(n) => n,
+                        Err(e) => {
+                            eprintln!("{} Clearing roadmap items: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+                    println!("{} Cleared {} existing roadmap items", "Info:".cyan(), cleared);
+
+                    // Re-parse the roadmap
+                    let parsed = match parse_roadmap(&roadmap_path) {
+                        Ok(p) => p,
+                        Err(e) => {
+                            eprintln!("{} Parsing roadmap: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    // Track current level-2 parent section for grouping
+                    let mut current_l2_parent: Option<String> = None;
+
+                    // Store sections in database
+                    for section in &parsed.sections {
+                        let (section_parent, items_section) = if section.level == 2 {
+                            current_l2_parent = Some(section.title.clone());
+                            (None, Some(section.title.as_str()))
+                        } else {
+                            (current_l2_parent.as_deref(), Some(section.title.as_str()))
+                        };
+
+                        // Create the section header entry
+                        if let Err(e) = db.create_roadmap_item(
+                            &section.title,
+                            section.description.as_deref(),
+                            section_parent,
+                            None,
+                            "none",
+                        ) {
+                            eprintln!("{} Creating roadmap item: {}", "Warning:".yellow(), e);
+                        }
+
+                        // Create items for checkboxes
+                        for item in &section.items {
+                            let state = if item.checked { "checked" } else { "unchecked" };
+                            if let Err(e) = db.create_roadmap_item(
+                                &item.text,
+                                None,
+                                items_section,
+                                None,
+                                state,
+                            ) {
+                                eprintln!("{} Creating roadmap item: {}", "Warning:".yellow(), e);
+                            }
+                        }
+                    }
+
+                    let total_items: usize = parsed.sections.iter().map(|s| s.items.len()).sum();
+                    println!("{} Refreshed {} sections with {} items", "Success:".green(), parsed.sections.len(), total_items);
                 }
 
                 RoadmapAction::Sync { path, repo, execute, create_issues } => {

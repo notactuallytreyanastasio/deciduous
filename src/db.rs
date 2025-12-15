@@ -1467,6 +1467,14 @@ impl Database {
         Ok(items)
     }
 
+    /// Clear all roadmap items (for refresh)
+    pub fn clear_roadmap_items(&self) -> Result<usize> {
+        let mut conn = self.get_conn()?;
+        let deleted = diesel::delete(roadmap_items::table)
+            .execute(&mut conn)?;
+        Ok(deleted)
+    }
+
     /// Get roadmap items by section
     pub fn get_roadmap_items_by_section(&self, section: &str) -> Result<Vec<RoadmapItem>> {
         let mut conn = self.get_conn()?;
