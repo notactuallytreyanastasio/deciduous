@@ -17,9 +17,10 @@ interface LayoutProps {
   onBranchChange?: (branch: string | null) => void;
 }
 
-type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap';
+type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story';
 
 const TABS: { id: ViewTab; label: string; path: string }[] = [
+  { id: 'story', label: 'Story', path: '/story' },
   { id: 'dag', label: 'DAG', path: '/' },
   { id: 'chains', label: 'Chains', path: '/chains' },
   { id: 'timeline', label: 'Timeline', path: '/timeline' },
@@ -32,6 +33,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
 
   const getCurrentTab = (): ViewTab => {
     const path = location.pathname;
+    if (path === '/story') return 'story';
     if (path === '/chains') return 'chains';
     if (path === '/timeline') return 'timeline';
     if (path === '/graph') return 'graph';

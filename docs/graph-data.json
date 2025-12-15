@@ -5708,6 +5708,39 @@
       "created_at": "2025-12-15T00:33:48.161231-05:00",
       "updated_at": "2025-12-15T00:33:48.161231-05:00",
       "metadata_json": "{\"branch\":\"fix/gh-pages-decision-nodes\",\"commit\":\"85ad24a\",\"confidence\":95}"
+    },
+    {
+      "id": 521,
+      "change_id": "69425caf-b0ec-4637-b301-840c12127a0f",
+      "node_type": "goal",
+      "title": "Create project history page",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T01:33:52.416124-05:00",
+      "updated_at": "2025-12-15T01:33:52.416124-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User asked: create a page telling the story of how deciduous was built, searching through commits and the decision graph\"}"
+    },
+    {
+      "id": 522,
+      "change_id": "6aa917d1-e983-42ec-a170-1e2f58145abd",
+      "node_type": "action",
+      "title": "Creating StoryView.tsx - comprehensive history page",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T01:34:54.947441-05:00",
+      "updated_at": "2025-12-15T01:34:54.947441-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 523,
+      "change_id": "267f2f3a-d26d-42a1-b785-7fd8da73e225",
+      "node_type": "outcome",
+      "title": "Story page complete - comprehensive timeline narrative of deciduous history",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T01:43:57.334860-05:00",
+      "updated_at": "2025-12-15T01:43:57.334860-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -10726,6 +10759,28 @@
       "weight": 1.0,
       "rationale": "Implementation complete",
       "created_at": "2025-12-15T00:33:52.846288-05:00"
+    },
+    {
+      "id": 457,
+      "from_node_id": 521,
+      "to_node_id": 522,
+      "from_change_id": "69425caf-b0ec-4637-b301-840c12127a0f",
+      "to_change_id": "6aa917d1-e983-42ec-a170-1e2f58145abd",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal spawned action",
+      "created_at": "2025-12-15T01:43:58.578864-05:00"
+    },
+    {
+      "id": 458,
+      "from_node_id": 522,
+      "to_node_id": 523,
+      "from_change_id": "6aa917d1-e983-42ec-a170-1e2f58145abd",
+      "to_change_id": "267f2f3a-d26d-42a1-b785-7fd8da73e225",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action produced outcome",
+      "created_at": "2025-12-15T01:44:04.194690-05:00"
     }
   ]
 }
