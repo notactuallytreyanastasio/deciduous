@@ -12,7 +12,7 @@ import { parseMetadata, truncate, shortCommit } from '../types/graph';
 // import { TypeBadge, ConfidenceBadge } from './NodeBadge';
 import { getNodeColor } from '../utils/colors';
 
-interface SearchResult {
+export interface SearchResult {
   node: DecisionNode;
   matchType: 'title' | 'description' | 'commit' | 'prompt' | 'files';
   matchText: string;
@@ -24,6 +24,7 @@ interface SearchBarProps {
   gitHistory?: GitCommit[];
   onSelectNode: (node: DecisionNode) => void;
   onHighlightNodes: (nodeIds: Set<number>) => void;
+  onSearchResults?: (results: SearchResult[]) => void;
   placeholder?: string;
 }
 
@@ -63,6 +64,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   gitHistory = [],
   onSelectNode,
   onHighlightNodes,
+  onSearchResults,
   placeholder = 'Search nodes, commits, prompts...',
 }) => {
   const [query, setQuery] = useState('');
@@ -155,6 +157,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     const highlightedIds = new Set(searchResults.map(r => r.node.id));
     onHighlightNodes(highlightedIds);
   }, [searchResults, onHighlightNodes]);
+
+  // Send search results to parent (if callback provided)
+  useEffect(() => {
+    if (onSearchResults) {
+      onSearchResults(searchResults);
+    }
+  }, [searchResults, onSearchResults]);
 
   // Reset selected index when results change
   useEffect(() => {

@@ -14,7 +14,10 @@ import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
 import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
-import { SearchBar } from '../components/SearchBar';
+import { SearchBar, type SearchResult } from '../components/SearchBar';
+import { SearchResultsPanel } from '../components/SearchResultsPanel';
+import { useNodeVisibility } from '../hooks/useNodeVisibility';
+import { useFocusMode } from '../hooks/useFocusMode';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
 
 interface DagViewProps {
@@ -80,6 +83,31 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
   // Search state - highlighted node IDs from search
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<number>>(new Set());
+
+  // Search results for the results panel
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [resultsPanelOpen, setResultsPanelOpen] = useState(false);
+
+  // Track node positions for visibility detection
+  const [nodePositions, setNodePositions] = useState<Map<number, { x: number; y: number; width: number; height: number }>>(new Map());
+  const [transform, setTransform] = useState({ x: 0, y: 0 });
+
+  // Focus mode
+  const { isFocused, focusedNodeIds, enterFocus, exitFocus } = useFocusMode(
+    graphData.nodes,
+    graphData.edges
+  );
+
+  // Node visibility tracking
+  const { visibilityMap } = useNodeVisibility(
+    svgRef,
+    nodePositions,
+    zoom,
+    transform
+  );
+
+  // Store zoom behavior for programmatic control
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
   // Sort chains by recency for display
   const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
@@ -182,6 +210,45 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     }
   }, []);
 
+  // Navigate to a specific node (pan/zoom to bring it into view)
+  const handleNavigateToNode = useCallback((node: DecisionNode) => {
+    if (!svgRef.current || !containerRef.current || !zoomBehaviorRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const pos = nodePositions.get(node.id);
+    if (!pos) return;
+
+    // Calculate target transform to center the node
+    const targetScale = 1.2; // Zoom in a bit
+    const targetX = width / 2 - pos.x * targetScale;
+    const targetY = height / 2 - pos.y * targetScale;
+
+    // Animate to the node
+    svg.transition()
+      .duration(500)
+      .call(
+        zoomBehaviorRef.current.transform,
+        d3.zoomIdentity.translate(targetX, targetY).scale(targetScale)
+      );
+  }, [nodePositions]);
+
+  // Focus on current search results
+  const handleFocusSearchResults = useCallback(() => {
+    const nodeIds = searchResults.map(r => r.node.id);
+    enterFocus(nodeIds, true);
+    setResultsPanelOpen(false);
+  }, [searchResults, enterFocus]);
+
+  // Handle search results from SearchBar
+  const handleSearchResults = useCallback((results: typeof searchResults) => {
+    setSearchResults(results);
+    setResultsPanelOpen(results.length > 0);
+  }, []);
+
   // Build and render DAG
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -193,11 +260,19 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
     svg.selectAll('*').remove();
 
-    // Filter nodes based on visibility
-    const visibleNodes = graphData.nodes.filter(n => visibleNodeIds.has(n.id));
-    const visibleEdges = graphData.edges.filter(
+    // Filter nodes based on visibility and focus mode
+    let visibleNodes = graphData.nodes.filter(n => visibleNodeIds.has(n.id));
+    let visibleEdges = graphData.edges.filter(
       e => visibleNodeIds.has(e.from_node_id) && visibleNodeIds.has(e.to_node_id)
     );
+
+    // Apply focus mode filtering
+    if (isFocused) {
+      visibleNodes = visibleNodes.filter(n => focusedNodeIds.has(n.id));
+      visibleEdges = visibleEdges.filter(
+        e => focusedNodeIds.has(e.from_node_id) && focusedNodeIds.has(e.to_node_id)
+      );
+    }
 
     if (visibleNodes.length === 0) return;
 
@@ -229,6 +304,19 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     // Run layout
     dagre.layout(g);
 
+    // Store node positions for visibility tracking
+    const newPositions = new Map<number, { x: number; y: number; width: number; height: number }>();
+    g.nodes().forEach(nodeId => {
+      const nodeData = g.node(nodeId) as DagreNodeData;
+      newPositions.set(parseInt(nodeId), {
+        x: nodeData.x,
+        y: nodeData.y,
+        width: nodeData.width,
+        height: nodeData.height,
+      });
+    });
+    setNodePositions(newPositions);
+
     // Get graph dimensions
     const graphWidth = g.graph().width || width;
     const graphHeight = g.graph().height || height;
@@ -242,7 +330,11 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       .on('zoom', (event) => {
         mainGroup.attr('transform', event.transform);
         setZoom(event.transform.k);
+        setTransform({ x: event.transform.x, y: event.transform.y });
       });
+
+    // Store zoom behavior ref for programmatic control
+    zoomBehaviorRef.current = zoomBehavior;
 
     svg.call(zoomBehavior);
 
@@ -387,7 +479,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     return () => {
       svg.on('.zoom', null);
     };
-  }, [graphData, visibleNodeIds, handleSelectNode, highlightedNodeIds]);
+  }, [graphData, visibleNodeIds, handleSelectNode, highlightedNodeIds, isFocused, focusedNodeIds]);
 
   return (
     <div style={{
@@ -405,6 +497,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             gitHistory={gitHistory}
             onSelectNode={handleSelectNode}
             onHighlightNodes={setHighlightedNodeIds}
+            onSearchResults={handleSearchResults}
             placeholder="Search nodes, commits..."
           />
         </div>
@@ -588,6 +681,29 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       <div ref={containerRef} style={styles.svgContainer}>
         <svg ref={svgRef} style={styles.svg} />
       </div>
+
+      {/* Focus Mode Indicator */}
+      {isFocused && (
+        <div style={styles.focusModeIndicator}>
+          <span style={styles.focusModeText}>
+            Focus Mode: {focusedNodeIds.size} nodes
+          </span>
+          <button onClick={exitFocus} style={styles.exitFocusBtn}>
+            Exit Focus
+          </button>
+        </div>
+      )}
+
+      {/* Search Results Panel */}
+      <SearchResultsPanel
+        results={searchResults}
+        visibilityMap={visibilityMap}
+        onSelectNode={handleSelectNode}
+        onNavigateToNode={handleNavigateToNode}
+        onFocusResults={handleFocusSearchResults}
+        isOpen={resultsPanelOpen && searchResults.length > 0}
+        onClose={() => setResultsPanelOpen(false)}
+      />
 
       {/* Detail Modal */}
       {selectedNode && (
@@ -1108,5 +1224,36 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#24292f',
     transition: 'background-color 0.15s',
     border: '1px solid #d0d7de',
+  },
+  // Focus mode indicator
+  focusModeIndicator: {
+    position: 'absolute',
+    bottom: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    padding: '10px 16px',
+    backgroundColor: '#0969da',
+    borderRadius: '8px',
+    boxShadow: '0 4px 12px rgba(9, 105, 218, 0.3)',
+    zIndex: 50,
+  },
+  focusModeText: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#ffffff',
+  },
+  exitFocusBtn: {
+    padding: '4px 10px',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    border: '1px solid rgba(255, 255, 255, 0.4)',
+    borderRadius: '4px',
+    color: '#ffffff',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
   },
 };
