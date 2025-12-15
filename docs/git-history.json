@@ -1,5 +1,13 @@
 [
   {
+    "hash": "f04dc1e5a3613d9747d35cfc72b17393593f8a2a",
+    "short_hash": "f04dc1e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T00:13:13-05:00",
+    "message": "docs: add GitHub Pages fixes to roadmap",
+    "files_changed": 1
+  },
+  {
     "hash": "a2daa6ac9e3d72c48eec39feb737af1cb1cfe41b",
     "short_hash": "a2daa6a",
     "author": "Bobby Nathan",
@@ -22,14 +30,6 @@
     "date": "2025-12-12T20:29:34-05:00",
     "message": "feat: add roadmap web page with GitHub issue integration\n\n- Add roadmap_items table to database schema for tracking roadmap items\n- Create roadmap module (src/roadmap.rs) with:\n  - ROADMAP.md parser extracting checklist items, sections, status\n  - Scope extraction (Critical, Extended, etc.)\n  - Auto-tagging based on keywords\n  - GitHub issue sync via gh CLI\n  - JSON export for web viewer\n- Add CLI commands: deciduous roadmap {parse,list,sync,export,summary}\n- Add /api/roadmap endpoint to serve.rs for local development\n- Create docs/roadmap/index.html web page:\n  - Styled consistently with main page (clean, white, no colors)\n  - Summary stats with progress bar\n  - Filterable by section, status, GitHub issues\n  - Searchable\n  - Works with both API and static JSON\n- Update deciduous sync to export roadmap-data.json\n- Add Roadmap link to main page navigation\n- Update tutorial styling: remove colorful banner, use subtle gray notice",
     "files_changed": 15
-  },
-  {
-    "hash": "7dd695e53f00bc32254d3f4d873f31af831e74ca",
-    "short_hash": "7dd695e",
-    "author": "Bobby Nathan",
-    "date": "2025-12-12T18:00:26-05:00",
-    "message": "docs: sync graph",
-    "files_changed": 2
   },
   {
     "hash": "7dd695e53f00bc32254d3f4d873f31af831e74ca",
