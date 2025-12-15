@@ -357,7 +357,9 @@ fn handle_roadmap_keys(app: &mut App, key: KeyEvent) -> bool {
 
         // Open GitHub issue in browser
         KeyCode::Char('o') => {
-            if let Some(url) = app.roadmap_state.selected_issue_url() {
+            if app.roadmap_state.github_repo.is_none() {
+                app.set_status("No GitHub repo configured. Set up roadmap sync or add git remote.".to_string());
+            } else if let Some(url) = app.roadmap_state.selected_issue_url() {
                 // Open URL in default browser
                 #[cfg(target_os = "macos")]
                 let result = std::process::Command::new("open").arg(&url).spawn();

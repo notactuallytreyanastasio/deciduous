@@ -41,6 +41,8 @@ pub struct RoadmapState {
     pub scroll_offset: usize,
     /// Whether detail panel is shown
     pub show_detail: bool,
+    /// GitHub repo for issue URLs (e.g., "owner/repo")
+    pub github_repo: Option<String>,
 }
 
 // =============================================================================
@@ -194,6 +196,11 @@ impl RoadmapState {
         self.refresh_visible();
     }
 
+    /// Set the GitHub repo for issue URLs (e.g., "owner/repo")
+    pub fn set_github_repo(&mut self, repo: Option<String>) {
+        self.github_repo = repo;
+    }
+
     /// Refresh visible items based on current mode
     fn refresh_visible(&mut self) {
         self.visible_items = filter_by_mode(&self.all_items, self.view_mode);
@@ -272,14 +279,12 @@ impl RoadmapState {
         count_by_status(&self.all_items)
     }
 
-    /// Get GitHub issue URL for selected item (if it has an issue)
+    /// Get GitHub issue URL for selected item (if it has an issue and github_repo is configured)
     pub fn selected_issue_url(&self) -> Option<String> {
+        let repo = self.github_repo.as_ref()?;
         self.selected_item().and_then(|item| {
             item.github_issue_number.map(|num| {
-                format!(
-                    "https://github.com/notactuallytreyanastasio/deciduous/issues/{}",
-                    num
-                )
+                format!("https://github.com/{}/issues/{}", repo, num)
             })
         })
     }
@@ -968,14 +973,33 @@ mod tests {
             make_item(2, "No Issue", "unchecked", None, None),
         ]);
 
+        // Without github_repo, should return None
+        state.selected_index = 0;
+        assert!(state.selected_issue_url().is_none());
+
+        // Set github_repo
+        state.set_github_repo(Some("owner/repo".to_string()));
+
         // First item has issue #1
         state.selected_index = 0;
         let url = state.selected_issue_url();
         assert!(url.is_some());
-        assert!(url.unwrap().contains("/issues/1"));
+        assert_eq!(url.unwrap(), "https://github.com/owner/repo/issues/1");
 
         // Second item has no issue
         state.selected_index = 1;
+        assert!(state.selected_issue_url().is_none());
+    }
+
+    #[test]
+    fn test_selected_issue_url_without_repo() {
+        let mut state = RoadmapState::new();
+        state.set_items(vec![
+            make_item(1, "With Issue", "unchecked", None, Some("open")),
+        ]);
+
+        // Without github_repo set, should return None even if item has issue
+        state.selected_index = 0;
         assert!(state.selected_issue_url().is_none());
     }
 }

@@ -336,4 +336,73 @@ mod tests {
         assert!(is_filter_change(&Msg::CycleBranchFilter));
         assert!(!is_filter_change(&Msg::MoveUp));
     }
+
+    #[test]
+    fn test_key_to_msg_actions() {
+        // Test action keys - these trigger side effects
+        assert_eq!(key_to_msg(KeyCode::Char('o'), KeyModifiers::NONE, false, false), Msg::OpenFiles);
+        assert_eq!(key_to_msg(KeyCode::Char('r'), KeyModifiers::NONE, false, false), Msg::RefreshGraph);
+        assert_eq!(key_to_msg(KeyCode::Char('y'), KeyModifiers::NONE, false, false), Msg::CopyToClipboard);
+    }
+
+    #[test]
+    fn test_key_to_msg_view_switching() {
+        assert_eq!(key_to_msg(KeyCode::Tab, KeyModifiers::NONE, false, false), Msg::NextView);
+        assert_eq!(key_to_msg(KeyCode::Tab, KeyModifiers::SHIFT, false, false), Msg::PrevView);
+        assert_eq!(key_to_msg(KeyCode::Char('1'), KeyModifiers::NONE, false, false), Msg::SwitchToView(ViewKind::Timeline));
+        assert_eq!(key_to_msg(KeyCode::Char('2'), KeyModifiers::NONE, false, false), Msg::SwitchToView(ViewKind::Dag));
+        assert_eq!(key_to_msg(KeyCode::Char('3'), KeyModifiers::NONE, false, false), Msg::SwitchToView(ViewKind::Graph));
+    }
+
+    #[test]
+    fn test_key_to_msg_filtering() {
+        assert_eq!(key_to_msg(KeyCode::Char('t'), KeyModifiers::NONE, false, false), Msg::CycleTypeFilter);
+        assert_eq!(key_to_msg(KeyCode::Char('b'), KeyModifiers::NONE, false, false), Msg::CycleBranchFilter);
+        assert_eq!(key_to_msg(KeyCode::Char('B'), KeyModifiers::NONE, false, false), Msg::OpenBranchSearch);
+        assert_eq!(key_to_msg(KeyCode::Char('/'), KeyModifiers::NONE, false, false), Msg::OpenBranchSearch);
+    }
+
+    #[test]
+    fn test_key_to_msg_modals() {
+        assert_eq!(key_to_msg(KeyCode::Char('?'), KeyModifiers::NONE, false, false), Msg::ToggleHelp);
+        assert_eq!(key_to_msg(KeyCode::Char('P'), KeyModifiers::NONE, false, false), Msg::OpenPromptModal);
+        assert_eq!(key_to_msg(KeyCode::Esc, KeyModifiers::NONE, false, false), Msg::CloseModal);
+    }
+
+    #[test]
+    fn test_key_to_msg_file_browser() {
+        assert_eq!(key_to_msg(KeyCode::Char('F'), KeyModifiers::NONE, false, false), Msg::ToggleFileBrowser);
+        assert_eq!(key_to_msg(KeyCode::Char('p'), KeyModifiers::NONE, false, false), Msg::PreviewFile);
+    }
+
+    #[test]
+    fn test_key_to_msg_detail_panel() {
+        assert_eq!(key_to_msg(KeyCode::Enter, KeyModifiers::NONE, false, false), Msg::ToggleDetailPanel);
+        assert_eq!(key_to_msg(KeyCode::Char('l'), KeyModifiers::NONE, false, false), Msg::DetailScrollDown);
+        assert_eq!(key_to_msg(KeyCode::Char('h'), KeyModifiers::NONE, false, false), Msg::DetailScrollUp);
+    }
+
+    #[test]
+    fn test_key_to_msg_page_navigation() {
+        assert_eq!(key_to_msg(KeyCode::Char('d'), KeyModifiers::CONTROL, false, false), Msg::PageDown);
+        assert_eq!(key_to_msg(KeyCode::Char('u'), KeyModifiers::CONTROL, false, false), Msg::PageUp);
+        assert_eq!(key_to_msg(KeyCode::PageDown, KeyModifiers::NONE, false, false), Msg::PageDown);
+        assert_eq!(key_to_msg(KeyCode::PageUp, KeyModifiers::NONE, false, false), Msg::PageUp);
+        assert_eq!(key_to_msg(KeyCode::Char('g'), KeyModifiers::NONE, false, false), Msg::JumpToTop);
+        assert_eq!(key_to_msg(KeyCode::Char('G'), KeyModifiers::NONE, false, false), Msg::JumpToBottom);
+        assert_eq!(key_to_msg(KeyCode::Home, KeyModifiers::NONE, false, false), Msg::JumpToTop);
+        assert_eq!(key_to_msg(KeyCode::End, KeyModifiers::NONE, false, false), Msg::JumpToBottom);
+    }
+
+    #[test]
+    fn test_key_to_msg_goal_story() {
+        assert_eq!(key_to_msg(KeyCode::Char('s'), KeyModifiers::NONE, false, false), Msg::ToggleGoalStory);
+    }
+
+    #[test]
+    fn test_key_to_msg_unhandled() {
+        // Keys that aren't mapped should return Noop
+        assert_eq!(key_to_msg(KeyCode::Char('z'), KeyModifiers::NONE, false, false), Msg::Noop);
+        assert_eq!(key_to_msg(KeyCode::Char('x'), KeyModifiers::NONE, false, false), Msg::Noop);
+    }
 }

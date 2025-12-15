@@ -455,11 +455,47 @@ impl App {
         match self.db.get_all_roadmap_items() {
             Ok(items) => {
                 self.roadmap_state.set_items(items);
+                // Try to get github_repo from sync state, fallback to git remote detection
+                let github_repo = self.detect_github_repo();
+                self.roadmap_state.set_github_repo(github_repo);
             }
             Err(e) => {
                 self.set_status(format!("Failed to load roadmap: {}", e));
             }
         }
+    }
+
+    /// Detect GitHub repo from git remote URL
+    fn detect_github_repo(&self) -> Option<String> {
+        // First try to get from database sync state
+        if let Ok(Some(state)) = self.db.get_roadmap_sync_state("ROADMAP.md") {
+            if state.github_repo.is_some() {
+                return state.github_repo;
+            }
+        }
+
+        // Fallback: parse git remote URL
+        let output = std::process::Command::new("git")
+            .args(["config", "--get", "remote.origin.url"])
+            .output()
+            .ok()?;
+
+        let url = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if url.is_empty() {
+            return None;
+        }
+
+        // Parse GitHub URL: git@github.com:owner/repo.git or https://github.com/owner/repo.git
+        if let Some(rest) = url.strip_prefix("git@github.com:") {
+            let repo = rest.trim_end_matches(".git");
+            return Some(repo.to_string());
+        }
+        if let Some(rest) = url.strip_prefix("https://github.com/") {
+            let repo = rest.trim_end_matches(".git");
+            return Some(repo.to_string());
+        }
+
+        None
     }
 
     /// Toggle checkbox state for a roadmap item
