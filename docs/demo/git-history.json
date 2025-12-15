@@ -1,10 +1,26 @@
 [
   {
-    "hash": "bc541a82d7940e7c2e0cffc3e7bcbefa80f9c2c6",
-    "short_hash": "bc541a8",
+    "hash": "0bd52dce5689f8f71f94dc976da72ab3f3812ae4",
+    "short_hash": "0bd52dc",
     "author": "Bobby Nathan",
-    "date": "2025-12-13T19:00:15-05:00",
-    "message": "docs: sync decision graph",
+    "date": "2025-12-15T00:58:44-05:00",
+    "message": "fix: update checkbox state in place without page reload\n\nUse optimistic local state update when toggling checkboxes:\n- Add local items state that syncs from props\n- Update state immediately on checkbox click\n- Fire-and-forget API call in background\n- No page reload, no network fetch, instant UI response",
+    "files_changed": 7
+  },
+  {
+    "hash": "85ad24a831528c0ac12db0f20d5e6fc4fa720b18",
+    "short_hash": "85ad24a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T00:33:14-05:00",
+    "message": "fix: add graph sync check to pre-push hook for GH Pages\n\nThe pre-push hook now runs 'deciduous sync' and checks if\ndocs/graph-data.json has uncommitted changes. If the graph\nis stale, the push is blocked with instructions to commit\nthe synced graph data.\n\nThis ensures GitHub Pages always has current decision graph data.\n\nDecision graph: goal #518, action #519",
+    "files_changed": 6
+  },
+  {
+    "hash": "f04dc1e5a3613d9747d35cfc72b17393593f8a2a",
+    "short_hash": "f04dc1e",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T00:13:13-05:00",
+    "message": "docs: add GitHub Pages fixes to roadmap",
     "files_changed": 1
   },
   {

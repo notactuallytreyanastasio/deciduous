@@ -137,9 +137,17 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
   const [showDetail, setShowDetail] = useState(false);
   const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
 
+  // Local state for items (allows optimistic updates)
+  const [items, setItems] = useState<RoadmapItem[]>(roadmapItems);
+
+  // Sync with props when they change
+  useEffect(() => {
+    setItems(roadmapItems);
+  }, [roadmapItems]);
+
   // Filter and count items
-  const filteredItems = useMemo(() => filterByMode(roadmapItems, viewMode), [roadmapItems, viewMode]);
-  const counts = useMemo(() => countByStatus(roadmapItems), [roadmapItems]);
+  const filteredItems = useMemo(() => filterByMode(items, viewMode), [items, viewMode]);
+  const counts = useMemo(() => countByStatus(items), [items]);
 
   // Group filtered items by section for rendering
   const groupedItems = useMemo(() => groupBySection(filteredItems), [filteredItems]);
@@ -397,22 +405,21 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                       onClick={() => setSelectedIndex(currentIndex)}
                       onToggleCheckbox={async () => {
                         const newState = item.checkbox_state === 'checked' ? 'unchecked' : 'checked';
-                        try {
-                          const response = await fetch('/api/roadmap/checkbox', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ item_id: item.id, checkbox_state: newState }),
-                          });
-                          if (response.ok) {
-                            setStatusMessage(`Item marked as ${newState}`);
-                            window.location.reload();
-                          } else {
-                            const data = await response.json();
-                            setStatusMessage(data.error || 'Failed to update');
-                          }
-                        } catch {
-                          setStatusMessage('API not available (requires deciduous serve)');
-                        }
+
+                        // Optimistic update - update local state immediately
+                        setItems(prev => prev.map(i =>
+                          i.id === item.id ? { ...i, checkbox_state: newState } : i
+                        ));
+                        setStatusMessage(`Item marked as ${newState}`);
+
+                        // Fire-and-forget API call (only works with deciduous serve)
+                        fetch('/api/roadmap/checkbox', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ item_id: item.id, checkbox_state: newState }),
+                        }).catch(() => {
+                          // API not available - that's fine, local state already updated
+                        });
                       }}
                       onSelectOutcome={handleSelectOutcome}
                       onOpenIssue={() => {
