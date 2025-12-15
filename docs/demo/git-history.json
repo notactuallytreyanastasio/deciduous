@@ -1,13 +1,5 @@
 [
   {
-    "hash": "0bd52dce5689f8f71f94dc976da72ab3f3812ae4",
-    "short_hash": "0bd52dc",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T00:58:44-05:00",
-    "message": "fix: update checkbox state in place without page reload\n\nUse optimistic local state update when toggling checkboxes:\n- Add local items state that syncs from props\n- Update state immediately on checkbox click\n- Fire-and-forget API call in background\n- No page reload, no network fetch, instant UI response",
-    "files_changed": 7
-  },
-  {
     "hash": "85ad24a831528c0ac12db0f20d5e6fc4fa720b18",
     "short_hash": "85ad24a",
     "author": "Bobby Nathan",
@@ -22,6 +14,14 @@
     "date": "2025-12-15T00:13:13-05:00",
     "message": "docs: add GitHub Pages fixes to roadmap",
     "files_changed": 1
+  },
+  {
+    "hash": "ae05556d27406daf38dc2a90973b0b20a2502331",
+    "short_hash": "ae05556",
+    "author": "Bobby Nathan",
+    "date": "2025-12-14T12:37:14-05:00",
+    "message": "fix(roadmap): improve sync to write issue metadata and prevent duplicates\n\n- Add --skip-completed flag to skip sections under \"## Completed\"\n- Fix sync to write issue numbers back to ROADMAP.md metadata\n- Add database lookup to find existing issues and prevent duplicates\n- Track new issue numbers during sync and update sections before writing\n- Update ROADMAP.md dates from 2024 to 2025",
+    "files_changed": 2
   },
   {
     "hash": "a2daa6ac9e3d72c48eec39feb737af1cb1cfe41b",

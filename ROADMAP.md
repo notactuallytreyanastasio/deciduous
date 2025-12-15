@@ -3,7 +3,7 @@
 ## Completed
 <!-- roadmap:section id="62dccf3f-c4ce-4359-bfab-5098f91d06bf" -->
 
-### v0.8.x - Prompt Tracking & Template Sync (December 2024)
+### v0.8.x - Prompt Tracking & Template Sync (December 2025)
 <!-- roadmap:section id="75e906b8-d00a-4d6a-8c9c-a3745cd272e8" -->
 - [x] `--prompt` flag for capturing user prompts on nodes
   <!-- roadmap:item id="49a306e7-3ff1-4247-963a-a8b31990ae23" outcome_change_id="" -->
@@ -14,7 +14,7 @@
 - [x] `deciduous update` no longer destroys custom content
   <!-- roadmap:item id="989c5423-f24d-4c0b-a2b8-958047b7a956" outcome_change_id="" -->
 
-### v0.7.x - TUI Graph Viewer (December 2024)
+### v0.7.x - TUI Graph Viewer (December 2025)
 <!-- roadmap:section id="8f3cbcbb-9718-47c5-8fe3-15df64909782" -->
 - [x] `deciduous tui` command for terminal-based graph visualization
   <!-- roadmap:item id="9dcc20df-7192-4d9e-9633-eee2a477e1d1" outcome_change_id="" -->
@@ -39,7 +39,7 @@
 - [x] Goal story view (s to show goal hierarchy)
   <!-- roadmap:item id="eef35aee-317f-45db-933b-518687db2e3d" outcome_change_id="" -->
 
-### v0.6.0 - Multi-User Graph Sync (December 2024)
+### v0.6.0 - Multi-User Graph Sync (December 2025)
 <!-- roadmap:section id="6513a80e-81f6-4ef2-9397-ea31a55fce2c" -->
 - [x] jj-inspired dual-ID model with `change_id` (UUID) for globally unique nodes
   <!-- roadmap:item id="841eea6a-e2ba-43d6-83de-dc10c54a0210" outcome_change_id="" -->
@@ -78,7 +78,7 @@
 <!-- roadmap:section id="280ac55f-4143-4a59-ab16-3213806b820d" -->
 
 ### Narrative User Guide
-<!-- roadmap:section id="c31c2378-9b07-4fa1-9ecc-860890108931" -->
+<!-- roadmap:section id="c31c2378-9b07-4fa1-9ecc-860890108931" issue="56" status="open" -->
 *A real, end-to-end tutorial that walks through an actual use case*
 - [ ] **Narrative-driven tutorial** (like the jj tutorial)
   <!-- roadmap:item id="a6cb0ced-0b6b-406c-ba46-ca72bb7fb8fb" outcome_change_id="" -->
@@ -105,7 +105,7 @@
   - Link prominently from README
 
 ### Automated Graph Sync Workflow
-<!-- roadmap:section id="ce8a9922-4b5b-498e-8467-175eb1600f6f" -->
+<!-- roadmap:section id="ce8a9922-4b5b-498e-8467-175eb1600f6f" issue="57" status="open" -->
 *Multi-user state management should be seamless*
 - [ ] **Default to diff/patch workflow for multi-user state management**
   <!-- roadmap:item id="f91ec3e1-6bcf-4b32-a985-7bf31d82b66d" outcome_change_id="" -->
@@ -147,7 +147,7 @@
 - [ ] **Fix GH Pages showing stale graph data** - local DB has all nodes but docs/graph-data.json isn't synced/pushed; need automated workflow to keep GH Pages current
 
 ### Context Recovery (Critical)
-<!-- roadmap:section id="2b2cd677-f9cd-42c8-ae0a-df0a1fe077b9" -->
+<!-- roadmap:section id="2b2cd677-f9cd-42c8-ae0a-df0a1fe077b9" issue="58" status="open" -->
 *Make compaction restore actually work reliably*
 - [ ] `/context` command fully restores working state after context loss
   <!-- roadmap:item id="2b362072-8187-44bf-b2c1-de6b738f981b" outcome_change_id="" -->
@@ -173,7 +173,7 @@
 <!-- roadmap:section id="6f761f06-3a84-475a-9b85-1ee70edf1a6c" -->
 
 ### Commit-Centric Graph Navigation
-<!-- roadmap:section id="dc855dbb-f5eb-4f20-b84c-b40996be83c8" -->
+<!-- roadmap:section id="dc855dbb-f5eb-4f20-b84c-b40996be83c8" issue="59" status="open" -->
 - [ ] More robust per-commit tooling
   <!-- roadmap:item id="29772243-3c4a-4ec2-8c00-d55ede4692f5" outcome_change_id="" -->
   - Link nodes to commits more reliably
@@ -191,7 +191,7 @@
   <!-- roadmap:item id="53b0faaf-c764-48b1-acf6-12141af6226c" outcome_change_id="" -->
 
 ### Web Viewer - URL State & Sharing
-<!-- roadmap:section id="b055d90e-d3f2-4d51-919c-934440e6cfdd" -->
+<!-- roadmap:section id="b055d90e-d3f2-4d51-919c-934440e6cfdd" issue="60" status="open" -->
 - [ ] **Query param encoding for shareable state**
   <!-- roadmap:item id="bc03b884-5bb3-4dc1-bf5c-e09387558cfa" outcome_change_id="" -->
   - Encode ALL view parameters in URL query string
@@ -202,7 +202,7 @@
   - "Copy link" button in UI for easy sharing
 
 ### Web Viewer - DAG + Timeline Split View
-<!-- roadmap:section id="296b450f-8a01-4b7f-8095-b51fdab3161c" -->
+<!-- roadmap:section id="296b450f-8a01-4b7f-8095-b51fdab3161c" issue="61" status="open" -->
 - [ ] **Split view showing DAG and Timeline together**
   <!-- roadmap:item id="beae4f3a-b8f6-484f-be01-09fbb93e1724" outcome_change_id="" -->
   - DAG view on one side, Timeline on the other
@@ -212,7 +212,7 @@
   - Configurable split direction (horizontal/vertical)
 
 ### Web Viewer - PR Integration
-<!-- roadmap:section id="d48c64dc-d640-49f4-9620-4ca7c9165266" -->
+<!-- roadmap:section id="d48c64dc-d640-49f4-9620-4ca7c9165266" issue="62" status="open" -->
 - [ ] **Link PRs to branch-filtered decision graph views**
   <!-- roadmap:item id="333557e3-6445-4091-b8cc-790c1810654f" outcome_change_id="" -->
   - Click a PR link → opens deciduous web viewer filtered to that branch's nodes
@@ -233,7 +233,7 @@
   - Rust utility functions for TUI (`build_chains`, `sort_chains_by_recency`, `get_recent_chains`)
 
 ### TUI Enhancements
-<!-- roadmap:section id="cea0dada-171d-4616-88f4-4ab5e3c89da5" -->
+<!-- roadmap:section id="cea0dada-171d-4616-88f4-4ab5e3c89da5" issue="63" status="open" -->
 - [ ] **Phase 2: Multi-goal chains**
   <!-- roadmap:item id="d33d22f2-2fe8-4d31-a838-05a3e8bfbe2a" outcome_change_id="" -->
   - Navigate between related goals
@@ -269,7 +269,7 @@
   - Cheat sheet generation (`deciduous tui --help-keys`)
 
 ### Code Tracking & File Associations (Extended)
-<!-- roadmap:section id="d14cb3b4-26cd-4299-9732-9f995d850c39" -->
+<!-- roadmap:section id="d14cb3b4-26cd-4299-9732-9f995d850c39" issue="64" status="open" -->
 - [ ] **Web UI: "View Code" button on nodes**
   <!-- roadmap:item id="9895465d-aa14-41d9-873f-b3995ccd9d25" outcome_change_id="" -->
   - Click a node → see associated files
@@ -306,7 +306,7 @@
   - Help ensure important code has documented reasoning
 
 ### Prompt Tracking (Extended)
-<!-- roadmap:section id="575de692-fcd7-4b61-bf72-a9f173e79ad9" -->
+<!-- roadmap:section id="575de692-fcd7-4b61-bf72-a9f173e79ad9" issue="65" status="open" -->
 - [x] **View prompts in web UI**
   <!-- roadmap:item id="a4952702-76cb-432a-b63e-c9cc1e0cf97f" outcome_change_id="" -->
   - Display the original prompt in node detail panel
@@ -333,7 +333,7 @@
 <!-- roadmap:section id="d790198d-adb4-4a71-9504-43aa89c7c002" -->
 
 ### Release Tooling
-<!-- roadmap:section id="8588ceb0-d117-4cc4-a46b-45c10b927bd5" -->
+<!-- roadmap:section id="8588ceb0-d117-4cc4-a46b-45c10b927bd5" issue="66" status="open" -->
 - [ ] **Automated release notes generation**
   <!-- roadmap:item id="fd513dd0-bbda-4ada-9ef6-3e86920fab00" outcome_change_id="" -->
   - `deciduous release-notes --from v0.7.0 --to v0.8.0`
@@ -377,7 +377,7 @@
   - Fail-safes: block release if tests fail or graph has incomplete goals
 
 ### Roadmap Manager Tool
-<!-- roadmap:section id="68ed088c-baa4-462b-88eb-4b643a66d070" -->
+<!-- roadmap:section id="68ed088c-baa4-462b-88eb-4b643a66d070" issue="67" status="open" -->
 - [ ] **Link roadmap items to work**
   <!-- roadmap:item id="16c29706-60c6-4d95-9599-0ef63c6a4401" outcome_change_id="" -->
   - Roadmap items should link to decision graph nodes
@@ -396,7 +396,7 @@
   - `deciduous roadmap status` - show completion based on linked nodes
 
 ### Claude Code Hooks Integration
-<!-- roadmap:section id="cd6c44c1-f3c7-468d-91c8-7679d4216ebe" -->
+<!-- roadmap:section id="cd6c44c1-f3c7-468d-91c8-7679d4216ebe" issue="68" status="open" -->
 - [ ] Explore using Claude Code hooks to guarantee workflow behavior
   <!-- roadmap:item id="42ffb395-a6e0-4f72-9220-01d2500c1c97" outcome_change_id="" -->
   - Claude Code supports hooks that run on various events (tool calls, messages, etc.)
@@ -436,7 +436,7 @@
   - Example hook configurations for different workflow styles
 
 ### Editor Memories Integration
-<!-- roadmap:section id="6d4a0665-85a3-4cc4-869e-a345dbea1383" -->
+<!-- roadmap:section id="6d4a0665-85a3-4cc4-869e-a345dbea1383" issue="69" status="open" -->
 - [ ] **Actually save memories correctly at runtime**
   <!-- roadmap:item id="f9db3d48-0358-4233-be99-363bc18b63b0" outcome_change_id="" -->
   - Windsurf creates memories during runtime - need to patch into that flow
@@ -467,7 +467,7 @@
   - Bidirectional: memories inform context recovery
 
 ### Roadmap Skill & TUI Integration
-<!-- roadmap:section id="e63eb8ba-c47c-4dd3-b761-7288288d64ee" -->
+<!-- roadmap:section id="e63eb8ba-c47c-4dd3-b761-7288288d64ee" issue="70" status="open" -->
 - [ ] **Claude Code skill for roadmap management**
   <!-- roadmap:item id="6ed19ee8-ddf9-4f3e-aea5-c3773b57b1bc" outcome_change_id="" -->
   - `/roadmap` skill to interact with ROADMAP.md and decision graph
@@ -486,7 +486,7 @@
   - Track completion: roadmap item is "done" when linked outcome exists
 
 ### Retroactive Commit Association
-<!-- roadmap:section id="23faed37-c03f-4ec1-a4d8-35beac9648d5" -->
+<!-- roadmap:section id="23faed37-c03f-4ec1-a4d8-35beac9648d5" issue="71" status="open" -->
 - [ ] **Audit existing nodes and associate with git commits**
   <!-- roadmap:item id="69eb1514-69e8-44b3-850b-b55a2dd3357d" outcome_change_id="" -->
   - Many early nodes were created without `--commit` flag
@@ -508,7 +508,7 @@
   - Help maintain commit-node linkage going forward
 
 ### Git Integration & Pre-commit Hook Awareness
-<!-- roadmap:section id="c08ba750-b673-4eaa-9087-48d45de678c2" -->
+<!-- roadmap:section id="c08ba750-b673-4eaa-9087-48d45de678c2" issue="72" status="open" -->
 - [ ] Inspect and respect pre-commit hooks
   <!-- roadmap:item id="121c9436-9310-4eae-8216-8d80ff4e42ba" outcome_change_id="" -->
   - Detect `.git/hooks/pre-commit` or `.husky/` hooks
@@ -528,7 +528,7 @@
   - Instruct LLMs to check for hooks before committing
 
 ### Git.log File Reliability
-<!-- roadmap:section id="66d64caf-4af3-494e-b8c5-c04ca26895d7" -->
+<!-- roadmap:section id="66d64caf-4af3-494e-b8c5-c04ca26895d7" issue="73" status="open" -->
 - [ ] Investigate why git.log file isn't always being created/updated
   <!-- roadmap:item id="493346ee-4047-4678-9950-0c69c0d14e3d" outcome_change_id="" -->
   - User reported missing git.log during session
@@ -545,7 +545,7 @@
   <!-- roadmap:item id="d14b1ccd-5fe3-40a3-a0c7-2f897ce25076" outcome_change_id="" -->
 
 ### Template Sync (init.rs ↔ actual files)
-<!-- roadmap:section id="f53d0d43-4614-45c5-9afb-ec3d7039991b" -->
+<!-- roadmap:section id="f53d0d43-4614-45c5-9afb-ec3d7039991b" issue="74" status="open" -->
 - [x] **FIX: `deciduous update` destroys custom content in command files** (v0.8.2)
   <!-- roadmap:item id="3979af69-4ecc-46e4-8fc3-7b3fe6ea075e" outcome_change_id="" -->
   - ~~Currently `update --claude` overwrites `.claude/commands/*.md` completely~~
@@ -590,7 +590,7 @@
 <!-- roadmap:section id="998babf3-7e02-451b-b027-f08457bfc047" -->
 
 ### TUI Architecture Refactor
-<!-- roadmap:section id="d12ee466-92fb-4e1f-bb0a-b6b3f5aef0eb" -->
+<!-- roadmap:section id="d12ee466-92fb-4e1f-bb0a-b6b3f5aef0eb" issue="75" status="open" -->
 - [ ] **Functional core, imperative shell**
   <!-- roadmap:item id="bda1dd2f-3e17-4d91-bf01-46961590c2f8" outcome_change_id="" -->
   - Extract pure functions from app.rs for all state transformations
@@ -611,7 +611,7 @@
   - Extract reusable update functions
 
 ### Type Unification (TUI + Web)
-<!-- roadmap:section id="866afa76-a663-4f36-ac57-21e69f2474de" -->
+<!-- roadmap:section id="866afa76-a663-4f36-ac57-21e69f2474de" issue="76" status="open" -->
 - [ ] **Shared type definitions**
   <!-- roadmap:item id="7c51596a-385f-4d83-a4ae-ef8a2667cc12" outcome_change_id="" -->
   - Unify TUI types (src/tui/types.rs) with web types (web/src/types/graph.ts)
@@ -630,7 +630,7 @@
   - Document the type mapping
 
 ### Documentation Restructure
-<!-- roadmap:section id="74b5be43-4c7c-4e8c-95e7-6b80d97451f0" -->
+<!-- roadmap:section id="74b5be43-4c7c-4e8c-95e7-6b80d97451f0" issue="77" status="open" -->
 - [ ] Rethink the `docs/` folder organization
   <!-- roadmap:item id="d7f198e6-3a9c-4fc9-a181-8afde9eb69de" outcome_change_id="" -->
   - Currently: GitHub Pages viewer lives here
@@ -654,7 +654,7 @@
 <!-- roadmap:section id="b98b3892-5851-463d-9d2a-e87503d47cd8" -->
 
 ### TUI PR Review Mode
-<!-- roadmap:section id="fadbdfed-ffbb-48dc-bd7e-668e645ece6a" -->
+<!-- roadmap:section id="fadbdfed-ffbb-48dc-bd7e-668e645ece6a" issue="78" status="open" -->
 - [ ] **GitHub PR integration in TUI**
   <!-- roadmap:item id="6707d5b3-0bdd-41c0-bebf-673d4aaf8e20" outcome_change_id="" -->
   - Pull in PR comments from GitHub API
@@ -669,7 +669,7 @@
   - See review status and approval state
 
 ### LLM Critique & Analysis
-<!-- roadmap:section id="30289abe-f336-4cff-af9f-5696a78d0bf6" -->
+<!-- roadmap:section id="30289abe-f336-4cff-af9f-5696a78d0bf6" issue="79" status="open" -->
 - [ ] `deciduous critique --goal <id>` - Have an LLM analyze a goal's decision chain
   <!-- roadmap:item id="c940eee4-473b-47c4-9a31-887ff23d0ece" outcome_change_id="" -->
   - Review decisions made, options chosen/rejected
@@ -685,7 +685,7 @@
   <!-- roadmap:item id="21b34e7f-494b-4135-95fe-f8b51b8dd857" outcome_change_id="" -->
 
 ### LLM Benchmarking Framework
-<!-- roadmap:section id="e4d61b19-2be0-4861-85fa-38cc15ff888e" -->
+<!-- roadmap:section id="e4d61b19-2be0-4861-85fa-38cc15ff888e" issue="80" status="open" -->
 - [ ] **Goal-based benchmarking**: Use the same goal/task across multiple LLMs
   <!-- roadmap:item id="8824ee41-1a7e-44c1-b349-c25313a3e7e5" outcome_change_id="" -->
   - Define a goal with acceptance criteria
@@ -715,7 +715,7 @@
   - CI integration for regression testing model capabilities
 
 ### DuckDB for OLAP Analytics
-<!-- roadmap:section id="46921027-f771-404d-b5b8-e65de9114871" -->
+<!-- roadmap:section id="46921027-f771-404d-b5b8-e65de9114871" issue="81" status="open" -->
 - [ ] Add DuckDB as optional analytical backend for decision graph queries
   <!-- roadmap:item id="ffc67234-8453-4cb9-944e-315485f78683" outcome_change_id="" -->
   - SQLite is great for OLTP (single-project, real-time logging)
@@ -749,7 +749,7 @@
 ---
 
 ### Live Graph Diff Viewer
-<!-- roadmap:section id="f0d1634e-1453-4c52-9fb6-372e76cb74e3" -->
+<!-- roadmap:section id="f0d1634e-1453-4c52-9fb6-372e76cb74e3" issue="82" status="open" -->
 - [ ] **Real-time graph following**
   <!-- roadmap:item id="65acf702-5b9b-489d-bd77-4216b2780ddf" outcome_change_id="" -->
   - Diff viewer that "follows" the decision graph as nodes are written
@@ -771,7 +771,7 @@
   - Non-blocking: viewer runs in separate process/terminal
 
 ### Live Graph Editor (Experimental)
-<!-- roadmap:section id="727c6fdd-eb2b-467d-b4db-b692739ba9dd" -->
+<!-- roadmap:section id="727c6fdd-eb2b-467d-b4db-b692739ba9dd" issue="83" status="open" -->
 - [ ] **Bidirectional graph editing**
   <!-- roadmap:item id="4262504d-ca47-420e-a4a1-1a5add05ed81" outcome_change_id="" -->
   - Not just viewing - actually edit the graph live
@@ -794,7 +794,7 @@
 ---
 
 ### Claude Desktop Integration
-<!-- roadmap:section id="d00d0c04-a8cf-4f83-a39e-56bb74159c78" -->
+<!-- roadmap:section id="d00d0c04-a8cf-4f83-a39e-56bb74159c78" issue="84" status="open" -->
 - [ ] **MCP server for Claude Desktop**
   <!-- roadmap:item id="2c8dc247-a368-4075-9c75-3dd9a12a6483" outcome_change_id="" -->
   - Expose deciduous as an MCP (Model Context Protocol) server
