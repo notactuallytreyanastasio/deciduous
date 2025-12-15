@@ -1,7 +1,23 @@
 [
   {
-    "hash": "c950d00d3996b60b0b30554a3d8b32beb0f36c5a",
-    "short_hash": "c950d00",
+    "hash": "b694e16274f3317495d9a29e3a1ccaf75c20e64c",
+    "short_hash": "b694e16",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T02:26:38-05:00",
+    "message": "feat(docs): expand story page with full timeline detail and elevator pitch\n\n- Feature Explosion, Bug Gauntlet, WASM Analyzer, Spelunking Experiments\n- Full Feature Cascade with 12 TUI features listed\n- Performance Crisis, Technical Debt Reckoning, all release notes\n- Added elevator pitch blurb at top\n- All node/commit references preserved from React component",
+    "files_changed": 1
+  },
+  {
+    "hash": "b694e16274f3317495d9a29e3a1ccaf75c20e64c",
+    "short_hash": "b694e16",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T02:26:38-05:00",
+    "message": "feat(docs): expand story page with full timeline detail and elevator pitch\n\n- Feature Explosion, Bug Gauntlet, WASM Analyzer, Spelunking Experiments\n- Full Feature Cascade with 12 TUI features listed\n- Performance Crisis, Technical Debt Reckoning, all release notes\n- Added elevator pitch blurb at top\n- All node/commit references preserved from React component",
+    "files_changed": 1
+  },
+  {
+    "hash": "0dcf3d4748c0bfaa0edce9165ec6c2724300079e",
+    "short_hash": "0dcf3d4",
     "author": "Bobby Nathan",
     "date": "2025-12-15T02:15:40-05:00",
     "message": "feat(docs): add standalone Story page with rich timeline narrative\n\n- Add docs/story.html with comprehensive history of Deciduous development\n- Timeline-based narrative covering Dec 4-15, 2025\n- Rich OG meta tags for social sharing (story-og.png/svg)\n- Add Story link to top navigation on index.html\n- Sync graph data (525 nodes, 460 edges)",

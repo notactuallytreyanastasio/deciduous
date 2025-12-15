@@ -5774,6 +5774,28 @@
       "created_at": "2025-12-15T02:15:00.055696-05:00",
       "updated_at": "2025-12-15T02:15:00.055696-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"9523e6e\",\"confidence\":95}"
+    },
+    {
+      "id": 527,
+      "change_id": "fb30b61f-e0a0-4a35-af96-b7afbc258b8e",
+      "node_type": "outcome",
+      "title": "Story page deployed to GH Pages with top navigation link",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:17:03.043773-05:00",
+      "updated_at": "2025-12-15T02:17:03.043773-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"0dcf3d4\",\"confidence\":95}"
+    },
+    {
+      "id": 528,
+      "change_id": "eff40386-11c6-46e7-ad7e-7a1ff42af28b",
+      "node_type": "outcome",
+      "title": "Expanded story page with full timeline detail",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:26:52.160634-05:00",
+      "updated_at": "2025-12-15T02:26:52.160634-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"b694e16\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -10836,6 +10858,28 @@
       "weight": 1.0,
       "rationale": "Standalone story page with OG meta complete",
       "created_at": "2025-12-15T02:15:12.982922-05:00"
+    },
+    {
+      "id": 461,
+      "from_node_id": 524,
+      "to_node_id": 527,
+      "from_change_id": "d37f5df1-2949-43b3-8d41-9eb8ba4be370",
+      "to_change_id": "fb30b61f-e0a0-4a35-af96-b7afbc258b8e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Story page now live on GitHub Pages",
+      "created_at": "2025-12-15T02:17:03.052633-05:00"
+    },
+    {
+      "id": 462,
+      "from_node_id": 524,
+      "to_node_id": 528,
+      "from_change_id": "d37f5df1-2949-43b3-8d41-9eb8ba4be370",
+      "to_change_id": "eff40386-11c6-46e7-ad7e-7a1ff42af28b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Full story content restored",
+      "created_at": "2025-12-15T02:26:52.168819-05:00"
     }
   ]
 }
