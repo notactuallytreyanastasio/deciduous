@@ -1,11 +1,19 @@
 [
   {
-    "hash": "5d73070dc2ac5f531cb86001ee43d6dc5bc76d72",
-    "short_hash": "5d73070",
+    "hash": "eddcf91c9518bc130ae833d0a68fce7a1e3d87b1",
+    "short_hash": "eddcf91",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T10:14:50-05:00",
-    "message": "feat: start demo with /context to show context recovery first\n\n- Session begins with /context slash command\n- Shows existing decision tree from previous session\n- Claude summarizes state and asks what's next\n- User continues with new work that links to existing graph\n- Demonstrates the full context recovery workflow",
-    "files_changed": 1
+    "date": "2025-12-15T10:27:44-05:00",
+    "message": "Merge branch 'landing-page-refresh' into main\n\nLanding page refresh with:\n- Animated session demo starting with /context\n- Auto-scrolling terminal with 920ms smooth scroll\n- Quickstart guide with 5 animated terminal demos\n- Stats banner, proof cards, editor badges\n- Updated graph: 553 nodes, 484 edges",
+    "files_changed": 0
+  },
+  {
+    "hash": "5bb13c8532e33276dac18b5df0be358024d167f9",
+    "short_hash": "5bb13c8",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:23:19-05:00",
+    "message": "feat: add animated quickstart guide, slow demo scroll 15%\n\n- Add 5-step quickstart guide with animated terminal demos\n- Install, init, add nodes, link nodes, view/share steps\n- Slow top demo scroll from 800ms to 920ms for better readability\n- Sync graph: 553 nodes, 482 edges",
+    "files_changed": 3
   },
   {
     "hash": "f7ce5543f81778db99920b7a779137a7fd212d54",

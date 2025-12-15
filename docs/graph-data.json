@@ -6082,6 +6082,28 @@
       "created_at": "2025-12-15T10:23:02.794435-05:00",
       "updated_at": "2025-12-15T10:23:02.794435-05:00",
       "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90}"
+    },
+    {
+      "id": 555,
+      "change_id": "023f75cc-4dcf-4638-a529-9067d2d3453f",
+      "node_type": "outcome",
+      "title": "Quickstart guide and scroll improvements pushed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:23:32.629128-05:00",
+      "updated_at": "2025-12-15T10:23:32.629128-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"commit\":\"5bb13c8\",\"confidence\":95}"
+    },
+    {
+      "id": 556,
+      "change_id": "31eeef77-ce56-45a2-bf12-925d509aad65",
+      "node_type": "action",
+      "title": "Adding 'See the Graph' link to stats banner",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:28:38.628755-05:00",
+      "updated_at": "2025-12-15T10:28:38.628755-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User wanted stats to link to decision graph\"}"
     }
   ],
   "edges": [
@@ -11386,6 +11408,39 @@
       "weight": 1.0,
       "rationale": "Further refinement of scroll speed",
       "created_at": "2025-12-15T10:23:02.804801-05:00"
+    },
+    {
+      "id": 483,
+      "from_node_id": 553,
+      "to_node_id": 555,
+      "from_change_id": "d292cd74-8d83-4d1b-9651-284e06ffc00b",
+      "to_change_id": "023f75cc-4dcf-4638-a529-9067d2d3453f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Work complete",
+      "created_at": "2025-12-15T10:23:32.637408-05:00"
+    },
+    {
+      "id": 484,
+      "from_node_id": 554,
+      "to_node_id": 555,
+      "from_change_id": "9e7aeafb-a2b1-4077-a480-e182da9b27d5",
+      "to_change_id": "023f75cc-4dcf-4638-a529-9067d2d3453f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Work complete",
+      "created_at": "2025-12-15T10:23:32.651558-05:00"
+    },
+    {
+      "id": 485,
+      "from_node_id": 543,
+      "to_node_id": 556,
+      "from_change_id": "02497504-d700-44c1-8429-ef5f56a043b2",
+      "to_change_id": "31eeef77-ce56-45a2-bf12-925d509aad65",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Landing page enhancement",
+      "created_at": "2025-12-15T10:28:38.637347-05:00"
     }
   ]
 }
