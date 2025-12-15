@@ -1020,10 +1020,34 @@
             steps.forEach(step => {
                 const delay = parseFloat(getComputedStyle(step).getPropertyValue('--delay')) * 1000;
                 setTimeout(() => {
-                    // Scroll to show the new step
-                    step.scrollIntoView({ behavior: 'smooth', block: 'end' });
-                }, delay + 300); // Small offset after animation starts
+                    // Slow scroll to show the new step
+                    const targetScroll = step.offsetTop - content.offsetTop - 20;
+                    smoothScrollTo(content, targetScroll, 800);
+                }, delay + 400);
             });
+        }
+
+        // Custom smooth scroll with configurable duration
+        function smoothScrollTo(element, target, duration) {
+            const start = element.scrollTop;
+            const distance = target - start;
+            let startTime = null;
+
+            function animation(currentTime) {
+                if (!startTime) startTime = currentTime;
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease out cubic
+                const ease = 1 - Math.pow(1 - progress, 3);
+                element.scrollTop = start + distance * ease;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animation);
+                }
+            }
+
+            requestAnimationFrame(animation);
         }
 
         // Replay the session demo animation
