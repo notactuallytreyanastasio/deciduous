@@ -287,10 +287,13 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
   if (roadmapItems.length === 0) {
     return (
       <div style={styles.empty}>
-        <h2>No Roadmap Items</h2>
-        <p>Run <code>deciduous roadmap init</code> to initialize the roadmap.</p>
-        <p style={styles.hint}>
-          Then run <code>deciduous roadmap sync</code> to sync with GitHub Issues.
+        <div style={styles.emptyIcon}>📋</div>
+        <h2 style={styles.emptyTitle}>No Roadmap Items</h2>
+        <p style={styles.emptyText}>
+          Run <code style={styles.code}>deciduous roadmap init</code> to initialize the roadmap.
+        </p>
+        <p style={styles.emptyHint}>
+          Then run <code style={styles.code}>deciduous roadmap sync</code> to sync with GitHub Issues.
         </p>
       </div>
     );
@@ -300,41 +303,48 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
     <div style={styles.container}>
       {/* Sidebar */}
       <div style={styles.sidebar}>
-        <h2 style={styles.title}>Roadmap</h2>
+        <div style={styles.sidebarHeader}>
+          <h2 style={styles.title}>Roadmap</h2>
+          <span style={styles.itemCount}>{filteredItems.length} items</span>
+        </div>
 
         {/* View Mode Toggle */}
-        <div style={styles.filterSection}>
-          <label style={styles.filterLabel}>View Mode</label>
-          <div style={styles.filterButtons}>
-            <button
-              onClick={() => { setViewMode('active'); setSelectedIndex(0); }}
-              style={{
-                ...styles.filterBtn,
-                ...(viewMode === 'active' ? styles.filterBtnActive : {}),
-              }}
-            >
-              Active ({counts.active})
-            </button>
-            <button
-              onClick={() => { setViewMode('completed'); setSelectedIndex(0); }}
-              style={{
-                ...styles.filterBtn,
-                ...(viewMode === 'completed' ? styles.filterBtnActive : {}),
-              }}
-            >
-              Completed ({counts.completed})
-            </button>
-          </div>
+        <div style={styles.toggleContainer}>
+          <button
+            onClick={() => { setViewMode('active'); setSelectedIndex(0); }}
+            style={{
+              ...styles.toggleBtn,
+              ...(viewMode === 'active' ? styles.toggleBtnActive : {}),
+            }}
+          >
+            <span style={getToggleDotStyle(viewMode === 'active', false)} />
+            Active
+            <span style={styles.toggleCount}>{counts.active}</span>
+          </button>
+          <button
+            onClick={() => { setViewMode('completed'); setSelectedIndex(0); }}
+            style={{
+              ...styles.toggleBtn,
+              ...(viewMode === 'completed' ? styles.toggleBtnActiveGreen : {}),
+            }}
+          >
+            <span style={getToggleDotStyle(viewMode === 'completed', true)} />
+            Done
+            <span style={styles.toggleCount}>{counts.completed}</span>
+          </button>
         </div>
 
         {/* Keyboard hints */}
         <div style={styles.hints}>
-          <div style={styles.hintItem}><kbd>j/k</kbd> Navigate</div>
-          <div style={styles.hintItem}><kbd>gg/G</kbd> Top/Bottom</div>
-          <div style={styles.hintItem}><kbd>o</kbd> Open issue</div>
-          <div style={styles.hintItem}><kbd>c</kbd> Toggle checkbox</div>
-          <div style={styles.hintItem}><kbd>Tab</kbd> Toggle view</div>
-          <div style={styles.hintItem}><kbd>Enter</kbd> Detail panel</div>
+          <div style={styles.hintsTitle}>Keyboard</div>
+          <div style={styles.hintGrid}>
+            <kbd style={styles.kbd}>j/k</kbd><span style={styles.hintText}>Navigate</span>
+            <kbd style={styles.kbd}>gg/G</kbd><span style={styles.hintText}>Top/Bottom</span>
+            <kbd style={styles.kbd}>o</kbd><span style={styles.hintText}>Open issue</span>
+            <kbd style={styles.kbd}>c</kbd><span style={styles.hintText}>Toggle done</span>
+            <kbd style={styles.kbd}>Tab</kbd><span style={styles.hintText}>Switch view</span>
+            <kbd style={styles.kbd}>Enter</kbd><span style={styles.hintText}>Details</span>
+          </div>
         </div>
 
         {/* Status message */}
@@ -347,9 +357,20 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
       <div style={styles.content}>
         {filteredItems.length === 0 ? (
           <div style={styles.emptyFiltered}>
-            {viewMode === 'active'
-              ? 'No active items. Press Tab to view completed.'
-              : 'No completed items. Press Tab to view active.'}
+            <div style={styles.emptyFilteredIcon}>
+              {viewMode === 'active' ? '🎉' : '📝'}
+            </div>
+            <p style={styles.emptyFilteredText}>
+              {viewMode === 'active'
+                ? 'All caught up! No active items.'
+                : 'No completed items yet.'}
+            </p>
+            <button
+              onClick={() => { setViewMode(viewMode === 'active' ? 'completed' : 'active'); setSelectedIndex(0); }}
+              style={styles.emptyFilteredBtn}
+            >
+              View {viewMode === 'active' ? 'completed' : 'active'} items
+            </button>
           </div>
         ) : (
           <div style={styles.itemList}>
@@ -362,7 +383,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
               for (const [section, items] of groupedItems) {
                 // Add section header
                 elements.push(
-                  <SectionHeader key={`section-${section}`} title={section} />
+                  <SectionHeader key={`section-${section}`} title={section} count={items.length} />
                 );
 
                 // Add items in this section
@@ -372,7 +393,6 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                     <RoadmapItemCard
                       key={item.id}
                       item={item}
-                      itemIndex={currentIndex + 1}
                       isSelected={currentIndex === selectedIndex}
                       onClick={() => setSelectedIndex(currentIndex)}
                       onSelectOutcome={handleSelectOutcome}
@@ -423,14 +443,16 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
 
 interface SectionHeaderProps {
   title: string;
+  count: number;
 }
 
-const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => {
+const SectionHeader: React.FC<SectionHeaderProps> = ({ title, count }) => {
   return (
     <div style={styles.sectionHeader}>
-      <span style={styles.sectionDash}>--</span>
+      <div style={styles.sectionLine} />
       <span style={styles.sectionTitle}>{title}</span>
-      <span style={styles.sectionDash}>--</span>
+      <span style={styles.sectionCount}>{count}</span>
+      <div style={styles.sectionLine} />
     </div>
   );
 };
@@ -441,7 +463,6 @@ const SectionHeader: React.FC<SectionHeaderProps> = ({ title }) => {
 
 interface RoadmapItemCardProps {
   item: RoadmapItem;
-  itemIndex: number;
   isSelected: boolean;
   onClick: () => void;
   onSelectOutcome: (id: number) => void;
@@ -450,7 +471,6 @@ interface RoadmapItemCardProps {
 
 const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({
   item,
-  itemIndex,
   isSelected,
   onClick,
   onSelectOutcome,
@@ -464,66 +484,85 @@ const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({
     <div
       style={{
         ...styles.card,
-        ...(complete ? styles.cardComplete : {}),
         ...(isSelected ? styles.cardSelected : {}),
       }}
       onClick={onClick}
     >
-      <div style={styles.cardHeader}>
-        {/* Item index (like TUI row numbers) */}
-        <span style={styles.itemIndex}>{itemIndex}.</span>
+      {/* Selection indicator */}
+      <div style={{
+        ...styles.selectionBar,
+        opacity: isSelected ? 1 : 0,
+      }} />
 
-        {/* ASCII Checkbox (matching TUI style) */}
-        <span style={{
-          ...styles.checkbox,
-          color: item.checkbox_state === 'checked' ? '#1a7f37' : '#6e7781',
-        }}>
-          {item.checkbox_state === 'checked' ? '[x]' : '[ ]'}
-        </span>
-
-        {/* Title */}
-        <span style={{
-          ...styles.cardTitle,
-          color: complete ? '#1a7f37' : partial ? '#9a6700' : '#24292f',
-        }}>
-          {item.title}
-        </span>
-
-        {/* Badges */}
-        <div style={styles.badges}>
-          {item.github_issue_number && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenIssue(); }}
-              style={{
-                ...styles.issueBadge,
-                ...(item.github_issue_state === 'closed' ? styles.issueClosed : styles.issueOpen),
-              }}
-              title="Click or press 'o' to open issue"
-            >
-              #{item.github_issue_number}
-            </button>
+      <div style={styles.cardContent}>
+        {/* Checkbox */}
+        <button
+          style={{
+            ...styles.checkbox,
+            ...(complete ? styles.checkboxChecked : {}),
+          }}
+          onClick={(e) => { e.stopPropagation(); }}
+        >
+          {complete && (
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           )}
-          {item.outcome_node_id && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSelectOutcome(item.outcome_node_id!); }}
-              style={styles.outcomeBadge}
-            >
-              Outcome
-            </button>
-          )}
+        </button>
+
+        {/* Main content */}
+        <div style={styles.cardMain}>
+          <span style={{
+            ...styles.cardTitle,
+            ...(complete ? styles.cardTitleComplete : {}),
+          }}>
+            {item.title}
+          </span>
+
+          {/* Meta row */}
+          <div style={styles.cardMeta}>
+            {item.github_issue_number && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onOpenIssue(); }}
+                style={{
+                  ...styles.badge,
+                  ...(item.github_issue_state === 'closed' ? styles.badgePurple : styles.badgeBlue),
+                }}
+                title="Open in GitHub"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: 4 }}>
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+                #{item.github_issue_number}
+              </button>
+            )}
+            {item.outcome_node_id && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onSelectOutcome(item.outcome_node_id!); }}
+                style={{ ...styles.badge, ...styles.badgeAmber }}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: 4 }}>
+                  <path d="M8.22 1.754a.25.25 0 00-.44 0L1.698 13.132a.25.25 0 00.22.368h12.164a.25.25 0 00.22-.368L8.22 1.754zm-1.763-.707c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0114.082 15H1.918a1.75 1.75 0 01-1.543-2.575L6.457 1.047z"/>
+                </svg>
+                Outcome
+              </button>
+            )}
+            {synced && (
+              <span style={{ ...styles.statusPill, ...styles.statusSynced }}>
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor" style={{ marginRight: 4 }}>
+                  <path d="M8 16A8 8 0 108 0a8 8 0 000 16zm3.78-9.72a.75.75 0 00-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l4.5-4.5z"/>
+                </svg>
+                Synced
+              </span>
+            )}
+            {!synced && partial && (
+              <span style={{ ...styles.statusPill, ...styles.statusPartial }}>
+                In Progress
+              </span>
+            )}
+          </div>
         </div>
       </div>
-
-      {item.description && (
-        <p style={styles.cardDesc}>{item.description}</p>
-      )}
-
-      {/* Show sync status: complete vs fully synced */}
-      {synced ? (
-        <div style={styles.syncedBadge}>Synced</div>
-      ) : complete ? (
-        <div style={styles.completeBadge}>Complete</div>
-      ) : null}
     </div>
   );
 };
@@ -545,310 +584,491 @@ const ItemDetailPanel: React.FC<ItemDetailPanelProps> = ({ item, onClose }) => {
     <div style={styles.detailContent}>
       <div style={styles.detailHeader}>
         <h3 style={styles.detailTitle}>{item.title}</h3>
-        <button onClick={onClose} style={styles.closeBtn}>×</button>
+        <button onClick={onClose} style={styles.closeBtn}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
       </div>
 
       {item.section && (
-        <div style={styles.detailRow}>
-          <span style={styles.detailLabel}>Section:</span>
-          <span>{item.section}</span>
-        </div>
+        <div style={styles.detailChip}>{item.section}</div>
       )}
 
       {item.description && (
-        <div style={styles.detailRow}>
-          <span style={styles.detailLabel}>Description:</span>
-          <p style={styles.detailDesc}>{item.description}</p>
-        </div>
+        <p style={styles.detailDesc}>{item.description}</p>
       )}
 
       <div style={styles.detailDivider}>Sync Status</div>
 
-      <div style={styles.statusRow}>
-        <span style={{ color: item.checkbox_state === 'checked' ? '#1a7f37' : '#cf222e' }}>
-          {item.checkbox_state === 'checked' ? '[x]' : '[ ]'} Checkbox: {item.checkbox_state}
-        </span>
+      <div style={styles.syncGrid}>
+        <SyncStatusRow
+          label="Checkbox"
+          checked={item.checkbox_state === 'checked'}
+          detail={item.checkbox_state}
+        />
+        <SyncStatusRow
+          label="Outcome"
+          checked={!!item.outcome_change_id}
+          detail={item.outcome_change_id ? item.outcome_change_id.slice(0, 8) : 'Not linked'}
+        />
+        <SyncStatusRow
+          label="Issue"
+          checked={item.github_issue_state === 'closed'}
+          detail={item.github_issue_number ? `#${item.github_issue_number} (${item.github_issue_state || 'unknown'})` : 'No issue'}
+        />
       </div>
 
-      <div style={styles.statusRow}>
-        <span style={{ color: item.outcome_change_id ? '#1a7f37' : '#cf222e' }}>
-          Outcome: {item.outcome_change_id ? `Linked (${item.outcome_change_id.slice(0, 8)})` : 'Not linked'}
-        </span>
-      </div>
-
-      <div style={styles.statusRow}>
-        <span style={{ color: item.github_issue_state === 'closed' ? '#1a7f37' : '#cf222e' }}>
-          Issue: {
-            item.github_issue_number
-              ? `#${item.github_issue_number} (${item.github_issue_state || 'unknown'})`
-              : 'No issue'
-          }
-        </span>
-      </div>
-
-      {/* Show both completion (display) and sync (full) status */}
+      {/* Overall status */}
       <div style={{
         ...styles.overallStatus,
-        backgroundColor: synced ? '#dafbe1' : complete ? '#ddf4ff' : '#fff8c5',
-        color: synced ? '#1a7f37' : complete ? '#0969da' : '#9a6700',
+        ...(synced ? styles.overallSynced : complete ? styles.overallComplete : styles.overallIncomplete),
       }}>
-        {synced ? 'SYNCED (all criteria met)' : complete ? 'COMPLETE (not synced)' : 'INCOMPLETE'}
+        {synced ? (
+          <>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 16A8 8 0 108 0a8 8 0 000 16zm3.78-9.72a.75.75 0 00-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l4.5-4.5z"/>
+            </svg>
+            Fully Synced
+          </>
+        ) : complete ? (
+          <>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0a8 8 0 100 16A8 8 0 008 0zm3.78 6.28a.75.75 0 00-1.06-1.06L6.75 9.19 5.28 7.72a.75.75 0 00-1.06 1.06l2 2a.75.75 0 001.06 0l4.5-4.5z"/>
+            </svg>
+            Complete (not synced)
+          </>
+        ) : (
+          <>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0a8 8 0 100 16A8 8 0 008 0zM1.5 8a6.5 6.5 0 1113 0 6.5 6.5 0 01-13 0z"/>
+            </svg>
+            Incomplete
+          </>
+        )}
       </div>
     </div>
   );
 };
 
+// Sync status row component
+const SyncStatusRow: React.FC<{ label: string; checked: boolean; detail: string }> = ({ label, checked, detail }) => (
+  <div style={styles.syncRow}>
+    <div style={{
+      ...styles.syncIcon,
+      backgroundColor: checked ? '#dcfce7' : '#fef2f2',
+      color: checked ? '#16a34a' : '#dc2626',
+    }}>
+      {checked ? (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M2.5 6L5 8.5L9.5 3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      ) : (
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+          <path d="M3 3l6 6M9 3L3 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+        </svg>
+      )}
+    </div>
+    <div style={styles.syncInfo}>
+      <span style={styles.syncLabel}>{label}</span>
+      <span style={styles.syncDetail}>{detail}</span>
+    </div>
+  </div>
+);
+
 // =============================================================================
 // Styles
 // =============================================================================
+
+/** Helper function for toggle dot styling */
+const getToggleDotStyle = (active: boolean, green: boolean): React.CSSProperties => ({
+  width: '8px',
+  height: '8px',
+  borderRadius: '50%',
+  backgroundColor: active ? (green ? '#22c55e' : '#3b82f6') : '#d1d5db',
+  transition: 'background-color 0.15s ease',
+});
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
     height: '100%',
     display: 'flex',
-    gap: 0,
+    backgroundColor: '#fafafa',
   },
   sidebar: {
-    width: '200px',
-    padding: '20px',
-    backgroundColor: '#f6f8fa',
-    borderRight: '1px solid #d0d7de',
-    flexShrink: 0,
-  },
-  title: {
-    fontSize: '16px',
-    margin: '0 0 20px 0',
-    color: '#24292f',
-  },
-  filterSection: {
-    marginBottom: '20px',
-  },
-  filterLabel: {
-    display: 'block',
-    fontSize: '11px',
-    color: '#6e7781',
-    marginBottom: '8px',
-    textTransform: 'uppercase',
-  },
-  filterButtons: {
+    width: '220px',
+    padding: '24px 20px',
+    backgroundColor: '#ffffff',
+    borderRight: '1px solid #e5e7eb',
     display: 'flex',
     flexDirection: 'column',
-    gap: '4px',
+    gap: '24px',
   },
-  filterBtn: {
-    padding: '8px 12px',
+  sidebarHeader: {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: '18px',
+    fontWeight: 600,
+    margin: 0,
+    color: '#111827',
+    letterSpacing: '-0.025em',
+  },
+  itemCount: {
     fontSize: '12px',
-    border: '1px solid #d0d7de',
-    backgroundColor: '#ffffff',
-    color: '#57606a',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    textAlign: 'left',
+    color: '#9ca3af',
+    fontWeight: 500,
   },
-  filterBtnActive: {
-    backgroundColor: '#0969da',
-    color: '#ffffff',
-    borderColor: '#0969da',
+  toggleContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  toggleBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    fontSize: '13px',
+    fontWeight: 500,
+    border: '1px solid #e5e7eb',
+    backgroundColor: '#ffffff',
+    color: '#6b7280',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  toggleBtnActive: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+    color: '#1d4ed8',
+  },
+  toggleBtnActiveGreen: {
+    backgroundColor: '#f0fdf4',
+    borderColor: '#22c55e',
+    color: '#16a34a',
+  },
+  toggleCount: {
+    marginLeft: 'auto',
+    fontSize: '12px',
+    fontWeight: 600,
+    color: 'inherit',
+    opacity: 0.7,
   },
   hints: {
-    marginTop: '20px',
-    paddingTop: '20px',
-    borderTop: '1px solid #d0d7de',
+    marginTop: 'auto',
   },
-  hintItem: {
+  hintsTitle: {
     fontSize: '11px',
-    color: '#6e7781',
-    marginBottom: '6px',
+    fontWeight: 600,
+    color: '#9ca3af',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+    marginBottom: '12px',
+  },
+  hintGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'auto 1fr',
+    gap: '8px 12px',
+    alignItems: 'center',
+  },
+  kbd: {
+    display: 'inline-block',
+    padding: '2px 6px',
+    fontSize: '11px',
+    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+    fontWeight: 500,
+    color: '#374151',
+    backgroundColor: '#f3f4f6',
+    borderRadius: '4px',
+    border: '1px solid #e5e7eb',
+    boxShadow: '0 1px 0 #d1d5db',
+  },
+  hintText: {
+    fontSize: '12px',
+    color: '#6b7280',
+  },
+  statusMessage: {
+    padding: '10px 14px',
+    backgroundColor: '#eff6ff',
+    color: '#1d4ed8',
+    borderRadius: '8px',
+    fontSize: '13px',
+    fontWeight: 500,
+    textAlign: 'center',
   },
   content: {
     flex: 1,
     overflowY: 'auto',
-    padding: '20px',
-    backgroundColor: '#ffffff',
+    padding: '24px',
   },
   itemList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '8px',
-  },
-  card: {
-    padding: '12px 16px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #d0d7de',
-    borderRadius: '6px',
-    cursor: 'pointer',
-    transition: 'border-color 0.2s, background-color 0.2s',
-  },
-  cardSelected: {
-    borderColor: '#0969da',
-    backgroundColor: '#f0f7ff',
-  },
-  cardComplete: {
-    backgroundColor: '#f0fdf4',
-    borderColor: '#86efac',
-  },
-  cardHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  checkbox: {
-    fontSize: '16px',
-  },
-  outcomeIcon: {
-    fontSize: '14px',
-  },
-  cardTitle: {
-    flex: 1,
-    fontSize: '14px',
-    fontWeight: 500,
-  },
-  cardSection: {
-    fontSize: '11px',
-    color: '#6e7781',
-    marginTop: '4px',
-    marginLeft: '40px',
-  },
-  badges: {
-    display: 'flex',
-    gap: '6px',
-  },
-  issueBadge: {
-    fontSize: '11px',
-    padding: '2px 8px',
-    borderRadius: '10px',
-    border: 'none',
-    cursor: 'pointer',
-    fontWeight: 500,
-  },
-  issueOpen: {
-    backgroundColor: '#ddf4ff',
-    color: '#0969da',
-  },
-  issueClosed: {
-    backgroundColor: '#8250df20',
-    color: '#8250df',
-  },
-  outcomeBadge: {
-    fontSize: '11px',
-    padding: '2px 8px',
-    borderRadius: '10px',
-    backgroundColor: '#fff8c5',
-    color: '#9a6700',
-    border: 'none',
-    cursor: 'pointer',
-  },
-  cardDesc: {
-    fontSize: '12px',
-    color: '#57606a',
-    margin: '8px 0 0 40px',
-    lineHeight: 1.4,
-  },
-  completeBadge: {
-    marginTop: '8px',
-    marginLeft: '40px',
-    fontSize: '11px',
-    color: '#1a7f37',
-    fontWeight: 500,
-  },
-  syncedBadge: {
-    marginTop: '8px',
-    marginLeft: '40px',
-    fontSize: '11px',
-    color: '#8250df',
-    fontWeight: 500,
+    gap: '4px',
+    maxWidth: '800px',
   },
   sectionHeader: {
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
-    padding: '12px 0 4px 0',
-    marginTop: '8px',
+    gap: '12px',
+    padding: '20px 0 12px 0',
   },
-  sectionDash: {
-    color: '#d0d7de',
-    fontSize: '12px',
+  sectionLine: {
+    flex: 1,
+    height: '1px',
+    backgroundColor: '#e5e7eb',
   },
   sectionTitle: {
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#0969da',
-  },
-  itemIndex: {
     fontSize: '12px',
-    color: '#6e7781',
-    minWidth: '24px',
-    fontFamily: 'monospace',
+    fontWeight: 600,
+    color: '#6b7280',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
+  },
+  sectionCount: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#9ca3af',
+    backgroundColor: '#f3f4f6',
+    padding: '2px 8px',
+    borderRadius: '10px',
+  },
+  card: {
+    position: 'relative',
+    backgroundColor: '#ffffff',
+    borderRadius: '10px',
+    border: '1px solid #e5e7eb',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    overflow: 'hidden',
+  },
+  cardSelected: {
+    borderColor: '#3b82f6',
+    boxShadow: '0 0 0 3px rgba(59, 130, 246, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.05)',
+  },
+  selectionBar: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '3px',
+    backgroundColor: '#3b82f6',
+    transition: 'opacity 0.15s ease',
+  },
+  cardContent: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '12px',
+    padding: '14px 16px',
+  },
+  checkbox: {
+    width: '20px',
+    height: '20px',
+    borderRadius: '6px',
+    border: '2px solid #d1d5db',
+    backgroundColor: '#ffffff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+    flexShrink: 0,
+    marginTop: '1px',
+  },
+  checkboxChecked: {
+    backgroundColor: '#22c55e',
+    borderColor: '#22c55e',
+    color: '#ffffff',
+  },
+  cardMain: {
+    flex: 1,
+    minWidth: 0,
+  },
+  cardTitle: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: '#111827',
+    lineHeight: 1.4,
+    display: 'block',
+    marginBottom: '6px',
+  },
+  cardTitleComplete: {
+    color: '#6b7280',
+    textDecoration: 'line-through',
+  },
+  cardMeta: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+    alignItems: 'center',
+  },
+  badge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '3px 8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    borderRadius: '6px',
+    border: 'none',
+    cursor: 'pointer',
+    transition: 'all 0.15s ease',
+  },
+  badgeBlue: {
+    backgroundColor: '#eff6ff',
+    color: '#2563eb',
+  },
+  badgePurple: {
+    backgroundColor: '#f5f3ff',
+    color: '#7c3aed',
+  },
+  badgeAmber: {
+    backgroundColor: '#fffbeb',
+    color: '#d97706',
+  },
+  statusPill: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    padding: '3px 8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    borderRadius: '10px',
+  },
+  statusSynced: {
+    backgroundColor: '#dcfce7',
+    color: '#16a34a',
+  },
+  statusPartial: {
+    backgroundColor: '#fef3c7',
+    color: '#d97706',
   },
   detailSidebar: {
-    width: '300px',
-    borderLeft: '1px solid #d0d7de',
+    width: '320px',
+    borderLeft: '1px solid #e5e7eb',
     backgroundColor: '#ffffff',
     flexShrink: 0,
+    overflowY: 'auto',
   },
   detailPanel: {
-    width: '300px',
-    borderLeft: '1px solid #d0d7de',
+    width: '320px',
+    borderLeft: '1px solid #e5e7eb',
     flexShrink: 0,
+    backgroundColor: '#ffffff',
   },
   detailContent: {
-    padding: '16px',
+    padding: '24px',
   },
   detailHeader: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    gap: '12px',
     marginBottom: '16px',
   },
   detailTitle: {
-    fontSize: '14px',
+    fontSize: '16px',
     fontWeight: 600,
-    color: '#24292f',
+    color: '#111827',
     margin: 0,
+    lineHeight: 1.4,
   },
   closeBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '28px',
+    height: '28px',
     background: 'none',
     border: 'none',
-    fontSize: '20px',
+    borderRadius: '6px',
     cursor: 'pointer',
-    color: '#6e7781',
-    padding: '0 4px',
+    color: '#9ca3af',
+    transition: 'all 0.15s ease',
   },
-  detailRow: {
-    marginBottom: '12px',
-  },
-  detailLabel: {
-    fontSize: '11px',
-    color: '#6e7781',
-    textTransform: 'uppercase',
-    display: 'block',
-    marginBottom: '4px',
+  detailChip: {
+    display: 'inline-block',
+    padding: '4px 10px',
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#6b7280',
+    backgroundColor: '#f3f4f6',
+    borderRadius: '6px',
+    marginBottom: '16px',
   },
   detailDesc: {
-    fontSize: '13px',
-    color: '#24292f',
-    margin: 0,
-    lineHeight: 1.5,
+    fontSize: '14px',
+    color: '#4b5563',
+    lineHeight: 1.6,
+    margin: '0 0 16px 0',
   },
   detailDivider: {
     fontSize: '11px',
-    color: '#6e7781',
+    fontWeight: 600,
+    color: '#9ca3af',
     textTransform: 'uppercase',
-    margin: '16px 0 12px 0',
-    paddingTop: '12px',
-    borderTop: '1px solid #d0d7de',
+    letterSpacing: '0.05em',
+    margin: '24px 0 16px 0',
+    paddingTop: '16px',
+    borderTop: '1px solid #e5e7eb',
   },
-  statusRow: {
+  syncGrid: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  syncRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+  },
+  syncIcon: {
+    width: '28px',
+    height: '28px',
+    borderRadius: '6px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  syncInfo: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
+  syncLabel: {
     fontSize: '13px',
-    marginBottom: '8px',
+    fontWeight: 500,
+    color: '#374151',
+  },
+  syncDetail: {
+    fontSize: '12px',
+    color: '#9ca3af',
   },
   overallStatus: {
-    marginTop: '16px',
-    padding: '8px 12px',
-    borderRadius: '4px',
-    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+    marginTop: '20px',
+    padding: '12px 16px',
+    borderRadius: '8px',
+    fontSize: '13px',
     fontWeight: 600,
-    textAlign: 'center',
+  },
+  overallSynced: {
+    backgroundColor: '#dcfce7',
+    color: '#16a34a',
+  },
+  overallComplete: {
+    backgroundColor: '#eff6ff',
+    color: '#2563eb',
+  },
+  overallIncomplete: {
+    backgroundColor: '#fef3c7',
+    color: '#d97706',
   },
   empty: {
     display: 'flex',
@@ -856,25 +1076,61 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     height: '100%',
-    color: '#57606a',
+    padding: '40px',
     textAlign: 'center',
   },
-  hint: {
+  emptyIcon: {
+    fontSize: '48px',
+    marginBottom: '16px',
+  },
+  emptyTitle: {
+    fontSize: '20px',
+    fontWeight: 600,
+    color: '#111827',
+    margin: '0 0 8px 0',
+  },
+  emptyText: {
     fontSize: '14px',
-    color: '#6e7781',
+    color: '#6b7280',
+    margin: '0 0 4px 0',
+  },
+  emptyHint: {
+    fontSize: '14px',
+    color: '#9ca3af',
+    margin: 0,
+  },
+  code: {
+    padding: '2px 6px',
+    fontSize: '13px',
+    fontFamily: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+    backgroundColor: '#f3f4f6',
+    borderRadius: '4px',
   },
   emptyFiltered: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '80px 40px',
     textAlign: 'center',
-    color: '#6e7781',
-    padding: '40px',
   },
-  statusMessage: {
-    marginTop: '12px',
-    padding: '8px 12px',
-    backgroundColor: '#ddf4ff',
-    color: '#0969da',
-    borderRadius: '4px',
-    fontSize: '12px',
-    textAlign: 'center',
+  emptyFilteredIcon: {
+    fontSize: '48px',
+    marginBottom: '16px',
+  },
+  emptyFilteredText: {
+    fontSize: '15px',
+    color: '#6b7280',
+    margin: '0 0 16px 0',
+  },
+  emptyFilteredBtn: {
+    padding: '10px 20px',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#3b82f6',
+    backgroundColor: '#eff6ff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'pointer',
   },
 };
