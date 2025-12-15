@@ -15,6 +15,9 @@ import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '..
 import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { SearchBar } from '../components/SearchBar';
+import { CalloutLines } from '../components/CalloutLines';
+import { MiniMap } from '../components/MiniMap';
+import { useNodeVisibility } from '../hooks/useNodeVisibility';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
 
 interface DagViewProps {
@@ -80,6 +83,25 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
   // Search state - highlighted node IDs from search
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<number>>(new Set());
+
+  // Track node positions for visibility detection and callouts
+  const [nodePositions, setNodePositions] = useState<Map<number, { x: number; y: number; width: number; height: number }>>(new Map());
+  const [transform, setTransform] = useState({ x: 0, y: 0 });
+  const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
+
+  // Graph bounds for minimap
+  const [graphBounds, setGraphBounds] = useState({ minX: 0, maxX: 1000, minY: 0, maxY: 1000 });
+
+  // Node visibility tracking
+  const { visibilityMap } = useNodeVisibility(
+    svgRef,
+    nodePositions,
+    zoom,
+    transform
+  );
+
+  // Store zoom behavior for programmatic control
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
   // Sort chains by recency for display
   const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
@@ -182,6 +204,35 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     }
   }, []);
 
+  // Navigate to a specific node (pan/zoom to bring it into view)
+  const handleNavigateToNode = useCallback((node: DecisionNode) => {
+    if (!svgRef.current || !containerRef.current || !zoomBehaviorRef.current) return;
+
+    const svg = d3.select(svgRef.current);
+    const container = containerRef.current;
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const pos = nodePositions.get(node.id);
+    if (!pos) return;
+
+    // Calculate target transform to center the node
+    const targetScale = 1.2; // Zoom in a bit
+    const targetX = width / 2 - pos.x * targetScale;
+    const targetY = height / 2 - pos.y * targetScale;
+
+    // Animate to the node
+    svg.transition()
+      .duration(500)
+      .call(
+        zoomBehaviorRef.current.transform,
+        d3.zoomIdentity.translate(targetX, targetY).scale(targetScale)
+      );
+
+    // Also open the node modal
+    setSelectedNode(node);
+  }, [nodePositions]);
+
   // Build and render DAG
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -229,6 +280,27 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     // Run layout
     dagre.layout(g);
 
+    // Store node positions for visibility tracking and callouts
+    const newPositions = new Map<number, { x: number; y: number; width: number; height: number }>();
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    g.nodes().forEach(nodeId => {
+      const nodeData = g.node(nodeId) as DagreNodeData;
+      newPositions.set(parseInt(nodeId), {
+        x: nodeData.x,
+        y: nodeData.y,
+        width: nodeData.width,
+        height: nodeData.height,
+      });
+      // Track bounds
+      minX = Math.min(minX, nodeData.x - nodeData.width / 2);
+      maxX = Math.max(maxX, nodeData.x + nodeData.width / 2);
+      minY = Math.min(minY, nodeData.y - nodeData.height / 2);
+      maxY = Math.max(maxY, nodeData.y + nodeData.height / 2);
+    });
+    setNodePositions(newPositions);
+    setGraphBounds({ minX, maxX, minY, maxY });
+    setContainerDimensions({ width, height });
+
     // Get graph dimensions
     const graphWidth = g.graph().width || width;
     const graphHeight = g.graph().height || height;
@@ -242,7 +314,11 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       .on('zoom', (event) => {
         mainGroup.attr('transform', event.transform);
         setZoom(event.transform.k);
+        setTransform({ x: event.transform.x, y: event.transform.y });
       });
+
+    // Store zoom behavior ref for programmatic control
+    zoomBehaviorRef.current = zoomBehavior;
 
     svg.call(zoomBehavior);
 
@@ -587,6 +663,32 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       {/* SVG Container */}
       <div ref={containerRef} style={styles.svgContainer}>
         <svg ref={svgRef} style={styles.svg} />
+
+        {/* Callout Lines for too-small nodes */}
+        {highlightedNodeIds.size > 0 && (
+          <CalloutLines
+            nodes={graphData.nodes}
+            highlightedNodeIds={highlightedNodeIds}
+            visibilityMap={visibilityMap}
+            containerWidth={containerDimensions.width}
+            containerHeight={containerDimensions.height}
+            onSelectNode={handleSelectNode}
+          />
+        )}
+
+        {/* MiniMap for off-screen nodes */}
+        {highlightedNodeIds.size > 0 && (
+          <MiniMap
+            nodes={graphData.nodes}
+            highlightedNodeIds={highlightedNodeIds}
+            visibilityMap={visibilityMap}
+            nodePositions={nodePositions}
+            graphBounds={graphBounds}
+            viewportBounds={{ x: transform.x, y: transform.y, width: containerDimensions.width, height: containerDimensions.height }}
+            zoom={zoom}
+            onNavigateToNode={handleNavigateToNode}
+          />
+        )}
       </div>
 
       {/* Detail Modal */}
