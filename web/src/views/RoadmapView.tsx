@@ -395,6 +395,25 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({
                       item={item}
                       isSelected={currentIndex === selectedIndex}
                       onClick={() => setSelectedIndex(currentIndex)}
+                      onToggleCheckbox={async () => {
+                        const newState = item.checkbox_state === 'checked' ? 'unchecked' : 'checked';
+                        try {
+                          const response = await fetch('/api/roadmap/checkbox', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ item_id: item.id, checkbox_state: newState }),
+                          });
+                          if (response.ok) {
+                            setStatusMessage(`Item marked as ${newState}`);
+                            window.location.reload();
+                          } else {
+                            const data = await response.json();
+                            setStatusMessage(data.error || 'Failed to update');
+                          }
+                        } catch {
+                          setStatusMessage('API not available (requires deciduous serve)');
+                        }
+                      }}
                       onSelectOutcome={handleSelectOutcome}
                       onOpenIssue={() => {
                         const url = getIssueUrl(item);
@@ -465,6 +484,7 @@ interface RoadmapItemCardProps {
   item: RoadmapItem;
   isSelected: boolean;
   onClick: () => void;
+  onToggleCheckbox: () => void;
   onSelectOutcome: (id: number) => void;
   onOpenIssue: () => void;
 }
@@ -473,6 +493,7 @@ const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({
   item,
   isSelected,
   onClick,
+  onToggleCheckbox,
   onSelectOutcome,
   onOpenIssue
 }) => {
@@ -501,7 +522,7 @@ const RoadmapItemCard: React.FC<RoadmapItemCardProps> = ({
             ...styles.checkbox,
             ...(complete ? styles.checkboxChecked : {}),
           }}
-          onClick={(e) => { e.stopPropagation(); }}
+          onClick={(e) => { e.stopPropagation(); onToggleCheckbox(); }}
         >
           {complete && (
             <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
