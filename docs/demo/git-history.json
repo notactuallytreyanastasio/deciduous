@@ -1,27 +1,11 @@
 [
   {
-    "hash": "f2fb98acb38303be64b78cc757683a6eb9dac3b5",
-    "short_hash": "f2fb98a",
+    "hash": "cdf0d378aa4579843ad3d8461aeea507ab017aae",
+    "short_hash": "cdf0d37",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T14:11:22-05:00",
-    "message": "release: v0.8.11",
-    "files_changed": 6
-  },
-  {
-    "hash": "049ff12335b57647a77b58157d66636c2b959328",
-    "short_hash": "049ff12",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T12:17:04-05:00",
-    "message": "docs: add decision graph for search feature",
-    "files_changed": 2
-  },
-  {
-    "hash": "d29cfc5833c055aca8a5b2cb535f75d462e2cab1",
-    "short_hash": "d29cfc5",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T12:16:23-05:00",
-    "message": "feat(web): add search functionality to DAG viewer\n\nAdd full-text search across nodes, commits, prompts, and files:\n\n- New SearchBar component with dropdown results\n- Debounced search (150ms) for performance\n- Keyboard navigation (up/down arrows, enter, escape)\n- Visual node highlighting with glow effect\n- Match count indicator in stats bar\n- Mobile-responsive design\n\nSearch matches:\n- Node titles and descriptions\n- Git commit messages (via linked commits)\n- User prompts stored in metadata\n- Associated file paths",
-    "files_changed": 6
+    "date": "2025-12-15T10:49:22-05:00",
+    "message": "feat: rewrite quickstart to show Claude Code workflow\n\n- Steps 3-5 now show Claude sessions instead of manual CLI\n- Shows Claude logging goals, decisions, actions automatically\n- Shows /context recovery in new session\n- Added CSS for Claude session styling in quickstart",
+    "files_changed": 3
   },
   {
     "hash": "cdf0d378aa4579843ad3d8461aeea507ab017aae",

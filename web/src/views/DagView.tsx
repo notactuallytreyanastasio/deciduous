@@ -14,6 +14,7 @@ import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
 import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
+import { SearchBar } from '../components/SearchBar';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
 
 interface DagViewProps {
@@ -76,6 +77,9 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
   const [isFullscreen, setIsFullscreen] = useState(!isMobile); // Fullscreen by default on desktop only
   const [isControlsCollapsed, setIsControlsCollapsed] = useState(isMobile); // Collapsed by default on mobile
+
+  // Search state - highlighted node IDs from search
+  const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<number>>(new Set());
 
   // Sort chains by recency for display
   const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
@@ -283,8 +287,11 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         .attr('marker-end', 'url(#arrowhead)');
     });
 
+    // Defs for markers and filters
+    const defs = svg.append('defs');
+
     // Arrow marker
-    svg.append('defs').append('marker')
+    defs.append('marker')
       .attr('id', 'arrowhead')
       .attr('viewBox', '-5 -5 10 10')
       .attr('refX', 8)
@@ -295,6 +302,20 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       .append('path')
       .attr('d', 'M-5,-5L5,0L-5,5Z')
       .attr('fill', '#666');
+
+    // Glow filter for search highlights
+    const glowFilter = defs.append('filter')
+      .attr('id', 'search-glow')
+      .attr('x', '-50%')
+      .attr('y', '-50%')
+      .attr('width', '200%')
+      .attr('height', '200%');
+    glowFilter.append('feGaussianBlur')
+      .attr('stdDeviation', '4')
+      .attr('result', 'coloredBlur');
+    const feMerge = glowFilter.append('feMerge');
+    feMerge.append('feMergeNode').attr('in', 'coloredBlur');
+    feMerge.append('feMergeNode').attr('in', 'SourceGraphic');
 
     // Draw nodes
     const nodes = mainGroup.append('g')
@@ -321,12 +342,26 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         const nodeData = (g.node(d) as DagreNodeData).node;
         return getNodeColor(nodeData.node_type);
       })
-      .attr('fill-opacity', 0.2)
+      .attr('fill-opacity', d => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        // Highlight search matches with higher opacity
+        return highlightedNodeIds.has(nodeData.id) ? 0.5 : 0.2;
+      })
       .attr('stroke', d => {
         const nodeData = (g.node(d) as DagreNodeData).node;
-        return getNodeColor(nodeData.node_type);
+        // Use yellow/gold stroke for search highlights
+        return highlightedNodeIds.has(nodeData.id) ? '#f59e0b' : getNodeColor(nodeData.node_type);
       })
-      .attr('stroke-width', 2);
+      .attr('stroke-width', d => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        // Thicker stroke for highlighted nodes
+        return highlightedNodeIds.has(nodeData.id) ? 4 : 2;
+      })
+      .attr('filter', d => {
+        const nodeData = (g.node(d) as DagreNodeData).node;
+        // Add glow effect for highlighted nodes
+        return highlightedNodeIds.has(nodeData.id) ? 'url(#search-glow)' : null;
+      });
 
     // Node ID
     nodes.append('text')
@@ -352,7 +387,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     return () => {
       svg.on('.zoom', null);
     };
-  }, [graphData, visibleNodeIds, handleSelectNode]);
+  }, [graphData, visibleNodeIds, handleSelectNode, highlightedNodeIds]);
 
   return (
     <div style={{
@@ -365,10 +400,13 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         ...(isFullscreen ? styles.fullscreenTopBar : {}),
       }}>
         <div style={styles.topBarLeft}>
-          <span style={styles.topBarTitle}>Recency Filter</span>
-          <span style={styles.topBarSubtitle} title="Showing most recently active goal chains first. Each chain includes a goal and all its connected decisions, actions, and outcomes.">
-            Showing {Math.min(recentChainCount, goalChains.length)} of {goalChains.length} goal chains
-          </span>
+          <SearchBar
+            nodes={graphData.nodes}
+            gitHistory={gitHistory}
+            onSelectNode={handleSelectNode}
+            onHighlightNodes={setHighlightedNodeIds}
+            placeholder="Search nodes, commits..."
+          />
         </div>
 
         <div style={styles.topBarCenter}>
@@ -466,6 +504,12 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         </div>
 
         <div style={styles.topBarRight}>
+          {highlightedNodeIds.size > 0 && (
+            <>
+              <span style={styles.matchCount}>{highlightedNodeIds.size} matches</span>
+              <span style={styles.topBarStatDivider}>·</span>
+            </>
+          )}
           <span style={styles.topBarStat}>{visibleNodeIds.size} nodes</span>
           <span style={styles.topBarStatDivider}>·</span>
           <span style={styles.topBarStat}>{visibleChains.length} chains</span>
@@ -704,8 +748,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   topBarLeft: {
     display: 'flex',
-    alignItems: 'baseline',
+    alignItems: 'center',
     gap: '12px',
+    flex: 1,
+    minWidth: 0,
+    maxWidth: '400px',
   },
   topBarTitle: {
     fontSize: '14px',
@@ -777,6 +824,14 @@ const styles: Record<string, React.CSSProperties> = {
   topBarStat: {
     fontSize: '12px',
     color: '#57606a',
+  },
+  matchCount: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#f59e0b',
+    backgroundColor: '#fef3c7',
+    padding: '2px 8px',
+    borderRadius: '10px',
   },
   topBarStatDivider: {
     color: '#d0d7de',
