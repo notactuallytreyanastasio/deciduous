@@ -134,7 +134,7 @@ while read local_ref local_sha remote_ref remote_sha; do
         echo ""
 
         # Full validation suite for main branch
-        echo "1/3 Running type validation..."
+        echo "1/5 Running type validation..."
         if ! "$REPO_ROOT/scripts/validate-types.sh"; then
             echo ""
             echo "ERROR: Type validation failed. Push to main aborted."
@@ -143,7 +143,7 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "2/3 Running tests..."
+        echo "2/5 Running tests..."
         if ! cargo test --quiet; then
             echo ""
             echo "ERROR: Tests failed. Push to main aborted."
@@ -151,11 +151,76 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "3/3 Building web UI..."
+        echo "3/5 Building web UI..."
         if ! (cd "$REPO_ROOT/web" && npm run build --silent 2>/dev/null); then
             echo ""
             echo "ERROR: Web build failed. Push to main aborted."
             exit 1
+        fi
+
+        echo ""
+        echo "4/5 Checking viewer.html sync..."
+        # Build fresh and compare with committed viewer.html
+        FRESH_BUILD="$REPO_ROOT/web/dist/index.html"
+        VIEWER_HTML="$REPO_ROOT/src/viewer.html"
+
+        if [ -f "$FRESH_BUILD" ] && [ -f "$VIEWER_HTML" ]; then
+            FRESH_HASH=$(shasum -a 256 "$FRESH_BUILD" | cut -d' ' -f1)
+            VIEWER_HASH=$(shasum -a 256 "$VIEWER_HTML" | cut -d' ' -f1)
+
+            if [ "$FRESH_HASH" != "$VIEWER_HASH" ]; then
+                echo ""
+                echo "ERROR: src/viewer.html is out of sync with web build!"
+                echo ""
+                echo "The embedded viewer for 'deciduous serve' doesn't match the latest web UI."
+                echo "This means cargo install users would get an outdated UI."
+                echo ""
+                echo "To fix, run:"
+                echo "  cp web/dist/index.html src/viewer.html"
+                echo "  git add src/viewer.html"
+                echo "  git commit --amend --no-edit"
+                echo ""
+                exit 1
+            fi
+            echo "✓ viewer.html matches fresh web build"
+        fi
+
+        echo ""
+        echo "5/5 Syncing decision graph for GitHub Pages..."
+        # Run deciduous sync to update docs/graph-data.json
+        if command -v deciduous &> /dev/null; then
+            deciduous sync > /dev/null 2>&1 || true
+
+            # Check if graph files have uncommitted changes
+            GRAPH_FILES="docs/graph-data.json docs/demo/graph-data.json docs/git-history.json docs/demo/git-history.json"
+            CHANGED_FILES=""
+            for f in $GRAPH_FILES; do
+                if [ -f "$REPO_ROOT/$f" ] && ! git diff --quiet "$REPO_ROOT/$f" 2>/dev/null; then
+                    CHANGED_FILES="$CHANGED_FILES $f"
+                fi
+            done
+
+            if [ -n "$CHANGED_FILES" ]; then
+                echo ""
+                echo "WARNING: Decision graph files have uncommitted changes after sync:"
+                for f in $CHANGED_FILES; do
+                    echo "  - $f"
+                done
+                echo ""
+                echo "GitHub Pages will show stale data without these changes."
+                echo ""
+                echo "To fix, run:"
+                echo "  git add docs/graph-data.json docs/demo/graph-data.json docs/git-history.json docs/demo/git-history.json"
+                echo "  git commit --amend --no-edit"
+                echo ""
+                echo "Or to push anyway (not recommended):"
+                echo "  git push --no-verify"
+                echo ""
+                exit 1
+            fi
+            echo "✓ Decision graph is synced for GitHub Pages"
+        else
+            echo "⚠ deciduous not found, skipping graph sync check"
         fi
 
         echo ""
@@ -176,4 +241,4 @@ echo "Git hooks installed successfully!"
 echo ""
 echo "Hooks installed:"
 echo "  - pre-commit: Runs clippy + validates types + enforces demo build sync"
-echo "  - pre-push: Full validation (types + tests + build) for main branch"
+echo "  - pre-push: Full validation (types + tests + build + graph sync) for main branch"

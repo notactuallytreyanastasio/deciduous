@@ -98,7 +98,7 @@
 - [ ] Get GH Pages to not require CLI / configure auth for static hosting
 - [ ] Get parity between GitHub Pages site and local React app
 - [ ] Make sure all this builds and works + is tested manually for real workflows
-- [ ] **Fix decision nodes missing from GH Pages** - ensure graph-data.json is correctly deployed and loaded
+- [ ] **Fix GH Pages showing stale graph data** - local DB has all nodes but docs/graph-data.json isn't synced/pushed; need automated workflow to keep GH Pages current
 
 ### Context Recovery (Critical)
 *Make compaction restore actually work reliably*
