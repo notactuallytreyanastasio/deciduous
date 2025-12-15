@@ -5664,6 +5664,39 @@
       "created_at": "2025-12-14T13:06:31.764053-05:00",
       "updated_at": "2025-12-14T13:06:31.764053-05:00",
       "metadata_json": "{\"branch\":\"roadmap/5-polish\",\"confidence\":95}"
+    },
+    {
+      "id": 517,
+      "change_id": "48423355-164d-43bd-ab38-f68f4b9d3cfd",
+      "node_type": "action",
+      "title": "Added GitHub Pages site fixes to ROADMAP.md",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T00:13:58.876850-05:00",
+      "updated_at": "2025-12-15T00:13:58.876850-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"f04dc1e\",\"confidence\":90}"
+    },
+    {
+      "id": 518,
+      "change_id": "de478dc1-e40d-472f-81da-2142886607de",
+      "node_type": "goal",
+      "title": "Fix decision nodes missing from GitHub Pages site",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T00:28:57.832061-05:00",
+      "updated_at": "2025-12-15T00:28:57.832061-05:00",
+      "metadata_json": "{\"branch\":\"fix/gh-pages-decision-nodes\",\"confidence\":90,\"prompt\":\"User reported decision nodes don't appear on GH Pages despite syncing\"}"
+    },
+    {
+      "id": 519,
+      "change_id": "808c5ddd-2e6b-4ffa-aa17-3182e8345768",
+      "node_type": "action",
+      "title": "Added graph sync check to pre-push hook",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T00:32:45.869324-05:00",
+      "updated_at": "2025-12-15T00:32:45.869324-05:00",
+      "metadata_json": "{\"branch\":\"fix/gh-pages-decision-nodes\",\"confidence\":90,\"files\":[\"scripts/install-hooks.sh\"]}"
     }
   ],
   "edges": [
@@ -10649,6 +10682,28 @@
       "weight": 1.0,
       "rationale": "PR chain rebuild completed successfully",
       "created_at": "2025-12-14T13:06:37.284731-05:00"
+    },
+    {
+      "id": 454,
+      "from_node_id": 476,
+      "to_node_id": 517,
+      "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+      "to_change_id": "48423355-164d-43bd-ab38-f68f4b9d3cfd",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Roadmap item for GitHub Pages fixes",
+      "created_at": "2025-12-15T00:14:04.999742-05:00"
+    },
+    {
+      "id": 455,
+      "from_node_id": 518,
+      "to_node_id": 519,
+      "from_change_id": "de478dc1-e40d-472f-81da-2142886607de",
+      "to_change_id": "808c5ddd-2e6b-4ffa-aa17-3182e8345768",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation to fix GH Pages stale data",
+      "created_at": "2025-12-15T00:32:51.564994-05:00"
     }
   ]
 }
