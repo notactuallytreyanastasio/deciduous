@@ -113,7 +113,38 @@ Deciduous initialized! Next steps:
                 <li>Team members share decisions via exportable patches</li>
             </ul>
 
-            <h2>Claude Code Integration</h2>
+            <h2>AI Editor Integration</h2>
+
+            <p>By default, <code>deciduous init</code> generates files for Claude Code. You can also target other editors:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Command</th>
+                        <th>Editor</th>
+                        <th>Files Generated</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>deciduous init</code></td>
+                        <td>Claude Code (default)</td>
+                        <td><code>.claude/commands/</code>, <code>CLAUDE.md</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>deciduous init --windsurf</code></td>
+                        <td>Windsurf (Cascade)</td>
+                        <td><code>.windsurf/rules/</code>, <code>AGENTS.md</code></td>
+                    </tr>
+                    <tr>
+                        <td><code>deciduous init --opencode</code></td>
+                        <td>OpenCode</td>
+                        <td><code>.opencode/</code>, <code>instructions.md</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Claude Code</h3>
 
             <p>The <code>.claude/commands/</code> directory contains slash commands that Claude Code will recognize:</p>
 
@@ -123,6 +154,10 @@ Deciduous initialized! Next steps:
             </ul>
 
             <p>The <code>CLAUDE.md</code> file contains instructions that Claude will follow, including the decision logging workflow. When you start a Claude Code session in this project, it will know how to use deciduous.</p>
+
+            <h3>Other Editors</h3>
+
+            <p>See <a href="ai-integration.html">AI Integration Files</a> for details on Windsurf and OpenCode setup.</p>
 
             <h2>Web Viewer Setup</h2>
 
@@ -155,9 +190,9 @@ Press Ctrl+C to stop</span></pre>
                     <span class="label">Previous</span>
                     <span class="title">Installing Deciduous</span>
                 </a>
-                <a href="first-nodes.html" class="next">
+                <a href="ai-integration.html" class="next">
                     <span class="label">Next</span>
-                    <span class="title">Your First Nodes</span>
+                    <span class="title">AI Integration Files</span>
                 </a>
             </div>
         </article>

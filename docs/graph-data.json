@@ -5818,6 +5818,61 @@
       "created_at": "2025-12-15T02:41:37.447272-05:00",
       "updated_at": "2025-12-15T02:41:37.447272-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"9157c1a\",\"confidence\":95}"
+    },
+    {
+      "id": 531,
+      "change_id": "fdc62968-1fb3-4302-8e32-e76984dc378e",
+      "node_type": "outcome",
+      "title": "Main page OG image updated to dark style matching other pages",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:43:56.586915-05:00",
+      "updated_at": "2025-12-15T02:43:56.586915-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"f2ef1d9\",\"confidence\":95}"
+    },
+    {
+      "id": 532,
+      "change_id": "49a619f3-0c2a-4b93-9cd8-4e0757d8e175",
+      "node_type": "goal",
+      "title": "Update tutorial with OpenCode support, flesh out content, check corrections",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:48:09.241631-05:00",
+      "updated_at": "2025-12-15T02:48:09.241631-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User asked to update tutorial with OpenCode stuff, flesh out content, check for corrections\"}"
+    },
+    {
+      "id": 533,
+      "change_id": "1277bede-656e-43ad-900f-6154510c24ae",
+      "node_type": "action",
+      "title": "Reading tutorial files to identify updates needed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:48:24.850804-05:00",
+      "updated_at": "2025-12-15T02:48:24.850804-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 534,
+      "change_id": "07a7ab26-a27d-4dc1-990e-68f27ab2b0a7",
+      "node_type": "action",
+      "title": "Adding OpenCode editor support section to tutorial",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:48:32.153656-05:00",
+      "updated_at": "2025-12-15T02:48:32.153656-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 535,
+      "change_id": "669e6d28-0bda-40fa-b10e-79f19b05fcde",
+      "node_type": "action",
+      "title": "Updated TUI and Web viewer documentation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T02:49:58.715467-05:00",
+      "updated_at": "2025-12-15T02:49:58.715467-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
     }
   ],
   "edges": [
@@ -10902,6 +10957,39 @@
       "weight": 1.0,
       "rationale": "Full story content restored",
       "created_at": "2025-12-15T02:26:52.168819-05:00"
+    },
+    {
+      "id": 463,
+      "from_node_id": 532,
+      "to_node_id": 533,
+      "from_change_id": "49a619f3-0c2a-4b93-9cd8-4e0757d8e175",
+      "to_change_id": "1277bede-656e-43ad-900f-6154510c24ae",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Reading files to understand updates",
+      "created_at": "2025-12-15T02:50:07.822203-05:00"
+    },
+    {
+      "id": 464,
+      "from_node_id": 532,
+      "to_node_id": 534,
+      "from_change_id": "49a619f3-0c2a-4b93-9cd8-4e0757d8e175",
+      "to_change_id": "07a7ab26-a27d-4dc1-990e-68f27ab2b0a7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Adding OpenCode support",
+      "created_at": "2025-12-15T02:50:07.831523-05:00"
+    },
+    {
+      "id": 465,
+      "from_node_id": 532,
+      "to_node_id": 535,
+      "from_change_id": "49a619f3-0c2a-4b93-9cd8-4e0757d8e175",
+      "to_change_id": "669e6d28-0bda-40fa-b10e-79f19b05fcde",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Updating viewer docs",
+      "created_at": "2025-12-15T02:50:07.841547-05:00"
     }
   ]
 }

@@ -55,11 +55,33 @@ Press Ctrl+C to stop</span></pre>
 
             <p>Open <a href="http://localhost:3000">http://localhost:3000</a> in your browser.</p>
 
-            <h2>Four Visualization Modes</h2>
+            <h2>Visualization Modes</h2>
 
-            <p>The web viewer has four views, accessible via tabs in the navigation:</p>
+            <p>The web viewer has multiple views, accessible via tabs in the navigation:</p>
 
-            <h3>1. Chains View</h3>
+            <h3>Story View</h3>
+
+            <p>A narrative timeline of your project's development, showing key decisions and milestones in chronological order. Best for understanding the "why" behind your codebase.</p>
+
+            <h3>DAG View (Default)</h3>
+
+            <div class="screenshot-placeholder">
+                <span class="label">[SCREENSHOT: web-dag-view.png]</span>
+                <div class="caption">The DAG view showing hierarchical decision flow</div>
+            </div>
+
+            <p>The default view. Shows a hierarchical directed acyclic graph with goal chains. By default, shows the 5 most recently active goal chains.</p>
+
+            <p><strong>Features:</strong></p>
+            <ul>
+                <li>Expand/collapse to show more or fewer chains</li>
+                <li>Click nodes to see full details</li>
+                <li>Visual hierarchy from goals to outcomes</li>
+            </ul>
+
+            <p><strong>Best for:</strong> Understanding decision hierarchies and goal-to-outcome flow</p>
+
+            <h3>Chains View</h3>
 
             <div class="screenshot-placeholder">
                 <span class="label">[SCREENSHOT: web-chains-view.png]</span>
@@ -109,17 +131,6 @@ Press Ctrl+C to stop</span></pre>
 
             <p><strong>Best for:</strong> Seeing the overall structure, finding clusters</p>
 
-            <h3>4. DAG View</h3>
-
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: web-dag-view.png]</span>
-                <div class="caption">The DAG view showing hierarchical decision flow</div>
-            </div>
-
-            <p>A hierarchical directed acyclic graph view that emphasizes parent-child relationships.</p>
-
-            <p><strong>Best for:</strong> Seeing decision hierarchies, understanding flow from goals to outcomes</p>
-
             <h2>Branch Filtering</h2>
 
             <p>In the stats bar at the top, there's a branch dropdown. Select a branch to filter all views to show only nodes from that branch.</p>
@@ -131,14 +142,14 @@ Press Ctrl+C to stop</span></pre>
 
             <h2>Git History Integration</h2>
 
-            <p>The Timeline and DAG views can show git commits alongside decision nodes. To enable this:</p>
+            <p>The Timeline and DAG views can show git commits alongside decision nodes. When you run <code>deciduous sync</code>, it automatically exports git history for commits linked to nodes:</p>
 
-            <pre><span class="comment"># Generate git history JSON</span>
-<span class="cmd">$ git log --pretty=format:'{"hash":"%H","short":"%h","message":"%s","date":"%aI"}' \
-    | head -100 > docs/git-history.json</span>
+            <pre><span class="cmd">$ deciduous sync</span>
+<span class="output">Exported graph to docs/graph-data.json
+  127 nodes, 98 edges
+Exported git-history.json (42 commits)</span></pre>
 
-<span class="comment"># Then sync the graph</span>
-<span class="cmd">$ deciduous sync</span></pre>
+            <p>Nodes linked to commits (using <code>--commit HEAD</code>) will show the commit details in both the web viewer and TUI.</p>
 
             <h2>Deploying to GitHub Pages</h2>
 

@@ -278,6 +278,58 @@ Changes not staged for commit:
 
             <p><code>AGENTS.md</code> is the Windsurf equivalent of <code>CLAUDE.md</code>. It contains the same Decision Graph Workflow section, formatted for Cascade.</p>
 
+            <h2>For OpenCode Users</h2>
+
+            <p>Run <code>deciduous init --opencode</code> to generate:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>.opencode/config.json</code></td>
+                        <td>OpenCode configuration with deciduous integration</td>
+                    </tr>
+                    <tr>
+                        <td><code>.opencode/instructions.md</code></td>
+                        <td>Project instructions with workflow rules</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>OpenCode Configuration</h3>
+
+            <p>OpenCode uses a <code>.opencode/</code> directory for project configuration. The generated <code>config.json</code> includes settings for the deciduous workflow:</p>
+
+            <pre>{
+  "agent": {
+    "model": "anthropic:claude-sonnet-4-20250514"
+  },
+  "instructions": ".opencode/instructions.md"
+}</pre>
+
+            <h3>instructions.md</h3>
+
+            <p><code>.opencode/instructions.md</code> is OpenCode's equivalent of <code>CLAUDE.md</code>. It contains the Decision Graph Workflow section that OpenCode's agent will follow.</p>
+
+            <p>The instructions file teaches the agent to:</p>
+
+            <ul>
+                <li>Log decisions in real-time using <code>deciduous add</code></li>
+                <li>Connect nodes immediately with <code>deciduous link</code></li>
+                <li>Run <code>/context</code> at session start for recovery</li>
+                <li>Sync the graph before pushing with <code>deciduous sync</code></li>
+            </ul>
+
+            <div class="info-box tip">
+                <strong>OpenCode + Deciduous</strong>
+                <p>OpenCode is a terminal-native AI coding assistant. Combined with deciduous (also terminal-native), you get a fully command-line workflow for AI-assisted development with persistent decision tracking.</p>
+            </div>
+
             <h2>The Workflow Loop</h2>
 
             <p>These files enforce a continuous loop:</p>

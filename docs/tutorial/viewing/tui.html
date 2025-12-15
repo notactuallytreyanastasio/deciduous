@@ -95,11 +95,26 @@
                         <td>Toggle detail panel</td>
                     </tr>
                     <tr>
+                        <td><kbd>Tab</kbd></td>
+                        <td>Toggle between Timeline and DAG view</td>
+                    </tr>
+                    <tr>
                         <td><kbd>q</kbd></td>
                         <td>Quit</td>
                     </tr>
                 </tbody>
             </table>
+
+            <h2>Timeline vs DAG View</h2>
+
+            <p>The TUI has two main views you can toggle between with <kbd>Tab</kbd>:</p>
+
+            <ul>
+                <li><strong>Timeline View:</strong> Chronological list of all nodes, most recent first</li>
+                <li><strong>DAG View:</strong> Hierarchical view showing goal chains with their connected decisions, actions, and outcomes</li>
+            </ul>
+
+            <p>The DAG view is particularly useful for understanding the structure of your decision graph&mdash;you can see how goals branch into decisions, which spawn actions and outcomes.</p>
 
             <h2>Filtering & Search</h2>
 
