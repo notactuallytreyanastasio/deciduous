@@ -575,6 +575,100 @@
         }
         footer a { color: #0969da; text-decoration: none; }
         footer a:hover { text-decoration: underline; }
+
+        /* Quickstart section */
+        .quickstart-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
+        }
+        .quickstart-section h2 {
+            border: none;
+            padding-bottom: 0;
+        }
+        .quickstart-section > p {
+            color: #57606a;
+            margin-bottom: 30px;
+        }
+        .quickstart-step {
+            margin-bottom: 30px;
+        }
+        .quickstart-step-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .quickstart-num {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            background: #2da44e;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        .quickstart-info h3 {
+            color: #24292f;
+            font-size: 1.1rem;
+            margin: 0 0 4px 0;
+        }
+        .quickstart-info p {
+            color: #57606a;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+        .quickstart-terminal {
+            background: #1e1e1e;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .quickstart-content {
+            padding: 16px 20px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.7;
+        }
+        .qs-step {
+            opacity: 0;
+            animation: fadeInStep 0.4s ease forwards;
+            animation-delay: var(--delay);
+        }
+        .qs-prompt {
+            color: #7ee787;
+            margin-right: 8px;
+        }
+        .qs-cmd {
+            color: #e5e5e5;
+        }
+        .qs-output {
+            color: #8b949e;
+            padding-left: 20px;
+        }
+        .qs-success {
+            color: #7ee787;
+            padding-left: 20px;
+        }
+        .qs-comment {
+            color: #6e7681;
+            font-style: italic;
+        }
+        .qs-tree {
+            color: #a5d6ff;
+            padding-left: 20px;
+            font-size: 0.8rem;
+        }
+        .quickstart-cta {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+            justify-content: center;
+        }
     </style>
 </head>
 <body>
@@ -890,14 +984,240 @@
             </div>
         </section>
 
-        <div class="code-block">
-            <span class="comment"># Get started in under a minute</span><br>
-            <span class="cmd">cargo install deciduous</span><br>
-            <span class="cmd">cd your-project</span><br>
-            <span class="cmd">deciduous init</span><br>
-            <span class="cmd">deciduous serve</span><br>
-            <span class="comment"># Open http://localhost:3000 to view your graph</span>
-        </div>
+        <section class="quickstart-section">
+            <h2>Quickstart Guide</h2>
+            <p>Get deciduous running in your project in under 2 minutes.</p>
+
+            <!-- Step 1: Install -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">1</span>
+                    <div class="quickstart-info">
+                        <h3>Install from crates.io</h3>
+                        <p>One command to install the CLI globally.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-install">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.8s">
+                            <span class="qs-output">Downloading deciduous v0.9.x</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.4s">
+                            <span class="qs-output">Compiling deciduous v0.9.x</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.2s">
+                            <span class="qs-success">Installed deciduous to ~/.cargo/bin/deciduous</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Initialize -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">2</span>
+                    <div class="quickstart-info">
+                        <h3>Initialize in your project</h3>
+                        <p>Creates the database, slash commands, and web viewer.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-init">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.6s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous init</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.2s">
+                            <span class="qs-output">Created .deciduous/deciduous.db</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.6s">
+                            <span class="qs-output">Created .claude/commands/context.md</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2s">
+                            <span class="qs-output">Created .claude/commands/decision.md</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.4s">
+                            <span class="qs-output">Created docs/ (web viewer)</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.8s">
+                            <span class="qs-output">Created CLAUDE.md</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 3.4s">
+                            <span class="qs-success">Deciduous initialized! Run 'deciduous serve' to start.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Add your first nodes -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">3</span>
+                    <div class="quickstart-info">
+                        <h3>Add your first nodes</h3>
+                        <p>Log goals, decisions, and outcomes as you work.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-nodes">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-comment"># Log a goal with confidence and prompt</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous add goal "Add user auth" -c 90 -p "User requested login"</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.3s">
+                            <span class="qs-success">Created node 1 (type: goal) [confidence: 90%]</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2s">
+                            <span class="qs-comment"># Log a decision point</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous add decision "Choose auth strategy" -c 80</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 3.3s">
+                            <span class="qs-success">Created node 2 (type: decision) [confidence: 80%]</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 4s">
+                            <span class="qs-comment"># Log the outcome with linked commit</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 4.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous add outcome "JWT auth working" -c 95 --commit HEAD</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 5.3s">
+                            <span class="qs-success">Created node 3 (type: outcome) [commit: a1b2c3d]</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Link nodes -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">4</span>
+                    <div class="quickstart-info">
+                        <h3>Connect the graph</h3>
+                        <p>Link nodes together to show how decisions flow.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-link">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-comment"># Link goal → decision</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous link 1 2 -r "Deciding auth approach"</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.3s">
+                            <span class="qs-success">Created edge 1 (1 → 2 via leads_to)</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2s">
+                            <span class="qs-comment"># Link decision → outcome</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous link 2 3 -r "Implementation complete"</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 3.3s">
+                            <span class="qs-success">Created edge 2 (2 → 3 via leads_to)</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 4s">
+                            <span class="qs-comment"># View the chain</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 4.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous nodes</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 5.2s">
+                            <span class="qs-tree">1 [goal] Add user auth → 2 [decision] Choose auth strategy → 3 [outcome] JWT auth working</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: View & Share -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">5</span>
+                    <div class="quickstart-info">
+                        <h3>View and share</h3>
+                        <p>Start the web viewer or browse in the terminal.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-view">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-comment"># Start web viewer</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous serve</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.2s">
+                            <span class="qs-success">Starting graph viewer at http://localhost:3000</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.8s">
+                            <span class="qs-output">Auto-refresh enabled (30 second interval)</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.8s">
+                            <span class="qs-comment"># Or use the TUI (in another terminal)</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 3.3s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous tui</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 4s">
+                            <span class="qs-output">Vim-style navigation: j/k to move, / to search, ? for help</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 5s">
+                            <span class="qs-comment"># Export for GitHub Pages</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 5.5s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">deciduous sync</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 6.2s">
+                            <span class="qs-success">Exported graph to docs/graph-data.json (3 nodes, 2 edges)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quickstart-cta">
+                <a href="tutorial/" class="btn btn-primary">Full Tutorial</a>
+                <a href="demo/" class="btn btn-secondary">See Live Graph</a>
+            </div>
+        </section>
 
         <section class="demo-section">
             <h2>See It In Action</h2>
@@ -976,7 +1296,7 @@
                 setTimeout(() => {
                     // Slow scroll to show the new step
                     const targetScroll = step.offsetTop - content.offsetTop - 20;
-                    smoothScrollTo(content, targetScroll, 800);
+                    smoothScrollTo(content, targetScroll, 920);
                 }, delay + 400);
             });
         }

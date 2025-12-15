@@ -1,11 +1,19 @@
 [
   {
-    "hash": "f3611c499051d3944ff13468d4bb1233fdf5c007",
-    "short_hash": "f3611c4",
+    "hash": "5d73070dc2ac5f531cb86001ee43d6dc5bc76d72",
+    "short_hash": "5d73070",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T09:51:41-05:00",
-    "message": "docs: sync graph",
-    "files_changed": 4
+    "date": "2025-12-15T10:14:50-05:00",
+    "message": "feat: start demo with /context to show context recovery first\n\n- Session begins with /context slash command\n- Shows existing decision tree from previous session\n- Claude summarizes state and asks what's next\n- User continues with new work that links to existing graph\n- Demonstrates the full context recovery workflow",
+    "files_changed": 1
+  },
+  {
+    "hash": "f7ce5543f81778db99920b7a779137a7fd212d54",
+    "short_hash": "f7ce554",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:01:51-05:00",
+    "message": "feat: refresh landing page with animated session demo\n\nNew sections:\n- Animated Claude Code session walkthrough showing the feedback loop\n- Stats banner with live node/edge counts\n- 'Built With Itself' proof section\n- 'Works With Your Editor' with Claude/Windsurf/OpenCode badges\n- 'Three Ways to View' cards for Web/TUI/CLI\n- Improved 'The Workflow' with numbered steps\n- Updated 'The Full Story' section\n\nKept:\n- Same OG meta tags and rich previews\n- Same overall structure (nav, header, elevator pitch)\n- Asciinema demo, PR examples, code quickstart",
+    "files_changed": 5
   },
   {
     "hash": "45a04287026c0a8079a96236ab89b12d71a7f037",

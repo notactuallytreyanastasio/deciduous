@@ -5994,6 +5994,94 @@
       "created_at": "2025-12-15T10:01:21.572322-05:00",
       "updated_at": "2025-12-15T10:01:21.572322-05:00",
       "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90,\"files\":[\"docs/index.html\"]}"
+    },
+    {
+      "id": 547,
+      "change_id": "cfd73bec-1543-4417-8cd5-235e1bd5f12c",
+      "node_type": "outcome",
+      "title": "PR #97 created for landing page refresh",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:02:33.513443-05:00",
+      "updated_at": "2025-12-15T10:02:33.513443-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"commit\":\"f7ce554\",\"confidence\":95}"
+    },
+    {
+      "id": 548,
+      "change_id": "e34f1a81-87d0-4915-b17c-c524b402d5eb",
+      "node_type": "action",
+      "title": "Expanded session demo to full ~40s realistic dialogue",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:05:57.474267-05:00",
+      "updated_at": "2025-12-15T10:05:57.474267-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90,\"files\":[\"docs/index.html\"]}"
+    },
+    {
+      "id": 549,
+      "change_id": "a533199a-ad1b-4d02-aca0-178017630e82",
+      "node_type": "action",
+      "title": "Adding terminal scrolling to session demo",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:22:48.030150-05:00",
+      "updated_at": "2025-12-15T10:22:48.030150-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90}"
+    },
+    {
+      "id": 550,
+      "change_id": "b0202b78-6622-4a9a-979b-7096292a9fd7",
+      "node_type": "action",
+      "title": "Slowing scroll animation for better readability",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:22:50.505718-05:00",
+      "updated_at": "2025-12-15T10:22:50.505718-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90}"
+    },
+    {
+      "id": 551,
+      "change_id": "0fecb269-f030-42a0-a70d-3888be0e9333",
+      "node_type": "action",
+      "title": "Removing emojis from view cards",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:22:51.804918-05:00",
+      "updated_at": "2025-12-15T10:22:51.804918-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90}"
+    },
+    {
+      "id": 552,
+      "change_id": "7fcfa3b1-160f-447b-9e0f-6c472a438a56",
+      "node_type": "action",
+      "title": "Starting demo with /context slash command",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:22:53.313443-05:00",
+      "updated_at": "2025-12-15T10:22:53.313443-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":95,\"prompt\":\"User wanted demo to showcase context recovery value prop\"}"
+    },
+    {
+      "id": 553,
+      "change_id": "d292cd74-8d83-4d1b-9651-284e06ffc00b",
+      "node_type": "action",
+      "title": "Adding animated quickstart guide with 5 terminal demos",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:23:00.863004-05:00",
+      "updated_at": "2025-12-15T10:23:00.863004-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":95,\"prompt\":\"User wanted fleshed out quickstart similar to top demo\"}"
+    },
+    {
+      "id": 554,
+      "change_id": "9e7aeafb-a2b1-4077-a480-e182da9b27d5",
+      "node_type": "action",
+      "title": "Slowing top demo scroll 15% (800ms to 920ms)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T10:23:02.794435-05:00",
+      "updated_at": "2025-12-15T10:23:02.794435-05:00",
+      "metadata_json": "{\"branch\":\"landing-page-refresh\",\"confidence\":90}"
     }
   ],
   "edges": [
@@ -11210,6 +11298,94 @@
       "weight": 1.0,
       "rationale": "Completed redesign",
       "created_at": "2025-12-15T10:01:30.435415-05:00"
+    },
+    {
+      "id": 475,
+      "from_node_id": 546,
+      "to_node_id": 547,
+      "from_change_id": "dbe0fbb5-afbe-4a4e-b041-67d4c00d6220",
+      "to_change_id": "cfd73bec-1543-4417-8cd5-235e1bd5f12c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created for review",
+      "created_at": "2025-12-15T10:02:38.636568-05:00"
+    },
+    {
+      "id": 476,
+      "from_node_id": 546,
+      "to_node_id": 548,
+      "from_change_id": "dbe0fbb5-afbe-4a4e-b041-67d4c00d6220",
+      "to_change_id": "e34f1a81-87d0-4915-b17c-c524b402d5eb",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Expanding demo per user feedback",
+      "created_at": "2025-12-15T10:06:03.602312-05:00"
+    },
+    {
+      "id": 477,
+      "from_node_id": 545,
+      "to_node_id": 549,
+      "from_change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "to_change_id": "a533199a-ad1b-4d02-aca0-178017630e82",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "UX improvement for long demo",
+      "created_at": "2025-12-15T10:22:48.039368-05:00"
+    },
+    {
+      "id": 478,
+      "from_node_id": 549,
+      "to_node_id": 550,
+      "from_change_id": "a533199a-ad1b-4d02-aca0-178017630e82",
+      "to_change_id": "b0202b78-6622-4a9a-979b-7096292a9fd7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Refinement",
+      "created_at": "2025-12-15T10:22:50.518602-05:00"
+    },
+    {
+      "id": 479,
+      "from_node_id": 545,
+      "to_node_id": 551,
+      "from_change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "to_change_id": "0fecb269-f030-42a0-a70d-3888be0e9333",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Design cleanup",
+      "created_at": "2025-12-15T10:22:51.813174-05:00"
+    },
+    {
+      "id": 480,
+      "from_node_id": 545,
+      "to_node_id": 552,
+      "from_change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "to_change_id": "7fcfa3b1-160f-447b-9e0f-6c472a438a56",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Demonstrates key feature",
+      "created_at": "2025-12-15T10:22:53.321477-05:00"
+    },
+    {
+      "id": 481,
+      "from_node_id": 545,
+      "to_node_id": 553,
+      "from_change_id": "6949b0f4-42ad-4122-84fe-d57a7e678fd7",
+      "to_change_id": "d292cd74-8d83-4d1b-9651-284e06ffc00b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Major landing page enhancement",
+      "created_at": "2025-12-15T10:23:00.870853-05:00"
+    },
+    {
+      "id": 482,
+      "from_node_id": 550,
+      "to_node_id": 554,
+      "from_change_id": "b0202b78-6622-4a9a-979b-7096292a9fd7",
+      "to_change_id": "9e7aeafb-a2b1-4077-a480-e182da9b27d5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Further refinement of scroll speed",
+      "created_at": "2025-12-15T10:23:02.804801-05:00"
     }
   ]
 }
