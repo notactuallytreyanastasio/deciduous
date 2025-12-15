@@ -527,6 +527,78 @@ impl GitHubClient {
     pub fn repo_name(&self) -> Option<&str> {
         self.repo.as_deref()
     }
+
+    /// Check if a label exists
+    pub fn label_exists(&self, name: &str) -> Result<bool> {
+        let mut cmd = Command::new("gh");
+        cmd.args([
+            "label", "list",
+            "--search", name,
+            "--json", "name",
+            "-q", &format!(".[] | select(.name == \"{}\")", name),
+        ]);
+
+        for arg in self.repo_args() {
+            cmd.arg(&arg);
+        }
+
+        let output = cmd.output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(GitHubError::CommandFailed {
+                command: "gh label list".to_string(),
+                stderr,
+            });
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(!stdout.trim().is_empty())
+    }
+
+    /// Create a label
+    pub fn create_label(&self, name: &str, description: &str, color: &str) -> Result<()> {
+        let mut cmd = Command::new("gh");
+        cmd.args([
+            "label", "create", name,
+            "--description", description,
+            "--color", color,
+            "--force",  // Update if exists
+        ]);
+
+        for arg in self.repo_args() {
+            cmd.arg(&arg);
+        }
+
+        let output = cmd.output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+            return Err(GitHubError::CommandFailed {
+                command: format!("gh label create {}", name),
+                stderr,
+            });
+        }
+
+        Ok(())
+    }
+}
+
+/// Ensure the 'roadmap' label exists, creating it if needed
+/// Returns Ok(true) if label was created, Ok(false) if it already existed
+pub fn ensure_roadmap_label(client: &GitHubClient) -> Result<bool> {
+    match client.label_exists("roadmap") {
+        Ok(true) => Ok(false),  // Already exists
+        Ok(false) => {
+            client.create_label(
+                "roadmap",
+                "Roadmap item synced from ROADMAP.md by deciduous",
+                "0e8a16"  // Green color
+            )?;
+            Ok(true)  // Created
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]

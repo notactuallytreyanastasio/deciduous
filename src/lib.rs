@@ -52,7 +52,7 @@ pub mod tui;
 pub use config::Config;
 pub use db::{
     CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
-    DecisionContext, DecisionSession, CheckboxState, RoadmapItem,
+    DecisionContext, DecisionSession, CheckboxState, RoadmapItem, GitHubIssueCache,
     CURRENT_SCHEMA, get_current_git_branch, get_current_git_commit, build_metadata_json,
 };
 pub use diff::{GraphPatch, PatchNode, PatchEdge, ApplyResult};

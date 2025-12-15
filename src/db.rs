@@ -514,6 +514,43 @@ pub struct RoadmapConflict {
 }
 
 // ============================================================================
+// GitHub Issue Cache
+// ============================================================================
+
+/// Insertable GitHub issue cache entry
+#[derive(Insertable, Debug)]
+#[diesel(table_name = github_issue_cache)]
+pub struct NewGitHubIssueCache<'a> {
+    pub issue_number: i32,
+    pub repo: &'a str,
+    pub title: &'a str,
+    pub body: Option<&'a str>,
+    pub state: &'a str,
+    pub html_url: &'a str,
+    pub created_at: &'a str,
+    pub updated_at: &'a str,
+    pub cached_at: &'a str,
+}
+
+/// Queryable GitHub issue cache entry
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = github_issue_cache)]
+pub struct GitHubIssueCache {
+    pub id: i32,
+    pub issue_number: i32,
+    pub repo: String,
+    pub title: String,
+    pub body: Option<String>,
+    pub state: String,
+    pub html_url: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub cached_at: String,
+}
+
+// ============================================================================
 // Helper structs for raw SQL queries
 // ============================================================================
 
@@ -869,6 +906,23 @@ impl Database {
             )
         "#).execute(&mut conn)?;
 
+        // GitHub issue cache for TUI/Web display
+        diesel::sql_query(r#"
+            CREATE TABLE IF NOT EXISTS github_issue_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                issue_number INTEGER NOT NULL,
+                repo TEXT NOT NULL,
+                title TEXT NOT NULL,
+                body TEXT,
+                state TEXT NOT NULL,
+                html_url TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                cached_at TEXT NOT NULL,
+                UNIQUE(repo, issue_number)
+            )
+        "#).execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)").execute(&mut conn)?;
@@ -885,6 +939,7 @@ impl Database {
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_github_issue ON roadmap_items(github_issue_number)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_github_issue_cache_repo ON github_issue_cache(repo, issue_number)").execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -1720,6 +1775,101 @@ impl Database {
         let is_complete = has_outcome && issue_closed;
 
         Ok((is_complete, has_outcome, issue_closed))
+    }
+
+    // ========================================================================
+    // GitHub Issue Cache Methods
+    // ========================================================================
+
+    /// Cache a GitHub issue for local display in TUI/Web
+    pub fn cache_github_issue(
+        &self,
+        issue_number: i32,
+        repo: &str,
+        title: &str,
+        body: Option<&str>,
+        state: &str,
+        html_url: &str,
+        created_at: &str,
+        updated_at: &str,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Upsert: delete existing then insert
+        diesel::delete(
+            github_issue_cache::table
+                .filter(github_issue_cache::repo.eq(repo))
+                .filter(github_issue_cache::issue_number.eq(issue_number))
+        ).execute(&mut conn)?;
+
+        let new_cache = NewGitHubIssueCache {
+            issue_number,
+            repo,
+            title,
+            body,
+            state,
+            html_url,
+            created_at,
+            updated_at,
+            cached_at: &now,
+        };
+
+        diesel::insert_into(github_issue_cache::table)
+            .values(&new_cache)
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Get a cached GitHub issue by repo and number
+    pub fn get_cached_issue(&self, repo: &str, issue_number: i32) -> Result<Option<GitHubIssueCache>> {
+        let mut conn = self.get_conn()?;
+
+        let result = github_issue_cache::table
+            .filter(github_issue_cache::repo.eq(repo))
+            .filter(github_issue_cache::issue_number.eq(issue_number))
+            .first::<GitHubIssueCache>(&mut conn)
+            .optional()?;
+
+        Ok(result)
+    }
+
+    /// Get all cached issues for a repo
+    pub fn get_cached_issues_for_repo(&self, repo: &str) -> Result<Vec<GitHubIssueCache>> {
+        let mut conn = self.get_conn()?;
+
+        let issues = github_issue_cache::table
+            .filter(github_issue_cache::repo.eq(repo))
+            .order(github_issue_cache::issue_number.desc())
+            .load::<GitHubIssueCache>(&mut conn)?;
+
+        Ok(issues)
+    }
+
+    /// Get all cached issues
+    pub fn get_all_cached_issues(&self) -> Result<Vec<GitHubIssueCache>> {
+        let mut conn = self.get_conn()?;
+
+        let issues = github_issue_cache::table
+            .order(github_issue_cache::cached_at.desc())
+            .load::<GitHubIssueCache>(&mut conn)?;
+
+        Ok(issues)
+    }
+
+    /// Clear cached issues older than a specified duration
+    pub fn clear_stale_cache(&self, max_age_hours: i64) -> Result<usize> {
+        let mut conn = self.get_conn()?;
+        let cutoff = chrono::Local::now() - chrono::Duration::hours(max_age_hours);
+        let cutoff_str = cutoff.to_rfc3339();
+
+        let deleted = diesel::delete(
+            github_issue_cache::table
+                .filter(github_issue_cache::cached_at.lt(&cutoff_str))
+        ).execute(&mut conn)?;
+
+        Ok(deleted)
     }
 }
 

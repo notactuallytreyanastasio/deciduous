@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand};
 use colored::Colorize;
 use deciduous::{Database, DotConfig, WriteupConfig, graph_to_dot, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
 use deciduous::roadmap::{parse_roadmap, write_roadmap_with_metadata, generate_issue_body, RoadmapSection};
-use deciduous::github::GitHubClient;
+use deciduous::github::{GitHubClient, ensure_roadmap_label};
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
@@ -321,7 +321,7 @@ enum RoadmapAction {
         path: Option<PathBuf>,
     },
 
-    /// Sync ROADMAP.md with GitHub Issues
+    /// Sync ROADMAP.md with GitHub Issues (dry-run by default, use --execute to apply)
     Sync {
         /// Path to ROADMAP.md (default: ROADMAP.md)
         #[arg(short, long)]
@@ -331,9 +331,9 @@ enum RoadmapAction {
         #[arg(short, long)]
         repo: Option<String>,
 
-        /// Preview changes without applying
+        /// Actually apply changes (default is dry-run mode)
         #[arg(long)]
-        dry_run: bool,
+        execute: bool,
 
         /// Create GitHub issues for new sections
         #[arg(long, default_value = "true")]
@@ -1337,7 +1337,8 @@ fn main() {
                     println!("  Metadata comments added to {}", roadmap_path.display());
                 }
 
-                RoadmapAction::Sync { path, repo, dry_run, create_issues } => {
+                RoadmapAction::Sync { path, repo, execute, create_issues } => {
+                    let dry_run = !execute;  // Default is dry-run mode
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
                     if !roadmap_path.exists() {
@@ -1383,10 +1384,23 @@ fn main() {
                         .filter(|s| s.level == 3)
                         .collect();
 
-                    println!("{} Syncing {} sections", "Roadmap:".cyan(), syncable_sections.len());
+                    if dry_run {
+                        println!("{} {} sections (use --execute to apply changes)", "Roadmap (dry run):".yellow(), syncable_sections.len());
+                    } else {
+                        println!("{} Syncing {} sections", "Roadmap:".cyan(), syncable_sections.len());
+                    }
 
                     if let Some(repo_name) = gh_client.repo_name() {
                         println!("  Repository: {}", repo_name);
+                    }
+
+                    // Ensure 'roadmap' label exists if we're creating issues
+                    if !dry_run && create_issues {
+                        match ensure_roadmap_label(&gh_client) {
+                            Ok(true) => println!("  {} Created 'roadmap' label", "✓".green()),
+                            Ok(false) => {} // Label already exists
+                            Err(e) => eprintln!("  {} Creating label: {} (issues may fail)", "Warning:".yellow(), e),
+                        }
                     }
 
                     let mut created = 0;
@@ -1430,6 +1444,22 @@ fn main() {
                                         // Update database with issue number
                                         if let Err(e) = db.update_roadmap_item_github_by_title(&section.title, issue.number, &issue.state) {
                                             eprintln!("    {} Updating database: {}", "Warning:".yellow(), e);
+                                        }
+
+                                        // Cache issue for TUI/Web display
+                                        if let Some(repo_name) = gh_client.repo_name() {
+                                            if let Err(e) = db.cache_github_issue(
+                                                issue.number,
+                                                repo_name,
+                                                &issue.title,
+                                                Some(&issue.body),
+                                                &issue.state,
+                                                &issue.html_url,
+                                                &issue.created_at,
+                                                &issue.updated_at,
+                                            ) {
+                                                eprintln!("    {} Caching issue: {}", "Warning:".yellow(), e);
+                                            }
                                         }
                                     }
                                     Err(e) => {

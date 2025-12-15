@@ -133,3 +133,22 @@ diesel::table! {
         resolved_at -> Nullable<Text>,
     }
 }
+
+// ============================================================================
+// GitHub Issue Cache - Local cache for TUI/Web display
+// ============================================================================
+
+diesel::table! {
+    github_issue_cache (id) {
+        id -> Integer,
+        issue_number -> Integer,
+        repo -> Text,
+        title -> Text,
+        body -> Nullable<Text>,
+        state -> Text,
+        html_url -> Text,
+        created_at -> Text,
+        updated_at -> Text,
+        cached_at -> Text,
+    }
+}
