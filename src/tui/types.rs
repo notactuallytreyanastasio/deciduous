@@ -10,7 +10,7 @@
 //!
 //! All three MUST stay in sync for consistent behavior.
 
-use crate::{DecisionNode, DecisionEdge};
+use crate::{DecisionEdge, DecisionNode};
 use serde_json::Value;
 
 // =============================================================================
@@ -18,6 +18,7 @@ use serde_json::Value;
 // =============================================================================
 
 /// Valid node types in the decision graph
+#[rustfmt::skip]
 pub const NODE_TYPES: &[&str] = &["goal", "decision", "option", "action", "outcome", "observation"];
 
 /// Valid node statuses
@@ -28,6 +29,7 @@ pub const NODE_STATUSES: &[&str] = &["pending", "active", "completed", "rejected
 // =============================================================================
 
 /// Valid edge types connecting nodes
+#[rustfmt::skip]
 pub const EDGE_TYPES: &[&str] = &["leads_to", "requires", "chosen", "rejected", "blocks", "enables"];
 
 // =============================================================================
@@ -55,10 +57,20 @@ impl NodeMetadata {
         serde_json::from_str::<Value>(json)
             .ok()
             .map(|v| Self {
-                confidence: v.get("confidence").and_then(|c| c.as_i64()).map(|c| c as i32),
-                commit: v.get("commit").and_then(|c| c.as_str()).map(|s| s.to_string()),
-                prompt: v.get("prompt").and_then(|p| p.as_str()).map(|s| s.to_string()),
-                files: v.get("files")
+                confidence: v
+                    .get("confidence")
+                    .and_then(|c| c.as_i64())
+                    .map(|c| c as i32),
+                commit: v
+                    .get("commit")
+                    .and_then(|c| c.as_str())
+                    .map(|s| s.to_string()),
+                prompt: v
+                    .get("prompt")
+                    .and_then(|p| p.as_str())
+                    .map(|s| s.to_string()),
+                files: v
+                    .get("files")
                     .and_then(|f| f.as_array())
                     .map(|arr| {
                         arr.iter()
@@ -66,7 +78,10 @@ impl NodeMetadata {
                             .collect()
                     })
                     .unwrap_or_default(),
-                branch: v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()),
+                branch: v
+                    .get("branch")
+                    .and_then(|b| b.as_str())
+                    .map(|s| s.to_string()),
             })
             .unwrap_or_default()
     }
@@ -114,9 +129,13 @@ pub fn short_commit(commit: &str) -> &str {
 /// Get confidence level category (mirrors getConfidenceLevel in TypeScript)
 pub fn get_confidence_level(confidence: Option<i32>) -> Option<&'static str> {
     confidence.map(|c| {
-        if c >= 70 { "high" }
-        else if c >= 40 { "med" }
-        else { "low" }
+        if c >= 70 {
+            "high"
+        } else if c >= 40 {
+            "med"
+        } else {
+            "low"
+        }
     })
 }
 
@@ -144,10 +163,7 @@ pub fn is_edge_type(value: &str) -> bool {
 
 /// Get all unique branches from a list of nodes
 pub fn get_unique_branches(nodes: &[DecisionNode]) -> Vec<String> {
-    let mut branches: Vec<String> = nodes
-        .iter()
-        .filter_map(get_branch)
-        .collect();
+    let mut branches: Vec<String> = nodes.iter().filter_map(get_branch).collect();
     branches.sort();
     branches.dedup();
     branches
@@ -171,7 +187,12 @@ pub fn get_outgoing_edges(node_id: i32, edges: &[DecisionEdge]) -> Vec<&Decision
 mod tests {
     use super::*;
 
-    fn make_test_node(id: i32, node_type: &str, title: &str, metadata_json: Option<&str>) -> DecisionNode {
+    fn make_test_node(
+        id: i32,
+        node_type: &str,
+        title: &str,
+        metadata_json: Option<&str>,
+    ) -> DecisionNode {
         DecisionNode {
             id,
             change_id: format!("test-change-{}", id),

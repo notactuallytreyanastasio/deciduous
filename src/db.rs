@@ -9,9 +9,9 @@ use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sqlite::SqliteConnection;
 use serde_json::json;
 use std::path::Path;
-use uuid::Uuid;
 #[cfg(feature = "ts-rs")]
 use ts_rs::TS;
+use uuid::Uuid;
 
 /// Build metadata JSON from optional fields (confidence, commit, prompt, files, branch)
 pub fn build_metadata_json(
@@ -22,7 +22,12 @@ pub fn build_metadata_json(
     branch: Option<&str>,
 ) -> Option<String> {
     // Only create JSON if at least one field is present
-    if confidence.is_none() && commit.is_none() && prompt.is_none() && files.is_none() && branch.is_none() {
+    if confidence.is_none()
+        && commit.is_none()
+        && prompt.is_none()
+        && files.is_none()
+        && branch.is_none()
+    {
         return None;
     }
 
@@ -684,7 +689,7 @@ impl Database {
 
         // Check if decision_nodes table exists
         let tables: Vec<TableInfo> = diesel::sql_query(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='decision_nodes'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='decision_nodes'",
         )
         .load::<TableInfo>(&mut conn)
         .unwrap_or_default();
@@ -694,11 +699,9 @@ impl Database {
         }
 
         // Check if change_id column exists in decision_nodes
-        let columns: Vec<PragmaTableInfo> = diesel::sql_query(
-            "PRAGMA table_info(decision_nodes)"
-        )
-        .load(&mut conn)
-        .unwrap_or_default();
+        let columns: Vec<PragmaTableInfo> = diesel::sql_query("PRAGMA table_info(decision_nodes)")
+            .load(&mut conn)
+            .unwrap_or_default();
 
         let has_change_id = columns.iter().any(|c| c.name == "change_id");
 
@@ -709,11 +712,10 @@ impl Database {
         }
 
         // Always backfill any NULL change_ids (handles both new columns and stragglers)
-        let nodes: Vec<NodeIdOnly> = diesel::sql_query(
-            "SELECT id FROM decision_nodes WHERE change_id IS NULL"
-        )
-        .load(&mut conn)
-        .unwrap_or_default();
+        let nodes: Vec<NodeIdOnly> =
+            diesel::sql_query("SELECT id FROM decision_nodes WHERE change_id IS NULL")
+                .load(&mut conn)
+                .unwrap_or_default();
 
         if nodes.is_empty() && has_change_id {
             return Ok(false); // Already fully migrated
@@ -729,11 +731,10 @@ impl Database {
         }
 
         // Check if edge columns need migration
-        let edge_columns: Vec<PragmaTableInfo> = diesel::sql_query(
-            "PRAGMA table_info(decision_edges)"
-        )
-        .load(&mut conn)
-        .unwrap_or_default();
+        let edge_columns: Vec<PragmaTableInfo> =
+            diesel::sql_query("PRAGMA table_info(decision_edges)")
+                .load(&mut conn)
+                .unwrap_or_default();
 
         let has_from_change_id = edge_columns.iter().any(|c| c.name == "from_change_id");
 
@@ -756,14 +757,17 @@ impl Database {
     }
 
     fn get_conn(&self) -> Result<DbConn> {
-        self.pool.get().map_err(|e| DbError::Connection(e.to_string()))
+        self.pool
+            .get()
+            .map_err(|e| DbError::Connection(e.to_string()))
     }
 
     fn init_schema(&self) -> Result<()> {
         let mut conn = self.get_conn()?;
 
         // Run raw SQL to create tables if they don't exist
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS schema_versions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 version TEXT NOT NULL UNIQUE,
@@ -771,9 +775,12 @@ impl Database {
                 features TEXT NOT NULL,
                 introduced_at TEXT NOT NULL
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_nodes (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 change_id TEXT NOT NULL UNIQUE,
@@ -785,9 +792,12 @@ impl Database {
                 updated_at TEXT NOT NULL,
                 metadata_json TEXT
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_edges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 from_node_id INTEGER NOT NULL,
@@ -802,9 +812,12 @@ impl Database {
                 FOREIGN KEY (to_node_id) REFERENCES decision_nodes(id),
                 UNIQUE(from_node_id, to_node_id, edge_type)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_context (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 node_id INTEGER NOT NULL,
@@ -813,9 +826,12 @@ impl Database {
                 captured_at TEXT NOT NULL,
                 FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS decision_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 name TEXT,
@@ -825,9 +841,12 @@ impl Database {
                 summary TEXT,
                 FOREIGN KEY (root_node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS session_nodes (
                 session_id INTEGER NOT NULL,
                 node_id INTEGER NOT NULL,
@@ -836,9 +855,12 @@ impl Database {
                 FOREIGN KEY (session_id) REFERENCES decision_sessions(id),
                 FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS command_log (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 command TEXT NOT NULL,
@@ -853,10 +875,13 @@ impl Database {
                 decision_node_id INTEGER,
                 FOREIGN KEY (decision_node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
         // Roadmap Board Tables
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS roadmap_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 change_id TEXT NOT NULL UNIQUE,
@@ -878,9 +903,12 @@ impl Database {
                 FOREIGN KEY (parent_id) REFERENCES roadmap_items(id),
                 FOREIGN KEY (outcome_node_id) REFERENCES decision_nodes(id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS roadmap_sync_state (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 roadmap_path TEXT NOT NULL,
@@ -890,9 +918,12 @@ impl Database {
                 last_markdown_parse TEXT,
                 conflict_count INTEGER NOT NULL DEFAULT 0
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS roadmap_conflicts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 item_change_id TEXT NOT NULL,
@@ -904,10 +935,13 @@ impl Database {
                 resolved_at TEXT,
                 FOREIGN KEY (item_change_id) REFERENCES roadmap_items(change_id)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
         // GitHub issue cache for TUI/Web display
-        diesel::sql_query(r#"
+        diesel::sql_query(
+            r#"
             CREATE TABLE IF NOT EXISTS github_issue_cache (
                 id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                 issue_number INTEGER NOT NULL,
@@ -921,21 +955,47 @@ impl Database {
                 cached_at TEXT NOT NULL,
                 UNIQUE(repo, issue_number)
             )
-        "#).execute(&mut conn)?;
+        "#,
+        )
+        .execute(&mut conn)?;
 
         // Create indexes
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_change_id ON decision_nodes(change_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from ON decision_edges(from_node_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to ON decision_edges(to_node_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_command_started_at ON command_log(started_at)").execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
+            .execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_status ON decision_nodes(status)")
+            .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_nodes_change_id ON decision_nodes(change_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_edges_from ON decision_edges(from_node_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to ON decision_edges(to_node_id)")
+            .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_command_started_at ON command_log(started_at)",
+        )
+        .execute(&mut conn)?;
 
         // Roadmap indexes
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_change_id ON roadmap_items(change_id)").execute(&mut conn)?;
-        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_section ON roadmap_items(section)").execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_roadmap_items_change_id ON roadmap_items(change_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_roadmap_items_section ON roadmap_items(section)",
+        )
+        .execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_github_issue ON roadmap_items(github_issue_number)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
@@ -970,12 +1030,10 @@ impl Database {
         let mut conn = self.get_conn()?;
 
         // Check if change_id column exists in decision_nodes
-        let columns: Vec<(String,)> = diesel::sql_query(
-            "PRAGMA table_info(decision_nodes)"
-        )
-        .load::<PragmaTableInfo>(&mut conn)
-        .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
-        .unwrap_or_default();
+        let columns: Vec<(String,)> = diesel::sql_query("PRAGMA table_info(decision_nodes)")
+            .load::<PragmaTableInfo>(&mut conn)
+            .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
+            .unwrap_or_default();
 
         let has_change_id = columns.iter().any(|(name,)| name == "change_id");
 
@@ -988,12 +1046,11 @@ impl Database {
             .execute(&mut conn)?;
 
         // Backfill change_id with UUIDs for existing nodes
-        let nodes: Vec<(i32,)> = diesel::sql_query(
-            "SELECT id FROM decision_nodes WHERE change_id IS NULL"
-        )
-        .load::<NodeIdOnly>(&mut conn)
-        .map(|rows| rows.into_iter().map(|r| (r.id,)).collect())
-        .unwrap_or_default();
+        let nodes: Vec<(i32,)> =
+            diesel::sql_query("SELECT id FROM decision_nodes WHERE change_id IS NULL")
+                .load::<NodeIdOnly>(&mut conn)
+                .map(|rows| rows.into_iter().map(|r| (r.id,)).collect())
+                .unwrap_or_default();
 
         for (node_id,) in nodes {
             let change_id = Uuid::new_v4().to_string();
@@ -1009,12 +1066,10 @@ impl Database {
             .execute(&mut conn)?;
 
         // Add from_change_id and to_change_id columns to decision_edges
-        let edge_columns: Vec<(String,)> = diesel::sql_query(
-            "PRAGMA table_info(decision_edges)"
-        )
-        .load::<PragmaTableInfo>(&mut conn)
-        .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
-        .unwrap_or_default();
+        let edge_columns: Vec<(String,)> = diesel::sql_query("PRAGMA table_info(decision_edges)")
+            .load::<PragmaTableInfo>(&mut conn)
+            .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
+            .unwrap_or_default();
 
         let has_from_change_id = edge_columns.iter().any(|(name,)| name == "from_change_id");
 
@@ -1035,8 +1090,10 @@ impl Database {
             // Create indexes
             diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)")
                 .execute(&mut conn)?;
-            diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)")
-                .execute(&mut conn)?;
+            diesel::sql_query(
+                "CREATE INDEX IF NOT EXISTS idx_edges_to_change ON decision_edges(to_change_id)",
+            )
+            .execute(&mut conn)?;
         }
 
         Ok(true) // Migration performed
@@ -1047,8 +1104,24 @@ impl Database {
     // ========================================================================
 
     /// Create a new decision node
-    pub fn create_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>, commit: Option<&str>) -> Result<i32> {
-        self.create_node_full(node_type, title, description, confidence, commit, None, None, None)
+    pub fn create_node(
+        &self,
+        node_type: &str,
+        title: &str,
+        description: Option<&str>,
+        confidence: Option<u8>,
+        commit: Option<&str>,
+    ) -> Result<i32> {
+        self.create_node_full(
+            node_type,
+            title,
+            description,
+            confidence,
+            commit,
+            None,
+            None,
+            None,
+        )
     }
 
     /// Create a decision node with full metadata (including prompt and files)
@@ -1085,14 +1158,23 @@ impl Database {
             .values(&new_node)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
 
     /// Add a node (alias for create_node for doc examples)
-    pub fn add_node(&self, node_type: &str, title: &str, description: Option<&str>, confidence: Option<u8>, commit: Option<&str>) -> Result<i32> {
+    pub fn add_node(
+        &self,
+        node_type: &str,
+        title: &str,
+        description: Option<&str>,
+        confidence: Option<u8>,
+        commit: Option<&str>,
+    ) -> Result<i32> {
         self.create_node(node_type, title, description, confidence, commit)
     }
 
@@ -1130,14 +1212,22 @@ impl Database {
             .values(&new_node)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
 
     /// Create an edge between nodes
-    pub fn create_edge(&self, from_id: i32, to_id: i32, edge_type: &str, rationale: Option<&str>) -> Result<i32> {
+    pub fn create_edge(
+        &self,
+        from_id: i32,
+        to_id: i32,
+        edge_type: &str,
+        rationale: Option<&str>,
+    ) -> Result<i32> {
         let mut conn = self.get_conn()?;
 
         // Validate both nodes exist and get their change_ids
@@ -1154,11 +1244,20 @@ impl Database {
         let to_change_id = to_node.as_ref().map(|n| n.change_id.clone());
 
         if from_node.is_none() && to_node.is_none() {
-            return Err(DbError::Validation(format!("Both nodes {} and {} do not exist. Run 'deciduous nodes' to see existing nodes.", from_id, to_id)));
+            return Err(DbError::Validation(format!(
+                "Both nodes {} and {} do not exist. Run 'deciduous nodes' to see existing nodes.",
+                from_id, to_id
+            )));
         } else if from_node.is_none() {
-            return Err(DbError::Validation(format!("Source node {} does not exist. Run 'deciduous nodes' to see existing nodes.", from_id)));
+            return Err(DbError::Validation(format!(
+                "Source node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                from_id
+            )));
         } else if to_node.is_none() {
-            return Err(DbError::Validation(format!("Target node {} does not exist. Run 'deciduous nodes' to see existing nodes.", to_id)));
+            return Err(DbError::Validation(format!(
+                "Target node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                to_id
+            )));
         }
 
         let now = chrono::Local::now().to_rfc3339();
@@ -1178,14 +1277,22 @@ impl Database {
             .values(&new_edge)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
 
     /// Add an edge (alias for create_edge for doc examples)
-    pub fn add_edge(&self, from_id: i32, to_id: i32, edge_type: &str, rationale: Option<&str>) -> Result<i32> {
+    pub fn add_edge(
+        &self,
+        from_id: i32,
+        to_id: i32,
+        edge_type: &str,
+        rationale: Option<&str>,
+    ) -> Result<i32> {
         self.create_edge(from_id, to_id, edge_type, rationale)
     }
 
@@ -1301,7 +1408,12 @@ impl Database {
     // ========================================================================
 
     /// Log a command execution
-    pub fn log_command(&self, command: &str, description: Option<&str>, working_dir: Option<&str>) -> Result<i32> {
+    pub fn log_command(
+        &self,
+        command: &str,
+        description: Option<&str>,
+        working_dir: Option<&str>,
+    ) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -1322,8 +1434,10 @@ impl Database {
             .values(&new_log)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
@@ -1403,8 +1517,10 @@ impl Database {
             .values(&new_item)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
@@ -1452,8 +1568,10 @@ impl Database {
             .values(&new_item)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
@@ -1470,8 +1588,7 @@ impl Database {
     /// Clear all roadmap items (for refresh)
     pub fn clear_roadmap_items(&self) -> Result<usize> {
         let mut conn = self.get_conn()?;
-        let deleted = diesel::delete(roadmap_items::table)
-            .execute(&mut conn)?;
+        let deleted = diesel::delete(roadmap_items::table).execute(&mut conn)?;
         Ok(deleted)
     }
 
@@ -1535,7 +1652,10 @@ impl Database {
             .execute(&mut conn)?;
 
         if affected == 0 {
-            return Err(DbError::Validation(format!("No roadmap item found with title: {}", title)));
+            return Err(DbError::Validation(format!(
+                "No roadmap item found with title: {}",
+                title
+            )));
         }
 
         Ok(())
@@ -1551,16 +1671,20 @@ impl Database {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        let affected = diesel::update(roadmap_items::table.filter(roadmap_items::change_id.eq(change_id)))
-            .set((
-                roadmap_items::github_issue_number.eq(Some(issue_number)),
-                roadmap_items::github_issue_state.eq(Some(issue_state)),
-                roadmap_items::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+        let affected =
+            diesel::update(roadmap_items::table.filter(roadmap_items::change_id.eq(change_id)))
+                .set((
+                    roadmap_items::github_issue_number.eq(Some(issue_number)),
+                    roadmap_items::github_issue_state.eq(Some(issue_state)),
+                    roadmap_items::updated_at.eq(&now),
+                ))
+                .execute(&mut conn)?;
 
         if affected == 0 {
-            return Err(DbError::Validation(format!("No roadmap item found with change_id: {}", change_id)));
+            return Err(DbError::Validation(format!(
+                "No roadmap item found with change_id: {}",
+                change_id
+            )));
         }
 
         Ok(())
@@ -1690,7 +1814,11 @@ impl Database {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        let last_github = if github_synced { Some(now.clone()) } else { None };
+        let last_github = if github_synced {
+            Some(now.clone())
+        } else {
+            None
+        };
         let last_parse = if markdown_parsed { Some(now) } else { None };
 
         diesel::update(roadmap_sync_state::table.filter(roadmap_sync_state::id.eq(state_id)))
@@ -1731,8 +1859,10 @@ impl Database {
             .values(&new_conflict)
             .execute(&mut conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>("last_insert_rowid()"))
-            .first(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
 
         Ok(id)
     }
@@ -1808,8 +1938,9 @@ impl Database {
         diesel::delete(
             github_issue_cache::table
                 .filter(github_issue_cache::repo.eq(repo))
-                .filter(github_issue_cache::issue_number.eq(issue_number))
-        ).execute(&mut conn)?;
+                .filter(github_issue_cache::issue_number.eq(issue_number)),
+        )
+        .execute(&mut conn)?;
 
         let new_cache = NewGitHubIssueCache {
             issue_number,
@@ -1831,7 +1962,11 @@ impl Database {
     }
 
     /// Get a cached GitHub issue by repo and number
-    pub fn get_cached_issue(&self, repo: &str, issue_number: i32) -> Result<Option<GitHubIssueCache>> {
+    pub fn get_cached_issue(
+        &self,
+        repo: &str,
+        issue_number: i32,
+    ) -> Result<Option<GitHubIssueCache>> {
         let mut conn = self.get_conn()?;
 
         let result = github_issue_cache::table
@@ -1873,9 +2008,9 @@ impl Database {
         let cutoff_str = cutoff.to_rfc3339();
 
         let deleted = diesel::delete(
-            github_issue_cache::table
-                .filter(github_issue_cache::cached_at.lt(&cutoff_str))
-        ).execute(&mut conn)?;
+            github_issue_cache::table.filter(github_issue_cache::cached_at.lt(&cutoff_str)),
+        )
+        .execute(&mut conn)?;
 
         Ok(deleted)
     }
@@ -2072,7 +2207,9 @@ mod tests {
         let db = Database::new(db_path.to_str().unwrap()).unwrap();
 
         // Create a node without metadata
-        let node_id = db.create_node("action", "Test action", None, None, None).unwrap();
+        let node_id = db
+            .create_node("action", "Test action", None, None, None)
+            .unwrap();
 
         // Update with commit
         db.update_node_commit(node_id, "abc123def456").unwrap();
@@ -2080,7 +2217,8 @@ mod tests {
         // Verify
         let nodes = db.get_all_nodes().unwrap();
         let node = nodes.iter().find(|n| n.id == node_id).unwrap();
-        let meta: serde_json::Value = serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
+        let meta: serde_json::Value =
+            serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
         assert_eq!(meta.get("commit").unwrap(), "abc123def456");
     }
 
@@ -2091,16 +2229,18 @@ mod tests {
         let db = Database::new(db_path.to_str().unwrap()).unwrap();
 
         // Create a node with existing metadata (confidence and branch)
-        let node_id = db.create_node_full(
-            "action",
-            "Test action",
-            None,
-            Some(85),
-            None,
-            None,
-            None,
-            Some("feature-x"),
-        ).unwrap();
+        let node_id = db
+            .create_node_full(
+                "action",
+                "Test action",
+                None,
+                Some(85),
+                None,
+                None,
+                None,
+                Some("feature-x"),
+            )
+            .unwrap();
 
         // Update with commit
         db.update_node_commit(node_id, "def789").unwrap();
@@ -2108,7 +2248,8 @@ mod tests {
         // Verify commit was added and other fields preserved
         let nodes = db.get_all_nodes().unwrap();
         let node = nodes.iter().find(|n| n.id == node_id).unwrap();
-        let meta: serde_json::Value = serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
+        let meta: serde_json::Value =
+            serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
 
         assert_eq!(meta.get("commit").unwrap(), "def789");
         assert_eq!(meta.get("confidence").unwrap(), 85);
@@ -2122,16 +2263,18 @@ mod tests {
         let db = Database::new(db_path.to_str().unwrap()).unwrap();
 
         // Create a node with an existing commit
-        let node_id = db.create_node_full(
-            "outcome",
-            "Test outcome",
-            None,
-            None,
-            Some("old_commit_hash"),
-            None,
-            None,
-            None,
-        ).unwrap();
+        let node_id = db
+            .create_node_full(
+                "outcome",
+                "Test outcome",
+                None,
+                None,
+                Some("old_commit_hash"),
+                None,
+                None,
+                None,
+            )
+            .unwrap();
 
         // Update with new commit
         db.update_node_commit(node_id, "new_commit_hash").unwrap();
@@ -2139,7 +2282,8 @@ mod tests {
         // Verify commit was overwritten
         let nodes = db.get_all_nodes().unwrap();
         let node = nodes.iter().find(|n| n.id == node_id).unwrap();
-        let meta: serde_json::Value = serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
+        let meta: serde_json::Value =
+            serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
 
         assert_eq!(meta.get("commit").unwrap(), "new_commit_hash");
     }

@@ -1,15 +1,24 @@
 use chrono::Local;
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
 use colored::Colorize;
-use deciduous::{Database, DotConfig, WriteupConfig, graph_to_dot, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
-use deciduous::roadmap::{parse_roadmap, write_roadmap_with_metadata, generate_issue_body, RoadmapSection};
-use deciduous::github::{GitHubClient, ensure_roadmap_label};
+use deciduous::github::{ensure_roadmap_label, GitHubClient};
+use deciduous::roadmap::{
+    generate_issue_body, parse_roadmap, write_roadmap_with_metadata, RoadmapSection,
+};
+use deciduous::{
+    filter_graph_by_ids, generate_pr_writeup, graph_to_dot, parse_node_range, Database, DotConfig,
+    WriteupConfig,
+};
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
 
 #[derive(Parser, Debug)]
 #[command(name = "deciduous")]
-#[command(author, version, about = "Decision graph tooling for AI-assisted development")]
+#[command(
+    author,
+    version,
+    about = "Decision graph tooling for AI-assisted development"
+)]
 struct Args {
     #[command(subcommand)]
     command: Command,
@@ -261,6 +270,12 @@ enum Command {
         #[command(subcommand)]
         action: RoadmapAction,
     },
+
+    /// Generate shell completions
+    Completion {
+        /// Shell type: bash, zsh, fish, powershell, elvish
+        shell: clap_complete::Shell,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -415,7 +430,12 @@ fn main() {
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
-    if let Command::Init { claude: _, windsurf, opencode } = args.command {
+    if let Command::Init {
+        claude: _,
+        windsurf,
+        opencode,
+    } = args.command
+    {
         // Determine editor type: default to Claude if neither specified
         let editor = if windsurf {
             deciduous::init::Editor::Windsurf
@@ -433,7 +453,12 @@ fn main() {
     }
 
     // Handle update separately - it doesn't need an existing database
-    if let Command::Update { claude: _, windsurf, opencode } = args.command {
+    if let Command::Update {
+        claude: _,
+        windsurf,
+        opencode,
+    } = args.command
+    {
         // Determine editor type: default to Claude if neither specified
         let editor = if windsurf {
             deciduous::init::Editor::Windsurf
@@ -459,6 +484,17 @@ fn main() {
         return;
     }
 
+    // Handle completion separately - doesn't need database
+    if let Command::Completion { shell } = args.command {
+        clap_complete::generate(
+            shell,
+            &mut Args::command(),
+            "deciduous",
+            &mut std::io::stdout(),
+        );
+        return;
+    }
+
     let db = match Database::open() {
         Ok(db) => db,
         Err(e) => {
@@ -468,9 +504,19 @@ fn main() {
     };
 
     match args.command {
-        Command::Init { .. } => unreachable!(), // Handled above
+        Command::Init { .. } => unreachable!(),   // Handled above
         Command::Update { .. } => unreachable!(), // Handled above
-        Command::Add { node_type, title, description, confidence, commit, prompt, files, branch, no_branch } => {
+        Command::Add {
+            node_type,
+            title,
+            description,
+            confidence,
+            commit,
+            prompt,
+            files,
+            branch,
+            no_branch,
+        } => {
             // Auto-detect branch if not specified and not disabled
             let effective_branch = if no_branch {
                 None
@@ -487,15 +533,49 @@ fn main() {
                 }
             });
 
-            match db.create_node_full(&node_type, &title, description.as_deref(), confidence, effective_commit.as_deref(), prompt.as_deref(), files.as_deref(), effective_branch.as_deref()) {
+            match db.create_node_full(
+                &node_type,
+                &title,
+                description.as_deref(),
+                confidence,
+                effective_commit.as_deref(),
+                prompt.as_deref(),
+                files.as_deref(),
+                effective_branch.as_deref(),
+            ) {
                 Ok(id) => {
-                    let conf_str = confidence.map(|c| format!(" [confidence: {}%]", c)).unwrap_or_default();
-                    let commit_str = effective_commit.as_ref().map(|c| format!(" [commit: {}]", &c[..7.min(c.len())])).unwrap_or_default();
-                    let prompt_str = if prompt.is_some() { " [prompt saved]" } else { "" };
-                    let files_str = files.as_ref().map(|f| format!(" [files: {}]", f)).unwrap_or_default();
-                    let branch_str = effective_branch.as_ref().map(|b| format!(" [branch: {}]", b)).unwrap_or_default();
-                    println!("{} node {} (type: {}, title: {}){}{}{}{}{}",
-                        "Created".green(), id, node_type, title, conf_str, commit_str, prompt_str, files_str, branch_str);
+                    let conf_str = confidence
+                        .map(|c| format!(" [confidence: {}%]", c))
+                        .unwrap_or_default();
+                    let commit_str = effective_commit
+                        .as_ref()
+                        .map(|c| format!(" [commit: {}]", &c[..7.min(c.len())]))
+                        .unwrap_or_default();
+                    let prompt_str = if prompt.is_some() {
+                        " [prompt saved]"
+                    } else {
+                        ""
+                    };
+                    let files_str = files
+                        .as_ref()
+                        .map(|f| format!(" [files: {}]", f))
+                        .unwrap_or_default();
+                    let branch_str = effective_branch
+                        .as_ref()
+                        .map(|b| format!(" [branch: {}]", b))
+                        .unwrap_or_default();
+                    println!(
+                        "{} node {} (type: {}, title: {}){}{}{}{}{}",
+                        "Created".green(),
+                        id,
+                        node_type,
+                        title,
+                        conf_str,
+                        commit_str,
+                        prompt_str,
+                        files_str,
+                        branch_str
+                    );
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -504,62 +584,79 @@ fn main() {
             }
         }
 
-        Command::Link { from, to, rationale, edge_type } => {
-            match db.create_edge(from, to, &edge_type, rationale.as_deref()) {
-                Ok(id) => {
-                    println!("{} edge {} ({} -> {} via {})", "Created".green(), id, from, to, edge_type);
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
+        Command::Link {
+            from,
+            to,
+            rationale,
+            edge_type,
+        } => match db.create_edge(from, to, &edge_type, rationale.as_deref()) {
+            Ok(id) => {
+                println!(
+                    "{} edge {} ({} -> {} via {})",
+                    "Created".green(),
+                    id,
+                    from,
+                    to,
+                    edge_type
+                );
             }
-        }
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
 
-        Command::Status { id, status } => {
-            match db.update_node_status(id, &status) {
-                Ok(()) => println!("{} node {} status to '{}'", "Updated".green(), id, status),
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
+        Command::Status { id, status } => match db.update_node_status(id, &status) {
+            Ok(()) => println!("{} node {} status to '{}'", "Updated".green(), id, status),
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
             }
-        }
+        },
 
         Command::Nodes { branch, node_type } => {
             match db.get_all_nodes() {
                 Ok(nodes) => {
                     // Filter nodes by branch and/or type
-                    let filtered: Vec<_> = nodes.into_iter().filter(|n| {
-                        // Filter by branch if specified
-                        let branch_match = match &branch {
-                            Some(b) => {
-                                n.metadata_json.as_ref().is_some_and(|meta| {
+                    let filtered: Vec<_> = nodes
+                        .into_iter()
+                        .filter(|n| {
+                            // Filter by branch if specified
+                            let branch_match = match &branch {
+                                Some(b) => n.metadata_json.as_ref().is_some_and(|meta| {
                                     serde_json::from_str::<serde_json::Value>(meta)
                                         .ok()
-                                        .and_then(|v| v.get("branch").and_then(|br| br.as_str()).map(|s| s.to_string()))
+                                        .and_then(|v| {
+                                            v.get("branch")
+                                                .and_then(|br| br.as_str())
+                                                .map(|s| s.to_string())
+                                        })
                                         .is_some_and(|node_branch| node_branch == *b)
-                                })
-                            }
-                            None => true,
-                        };
-                        // Filter by type if specified
-                        let type_match = match &node_type {
-                            Some(t) => n.node_type == *t,
-                            None => true,
-                        };
-                        branch_match && type_match
-                    }).collect();
+                                }),
+                                None => true,
+                            };
+                            // Filter by type if specified
+                            let type_match = match &node_type {
+                                Some(t) => n.node_type == *t,
+                                None => true,
+                            };
+                            branch_match && type_match
+                        })
+                        .collect();
 
                     if filtered.is_empty() {
                         if branch.is_some() || node_type.is_some() {
                             println!("No nodes found matching filters.");
                         } else {
-                            println!("No nodes found. Add one with: deciduous add goal \"My goal\"");
+                            println!(
+                                "No nodes found. Add one with: deciduous add goal \"My goal\""
+                            );
                         }
                     } else {
                         let header = match &branch {
-                            Some(b) => format!("Nodes on branch '{}' ({} total):", b, filtered.len()),
+                            Some(b) => {
+                                format!("Nodes on branch '{}' ({} total):", b, filtered.len())
+                            }
                             None => format!("{} nodes:", filtered.len()),
                         };
                         println!("{}", header.cyan());
@@ -574,33 +671,9 @@ fn main() {
                                 "observation" => n.node_type.magenta(),
                                 _ => n.node_type.white(),
                             };
-                            println!("{:<5} {:<12} {:<10} {}", n.id, type_colored, n.status, n.title);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
-            }
-        }
-
-        Command::Edges => {
-            match db.get_all_edges() {
-                Ok(edges) => {
-                    if edges.is_empty() {
-                        println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
-                    } else {
-                        println!("{:<5} {:<6} {:<6} {:<12} RATIONALE", "ID", "FROM", "TO", "TYPE");
-                        println!("{}", "-".repeat(70));
-                        for e in edges {
                             println!(
-                                "{:<5} {:<6} {:<6} {:<12} {}",
-                                e.id,
-                                e.from_node_id,
-                                e.to_node_id,
-                                e.edge_type,
-                                e.rationale.unwrap_or_default()
+                                "{:<5} {:<12} {:<10} {}",
+                                n.id, type_colored, n.status, n.title
                             );
                         }
                     }
@@ -612,26 +685,54 @@ fn main() {
             }
         }
 
-        Command::Graph => {
-            match db.get_graph() {
-                Ok(graph) => {
-                    match serde_json::to_string_pretty(&graph) {
-                        Ok(json) => println!("{}", json),
-                        Err(e) => {
-                            eprintln!("{} Serializing graph: {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
+        Command::Edges => match db.get_all_edges() {
+            Ok(edges) => {
+                if edges.is_empty() {
+                    println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
+                } else {
+                    println!(
+                        "{:<5} {:<6} {:<6} {:<12} RATIONALE",
+                        "ID", "FROM", "TO", "TYPE"
+                    );
+                    println!("{}", "-".repeat(70));
+                    for e in edges {
+                        println!(
+                            "{:<5} {:<6} {:<6} {:<12} {}",
+                            e.id,
+                            e.from_node_id,
+                            e.to_node_id,
+                            e.edge_type,
+                            e.rationale.unwrap_or_default()
+                        );
                     }
                 }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
+
+        Command::Graph => match db.get_graph() {
+            Ok(graph) => match serde_json::to_string_pretty(&graph) {
+                Ok(json) => println!("{}", json),
                 Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
+                    eprintln!("{} Serializing graph: {}", "Error:".red(), e);
                     std::process::exit(1);
                 }
+            },
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
             }
-        }
+        },
 
         Command::Serve { port } => {
-            println!("{} Starting graph viewer at http://localhost:{}", "Deciduous".cyan(), port);
+            println!(
+                "{} Starting graph viewer at http://localhost:{}",
+                "Deciduous".cyan(),
+                port
+            );
             if let Err(e) = deciduous::serve::start_graph_server(port) {
                 eprintln!("{} Server error: {}", "Error:".red(), e);
                 std::process::exit(1);
@@ -640,9 +741,7 @@ fn main() {
 
         Command::Sync { output } => {
             // Default to docs/ for GitHub Pages compatibility
-            let output_path = output.unwrap_or_else(|| {
-                PathBuf::from("docs/graph-data.json")
-            });
+            let output_path = output.unwrap_or_else(|| PathBuf::from("docs/graph-data.json"));
 
             // Create parent directories if needed
             if let Some(parent) = output_path.parent() {
@@ -655,14 +754,26 @@ fn main() {
                         Ok(json) => {
                             match std::fs::write(&output_path, &json) {
                                 Ok(()) => {
-                                    println!("{} graph to {}", "Exported".green(), output_path.display());
-                                    println!("  {} nodes, {} edges", graph.nodes.len(), graph.edges.len());
+                                    println!(
+                                        "{} graph to {}",
+                                        "Exported".green(),
+                                        output_path.display()
+                                    );
+                                    println!(
+                                        "  {} nodes, {} edges",
+                                        graph.nodes.len(),
+                                        graph.edges.len()
+                                    );
 
                                     // Also sync to docs/demo/ if it exists (for GitHub Pages demo)
                                     let demo_path = PathBuf::from("docs/demo/graph-data.json");
                                     if demo_path.parent().map(|p| p.exists()).unwrap_or(false) {
                                         if let Err(e) = std::fs::write(&demo_path, &json) {
-                                            eprintln!("{} Also writing to demo/: {}", "Warning:".yellow(), e);
+                                            eprintln!(
+                                                "{} Also writing to demo/: {}",
+                                                "Warning:".yellow(),
+                                                e
+                                            );
                                         }
                                     }
 
@@ -671,19 +782,29 @@ fn main() {
                                         match export_git_history(&graph.nodes, output_dir) {
                                             Ok(count) => {
                                                 if count > 0 {
-                                                    println!("{} git-history.json ({} commits)", "Exported".green(), count);
+                                                    println!(
+                                                        "{} git-history.json ({} commits)",
+                                                        "Exported".green(),
+                                                        count
+                                                    );
                                                 }
                                                 // Also sync to docs/demo/ if it exists
                                                 let demo_dir = PathBuf::from("docs/demo");
                                                 if demo_dir.exists() {
-                                                    if let Err(e) = export_git_history(&graph.nodes, &demo_dir) {
+                                                    if let Err(e) =
+                                                        export_git_history(&graph.nodes, &demo_dir)
+                                                    {
                                                         eprintln!("{} Also writing git history to demo/: {}", "Warning:".yellow(), e);
                                                     }
                                                 }
                                             }
                                             Err(e) => {
                                                 // Non-fatal: git history is optional
-                                                eprintln!("{} Exporting git history: {}", "Warning:".yellow(), e);
+                                                eprintln!(
+                                                    "{} Exporting git history: {}",
+                                                    "Warning:".yellow(),
+                                                    e
+                                                );
                                             }
                                         }
                                     }
@@ -710,7 +831,11 @@ fn main() {
         Command::Backup { output } => {
             let db_path = Database::db_path();
             if !db_path.exists() {
-                eprintln!("{} No database found at {}", "Error:".red(), db_path.display());
+                eprintln!(
+                    "{} No database found at {}",
+                    "Error:".red(),
+                    db_path.display()
+                );
                 std::process::exit(1);
             }
 
@@ -721,7 +846,12 @@ fn main() {
 
             match std::fs::copy(&db_path, &backup_path) {
                 Ok(bytes) => {
-                    println!("{} backup: {} ({} bytes)", "Created".green(), backup_path.display(), bytes);
+                    println!(
+                        "{} backup: {} ({} bytes)",
+                        "Created".green(),
+                        backup_path.display(),
+                        bytes
+                    );
                 }
                 Err(e) => {
                     eprintln!("{} Creating backup: {}", "Error:".red(), e);
@@ -730,30 +860,38 @@ fn main() {
             }
         }
 
-        Command::Commands { limit } => {
-            match db.get_recent_commands(limit) {
-                Ok(commands) => {
-                    if commands.is_empty() {
-                        println!("No commands logged.");
-                    } else {
-                        for c in commands {
-                            println!(
-                                "[{}] {} (exit: {})",
-                                c.started_at,
-                                truncate(&c.command, 60),
-                                c.exit_code.map(|c| c.to_string()).unwrap_or_else(|| "running".to_string())
-                            );
-                        }
+        Command::Commands { limit } => match db.get_recent_commands(limit) {
+            Ok(commands) => {
+                if commands.is_empty() {
+                    println!("No commands logged.");
+                } else {
+                    for c in commands {
+                        println!(
+                            "[{}] {} (exit: {})",
+                            c.started_at,
+                            truncate(&c.command, 60),
+                            c.exit_code
+                                .map(|c| c.to_string())
+                                .unwrap_or_else(|| "running".to_string())
+                        );
                     }
                 }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
             }
-        }
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
 
-        Command::Dot { output, roots, nodes, png, auto, title, rankdir } => {
+        Command::Dot {
+            output,
+            roots,
+            nodes,
+            png,
+            auto,
+            title,
+            rankdir,
+        } => {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -798,14 +936,19 @@ fn main() {
                         // Create docs/ if needed
                         let _ = std::fs::create_dir_all("docs");
 
-                        Some(PathBuf::from(format!("docs/decision-graph-{}.dot", safe_branch)))
+                        Some(PathBuf::from(format!(
+                            "docs/decision-graph-{}.dot",
+                            safe_branch
+                        )))
                     } else {
                         output.clone()
                     };
 
                     if png || auto {
                         // Generate PNG using graphviz
-                        let dot_path = effective_output.clone().unwrap_or_else(|| PathBuf::from("graph.dot"));
+                        let dot_path = effective_output
+                            .clone()
+                            .unwrap_or_else(|| PathBuf::from("graph.dot"));
                         let png_path = dot_path.with_extension("png");
 
                         // Write DOT file
@@ -816,7 +959,12 @@ fn main() {
 
                         // Run graphviz
                         match ProcessCommand::new("dot")
-                            .args(["-Tpng", &dot_path.to_string_lossy(), "-o", &png_path.to_string_lossy()])
+                            .args([
+                                "-Tpng",
+                                &dot_path.to_string_lossy(),
+                                "-o",
+                                &png_path.to_string_lossy(),
+                            ])
                             .output()
                         {
                             Ok(output) => {
@@ -824,9 +972,14 @@ fn main() {
                                     println!("{} DOT: {}", "Exported".green(), dot_path.display());
                                     println!("{} PNG: {}", "Generated".green(), png_path.display());
                                 } else {
-                                    eprintln!("{} graphviz failed: {}", "Error:".red(),
-                                        String::from_utf8_lossy(&output.stderr));
-                                    eprintln!("Make sure graphviz is installed: brew install graphviz");
+                                    eprintln!(
+                                        "{} graphviz failed: {}",
+                                        "Error:".red(),
+                                        String::from_utf8_lossy(&output.stderr)
+                                    );
+                                    eprintln!(
+                                        "Make sure graphviz is installed: brew install graphviz"
+                                    );
                                     std::process::exit(1);
                                 }
                             }
@@ -843,7 +996,11 @@ fn main() {
                             std::process::exit(1);
                         }
                         println!("{} DOT graph to {}", "Exported".green(), path.display());
-                        println!("  {} nodes, {} edges", filtered_graph.nodes.len(), filtered_graph.edges.len());
+                        println!(
+                            "  {} nodes, {} edges",
+                            filtered_graph.nodes.len(),
+                            filtered_graph.edges.len()
+                        );
                     } else {
                         // Print to stdout
                         println!("{}", dot);
@@ -856,7 +1013,16 @@ fn main() {
             }
         }
 
-        Command::Writeup { title, roots, nodes, output, png, auto, no_dot, no_test_plan } => {
+        Command::Writeup {
+            title,
+            roots,
+            nodes,
+            output,
+            png,
+            auto,
+            no_dot,
+            no_test_plan,
+        } => {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -943,43 +1109,53 @@ fn main() {
             }
         }
 
-        Command::Migrate => {
-            match db.migrate_add_change_ids() {
-                Ok(true) => {
-                    println!("{} Database migrated - added change_id columns for multi-user sync", "Success:".green());
-                }
-                Ok(false) => {
-                    println!("{} Database already has change_id columns - no migration needed", "Info:".cyan());
-                }
-                Err(e) => {
-                    eprintln!("{} Migration failed: {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
+        Command::Migrate => match db.migrate_add_change_ids() {
+            Ok(true) => {
+                println!(
+                    "{} Database migrated - added change_id columns for multi-user sync",
+                    "Success:".green()
+                );
             }
-        }
+            Ok(false) => {
+                println!(
+                    "{} Database already has change_id columns - no migration needed",
+                    "Info:".cyan()
+                );
+            }
+            Err(e) => {
+                eprintln!("{} Migration failed: {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
 
         Command::Diff { action } => {
             match action {
-                DiffAction::Export { output, nodes, branch, author, base_commit } => {
+                DiffAction::Export {
+                    output,
+                    nodes,
+                    branch,
+                    author,
+                    base_commit,
+                } => {
                     // Parse node IDs if provided
                     let node_ids = nodes.as_ref().map(|n| parse_node_range(n));
 
                     match db.export_patch(node_ids, branch.as_deref(), author, base_commit) {
-                        Ok(patch) => {
-                            match patch.save(&output) {
-                                Ok(()) => {
-                                    println!("{} Exported {} nodes and {} edges to {}",
-                                        "Success:".green(),
-                                        patch.nodes.len(),
-                                        patch.edges.len(),
-                                        output.display());
-                                }
-                                Err(e) => {
-                                    eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
+                        Ok(patch) => match patch.save(&output) {
+                            Ok(()) => {
+                                println!(
+                                    "{} Exported {} nodes and {} edges to {}",
+                                    "Success:".green(),
+                                    patch.nodes.len(),
+                                    patch.edges.len(),
+                                    output.display()
+                                );
                             }
-                        }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        },
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
                             std::process::exit(1);
@@ -995,32 +1171,48 @@ fn main() {
 
                     for file in files {
                         match deciduous::GraphPatch::load(&file) {
-                            Ok(patch) => {
-                                match db.apply_patch(&patch, dry_run) {
-                                    Ok(result) => {
-                                        if dry_run {
-                                            println!("{} {} (dry run)", "Would apply:".cyan(), file.display());
-                                        } else {
-                                            println!("{} {}", "Applied:".green(), file.display());
-                                        }
-                                        println!("  Nodes: {} added, {} skipped", result.nodes_added, result.nodes_skipped);
-                                        println!("  Edges: {} added, {} skipped", result.edges_added, result.edges_skipped);
-                                        if !result.edges_failed.is_empty() {
-                                            println!("  {} edges failed (missing nodes):", result.edges_failed.len());
-                                            for msg in &result.edges_failed {
-                                                println!("    - {}", msg);
-                                            }
-                                        }
-                                        total_added += result.nodes_added;
-                                        total_skipped += result.nodes_skipped;
-                                        total_edges_added += result.edges_added;
-                                        total_edges_skipped += result.edges_skipped;
+                            Ok(patch) => match db.apply_patch(&patch, dry_run) {
+                                Ok(result) => {
+                                    if dry_run {
+                                        println!(
+                                            "{} {} (dry run)",
+                                            "Would apply:".cyan(),
+                                            file.display()
+                                        );
+                                    } else {
+                                        println!("{} {}", "Applied:".green(), file.display());
                                     }
-                                    Err(e) => {
-                                        eprintln!("{} Applying {}: {}", "Error:".red(), file.display(), e);
+                                    println!(
+                                        "  Nodes: {} added, {} skipped",
+                                        result.nodes_added, result.nodes_skipped
+                                    );
+                                    println!(
+                                        "  Edges: {} added, {} skipped",
+                                        result.edges_added, result.edges_skipped
+                                    );
+                                    if !result.edges_failed.is_empty() {
+                                        println!(
+                                            "  {} edges failed (missing nodes):",
+                                            result.edges_failed.len()
+                                        );
+                                        for msg in &result.edges_failed {
+                                            println!("    - {}", msg);
+                                        }
                                     }
+                                    total_added += result.nodes_added;
+                                    total_skipped += result.nodes_skipped;
+                                    total_edges_added += result.edges_added;
+                                    total_edges_skipped += result.edges_skipped;
                                 }
-                            }
+                                Err(e) => {
+                                    eprintln!(
+                                        "{} Applying {}: {}",
+                                        "Error:".red(),
+                                        file.display(),
+                                        e
+                                    );
+                                }
+                            },
                             Err(e) => {
                                 eprintln!("{} Loading {}: {}", "Error:".red(), file.display(), e);
                             }
@@ -1028,17 +1220,25 @@ fn main() {
                     }
 
                     if !dry_run {
-                        println!("\n{} {} nodes added, {} skipped; {} edges added, {} skipped",
+                        println!(
+                            "\n{} {} nodes added, {} skipped; {} edges added, {} skipped",
                             "Total:".cyan(),
-                            total_added, total_skipped,
-                            total_edges_added, total_edges_skipped);
+                            total_added,
+                            total_skipped,
+                            total_edges_added,
+                            total_edges_skipped
+                        );
                     }
                 }
 
                 DiffAction::Status { path } => {
                     let patches_dir = path.unwrap_or_else(|| PathBuf::from(".deciduous/patches"));
                     if !patches_dir.exists() {
-                        println!("{} No patches directory found at {}", "Info:".cyan(), patches_dir.display());
+                        println!(
+                            "{} No patches directory found at {}",
+                            "Info:".cyan(),
+                            patches_dir.display()
+                        );
                         println!("Create one with: mkdir -p {}", patches_dir.display());
                         return;
                     }
@@ -1059,12 +1259,14 @@ fn main() {
                             if let Ok(patch) = deciduous::GraphPatch::load(&path) {
                                 let author = patch.author.as_deref().unwrap_or("unknown");
                                 let branch = patch.branch.as_deref().unwrap_or("unknown");
-                                println!("  {} - {} nodes, {} edges (author: {}, branch: {})",
+                                println!(
+                                    "  {} - {} nodes, {} edges (author: {}, branch: {})",
                                     path.file_name().unwrap_or_default().to_string_lossy(),
                                     patch.nodes.len(),
                                     patch.edges.len(),
                                     author,
-                                    branch);
+                                    branch
+                                );
                             }
                         }
                     }
@@ -1079,38 +1281,52 @@ fn main() {
                         match deciduous::GraphPatch::load(file) {
                             Ok(patch) => {
                                 // Collect all node change_ids in the patch
-                                let node_ids: HashSet<&str> = patch.nodes.iter()
-                                    .map(|n| n.change_id.as_str())
-                                    .collect();
+                                let node_ids: HashSet<&str> =
+                                    patch.nodes.iter().map(|n| n.change_id.as_str()).collect();
 
                                 // Check each edge for missing nodes
                                 let mut missing_edges = Vec::new();
                                 for edge in &patch.edges {
-                                    let from_missing = !node_ids.contains(edge.from_change_id.as_str());
+                                    let from_missing =
+                                        !node_ids.contains(edge.from_change_id.as_str());
                                     let to_missing = !node_ids.contains(edge.to_change_id.as_str());
 
                                     if from_missing || to_missing {
                                         let mut missing = Vec::new();
                                         if from_missing {
-                                            missing.push(format!("from: {}", &edge.from_change_id[..8.min(edge.from_change_id.len())]));
+                                            missing.push(format!(
+                                                "from: {}",
+                                                &edge.from_change_id
+                                                    [..8.min(edge.from_change_id.len())]
+                                            ));
                                         }
                                         if to_missing {
-                                            missing.push(format!("to: {}", &edge.to_change_id[..8.min(edge.to_change_id.len())]));
+                                            missing.push(format!(
+                                                "to: {}",
+                                                &edge.to_change_id
+                                                    [..8.min(edge.to_change_id.len())]
+                                            ));
                                         }
-                                        missing_edges.push((edge.edge_type.clone(), missing.join(", ")));
+                                        missing_edges
+                                            .push((edge.edge_type.clone(), missing.join(", ")));
                                     }
                                 }
 
                                 println!("{} {}", "Validating:".cyan(), file.display());
                                 println!("  Nodes: {}", patch.nodes.len());
-                                println!("  Edges: {} ({} valid, {} with missing refs)",
+                                println!(
+                                    "  Edges: {} ({} valid, {} with missing refs)",
                                     patch.edges.len(),
                                     patch.edges.len() - missing_edges.len(),
-                                    missing_edges.len());
+                                    missing_edges.len()
+                                );
 
                                 if !missing_edges.is_empty() {
                                     any_errors = true;
-                                    println!("  {} Edges referencing missing nodes:", "Warning:".yellow());
+                                    println!(
+                                        "  {} Edges referencing missing nodes:",
+                                        "Warning:".yellow()
+                                    );
                                     for (edge_type, missing) in &missing_edges {
                                         println!("    - {} edge: missing {}", edge_type, missing);
                                     }
@@ -1120,10 +1336,15 @@ fn main() {
                                     println!("  already exist in the target database or are imported first.");
                                     println!();
                                     println!("  {} Re-export with all dependent nodes, or apply patches in order:", "Fix:".green());
-                                    println!("    1. Apply the patch containing the parent nodes first");
+                                    println!(
+                                        "    1. Apply the patch containing the parent nodes first"
+                                    );
                                     println!("    2. Then apply this patch");
                                 } else {
-                                    println!("  {} All edges reference nodes within the patch", "OK:".green());
+                                    println!(
+                                        "  {} All edges reference nodes within the patch",
+                                        "OK:".green()
+                                    );
                                 }
                             }
                             Err(e) => {
@@ -1142,10 +1363,19 @@ fn main() {
         }
 
         Command::Tui { .. } => unreachable!(), // Handled above
+        Command::Completion { .. } => unreachable!(), // Handled above
 
-        Command::Audit { associate_commits, min_score, dry_run, yes } => {
+        Command::Audit {
+            associate_commits,
+            min_score,
+            dry_run,
+            yes,
+        } => {
             if !associate_commits {
-                eprintln!("{} No audit action specified. Use --associate-commits", "Error:".red());
+                eprintln!(
+                    "{} No audit action specified. Use --associate-commits",
+                    "Error:".red()
+                );
                 std::process::exit(1);
             }
 
@@ -1165,31 +1395,52 @@ fn main() {
                 std::process::exit(1);
             }
 
-            println!("{} {} nodes, {} commits", "Analyzing:".cyan(), nodes.len(), commits.len());
+            println!(
+                "{} {} nodes, {} commits",
+                "Analyzing:".cyan(),
+                nodes.len(),
+                commits.len()
+            );
 
             // Find action/outcome nodes without commits
-            let nodes_to_check: Vec<_> = nodes.iter()
+            let nodes_to_check: Vec<_> = nodes
+                .iter()
                 .filter(|n| n.node_type == "action" || n.node_type == "outcome")
                 .filter(|n| {
                     // Check if already has commit
-                    !n.metadata_json.as_ref()
+                    !n.metadata_json
+                        .as_ref()
                         .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                        .and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(|s| !s.is_empty()))
+                        .and_then(|v| {
+                            v.get("commit")
+                                .and_then(|c| c.as_str())
+                                .map(|s| !s.is_empty())
+                        })
                         .unwrap_or(false)
                 })
                 .collect();
 
-            let with_commits = nodes.iter()
+            let with_commits = nodes
+                .iter()
                 .filter(|n| n.node_type == "action" || n.node_type == "outcome")
                 .filter(|n| {
-                    n.metadata_json.as_ref()
+                    n.metadata_json
+                        .as_ref()
                         .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                        .and_then(|v| v.get("commit").and_then(|c| c.as_str()).map(|s| !s.is_empty()))
+                        .and_then(|v| {
+                            v.get("commit")
+                                .and_then(|c| c.as_str())
+                                .map(|s| !s.is_empty())
+                        })
                         .unwrap_or(false)
                 })
                 .count();
 
-            println!("  Action/outcome nodes: {} with commits, {} without", with_commits, nodes_to_check.len());
+            println!(
+                "  Action/outcome nodes: {} with commits, {} without",
+                with_commits,
+                nodes_to_check.len()
+            );
 
             // Find matches
             let mut matches: Vec<CommitMatch> = Vec::new();
@@ -1200,7 +1451,8 @@ fn main() {
 
                 for commit in &commits {
                     let score = keyword_match_score(&node.title, &commit.message);
-                    if score >= threshold && (best_match.is_none() || score > best_match.unwrap().1) {
+                    if score >= threshold && (best_match.is_none() || score > best_match.unwrap().1)
+                    {
                         best_match = Some((commit, score));
                     }
                 }
@@ -1217,19 +1469,41 @@ fn main() {
             }
 
             if matches.is_empty() {
-                println!("\n{} No matches found above {}% threshold", "Result:".cyan(), min_score);
+                println!(
+                    "\n{} No matches found above {}% threshold",
+                    "Result:".cyan(),
+                    min_score
+                );
                 return;
             }
 
             // Sort by score descending
-            matches.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
+            matches.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
 
-            println!("\n{} Found {} potential matches (>= {}%):", "Matches:".green(), matches.len(), min_score);
+            println!(
+                "\n{} Found {} potential matches (>= {}%):",
+                "Matches:".green(),
+                matches.len(),
+                min_score
+            );
             println!("{}", "=".repeat(80));
 
             for m in &matches {
-                println!("\nNode #{} ({}%): {}", m.node_id, (m.score * 100.0) as u8, truncate(&m.node_title, 55));
-                println!("  -> {}: {}", &m.commit_hash[..7], truncate(&m.commit_message, 55));
+                println!(
+                    "\nNode #{} ({}%): {}",
+                    m.node_id,
+                    (m.score * 100.0) as u8,
+                    truncate(&m.node_title, 55)
+                );
+                println!(
+                    "  -> {}: {}",
+                    &m.commit_hash[..7],
+                    truncate(&m.commit_message, 55)
+                );
             }
 
             if dry_run {
@@ -1245,7 +1519,9 @@ fn main() {
                 std::io::stdout().flush().ok();
 
                 let mut input = String::new();
-                if std::io::stdin().read_line(&mut input).is_err() || input.trim().to_lowercase() != "y" {
+                if std::io::stdin().read_line(&mut input).is_err()
+                    || input.trim().to_lowercase() != "y"
+                {
                     println!("{}", "Aborted".yellow());
                     return;
                 }
@@ -1259,7 +1535,12 @@ fn main() {
                 match db.update_node_commit(m.node_id, &m.commit_hash) {
                     Ok(()) => {
                         applied += 1;
-                        println!("{} Node #{} <- {}", "Linked:".green(), m.node_id, &m.commit_hash[..7]);
+                        println!(
+                            "{} Node #{} <- {}",
+                            "Linked:".green(),
+                            m.node_id,
+                            &m.commit_hash[..7]
+                        );
                     }
                     Err(e) => {
                         failed += 1;
@@ -1268,7 +1549,12 @@ fn main() {
                 }
             }
 
-            println!("\n{} {} linked, {} failed", "Done:".green(), applied, failed);
+            println!(
+                "\n{} {} linked, {} failed",
+                "Done:".green(),
+                applied,
+                failed
+            );
         }
 
         Command::Roadmap { action } => {
@@ -1277,7 +1563,11 @@ fn main() {
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
                     if !roadmap_path.exists() {
-                        eprintln!("{} File not found: {}", "Error:".red(), roadmap_path.display());
+                        eprintln!(
+                            "{} File not found: {}",
+                            "Error:".red(),
+                            roadmap_path.display()
+                        );
                         std::process::exit(1);
                     }
 
@@ -1290,7 +1580,12 @@ fn main() {
                         }
                     };
 
-                    println!("{} Found {} sections in {}", "Parsed:".green(), parsed.sections.len(), roadmap_path.display());
+                    println!(
+                        "{} Found {} sections in {}",
+                        "Parsed:".green(),
+                        parsed.sections.len(),
+                        roadmap_path.display()
+                    );
 
                     // Read original content for rewriting
                     let content = match std::fs::read_to_string(&roadmap_path) {
@@ -1302,7 +1597,11 @@ fn main() {
                     };
 
                     // Write back with metadata
-                    let updated = match write_roadmap_with_metadata(&roadmap_path, &parsed.sections, &content) {
+                    let updated = match write_roadmap_with_metadata(
+                        &roadmap_path,
+                        &parsed.sections,
+                        &content,
+                    ) {
                         Ok(u) => u,
                         Err(e) => {
                             eprintln!("{} Writing metadata: {}", "Error:".red(), e);
@@ -1349,7 +1648,7 @@ fn main() {
                                 &item.text,
                                 None,
                                 items_section, // Items belong to the section that contains them
-                                None, // parent_id
+                                None,          // parent_id
                                 state,
                             ) {
                                 eprintln!("{} Creating roadmap item: {}", "Warning:".yellow(), e);
@@ -1359,7 +1658,12 @@ fn main() {
 
                     // Count items
                     let total_items: usize = parsed.sections.iter().map(|s| s.items.len()).sum();
-                    println!("{} Initialized {} sections with {} items", "Success:".green(), parsed.sections.len(), total_items);
+                    println!(
+                        "{} Initialized {} sections with {} items",
+                        "Success:".green(),
+                        parsed.sections.len(),
+                        total_items
+                    );
                     println!("  Metadata comments added to {}", roadmap_path.display());
                 }
 
@@ -1367,7 +1671,11 @@ fn main() {
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
                     if !roadmap_path.exists() {
-                        eprintln!("{} File not found: {}", "Error:".red(), roadmap_path.display());
+                        eprintln!(
+                            "{} File not found: {}",
+                            "Error:".red(),
+                            roadmap_path.display()
+                        );
                         std::process::exit(1);
                     }
 
@@ -1379,7 +1687,11 @@ fn main() {
                             std::process::exit(1);
                         }
                     };
-                    println!("{} Cleared {} existing roadmap items", "Info:".cyan(), cleared);
+                    println!(
+                        "{} Cleared {} existing roadmap items",
+                        "Info:".cyan(),
+                        cleared
+                    );
 
                     // Re-parse the roadmap
                     let parsed = match parse_roadmap(&roadmap_path) {
@@ -1416,28 +1728,38 @@ fn main() {
                         // Create items for checkboxes
                         for item in &section.items {
                             let state = if item.checked { "checked" } else { "unchecked" };
-                            if let Err(e) = db.create_roadmap_item(
-                                &item.text,
-                                None,
-                                items_section,
-                                None,
-                                state,
-                            ) {
+                            if let Err(e) =
+                                db.create_roadmap_item(&item.text, None, items_section, None, state)
+                            {
                                 eprintln!("{} Creating roadmap item: {}", "Warning:".yellow(), e);
                             }
                         }
                     }
 
                     let total_items: usize = parsed.sections.iter().map(|s| s.items.len()).sum();
-                    println!("{} Refreshed {} sections with {} items", "Success:".green(), parsed.sections.len(), total_items);
+                    println!(
+                        "{} Refreshed {} sections with {} items",
+                        "Success:".green(),
+                        parsed.sections.len(),
+                        total_items
+                    );
                 }
 
-                RoadmapAction::Sync { path, repo, execute, create_issues } => {
-                    let dry_run = !execute;  // Default is dry-run mode
+                RoadmapAction::Sync {
+                    path,
+                    repo,
+                    execute,
+                    create_issues,
+                } => {
+                    let dry_run = !execute; // Default is dry-run mode
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
                     if !roadmap_path.exists() {
-                        eprintln!("{} File not found: {}", "Error:".red(), roadmap_path.display());
+                        eprintln!(
+                            "{} File not found: {}",
+                            "Error:".red(),
+                            roadmap_path.display()
+                        );
                         eprintln!("Run 'deciduous roadmap init' first");
                         std::process::exit(1);
                     }
@@ -1452,7 +1774,7 @@ fn main() {
                                 eprintln!("Specify repo with --repo owner/repo");
                                 std::process::exit(1);
                             }
-                        }
+                        },
                     };
 
                     // Check auth
@@ -1475,14 +1797,21 @@ fn main() {
                     };
 
                     // Only sync level 3 sections (actual items, not parent headers)
-                    let syncable_sections: Vec<&RoadmapSection> = parsed.sections.iter()
-                        .filter(|s| s.level == 3)
-                        .collect();
+                    let syncable_sections: Vec<&RoadmapSection> =
+                        parsed.sections.iter().filter(|s| s.level == 3).collect();
 
                     if dry_run {
-                        println!("{} {} sections (use --execute to apply changes)", "Roadmap (dry run):".yellow(), syncable_sections.len());
+                        println!(
+                            "{} {} sections (use --execute to apply changes)",
+                            "Roadmap (dry run):".yellow(),
+                            syncable_sections.len()
+                        );
                     } else {
-                        println!("{} Syncing {} sections", "Roadmap:".cyan(), syncable_sections.len());
+                        println!(
+                            "{} Syncing {} sections",
+                            "Roadmap:".cyan(),
+                            syncable_sections.len()
+                        );
                     }
 
                     if let Some(repo_name) = gh_client.repo_name() {
@@ -1494,7 +1823,11 @@ fn main() {
                         match ensure_roadmap_label(&gh_client) {
                             Ok(true) => println!("  {} Created 'roadmap' label", "✓".green()),
                             Ok(false) => {} // Label already exists
-                            Err(e) => eprintln!("  {} Creating label: {} (issues may fail)", "Warning:".yellow(), e),
+                            Err(e) => eprintln!(
+                                "  {} Creating label: {} (issues may fail)",
+                                "Warning:".yellow(),
+                                e
+                            ),
                         }
                     }
 
@@ -1510,16 +1843,31 @@ fn main() {
                             let body = generate_issue_body(section);
 
                             if dry_run {
-                                println!("  {} Would update issue #{}: {}", "[DRY]".yellow(), issue_num, section.title);
+                                println!(
+                                    "  {} Would update issue #{}: {}",
+                                    "[DRY]".yellow(),
+                                    issue_num,
+                                    section.title
+                                );
                                 updated += 1;
                             } else {
                                 match gh_client.update_issue_body(issue_num, &body) {
                                     Ok(()) => {
-                                        println!("  {} Updated issue #{}: {}", "✓".green(), issue_num, section.title);
+                                        println!(
+                                            "  {} Updated issue #{}: {}",
+                                            "✓".green(),
+                                            issue_num,
+                                            section.title
+                                        );
                                         updated += 1;
                                     }
                                     Err(e) => {
-                                        eprintln!("  {} Updating issue #{}: {}", "✗".red(), issue_num, e);
+                                        eprintln!(
+                                            "  {} Updating issue #{}: {}",
+                                            "✗".red(),
+                                            issue_num,
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -1528,17 +1876,34 @@ fn main() {
                             let body = generate_issue_body(section);
 
                             if dry_run {
-                                println!("  {} Would create issue: {}", "[DRY]".yellow(), section.title);
+                                println!(
+                                    "  {} Would create issue: {}",
+                                    "[DRY]".yellow(),
+                                    section.title
+                                );
                                 created += 1;
                             } else {
                                 match gh_client.create_issue(&section.title, &body, &["roadmap"]) {
                                     Ok(issue) => {
-                                        println!("  {} Created issue #{}: {}", "✓".green(), issue.number, section.title);
+                                        println!(
+                                            "  {} Created issue #{}: {}",
+                                            "✓".green(),
+                                            issue.number,
+                                            section.title
+                                        );
                                         created += 1;
 
                                         // Update database with issue number
-                                        if let Err(e) = db.update_roadmap_item_github_by_title(&section.title, issue.number, &issue.state) {
-                                            eprintln!("    {} Updating database: {}", "Warning:".yellow(), e);
+                                        if let Err(e) = db.update_roadmap_item_github_by_title(
+                                            &section.title,
+                                            issue.number,
+                                            &issue.state,
+                                        ) {
+                                            eprintln!(
+                                                "    {} Updating database: {}",
+                                                "Warning:".yellow(),
+                                                e
+                                            );
                                         }
 
                                         // Cache issue for TUI/Web display
@@ -1553,12 +1918,21 @@ fn main() {
                                                 &issue.created_at,
                                                 &issue.updated_at,
                                             ) {
-                                                eprintln!("    {} Caching issue: {}", "Warning:".yellow(), e);
+                                                eprintln!(
+                                                    "    {} Caching issue: {}",
+                                                    "Warning:".yellow(),
+                                                    e
+                                                );
                                             }
                                         }
                                     }
                                     Err(e) => {
-                                        eprintln!("  {} Creating issue for '{}': {}", "✗".red(), section.title, e);
+                                        eprintln!(
+                                            "  {} Creating issue for '{}': {}",
+                                            "✗".red(),
+                                            section.title,
+                                            e
+                                        );
                                     }
                                 }
                             }
@@ -1571,7 +1945,8 @@ fn main() {
                     // Write updated roadmap with issue metadata
                     if !dry_run && created > 0 {
                         let content = std::fs::read_to_string(&roadmap_path).unwrap_or_default();
-                        match write_roadmap_with_metadata(&roadmap_path, &parsed.sections, &content) {
+                        match write_roadmap_with_metadata(&roadmap_path, &parsed.sections, &content)
+                        {
                             Ok(updated_content) => {
                                 if let Err(e) = std::fs::write(&roadmap_path, &updated_content) {
                                     eprintln!("{} Writing roadmap: {}", "Warning:".yellow(), e);
@@ -1581,16 +1956,33 @@ fn main() {
                         }
                     }
 
-                    println!("\n{} {} created, {} updated, {} skipped",
-                        if dry_run { "Summary (dry run):".yellow() } else { "Summary:".green() },
-                        created, updated, skipped);
+                    println!(
+                        "\n{} {} created, {} updated, {} skipped",
+                        if dry_run {
+                            "Summary (dry run):".yellow()
+                        } else {
+                            "Summary:".green()
+                        },
+                        created,
+                        updated,
+                        skipped
+                    );
                 }
 
-                RoadmapAction::List { path, section, with_issues, without_issues } => {
+                RoadmapAction::List {
+                    path,
+                    section,
+                    with_issues,
+                    without_issues,
+                } => {
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
                     if !roadmap_path.exists() {
-                        eprintln!("{} File not found: {}", "Error:".red(), roadmap_path.display());
+                        eprintln!(
+                            "{} File not found: {}",
+                            "Error:".red(),
+                            roadmap_path.display()
+                        );
                         std::process::exit(1);
                     }
 
@@ -1603,7 +1995,9 @@ fn main() {
                     };
 
                     // Filter sections
-                    let filtered: Vec<_> = parsed.sections.iter()
+                    let filtered: Vec<_> = parsed
+                        .sections
+                        .iter()
                         .filter(|s| {
                             if let Some(ref sect) = section {
                                 s.title.to_lowercase().contains(&sect.to_lowercase())
@@ -1642,14 +2036,25 @@ fn main() {
                         let total = s.items.len();
 
                         if total > 0 {
-                            println!("{} {} [{}/{}] ({})", header_prefix.yellow(), s.title, completed, total, issue_str);
+                            println!(
+                                "{} {} [{}/{}] ({})",
+                                header_prefix.yellow(),
+                                s.title,
+                                completed,
+                                total,
+                                issue_str
+                            );
                         } else {
                             println!("{} {} ({})", header_prefix.yellow(), s.title, issue_str);
                         }
 
                         // Show checkbox items
                         for item in &s.items {
-                            let check = if item.checked { "✓".green() } else { "○".dimmed() };
+                            let check = if item.checked {
+                                "✓".green()
+                            } else {
+                                "○".dimmed()
+                            };
                             println!("    {} {}", check, item.text);
                         }
                     }
@@ -1678,13 +2083,19 @@ fn main() {
                                     match node {
                                         Some(n) if n.node_type == "outcome" => {
                                             // Link them
-                                            match db.link_roadmap_to_outcome(roadmap_item.id, outcome_id, &n.change_id) {
+                                            match db.link_roadmap_to_outcome(
+                                                roadmap_item.id,
+                                                outcome_id,
+                                                &n.change_id,
+                                            ) {
                                                 Ok(()) => {
-                                                    println!("{} Linked '{}' to outcome #{}: {}",
+                                                    println!(
+                                                        "{} Linked '{}' to outcome #{}: {}",
                                                         "Success:".green(),
                                                         roadmap_item.title,
                                                         outcome_id,
-                                                        n.title);
+                                                        n.title
+                                                    );
                                                 }
                                                 Err(e) => {
                                                     eprintln!("{} {}", "Error:".red(), e);
@@ -1693,11 +2104,20 @@ fn main() {
                                             }
                                         }
                                         Some(n) => {
-                                            eprintln!("{} Node #{} is a {}, not an outcome", "Error:".red(), outcome_id, n.node_type);
+                                            eprintln!(
+                                                "{} Node #{} is a {}, not an outcome",
+                                                "Error:".red(),
+                                                outcome_id,
+                                                n.node_type
+                                            );
                                             std::process::exit(1);
                                         }
                                         None => {
-                                            eprintln!("{} Node #{} not found", "Error:".red(), outcome_id);
+                                            eprintln!(
+                                                "{} Node #{} not found",
+                                                "Error:".red(),
+                                                outcome_id
+                                            );
                                             std::process::exit(1);
                                         }
                                     }
@@ -1733,9 +2153,11 @@ fn main() {
                         Some(roadmap_item) => {
                             match db.unlink_roadmap_from_outcome(roadmap_item.id) {
                                 Ok(()) => {
-                                    println!("{} Unlinked '{}' from outcome",
+                                    println!(
+                                        "{} Unlinked '{}' from outcome",
                                         "Success:".green(),
-                                        roadmap_item.title);
+                                        roadmap_item.title
+                                    );
                                 }
                                 Err(e) => {
                                     eprintln!("{} {}", "Error:".red(), e);
@@ -1764,12 +2186,25 @@ fn main() {
                         return;
                     }
 
-                    println!("{} {} conflicts found:\n", "Conflicts:".yellow(), conflicts.len());
+                    println!(
+                        "{} {} conflicts found:\n",
+                        "Conflicts:".yellow(),
+                        conflicts.len()
+                    );
 
                     for conflict in &conflicts {
-                        println!("  Item: {} ({})", conflict.item_change_id, conflict.conflict_type);
-                        println!("    Local:  {}", conflict.local_value.as_deref().unwrap_or("(none)"));
-                        println!("    Remote: {}", conflict.remote_value.as_deref().unwrap_or("(none)"));
+                        println!(
+                            "  Item: {} ({})",
+                            conflict.item_change_id, conflict.conflict_type
+                        );
+                        println!(
+                            "    Local:  {}",
+                            conflict.local_value.as_deref().unwrap_or("(none)")
+                        );
+                        println!(
+                            "    Remote: {}",
+                            conflict.remote_value.as_deref().unwrap_or("(none)")
+                        );
                         if let Some(ref res) = conflict.resolution {
                             println!("    Resolution: {}", res);
                         }
@@ -1777,8 +2212,13 @@ fn main() {
                     }
 
                     if resolve {
-                        println!("{} Interactive conflict resolution not yet implemented", "TODO:".yellow());
-                        println!("For now, manually edit ROADMAP.md and run 'deciduous roadmap sync'");
+                        println!(
+                            "{} Interactive conflict resolution not yet implemented",
+                            "TODO:".yellow()
+                        );
+                        println!(
+                            "For now, manually edit ROADMAP.md and run 'deciduous roadmap sync'"
+                        );
                     }
                 }
 
@@ -1818,9 +2258,16 @@ fn main() {
                     // Show item counts from database
                     match db.get_all_roadmap_items() {
                         Ok(items) => {
-                            let with_issues = items.iter().filter(|i| i.github_issue_number.is_some()).count();
-                            let with_outcomes = items.iter().filter(|i| i.outcome_node_id.is_some()).count();
-                            let completed = items.iter().filter(|i| i.checkbox_state == "checked").count();
+                            let with_issues = items
+                                .iter()
+                                .filter(|i| i.github_issue_number.is_some())
+                                .count();
+                            let with_outcomes =
+                                items.iter().filter(|i| i.outcome_node_id.is_some()).count();
+                            let completed = items
+                                .iter()
+                                .filter(|i| i.checkbox_state == "checked")
+                                .count();
 
                             println!("\n{}", "Items:".cyan());
                             println!("  Total: {}", items.len());
@@ -1834,7 +2281,11 @@ fn main() {
                     }
                 }
 
-                RoadmapAction::Check { path: _, incomplete, complete } => {
+                RoadmapAction::Check {
+                    path: _,
+                    incomplete,
+                    complete,
+                } => {
                     // Get all roadmap items from database
                     let items = match db.get_all_roadmap_items() {
                         Ok(i) => i,
@@ -1901,16 +2352,30 @@ fn main() {
                             "○".yellow()
                         };
 
-                        let checkbox_icon = if *checkbox { "☑".green() } else { "☐".dimmed() };
-                        let outcome_icon = if *outcome { "⚡".green() } else { "⚡".dimmed() };
-                        let issue_icon = if *issue { "🔒".green() } else { "🔓".dimmed() };
+                        let checkbox_icon = if *checkbox {
+                            "☑".green()
+                        } else {
+                            "☐".dimmed()
+                        };
+                        let outcome_icon = if *outcome {
+                            "⚡".green()
+                        } else {
+                            "⚡".dimmed()
+                        };
+                        let issue_icon = if *issue {
+                            "🔒".green()
+                        } else {
+                            "🔓".dimmed()
+                        };
 
-                        println!("{} {} {} {} {}",
+                        println!(
+                            "{} {} {} {} {}",
                             status_icon,
                             checkbox_icon,
                             outcome_icon,
                             issue_icon,
-                            truncate(title, 60));
+                            truncate(title, 60)
+                        );
                     }
 
                     // Print summary
@@ -1918,8 +2383,12 @@ fn main() {
                     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
                     println!();
                     println!("{}", "Legend:".dimmed());
-                    println!("  {} = checkbox checked    {} = outcome linked    {} = issue closed",
-                        "☑".green(), "⚡".green(), "🔒".green());
+                    println!(
+                        "  {} = checkbox checked    {} = outcome linked    {} = issue closed",
+                        "☑".green(),
+                        "⚡".green(),
+                        "🔒".green()
+                    );
                     println!();
                     println!("{}", "Summary:".cyan());
                     println!("  {} {} complete", "✓".green(), complete_count);
@@ -1928,8 +2397,10 @@ fn main() {
 
                     if incomplete_count > 0 {
                         println!();
-                        println!("{} Completion requires: checkbox ☑ AND outcome ⚡ AND issue closed 🔒",
-                            "Note:".dimmed());
+                        println!(
+                            "{} Completion requires: checkbox ☑ AND outcome ⚡ AND issue closed 🔒",
+                            "Note:".dimmed()
+                        );
                     }
                 }
             }
@@ -1974,22 +2445,20 @@ fn get_git_commits_for_audit() -> Vec<AuditCommit> {
         .ok();
 
     match output {
-        Some(o) if o.status.success() => {
-            String::from_utf8_lossy(&o.stdout)
-                .lines()
-                .filter_map(|line| {
-                    let parts: Vec<&str> = line.splitn(2, '|').collect();
-                    if parts.len() == 2 {
-                        Some(AuditCommit {
-                            hash: parts[0].to_string(),
-                            message: parts[1].to_string(),
-                        })
-                    } else {
-                        None
-                    }
-                })
-                .collect()
-        }
+        Some(o) if o.status.success() => String::from_utf8_lossy(&o.stdout)
+            .lines()
+            .filter_map(|line| {
+                let parts: Vec<&str> = line.splitn(2, '|').collect();
+                if parts.len() == 2 {
+                    Some(AuditCommit {
+                        hash: parts[0].to_string(),
+                        message: parts[1].to_string(),
+                    })
+                } else {
+                    None
+                }
+            })
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -1997,9 +2466,12 @@ fn get_git_commits_for_audit() -> Vec<AuditCommit> {
 /// Calculate keyword match score between node title and commit message
 fn keyword_match_score(node_title: &str, commit_message: &str) -> f64 {
     let stopwords: std::collections::HashSet<&str> = [
-        "the", "a", "an", "and", "or", "to", "for", "in", "on", "with",
-        "is", "was", "be", "as", "of", "it", "that", "this", "from", "by"
-    ].iter().cloned().collect();
+        "the", "a", "an", "and", "or", "to", "for", "in", "on", "with", "is", "was", "be", "as",
+        "of", "it", "that", "this", "from", "by",
+    ]
+    .iter()
+    .cloned()
+    .collect();
 
     let normalize = |s: &str| -> std::collections::HashSet<String> {
         s.to_lowercase()
@@ -2085,10 +2557,7 @@ fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
 
     let files_changed = files_output.and_then(|o| {
         if o.status.success() {
-            let count = String::from_utf8_lossy(&o.stdout)
-                .trim()
-                .lines()
-                .count();
+            let count = String::from_utf8_lossy(&o.stdout).trim().lines().count();
             Some(count as u32)
         } else {
             None
@@ -2106,7 +2575,10 @@ fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
 }
 
 /// Generate git-history.json for all commits linked to nodes
-fn export_git_history(nodes: &[deciduous::DecisionNode], output_dir: &std::path::Path) -> Result<usize, Box<dyn std::error::Error>> {
+fn export_git_history(
+    nodes: &[deciduous::DecisionNode],
+    output_dir: &std::path::Path,
+) -> Result<usize, Box<dyn std::error::Error>> {
     let hashes = extract_commit_hashes(nodes);
     let mut commits: Vec<GitCommit> = Vec::new();
 
@@ -2139,51 +2611,44 @@ mod tests {
     #[test]
     fn test_keyword_match_exact() {
         // Exact match should be 100%
-        let score = keyword_match_score(
-            "Add user authentication",
-            "feat: Add user authentication",
-        );
+        let score = keyword_match_score("Add user authentication", "feat: Add user authentication");
         assert!((score - 1.0).abs() < 0.01, "Expected ~100%, got {}", score);
     }
 
     #[test]
     fn test_keyword_match_partial() {
         // Partial overlap
-        let score = keyword_match_score(
-            "Implement dark mode toggle",
-            "feat: add dark mode support",
-        );
+        let score =
+            keyword_match_score("Implement dark mode toggle", "feat: add dark mode support");
         // "dark" and "mode" match, "implement" and "toggle" don't
-        assert!(score > 0.3 && score < 0.8, "Expected partial match, got {}", score);
+        assert!(
+            score > 0.3 && score < 0.8,
+            "Expected partial match, got {}",
+            score
+        );
     }
 
     #[test]
     fn test_keyword_match_no_overlap() {
-        let score = keyword_match_score(
-            "Fix database connection",
-            "feat: add new UI component",
-        );
+        let score = keyword_match_score("Fix database connection", "feat: add new UI component");
         assert!(score < 0.1, "Expected no match, got {}", score);
     }
 
     #[test]
     fn test_keyword_match_ignores_stopwords() {
         // Stopwords like "the", "a", "to" should be ignored
-        let score = keyword_match_score(
-            "the fix for the bug",
-            "a fix to the issue",
-        );
+        let score = keyword_match_score("the fix for the bug", "a fix to the issue");
         // Only "fix" matches, "bug" vs "issue" don't
         assert!(score > 0.0, "Should have some match from 'fix'");
     }
 
     #[test]
     fn test_keyword_match_case_insensitive() {
-        let score = keyword_match_score(
-            "ADD USER AUTH",
-            "add user auth",
+        let score = keyword_match_score("ADD USER AUTH", "add user auth");
+        assert!(
+            (score - 1.0).abs() < 0.01,
+            "Should match case-insensitively"
         );
-        assert!((score - 1.0).abs() < 0.01, "Should match case-insensitively");
     }
 
     #[test]
@@ -2201,19 +2666,21 @@ mod tests {
     #[test]
     fn test_keyword_match_special_chars() {
         // Special characters are filtered, identical strings match
-        let score = keyword_match_score(
-            "fix: user-auth (v2)",
-            "fix: user-auth (v2)",
-        );
+        let score = keyword_match_score("fix: user-auth (v2)", "fix: user-auth (v2)");
         // Both strings normalize the same, should be 100%
-        assert!((score - 1.0).abs() < 0.01, "Same string should match 100%, got {}", score);
+        assert!(
+            (score - 1.0).abs() < 0.01,
+            "Same string should match 100%, got {}",
+            score
+        );
 
         // Punctuation like colons is stripped
-        let score2 = keyword_match_score(
-            "fix bug",
-            "fix: bug",
+        let score2 = keyword_match_score("fix bug", "fix: bug");
+        assert!(
+            (score2 - 1.0).abs() < 0.01,
+            "Punctuation should be ignored, got {}",
+            score2
         );
-        assert!((score2 - 1.0).abs() < 0.01, "Punctuation should be ignored, got {}", score2);
     }
 
     #[test]
@@ -2223,6 +2690,10 @@ mod tests {
             "Implemented --claude and --windsurf flags for init command",
             "feat: add --claude and --windsurf flags to init command",
         );
-        assert!(score > 0.7, "Real example should have high match, got {}", score);
+        assert!(
+            score > 0.7,
+            "Real example should have high match, got {}",
+            score
+        );
     }
 }

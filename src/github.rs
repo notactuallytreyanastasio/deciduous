@@ -12,7 +12,7 @@ pub struct GitHubIssue {
     pub number: i32,
     pub title: String,
     pub body: String,
-    pub state: String,  // "open" or "closed"
+    pub state: String, // "open" or "closed"
     pub html_url: String,
     pub created_at: String,
     pub updated_at: String,
@@ -52,7 +52,10 @@ impl std::fmt::Display for GitHubError {
                 write!(f, "Command '{}' failed: {}", command, stderr)
             }
             GitHubError::NotAuthenticated => {
-                write!(f, "Not authenticated with GitHub. Run 'gh auth login' first.")
+                write!(
+                    f,
+                    "Not authenticated with GitHub. Run 'gh auth login' first."
+                )
             }
             GitHubError::RateLimited => {
                 write!(f, "GitHub API rate limit exceeded. Try again later.")
@@ -80,7 +83,7 @@ pub type Result<T> = std::result::Result<T, GitHubError>;
 
 /// GitHub client using `gh` CLI
 pub struct GitHubClient {
-    repo: Option<String>,  // "owner/repo" format
+    repo: Option<String>, // "owner/repo" format
 }
 
 impl GitHubClient {
@@ -92,7 +95,14 @@ impl GitHubClient {
     /// Auto-detect repo from git remote
     pub fn auto_detect() -> Result<Self> {
         let output = Command::new("gh")
-            .args(["repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"])
+            .args([
+                "repo",
+                "view",
+                "--json",
+                "nameWithOwner",
+                "-q",
+                ".nameWithOwner",
+            ])
             .output()?;
 
         if output.status.success() {
@@ -107,9 +117,7 @@ impl GitHubClient {
 
     /// Check if gh CLI is authenticated
     pub fn check_auth() -> Result<bool> {
-        let output = Command::new("gh")
-            .args(["auth", "status"])
-            .output()?;
+        let output = Command::new("gh").args(["auth", "status"]).output()?;
 
         Ok(output.status.success())
     }
@@ -123,12 +131,7 @@ impl GitHubClient {
     }
 
     /// Create a new issue
-    pub fn create_issue(
-        &self,
-        title: &str,
-        body: &str,
-        labels: &[&str],
-    ) -> Result<GitHubIssue> {
+    pub fn create_issue(&self, title: &str, body: &str, labels: &[&str]) -> Result<GitHubIssue> {
         let mut args = vec!["issue", "create", "--title", title, "--body", body];
 
         // Add labels
@@ -178,9 +181,11 @@ impl GitHubClient {
     pub fn get_issue(&self, number: i32) -> Result<GitHubIssue> {
         let mut cmd = Command::new("gh");
         cmd.args([
-            "issue", "view",
+            "issue",
+            "view",
             &number.to_string(),
-            "--json", "number,title,body,state,url,createdAt,updatedAt",
+            "--json",
+            "number,title,body,state,url,createdAt,updatedAt",
         ]);
 
         for arg in self.repo_args() {
@@ -219,8 +224,8 @@ impl GitHubClient {
             updated_at: String,
         }
 
-        let resp: IssueResponse = serde_json::from_str(&json_str)
-            .map_err(|e| GitHubError::ParseError {
+        let resp: IssueResponse =
+            serde_json::from_str(&json_str).map_err(|e| GitHubError::ParseError {
                 message: format!("JSON parse error: {} - Raw: {}", e, json_str),
             })?;
 
@@ -238,11 +243,7 @@ impl GitHubClient {
     /// Update an issue's body
     pub fn update_issue_body(&self, number: i32, body: &str) -> Result<()> {
         let mut cmd = Command::new("gh");
-        cmd.args([
-            "issue", "edit",
-            &number.to_string(),
-            "--body", body,
-        ]);
+        cmd.args(["issue", "edit", &number.to_string(), "--body", body]);
 
         for arg in self.repo_args() {
             cmd.arg(&arg);
@@ -264,11 +265,7 @@ impl GitHubClient {
     /// Update an issue's title
     pub fn update_issue_title(&self, number: i32, title: &str) -> Result<()> {
         let mut cmd = Command::new("gh");
-        cmd.args([
-            "issue", "edit",
-            &number.to_string(),
-            "--title", title,
-        ]);
+        cmd.args(["issue", "edit", &number.to_string(), "--title", title]);
 
         for arg in self.repo_args() {
             cmd.arg(&arg);
@@ -290,10 +287,7 @@ impl GitHubClient {
     /// Close an issue
     pub fn close_issue(&self, number: i32) -> Result<()> {
         let mut cmd = Command::new("gh");
-        cmd.args([
-            "issue", "close",
-            &number.to_string(),
-        ]);
+        cmd.args(["issue", "close", &number.to_string()]);
 
         for arg in self.repo_args() {
             cmd.arg(&arg);
@@ -315,10 +309,7 @@ impl GitHubClient {
     /// Reopen an issue
     pub fn reopen_issue(&self, number: i32) -> Result<()> {
         let mut cmd = Command::new("gh");
-        cmd.args([
-            "issue", "reopen",
-            &number.to_string(),
-        ]);
+        cmd.args(["issue", "reopen", &number.to_string()]);
 
         for arg in self.repo_args() {
             cmd.arg(&arg);
@@ -341,10 +332,13 @@ impl GitHubClient {
     pub fn get_issue_comments(&self, number: i32) -> Result<Vec<GitHubComment>> {
         let mut cmd = Command::new("gh");
         cmd.args([
-            "issue", "view",
+            "issue",
+            "view",
             &number.to_string(),
-            "--json", "comments",
-            "-q", ".comments",
+            "--json",
+            "comments",
+            "-q",
+            ".comments",
         ]);
 
         for arg in self.repo_args() {
@@ -368,8 +362,8 @@ impl GitHubClient {
             return Ok(vec![]);
         }
 
-        let comments: Vec<GitHubComment> = serde_json::from_str(&json_str)
-            .map_err(|e| GitHubError::ParseError {
+        let comments: Vec<GitHubComment> =
+            serde_json::from_str(&json_str).map_err(|e| GitHubError::ParseError {
                 message: format!("JSON parse error for comments: {} - Raw: {}", e, json_str),
             })?;
 
@@ -379,11 +373,7 @@ impl GitHubClient {
     /// Add a comment to an issue
     pub fn add_comment(&self, number: i32, body: &str) -> Result<()> {
         let mut cmd = Command::new("gh");
-        cmd.args([
-            "issue", "comment",
-            &number.to_string(),
-            "--body", body,
-        ]);
+        cmd.args(["issue", "comment", &number.to_string(), "--body", body]);
 
         for arg in self.repo_args() {
             cmd.arg(&arg);
@@ -406,10 +396,14 @@ impl GitHubClient {
     pub fn list_issues_with_label(&self, label: &str) -> Result<Vec<GitHubIssue>> {
         let mut cmd = Command::new("gh");
         cmd.args([
-            "issue", "list",
-            "--label", label,
-            "--state", "all",
-            "--json", "number,title,body,state,url,createdAt,updatedAt",
+            "issue",
+            "list",
+            "--label",
+            label,
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,state,url,createdAt,updatedAt",
         ]);
 
         for arg in self.repo_args() {
@@ -441,31 +435,39 @@ impl GitHubClient {
             updated_at: String,
         }
 
-        let items: Vec<IssueListItem> = serde_json::from_str(&json_str)
-            .map_err(|e| GitHubError::ParseError {
+        let items: Vec<IssueListItem> =
+            serde_json::from_str(&json_str).map_err(|e| GitHubError::ParseError {
                 message: format!("JSON parse error: {}", e),
             })?;
 
-        Ok(items.into_iter().map(|item| GitHubIssue {
-            number: item.number,
-            title: item.title,
-            body: item.body,
-            state: item.state.to_lowercase(),
-            html_url: item.url,
-            created_at: item.created_at,
-            updated_at: item.updated_at,
-        }).collect())
+        Ok(items
+            .into_iter()
+            .map(|item| GitHubIssue {
+                number: item.number,
+                title: item.title,
+                body: item.body,
+                state: item.state.to_lowercase(),
+                html_url: item.url,
+                created_at: item.created_at,
+                updated_at: item.updated_at,
+            })
+            .collect())
     }
 
     /// Search for an issue by title
     pub fn find_issue_by_title(&self, title: &str) -> Result<Option<GitHubIssue>> {
         let mut cmd = Command::new("gh");
         cmd.args([
-            "issue", "list",
-            "--search", &format!("\"{}\" in:title", title),
-            "--state", "all",
-            "--json", "number,title,body,state,url,createdAt,updatedAt",
-            "--limit", "1",
+            "issue",
+            "list",
+            "--search",
+            &format!("\"{}\" in:title", title),
+            "--state",
+            "all",
+            "--json",
+            "number,title,body,state,url,createdAt,updatedAt",
+            "--limit",
+            "1",
         ]);
 
         for arg in self.repo_args() {
@@ -497,8 +499,8 @@ impl GitHubClient {
             updated_at: String,
         }
 
-        let items: Vec<IssueListItem> = serde_json::from_str(&json_str)
-            .map_err(|e| GitHubError::ParseError {
+        let items: Vec<IssueListItem> =
+            serde_json::from_str(&json_str).map_err(|e| GitHubError::ParseError {
                 message: format!("JSON parse error: {}", e),
             })?;
 
@@ -532,10 +534,14 @@ impl GitHubClient {
     pub fn label_exists(&self, name: &str) -> Result<bool> {
         let mut cmd = Command::new("gh");
         cmd.args([
-            "label", "list",
-            "--search", name,
-            "--json", "name",
-            "-q", &format!(".[] | select(.name == \"{}\")", name),
+            "label",
+            "list",
+            "--search",
+            name,
+            "--json",
+            "name",
+            "-q",
+            &format!(".[] | select(.name == \"{}\")", name),
         ]);
 
         for arg in self.repo_args() {
@@ -560,10 +566,14 @@ impl GitHubClient {
     pub fn create_label(&self, name: &str, description: &str, color: &str) -> Result<()> {
         let mut cmd = Command::new("gh");
         cmd.args([
-            "label", "create", name,
-            "--description", description,
-            "--color", color,
-            "--force",  // Update if exists
+            "label",
+            "create",
+            name,
+            "--description",
+            description,
+            "--color",
+            color,
+            "--force", // Update if exists
         ]);
 
         for arg in self.repo_args() {
@@ -588,14 +598,14 @@ impl GitHubClient {
 /// Returns Ok(true) if label was created, Ok(false) if it already existed
 pub fn ensure_roadmap_label(client: &GitHubClient) -> Result<bool> {
     match client.label_exists("roadmap") {
-        Ok(true) => Ok(false),  // Already exists
+        Ok(true) => Ok(false), // Already exists
         Ok(false) => {
             client.create_label(
                 "roadmap",
                 "Roadmap item synced from ROADMAP.md by deciduous",
-                "0e8a16"  // Green color
+                "0e8a16", // Green color
             )?;
-            Ok(true)  // Created
+            Ok(true) // Created
         }
         Err(e) => Err(e),
     }

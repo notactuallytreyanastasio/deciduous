@@ -16,7 +16,7 @@ use uuid::Uuid;
 pub struct RoadmapSection {
     pub change_id: String,
     pub title: String,
-    pub level: u8,  // 2 for ##, 3 for ###
+    pub level: u8, // 2 for ##, 3 for ###
     pub description: Option<String>,
     pub items: Vec<RoadmapCheckItem>,
     pub github_issue_number: Option<i32>,
@@ -107,22 +107,34 @@ pub fn parse_section_metadata(comment: &str) -> SectionMetadata {
     let mut meta = SectionMetadata::default();
 
     // Extract id
-    if let Some(caps) = Regex::new(r#"id="([^"]+)""#).ok().and_then(|re| re.captures(comment)) {
+    if let Some(caps) = Regex::new(r#"id="([^"]+)""#)
+        .ok()
+        .and_then(|re| re.captures(comment))
+    {
         meta.id = caps.get(1).map(|m| m.as_str().to_string());
     }
 
     // Extract issue number
-    if let Some(caps) = Regex::new(r#"issue="(\d+)""#).ok().and_then(|re| re.captures(comment)) {
+    if let Some(caps) = Regex::new(r#"issue="(\d+)""#)
+        .ok()
+        .and_then(|re| re.captures(comment))
+    {
         meta.issue = caps.get(1).and_then(|m| m.as_str().parse().ok());
     }
 
     // Extract status
-    if let Some(caps) = Regex::new(r#"status="([^"]+)""#).ok().and_then(|re| re.captures(comment)) {
+    if let Some(caps) = Regex::new(r#"status="([^"]+)""#)
+        .ok()
+        .and_then(|re| re.captures(comment))
+    {
         meta.status = caps.get(1).map(|m| m.as_str().to_string());
     }
 
     // Extract last_sync
-    if let Some(caps) = Regex::new(r#"last_sync="([^"]+)""#).ok().and_then(|re| re.captures(comment)) {
+    if let Some(caps) = Regex::new(r#"last_sync="([^"]+)""#)
+        .ok()
+        .and_then(|re| re.captures(comment))
+    {
         meta.last_sync = caps.get(1).map(|m| m.as_str().to_string());
     }
 
@@ -135,12 +147,18 @@ pub fn parse_item_metadata(comment: &str) -> ItemMetadata {
     let mut meta = ItemMetadata::default();
 
     // Extract id
-    if let Some(caps) = Regex::new(r#"id="([^"]+)""#).ok().and_then(|re| re.captures(comment)) {
+    if let Some(caps) = Regex::new(r#"id="([^"]+)""#)
+        .ok()
+        .and_then(|re| re.captures(comment))
+    {
         meta.id = caps.get(1).map(|m| m.as_str().to_string());
     }
 
     // Extract outcome_change_id
-    if let Some(caps) = Regex::new(r#"outcome_change_id="([^"]+)""#).ok().and_then(|re| re.captures(comment)) {
+    if let Some(caps) = Regex::new(r#"outcome_change_id="([^"]+)""#)
+        .ok()
+        .and_then(|re| re.captures(comment))
+    {
         let value = caps.get(1).map(|m| m.as_str().to_string());
         // Only set if not empty
         if value.as_ref().map(|s| !s.is_empty()).unwrap_or(false) {
@@ -178,7 +196,10 @@ pub fn generate_section_metadata(
 /// Generate item metadata comment
 pub fn generate_item_metadata(change_id: &str, outcome_change_id: Option<&str>) -> String {
     let outcome = outcome_change_id.unwrap_or("");
-    format!(r#"<!-- roadmap:item id="{}" outcome_change_id="{}" -->"#, change_id, outcome)
+    format!(
+        r#"<!-- roadmap:item id="{}" outcome_change_id="{}" -->"#,
+        change_id, outcome
+    )
 }
 
 /// Parse ROADMAP.md file into structured sections
@@ -206,7 +227,7 @@ pub fn parse_roadmap<P: AsRef<Path>>(path: P) -> Result<ParsedRoadmap> {
             let level = caps.get(1).unwrap().as_str().len() as u8;
             let title = caps.get(2).unwrap().as_str().trim().to_string();
 
-            let line_start = i + 1;  // 1-indexed
+            let line_start = i + 1; // 1-indexed
 
             // Look for metadata comment on next line
             let mut section_meta = SectionMetadata::default();
@@ -220,7 +241,9 @@ pub fn parse_roadmap<P: AsRef<Path>>(path: P) -> Result<ParsedRoadmap> {
             }
 
             // Generate change_id if not present
-            let change_id = section_meta.id.unwrap_or_else(|| Uuid::new_v4().to_string());
+            let change_id = section_meta
+                .id
+                .unwrap_or_else(|| Uuid::new_v4().to_string());
 
             // Collect description lines until next header or checkbox
             let mut description_lines: Vec<&str> = Vec::new();
@@ -244,8 +267,9 @@ pub fn parse_roadmap<P: AsRef<Path>>(path: P) -> Result<ParsedRoadmap> {
                     let mut item_meta = ItemMetadata::default();
                     if j + 1 < lines.len() {
                         if let Some(item_meta_caps) = item_meta_re.captures(lines[j + 1]) {
-                            item_meta = parse_item_metadata(item_meta_caps.get(1).unwrap().as_str());
-                            j += 1;  // Skip metadata line
+                            item_meta =
+                                parse_item_metadata(item_meta_caps.get(1).unwrap().as_str());
+                            j += 1; // Skip metadata line
                         }
                     }
 
@@ -256,9 +280,12 @@ pub fn parse_roadmap<P: AsRef<Path>>(path: P) -> Result<ParsedRoadmap> {
                         text,
                         checked,
                         outcome_change_id: item_meta.outcome_change_id,
-                        line_number: j + 1,  // 1-indexed
+                        line_number: j + 1, // 1-indexed
                     });
-                } else if !next_line.trim().is_empty() && !item_meta_re.is_match(next_line) && !section_meta_re.is_match(next_line) {
+                } else if !next_line.trim().is_empty()
+                    && !item_meta_re.is_match(next_line)
+                    && !section_meta_re.is_match(next_line)
+                {
                     // Non-empty, non-metadata line is description
                     if items.is_empty() {
                         description_lines.push(next_line);
@@ -320,10 +347,8 @@ pub fn write_roadmap_with_metadata<P: AsRef<Path>>(
     let item_meta_re = Regex::new(r"<!--\s*roadmap:item\s+(.+?)\s*-->")?;
 
     // Build lookup maps
-    let section_map: HashMap<String, &RoadmapSection> = sections
-        .iter()
-        .map(|s| (s.title.clone(), s))
-        .collect();
+    let section_map: HashMap<String, &RoadmapSection> =
+        sections.iter().map(|s| (s.title.clone(), s)).collect();
 
     let mut i = 0;
     while i < lines.len() {
@@ -339,7 +364,7 @@ pub fn write_roadmap_with_metadata<P: AsRef<Path>>(
             if let Some(section) = section_map.get(&title) {
                 // Skip existing metadata comment if present
                 if i + 1 < lines.len() && section_meta_re.is_match(lines[i + 1]) {
-                    i += 1;  // Skip old metadata
+                    i += 1; // Skip old metadata
                 }
 
                 // Add updated metadata
@@ -347,7 +372,7 @@ pub fn write_roadmap_with_metadata<P: AsRef<Path>>(
                     &section.change_id,
                     section.github_issue_number,
                     section.github_issue_state.as_deref(),
-                    None,  // last_sync will be set by sync operation
+                    None, // last_sync will be set by sync operation
                 );
                 output_lines.push(meta_comment);
             }
@@ -380,10 +405,8 @@ pub fn write_roadmap_with_metadata<P: AsRef<Path>>(
 
             // Add updated metadata
             if let Some(item) = found_item {
-                let meta_comment = generate_item_metadata(
-                    &item.change_id,
-                    item.outcome_change_id.as_deref(),
-                );
+                let meta_comment =
+                    generate_item_metadata(&item.change_id, item.outcome_change_id.as_deref());
                 output_lines.push(format!("  {}", meta_comment));
             }
 
@@ -430,7 +453,10 @@ pub fn generate_issue_body(section: &RoadmapSection) -> String {
 
     // Add metadata footer
     body.push_str("\n---\n");
-    body.push_str(&format!("_Synced from ROADMAP.md (change_id: {})_\n", section.change_id));
+    body.push_str(&format!(
+        "_Synced from ROADMAP.md (change_id: {})_\n",
+        section.change_id
+    ));
 
     body
 }
@@ -586,7 +612,11 @@ Description here.
 
         let result = parse_roadmap(file.path()).unwrap();
 
-        let section = result.sections.iter().find(|s| s.title == "Feature With Metadata").unwrap();
+        let section = result
+            .sections
+            .iter()
+            .find(|s| s.title == "Feature With Metadata")
+            .unwrap();
         assert_eq!(section.change_id, "existing-uuid");
         assert_eq!(section.github_issue_number, Some(42));
         assert_eq!(section.github_issue_state, Some("open".to_string()));
@@ -595,7 +625,10 @@ Description here.
         assert_eq!(section.items[0].outcome_change_id, None);
 
         assert_eq!(section.items[1].change_id, "item-uuid-2");
-        assert_eq!(section.items[1].outcome_change_id, Some("outcome-uuid".to_string()));
+        assert_eq!(
+            section.items[1].outcome_change_id,
+            Some("outcome-uuid".to_string())
+        );
     }
 
     #[test]

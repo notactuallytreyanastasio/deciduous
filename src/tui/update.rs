@@ -41,7 +41,10 @@ impl Cmd {
     /// Create a batch of commands
     pub fn batch(cmds: Vec<Cmd>) -> Cmd {
         // Filter out None commands
-        let mut cmds: Vec<Cmd> = cmds.into_iter().filter(|c| !matches!(c, Cmd::None)).collect();
+        let mut cmds: Vec<Cmd> = cmds
+            .into_iter()
+            .filter(|c| !matches!(c, Cmd::None))
+            .collect();
         match cmds.len() {
             0 => Cmd::None,
             1 => cmds.pop().unwrap_or(Cmd::None), // Safe: len == 1 guarantees element
@@ -294,8 +297,10 @@ pub fn update(msg: Msg, model: Model) -> (Model, Cmd) {
         }
 
         Msg::CycleBranchFilter => {
-            let new_filter =
-                state::cycle_branch_filter(model.branch_filter.as_deref(), &model.available_branches);
+            let new_filter = state::cycle_branch_filter(
+                model.branch_filter.as_deref(),
+                &model.available_branches,
+            );
             (
                 Model {
                     branch_filter: new_filter,

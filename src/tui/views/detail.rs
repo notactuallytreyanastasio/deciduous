@@ -126,7 +126,12 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
 
     // Metadata section
     lines.push(Line::from(Span::styled(
-        format!("ID: {} │ {} │ {}", node.id, node.status, format_date(&node.created_at)),
+        format!(
+            "ID: {} │ {} │ {}",
+            node.id,
+            node.status,
+            format_date(&node.created_at)
+        ),
         Style::default().fg(Color::DarkGray),
     )));
     lines.push(Line::from(""));
@@ -255,8 +260,11 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
     // Files - interactive list
     if !files.is_empty() {
         let file_header = if app.detail_in_files {
-            format!("─── Files ({}/{}) [F:exit n/N:nav p:preview d:diff o:open] ───",
-                app.detail_file_index + 1, files.len())
+            format!(
+                "─── Files ({}/{}) [F:exit n/N:nav p:preview d:diff o:open] ───",
+                app.detail_file_index + 1,
+                files.len()
+            )
         } else {
             format!("─── Files ({}) [F:browse p:preview] ───", files.len())
         };

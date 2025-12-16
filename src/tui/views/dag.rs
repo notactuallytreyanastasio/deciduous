@@ -4,7 +4,10 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, Paragraph, canvas::{Canvas, Line as CanvasLine, Rectangle}},
+    widgets::{
+        canvas::{Canvas, Line as CanvasLine, Rectangle},
+        Block, Borders, Paragraph,
+    },
 };
 
 use crate::tui::app::App;
@@ -142,8 +145,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         ]),
     ];
 
-    let legend = Paragraph::new(legend_text)
-        .style(Style::default().bg(Color::Black));
+    let legend = Paragraph::new(legend_text).style(Style::default().bg(Color::Black));
     frame.render_widget(legend, legend_area);
 }
 
@@ -162,8 +164,14 @@ fn calculate_layout(
     let mut parents: HashMap<i32, Vec<i32>> = HashMap::new();
 
     for edge in edges {
-        children.entry(edge.from_node_id).or_default().push(edge.to_node_id);
-        parents.entry(edge.to_node_id).or_default().push(edge.from_node_id);
+        children
+            .entry(edge.from_node_id)
+            .or_default()
+            .push(edge.to_node_id);
+        parents
+            .entry(edge.to_node_id)
+            .or_default()
+            .push(edge.from_node_id);
     }
 
     // Find root nodes (no incoming edges)

@@ -15,7 +15,11 @@ struct ApiResponse<T> {
 
 impl<T: Serialize> ApiResponse<T> {
     fn success(data: T) -> Self {
-        Self { ok: true, data: Some(data), error: None }
+        Self {
+            ok: true,
+            data: Some(data),
+            error: None,
+        }
     }
 }
 
@@ -26,9 +30,8 @@ const GRAPH_VIEWER_HTML: &str = include_str!("viewer.html");
 /// Start the decision graph viewer server
 pub fn start_graph_server(port: u16) -> std::io::Result<()> {
     let addr = format!("127.0.0.1:{}", port);
-    let server = Server::http(&addr).map_err(|e| {
-        std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
-    })?;
+    let server = Server::http(&addr)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     let url = format!("http://localhost:{}", port);
 
@@ -64,8 +67,9 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             let graph = get_decision_graph();
             let json = serde_json::to_string(&ApiResponse::success(graph))?;
 
-            let response = Response::from_string(json)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
             request.respond(response)
         }
 
@@ -74,8 +78,9 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             let commands = get_command_log();
             let json = serde_json::to_string(&ApiResponse::success(commands))?;
 
-            let response = Response::from_string(json)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
             request.respond(response)
         }
 
@@ -84,15 +89,14 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             let items = get_roadmap_items();
             let json = serde_json::to_string(&ApiResponse::success(items))?;
 
-            let response = Response::from_string(json)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
             request.respond(response)
         }
 
         // API: Toggle roadmap item checkbox (POST /api/roadmap/checkbox)
-        (&Method::Post, "/api/roadmap/checkbox") => {
-            handle_toggle_checkbox(request)
-        }
+        (&Method::Post, "/api/roadmap/checkbox") => handle_toggle_checkbox(request),
 
         // 404
         _ => {
@@ -104,8 +108,14 @@ fn handle_request(request: Request) -> std::io::Result<()> {
 
 fn get_decision_graph() -> DecisionGraph {
     match Database::open() {
-        Ok(db) => db.get_graph().unwrap_or_else(|_| DecisionGraph { nodes: vec![], edges: vec![] }),
-        Err(_) => DecisionGraph { nodes: vec![], edges: vec![] },
+        Ok(db) => db.get_graph().unwrap_or_else(|_| DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        }),
+        Err(_) => DecisionGraph {
+            nodes: vec![],
+            edges: vec![],
+        },
     }
 }
 
@@ -140,7 +150,9 @@ fn handle_toggle_checkbox(mut request: Request) -> std::io::Result<()> {
         })?;
         let response = Response::from_string(json)
             .with_status_code(400)
-            .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+            .with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
         return request.respond(response);
     }
 
@@ -155,7 +167,9 @@ fn handle_toggle_checkbox(mut request: Request) -> std::io::Result<()> {
             })?;
             let response = Response::from_string(json)
                 .with_status_code(400)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
             return request.respond(response);
         }
     };
@@ -168,11 +182,14 @@ fn handle_toggle_checkbox(mut request: Request) -> std::io::Result<()> {
 
     let (json, status) = match result {
         Ok(()) => (serde_json::to_string(&ApiResponse::success(true))?, 200),
-        Err(e) => (serde_json::to_string(&ApiResponse::<bool> {
-            ok: false,
-            data: None,
-            error: Some(format!("Database error: {}", e)),
-        })?, 500),
+        Err(e) => (
+            serde_json::to_string(&ApiResponse::<bool> {
+                ok: false,
+                data: None,
+                error: Some(format!("Database error: {}", e)),
+            })?,
+            500,
+        ),
     };
 
     let response = Response::from_string(json)
@@ -237,7 +254,9 @@ mod tests {
     #[test]
     fn test_viewer_html_is_valid() {
         // The embedded viewer should be valid HTML
-        assert!(GRAPH_VIEWER_HTML.contains("<!DOCTYPE html>") || GRAPH_VIEWER_HTML.contains("<html"));
+        assert!(
+            GRAPH_VIEWER_HTML.contains("<!DOCTYPE html>") || GRAPH_VIEWER_HTML.contains("<html")
+        );
         assert!(GRAPH_VIEWER_HTML.contains("</html>"));
     }
 
