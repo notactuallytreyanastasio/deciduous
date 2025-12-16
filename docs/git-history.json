@@ -1,11 +1,35 @@
 [
   {
-    "hash": "f2fb98acb38303be64b78cc757683a6eb9dac3b5",
-    "short_hash": "f2fb98a",
+    "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",
+    "short_hash": "cb4d2c2",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T14:11:22-05:00",
-    "message": "release: v0.8.11",
-    "files_changed": 6
+    "date": "2025-12-15T18:59:52-05:00",
+    "message": "feat(web): implement Approach B - Callouts First for graph explorer\n\nImplementation of the Callouts First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add CalloutLines component that draws lines from tiny nodes to labels\n- Add MiniMap component showing off-screen match indicators\n- Integrate components into DagView with:\n  - Callout lines for too-small search matches\n  - Mini overview map with viewport indicator\n  - Click-to-navigate from minimap to off-screen nodes\n- Track node positions and graph bounds for visualization\n\nThis approach prioritizes in-graph visual indicators (callout lines)\nover a floating panel, keeping attention on the graph itself.",
+    "files_changed": 7
+  },
+  {
+    "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",
+    "short_hash": "cb4d2c2",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T18:59:52-05:00",
+    "message": "feat(web): implement Approach B - Callouts First for graph explorer\n\nImplementation of the Callouts First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add CalloutLines component that draws lines from tiny nodes to labels\n- Add MiniMap component showing off-screen match indicators\n- Integrate components into DagView with:\n  - Callout lines for too-small search matches\n  - Mini overview map with viewport indicator\n  - Click-to-navigate from minimap to off-screen nodes\n- Track node positions and graph bounds for visualization\n\nThis approach prioritizes in-graph visual indicators (callout lines)\nover a floating panel, keeping attention on the graph itself.",
+    "files_changed": 7
+  },
+  {
+    "hash": "09829ffbb3af45d127d5c99bbbbc1b1103545352",
+    "short_hash": "09829ff",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T18:54:09-05:00",
+    "message": "feat(web): implement Approach A - Side Panel First for graph explorer\n\nImplementation of the Side Panel First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add useFocusMode hook for isolating subgraphs\n- Add SearchResultsPanel component with visibility categorization\n- Integrate components into DagView with:\n  - Search results panel showing visible/hidden matches\n  - Navigate to node functionality\n  - Focus mode to isolate search results\n  - Focus mode indicator with exit button\n- Update SearchBar to export results to parent component\n\nThis approach prioritizes a floating results panel that categorizes\nmatches by visibility, with \"Navigate\" buttons for off-screen nodes.",
+    "files_changed": 8
+  },
+  {
+    "hash": "42c89eb4211cbd1d5b68a62a273d5d6c958f5046",
+    "short_hash": "42c89eb",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T14:48:45-05:00",
+    "message": "fix(tui): roadmap 'o' keystroke now opens correct GitHub repo\n\nThe 'o' key in the roadmap view was hardcoded to open issues from\n'notactuallytreyanastasio/deciduous' instead of the user's actual repo.\n\nChanges:\n- Add github_repo field to RoadmapState\n- Detect repo from DB sync state or git remote URL\n- Add comprehensive keystroke tests to msg.rs\n- Improve error message when no repo configured",
+    "files_changed": 4
   },
   {
     "hash": "049ff12335b57647a77b58157d66636c2b959328",

@@ -6544,6 +6544,28 @@
       "created_at": "2025-12-15T18:59:25.010990-05:00",
       "updated_at": "2025-12-15T18:59:25.010990-05:00",
       "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":90,\"files\":[\"web/src/views/DagView.tsx\"]}"
+    },
+    {
+      "id": 597,
+      "change_id": "4c7cd64c-7d01-4629-859c-f89ae2b9cd12",
+      "node_type": "outcome",
+      "title": "Created PR #102 for Approach B",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:00:42.659950-05:00",
+      "updated_at": "2025-12-15T19:00:42.659950-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"commit\":\"cb4d2c2\",\"confidence\":95}"
+    },
+    {
+      "id": 598,
+      "change_id": "468960b7-ae33-4709-bc14-e0c8f3a68bc5",
+      "node_type": "outcome",
+      "title": "Both implementation approaches completed with PRs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:00:47.566585-05:00",
+      "updated_at": "2025-12-15T19:00:47.566585-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -12299,6 +12321,28 @@
       "weight": 1.0,
       "rationale": "Integration step",
       "created_at": "2025-12-15T18:59:25.019854-05:00"
+    },
+    {
+      "id": 524,
+      "from_node_id": 593,
+      "to_node_id": 597,
+      "from_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "to_change_id": "4c7cd64c-7d01-4629-859c-f89ae2b9cd12",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created",
+      "created_at": "2025-12-15T19:00:42.668974-05:00"
+    },
+    {
+      "id": 525,
+      "from_node_id": 582,
+      "to_node_id": 598,
+      "from_change_id": "8040b5e5-68fc-42b2-b103-85d74aaa0968",
+      "to_change_id": "468960b7-ae33-4709-bc14-e0c8f3a68bc5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal achieved",
+      "created_at": "2025-12-15T19:00:47.573722-05:00"
     }
   ]
 }
