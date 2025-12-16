@@ -254,6 +254,37 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 
 ---
 
+## API Trace Capture
+
+Capture Claude API traffic to analyze token usage, see thinking/response content, and correlate API calls with decision nodes.
+
+```bash
+# Run Claude through the deciduous proxy
+deciduous proxy -- claude
+
+# View traces
+deciduous tui            # Press 't' for Trace view
+deciduous serve          # Click "Traces" tab
+
+# Manage traces
+deciduous trace sessions              # List sessions
+deciduous trace spans <session_id>    # List spans
+deciduous trace link <sid> <node_id>  # Link to decision node
+deciduous trace prune --days 30       # Clean up old traces
+```
+
+The proxy intercepts Anthropic API calls, recording:
+- Token usage (input/output/cache)
+- Model selection and duration
+- Thinking blocks and responses
+- Tool calls and their results
+
+Link trace sessions to decision nodes to see exactly which API calls went into implementing a feature.
+
+> **Inspiration:** The trace capture approach was inspired by [badlogic/lemmy/claude-trace](https://github.com/badlogic/lemmy/tree/main/apps/claude-trace).
+
+---
+
 ## Commands Reference
 
 ```bash
@@ -311,6 +342,14 @@ deciduous diff export -o patch.json
 deciduous diff apply patches/*.json
 deciduous diff status
 deciduous migrate            # Add change_id columns
+
+# API trace capture
+deciduous proxy -- claude    # Run with trace capture
+deciduous trace sessions     # List trace sessions
+deciduous trace spans <id>   # List spans in session
+deciduous trace show <id>    # Show span content
+deciduous trace link <s> <n> # Link session to node
+deciduous trace prune        # Clean up old traces
 
 # Shell completion
 deciduous completion bash    # Generate bash completions
