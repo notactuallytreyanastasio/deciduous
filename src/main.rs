@@ -43,6 +43,10 @@ enum Command {
         /// Initialize for Codex (creates .codex/prompts/ and AGENTS.md)
         #[arg(long, group = "editor")]
         codex: bool,
+
+        /// Overwrite existing files (useful for updating outdated CLAUDE.md)
+        #[arg(long, short = 'f')]
+        force: bool,
     },
 
     /// Update tooling files to latest version (overwrites existing)
@@ -345,9 +349,28 @@ enum TraceAction {
         #[arg(long)]
         session: String,
 
+        /// Existing span ID to complete (for two-phase span tracking)
+        #[arg(long)]
+        span_id: Option<i32>,
+
         /// Read span data from stdin as JSON
         #[arg(long)]
         stdin: bool,
+    },
+
+    /// Start a new span (returns span_id for active tracking)
+    SpanStart {
+        /// Session ID
+        #[arg(long)]
+        session: String,
+
+        /// Model name (optional, can be set later)
+        #[arg(long)]
+        model: Option<String>,
+
+        /// User message preview (optional)
+        #[arg(long)]
+        user_preview: Option<String>,
     },
 
     /// List trace sessions
@@ -587,6 +610,7 @@ fn main() {
         windsurf,
         opencode,
         codex,
+        force,
     } = args.command
     {
         // Determine editor type: default to Claude if none specified
@@ -600,7 +624,7 @@ fn main() {
             deciduous::init::Editor::Claude
         };
 
-        if let Err(e) = deciduous::init::init_project(editor) {
+        if let Err(e) = deciduous::init::init_project(editor, force) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -732,6 +756,20 @@ fn main() {
                 effective_branch.as_deref(),
             ) {
                 Ok(id) => {
+                    // Auto-link to active trace span if DECIDUOUS_TRACE_SPAN is set
+                    let trace_str = if let Ok(span_id_str) = std::env::var("DECIDUOUS_TRACE_SPAN") {
+                        if let Ok(span_id) = span_id_str.parse::<i32>() {
+                            match db.link_span_to_node_via_table(span_id, id) {
+                                Ok(()) => format!(" [traced: span #{}]", span_id).cyan().to_string(),
+                                Err(_) => String::new(),
+                            }
+                        } else {
+                            String::new()
+                        }
+                    } else {
+                        String::new()
+                    };
+
                     let conf_str = confidence
                         .map(|c| format!(" [confidence: {}%]", c))
                         .unwrap_or_default();
@@ -752,7 +790,7 @@ fn main() {
                         .map(|b| format!(" [branch: {}]", b))
                         .unwrap_or_default();
                     println!(
-                        "{} node {} (type: {}, title: {}){}{}{}{}{}",
+                        "{} node {} (type: {}, title: {}){}{}{}{}{}{}",
                         "Created".green(),
                         id,
                         node_type,
@@ -761,7 +799,8 @@ fn main() {
                         commit_str,
                         prompt_str,
                         files_str,
-                        branch_str
+                        branch_str,
+                        trace_str
                     );
                 }
                 Err(e) => {
@@ -2707,7 +2746,7 @@ fn main() {
                     }
                 }
 
-                TraceAction::Record { session, stdin } => {
+                TraceAction::Record { session, span_id: existing_span_id, stdin } => {
                     if !stdin {
                         eprintln!("{} --stdin is required", "Error:".red());
                         std::process::exit(1);
@@ -2731,12 +2770,21 @@ fn main() {
                     let model = span_data["model"].as_str();
                     let user_preview = span_data["user_preview"].as_str();
 
-                    // Create span
-                    let span_id = match db.create_trace_span(&session, model, user_preview) {
-                        Ok(id) => id,
-                        Err(e) => {
-                            eprintln!("{} Creating span: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                    // Use existing span or create new one
+                    let span_id = if let Some(sid) = existing_span_id {
+                        // Update model if provided (span-start might not have had it)
+                        if model.is_some() {
+                            let _ = db.update_trace_span_model(sid, model);
+                        }
+                        sid
+                    } else {
+                        // Create new span (legacy single-call mode)
+                        match db.create_trace_span(&session, model, user_preview) {
+                            Ok(id) => id,
+                            Err(e) => {
+                                eprintln!("{} Creating span: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
                         }
                     };
 
@@ -2793,10 +2841,44 @@ fn main() {
                                 }
                             }
                         }
+
+                        // Store system prompt if provided (captured from request)
+                        if let Some(system_prompt) = span_data["system_prompt"].as_str() {
+                            let _ = db.add_trace_content(span_id, "system", system_prompt, None, None);
+                        }
+
+                        // Store tool definitions if provided (captured from request)
+                        if let Some(tool_defs) = span_data["tool_definitions"].as_array() {
+                            let tool_defs_json = serde_json::to_string(tool_defs).unwrap_or_default();
+                            if !tool_defs_json.is_empty() && tool_defs_json != "[]" {
+                                let _ = db.add_trace_content(span_id, "tool_definitions", &tool_defs_json, None, None);
+                            }
+                        }
                     }
 
                     // Output JSON for the interceptor
                     println!(r#"{{"span_id": {}}}"#, span_id);
+                }
+
+                TraceAction::SpanStart { session, model, user_preview } => {
+                    // Create a pending span and return its ID
+                    // This enables active span tracking - the interceptor sets
+                    // DECIDUOUS_TRACE_SPAN so nodes created during the span
+                    // can be automatically linked
+                    match db.create_trace_span(
+                        &session,
+                        model.as_deref(),
+                        user_preview.as_deref(),
+                    ) {
+                        Ok(span_id) => {
+                            // Output JSON for the interceptor to parse
+                            println!(r#"{{"span_id": {}}}"#, span_id);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
 
                 TraceAction::Sessions { limit, linked } => {

@@ -680,6 +680,24 @@ pub struct TraceContent {
     pub sequence_num: i32,
 }
 
+/// Insertable span-node link
+#[derive(Insertable)]
+#[diesel(table_name = span_nodes)]
+pub struct NewSpanNode<'a> {
+    pub span_id: i32,
+    pub node_id: i32,
+    pub created_at: &'a str,
+}
+
+/// Queryable span-node link
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[diesel(table_name = span_nodes)]
+pub struct SpanNode {
+    pub span_id: i32,
+    pub node_id: i32,
+    pub created_at: String,
+}
+
 // ============================================================================
 // Helper structs for raw SQL queries
 // ============================================================================
@@ -1154,6 +1172,21 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // Span-Node linking table (tracks which nodes were created during which spans)
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS span_nodes (
+                span_id INTEGER NOT NULL,
+                node_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (span_id, node_id),
+                FOREIGN KEY (span_id) REFERENCES trace_spans(id),
+                FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
             .execute(&mut conn)?;
@@ -1211,6 +1244,16 @@ impl Database {
         .execute(&mut conn)?;
         diesel::sql_query(
             "CREATE INDEX IF NOT EXISTS idx_trace_content_span_id ON trace_content(span_id)",
+        )
+        .execute(&mut conn)?;
+
+        // Span-node linking indexes
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_span_nodes_span_id ON span_nodes(span_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_span_nodes_node_id ON span_nodes(node_id)",
         )
         .execute(&mut conn)?;
 
@@ -2436,6 +2479,15 @@ impl Database {
         Ok(id)
     }
 
+    /// Update the model field of a trace span (used when span-start didn't have it)
+    pub fn update_trace_span_model(&self, span_id: i32, model: Option<&str>) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(trace_spans::table.filter(trace_spans::id.eq(span_id)))
+            .set(trace_spans::model.eq(model))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
     /// Complete a trace span with response data
     #[allow(clippy::too_many_arguments)]
     pub fn complete_trace_span(
@@ -2701,6 +2753,106 @@ impl Database {
         .execute(&mut conn)?;
 
         Ok((sessions_deleted, spans_deleted, content_deleted))
+    }
+
+    // ========================================================================
+    // Span-Node Linking (for auto-linking nodes created during trace spans)
+    // ========================================================================
+
+    /// Link a span to a node via the span_nodes join table
+    /// This is called when a node is created during an active trace span
+    pub fn link_span_to_node_via_table(&self, span_id: i32, node_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_link = NewSpanNode {
+            span_id,
+            node_id,
+            created_at: &now,
+        };
+
+        // Use INSERT OR IGNORE to handle duplicates gracefully
+        diesel::insert_or_ignore_into(span_nodes::table)
+            .values(&new_link)
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Get all nodes that were created during a specific span
+    pub fn get_nodes_for_span(&self, span_id: i32) -> Result<Vec<DecisionNode>> {
+        let mut conn = self.get_conn()?;
+
+        // Get node IDs from span_nodes join table
+        let node_ids: Vec<i32> = span_nodes::table
+            .filter(span_nodes::span_id.eq(span_id))
+            .select(span_nodes::node_id)
+            .load(&mut conn)?;
+
+        if node_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Fetch the actual nodes
+        let nodes = decision_nodes::table
+            .filter(decision_nodes::id.eq_any(node_ids))
+            .order(decision_nodes::id.asc())
+            .load::<DecisionNode>(&mut conn)?;
+
+        Ok(nodes)
+    }
+
+    /// Get the span(s) during which a node was created
+    pub fn get_spans_for_node(&self, node_id: i32) -> Result<Vec<TraceSpan>> {
+        let mut conn = self.get_conn()?;
+
+        // Get span IDs from span_nodes join table
+        let span_ids: Vec<i32> = span_nodes::table
+            .filter(span_nodes::node_id.eq(node_id))
+            .select(span_nodes::span_id)
+            .load(&mut conn)?;
+
+        if span_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Fetch the actual spans
+        let spans = trace_spans::table
+            .filter(trace_spans::id.eq_any(span_ids))
+            .order(trace_spans::id.asc())
+            .load::<TraceSpan>(&mut conn)?;
+
+        Ok(spans)
+    }
+
+    /// Get the count of nodes created during a specific span
+    pub fn get_node_count_for_span(&self, span_id: i32) -> Result<i64> {
+        let mut conn = self.get_conn()?;
+
+        let count: i64 = span_nodes::table
+            .filter(span_nodes::span_id.eq(span_id))
+            .count()
+            .get_result(&mut conn)?;
+
+        Ok(count)
+    }
+
+    /// Get node counts for multiple spans at once (for efficient list display)
+    pub fn get_node_counts_for_spans(&self, span_ids: &[i32]) -> Result<std::collections::HashMap<i32, i64>> {
+        let mut conn = self.get_conn()?;
+
+        // Query all links for the given span IDs
+        let links: Vec<SpanNode> = span_nodes::table
+            .filter(span_nodes::span_id.eq_any(span_ids))
+            .load(&mut conn)?;
+
+        // Count nodes per span
+        let mut counts = std::collections::HashMap::new();
+        for link in links {
+            *counts.entry(link.span_id).or_insert(0i64) += 1;
+        }
+
+        Ok(counts)
     }
 }
 

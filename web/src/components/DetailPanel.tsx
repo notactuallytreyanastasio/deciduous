@@ -5,10 +5,25 @@
  * Used by all views.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { DecisionNode, GraphData, GitCommit } from '../types/graph';
 import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
+import { formatDuration, getModelShortName } from '../types/trace';
+
+// Trace info for a node
+interface SpanWithSession {
+  span_id: number;
+  sequence_num: number;
+  session_id: string;
+  model: string | null;
+  duration_ms: number | null;
+  started_at: string;
+}
+
+interface NodeTraceInfo {
+  spans: SpanWithSession[];
+}
 
 interface DetailPanelProps {
   node: DecisionNode | null;
@@ -33,6 +48,31 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   repo,
   gitHistory = [],
 }) => {
+  const [traceInfo, setTraceInfo] = useState<NodeTraceInfo | null>(null);
+
+  // Fetch trace info when node changes
+  useEffect(() => {
+    if (!node) {
+      setTraceInfo(null);
+      return;
+    }
+
+    const fetchTraceInfo = async () => {
+      try {
+        const res = await fetch(`/api/nodes/${node.id}/traces`);
+        const data = await res.json();
+        if (data.ok && data.data) {
+          setTraceInfo(data.data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch trace info:', e);
+        setTraceInfo(null);
+      }
+    };
+
+    fetchTraceInfo();
+  }, [node?.id]);
+
   // Use repo from config if not explicitly passed
   const effectiveRepo = repo ?? getCommitRepo(graphData);
   if (!node) {
@@ -135,6 +175,28 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {traceInfo && traceInfo.spans.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Created During Trace</h3>
+          {traceInfo.spans.map((span) => (
+            <div key={span.span_id} style={styles.traceInfo}>
+              <div style={styles.traceHeader}>
+                <span style={styles.traceSpan}>Span #{span.sequence_num}</span>
+                {span.model && (
+                  <span style={styles.traceModel}>{getModelShortName(span.model)}</span>
+                )}
+                {span.duration_ms && (
+                  <span style={styles.traceDuration}>{formatDuration(span.duration_ms)}</span>
+                )}
+              </div>
+              <div style={styles.traceSession}>
+                Session: {span.session_id.slice(0, 8)}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -355,5 +417,41 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#57606a',
     marginTop: '8px',
+  },
+  traceInfo: {
+    backgroundColor: '#fff8e6',
+    border: '1px solid #f0d77a',
+    padding: '12px',
+    borderRadius: '6px',
+    marginBottom: '8px',
+    borderLeft: '3px solid #d4a72c',
+  },
+  traceHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
+  },
+  traceSpan: {
+    fontWeight: 500,
+    color: '#24292f',
+    fontSize: '13px',
+  },
+  traceModel: {
+    backgroundColor: '#8b5cf6',
+    color: '#fff',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '11px',
+  },
+  traceDuration: {
+    color: '#57606a',
+    fontSize: '12px',
+  },
+  traceSession: {
+    marginTop: '6px',
+    fontSize: '12px',
+    color: '#57606a',
+    fontFamily: 'monospace',
   },
 };

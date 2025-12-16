@@ -13,7 +13,8 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
 };
 
-use crate::db::{TraceContent, TraceSession, TraceSpan};
+use crate::db::{DecisionNode, TraceContent, TraceSession, TraceSpan};
+use std::collections::HashMap;
 
 // =============================================================================
 // Model - State
@@ -35,6 +36,7 @@ pub enum DetailTab {
     Thinking,
     Response,
     Tools,
+    Nodes,
 }
 
 /// State for the trace view
@@ -64,6 +66,10 @@ pub struct TraceState {
     pub detail_tab: DetailTab,
     /// Show detail panel (for spans view)
     pub show_detail: bool,
+    /// Node counts per span (span_id -> count)
+    pub node_counts: HashMap<i32, i64>,
+    /// Nodes for the detail view (Nodes tab)
+    pub detail_nodes: Vec<DecisionNode>,
 }
 
 // =============================================================================
@@ -195,6 +201,16 @@ impl TraceState {
     pub fn set_detail_content(&mut self, content: Vec<TraceContent>) {
         self.detail_content = content;
         self.detail_scroll = 0;
+    }
+
+    /// Set node counts for spans (for efficient display)
+    pub fn set_node_counts(&mut self, counts: HashMap<i32, i64>) {
+        self.node_counts = counts;
+    }
+
+    /// Set nodes for detail view (Nodes tab)
+    pub fn set_detail_nodes(&mut self, nodes: Vec<DecisionNode>) {
+        self.detail_nodes = nodes;
     }
 
     /// Clear all state (for refresh)
@@ -373,7 +389,8 @@ impl TraceState {
         self.detail_tab = match self.detail_tab {
             DetailTab::Thinking => DetailTab::Response,
             DetailTab::Response => DetailTab::Tools,
-            DetailTab::Tools => DetailTab::Thinking,
+            DetailTab::Tools => DetailTab::Nodes,
+            DetailTab::Nodes => DetailTab::Thinking,
         };
         self.detail_scroll = 0;
     }
@@ -381,9 +398,10 @@ impl TraceState {
     /// Previous detail tab
     pub fn prev_detail_tab(&mut self) {
         self.detail_tab = match self.detail_tab {
-            DetailTab::Thinking => DetailTab::Tools,
+            DetailTab::Thinking => DetailTab::Nodes,
             DetailTab::Response => DetailTab::Thinking,
             DetailTab::Tools => DetailTab::Response,
+            DetailTab::Nodes => DetailTab::Tools,
         };
         self.detail_scroll = 0;
     }
@@ -407,10 +425,12 @@ impl TraceState {
 
     /// Get content for current detail tab
     pub fn current_tab_content(&self) -> String {
+        // Nodes tab is handled separately in draw_span_detail
         let content_type = match self.detail_tab {
             DetailTab::Thinking => "thinking",
             DetailTab::Response => "response",
             DetailTab::Tools => "tool_input",
+            DetailTab::Nodes => return String::new(), // Nodes rendered separately
         };
 
         self.detail_content
@@ -590,7 +610,7 @@ fn draw_spans_list(frame: &mut Frame, state: &TraceState, area: Rect, title: &st
             let real_idx = start + idx;
             let is_selected = real_idx == state.selected_span_idx;
 
-            // Format: #seq | model | duration | tokens | tools | stop_reason
+            // Format: #seq | model | duration | tokens | tools | nodes
             let model = model_short_name(span.model.as_deref());
             let duration = format_duration_ms(span.duration_ms);
             let tokens_in = span.input_tokens.map(|t| format_tokens(t)).unwrap_or("-".into());
@@ -598,13 +618,24 @@ fn draw_spans_list(frame: &mut Frame, state: &TraceState, area: Rect, title: &st
             let tools = span.tool_names.as_deref().unwrap_or("-");
             let tools_short = truncate_str(tools, 15);
 
+            // Get node count for this span
+            let node_count = state.node_counts.get(&span.id).copied().unwrap_or(0);
+            let nodes_str = if node_count > 0 {
+                format!(" +{} nodes", node_count)
+            } else {
+                String::new()
+            };
+
             let line = format!(
-                " #{:<2} │ {:>6} │ {:>6} │ {}↓ {}↑ │ {}",
-                span.sequence_num, model, duration, tokens_in, tokens_out, tools_short
+                " #{:<2} │ {:>6} │ {:>6} │ {}↓ {}↑ │ {}{}",
+                span.sequence_num, model, duration, tokens_in, tokens_out, tools_short, nodes_str
             );
 
             let style = if is_selected {
                 Style::default().fg(Color::Black).bg(Color::Yellow)
+            } else if node_count > 0 {
+                // Highlight spans that created nodes
+                Style::default().fg(Color::Green)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -688,11 +719,46 @@ fn draw_span_detail(frame: &mut Frame, state: &TraceState, area: Rect) {
     let inner = block.inner(chunks[1]);
     frame.render_widget(block, chunks[1]);
 
+    // Special handling for Nodes tab
+    if state.detail_tab == DetailTab::Nodes {
+        if state.detail_nodes.is_empty() {
+            let para = Paragraph::new("No nodes created during this span")
+                .style(Style::default().fg(Color::DarkGray))
+                .alignment(Alignment::Center);
+            frame.render_widget(para, inner);
+        } else {
+            // Render nodes list
+            let lines: Vec<Line> = state.detail_nodes
+                .iter()
+                .map(|node| {
+                    let type_color = match node.node_type.as_str() {
+                        "goal" => Color::Yellow,
+                        "action" => Color::Blue,
+                        "outcome" => Color::Green,
+                        "decision" => Color::Magenta,
+                        "observation" => Color::Cyan,
+                        _ => Color::White,
+                    };
+                    Line::from(vec![
+                        Span::styled(format!("#{:<3} ", node.id), Style::default().fg(Color::DarkGray)),
+                        Span::styled(format!("[{}] ", node.node_type), Style::default().fg(type_color)),
+                        Span::raw(&node.title),
+                    ])
+                })
+                .collect();
+            let para = Paragraph::new(lines)
+                .style(Style::default().fg(Color::White));
+            frame.render_widget(para, inner);
+        }
+        return;
+    }
+
     if content.is_empty() {
         let msg = match state.detail_tab {
             DetailTab::Thinking => "No thinking content",
             DetailTab::Response => "No response content",
             DetailTab::Tools => "No tool calls",
+            DetailTab::Nodes => "No nodes created during this span",
         };
         let para = Paragraph::new(msg)
             .style(Style::default().fg(Color::DarkGray))
@@ -720,6 +786,7 @@ fn draw_detail_tabs(frame: &mut Frame, state: &TraceState, area: Rect) {
         ("Thinking", DetailTab::Thinking),
         ("Response", DetailTab::Response),
         ("Tools", DetailTab::Tools),
+        ("Nodes", DetailTab::Nodes),
     ];
 
     let tab_spans: Vec<Span> = tabs
@@ -740,7 +807,7 @@ fn draw_detail_tabs(frame: &mut Frame, state: &TraceState, area: Rect) {
     let mut line_spans = vec![Span::raw(" ")];
     for (i, tab_span) in tab_spans.into_iter().enumerate() {
         line_spans.push(tab_span);
-        if i < 2 {
+        if i < tabs.len() - 1 {
             line_spans.push(Span::raw(" │ "));
         }
     }

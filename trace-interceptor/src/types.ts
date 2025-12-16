@@ -18,6 +18,16 @@ export interface SpanData {
   thinking?: string;
   response?: string;
   tool_calls?: ToolCall[];
+  // New fields for comprehensive tracing
+  system_prompt?: string;           // The hidden system instructions
+  tool_definitions?: ToolDefinition[]; // Available tools with schemas
+  message_count?: number;           // Number of messages in conversation
+}
+
+export interface ToolDefinition {
+  name: string;
+  description?: string;
+  input_schema?: unknown;
 }
 
 export interface ToolCall {

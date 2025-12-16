@@ -51,13 +51,15 @@ export interface TraceSpan {
   tool_names: string | null;
   linked_node_id: number | null;
   linked_change_id: string | null;
+  // Added: count of nodes created during this span
+  node_count?: number;
 }
 
 // =============================================================================
 // Trace Content - Large content stored separately
 // =============================================================================
 
-export type TraceContentType = 'thinking' | 'response' | 'tool_input' | 'tool_output' | 'system';
+export type TraceContentType = 'thinking' | 'response' | 'tool_input' | 'tool_output' | 'system' | 'tool_definitions';
 
 export interface TraceContent {
   id: number;

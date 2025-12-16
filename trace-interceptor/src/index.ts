@@ -8,7 +8,7 @@
 
 import { DeciduousClient } from './deciduous';
 import { ResponseAccumulator, createAccumulatingStream } from './stream-parser';
-import type { SpanData, AnthropicRequest, AnthropicResponse } from './types';
+import type { SpanData, AnthropicRequest, AnthropicResponse, ToolDefinition } from './types';
 
 // Store original fetch
 const originalFetch = globalThis.fetch;
@@ -54,6 +54,41 @@ function extractUserPreview(body: AnthropicRequest): string | undefined {
   }
 
   return undefined;
+}
+
+/**
+ * Extract system prompt from request body
+ */
+function extractSystemPrompt(body: AnthropicRequest): string | undefined {
+  if (!body.system) return undefined;
+
+  // System can be a string or array of content blocks
+  if (typeof body.system === 'string') {
+    return body.system;
+  }
+
+  // Array of content blocks
+  const textBlocks = body.system.filter((b) => b.type === 'text' && b.text);
+  return textBlocks.map((b) => b.text).join('\n') || undefined;
+}
+
+/**
+ * Extract tool definitions from request body
+ */
+function extractToolDefinitions(body: AnthropicRequest): ToolDefinition[] | undefined {
+  if (!body.tools || !Array.isArray(body.tools)) return undefined;
+
+  const defs: ToolDefinition[] = [];
+  for (const tool of body.tools) {
+    if (typeof tool === 'object' && tool !== null && 'name' in tool) {
+      defs.push({
+        name: (tool as { name: string }).name,
+        description: (tool as { description?: string }).description,
+        input_schema: (tool as { input_schema?: unknown }).input_schema,
+      });
+    }
+  }
+  return defs.length > 0 ? defs : undefined;
 }
 
 /**
@@ -137,6 +172,16 @@ async function interceptedFetch(
   }
 
   const userPreview = requestBody ? extractUserPreview(requestBody) : undefined;
+  const systemPrompt = requestBody ? extractSystemPrompt(requestBody) : undefined;
+  const toolDefs = requestBody ? extractToolDefinitions(requestBody) : undefined;
+  const messageCount = requestBody?.messages?.length;
+
+  // Start span BEFORE making the request (active span tracking)
+  // This enables nodes created during the API call to be linked to this span
+  const spanId = await deciduous.startSpan(userPreview);
+  if (spanId !== null) {
+    process.env.DECIDUOUS_TRACE_SPAN = spanId.toString();
+  }
 
   // Make the actual request
   const response = await originalFetch(input, init);
@@ -151,9 +196,17 @@ async function interceptedFetch(
         ...accumulator.finalize(),
         duration_ms: duration,
         user_preview: userPreview,
+        system_prompt: systemPrompt,
+        tool_definitions: toolDefs,
+        message_count: messageCount,
       };
 
-      await deciduous.recordSpan(spanData);
+      await deciduous.recordSpan(spanData, spanId ?? undefined);
+
+      // NOTE: Don't delete DECIDUOUS_TRACE_SPAN here!
+      // Tools are executed AFTER the API response completes but BEFORE the next API call.
+      // The span ID needs to persist so `deciduous add` can link nodes to this span.
+      // The env var will be overwritten when the next span starts (line 145).
     };
 
     // Wrap the response body
@@ -178,9 +231,15 @@ async function interceptedFetch(
     ...parseNonStreamingResponse(responseData),
     duration_ms: duration,
     user_preview: userPreview,
+    system_prompt: systemPrompt,
+    tool_definitions: toolDefs,
+    message_count: messageCount,
   };
 
-  await deciduous.recordSpan(spanData);
+  await deciduous.recordSpan(spanData, spanId ?? undefined);
+
+  // NOTE: Don't delete DECIDUOUS_TRACE_SPAN here!
+  // Same as streaming case - tools run after response, need span ID.
 
   return response;
 }

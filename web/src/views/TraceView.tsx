@@ -30,7 +30,6 @@ import {
 // =============================================================================
 
 type ViewMode = 'sessions' | 'spans' | 'detail';
-type DetailTab = 'thinking' | 'response' | 'tools';
 
 // =============================================================================
 // Styles
@@ -178,24 +177,14 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
   },
-  detailTabs: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '16px',
-  },
-  tab: {
-    padding: '6px 12px',
-    borderRadius: '6px',
-    border: '1px solid #e5e7eb',
-    background: '#ffffff',
-    color: '#6b7280',
-    cursor: 'pointer',
-    fontSize: '13px',
-  },
-  tabActive: {
-    backgroundColor: '#3b82f6',
-    borderColor: '#3b82f6',
-    color: '#fff',
+  nodeCount: {
+    color: '#22c55e',
+    fontWeight: 500,
+    fontSize: '12px',
+    padding: '2px 6px',
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderRadius: '4px',
+    marginLeft: '8px',
   },
   contentArea: {
     backgroundColor: '#f9fafb',
@@ -242,7 +231,6 @@ const TraceView: React.FC = () => {
   const [selectedSessionIdx, setSelectedSessionIdx] = useState(0);
   const [selectedSpanIdx, setSelectedSpanIdx] = useState(0);
   const [viewMode, setViewMode] = useState<ViewMode>('sessions');
-  const [detailTab, setDetailTab] = useState<DetailTab>('thinking');
   const [_loading, setLoading] = useState(false);
 
   // Fetch sessions on mount
@@ -332,7 +320,6 @@ const TraceView: React.FC = () => {
             const span = spans[selectedSpanIdx];
             fetchContent(session.session_id, span.id);
             setViewMode('detail');
-            setDetailTab('thinking');
           }
           break;
         case 'Escape':
@@ -349,36 +336,12 @@ const TraceView: React.FC = () => {
           e.preventDefault();
           fetchSessions();
           break;
-        case 'Tab':
-          if (viewMode === 'detail') {
-            e.preventDefault();
-            setDetailTab(t => {
-              if (t === 'thinking') return 'response';
-              if (t === 'response') return 'tools';
-              return 'thinking';
-            });
-          }
-          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [viewMode, sessions, spans, selectedSessionIdx, selectedSpanIdx]);
-
-  // Get content for current tab
-  const getTabContent = useCallback(() => {
-    if (detailTab === 'thinking') {
-      return content.filter(c => c.content_type === 'thinking').map(c => c.content).join('\n');
-    } else if (detailTab === 'response') {
-      return content.filter(c => c.content_type === 'response').map(c => c.content).join('\n');
-    } else {
-      return content
-        .filter(c => c.content_type === 'tool_input' || c.content_type === 'tool_output')
-        .map(c => `=== ${c.tool_name || 'Tool'} (${c.content_type}) ===\n${c.content}`)
-        .join('\n\n');
-    }
-  }, [content, detailTab]);
 
   const getModelStyle = (model: string | null): React.CSSProperties => {
     const name = getModelShortName(model);
@@ -476,7 +439,6 @@ const TraceView: React.FC = () => {
                 setSelectedSpanIdx(idx);
                 fetchContent(session.session_id, span.id);
                 setViewMode('detail');
-                setDetailTab('thinking');
               }}
             >
               <span style={styles.spanSeq}>#{span.sequence_num}</span>
@@ -489,6 +451,9 @@ const TraceView: React.FC = () => {
               {span.tool_names && (
                 <span style={styles.toolList}>{span.tool_names}</span>
               )}
+              {span.node_count && span.node_count > 0 && (
+                <span style={styles.nodeCount}>+{span.node_count} nodes</span>
+              )}
             </div>
           ))
         )}
@@ -496,10 +461,28 @@ const TraceView: React.FC = () => {
     );
   };
 
-  // Detail panel with preview
+  // Get content for a specific type
+  const getThinkingContent = useCallback(() => {
+    return content.filter(c => c.content_type === 'thinking').map(c => c.content).join('\n');
+  }, [content]);
+
+  const getResponseContent = useCallback(() => {
+    return content.filter(c => c.content_type === 'response').map(c => c.content).join('\n');
+  }, [content]);
+
+  const getToolsContent = useCallback(() => {
+    return content
+      .filter(c => c.content_type === 'tool_input' || c.content_type === 'tool_output')
+      .map(c => `=== ${c.tool_name || 'Tool'} (${c.content_type}) ===\n${c.content}`)
+      .join('\n\n');
+  }, [content]);
+
+  // Detail panel showing all sections
   const renderDetail = () => {
     const span = spans[selectedSpanIdx];
-    const tabContent = getTabContent();
+    const thinkingContent = getThinkingContent();
+    const responseContent = getResponseContent();
+    const toolsContent = getToolsContent();
 
     return (
       <div style={styles.detailPanel}>
@@ -516,35 +499,40 @@ const TraceView: React.FC = () => {
           </button>
         </div>
 
-        {span && (
-          <>
-            {span.user_preview && (
-              <div style={styles.previewSection}>
-                <div style={styles.previewLabel}>User:</div>
-                <div style={styles.previewText}>{span.user_preview.slice(0, 200)}...</div>
-              </div>
-            )}
-          </>
+        {span && span.user_preview && (
+          <div style={styles.previewSection}>
+            <div style={styles.previewLabel}>User:</div>
+            <div style={{ ...styles.previewText, maxHeight: '100px', overflow: 'auto' }}>
+              {span.user_preview}
+            </div>
+          </div>
         )}
 
-        <div style={styles.detailTabs}>
-          {(['thinking', 'response', 'tools'] as DetailTab[]).map(tab => (
-            <button
-              key={tab}
-              style={{
-                ...styles.tab,
-                ...(detailTab === tab ? styles.tabActive : {}),
-              }}
-              onClick={() => setDetailTab(tab)}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          ))}
+        {/* Thinking Section */}
+        <div style={styles.previewSection}>
+          <div style={styles.previewLabel}>Thinking:</div>
+          <div style={{ ...styles.contentArea, maxHeight: '200px' }}>
+            {thinkingContent || <span style={{ color: '#9ca3af' }}>No thinking content</span>}
+          </div>
         </div>
 
-        <div style={styles.contentArea}>
-          {tabContent || `No ${detailTab} content`}
+        {/* Response Section */}
+        <div style={styles.previewSection}>
+          <div style={styles.previewLabel}>Response:</div>
+          <div style={{ ...styles.contentArea, maxHeight: '200px' }}>
+            {responseContent || <span style={{ color: '#9ca3af' }}>No response content</span>}
+          </div>
         </div>
+
+        {/* Tools Section */}
+        {toolsContent && (
+          <div style={styles.previewSection}>
+            <div style={styles.previewLabel}>Tools:</div>
+            <div style={{ ...styles.contentArea, maxHeight: '200px' }}>
+              {toolsContent}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -559,20 +547,33 @@ const TraceView: React.FC = () => {
           {spans[selectedSpanIdx] && (
             <div style={{ ...styles.detailPanel, width: '300px' }}>
               <h3 style={{ ...styles.title, fontSize: '14px', marginBottom: '12px' }}>Preview</h3>
+              {spans[selectedSpanIdx].user_preview && (
+                <div style={styles.previewSection}>
+                  <div style={styles.previewLabel}>User:</div>
+                  <div style={{ ...styles.previewText, maxHeight: '80px', overflow: 'auto' }}>
+                    {spans[selectedSpanIdx].user_preview}
+                  </div>
+                </div>
+              )}
               {spans[selectedSpanIdx].thinking_preview && (
                 <div style={styles.previewSection}>
                   <div style={styles.previewLabel}>Thinking:</div>
-                  <div style={styles.previewText}>
-                    {spans[selectedSpanIdx].thinking_preview?.slice(0, 300)}...
+                  <div style={{ ...styles.previewText, maxHeight: '120px', overflow: 'auto' }}>
+                    {spans[selectedSpanIdx].thinking_preview}
                   </div>
                 </div>
               )}
               {spans[selectedSpanIdx].response_preview && (
                 <div style={styles.previewSection}>
                   <div style={styles.previewLabel}>Response:</div>
-                  <div style={styles.previewText}>
-                    {spans[selectedSpanIdx].response_preview?.slice(0, 300)}...
+                  <div style={{ ...styles.previewText, maxHeight: '120px', overflow: 'auto' }}>
+                    {spans[selectedSpanIdx].response_preview}
                   </div>
+                </div>
+              )}
+              {!spans[selectedSpanIdx].thinking_preview && !spans[selectedSpanIdx].response_preview && (
+                <div style={styles.emptyState}>
+                  <p style={{ fontSize: '12px' }}>Click to view full content</p>
                 </div>
               )}
             </div>

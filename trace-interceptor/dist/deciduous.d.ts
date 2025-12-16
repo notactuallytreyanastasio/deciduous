@@ -7,15 +7,25 @@ export declare class DeciduousClient {
     private deciduousBin;
     constructor();
     /**
-     * Start a new trace session
+     * Start or resume a trace session
+     * If DECIDUOUS_TRACE_SESSION is set (by proxy command), use that session
+     * Otherwise, start a new one
      */
     startSession(): Promise<string>;
     /**
-     * Record a complete span (request + response)
+     * Start a new span before making an API call (for active tracking)
+     * Returns the span ID which should be set as DECIDUOUS_TRACE_SPAN env var
      */
-    recordSpan(data: SpanData): Promise<number | null>;
+    startSpan(userPreview?: string): Promise<number | null>;
+    /**
+     * Record/complete a span (request + response)
+     * If spanId is provided, completes an existing span; otherwise creates a new one
+     */
+    recordSpan(data: SpanData, spanId?: number): Promise<number | null>;
     /**
      * End the current trace session
+     * Note: If session was provided by proxy (DECIDUOUS_TRACE_SESSION),
+     * the proxy handles ending it, so we just clear our reference
      */
     endSession(): Promise<void>;
     /**
