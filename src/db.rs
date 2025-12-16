@@ -556,6 +556,131 @@ pub struct GitHubIssueCache {
 }
 
 // ============================================================================
+// Claude Trace Models
+// ============================================================================
+
+/// Insertable trace session
+#[derive(Insertable)]
+#[diesel(table_name = trace_sessions)]
+pub struct NewTraceSession<'a> {
+    pub session_id: &'a str,
+    pub started_at: &'a str,
+    pub ended_at: Option<&'a str>,
+    pub working_dir: Option<&'a str>,
+    pub git_branch: Option<&'a str>,
+    pub command: Option<&'a str>,
+    pub summary: Option<&'a str>,
+    pub total_input_tokens: i32,
+    pub total_output_tokens: i32,
+    pub total_cache_read: i32,
+    pub total_cache_write: i32,
+    pub linked_node_id: Option<i32>,
+    pub linked_change_id: Option<&'a str>,
+}
+
+/// Queryable trace session
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = trace_sessions)]
+pub struct TraceSession {
+    pub id: i32,
+    pub session_id: String,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub working_dir: Option<String>,
+    pub git_branch: Option<String>,
+    pub command: Option<String>,
+    pub summary: Option<String>,
+    pub total_input_tokens: i32,
+    pub total_output_tokens: i32,
+    pub total_cache_read: i32,
+    pub total_cache_write: i32,
+    pub linked_node_id: Option<i32>,
+    pub linked_change_id: Option<String>,
+}
+
+/// Insertable trace span
+#[derive(Insertable)]
+#[diesel(table_name = trace_spans)]
+pub struct NewTraceSpan<'a> {
+    pub change_id: &'a str,
+    pub session_id: &'a str,
+    pub sequence_num: i32,
+    pub started_at: &'a str,
+    pub completed_at: Option<&'a str>,
+    pub duration_ms: Option<i32>,
+    pub model: Option<&'a str>,
+    pub request_id: Option<&'a str>,
+    pub stop_reason: Option<&'a str>,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
+    pub cache_read: Option<i32>,
+    pub cache_write: Option<i32>,
+    pub user_preview: Option<&'a str>,
+    pub thinking_preview: Option<&'a str>,
+    pub response_preview: Option<&'a str>,
+    pub tool_names: Option<&'a str>,
+    pub linked_node_id: Option<i32>,
+    pub linked_change_id: Option<&'a str>,
+}
+
+/// Queryable trace span
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = trace_spans)]
+pub struct TraceSpan {
+    pub id: i32,
+    pub change_id: String,
+    pub session_id: String,
+    pub sequence_num: i32,
+    pub started_at: String,
+    pub completed_at: Option<String>,
+    pub duration_ms: Option<i32>,
+    pub model: Option<String>,
+    pub request_id: Option<String>,
+    pub stop_reason: Option<String>,
+    pub input_tokens: Option<i32>,
+    pub output_tokens: Option<i32>,
+    pub cache_read: Option<i32>,
+    pub cache_write: Option<i32>,
+    pub user_preview: Option<String>,
+    pub thinking_preview: Option<String>,
+    pub response_preview: Option<String>,
+    pub tool_names: Option<String>,
+    pub linked_node_id: Option<i32>,
+    pub linked_change_id: Option<String>,
+}
+
+/// Insertable trace content
+#[derive(Insertable)]
+#[diesel(table_name = trace_content)]
+pub struct NewTraceContent<'a> {
+    pub span_id: i32,
+    pub content_type: &'a str,
+    pub tool_name: Option<&'a str>,
+    pub tool_use_id: Option<&'a str>,
+    pub content: &'a str,
+    pub sequence_num: i32,
+}
+
+/// Queryable trace content
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = trace_content)]
+pub struct TraceContent {
+    pub id: i32,
+    pub span_id: i32,
+    pub content_type: String,
+    pub tool_name: Option<String>,
+    pub tool_use_id: Option<String>,
+    pub content: String,
+    pub sequence_num: i32,
+}
+
+// ============================================================================
 // Helper structs for raw SQL queries
 // ============================================================================
 
@@ -959,6 +1084,76 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // Claude Trace Tables
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS trace_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                session_id TEXT NOT NULL UNIQUE,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                working_dir TEXT,
+                git_branch TEXT,
+                command TEXT,
+                summary TEXT,
+                total_input_tokens INTEGER NOT NULL DEFAULT 0,
+                total_output_tokens INTEGER NOT NULL DEFAULT 0,
+                total_cache_read INTEGER NOT NULL DEFAULT 0,
+                total_cache_write INTEGER NOT NULL DEFAULT 0,
+                linked_node_id INTEGER,
+                linked_change_id TEXT,
+                FOREIGN KEY (linked_node_id) REFERENCES decision_nodes(id)
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS trace_spans (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                change_id TEXT NOT NULL UNIQUE,
+                session_id TEXT NOT NULL,
+                sequence_num INTEGER NOT NULL,
+                started_at TEXT NOT NULL,
+                completed_at TEXT,
+                duration_ms INTEGER,
+                model TEXT,
+                request_id TEXT,
+                stop_reason TEXT,
+                input_tokens INTEGER,
+                output_tokens INTEGER,
+                cache_read INTEGER,
+                cache_write INTEGER,
+                user_preview TEXT,
+                thinking_preview TEXT,
+                response_preview TEXT,
+                tool_names TEXT,
+                linked_node_id INTEGER,
+                linked_change_id TEXT,
+                FOREIGN KEY (session_id) REFERENCES trace_sessions(session_id),
+                FOREIGN KEY (linked_node_id) REFERENCES decision_nodes(id)
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS trace_content (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                span_id INTEGER NOT NULL,
+                content_type TEXT NOT NULL,
+                tool_name TEXT,
+                tool_use_id TEXT,
+                content TEXT NOT NULL,
+                sequence_num INTEGER NOT NULL DEFAULT 0,
+                FOREIGN KEY (span_id) REFERENCES trace_spans(id)
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
             .execute(&mut conn)?;
@@ -1000,6 +1195,24 @@ impl Database {
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_github_issue_cache_repo ON github_issue_cache(repo, issue_number)").execute(&mut conn)?;
+
+        // Trace indexes
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_trace_sessions_session_id ON trace_sessions(session_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_trace_spans_session_id ON trace_spans(session_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_trace_spans_change_id ON trace_spans(change_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_trace_content_span_id ON trace_content(span_id)",
+        )
+        .execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -2066,6 +2279,402 @@ impl Database {
         .execute(&mut conn)?;
 
         Ok(deleted)
+    }
+
+    // ========================================================================
+    // Claude Trace Operations
+    // ========================================================================
+
+    /// Start a new trace session
+    pub fn start_trace_session(
+        &self,
+        session_id: &str,
+        working_dir: Option<&str>,
+        git_branch: Option<&str>,
+        command: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_session = NewTraceSession {
+            session_id,
+            started_at: &now,
+            ended_at: None,
+            working_dir,
+            git_branch,
+            command,
+            summary: None,
+            total_input_tokens: 0,
+            total_output_tokens: 0,
+            total_cache_read: 0,
+            total_cache_write: 0,
+            linked_node_id: None,
+            linked_change_id: None,
+        };
+
+        diesel::insert_into(trace_sessions::table)
+            .values(&new_session)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// End a trace session
+    pub fn end_trace_session(&self, session_id: &str, summary: Option<&str>) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Calculate totals from spans
+        let spans = trace_spans::table
+            .filter(trace_spans::session_id.eq(session_id))
+            .load::<TraceSpan>(&mut conn)?;
+
+        let total_input: i32 = spans.iter().filter_map(|s| s.input_tokens).sum();
+        let total_output: i32 = spans.iter().filter_map(|s| s.output_tokens).sum();
+        let total_cache_read: i32 = spans.iter().filter_map(|s| s.cache_read).sum();
+        let total_cache_write: i32 = spans.iter().filter_map(|s| s.cache_write).sum();
+
+        diesel::update(trace_sessions::table.filter(trace_sessions::session_id.eq(session_id)))
+            .set((
+                trace_sessions::ended_at.eq(Some(&now)),
+                trace_sessions::summary.eq(summary),
+                trace_sessions::total_input_tokens.eq(total_input),
+                trace_sessions::total_output_tokens.eq(total_output),
+                trace_sessions::total_cache_read.eq(total_cache_read),
+                trace_sessions::total_cache_write.eq(total_cache_write),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Get a trace session by session_id
+    pub fn get_trace_session(&self, session_id: &str) -> Result<Option<TraceSession>> {
+        let mut conn = self.get_conn()?;
+        let session = trace_sessions::table
+            .filter(trace_sessions::session_id.eq(session_id))
+            .first::<TraceSession>(&mut conn)
+            .optional()?;
+        Ok(session)
+    }
+
+    /// Get recent trace sessions
+    pub fn get_trace_sessions(&self, limit: i64) -> Result<Vec<TraceSession>> {
+        let mut conn = self.get_conn()?;
+        let sessions = trace_sessions::table
+            .order(trace_sessions::started_at.desc())
+            .limit(limit)
+            .load::<TraceSession>(&mut conn)?;
+        Ok(sessions)
+    }
+
+    /// Get trace sessions linked to decision nodes
+    pub fn get_linked_trace_sessions(&self, limit: i64) -> Result<Vec<TraceSession>> {
+        let mut conn = self.get_conn()?;
+        let sessions = trace_sessions::table
+            .filter(trace_sessions::linked_node_id.is_not_null())
+            .order(trace_sessions::started_at.desc())
+            .limit(limit)
+            .load::<TraceSession>(&mut conn)?;
+        Ok(sessions)
+    }
+
+    /// Create a trace span
+    pub fn create_trace_span(
+        &self,
+        session_id: &str,
+        model: Option<&str>,
+        user_preview: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+        let change_id = Uuid::new_v4().to_string();
+
+        // Get next sequence number for this session
+        let max_seq: Option<i32> = trace_spans::table
+            .filter(trace_spans::session_id.eq(session_id))
+            .select(diesel::dsl::max(trace_spans::sequence_num))
+            .first(&mut conn)?;
+        let sequence_num = max_seq.unwrap_or(0) + 1;
+
+        let new_span = NewTraceSpan {
+            change_id: &change_id,
+            session_id,
+            sequence_num,
+            started_at: &now,
+            completed_at: None,
+            duration_ms: None,
+            model,
+            request_id: None,
+            stop_reason: None,
+            input_tokens: None,
+            output_tokens: None,
+            cache_read: None,
+            cache_write: None,
+            user_preview,
+            thinking_preview: None,
+            response_preview: None,
+            tool_names: None,
+            linked_node_id: None,
+            linked_change_id: None,
+        };
+
+        diesel::insert_into(trace_spans::table)
+            .values(&new_span)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Complete a trace span with response data
+    #[allow(clippy::too_many_arguments)]
+    pub fn complete_trace_span(
+        &self,
+        span_id: i32,
+        duration_ms: i32,
+        request_id: Option<&str>,
+        stop_reason: Option<&str>,
+        input_tokens: Option<i32>,
+        output_tokens: Option<i32>,
+        cache_read: Option<i32>,
+        cache_write: Option<i32>,
+        thinking_preview: Option<&str>,
+        response_preview: Option<&str>,
+        tool_names: Option<&str>,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(trace_spans::table.filter(trace_spans::id.eq(span_id)))
+            .set((
+                trace_spans::completed_at.eq(Some(&now)),
+                trace_spans::duration_ms.eq(Some(duration_ms)),
+                trace_spans::request_id.eq(request_id),
+                trace_spans::stop_reason.eq(stop_reason),
+                trace_spans::input_tokens.eq(input_tokens),
+                trace_spans::output_tokens.eq(output_tokens),
+                trace_spans::cache_read.eq(cache_read),
+                trace_spans::cache_write.eq(cache_write),
+                trace_spans::thinking_preview.eq(thinking_preview),
+                trace_spans::response_preview.eq(response_preview),
+                trace_spans::tool_names.eq(tool_names),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Get spans for a session
+    pub fn get_trace_spans(&self, session_id: &str) -> Result<Vec<TraceSpan>> {
+        let mut conn = self.get_conn()?;
+        let spans = trace_spans::table
+            .filter(trace_spans::session_id.eq(session_id))
+            .order(trace_spans::sequence_num.asc())
+            .load::<TraceSpan>(&mut conn)?;
+        Ok(spans)
+    }
+
+    /// Get a single span by ID
+    pub fn get_trace_span(&self, span_id: i32) -> Result<Option<TraceSpan>> {
+        let mut conn = self.get_conn()?;
+        let span = trace_spans::table
+            .filter(trace_spans::id.eq(span_id))
+            .first::<TraceSpan>(&mut conn)
+            .optional()?;
+        Ok(span)
+    }
+
+    /// Add content to a trace span
+    pub fn add_trace_content(
+        &self,
+        span_id: i32,
+        content_type: &str,
+        content: &str,
+        tool_name: Option<&str>,
+        tool_use_id: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+
+        // Get next sequence number for this span/type
+        let max_seq: Option<i32> = trace_content::table
+            .filter(trace_content::span_id.eq(span_id))
+            .filter(trace_content::content_type.eq(content_type))
+            .select(diesel::dsl::max(trace_content::sequence_num))
+            .first(&mut conn)?;
+        let sequence_num = max_seq.unwrap_or(-1) + 1;
+
+        let new_content = NewTraceContent {
+            span_id,
+            content_type,
+            tool_name,
+            tool_use_id,
+            content,
+            sequence_num,
+        };
+
+        diesel::insert_into(trace_content::table)
+            .values(&new_content)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Get content for a span
+    pub fn get_trace_content(&self, span_id: i32) -> Result<Vec<TraceContent>> {
+        let mut conn = self.get_conn()?;
+        let content = trace_content::table
+            .filter(trace_content::span_id.eq(span_id))
+            .order(trace_content::sequence_num.asc())
+            .load::<TraceContent>(&mut conn)?;
+        Ok(content)
+    }
+
+    /// Get content for a span by type
+    pub fn get_trace_content_by_type(
+        &self,
+        span_id: i32,
+        content_type: &str,
+    ) -> Result<Vec<TraceContent>> {
+        let mut conn = self.get_conn()?;
+        let content = trace_content::table
+            .filter(trace_content::span_id.eq(span_id))
+            .filter(trace_content::content_type.eq(content_type))
+            .order(trace_content::sequence_num.asc())
+            .load::<TraceContent>(&mut conn)?;
+        Ok(content)
+    }
+
+    /// Link a trace session to a decision node
+    pub fn link_trace_session_to_node(&self, session_id: &str, node_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+
+        // Get node's change_id
+        let node = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)?;
+
+        diesel::update(trace_sessions::table.filter(trace_sessions::session_id.eq(session_id)))
+            .set((
+                trace_sessions::linked_node_id.eq(Some(node_id)),
+                trace_sessions::linked_change_id.eq(Some(&node.change_id)),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Link a trace span to a decision node
+    pub fn link_trace_span_to_node(&self, span_id: i32, node_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+
+        // Get node's change_id
+        let node = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)?;
+
+        diesel::update(trace_spans::table.filter(trace_spans::id.eq(span_id)))
+            .set((
+                trace_spans::linked_node_id.eq(Some(node_id)),
+                trace_spans::linked_change_id.eq(Some(&node.change_id)),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Unlink a trace session from its decision node
+    pub fn unlink_trace_session(&self, session_id: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+
+        diesel::update(trace_sessions::table.filter(trace_sessions::session_id.eq(session_id)))
+            .set((
+                trace_sessions::linked_node_id.eq(None::<i32>),
+                trace_sessions::linked_change_id.eq(None::<String>),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Unlink a trace span from its decision node
+    pub fn unlink_trace_span(&self, span_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+
+        diesel::update(trace_spans::table.filter(trace_spans::id.eq(span_id)))
+            .set((
+                trace_spans::linked_node_id.eq(None::<i32>),
+                trace_spans::linked_change_id.eq(None::<String>),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Prune old trace data (sessions and their spans/content)
+    pub fn prune_traces(&self, days: u32, keep_linked: bool) -> Result<(usize, usize, usize)> {
+        let mut conn = self.get_conn()?;
+        let cutoff =
+            chrono::Local::now() - chrono::Duration::days(i64::from(days));
+        let cutoff_str = cutoff.to_rfc3339();
+
+        // Find sessions to delete
+        let mut query = trace_sessions::table
+            .filter(trace_sessions::started_at.lt(&cutoff_str))
+            .into_boxed();
+
+        if keep_linked {
+            query = query.filter(trace_sessions::linked_node_id.is_null());
+        }
+
+        let sessions_to_delete: Vec<TraceSession> = query.load(&mut conn)?;
+        let session_ids: Vec<&str> = sessions_to_delete
+            .iter()
+            .map(|s| s.session_id.as_str())
+            .collect();
+
+        if session_ids.is_empty() {
+            return Ok((0, 0, 0));
+        }
+
+        // Get span IDs for these sessions
+        let spans_to_delete: Vec<TraceSpan> = trace_spans::table
+            .filter(trace_spans::session_id.eq_any(&session_ids))
+            .load(&mut conn)?;
+        let span_ids: Vec<i32> = spans_to_delete.iter().map(|s| s.id).collect();
+
+        // Delete content first (FK constraint)
+        let content_deleted =
+            diesel::delete(trace_content::table.filter(trace_content::span_id.eq_any(&span_ids)))
+                .execute(&mut conn)?;
+
+        // Delete spans
+        let spans_deleted = diesel::delete(
+            trace_spans::table.filter(trace_spans::session_id.eq_any(&session_ids)),
+        )
+        .execute(&mut conn)?;
+
+        // Delete sessions
+        let sessions_deleted = diesel::delete(
+            trace_sessions::table.filter(trace_sessions::session_id.eq_any(&session_ids)),
+        )
+        .execute(&mut conn)?;
+
+        Ok((sessions_deleted, spans_deleted, content_deleted))
     }
 }
 

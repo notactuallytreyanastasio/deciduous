@@ -1,0 +1,18 @@
+{
+  "name": "deciduous-trace-interceptor",
+  "version": "0.1.0",
+  "description": "Fetch interceptor for capturing Claude API traffic to deciduous",
+  "main": "dist/interceptor-loader.js",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "private": true
+}

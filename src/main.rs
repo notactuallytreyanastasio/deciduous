@@ -297,6 +297,137 @@ enum Command {
         /// Shell type: bash, zsh, fish, powershell, elvish
         shell: clap_complete::Shell,
     },
+
+    /// Manage API trace capture from Claude Code sessions
+    Trace {
+        #[command(subcommand)]
+        action: TraceAction,
+    },
+
+    /// Run a command through the trace-capturing proxy
+    Proxy {
+        /// Command to run (e.g., "claude")
+        #[arg(trailing_var_arg = true, required = true)]
+        command: Vec<String>,
+
+        /// Auto-link trace session to most recent goal node
+        #[arg(long)]
+        auto_link: bool,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum TraceAction {
+    /// Start a new trace session
+    Start {
+        /// Working directory (default: current directory)
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+
+        /// Command being traced (for display)
+        #[arg(long)]
+        command: Option<String>,
+    },
+
+    /// End a trace session
+    End {
+        /// Session ID to end
+        session_id: String,
+
+        /// Optional summary
+        #[arg(long)]
+        summary: Option<String>,
+    },
+
+    /// Record a trace span (called by interceptor, reads JSON from stdin)
+    Record {
+        /// Session ID
+        #[arg(long)]
+        session: String,
+
+        /// Read span data from stdin as JSON
+        #[arg(long)]
+        stdin: bool,
+    },
+
+    /// List trace sessions
+    Sessions {
+        /// Number of sessions to show
+        #[arg(short, long, default_value = "20")]
+        limit: i64,
+
+        /// Only show sessions linked to decision nodes
+        #[arg(long)]
+        linked: bool,
+    },
+
+    /// Show spans in a trace session
+    Spans {
+        /// Session ID
+        session_id: String,
+
+        /// Show thinking block previews
+        #[arg(long)]
+        show_thinking: bool,
+    },
+
+    /// Show full content for a span
+    Show {
+        /// Span ID
+        span_id: i32,
+
+        /// Show thinking block content
+        #[arg(long)]
+        thinking: bool,
+
+        /// Show response content
+        #[arg(long)]
+        response: bool,
+
+        /// Show tool calls
+        #[arg(long)]
+        tools: bool,
+    },
+
+    /// Link a trace session or span to a decision node
+    Link {
+        /// Target decision node ID
+        node_id: i32,
+
+        /// Session ID to link
+        #[arg(long, group = "target")]
+        session: Option<String>,
+
+        /// Span ID to link
+        #[arg(long, group = "target")]
+        span: Option<i32>,
+    },
+
+    /// Unlink a trace session or span from its decision node
+    Unlink {
+        /// Session ID to unlink
+        #[arg(long, group = "target")]
+        session: Option<String>,
+
+        /// Span ID to unlink
+        #[arg(long, group = "target")]
+        span: Option<i32>,
+    },
+
+    /// Delete old trace data
+    Prune {
+        /// Delete traces older than N days
+        #[arg(long, default_value = "30")]
+        days: u32,
+
+        /// Keep linked traces even if old
+        #[arg(long)]
+        keep_linked: bool,
+
+        /// Show what would be deleted without deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -2530,6 +2661,588 @@ fn main() {
                 }
             }
         }
+
+        Command::Trace { action } => {
+            match action {
+                TraceAction::Start { cwd, command } => {
+                    let session_id = uuid::Uuid::new_v4().to_string();
+                    let working_dir = cwd
+                        .map(|p| p.to_string_lossy().to_string())
+                        .or_else(|| std::env::current_dir().ok().map(|p| p.to_string_lossy().to_string()));
+
+                    // Get git branch
+                    let git_branch = std::process::Command::new("git")
+                        .args(["branch", "--show-current"])
+                        .output()
+                        .ok()
+                        .filter(|o| o.status.success())
+                        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+
+                    match db.start_trace_session(
+                        &session_id,
+                        working_dir.as_deref(),
+                        git_branch.as_deref(),
+                        command.as_deref(),
+                    ) {
+                        Ok(_id) => {
+                            // Output JSON for the interceptor to parse
+                            println!(r#"{{"session_id": "{}"}}"#, session_id);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                TraceAction::End { session_id, summary } => {
+                    match db.end_trace_session(&session_id, summary.as_deref()) {
+                        Ok(()) => {
+                            println!("{} Trace session ended", "Success:".green());
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                TraceAction::Record { session, stdin } => {
+                    if !stdin {
+                        eprintln!("{} --stdin is required", "Error:".red());
+                        std::process::exit(1);
+                    }
+
+                    let mut input = String::new();
+                    if let Err(e) = std::io::stdin().read_line(&mut input) {
+                        eprintln!("{} Reading stdin: {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+
+                    // Parse span data from JSON
+                    let span_data: serde_json::Value = match serde_json::from_str(&input) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("{} Parsing JSON: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let model = span_data["model"].as_str();
+                    let user_preview = span_data["user_preview"].as_str();
+
+                    // Create span
+                    let span_id = match db.create_trace_span(&session, model, user_preview) {
+                        Ok(id) => id,
+                        Err(e) => {
+                            eprintln!("{} Creating span: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    // Complete span if response data is included
+                    if span_data.get("duration_ms").is_some() {
+                        let duration_ms = span_data["duration_ms"].as_i64().unwrap_or(0) as i32;
+                        let request_id = span_data["request_id"].as_str();
+                        let stop_reason = span_data["stop_reason"].as_str();
+                        let input_tokens = span_data["input_tokens"].as_i64().map(|v| v as i32);
+                        let output_tokens = span_data["output_tokens"].as_i64().map(|v| v as i32);
+                        let cache_read = span_data["cache_read"].as_i64().map(|v| v as i32);
+                        let cache_write = span_data["cache_write"].as_i64().map(|v| v as i32);
+                        let thinking_preview = span_data["thinking_preview"].as_str();
+                        let response_preview = span_data["response_preview"].as_str();
+                        let tool_names = span_data["tool_names"].as_str();
+
+                        if let Err(e) = db.complete_trace_span(
+                            span_id,
+                            duration_ms,
+                            request_id,
+                            stop_reason,
+                            input_tokens,
+                            output_tokens,
+                            cache_read,
+                            cache_write,
+                            thinking_preview,
+                            response_preview,
+                            tool_names,
+                        ) {
+                            eprintln!("{} Completing span: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+
+                        // Store full content if provided
+                        if let Some(thinking) = span_data["thinking"].as_str() {
+                            let _ = db.add_trace_content(span_id, "thinking", thinking, None, None);
+                        }
+                        if let Some(response) = span_data["response"].as_str() {
+                            let _ = db.add_trace_content(span_id, "response", response, None, None);
+                        }
+                        if let Some(tools) = span_data["tool_calls"].as_array() {
+                            for tool in tools {
+                                let tool_name = tool["name"].as_str();
+                                let tool_use_id = tool["id"].as_str();
+                                if let Some(input) = tool["input"].as_str() {
+                                    let _ = db.add_trace_content(
+                                        span_id, "tool_input", input, tool_name, tool_use_id,
+                                    );
+                                }
+                                if let Some(output) = tool["output"].as_str() {
+                                    let _ = db.add_trace_content(
+                                        span_id, "tool_output", output, tool_name, tool_use_id,
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    // Output JSON for the interceptor
+                    println!(r#"{{"span_id": {}}}"#, span_id);
+                }
+
+                TraceAction::Sessions { limit, linked } => {
+                    let sessions = if linked {
+                        db.get_linked_trace_sessions(limit)
+                    } else {
+                        db.get_trace_sessions(limit)
+                    };
+
+                    match sessions {
+                        Ok(sessions) => {
+                            if sessions.is_empty() {
+                                println!("No trace sessions found.");
+                                return;
+                            }
+
+                            println!(
+                                "{} ({} sessions)\n",
+                                "Trace Sessions".cyan(),
+                                sessions.len()
+                            );
+
+                            for session in &sessions {
+                                let status = if session.ended_at.is_some() {
+                                    "ended".dimmed()
+                                } else {
+                                    "active".green()
+                                };
+
+                                let linked_str = match session.linked_node_id {
+                                    Some(id) => format!("→ node #{}", id).yellow().to_string(),
+                                    None => "".to_string(),
+                                };
+
+                                let tokens = format!(
+                                    "{}↓ {}↑",
+                                    session.total_input_tokens, session.total_output_tokens
+                                );
+
+                                println!(
+                                    "  {} [{}] {} {} {}",
+                                    &session.session_id[..8],
+                                    status,
+                                    tokens.dimmed(),
+                                    session.command.as_deref().unwrap_or(""),
+                                    linked_str
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                TraceAction::Spans { session_id, show_thinking } => {
+                    match db.get_trace_spans(&session_id) {
+                        Ok(spans) => {
+                            if spans.is_empty() {
+                                println!("No spans found for session {}.", &session_id[..8]);
+                                return;
+                            }
+
+                            println!(
+                                "{} ({} spans)\n",
+                                format!("Session {}", &session_id[..8]).cyan(),
+                                spans.len()
+                            );
+
+                            for span in &spans {
+                                let duration = span
+                                    .duration_ms
+                                    .map(|d| format!("{}ms", d))
+                                    .unwrap_or_else(|| "...".to_string());
+
+                                let tokens = match (span.input_tokens, span.output_tokens) {
+                                    (Some(i), Some(o)) => format!("{}↓ {}↑", i, o),
+                                    _ => "".to_string(),
+                                };
+
+                                let linked_str = match span.linked_node_id {
+                                    Some(id) => format!("→ #{}", id).yellow().to_string(),
+                                    None => "".to_string(),
+                                };
+
+                                println!(
+                                    "  #{} [{}] {} {} {}",
+                                    span.id,
+                                    duration.dimmed(),
+                                    tokens.dimmed(),
+                                    span.model.as_deref().unwrap_or(""),
+                                    linked_str
+                                );
+
+                                if let Some(ref tools) = span.tool_names {
+                                    println!("      tools: {}", tools.dimmed());
+                                }
+
+                                if show_thinking {
+                                    if let Some(ref thinking) = span.thinking_preview {
+                                        let preview = if thinking.len() > 100 {
+                                            format!("{}...", &thinking[..100])
+                                        } else {
+                                            thinking.clone()
+                                        };
+                                        println!("      thinking: {}", preview.dimmed());
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                TraceAction::Show { span_id, thinking, response, tools } => {
+                    let show_all = !thinking && !response && !tools;
+
+                    match db.get_trace_span(span_id) {
+                        Ok(Some(span)) => {
+                            println!("{}", format!("Span #{}", span_id).cyan());
+                            println!("  Session: {}", &span.session_id[..8]);
+                            if let Some(model) = &span.model {
+                                println!("  Model: {}", model);
+                            }
+                            if let Some(duration) = span.duration_ms {
+                                println!("  Duration: {}ms", duration);
+                            }
+                            if let (Some(i), Some(o)) = (span.input_tokens, span.output_tokens) {
+                                println!("  Tokens: {}↓ {}↑", i, o);
+                            }
+                            println!();
+                        }
+                        Ok(None) => {
+                            eprintln!("{} Span #{} not found", "Error:".red(), span_id);
+                            std::process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+
+                    // Get content
+                    match db.get_trace_content(span_id) {
+                        Ok(content) => {
+                            for item in &content {
+                                let show = show_all
+                                    || (thinking && item.content_type == "thinking")
+                                    || (response && item.content_type == "response")
+                                    || (tools && (item.content_type == "tool_input" || item.content_type == "tool_output"));
+
+                                if show {
+                                    let label = match item.content_type.as_str() {
+                                        "thinking" => "Thinking".magenta(),
+                                        "response" => "Response".green(),
+                                        "tool_input" => format!(
+                                            "Tool Input ({})",
+                                            item.tool_name.as_deref().unwrap_or("?")
+                                        ).yellow(),
+                                        "tool_output" => format!(
+                                            "Tool Output ({})",
+                                            item.tool_name.as_deref().unwrap_or("?")
+                                        ).cyan(),
+                                        _ => item.content_type.clone().normal(),
+                                    };
+
+                                    println!("{}", label);
+                                    println!("{}", "─".repeat(60));
+                                    println!("{}", item.content);
+                                    println!();
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                        }
+                    }
+                }
+
+                TraceAction::Link { node_id, session, span } => {
+                    if session.is_none() && span.is_none() {
+                        eprintln!("{} Specify --session or --span", "Error:".red());
+                        std::process::exit(1);
+                    }
+
+                    if let Some(session_id) = session {
+                        match db.link_trace_session_to_node(&session_id, node_id) {
+                            Ok(()) => {
+                                println!(
+                                    "{} Linked session {} to node #{}",
+                                    "Success:".green(),
+                                    &session_id[..8],
+                                    node_id
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+
+                    if let Some(span_id) = span {
+                        match db.link_trace_span_to_node(span_id, node_id) {
+                            Ok(()) => {
+                                println!(
+                                    "{} Linked span #{} to node #{}",
+                                    "Success:".green(),
+                                    span_id,
+                                    node_id
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                }
+
+                TraceAction::Unlink { session, span } => {
+                    if session.is_none() && span.is_none() {
+                        eprintln!("{} Specify --session or --span", "Error:".red());
+                        std::process::exit(1);
+                    }
+
+                    if let Some(session_id) = session {
+                        match db.unlink_trace_session(&session_id) {
+                            Ok(()) => {
+                                println!(
+                                    "{} Unlinked session {}",
+                                    "Success:".green(),
+                                    &session_id[..8]
+                                );
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+
+                    if let Some(span_id) = span {
+                        match db.unlink_trace_span(span_id) {
+                            Ok(()) => {
+                                println!("{} Unlinked span #{}", "Success:".green(), span_id);
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                }
+
+                TraceAction::Prune { days, keep_linked, dry_run } => {
+                    if dry_run {
+                        println!(
+                            "{} Would prune traces older than {} days{}",
+                            "[DRY RUN]".yellow(),
+                            days,
+                            if keep_linked { " (keeping linked)" } else { "" }
+                        );
+                        // TODO: Add count of what would be deleted
+                        return;
+                    }
+
+                    match db.prune_traces(days, keep_linked) {
+                        Ok((sessions, spans, content)) => {
+                            println!(
+                                "{} Pruned {} sessions, {} spans, {} content items",
+                                "Success:".green(),
+                                sessions,
+                                spans,
+                                content
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+            }
+        }
+
+        Command::Proxy { command, auto_link } => {
+            if command.is_empty() {
+                eprintln!("{} No command specified", "Error:".red());
+                std::process::exit(1);
+            }
+
+            // Find the interceptor loader
+            let interceptor_path = find_interceptor_path();
+            if interceptor_path.is_none() {
+                eprintln!("{} Trace interceptor not found", "Error:".red());
+                eprintln!("Build the interceptor first:");
+                eprintln!("  cd trace-interceptor && npm install && npm run build");
+                std::process::exit(1);
+            }
+            let interceptor_path = interceptor_path.unwrap();
+
+            // Generate session ID and start trace session
+            let session_id = uuid::Uuid::new_v4().to_string();
+            let working_dir = std::env::current_dir()
+                .ok()
+                .map(|p| p.to_string_lossy().to_string());
+            let git_branch = std::process::Command::new("git")
+                .args(["branch", "--show-current"])
+                .output()
+                .ok()
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+            let cmd_str = command.join(" ");
+
+            match db.start_trace_session(
+                &session_id,
+                working_dir.as_deref(),
+                git_branch.as_deref(),
+                Some(&cmd_str),
+            ) {
+                Ok(_) => {
+                    println!(
+                        "{} Started trace session {}",
+                        "Trace:".cyan(),
+                        &session_id[..8]
+                    );
+                }
+                Err(e) => {
+                    eprintln!("{} Starting trace session: {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+
+            // Auto-link to most recent goal if requested
+            if auto_link {
+                if let Ok(nodes) = db.get_all_nodes() {
+                    // Find most recent goal node
+                    if let Some(goal) = nodes
+                        .iter()
+                        .filter(|n| n.node_type == "goal")
+                        .max_by_key(|n| &n.created_at)
+                    {
+                        if let Err(e) = db.link_trace_session_to_node(&session_id, goal.id) {
+                            eprintln!(
+                                "{} Auto-linking to goal #{}: {}",
+                                "Warning:".yellow(),
+                                goal.id,
+                                e
+                            );
+                        } else {
+                            println!(
+                                "  {} Linked to goal #{}: {}",
+                                "→".yellow(),
+                                goal.id,
+                                truncate(&goal.title, 50)
+                            );
+                        }
+                    }
+                }
+            }
+
+            // Build environment with NODE_OPTIONS
+            let node_options = format!(
+                "--require {}",
+                interceptor_path.to_string_lossy()
+            );
+            let existing_node_options = std::env::var("NODE_OPTIONS").unwrap_or_default();
+            let full_node_options = if existing_node_options.is_empty() {
+                node_options
+            } else {
+                format!("{} {}", existing_node_options, node_options)
+            };
+
+            // Spawn child process
+            let (cmd, args) = command.split_first().unwrap();
+            let mut child = match std::process::Command::new(cmd)
+                .args(args)
+                .env("NODE_OPTIONS", &full_node_options)
+                .env("DECIDUOUS_TRACE_SESSION", &session_id)
+                .spawn()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("{} Spawning command '{}': {}", "Error:".red(), cmd, e);
+                    let _ = db.end_trace_session(&session_id, Some("Failed to spawn"));
+                    std::process::exit(1);
+                }
+            };
+
+            // Wait for child to complete
+            let exit_status = match child.wait() {
+                Ok(status) => status,
+                Err(e) => {
+                    eprintln!("{} Waiting for command: {}", "Error:".red(), e);
+                    let _ = db.end_trace_session(&session_id, Some("Wait failed"));
+                    std::process::exit(1);
+                }
+            };
+
+            // End trace session
+            let summary = if exit_status.success() {
+                format!("Completed successfully ({})", cmd_str)
+            } else {
+                format!(
+                    "Exited with code {} ({})",
+                    exit_status.code().unwrap_or(-1),
+                    cmd_str
+                )
+            };
+
+            if let Err(e) = db.end_trace_session(&session_id, Some(&summary)) {
+                eprintln!("{} Ending trace session: {}", "Warning:".yellow(), e);
+            }
+
+            // Get session stats
+            if let Ok(Some(session)) = db.get_trace_session(&session_id) {
+                println!(
+                    "\n{} Session {} ended",
+                    "Trace:".cyan(),
+                    &session_id[..8]
+                );
+                println!(
+                    "  Tokens: {}↓ {}↑ (cache: {}r {}w)",
+                    session.total_input_tokens,
+                    session.total_output_tokens,
+                    session.total_cache_read,
+                    session.total_cache_write
+                );
+
+                if let Ok(spans) = db.get_trace_spans(&session_id) {
+                    println!("  Spans: {}", spans.len());
+                }
+
+                if let Some(node_id) = session.linked_node_id {
+                    println!("  Linked: node #{}", node_id);
+                }
+            }
+
+            // Exit with same code as child
+            std::process::exit(exit_status.code().unwrap_or(1));
+        }
     }
 }
 
@@ -2541,6 +3254,60 @@ fn truncate(s: &str, max_len: usize) -> String {
         let truncated: String = s.chars().take(char_len).collect();
         format!("{}...", truncated)
     }
+}
+
+/// Find the trace interceptor loader path
+fn find_interceptor_path() -> Option<PathBuf> {
+    // Check standard locations in order:
+    // 1. DECIDUOUS_INTERCEPTOR env var
+    // 2. ~/.deciduous/trace-interceptor/interceptor-loader.js
+    // 3. trace-interceptor/dist/interceptor-loader.js (relative to cwd)
+    // 4. trace-interceptor/dist/interceptor-loader.js (relative to exe)
+
+    // 1. Env var override
+    if let Ok(path) = std::env::var("DECIDUOUS_INTERCEPTOR") {
+        let p = PathBuf::from(path);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // 2. User home directory
+    if let Ok(home) = std::env::var("HOME") {
+        let p = PathBuf::from(home)
+            .join(".deciduous")
+            .join("trace-interceptor")
+            .join("interceptor-loader.js");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // 3. Relative to current directory
+    if let Ok(cwd) = std::env::current_dir() {
+        let p = cwd
+            .join("trace-interceptor")
+            .join("dist")
+            .join("interceptor-loader.js");
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // 4. Relative to executable
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(exe_dir) = exe.parent() {
+            let p = exe_dir
+                .join("trace-interceptor")
+                .join("dist")
+                .join("interceptor-loader.js");
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+
+    None
 }
 
 // =============================================================================
