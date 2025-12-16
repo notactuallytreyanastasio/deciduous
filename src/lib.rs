@@ -44,6 +44,7 @@ pub mod diff;
 pub mod export;
 pub mod github;
 pub mod init;
+pub mod interceptor;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
