@@ -254,16 +254,32 @@ src/
 ├── schema.rs            # Diesel table definitions
 ├── init.rs              # Project initialization (deciduous init)
 ├── serve.rs             # HTTP server for web UI
-└── export.rs            # DOT export and PR writeup generation
+├── export.rs            # DOT export and PR writeup generation
+├── interceptor.rs       # Embedded JS interceptor for API tracing
+└── tui/
+    ├── app.rs           # TUI application state
+    ├── views/
+    │   ├── trace.rs     # Trace session/span viewer
+    │   └── roadmap.rs   # Roadmap view
+    └── ...
 
 web/                     # React/TypeScript web viewer source
 ├── src/
-│   ├── utils/
-│   │   └── graphProcessing.ts  # Chain building, session grouping algorithms
+│   ├── views/
+│   │   └── TraceView.tsx       # Trace sessions/spans UI
 │   ├── types/
-│   │   └── graph.ts            # TypeScript types for graph data
-│   └── components/             # React components
+│   │   ├── graph.ts            # TypeScript types for graph data
+│   │   └── trace.ts            # TypeScript types for traces
+│   └── utils/
+│       └── graphProcessing.ts  # Chain building, session grouping
 └── dist/                       # Built output (singlefile HTML)
+
+trace-interceptor/       # Node.js API interceptor (bundled into binary)
+├── src/
+│   ├── index.ts         # Fetch interception logic
+│   ├── deciduous.ts     # CLI client for recording spans
+│   └── stream-parser.ts # SSE response parsing
+└── dist/bundle.js       # Bundled output (embedded in Rust)
 ```
 
 ## Web Viewer Development
@@ -322,12 +338,18 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous backup` | Create database backup |
 | `deciduous serve` | Start web viewer |
 | `deciduous sync` | Export graph to JSON file |
+| `deciduous tui` | Interactive terminal UI |
 | `deciduous dot` | Export graph as DOT format |
 | `deciduous writeup` | Generate PR writeup markdown |
 | `deciduous diff export` | Export nodes as a shareable patch |
 | `deciduous diff apply` | Apply patches from teammates |
 | `deciduous diff status` | List available patches |
 | `deciduous migrate` | Add change_id columns for sync |
+| `deciduous proxy -- <cmd>` | Run command with API trace capture |
+| `deciduous trace sessions` | List trace sessions |
+| `deciduous trace spans <id>` | List spans in a session |
+| `deciduous trace link <sid> <nid>` | Link session to node |
+| `deciduous trace prune` | Delete old trace data |
 
 ## DOT Export Options
 
@@ -435,6 +457,103 @@ deciduous diff status
   "edges": [{ "from_change_id": "uuid1", "to_change_id": "uuid2", ... }]
 }
 ```
+
+---
+
+## API Trace Capture
+
+Capture and analyze Claude API traffic to understand token usage, model selection, and correlate API calls with decision nodes.
+
+### Quick Start
+
+```bash
+# Run Claude through the deciduous proxy
+deciduous proxy -- claude
+
+# View traces in TUI
+deciduous tui   # Press 't' for Trace view
+
+# View traces in web viewer
+deciduous serve  # Click "Traces" tab
+```
+
+### How It Works
+
+The `deciduous proxy` command:
+1. Starts a trace session
+2. Injects a JavaScript interceptor via `NODE_OPTIONS`
+3. Captures all Anthropic API requests/responses
+4. Records token usage, model, duration, thinking/response content
+5. Updates session totals in real-time
+
+### Trace Commands
+
+```bash
+# Start proxy (recommended way to capture traces)
+deciduous proxy -- claude
+deciduous proxy -- claude --dangerously-skip-permissions
+
+# Manual trace management
+deciduous trace sessions              # List all sessions
+deciduous trace spans <session_id>    # List spans in a session
+deciduous trace show <span_id>        # Show full span content
+deciduous trace link <session_id> <node_id>    # Link session to decision node
+deciduous trace unlink <session_id>   # Unlink session
+deciduous trace prune --days 30       # Delete old traces (keeps linked)
+```
+
+### TUI Trace View
+
+Press `t` in the TUI to access the Trace view:
+
+| Key | Action |
+|-----|--------|
+| `j/k` | Navigate sessions/spans |
+| `Enter` | Expand session → spans → detail |
+| `Esc` | Go back |
+| `Tab` | Switch detail tabs (Thinking/Response/Tools) |
+| `l` | Link session to a node |
+| `u` | Unlink session |
+| `r` | Refresh |
+
+### Web Trace View
+
+The web viewer's "Traces" tab shows:
+- Session list with token totals and duration
+- Span list when session expanded
+- Detail panel with thinking, response, and tool content
+
+### Data Stored
+
+**Sessions** track:
+- Session ID, start/end time, duration
+- Working directory, git branch
+- Total tokens (input/output/cache read/cache write)
+- Linked decision node (optional)
+
+**Spans** track per-API-call:
+- Sequence number, model, duration
+- Token counts, cache stats
+- Stop reason, tool names used
+- Previews of user message, thinking, response
+
+**Content** stores full text:
+- Complete thinking blocks
+- Full response text
+- Tool inputs and outputs
+
+### Linking Traces to Decisions
+
+Link a trace session to a decision node to correlate API activity with your decision graph:
+
+```bash
+# After a session, link it to the goal you were working on
+deciduous trace link abc123 42
+
+# Or use TUI: navigate to session, press 'l', select node
+```
+
+Linked sessions show a green badge in the UI and are preserved during pruning.
 
 ---
 
