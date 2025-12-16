@@ -782,32 +782,53 @@ fn main() {
                                     }
 
                                     // Export git history for linked commits
-                                    if let Some(output_dir) = output_path.parent() {
-                                        match export_git_history(&graph.nodes, output_dir) {
-                                            Ok(count) => {
-                                                if count > 0 {
-                                                    println!(
-                                                        "{} git-history.json ({} commits)",
-                                                        "Exported".green(),
-                                                        count
-                                                    );
-                                                }
-                                                // Also sync to docs/demo/ if it exists
-                                                let demo_dir = PathBuf::from("docs/demo");
-                                                if demo_dir.exists() {
-                                                    if let Err(e) =
-                                                        export_git_history(&graph.nodes, &demo_dir)
-                                                    {
-                                                        eprintln!("{} Also writing git history to demo/: {}", "Warning:".yellow(), e);
+                                    // Skip when external repo is configured (commits won't be in local git)
+                                    if !include_config {
+                                        if let Some(output_dir) = output_path.parent() {
+                                            match export_git_history(&graph.nodes, output_dir) {
+                                                Ok(count) => {
+                                                    if count > 0 {
+                                                        println!(
+                                                            "{} git-history.json ({} commits)",
+                                                            "Exported".green(),
+                                                            count
+                                                        );
+                                                    }
+                                                    // Also sync to docs/demo/ if it exists
+                                                    let demo_dir = PathBuf::from("docs/demo");
+                                                    if demo_dir.exists() {
+                                                        if let Err(e) = export_git_history(
+                                                            &graph.nodes,
+                                                            &demo_dir,
+                                                        ) {
+                                                            eprintln!("{} Also writing git history to demo/: {}", "Warning:".yellow(), e);
+                                                        }
                                                     }
                                                 }
+                                                Err(e) => {
+                                                    // Non-fatal: git history is optional
+                                                    eprintln!(
+                                                        "{} Exporting git history: {}",
+                                                        "Warning:".yellow(),
+                                                        e
+                                                    );
+                                                }
                                             }
-                                            Err(e) => {
-                                                // Non-fatal: git history is optional
-                                                eprintln!(
-                                                    "{} Exporting git history: {}",
-                                                    "Warning:".yellow(),
-                                                    e
+                                        }
+                                    } else {
+                                        // External repo mode: preserve existing git-history.json
+                                        if let Some(output_dir) = output_path.parent() {
+                                            let git_history_path =
+                                                output_dir.join("git-history.json");
+                                            if git_history_path.exists() {
+                                                println!(
+                                                    "{} git-history.json (external repo mode - manually managed)",
+                                                    "Preserved".cyan()
+                                                );
+                                            } else {
+                                                println!(
+                                                    "{} Create docs/git-history.json manually for external repo commits",
+                                                    "Note:".yellow()
                                                 );
                                             }
                                         }
