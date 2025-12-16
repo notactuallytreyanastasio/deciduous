@@ -87,8 +87,13 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
       )}
 
       {prompt && (
-        <div style={styles.section}>
-          <h3 style={styles.sectionTitle}>Prompt</h3>
+        <div style={styles.promptSection}>
+          <div style={styles.promptHeader}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: '8px' }}>
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+            User Prompt
+          </div>
           <div style={styles.prompt}>
             {prompt}
           </div>
@@ -295,17 +300,30 @@ const styles: Record<string, React.CSSProperties> = {
     marginRight: '20px',
     fontSize: '13px',
   },
+  promptSection: {
+    marginTop: '20px',
+    marginBottom: '20px',
+    backgroundColor: '#fffbeb',
+    border: '1px solid #fbbf24',
+    borderRadius: '8px',
+    overflow: 'hidden',
+  },
+  promptHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    padding: '10px 15px',
+    backgroundColor: '#fef3c7',
+    borderBottom: '1px solid #fbbf24',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#92400e',
+  },
   prompt: {
-    backgroundColor: '#f6f8fa',
-    border: '1px solid #d0d7de',
     padding: '15px',
-    borderRadius: '6px',
     fontSize: '14px',
-    color: '#24292f',
+    color: '#78350f',
     lineHeight: 1.6,
     whiteSpace: 'pre-wrap',
-    fontStyle: 'italic',
-    borderLeft: '3px solid #0969da',
   },
   fileList: {
     display: 'flex',
