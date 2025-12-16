@@ -1,7 +1,15 @@
 [
   {
-    "hash": "c65b4bbe5e41fe781e168807f0f5e557088a2fef",
-    "short_hash": "c65b4bb",
+    "hash": "7f4b10bc1807b959b890486681052e2e6e669f22",
+    "short_hash": "7f4b10b",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T22:48:29-05:00",
+    "message": "fix: preserve git-history.json when external repo is configured (#118)\n\n## Summary\n\nWhen `commit_repo` is set in `.deciduous/config.toml` (external repo mode), `deciduous sync` was overwriting `git-history.json` with an empty array because the commits don't exist in the local git repository.\n\nThis fix:\n- Skips `export_git_history()` when external repo is configured\n- Preserves existing `git-history.json` instead of overwriting\n- Prints helpful message about manual management in external mode\n\n## Test Plan\n\n1. Configure external repo: `[github] commit_repo = \"owner/repo\"` \n2. Create `docs/git-history.json` manually with commit data\n3. Run `deciduous sync`\n4. Verify `git-history.json` is preserved (not emptied)\n5. Verify message: `Preserved git-history.json (external repo mode - manually managed)`\n\n## Context\n\nFound while documenting Phoenix Framework history in a separate repo (`phoenix_from_ashes`). The graph documents `phoenixframework/phoenix` commits but lives in a different repo, so `deciduous sync` was wiping the manually-created git history.\n\nWhen commit_repo is set in config (external repo mode), deciduous sync\nnow skips regenerating git-history.json since the commits won't exist\nin the local git repository. This allows users to manually manage their\ngit-history.json file for documenting external repositories.\n\n- Skip export_git_history() when include_config is true\n- Print helpful message about manual management in external mode\n- Preserves existing git-history.json instead of overwriting with empty",
+    "files_changed": 1
+  },
+  {
+    "hash": "4607e0d865ff77a7747888ef398f21628a494c9f",
+    "short_hash": "4607e0d",
     "author": "Bobby Nathan",
     "date": "2025-12-15T22:36:52-05:00",
     "message": "release: v0.8.12\n\n### Added\n- Shell completion subcommand for bash, zsh, fish, powershell (#114)\n- External repository support for commit links (#116)\n- cargo fmt requirement in pre-commit hooks and CI (#117)\n\n### Fixed\n- Multiline array definitions in type validation script (#115)",

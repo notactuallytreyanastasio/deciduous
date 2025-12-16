@@ -6808,6 +6808,39 @@
       "created_at": "2025-12-15T22:30:13.529662-05:00",
       "updated_at": "2025-12-15T22:30:13.529662-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 621,
+      "change_id": "6bb79237-c015-469b-b9f7-fd31ea52479a",
+      "node_type": "action",
+      "title": "Released v0.8.12",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:39:16.783454-05:00",
+      "updated_at": "2025-12-15T22:39:16.783454-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"4607e0d\",\"confidence\":100}"
+    },
+    {
+      "id": 622,
+      "change_id": "089ba452-abb1-470b-b120-fe8246b17124",
+      "node_type": "goal",
+      "title": "Fix git-history.json preservation in external repo mode",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:50:19.820114-05:00",
+      "updated_at": "2025-12-15T22:50:19.820114-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 623,
+      "change_id": "bffbd341-8047-4a8f-977b-430d0d811a22",
+      "node_type": "outcome",
+      "title": "PR #118 merged - external repo git-history preserved",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:50:20.768221-05:00",
+      "updated_at": "2025-12-15T22:50:20.768221-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
     }
   ],
   "edges": [
@@ -12750,6 +12783,28 @@
       "weight": 1.0,
       "rationale": "Action resulted in PR creation",
       "created_at": "2025-12-15T22:30:22.293558-05:00"
+    },
+    {
+      "id": 541,
+      "from_node_id": 622,
+      "to_node_id": 623,
+      "from_change_id": "089ba452-abb1-470b-b120-fe8246b17124",
+      "to_change_id": "bffbd341-8047-4a8f-977b-430d0d811a22",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Bug fix merged",
+      "created_at": "2025-12-15T22:50:28.328772-05:00"
+    },
+    {
+      "id": 542,
+      "from_node_id": 618,
+      "to_node_id": 622,
+      "from_change_id": "74464ca9-db48-43bf-a632-80b8ffce33be",
+      "to_change_id": "089ba452-abb1-470b-b120-fe8246b17124",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Follow-up fix for external repo feature",
+      "created_at": "2025-12-15T22:50:28.338687-05:00"
     }
   ]
 }
