@@ -39,6 +39,10 @@ enum Command {
         /// Initialize for OpenCode (creates .opencode/command/ and AGENTS.md)
         #[arg(long, group = "editor")]
         opencode: bool,
+
+        /// Initialize for Codex (creates .codex/prompts/ and AGENTS.md)
+        #[arg(long, group = "editor")]
+        codex: bool,
     },
 
     /// Update tooling files to latest version (overwrites existing)
@@ -54,6 +58,10 @@ enum Command {
         /// Update OpenCode files (.opencode/command/, AGENTS.md)
         #[arg(long, group = "editor")]
         opencode: bool,
+
+        /// Update Codex files (.codex/prompts/, AGENTS.md)
+        #[arg(long, group = "editor")]
+        codex: bool,
     },
 
     /// Add a new node to the decision graph
@@ -434,13 +442,16 @@ fn main() {
         claude: _,
         windsurf,
         opencode,
+        codex,
     } = args.command
     {
-        // Determine editor type: default to Claude if neither specified
+        // Determine editor type: default to Claude if none specified
         let editor = if windsurf {
             deciduous::init::Editor::Windsurf
         } else if opencode {
             deciduous::init::Editor::Opencode
+        } else if codex {
+            deciduous::init::Editor::Codex
         } else {
             deciduous::init::Editor::Claude
         };
@@ -457,13 +468,16 @@ fn main() {
         claude: _,
         windsurf,
         opencode,
+        codex,
     } = args.command
     {
-        // Determine editor type: default to Claude if neither specified
+        // Determine editor type: default to Claude if none specified
         let editor = if windsurf {
             deciduous::init::Editor::Windsurf
         } else if opencode {
             deciduous::init::Editor::Opencode
+        } else if codex {
+            deciduous::init::Editor::Codex
         } else {
             deciduous::init::Editor::Claude
         };

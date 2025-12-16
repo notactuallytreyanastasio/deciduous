@@ -77,13 +77,15 @@ cargo install deciduous
 
 ```bash
 cd your-project
-deciduous init           # For Claude Code (default)
+deciduous init            # For Claude Code (default)
 deciduous init --windsurf # For Windsurf/Cascade
+deciduous init --opencode # For OpenCode
+deciduous init --codex    # For Codex
 ```
 
 This creates:
 - `.deciduous/deciduous.db` — SQLite database for the graph
-- `.claude/commands/` or `.windsurf/rules/` — Editor-specific tooling
+- Editor-specific tooling (`.claude/commands/`, `.windsurf/rules/`, `.opencode/command/`, or `.codex/prompts/`)
 - `docs/` — Static web viewer (deployable to GitHub Pages)
 - `CLAUDE.md` or `AGENTS.md` — Project instructions with the logging workflow
 
@@ -256,8 +258,10 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 
 ```bash
 # Initialize
-deciduous init               # Claude Code
+deciduous init               # Claude Code (default)
 deciduous init --windsurf    # Windsurf/Cascade
+deciduous init --opencode    # OpenCode
+deciduous init --codex       # Codex
 deciduous update             # Update tooling to latest version
 
 # Add nodes
