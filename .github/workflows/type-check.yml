@@ -8,9 +8,41 @@ on:
   workflow_dispatch:
 
 jobs:
+  format-check:
+    name: Check Code Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Check Rust Formatting
+        run: cargo fmt --check
+
+      - name: Format Summary
+        if: success()
+        run: |
+          echo "## Code Formatting ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All Rust code is properly formatted." >> $GITHUB_STEP_SUMMARY
+
+      - name: Format Failure Summary
+        if: failure()
+        run: |
+          echo "## Code Formatting ✗" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Rust code is not properly formatted!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Run \`cargo fmt\` locally to fix formatting." >> $GITHUB_STEP_SUMMARY
+
   validate-types:
     name: Validate Type Synchronization
     runs-on: ubuntu-latest
+    needs: format-check
     steps:
       - name: Checkout
         uses: actions/checkout@v4

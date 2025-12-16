@@ -20,7 +20,7 @@ echo "Installing git hooks..."
 cat > "$HOOKS_DIR/pre-commit" << 'EOF'
 #!/usr/bin/env bash
 #
-# pre-commit hook - Run clippy and validate types before committing
+# pre-commit hook - Run fmt, clippy and validate types before committing
 #
 
 set -euo pipefail
@@ -28,7 +28,16 @@ set -euo pipefail
 # Get the root of the repository
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 
-# Run clippy first (catches lint errors)
+# Run cargo fmt check first (code must be formatted)
+echo "Checking code formatting..."
+if ! cargo fmt --check --quiet 2>&1; then
+    echo ""
+    echo "ERROR: Code is not formatted. Commit aborted."
+    echo "Run 'cargo fmt' to format the code."
+    exit 1
+fi
+
+# Run clippy (catches lint errors)
 echo "Running clippy..."
 if ! cargo clippy --quiet 2>&1; then
     echo ""
@@ -134,7 +143,16 @@ while read local_ref local_sha remote_ref remote_sha; do
         echo ""
 
         # Full validation suite for main branch
-        echo "1/5 Running type validation..."
+        echo "1/6 Checking code formatting..."
+        if ! cargo fmt --check --quiet 2>&1; then
+            echo ""
+            echo "ERROR: Code is not formatted. Push to main aborted."
+            echo "Run 'cargo fmt' to format the code."
+            exit 1
+        fi
+
+        echo ""
+        echo "2/6 Running type validation..."
         if ! "$REPO_ROOT/scripts/validate-types.sh"; then
             echo ""
             echo "ERROR: Type validation failed. Push to main aborted."
@@ -143,7 +161,7 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "2/5 Running tests..."
+        echo "3/6 Running tests..."
         if ! cargo test --quiet; then
             echo ""
             echo "ERROR: Tests failed. Push to main aborted."
@@ -151,7 +169,7 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "3/5 Building web UI..."
+        echo "4/6 Building web UI..."
         if ! (cd "$REPO_ROOT/web" && npm run build --silent 2>/dev/null); then
             echo ""
             echo "ERROR: Web build failed. Push to main aborted."
@@ -159,7 +177,7 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "4/5 Checking viewer.html sync..."
+        echo "5/6 Checking viewer.html sync..."
         # Build fresh and compare with committed viewer.html
         FRESH_BUILD="$REPO_ROOT/web/dist/index.html"
         VIEWER_HTML="$REPO_ROOT/src/viewer.html"
@@ -186,7 +204,7 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "5/5 Syncing decision graph for GitHub Pages..."
+        echo "6/6 Syncing decision graph for GitHub Pages..."
         # Run deciduous sync to update docs/graph-data.json
         if command -v deciduous &> /dev/null; then
             deciduous sync > /dev/null 2>&1 || true
@@ -240,5 +258,5 @@ echo ""
 echo "Git hooks installed successfully!"
 echo ""
 echo "Hooks installed:"
-echo "  - pre-commit: Runs clippy + validates types + enforces demo build sync"
-echo "  - pre-push: Full validation (types + tests + build + graph sync) for main branch"
+echo "  - pre-commit: Runs fmt + clippy + validates types + enforces demo build sync"
+echo "  - pre-push: Full validation (fmt + types + tests + build + graph sync) for main branch"
