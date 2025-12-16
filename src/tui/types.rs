@@ -18,14 +18,8 @@ use serde_json::Value;
 // =============================================================================
 
 /// Valid node types in the decision graph
-pub const NODE_TYPES: &[&str] = &[
-    "goal",
-    "decision",
-    "option",
-    "action",
-    "outcome",
-    "observation",
-];
+#[rustfmt::skip]
+pub const NODE_TYPES: &[&str] = &["goal", "decision", "option", "action", "outcome", "observation"];
 
 /// Valid node statuses
 pub const NODE_STATUSES: &[&str] = &["pending", "active", "completed", "rejected"];
@@ -35,9 +29,8 @@ pub const NODE_STATUSES: &[&str] = &["pending", "active", "completed", "rejected
 // =============================================================================
 
 /// Valid edge types connecting nodes
-pub const EDGE_TYPES: &[&str] = &[
-    "leads_to", "requires", "chosen", "rejected", "blocks", "enables",
-];
+#[rustfmt::skip]
+pub const EDGE_TYPES: &[&str] = &["leads_to", "requires", "chosen", "rejected", "blocks", "enables"];
 
 // =============================================================================
 // Metadata - stored as JSON string in metadata_json field
