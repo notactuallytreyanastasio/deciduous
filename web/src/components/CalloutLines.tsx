@@ -20,10 +20,10 @@ interface CalloutLinesProps {
   onSelectNode: (node: DecisionNode) => void;
 }
 
-// Label dimensions - bigger for readability
-const LABEL_WIDTH = 220;
+// Label dimensions - sized to show more text while fitting mobile
+const LABEL_WIDTH = 280;
 const LABEL_HEIGHT = 40;
-const LABEL_MARGIN = 24;
+const LABEL_MARGIN = 16;
 const LABEL_PADDING = 10;
 
 // Reserved zone at top (for top bar)
@@ -208,7 +208,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 fontWeight="500"
                 dominantBaseline="middle"
               >
-                {truncate(callout.node.title, 22)}
+                {truncate(callout.node.title, 32)}
               </text>
             </g>
           </g>

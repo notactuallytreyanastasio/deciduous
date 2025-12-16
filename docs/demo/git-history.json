@@ -1,10 +1,10 @@
 [
   {
-    "hash": "dc7a1f34eb6314da600c0ff17ce881754360c47a",
-    "short_hash": "dc7a1f3",
+    "hash": "2c930ad4af19da13a4581fd53dddcdec092b71fd",
+    "short_hash": "2c930ad",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T19:05:14-05:00",
-    "message": "build: update demo for GitHub Pages deployment",
+    "date": "2025-12-15T19:12:49-05:00",
+    "message": "fix(web): improve callout positioning and sizing\n\n- Labels now always stack on right side (avoids legend collision)\n- Bigger labels (220x40) with larger fonts for readability\n- Better vertical stacking with overlap prevention\n- Larger node indicator circles (r=8)\n- Cleaner line styling",
     "files_changed": 4
   },
   {

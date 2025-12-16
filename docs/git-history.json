@@ -1,11 +1,11 @@
 [
   {
-    "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",
-    "short_hash": "cb4d2c2",
+    "hash": "2c930ad4af19da13a4581fd53dddcdec092b71fd",
+    "short_hash": "2c930ad",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T18:59:52-05:00",
-    "message": "feat(web): implement Approach B - Callouts First for graph explorer\n\nImplementation of the Callouts First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add CalloutLines component that draws lines from tiny nodes to labels\n- Add MiniMap component showing off-screen match indicators\n- Integrate components into DagView with:\n  - Callout lines for too-small search matches\n  - Mini overview map with viewport indicator\n  - Click-to-navigate from minimap to off-screen nodes\n- Track node positions and graph bounds for visualization\n\nThis approach prioritizes in-graph visual indicators (callout lines)\nover a floating panel, keeping attention on the graph itself.",
-    "files_changed": 7
+    "date": "2025-12-15T19:12:49-05:00",
+    "message": "fix(web): improve callout positioning and sizing\n\n- Labels now always stack on right side (avoids legend collision)\n- Bigger labels (220x40) with larger fonts for readability\n- Better vertical stacking with overlap prevention\n- Larger node indicator circles (r=8)\n- Cleaner line styling",
+    "files_changed": 4
   },
   {
     "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",
