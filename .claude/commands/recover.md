@@ -132,7 +132,7 @@ If $ARGUMENTS specifies a focus, prioritize context for:
 ```
 SESSION START
     ↓
-Run /context → See past decisions
+Run /recover → See past decisions
     ↓
 AUDIT → Fix any orphan nodes first!
     ↓

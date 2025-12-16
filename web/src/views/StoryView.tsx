@@ -210,7 +210,7 @@ export const StoryView: React.FC<StoryViewProps> = ({ graphData, gitHistory = []
             <ul>
               <li><strong>CLAUDE.md</strong>: Project instructions with decision logging workflow</li>
               <li><strong>Makefile</strong>: Shortcuts for common operations</li>
-              <li><strong>Slash commands</strong>: <Code>/decision</Code> and <Code>/context</Code> for recovery</li>
+              <li><strong>Slash commands</strong>: <Code>/decision</Code> and <Code>/recover</Code> for recovery</li>
             </ul>
             <p>
               The pattern was set: log <em>before</em> you act, not after. Connect every node to its parent.

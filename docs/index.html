@@ -751,10 +751,10 @@
                 <button class="replay-btn" onclick="replayDemo()">Replay</button>
             </div>
             <div class="session-content" id="session-content">
-                <!-- Session starts with /context -->
+                <!-- Session starts with /recover -->
                 <div class="session-step" style="--delay: 0s">
                     <div class="step-label user">You</div>
-                    <div class="step-content">/context</div>
+                    <div class="step-content">/recover</div>
                 </div>
                 <div class="session-step" style="--delay: 1s">
                     <div class="step-label claude">Claude</div>
@@ -908,7 +908,7 @@
 
         <div class="elevator-pitch">
             <p><strong>LLMs forget. Your decisions shouldn't.</strong> When AI sessions end and context windows reset, critical reasoning evaporates. Deciduous captures every goal, every approach considered, every choice made&mdash;creating a queryable record that survives session boundaries.</p>
-            <p><strong>Beyond context recovery.</strong> The graph improves how you work: logging decisions <em>before</em> you act forces clearer thinking. Generate PR writeups directly from your decision trail. Query past reasoning with <code>/context</code> to recover state instantly. Share decisions across teammates with idempotent patches. Link commits to the goals that spawned them.</p>
+            <p><strong>Beyond context recovery.</strong> The graph improves how you work: logging decisions <em>before</em> you act forces clearer thinking. Generate PR writeups directly from your decision trail. Query past reasoning with <code>/recover</code> to recover state instantly. Share decisions across teammates with idempotent patches. Link commits to the goals that spawned them.</p>
             <p><strong>Institutional memory that compounds.</strong> Every decision becomes searchable history. New developers can ask "why is this like this?" and get real answers. The graph outlives any single session, any single developer, any single AI assistant.</p>
         </div>
 
@@ -923,7 +923,7 @@
                 </div>
                 <div class="proof-card">
                     <h3>Context Recovery Works</h3>
-                    <p>Multiple sessions lost context. Each time, <code>/context</code> brought developers back up to speed in seconds.</p>
+                    <p>Multiple sessions lost context. Each time, <code>/recover</code> brought developers back up to speed in seconds.</p>
                 </div>
                 <div class="proof-card">
                     <h3>Real PR Writeups</h3>
@@ -955,7 +955,7 @@
                 </div>
             </div>
 
-            <p style="margin-top: 20px; font-size: 0.95rem;">Running <code>init</code> creates slash commands (<code>/context</code>, <code>/decision</code>) and project instructions that teach your AI assistant the decision-logging workflow.</p>
+            <p style="margin-top: 20px; font-size: 0.95rem;">Running <code>init</code> creates slash commands (<code>/recover</code>, <code>/decision</code>) and project instructions that teach your AI assistant the decision-logging workflow.</p>
         </section>
 
         <section>
@@ -1018,7 +1018,7 @@
                 <div class="workflow-step">
                     <div class="workflow-num">1</div>
                     <div class="workflow-content">
-                        <h4>Start with <code>/context</code></h4>
+                        <h4>Start with <code>/recover</code></h4>
                         <p>Recover state from the decision graph. See recent goals, pending decisions, what was in progress.</p>
                     </div>
                 </div>
@@ -1107,7 +1107,7 @@
                             <span class="qs-output">Created .deciduous/deciduous.db</span>
                         </div>
                         <div class="qs-step" style="--delay: 1.2s">
-                            <span class="qs-output">Created .claude/commands/context.md</span>
+                            <span class="qs-output">Created .claude/commands/recover.md</span>
                         </div>
                         <div class="qs-step" style="--delay: 1.6s">
                             <span class="qs-output">Created .claude/commands/decision.md</span>
@@ -1218,7 +1218,7 @@
                     <span class="quickstart-num">5</span>
                     <div class="quickstart-info">
                         <h3>Recover context anytime</h3>
-                        <p>New session? Use /context to pick up where you left off.</p>
+                        <p>New session? Use /recover to pick up where you left off.</p>
                     </div>
                 </div>
                 <div class="quickstart-terminal qs-claude-session" id="qs-view">
@@ -1231,7 +1231,7 @@
                     <div class="quickstart-content">
                         <div class="qs-step" style="--delay: 0s">
                             <div class="step-label user">You</div>
-                            <div class="qs-user-msg">/context</div>
+                            <div class="qs-user-msg">/recover</div>
                         </div>
                         <div class="qs-step" style="--delay: 1s">
                             <div class="step-label claude">Claude</div>
@@ -1303,7 +1303,7 @@
             <h2>The Full Story</h2>
             <p>Deciduous was extracted from an audio forensics tool called losselot (a portmanteau of "loss" and "Ocelot", the Phish song). What started as an experiment in AI-assisted development became a tool for surviving the fundamental problem with LLM sessions: they forget.</p>
             <p>The insight was simple. AI sessions end. Context windows reset. Decisions evaporate. But if you capture decisions as they happen&mdash;not reconstructed later&mdash;the reasoning survives.</p>
-            <p><strong>Deciduous is the proof.</strong> Every feature you see was built with Claude Code using deciduous to track the work. When sessions ended, <code>/context</code> brought the next one up to speed. When PRs needed writeups, the graph generated them. When someone asked "why is this like this?", the answer was one query away.</p>
+            <p><strong>Deciduous is the proof.</strong> Every feature you see was built with Claude Code using deciduous to track the work. When sessions ended, <code>/recover</code> brought the next one up to speed. When PRs needed writeups, the graph generated them. When someone asked "why is this like this?", the answer was one query away.</p>
             <p><a href="story.html">Read the complete chronicle &rarr;</a></p>
         </section>
 

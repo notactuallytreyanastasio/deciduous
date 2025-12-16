@@ -340,7 +340,7 @@ EXPORT PATCHES FOR YOUR TEAMMATES.
 **Live graph**: https://notactuallytreyanastasio.github.io/deciduous/
 "#;
 
-const CONTEXT_MD: &str = r#"---
+const RECOVER_MD: &str = r#"---
 description: Recover context from decision graph and recent activity - USE THIS ON SESSION START
 allowed-tools: Bash(deciduous:*, git:*, cat:*, tail:*)
 argument-hint: [focus-area]
@@ -474,7 +474,7 @@ If $ARGUMENTS specifies a focus, prioritize context for:
 ```
 SESSION START
     ↓
-Run /context → See past decisions
+Run /recover → See past decisions
     ↓
 AUDIT → Fix any orphan nodes first!
     ↓
@@ -972,9 +972,9 @@ PR workflow: Export patch → commit patch file → PR → teammates apply.
 </decision_graph_workflow>
 "#;
 
-/// Windsurf context rule - placed in .windsurf/rules/context.md
+/// Windsurf context rule - placed in .windsurf/rules/recover.md
 /// Model-triggered rule for session recovery
-const WINDSURF_CONTEXT_RULE: &str = r#"---
+const WINDSURF_RECOVER_RULE: &str = r#"---
 description: Context recovery - query decision graph at session start or when recovering from context loss
 globs:
 alwaysApply: false
@@ -1370,9 +1370,9 @@ SYNC BEFORE YOU PUSH.
 ```
 "#;
 
-/// OpenCode context command - placed in .opencode/command/context.md
-const OPENCODE_CONTEXT_CMD: &str = r#"---
-description: "Recover context from decision graph - USE THIS ON SESSION START. Usage: /context [focus-area]"
+/// OpenCode context command - placed in .opencode/command/recover.md
+const OPENCODE_RECOVER_CMD: &str = r#"---
+description: "Recover context from decision graph - USE THIS ON SESSION START. Usage: /recover [focus-area]"
 ---
 
 # Context Recovery
@@ -1483,7 +1483,7 @@ If $ARGUMENTS specifies a focus, prioritize context for:
 ```
 SESSION START
     |
-Run /context -> See past decisions
+Run /recover -> See past decisions
     |
 AUDIT -> Fix any orphan nodes first!
     |
@@ -1783,8 +1783,8 @@ SYNC BEFORE YOU PUSH.
 ```
 "#;
 
-/// Codex context prompt - placed in .codex/prompts/context.md
-const CODEX_CONTEXT_PROMPT: &str = r#"---
+/// Codex recover prompt - placed in .codex/prompts/recover.md
+const CODEX_RECOVER_PROMPT: &str = r#"---
 description: Recover context from decision graph - USE THIS ON SESSION START
 argument-hint: [FOCUS="<area>"]
 ---
@@ -1897,7 +1897,7 @@ If $FOCUS specifies a focus, prioritize context for:
 ```
 SESSION START
     |
-Run /prompts:context -> See past decisions
+Run /prompts:recover -> See past decisions
     |
 AUDIT -> Fix any orphan nodes first!
     |
@@ -2117,7 +2117,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
 
             // Write context.md slash command
             let context_path = claude_dir.join("context.md");
-            write_file_if_missing(&context_path, CONTEXT_MD, ".claude/commands/context.md")?;
+            write_file_if_missing(&context_path, RECOVER_MD, ".claude/commands/recover.md")?;
 
             // Append to or create CLAUDE.md
             let claude_md_path = cwd.join("CLAUDE.md");
@@ -2144,8 +2144,8 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             let context_path = windsurf_rules.join("context.md");
             write_file_if_missing(
                 &context_path,
-                WINDSURF_CONTEXT_RULE,
-                ".windsurf/rules/context.md",
+                WINDSURF_RECOVER_RULE,
+                ".windsurf/rules/recover.md",
             )?;
 
             // Write memories.md (project-level memories Cascade auto-retrieves)
@@ -2173,8 +2173,8 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             let context_path = opencode_cmd_dir.join("context.md");
             write_file_if_missing(
                 &context_path,
-                OPENCODE_CONTEXT_CMD,
-                ".opencode/command/context.md",
+                OPENCODE_RECOVER_CMD,
+                ".opencode/command/recover.md",
             )?;
 
             // Write build-test.md command
@@ -2222,8 +2222,8 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             let context_path = codex_prompts_dir.join("context.md");
             write_file_if_missing(
                 &context_path,
-                CODEX_CONTEXT_PROMPT,
-                ".codex/prompts/context.md",
+                CODEX_RECOVER_PROMPT,
+                ".codex/prompts/recover.md",
             )?;
 
             // Write build-test.md prompt
@@ -2330,13 +2330,13 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             println!(
                 "  3. Use {} or {} slash commands",
                 "/decision".cyan(),
-                "/context".cyan()
+                "/recover".cyan()
             );
         }
         Editor::Windsurf => {
             println!("  3. Rules created in {}", ".windsurf/rules/".cyan());
             println!("     - {} (set to Always On)", "deciduous.md".cyan());
-            println!("     - {} (model-triggered)", "context.md".cyan());
+            println!("     - {} (model-triggered)", "recover.md".cyan());
             println!("     - {} (auto-retrieved)", ".windsurf/memories.md".cyan());
             println!();
             println!(
@@ -2355,7 +2355,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
         Editor::Opencode => {
             println!("  3. Commands created in {}", ".opencode/command/".cyan());
             println!("     - {} (decision tracking)", "/decision".cyan());
-            println!("     - {} (context recovery)", "/context".cyan());
+            println!("     - {} (context recovery)", "/recover".cyan());
             println!("     - {} (build & test)", "/build-test".cyan());
             println!("     - {} (graph viewer)", "/serve-ui".cyan());
             println!("     - {} (export graph)", "/sync-graph".cyan());
@@ -2364,7 +2364,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
         Editor::Codex => {
             println!("  3. Prompts created in {}", ".codex/prompts/".cyan());
             println!("     - {} (decision tracking)", "/prompts:decision".cyan());
-            println!("     - {} (context recovery)", "/prompts:context".cyan());
+            println!("     - {} (context recovery)", "/prompts:recover".cyan());
             println!("     - {} (build & test)", "/prompts:build-test".cyan());
             println!("     - {} (graph viewer)", "/prompts:serve-ui".cyan());
             println!("     - {} (export graph)", "/prompts:sync-graph".cyan());
@@ -2539,7 +2539,7 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
 
             // Overwrite context.md slash command
             let context_path = claude_dir.join("context.md");
-            write_file_overwrite(&context_path, CONTEXT_MD, ".claude/commands/context.md")?;
+            write_file_overwrite(&context_path, RECOVER_MD, ".claude/commands/recover.md")?;
 
             // Update CLAUDE.md section
             let claude_md_path = cwd.join("CLAUDE.md");
@@ -2564,8 +2564,8 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let context_path = windsurf_rules.join("context.md");
             write_file_overwrite(
                 &context_path,
-                WINDSURF_CONTEXT_RULE,
-                ".windsurf/rules/context.md",
+                WINDSURF_RECOVER_RULE,
+                ".windsurf/rules/recover.md",
             )?;
 
             // Overwrite memories.md
@@ -2593,8 +2593,8 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let context_path = opencode_cmd_dir.join("context.md");
             write_file_overwrite(
                 &context_path,
-                OPENCODE_CONTEXT_CMD,
-                ".opencode/command/context.md",
+                OPENCODE_RECOVER_CMD,
+                ".opencode/command/recover.md",
             )?;
 
             // Overwrite build-test.md command
@@ -2642,8 +2642,8 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let context_path = codex_prompts_dir.join("context.md");
             write_file_overwrite(
                 &context_path,
-                CODEX_CONTEXT_PROMPT,
-                ".codex/prompts/context.md",
+                CODEX_RECOVER_PROMPT,
+                ".codex/prompts/recover.md",
             )?;
 
             // Overwrite build-test.md prompt
@@ -2856,14 +2856,14 @@ mod tests {
     }
 
     #[test]
-    fn test_context_md_has_required_frontmatter() {
+    fn test_recover_md_has_required_frontmatter() {
         assert!(
-            CONTEXT_MD.starts_with("---"),
-            "context.md should start with frontmatter"
+            RECOVER_MD.starts_with("---"),
+            "recover.md should start with frontmatter"
         );
         assert!(
-            CONTEXT_MD.contains("description:"),
-            "context.md should have description"
+            RECOVER_MD.contains("description:"),
+            "recover.md should have description"
         );
     }
 
@@ -2901,14 +2901,14 @@ mod tests {
     }
 
     #[test]
-    fn test_opencode_context_cmd_has_required_frontmatter() {
+    fn test_opencode_recover_cmd_has_required_frontmatter() {
         assert!(
-            OPENCODE_CONTEXT_CMD.starts_with("---"),
-            "opencode context cmd should start with frontmatter"
+            OPENCODE_RECOVER_CMD.starts_with("---"),
+            "opencode recover cmd should start with frontmatter"
         );
         assert!(
-            OPENCODE_CONTEXT_CMD.contains("description:"),
-            "opencode context cmd should have description"
+            OPENCODE_RECOVER_CMD.contains("description:"),
+            "opencode recover cmd should have description"
         );
     }
 
@@ -2921,11 +2921,11 @@ mod tests {
     }
 
     #[test]
-    fn test_opencode_context_cmd_contains_recovery() {
-        assert!(OPENCODE_CONTEXT_CMD.contains("Context Recovery"));
-        assert!(OPENCODE_CONTEXT_CMD.contains("deciduous nodes"));
-        assert!(OPENCODE_CONTEXT_CMD.contains("deciduous edges"));
-        assert!(OPENCODE_CONTEXT_CMD.contains("$ARGUMENTS"));
+    fn test_opencode_recover_cmd_contains_recovery() {
+        assert!(OPENCODE_RECOVER_CMD.contains("Context Recovery"));
+        assert!(OPENCODE_RECOVER_CMD.contains("deciduous nodes"));
+        assert!(OPENCODE_RECOVER_CMD.contains("deciduous edges"));
+        assert!(OPENCODE_RECOVER_CMD.contains("$ARGUMENTS"));
     }
 
     #[test]
@@ -3170,14 +3170,14 @@ This should be preserved."#;
     }
 
     #[test]
-    fn test_codex_context_prompt_has_required_frontmatter() {
+    fn test_codex_recover_prompt_has_required_frontmatter() {
         assert!(
-            CODEX_CONTEXT_PROMPT.starts_with("---"),
-            "codex context prompt should start with frontmatter"
+            CODEX_RECOVER_PROMPT.starts_with("---"),
+            "codex recover prompt should start with frontmatter"
         );
         assert!(
-            CODEX_CONTEXT_PROMPT.contains("description:"),
-            "codex context prompt should have description"
+            CODEX_RECOVER_PROMPT.contains("description:"),
+            "codex recover prompt should have description"
         );
     }
 
@@ -3190,10 +3190,10 @@ This should be preserved."#;
     }
 
     #[test]
-    fn test_codex_context_prompt_contains_recovery() {
-        assert!(CODEX_CONTEXT_PROMPT.contains("Context Recovery"));
-        assert!(CODEX_CONTEXT_PROMPT.contains("deciduous nodes"));
-        assert!(CODEX_CONTEXT_PROMPT.contains("deciduous edges"));
+    fn test_codex_recover_prompt_contains_recovery() {
+        assert!(CODEX_RECOVER_PROMPT.contains("Context Recovery"));
+        assert!(CODEX_RECOVER_PROMPT.contains("deciduous nodes"));
+        assert!(CODEX_RECOVER_PROMPT.contains("deciduous edges"));
     }
 
     #[test]

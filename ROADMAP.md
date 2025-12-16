@@ -77,6 +77,50 @@
 ## In Progress / High Priority
 <!-- roadmap:section id="280ac55f-4143-4a59-ab16-3213806b820d" -->
 
+### Subagent System for Codebase Domains
+<!-- roadmap:section id="a1b2c3d4-5e6f-7890-abcd-ef1234567890" -->
+*Specialized agents for each part of the deciduous codebase*
+- [ ] **Set up domain-specific subagents**
+  <!-- roadmap:item id="d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a" outcome_change_id="" -->
+  - Each domain gets a specialized agent with focused context and tools
+  - Agents can work in parallel on different parts of the codebase
+  - Reduces context overhead by scoping to relevant files/patterns
+- [ ] **Rust Core Agent** (`src/` excluding `src/tui/`)
+  <!-- roadmap:item id="e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b" outcome_change_id="" -->
+  - CLI commands, database layer, export/sync logic
+  - Diesel ORM, SQLite, command dispatch
+  - Focus: `src/main.rs`, `src/db.rs`, `src/lib.rs`, `src/serve.rs`
+- [ ] **TUI Agent** (`src/tui/`)
+  <!-- roadmap:item id="f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c" outcome_change_id="" -->
+  - Terminal UI with Ratatui
+  - Views, modals, navigation, keybindings
+  - Focus: `src/tui/app.rs`, `src/tui/views/`, `src/tui/widgets/`
+- [ ] **Web Viewer Agent** (`web/`)
+  <!-- roadmap:item id="a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d" outcome_change_id="" -->
+  - React + TypeScript + D3/Dagre
+  - Components, hooks, views, styling
+  - Focus: `web/src/views/`, `web/src/components/`, `web/src/hooks/`
+- [ ] **Tooling/Templates Agent** (`.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md`)
+  <!-- roadmap:item id="b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e" outcome_change_id="" -->
+  - Editor integrations, slash commands, rules
+  - Template sync with `src/init.rs`
+  - Focus: `.claude/commands/`, `.windsurf/rules/`, tooling docs
+- [ ] **Documentation Agent** (`docs/`, `README.md`, `ROADMAP.md`)
+  <!-- roadmap:item id="c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f" outcome_change_id="" -->
+  - User-facing docs, guides, roadmap management
+  - GitHub Pages content
+  - Focus: `docs/`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`
+- [ ] **CI/CD Agent** (`scripts/`, `.github/`)
+  <!-- roadmap:item id="d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a" outcome_change_id="" -->
+  - Build scripts, GitHub Actions, release automation
+  - Pre-commit hooks, validation
+  - Focus: `scripts/`, `.github/workflows/`, `Cargo.toml`
+- [x] **Fix `/context` command name collision** (renamed to `/recover`)
+  <!-- roadmap:item id="e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b" outcome_change_id="" -->
+  - Renamed `.claude/commands/context.md` to `recover.md`
+  - Also renamed in `.windsurf/rules/` and `.opencode/command/`
+  - Updated CLAUDE.md, README.md, and tooling docs
+
 ### Narrative User Guide
 <!-- roadmap:section id="c31c2378-9b07-4fa1-9ecc-860890108931" -->
 *A real, end-to-end tutorial that walks through an actual use case*
@@ -103,6 +147,48 @@
   - Standalone page on the GH Pages site
   - Could also be an asciinema + written hybrid
   - Link prominently from README
+
+### Real OSS Project Demo - Bootstrap from History
+<!-- roadmap:section id="g2h3i4j5-k6l7-8m9n-0o1p-2q3r4s5t6u7v" -->
+*Show how to add deciduous to an existing project and build decision history from what already exists*
+- [ ] **Demo: Add deciduous to a real open source project**
+  <!-- roadmap:item id="h3i4j5k6-l7m8-9n0o-1p2q-3r4s5t6u7v8w" outcome_change_id="" -->
+  - Pick a well-known OSS repo (maybe a Rust project for dogfooding)
+  - Initialize deciduous and build a decision graph from scratch
+  - Document the process as a replicable guide
+- [ ] **Import decision history from git commits**
+  <!-- roadmap:item id="i4j5k6l7-m8n9-0o1p-2q3r-4s5t6u7v8w9x" outcome_change_id="" -->
+  - Parse commit messages for decision-related keywords
+  - Auto-generate goal/action/outcome nodes from commit patterns
+  - Link nodes to commits automatically
+  - `deciduous import git --since "6 months ago"` or similar
+  - Heuristics: "feat:" → goal, "fix:" → action+outcome, "refactor:" → decision
+- [ ] **Import decision history from PRs**
+  <!-- roadmap:item id="j5k6l7m8-n9o0-1p2q-3r4s-5t6u7v8w9x0y" outcome_change_id="" -->
+  - Fetch PR titles, descriptions, and comments via GitHub API
+  - Extract goals from PR titles/descriptions
+  - Extract decisions from PR discussions and review comments
+  - Link PRs to generated nodes
+  - `deciduous import github-prs --repo owner/repo --since "2024-01-01"`
+- [ ] **Import from GitHub Issues**
+  <!-- roadmap:item id="k6l7m8n9-o0p1-2q3r-4s5t-6u7v8w9x0y1z" outcome_change_id="" -->
+  - Issues often capture goals and decisions
+  - Parse issue labels (bug, feature, enhancement) to determine node types
+  - Link closed issues to outcome nodes
+  - `deciduous import github-issues --repo owner/repo`
+- [ ] **Interactive bootstrap wizard**
+  <!-- roadmap:item id="l7m8n9o0-p1q2-3r4s-5t6u-7v8w9x0y1z2a" outcome_change_id="" -->
+  - `deciduous bootstrap` command for guided setup
+  - Walk through recent commits/PRs and ask user to categorize
+  - "This commit looks like a feature - create a goal node? [Y/n]"
+  - Build initial graph interactively with human validation
+  - Option for fully automatic mode with sensible defaults
+- [ ] **Publish case study**
+  <!-- roadmap:item id="m8n9o0p1-q2r3-4s5t-6u7v-8w9x0y1z2a3b" outcome_change_id="" -->
+  - Write up the experience of adding deciduous to an existing project
+  - Show before/after: navigating codebase without vs with decision graph
+  - Include screenshots of TUI and web viewer exploring imported history
+  - Highlight insights discovered from visualizing historical decisions
 
 ### Automated Graph Sync Workflow
 <!-- roadmap:section id="ce8a9922-4b5b-498e-8467-175eb1600f6f" -->
@@ -149,7 +235,7 @@
 ### Context Recovery (Critical)
 <!-- roadmap:section id="2b2cd677-f9cd-42c8-ae0a-df0a1fe077b9" -->
 *Make compaction restore actually work reliably*
-- [ ] `/context` command fully restores working state after context loss
+- [ ] `/recover` command fully restores working state after context loss
   <!-- roadmap:item id="2b362072-8187-44bf-b2c1-de6b738f981b" outcome_change_id="" -->
 - [ ] Query decision graph for recent goals, decisions, actions in progress
   <!-- roadmap:item id="7283b036-9dd0-4464-b681-51b236b9dfd9" outcome_change_id="" -->
@@ -221,9 +307,9 @@
 - [ ] Integration with `git log` to annotate commits with decision context
   <!-- roadmap:item id="53b0faaf-c764-48b1-acf6-12141af6226c" outcome_change_id="" -->
 
-### Web Viewer - URL State & Sharing
+### Web Viewer - URL State & Sharing (Completed - PR #105)
 <!-- roadmap:section id="b055d90e-d3f2-4d51-919c-934440e6cfdd" -->
-- [ ] **Query param encoding for shareable state**
+- [x] **Query param encoding for shareable state**
   <!-- roadmap:item id="bc03b884-5bb3-4dc1-bf5c-e09387558cfa" outcome_change_id="" -->
   - Encode ALL view parameters in URL query string
   - Branch filter, selected node, view type, expanded chains, etc.
@@ -363,6 +449,26 @@
 ## Backlog - Tooling & Automation
 <!-- roadmap:section id="d790198d-adb4-4a71-9504-43aa89c7c002" -->
 
+### Installation & PATH Handling
+<!-- roadmap:section id="f1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c" -->
+*Graceful handling of common installation issues*
+- [ ] **Detect and suggest PATH fixes for `~/.cargo/bin`**
+  <!-- roadmap:item id="a2b3c4d5-e6f7-8a9b-0c1d-2e3f4a5b6c7d" outcome_change_id="" -->
+  - After `cargo install deciduous`, binary is in `~/.cargo/bin`
+  - Many users don't have this in PATH
+  - Detect when `deciduous` command fails due to PATH issues
+  - Provide clear instructions for adding to PATH:
+    - bash/zsh: `export PATH="$HOME/.cargo/bin:$PATH"` in `.bashrc`/`.zshrc`
+    - fish: `set -gx PATH $HOME/.cargo/bin $PATH` in `config.fish`
+  - Consider: post-install script that checks and warns
+  - Consider: `cargo install` wrapper that checks PATH after install
+- [ ] **Graceful error messages for common issues**
+  <!-- roadmap:item id="b3c4d5e6-f7a8-9b0c-1d2e-3f4a5b6c7d8e" outcome_change_id="" -->
+  - "command not found: deciduous" → suggest PATH fix
+  - Database not found → suggest `deciduous init`
+  - Permission errors → suggest fix
+  - Missing dependencies (graphviz for --png) → suggest install command
+
 ### Release Tooling
 <!-- roadmap:section id="8588ceb0-d117-4cc4-a46b-45c10b927bd5" -->
 - [ ] **Automated release notes generation**
@@ -395,6 +501,23 @@
   - Workflow file: `.github/workflows/release.yml`
   - Optional: Separate workflow for nightly/canary builds
   - Consider: cargo-dist or release-plz for Rust-specific release automation
+- [ ] **Pre-built binary distribution for all platforms**
+  <!-- roadmap:item id="c4d5e6f7-a8b9-0c1d-2e3f-4a5b6c7d8e9f" outcome_change_id="" -->
+  - Build and distribute pre-compiled binaries so users don't need Rust/cargo
+  - **Target platforms:**
+    - Linux x86_64 (glibc and musl for maximum compatibility)
+    - Linux aarch64 (ARM64 for Raspberry Pi, cloud instances)
+    - macOS x86_64 (Intel Macs)
+    - macOS aarch64 (Apple Silicon M1/M2/M3)
+    - Windows x86_64 (.exe)
+  - **Distribution channels:**
+    - GitHub Releases with platform-specific tarballs/zips
+    - Install script: `curl -fsSL https://deciduous.dev/install.sh | sh`
+    - Homebrew tap for macOS: `brew install deciduous/tap/deciduous`
+    - Consider: Chocolatey for Windows, apt/yum repos for Linux
+  - **Binary naming convention:** `deciduous-{version}-{os}-{arch}.{ext}`
+  - **Verification:** SHA256 checksums and optional GPG signatures
+  - **Self-update:** `deciduous update` to fetch latest binary for current platform
 - [ ] **Release checklist automation**
   <!-- roadmap:item id="39e31162-c380-4cfe-8035-4287db092e71" outcome_change_id="" -->
   - `deciduous release prep v0.9.0` - prepare release locally
@@ -449,7 +572,7 @@
   - Auto-add commit hash to recent action/outcome nodes
 - [ ] **Session start hooks**: On conversation begin
   <!-- roadmap:item id="9b8ef4e0-4596-4404-9edf-7bc3f9d59716" outcome_change_id="" -->
-  - Auto-run `/context` equivalent
+  - Auto-run `/recover` equivalent
   - Load graph state and surface pending decisions
   - Warn if there are disconnected nodes needing attention
 - [ ] **Prompt submit hooks**: When user sends a message
@@ -608,9 +731,9 @@
     - CI check that fails if templates don't match actual files
   - Include ALL tooling files:
     - `.claude/commands/decision.md`
-    - `.claude/commands/context.md`
+    - `.claude/commands/recover.md`
     - `.windsurf/rules/decision.md`
-    - `.windsurf/rules/context.md`
+    - `.windsurf/rules/recover.md`
     - `CLAUDE.md`
     - `AGENTS.md`
   - Never have drift between what `deciduous init` creates and what the repo actually uses

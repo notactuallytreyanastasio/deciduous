@@ -1,5 +1,5 @@
 ---
-description: "Recover context from decision graph - USE THIS ON SESSION START. Usage: /context [focus-area]"
+description: "Recover context from decision graph - USE THIS ON SESSION START. Usage: /recover [focus-area]"
 ---
 
 # Context Recovery
@@ -110,7 +110,7 @@ If $ARGUMENTS specifies a focus, prioritize context for:
 ```
 SESSION START
     |
-Run /context -> See past decisions
+Run /recover -> See past decisions
     |
 AUDIT -> Fix any orphan nodes first!
     |

@@ -58,14 +58,14 @@
 
             <p>With deciduous, Claude can query the graph and recover all of this.</p>
 
-            <h2>The /context Command</h2>
+            <h2>The /recover Command</h2>
 
-            <p>At the start of a new session, the user (or Claude) runs <code>/context</code>:</p>
+            <p>At the start of a new session, the user (or Claude) runs <code>/recover</code>:</p>
 
             <div class="terminal-session">
                 <div class="terminal-header">Claude Code Session (New Session)</div>
                 <div class="terminal-body">
-<span class="user-input">&gt; /context</span>
+<span class="user-input">&gt; /recover</span>
 
 Let me recover context from the decision graph...
 
@@ -160,7 +160,7 @@ The rate limiting feature appears complete. What would you like to work on next?
             <pre style="line-height: 1.8;">SESSION START
     │
     ▼
-Run /context → Query decision graph
+Run /recover → Query decision graph
     │
     ▼
 Claude reports: goals, decisions, status
@@ -181,12 +181,12 @@ SESSION END → Graph survives
 
             <h2>Context Mid-Session</h2>
 
-            <p>You can also run <code>/context</code> mid-session if Claude seems to have lost track:</p>
+            <p>You can also run <code>/recover</code> mid-session if Claude seems to have lost track:</p>
 
             <div class="terminal-session">
                 <div class="terminal-header">Mid-Session Context Recovery</div>
                 <div class="terminal-body">
-<span class="user-input">&gt; Wait, what were we doing? Run /context</span>
+<span class="user-input">&gt; Wait, what were we doing? Run /recover</span>
 
 Let me check the decision graph...
 

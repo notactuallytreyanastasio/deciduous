@@ -123,7 +123,7 @@ Your graph will be live at `https://<user>.github.io/<repo>/`
 ```
 SESSION START
     |
-Run /context → Query past decisions
+Run /recover → Query past decisions
     |
 DO WORK → Log BEFORE each action
     |

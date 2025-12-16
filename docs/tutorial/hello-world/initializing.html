@@ -53,7 +53,7 @@
 <span class="cmd">$ deciduous init</span>
 <span class="output">Created .deciduous/deciduous.db (SQLite database)
 Created .deciduous/config.toml (configuration)
-Created .claude/commands/context.md (Claude slash command)
+Created .claude/commands/recover.md (Claude slash command)
 Created .claude/commands/decision.md (Claude slash command)
 Created docs/ (web viewer, deployable to GitHub Pages)
 Created CLAUDE.md (project instructions)
@@ -62,7 +62,7 @@ Added .deciduous/deciduous.db to .gitignore
 Deciduous initialized! Next steps:
   1. Run 'deciduous serve' to start the web viewer
   2. Use 'deciduous add goal "Your goal" -c 90' to create nodes
-  3. Tell Claude to use /context at session start</span></pre>
+  3. Tell Claude to use /recover at session start</span></pre>
 
             <h2>What Got Created</h2>
 
@@ -149,7 +149,7 @@ Deciduous initialized! Next steps:
             <p>The <code>.claude/commands/</code> directory contains slash commands that Claude Code will recognize:</p>
 
             <ul>
-                <li><code>/context</code> &mdash; Recover context from the decision graph at session start</li>
+                <li><code>/recover</code> &mdash; Recover context from the decision graph at session start</li>
                 <li><code>/decision</code> &mdash; Manage the decision graph (add nodes, link, etc.)</li>
             </ul>
 

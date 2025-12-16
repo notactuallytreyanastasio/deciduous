@@ -167,7 +167,7 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 PR workflow: Export patch → commit patch file → PR → teammates apply.
 ## Session Start Checklist
 
-Every new session or after context recovery, run `/context` or:
+Every new session or after context recovery, run `/recover` or:
 
 ```bash
 deciduous nodes           # What decisions exist?

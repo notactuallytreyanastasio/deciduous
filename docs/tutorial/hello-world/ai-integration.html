@@ -88,7 +88,7 @@
                         <td>Slash command for managing the graph</td>
                     </tr>
                     <tr>
-                        <td><code>.claude/commands/context.md</code></td>
+                        <td><code>.claude/commands/recover.md</code></td>
                         <td>Slash command for context recovery</td>
                     </tr>
                     <tr>
@@ -182,14 +182,14 @@ AUDIT regularly -> Check for missing connections
                 </tbody>
             </table>
 
-            <h3>/context &mdash; The Memory Restorer</h3>
+            <h3>/recover &mdash; The Memory Restorer</h3>
 
-            <p>The <code>/context</code> slash command recovers context at session start:</p>
+            <p>The <code>/recover</code> slash command recovers context at session start:</p>
 
             <div class="terminal-session">
-                <div class="terminal-header">Using /context at Session Start</div>
+                <div class="terminal-header">Using /recover at Session Start</div>
                 <div class="terminal-body">
-<span class="user-input">/context</span>
+<span class="user-input">/recover</span>
 
 I'll query the decision graph to recover context...
 
@@ -244,7 +244,7 @@ Changes not staged for commit:
                         <td>Always On rule for decision logging</td>
                     </tr>
                     <tr>
-                        <td><code>.windsurf/rules/context.md</code></td>
+                        <td><code>.windsurf/rules/recover.md</code></td>
                         <td>Model-triggered rule for context recovery</td>
                     </tr>
                     <tr>
@@ -321,7 +321,7 @@ Changes not staged for commit:
             <ul>
                 <li>Log decisions in real-time using <code>deciduous add</code></li>
                 <li>Connect nodes immediately with <code>deciduous link</code></li>
-                <li>Run <code>/context</code> at session start for recovery</li>
+                <li>Run <code>/recover</code> at session start for recovery</li>
                 <li>Sync the graph before pushing with <code>deciduous sync</code></li>
             </ul>
 
@@ -337,7 +337,7 @@ Changes not staged for commit:
             <pre>SESSION START
     │
     ▼
-Run /context → See past decisions
+Run /recover → See past decisions
     │
     ▼
 AUDIT → Fix any orphan nodes first!
@@ -445,7 +445,7 @@ Exported git history to docs/git-history.json</span></pre>
             <ul>
                 <li><strong>CLAUDE.md / AGENTS.md</strong> &mdash; behavioral rules</li>
                 <li><strong>Slash commands / Rules</strong> &mdash; quick access to operations</li>
-                <li><strong>/context</strong> &mdash; memory restoration at session start</li>
+                <li><strong>/recover</strong> &mdash; memory restoration at session start</li>
             </ul>
 
             <p>Creates a system where decisions are logged in real-time, survive context loss, and are automatically recovered in new sessions.</p>
