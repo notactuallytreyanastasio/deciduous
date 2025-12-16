@@ -7,7 +7,7 @@
 
 import React from 'react';
 import type { DecisionNode, GraphData, GitCommit } from '../types/graph';
-import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl } from '../types/graph';
+import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
 
 interface DetailPanelProps {
@@ -30,9 +30,11 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   graphData,
   onSelectNode,
   onClose,
-  repo = 'notactuallytreyanastasio/deciduous',
+  repo,
   gitHistory = [],
 }) => {
+  // Use repo from config if not explicitly passed
+  const effectiveRepo = repo ?? getCommitRepo(graphData);
   if (!node) {
     return (
       <div style={styles.panel}>
@@ -116,7 +118,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
           <h3 style={styles.sectionTitle}>Linked Commit</h3>
           <div style={styles.commitSection}>
             <a
-              href={githubCommitUrl(commitHash, repo)}
+              href={githubCommitUrl(commitHash, effectiveRepo)}
               target="_blank"
               rel="noopener noreferrer"
               style={styles.commitHash}

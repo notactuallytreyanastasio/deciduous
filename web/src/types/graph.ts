@@ -62,12 +62,36 @@ export interface DecisionEdge extends Omit<GeneratedDecisionEdge, 'edge_type'> {
 export type { DecisionContext, DecisionSession, CommandLog } from './generated/schema';
 
 /**
- * Full graph data structure as exported by `losselot db graph`
+ * GitHub configuration for external repo links
+ */
+export interface GithubConfig {
+  commit_repo?: string;  // e.g., "phoenixframework/phoenix"
+}
+
+/**
+ * Branch configuration
+ */
+export interface BranchConfig {
+  main_branches?: string[];
+  auto_detect?: boolean;
+}
+
+/**
+ * Configuration from .deciduous/config.toml
+ */
+export interface DeciduousConfig {
+  github?: GithubConfig;
+  branch?: BranchConfig;
+}
+
+/**
+ * Full graph data structure as exported by `deciduous sync`
  * This is the JSON format written to graph-data.json
  */
 export interface GraphData {
   nodes: DecisionNode[];
   edges: DecisionEdge[];
+  config?: DeciduousConfig;  // Optional config for external repo links
 }
 
 // =============================================================================
@@ -220,10 +244,29 @@ export function getConfidenceLevel(confidence: number | null): 'high' | 'med' | 
 }
 
 /**
+ * Default repository for commit links (when no config is provided)
+ */
+export const DEFAULT_COMMIT_REPO = 'notactuallytreyanastasio/deciduous';
+
+/**
+ * Get the commit repo from graph config, with fallback to default
+ */
+export function getCommitRepo(graphData: GraphData | null): string {
+  return graphData?.config?.github?.commit_repo ?? DEFAULT_COMMIT_REPO;
+}
+
+/**
  * Create GitHub commit URL
  */
-export function githubCommitUrl(commit: string, repo: string = 'notactuallytreyanastasio/losselot'): string {
+export function githubCommitUrl(commit: string, repo: string = DEFAULT_COMMIT_REPO): string {
   return `https://github.com/${repo}/commit/${commit}`;
+}
+
+/**
+ * Create GitHub PR URL
+ */
+export function githubPrUrl(prNumber: number | string, repo: string = DEFAULT_COMMIT_REPO): string {
+  return `https://github.com/${repo}/pull/${prNumber}`;
 }
 
 /**

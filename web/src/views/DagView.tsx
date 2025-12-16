@@ -12,7 +12,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
-import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl } from '../types/graph';
+import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { SearchBar } from '../components/SearchBar';
 import { CalloutLines } from '../components/CalloutLines';
@@ -737,10 +737,11 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
               const commitHash = getCommit(selectedNode);
               const commitInfo = getCommitInfo(commitHash, gitHistory);
               if (!commitHash) return null;
+              const commitRepo = getCommitRepo(graphData);
               return (
                 <div style={styles.commitSection}>
                   <a
-                    href={githubCommitUrl(commitHash, 'notactuallytreyanastasio/deciduous')}
+                    href={githubCommitUrl(commitHash, commitRepo)}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={styles.commitLink}

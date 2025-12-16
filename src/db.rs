@@ -1293,7 +1293,14 @@ impl Database {
     pub fn get_graph(&self) -> Result<DecisionGraph> {
         let nodes = self.get_all_nodes()?;
         let edges = self.get_all_edges()?;
-        Ok(DecisionGraph { nodes, edges })
+        Ok(DecisionGraph { nodes, edges, config: None })
+    }
+
+    /// Get full graph with config included (for export)
+    pub fn get_graph_with_config(&self, config: Option<crate::config::Config>) -> Result<DecisionGraph> {
+        let nodes = self.get_all_nodes()?;
+        let edges = self.get_all_edges()?;
+        Ok(DecisionGraph { nodes, edges, config })
     }
 
     // ========================================================================
@@ -1900,6 +1907,9 @@ pub type DbRecord = DecisionNode;
 pub struct DecisionGraph {
     pub nodes: Vec<DecisionNode>,
     pub edges: Vec<DecisionEdge>,
+    /// Optional config from .deciduous/config.toml (for external repo links, etc.)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub config: Option<crate::config::Config>,
 }
 
 #[cfg(test)]

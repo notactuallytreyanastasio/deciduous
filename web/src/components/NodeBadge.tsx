@@ -7,7 +7,7 @@
 
 import React from 'react';
 import type { NodeType, EdgeType, DecisionNode } from '../types/graph';
-import { getConfidence, getCommit, getConfidenceLevel, shortCommit, githubCommitUrl } from '../types/graph';
+import { getConfidence, getCommit, getConfidenceLevel, shortCommit, githubCommitUrl, DEFAULT_COMMIT_REPO } from '../types/graph';
 import { getNodeColor, getConfidenceColors } from '../utils/colors';
 
 // =============================================================================
@@ -76,7 +76,7 @@ interface CommitBadgeProps {
 
 export const CommitBadge: React.FC<CommitBadgeProps> = ({
   commit,
-  repo = 'notactuallytreyanastasio/losselot',
+  repo = DEFAULT_COMMIT_REPO,
 }) => {
   if (!commit) return null;
 

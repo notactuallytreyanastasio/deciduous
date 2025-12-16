@@ -246,7 +246,7 @@ pub fn filter_graph_from_roots(graph: &DecisionGraph, root_ids: &[i32]) -> Decis
         .cloned()
         .collect();
 
-    DecisionGraph { nodes, edges }
+    DecisionGraph { nodes, edges, config: graph.config.clone() }
 }
 
 /// Filter a graph to only include specific node IDs (no traversal)
@@ -267,7 +267,7 @@ pub fn filter_graph_by_ids(graph: &DecisionGraph, node_ids: &[i32]) -> DecisionG
         .cloned()
         .collect();
 
-    DecisionGraph { nodes, edges }
+    DecisionGraph { nodes, edges, config: graph.config.clone() }
 }
 
 /// Parse a node range specification (e.g., "1-11" or "1,2,5-10,15")
@@ -596,6 +596,7 @@ mod tests {
                     created_at: "2025-01-01T00:00:00Z".to_string(),
                 },
             ],
+            config: None,
         }
     }
 
@@ -874,6 +875,7 @@ mod tests {
         let graph = DecisionGraph {
             nodes: vec![],
             edges: vec![],
+            config: None,
         };
         let config = DotConfig::default();
         let dot = graph_to_dot(&graph, &config);
@@ -887,6 +889,7 @@ mod tests {
         let graph = DecisionGraph {
             nodes: vec![],
             edges: vec![],
+            config: None,
         };
         let config = WriteupConfig {
             title: "Empty".to_string(),

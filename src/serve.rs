@@ -103,9 +103,14 @@ fn handle_request(request: Request) -> std::io::Result<()> {
 }
 
 fn get_decision_graph() -> DecisionGraph {
+    // Load config for external repo support
+    let config = crate::config::Config::load();
+    let include_config = config.github.commit_repo.is_some();
+    let config_opt = if include_config { Some(config) } else { None };
+
     match Database::open() {
-        Ok(db) => db.get_graph().unwrap_or_else(|_| DecisionGraph { nodes: vec![], edges: vec![] }),
-        Err(_) => DecisionGraph { nodes: vec![], edges: vec![] },
+        Ok(db) => db.get_graph_with_config(config_opt.clone()).unwrap_or_else(|_| DecisionGraph { nodes: vec![], edges: vec![], config: config_opt.clone() }),
+        Err(_) => DecisionGraph { nodes: vec![], edges: vec![], config: config_opt },
     }
 }
 

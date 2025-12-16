@@ -2,19 +2,33 @@
 //!
 //! Reads from .deciduous/config.toml
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// Configuration structure
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct Config {
     /// Branch settings
     #[serde(default)]
     pub branch: BranchConfig,
+
+    /// GitHub settings for external repository references
+    #[serde(default)]
+    pub github: GithubConfig,
+}
+
+/// GitHub-related configuration for commit/PR links
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
+pub struct GithubConfig {
+    /// External repository for commit links (e.g., "phoenixframework/phoenix")
+    /// When set, commit hashes in nodes will link to this repo instead of the local one.
+    /// Format: "owner/repo"
+    #[serde(default)]
+    pub commit_repo: Option<String>,
 }
 
 /// Branch-related configuration
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BranchConfig {
     /// Main/default branch names (nodes on these branches won't trigger special grouping)
     /// Default: ["main", "master"]

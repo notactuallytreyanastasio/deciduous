@@ -1,7 +1,7 @@
 use chrono::Local;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
-use deciduous::{Database, DotConfig, WriteupConfig, graph_to_dot, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
+use deciduous::{Config, Database, DotConfig, WriteupConfig, graph_to_dot, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
 use deciduous::roadmap::{parse_roadmap, write_roadmap_with_metadata, generate_issue_body, RoadmapSection};
 use deciduous::github::{GitHubClient, ensure_roadmap_label};
 use std::path::PathBuf;
@@ -649,7 +649,11 @@ fn main() {
                 std::fs::create_dir_all(parent).ok();
             }
 
-            match db.get_graph() {
+            // Load config and include it in export (for external repo support, etc.)
+            let config = Config::load();
+            let include_config = config.github.commit_repo.is_some();
+
+            match db.get_graph_with_config(if include_config { Some(config) } else { None }) {
                 Ok(graph) => {
                     match serde_json::to_string_pretty(&graph) {
                         Ok(json) => {
