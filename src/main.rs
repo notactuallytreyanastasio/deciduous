@@ -2,7 +2,7 @@ use chrono::Local;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use deciduous::{Database, DotConfig, WriteupConfig, graph_to_dot, generate_pr_writeup, filter_graph_by_ids, parse_node_range};
-use deciduous::roadmap::{parse_roadmap, write_roadmap_with_metadata, generate_issue_body, RoadmapSection};
+use deciduous::roadmap::{parse_roadmap, write_roadmap_with_metadata, write_roadmap_with_checkboxes, generate_issue_body, parse_issue_body_checkboxes, RoadmapSection};
 use deciduous::github::{GitHubClient, ensure_roadmap_label};
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -345,6 +345,11 @@ enum RoadmapAction {
         /// Create GitHub issues for new sections
         #[arg(long, default_value = "true")]
         create_issues: bool,
+
+        /// Pull checkbox states from GitHub Issues to local ROADMAP.md
+        /// (GitHub is source of truth for completion status)
+        #[arg(long)]
+        pull: bool,
     },
 
     /// List roadmap items with status
@@ -1432,7 +1437,7 @@ fn main() {
                     println!("{} Refreshed {} sections with {} items", "Success:".green(), parsed.sections.len(), total_items);
                 }
 
-                RoadmapAction::Sync { path, repo, execute, create_issues } => {
+                RoadmapAction::Sync { path, repo, execute, create_issues, pull } => {
                     let dry_run = !execute;  // Default is dry-run mode
                     let roadmap_path = path.unwrap_or_else(|| PathBuf::from("ROADMAP.md"));
 
@@ -1498,15 +1503,133 @@ fn main() {
                         }
                     }
 
+                    // CRITICAL: Fetch existing issues from GitHub to resolve sections
+                    // GitHub issues are the source of truth - resolve by title before syncing
+                    use std::collections::HashMap;
+                    println!("  {} Fetching existing roadmap issues from GitHub...", "→".cyan());
+
+                    let existing_issues: HashMap<String, deciduous::github::GitHubIssue> =
+                        match gh_client.list_issues_with_label("roadmap") {
+                            Ok(issues) => {
+                                println!("  {} Found {} existing issues", "✓".green(), issues.len());
+                                issues.into_iter()
+                                    .map(|issue| (issue.title.clone(), issue))
+                                    .collect()
+                            }
+                            Err(e) => {
+                                eprintln!("  {} Fetching issues: {} (will create new)", "Warning:".yellow(), e);
+                                HashMap::new()
+                            }
+                        };
+
+                    // Build a map of sections that need metadata updates (resolved from GitHub)
+                    let mut resolved_sections: HashMap<String, (i32, String)> = HashMap::new();
+                    let mut resolved_count = 0;
+
+                    for section in &syncable_sections {
+                        // If section doesn't have an issue number, try to resolve from GitHub
+                        if section.github_issue_number.is_none() {
+                            if let Some(issue) = existing_issues.get(&section.title) {
+                                resolved_sections.insert(
+                                    section.title.clone(),
+                                    (issue.number, issue.state.clone())
+                                );
+                                resolved_count += 1;
+                            }
+                        }
+                    }
+
+                    if resolved_count > 0 {
+                        println!("  {} Resolved {} sections to existing issues", "✓".green(), resolved_count);
+                    }
+
+                    // If --pull, sync checkbox states from GitHub to local
+                    // GitHub is the source of truth for completion status
+                    let mut pulled_checkbox_updates: HashMap<String, Vec<(String, bool)>> = HashMap::new();
+                    let mut pull_count = 0;
+
+                    if pull {
+                        println!("  {} Pulling checkbox states from GitHub...", "→".cyan());
+                        for section in &syncable_sections {
+                            // Find matching issue (from metadata or resolved)
+                            let issue = if let Some(num) = section.github_issue_number {
+                                existing_issues.values().find(|i| i.number == num)
+                            } else {
+                                existing_issues.get(&section.title)
+                            };
+
+                            if let Some(issue) = issue {
+                                // Parse checkbox states from issue body
+                                let github_checkboxes = parse_issue_body_checkboxes(&issue.body);
+                                if !github_checkboxes.is_empty() {
+                                    // Check for any differences
+                                    let mut has_changes = false;
+                                    for (gh_text, gh_checked) in &github_checkboxes {
+                                        if let Some(local_item) = section.items.iter().find(|i| i.text.contains(gh_text) || gh_text.contains(&i.text)) {
+                                            if local_item.checked != *gh_checked {
+                                                has_changes = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if has_changes {
+                                        pulled_checkbox_updates.insert(section.title.clone(), github_checkboxes);
+                                        pull_count += 1;
+                                    }
+                                }
+                            }
+                        }
+                        if pull_count > 0 {
+                            println!("  {} Found {} sections with checkbox updates from GitHub", "✓".green(), pull_count);
+                        } else {
+                            println!("  {} All checkboxes already in sync", "✓".green());
+                        }
+                    }
+
+                    // Build updated sections with resolved issue numbers AND pulled checkbox states
+                    let updated_sections: Vec<RoadmapSection> = parsed.sections.iter()
+                        .map(|section| {
+                            let mut updated = section.clone();
+
+                            // Apply resolved issue data
+                            if let Some((issue_num, issue_state)) = resolved_sections.get(&section.title) {
+                                updated.github_issue_number = Some(*issue_num);
+                                updated.github_issue_state = Some(issue_state.clone());
+                            }
+
+                            // Apply pulled checkbox states from GitHub
+                            if let Some(gh_checkboxes) = pulled_checkbox_updates.get(&section.title) {
+                                for item in &mut updated.items {
+                                    // Find matching checkbox in GitHub data
+                                    if let Some((_, gh_checked)) = gh_checkboxes.iter()
+                                        .find(|(text, _)| item.text.contains(text) || text.contains(&item.text))
+                                    {
+                                        item.checked = *gh_checked;
+                                    }
+                                }
+                            }
+
+                            updated
+                        })
+                        .collect();
+
                     let mut created = 0;
                     let mut updated = 0;
                     let mut skipped = 0;
 
                     for section in &syncable_sections {
-                        // Check if section already has an issue
-                        if section.github_issue_number.is_some() {
-                            // Update existing issue
-                            let issue_num = section.github_issue_number.unwrap();
+                        // Check if section has an issue (either from metadata or resolved from GitHub)
+                        let resolved_issue = resolved_sections.get(&section.title);
+                        let has_issue = section.github_issue_number.is_some() || resolved_issue.is_some();
+
+                        if has_issue {
+                            // Get issue number from metadata or resolution
+                            let (issue_num, _issue_state) = if let Some(num) = section.github_issue_number {
+                                (num, section.github_issue_state.clone().unwrap_or_else(|| "open".to_string()))
+                            } else {
+                                resolved_issue.unwrap().clone()
+                            };
+                            // Update existing issue (or sync resolved issue from GitHub)
                             let body = generate_issue_body(section);
 
                             if dry_run {
@@ -1569,21 +1692,44 @@ fn main() {
                     }
 
                     // Write updated roadmap with issue metadata
-                    if !dry_run && created > 0 {
+                    // Include resolved sections (resolved_count) and pulled checkbox updates
+                    if !dry_run && (created > 0 || resolved_count > 0 || pull_count > 0) {
                         let content = std::fs::read_to_string(&roadmap_path).unwrap_or_default();
-                        match write_roadmap_with_metadata(&roadmap_path, &parsed.sections, &content) {
-                            Ok(updated_content) => {
-                                if let Err(e) = std::fs::write(&roadmap_path, &updated_content) {
-                                    eprintln!("{} Writing roadmap: {}", "Warning:".yellow(), e);
+
+                        // First, update metadata (issue numbers)
+                        let content_after_metadata = if created > 0 || resolved_count > 0 {
+                            match write_roadmap_with_metadata(&roadmap_path, &updated_sections, &content) {
+                                Ok(updated_content) => {
+                                    if resolved_count > 0 {
+                                        println!("  {} Updated ROADMAP.md with {} resolved issue numbers", "✓".green(), resolved_count);
+                                    }
+                                    updated_content
+                                }
+                                Err(e) => {
+                                    eprintln!("{} Updating metadata: {}", "Warning:".yellow(), e);
+                                    content
                                 }
                             }
-                            Err(e) => eprintln!("{} Updating metadata: {}", "Warning:".yellow(), e),
+                        } else {
+                            content
+                        };
+
+                        // Then, update checkbox states if pulling from GitHub
+                        if pull_count > 0 {
+                            match write_roadmap_with_checkboxes(&roadmap_path, &updated_sections, &content_after_metadata) {
+                                Ok(_) => {
+                                    println!("  {} Updated {} sections with checkbox states from GitHub", "✓".green(), pull_count);
+                                }
+                                Err(e) => {
+                                    eprintln!("{} Updating checkboxes: {}", "Warning:".yellow(), e);
+                                }
+                            }
                         }
                     }
 
-                    println!("\n{} {} created, {} updated, {} skipped",
+                    println!("\n{} {} created, {} updated, {} resolved, {} pulled, {} skipped",
                         if dry_run { "Summary (dry run):".yellow() } else { "Summary:".green() },
-                        created, updated, skipped);
+                        created, updated, resolved_count, pull_count, skipped);
                 }
 
                 RoadmapAction::List { path, section, with_issues, without_issues } => {

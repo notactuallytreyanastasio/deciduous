@@ -451,6 +451,75 @@ pub fn parse_issue_body_checkboxes(body: &str) -> Vec<(String, bool)> {
     items
 }
 
+/// Rewrite ROADMAP.md with updated checkbox states from sections
+/// This updates the actual checkbox markers ([ ] or [x]) based on section item states
+pub fn write_roadmap_with_checkboxes<P: AsRef<Path>>(
+    path: P,
+    sections: &[RoadmapSection],
+    original_content: &str,
+) -> Result<String> {
+    let lines: Vec<&str> = original_content.lines().collect();
+    let mut output_lines: Vec<String> = Vec::new();
+
+    let header_re = Regex::new(r"^(#{2,3})\s+(.+)$")?;
+    let checkbox_re = Regex::new(r"^(-\s+\[)([ xX])(\]\s+)(.+)$")?;
+
+    // Build lookup map: title -> section
+    let section_map: HashMap<String, &RoadmapSection> = sections
+        .iter()
+        .map(|s| (s.title.clone(), s))
+        .collect();
+
+    let mut current_section_title: Option<String> = None;
+
+    for line in lines {
+        // Check for header - track current section
+        if let Some(caps) = header_re.captures(line) {
+            let title = caps.get(2).unwrap().as_str().trim().to_string();
+            current_section_title = Some(title);
+            output_lines.push(line.to_string());
+            continue;
+        }
+
+        // Check for checkbox item
+        if let Some(caps) = checkbox_re.captures(line) {
+            let prefix = caps.get(1).unwrap().as_str();  // "- ["
+            let suffix = caps.get(3).unwrap().as_str();  // "] "
+            let text = caps.get(4).unwrap().as_str().trim();
+
+            // Find if we have an updated state for this item
+            let new_checked = if let Some(ref title) = current_section_title {
+                if let Some(section) = section_map.get(title) {
+                    section.items.iter()
+                        .find(|item| item.text.contains(text) || text.contains(&item.text))
+                        .map(|item| item.checked)
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(checked) = new_checked {
+                let mark = if checked { "x" } else { " " };
+                output_lines.push(format!("{}{}{}{}", prefix, mark, suffix, text));
+            } else {
+                output_lines.push(line.to_string());
+            }
+            continue;
+        }
+
+        output_lines.push(line.to_string());
+    }
+
+    let new_content = output_lines.join("\n");
+
+    // Write to file
+    fs::write(path.as_ref(), &new_content)?;
+
+    Ok(new_content)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
