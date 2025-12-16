@@ -157,28 +157,31 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       if (b.matchType === 'title' && a.matchType !== 'title') return 1;
       // Then by recency
       return new Date(b.node.updated_at).getTime() - new Date(a.node.updated_at).getTime();
-    }).slice(0, 15); // Limit to 15 results
+    });
   }, [debouncedQuery, nodes, commitMap]);
 
-  // Update highlighted nodes when search changes
+  // All results for highlighting (unlimited), limited for dropdown display
+  const dropdownResults = useMemo(() => searchResults.slice(0, 15), [searchResults]);
+
+  // Update highlighted nodes when search changes - highlight ALL matches, not just dropdown
   useEffect(() => {
     const highlightedIds = new Set(searchResults.map(r => r.node.id));
     onHighlightNodes(highlightedIds);
   }, [searchResults, onHighlightNodes]);
 
-  // Reset selected index when results change
+  // Reset selected index when dropdown results change
   useEffect(() => {
     setSelectedIndex(0);
-  }, [searchResults]);
+  }, [dropdownResults]);
 
-  // Keyboard navigation
+  // Keyboard navigation - uses dropdown results for navigation
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!searchResults.length) return;
+    if (!dropdownResults.length) return;
 
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, searchResults.length - 1));
+        setSelectedIndex(prev => Math.min(prev + 1, dropdownResults.length - 1));
         break;
       case 'ArrowUp':
         e.preventDefault();
@@ -186,8 +189,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         break;
       case 'Enter':
         e.preventDefault();
-        if (searchResults[selectedIndex]) {
-          onSelectNode(searchResults[selectedIndex].node);
+        if (dropdownResults[selectedIndex]) {
+          onSelectNode(dropdownResults[selectedIndex].node);
           setQuery('');
           inputRef.current?.blur();
         }
@@ -198,15 +201,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         inputRef.current?.blur();
         break;
     }
-  }, [searchResults, selectedIndex, onSelectNode]);
+  }, [dropdownResults, selectedIndex, onSelectNode]);
 
   // Scroll selected item into view
   useEffect(() => {
-    if (dropdownRef.current && searchResults.length > 0) {
+    if (dropdownRef.current && dropdownResults.length > 0) {
       const selectedElement = dropdownRef.current.children[selectedIndex] as HTMLElement;
       selectedElement?.scrollIntoView({ block: 'nearest' });
     }
-  }, [selectedIndex, searchResults.length]);
+  }, [selectedIndex, dropdownResults.length]);
 
   const handleResultClick = useCallback((result: SearchResult) => {
     onSelectNode(result.node);
@@ -214,7 +217,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
     inputRef.current?.blur();
   }, [onSelectNode]);
 
-  const showDropdown = isFocused && searchResults.length > 0;
+  const showDropdown = isFocused && dropdownResults.length > 0;
 
   // Get match type label
   const getMatchLabel = (matchType: SearchResult['matchType']) => {
@@ -266,7 +269,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           style={styles.dropdown}
           role="listbox"
         >
-          {searchResults.map((result, index) => (
+          {dropdownResults.map((result, index) => (
             <div
               key={`${result.node.id}-${result.matchType}`}
               onClick={() => handleResultClick(result)}
@@ -296,7 +299,11 @@ export const SearchBar: React.FC<SearchBarProps> = ({
             </div>
           ))}
           <div style={styles.dropdownFooter}>
-            <span style={styles.footerHint}>↑↓ navigate · Enter select · Esc close</span>
+            <span style={styles.footerHint}>
+              {searchResults.length > 15
+                ? `Showing 15 of ${searchResults.length} · All ${searchResults.length} highlighted`
+                : '↑↓ navigate · Enter select · Esc close'}
+            </span>
           </div>
         </div>
       )}

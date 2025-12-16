@@ -691,6 +691,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         {highlightedNodeIds.size > 0 && (
           <CalloutLines
             nodes={graphData.nodes}
+            edges={graphData.edges}
             highlightedNodeIds={highlightedNodeIds}
             visibilityMap={visibilityMap}
             containerWidth={containerDimensions.width}
