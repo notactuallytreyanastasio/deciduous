@@ -2734,7 +2734,7 @@ fn add_codex_to_gitignore(cwd: &Path) -> Result<(), String> {
     // Build the new content to append
     let mut new_section = String::new();
     if !existing.trim().is_empty() {
-        new_section.push_str("\n");
+        new_section.push('\n');
     }
     new_section.push_str("\n# Codex files (prompts/ should be committed)\n");
     for entry in &codex_entries {
