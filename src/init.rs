@@ -13,6 +13,7 @@ pub enum Editor {
     Claude,
     Windsurf,
     Opencode,
+    Codex,
 }
 
 /// Static HTML viewer for GitHub Pages (embedded at compile time)
@@ -1643,6 +1644,423 @@ Export the current decision graph to docs/graph-data.json so it's deployed to Gi
 This should be run before any push to main to ensure the live site has the latest decisions.
 "#;
 
+// ============================================================================
+// CODEX-SPECIFIC TEMPLATES
+// ============================================================================
+
+/// Codex decision prompt - placed in .codex/prompts/decision.md
+/// Note: Codex uses top-level prompts/ directory only (no subdirs)
+/// Invoked as: /prompts:decision ACTION="add goal" TITLE="Feature name"
+const CODEX_DECISION_PROMPT: &str = r#"---
+description: Manage decision graph - track algorithm choices and reasoning
+argument-hint: [ACTION=<action>] [TITLE="<title>"]
+---
+
+# Decision Graph Management
+
+**Log decisions IN REAL-TIME as you work, not retroactively.**
+
+## When to Use This
+
+| You're doing this... | Log this type | Command |
+|---------------------|---------------|---------|
+| Starting a new feature | `goal` **with -p** | `/prompts:decision ACTION="add goal" TITLE="Add user auth"` |
+| Choosing between approaches | `decision` | `/prompts:decision ACTION="add decision" TITLE="Choose auth method"` |
+| Considering an option | `option` | `/prompts:decision ACTION="add option" TITLE="JWT tokens"` |
+| About to write code | `action` | `/prompts:decision ACTION="add action" TITLE="Implementing JWT"` |
+| Noticing something | `observation` | `/prompts:decision ACTION="add obs" TITLE="Found existing code"` |
+| Finished something | `outcome` | `/prompts:decision ACTION="add outcome" TITLE="JWT working"` |
+
+## Quick Commands
+
+Based on $ARGUMENTS:
+
+### View Commands
+- `nodes` or `list` -> `deciduous nodes`
+- `edges` -> `deciduous edges`
+- `graph` -> `deciduous graph`
+- `commands` -> `deciduous commands`
+
+### Create Nodes (with optional metadata)
+- `add goal <title>` -> `deciduous add goal "<title>" -c 90`
+- `add decision <title>` -> `deciduous add decision "<title>" -c 75`
+- `add option <title>` -> `deciduous add option "<title>" -c 70`
+- `add action <title>` -> `deciduous add action "<title>" -c 85`
+- `add obs <title>` -> `deciduous add observation "<title>" -c 80`
+- `add outcome <title>` -> `deciduous add outcome "<title>" -c 90`
+
+### Optional Flags for Nodes
+- `-c, --confidence <0-100>` - Confidence level
+- `-p, --prompt "..."` - Store the user prompt that triggered this node
+- `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-b, --branch <name>` - Git branch (auto-detected by default)
+- `--no-branch` - Skip branch auto-detection
+- `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
+
+### CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
+
+## CRITICAL: Capture User Prompts When Semantically Meaningful
+
+**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+
+```bash
+# New feature request - capture the prompt on the goal
+deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+
+# Downstream work links back - no prompt needed (it flows via edges)
+deciduous add decision "Choose auth method" -c 75
+deciduous link <goal_id> <decision_id> -r "Deciding approach"
+
+# BUT if the user gives new direction mid-stream, capture that too
+deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+```
+
+**When to capture prompts:**
+- Root `goal` nodes: YES - the original request
+- Major direction changes: YES - when user redirects the work
+- Routine downstream nodes: NO - they inherit context via edges
+
+### Create Edges
+- `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
+
+### Sync Graph
+- `sync` -> `deciduous sync`
+
+### Multi-User Sync (Diff/Patch)
+- `diff export -o <file>` -> `deciduous diff export -o <file>`
+- `diff export --nodes 1-10 -o <file>` -> export specific nodes
+- `diff export --branch feature-x -o <file>` -> export nodes from branch
+- `diff apply <file>` -> `deciduous diff apply <file>` (idempotent)
+- `diff apply --dry-run <file>` -> preview without applying
+- `diff status` -> `deciduous diff status`
+
+### Export & Visualization
+- `dot` -> `deciduous dot`
+- `dot --png` -> `deciduous dot --png -o graph.dot`
+- `writeup` -> `deciduous writeup`
+- `writeup -t "Title" --nodes 1-11` -> filtered writeup
+
+## Node Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `goal` | High-level objective | "Add user authentication" |
+| `decision` | Choice point with options | "Choose auth method" |
+| `option` | Possible approach | "Use JWT tokens" |
+| `action` | Something implemented | "Added JWT middleware" |
+| `outcome` | Result of action | "JWT auth working" |
+| `observation` | Finding or data point | "Existing code uses sessions" |
+
+## Graph Integrity - CRITICAL
+
+**Every node MUST be logically connected.** Floating nodes break the graph's value.
+
+### Connection Rules
+| Node Type | MUST connect to |
+|-----------|----------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The decision/goal that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action/decision |
+| `decision` | Parent goal (if any) |
+| `goal` | Can be a root (no parent needed) |
+
+## The Rule
+
+```
+LOG BEFORE YOU CODE, NOT AFTER.
+CONNECT EVERY NODE TO ITS PARENT.
+AUDIT FOR ORPHANS REGULARLY.
+SYNC BEFORE YOU PUSH.
+```
+"#;
+
+/// Codex context prompt - placed in .codex/prompts/context.md
+const CODEX_CONTEXT_PROMPT: &str = r#"---
+description: Recover context from decision graph - USE THIS ON SESSION START
+argument-hint: [FOCUS="<area>"]
+---
+
+# Context Recovery
+
+**RUN THIS AT SESSION START.** The decision graph is your persistent memory.
+
+## Step 1: Query the Graph
+
+```bash
+# See all decisions (look for recent ones and pending status)
+deciduous nodes
+
+# Filter by current branch (useful for feature work)
+deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)
+
+# See how decisions connect
+deciduous edges
+
+# What commands were recently run?
+deciduous commands
+```
+
+**Branch-scoped context**: If working on a feature branch, filter nodes to see only decisions relevant to this branch.
+
+## Step 1.5: Audit Graph Integrity
+
+**CRITICAL: Check that all nodes are logically connected.**
+
+```bash
+# Find nodes with no incoming edges (potential missing connections)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+
+**Review each flagged node:**
+- Root `goal` nodes are VALID without parents
+- `outcome` nodes MUST link back to their action/goal
+- `action` nodes MUST link to their parent goal/decision
+- `option` nodes MUST link to their parent decision
+
+**Fix missing connections:**
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
+```
+
+## Step 2: Check Git State
+
+```bash
+git status
+git log --oneline -10
+git diff --stat
+```
+
+## After Gathering Context, Report:
+
+1. **Current branch** and pending changes
+2. **Branch-specific decisions** (filter by branch if on feature branch)
+3. **Recent decisions** (especially pending/active ones)
+4. **Last actions** from git log and command log
+5. **Open questions** or unresolved observations
+6. **Suggested next steps**
+
+---
+
+## REMEMBER: Real-Time Logging Required
+
+After recovering context, you MUST follow the logging workflow:
+
+```
+EVERY USER REQUEST -> Log goal/decision first
+BEFORE CODE CHANGES -> Log action
+AFTER CHANGES -> Log outcome, link nodes
+BEFORE GIT PUSH -> deciduous sync
+```
+
+**The user is watching the graph live.** Log as you go, not after.
+
+### Quick Logging Commands
+
+```bash
+# Root goal with user prompt (capture what the user asked for)
+deciduous add goal "What we're trying to do" -c 90 -p "User asked: <their request>"
+
+deciduous add action "What I'm about to implement" -c 85
+deciduous add outcome "What happened" -c 95
+deciduous link FROM TO -r "Connection reason"
+
+deciduous sync  # Do this frequently!
+```
+
+---
+
+## Focus Areas
+
+If $FOCUS specifies a focus, prioritize context for:
+
+- **auth**: Authentication-related decisions
+- **ui** / **graph**: UI and graph viewer state
+- **cli**: Command-line interface changes
+- **api**: API endpoints and data structures
+
+---
+
+## The Memory Loop
+
+```
+SESSION START
+    |
+Run /prompts:context -> See past decisions
+    |
+AUDIT -> Fix any orphan nodes first!
+    |
+DO WORK -> Log BEFORE each action
+    |
+CONNECT -> Link new nodes immediately
+    |
+AFTER CHANGES -> Log outcomes, observations
+    |
+AUDIT AGAIN -> Any new orphans?
+    |
+BEFORE PUSH -> deciduous sync
+    |
+PUSH -> Live graph updates
+    |
+SESSION END -> Final audit
+    |
+(repeat)
+```
+
+---
+
+## Multi-User Sync
+
+If working in a team, check for and apply patches from teammates:
+
+```bash
+# Check for unapplied patches
+deciduous diff status
+
+# Apply all patches (idempotent - safe to run multiple times)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate-feature.json
+```
+
+Before pushing your branch, export your decisions for teammates:
+
+```bash
+# Export your branch's decisions as a patch
+deciduous diff export --branch $(git rev-parse --abbrev-ref HEAD) \
+  -o .deciduous/patches/$(whoami)-$(git rev-parse --abbrev-ref HEAD).json
+
+# Commit the patch file
+git add .deciduous/patches/
+```
+
+## Why This Matters
+
+- Context loss during compaction loses your reasoning
+- The graph survives - query it early, query it often
+- Retroactive logging misses details - log in the moment
+- The user sees the graph live - show your work
+"#;
+
+/// Codex build-test prompt
+const CODEX_BUILD_TEST_PROMPT: &str = r#"---
+description: Build the project and run the test suite
+argument-hint: [PATTERN="<test-pattern>"]
+---
+
+# Build and Test
+
+Build the project and run the test suite.
+
+## Instructions
+
+1. Run the full build and test cycle:
+   ```bash
+   cargo build --release && cargo test
+   ```
+
+2. If tests fail, analyze the failures and explain:
+   - Which test failed
+   - What it was testing
+   - Likely cause of failure
+   - Suggested fix
+
+3. If all tests pass, report success and any warnings from the build.
+
+4. If $PATTERN specifies a specific test pattern, run only those tests:
+   ```bash
+   cargo test $PATTERN
+   ```
+
+## Test categories in this project
+- `test_public_exports` - API verification
+- `test_filter_graph` - Graph filtering
+- `test_extract_commit` - Commit extraction from metadata
+- `test_extract_confidence` - Confidence extraction from metadata
+- `test_graph_to_dot` - DOT export
+- `test_generate_writeup` - PR writeup generation
+
+$ARGUMENTS
+"#;
+
+/// Codex serve-ui prompt
+const CODEX_SERVE_UI_PROMPT: &str = r#"---
+description: Launch the deciduous web server for viewing the decision graph
+argument-hint: [PORT="<port>"]
+---
+
+# Start Decision Graph Viewer
+
+Launch the deciduous web server for viewing and navigating the decision graph.
+
+## Instructions
+
+1. Start the server:
+   ```bash
+   deciduous serve --port ${PORT:-3000}
+   ```
+
+2. Inform the user:
+   - The server is running at http://localhost:${PORT:-3000}
+   - The graph auto-refreshes every 30 seconds
+   - They can browse decisions, chains, and timeline views
+   - Changes made via CLI will appear automatically
+
+3. The server will run in the foreground. Remind user to stop it when done (Ctrl+C).
+
+## UI Features
+- **Chains View**: See decision chains grouped by goals
+- **Timeline View**: Chronological view of all decisions
+- **Graph View**: Interactive force-directed graph
+- **DAG View**: Directed acyclic graph visualization
+- **Detail Panel**: Click any node to see full details including:
+  - Node metadata (confidence, commit, prompt, files)
+  - Connected nodes (incoming/outgoing edges)
+  - Timestamps and status
+
+## Alternative: Static Hosting
+
+For GitHub Pages or other static hosting:
+```bash
+deciduous sync  # Exports to docs/graph-data.json
+```
+
+Then push to GitHub - the graph is viewable at your GitHub Pages URL.
+
+$ARGUMENTS
+"#;
+
+/// Codex sync-graph prompt
+const CODEX_SYNC_GRAPH_PROMPT: &str = r#"---
+description: Export the decision graph to docs/ for GitHub Pages
+argument-hint:
+---
+
+# Sync Decision Graph to GitHub Pages
+
+Export the current decision graph to docs/graph-data.json so it's deployed to GitHub Pages.
+
+## Steps
+
+1. Run `deciduous sync` to export the graph
+2. Show the user how many nodes/edges were exported
+3. If there are changes, stage them: `git add docs/graph-data.json`
+
+This should be run before any push to main to ensure the live site has the latest decisions.
+"#;
+
 /// Initialize deciduous in the current directory
 pub fn init_project(editor: Editor) -> Result<(), String> {
     let cwd =
@@ -1652,6 +2070,7 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
         Editor::Claude => "Claude Code",
         Editor::Windsurf => "Windsurf",
         Editor::Opencode => "OpenCode",
+        Editor::Codex => "Codex",
     };
 
     println!(
@@ -1786,6 +2205,58 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             let agents_md_path = cwd.join("AGENTS.md");
             append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
         }
+        Editor::Codex => {
+            // Create .codex/prompts directory (top-level only, Codex doesn't read subdirs)
+            let codex_prompts_dir = cwd.join(".codex").join("prompts");
+            create_dir_if_missing(&codex_prompts_dir)?;
+
+            // Write decision.md prompt
+            let decision_path = codex_prompts_dir.join("decision.md");
+            write_file_if_missing(
+                &decision_path,
+                CODEX_DECISION_PROMPT,
+                ".codex/prompts/decision.md",
+            )?;
+
+            // Write context.md prompt
+            let context_path = codex_prompts_dir.join("context.md");
+            write_file_if_missing(
+                &context_path,
+                CODEX_CONTEXT_PROMPT,
+                ".codex/prompts/context.md",
+            )?;
+
+            // Write build-test.md prompt
+            let build_test_path = codex_prompts_dir.join("build-test.md");
+            write_file_if_missing(
+                &build_test_path,
+                CODEX_BUILD_TEST_PROMPT,
+                ".codex/prompts/build-test.md",
+            )?;
+
+            // Write serve-ui.md prompt
+            let serve_ui_path = codex_prompts_dir.join("serve-ui.md");
+            write_file_if_missing(
+                &serve_ui_path,
+                CODEX_SERVE_UI_PROMPT,
+                ".codex/prompts/serve-ui.md",
+            )?;
+
+            // Write sync-graph.md prompt
+            let sync_graph_path = codex_prompts_dir.join("sync-graph.md");
+            write_file_if_missing(
+                &sync_graph_path,
+                CODEX_SYNC_GRAPH_PROMPT,
+                ".codex/prompts/sync-graph.md",
+            )?;
+
+            // Add Codex-specific entries to .gitignore (selective ignoring)
+            add_codex_to_gitignore(&cwd)?;
+
+            // Append to or create AGENTS.md (Codex uses AGENTS.md like Windsurf/OpenCode)
+            let agents_md_path = cwd.join("AGENTS.md");
+            append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+        }
     }
 
     // 4. Add .deciduous to .gitignore if not already there
@@ -1889,6 +2360,23 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             println!("     - {} (graph viewer)", "/serve-ui".cyan());
             println!("     - {} (export graph)", "/sync-graph".cyan());
             println!("  4. Instructions added to {}", "AGENTS.md".cyan());
+        }
+        Editor::Codex => {
+            println!("  3. Prompts created in {}", ".codex/prompts/".cyan());
+            println!("     - {} (decision tracking)", "/prompts:decision".cyan());
+            println!("     - {} (context recovery)", "/prompts:context".cyan());
+            println!("     - {} (build & test)", "/prompts:build-test".cyan());
+            println!("     - {} (graph viewer)", "/prompts:serve-ui".cyan());
+            println!("     - {} (export graph)", "/prompts:sync-graph".cyan());
+            println!("  4. Instructions added to {}", "AGENTS.md".cyan());
+            println!();
+            println!(
+                "{}",
+                "  Note: Set CODEX_HOME to use project-local prompts:"
+                    .yellow()
+                    .bold()
+            );
+            println!("     {}", "export CODEX_HOME=.codex".cyan());
         }
     }
 
@@ -2016,6 +2504,7 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
         Editor::Claude => "Claude Code",
         Editor::Windsurf => "Windsurf",
         Editor::Opencode => "OpenCode",
+        Editor::Codex => "Codex",
     };
 
     println!(
@@ -2136,6 +2625,55 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let agents_md_path = cwd.join("AGENTS.md");
             replace_config_md_section(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
         }
+        Editor::Codex => {
+            // Create .codex/prompts directory if needed
+            let codex_prompts_dir = cwd.join(".codex").join("prompts");
+            create_dir_if_missing(&codex_prompts_dir)?;
+
+            // Overwrite decision.md prompt
+            let decision_path = codex_prompts_dir.join("decision.md");
+            write_file_overwrite(
+                &decision_path,
+                CODEX_DECISION_PROMPT,
+                ".codex/prompts/decision.md",
+            )?;
+
+            // Overwrite context.md prompt
+            let context_path = codex_prompts_dir.join("context.md");
+            write_file_overwrite(
+                &context_path,
+                CODEX_CONTEXT_PROMPT,
+                ".codex/prompts/context.md",
+            )?;
+
+            // Overwrite build-test.md prompt
+            let build_test_path = codex_prompts_dir.join("build-test.md");
+            write_file_overwrite(
+                &build_test_path,
+                CODEX_BUILD_TEST_PROMPT,
+                ".codex/prompts/build-test.md",
+            )?;
+
+            // Overwrite serve-ui.md prompt
+            let serve_ui_path = codex_prompts_dir.join("serve-ui.md");
+            write_file_overwrite(
+                &serve_ui_path,
+                CODEX_SERVE_UI_PROMPT,
+                ".codex/prompts/serve-ui.md",
+            )?;
+
+            // Overwrite sync-graph.md prompt
+            let sync_graph_path = codex_prompts_dir.join("sync-graph.md");
+            write_file_overwrite(
+                &sync_graph_path,
+                CODEX_SYNC_GRAPH_PROMPT,
+                ".codex/prompts/sync-graph.md",
+            )?;
+
+            // Update AGENTS.md section
+            let agents_md_path = cwd.join("AGENTS.md");
+            replace_config_md_section(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+        }
     }
 
     println!(
@@ -2222,6 +2760,49 @@ fn add_to_gitignore(cwd: &Path) -> Result<(), String> {
         println!("   {} .gitignore", "Creating".green());
     }
 
+    Ok(())
+}
+
+/// Add Codex-specific entries to .gitignore (selective, not entire directory)
+/// Uses negation pattern to allow prompts/ to be committed while ignoring other files
+fn add_codex_to_gitignore(cwd: &Path) -> Result<(), String> {
+    let gitignore_path = cwd.join(".gitignore");
+
+    // The pattern we want to add:
+    // .codex/*           - Ignore everything in .codex
+    // !.codex/prompts/   - Except prompts directory
+    // !.codex/prompts/** - And its contents
+    let codex_entries = [".codex/*", "!.codex/prompts/", "!.codex/prompts/**"];
+
+    let existing = if gitignore_path.exists() {
+        fs::read_to_string(&gitignore_path)
+            .map_err(|e| format!("Could not read .gitignore: {}", e))?
+    } else {
+        String::new()
+    };
+
+    // Check if codex entries are already present
+    if existing.lines().any(|line| line.trim() == ".codex/*") {
+        // Already configured
+        return Ok(());
+    }
+
+    // Build the new content to append
+    let mut new_section = String::new();
+    if !existing.trim().is_empty() {
+        new_section.push('\n');
+    }
+    new_section.push_str("\n# Codex files (prompts/ should be committed)\n");
+    for entry in &codex_entries {
+        new_section.push_str(entry);
+        new_section.push('\n');
+    }
+
+    let new_content = format!("{}{}", existing.trim_end(), new_section);
+    fs::write(&gitignore_path, new_content)
+        .map_err(|e| format!("Could not update .gitignore: {}", e))?;
+
+    println!("   {} .gitignore (added Codex entries)", "Updated".green());
     Ok(())
 }
 
@@ -2555,5 +3136,133 @@ This should be preserved."#;
     fn test_deploy_workflow_is_valid_yaml() {
         let result: Result<serde_yaml::Value, _> = serde_yaml::from_str(DEPLOY_PAGES_WORKFLOW);
         assert!(result.is_ok(), "DEPLOY_PAGES_WORKFLOW should be valid YAML");
+    }
+
+    // === Codex Template Tests ===
+
+    #[test]
+    fn test_editor_codex_equality() {
+        assert_eq!(Editor::Codex, Editor::Codex);
+        assert_ne!(Editor::Claude, Editor::Codex);
+        assert_ne!(Editor::Windsurf, Editor::Codex);
+        assert_ne!(Editor::Opencode, Editor::Codex);
+    }
+
+    #[test]
+    fn test_editor_codex_debug() {
+        assert_eq!(format!("{:?}", Editor::Codex), "Codex");
+    }
+
+    #[test]
+    fn test_codex_decision_prompt_has_required_frontmatter() {
+        assert!(
+            CODEX_DECISION_PROMPT.starts_with("---"),
+            "codex decision prompt should start with frontmatter"
+        );
+        assert!(
+            CODEX_DECISION_PROMPT.contains("description:"),
+            "codex decision prompt should have description"
+        );
+        assert!(
+            CODEX_DECISION_PROMPT.contains("argument-hint:"),
+            "codex decision prompt should have argument-hint"
+        );
+    }
+
+    #[test]
+    fn test_codex_context_prompt_has_required_frontmatter() {
+        assert!(
+            CODEX_CONTEXT_PROMPT.starts_with("---"),
+            "codex context prompt should start with frontmatter"
+        );
+        assert!(
+            CODEX_CONTEXT_PROMPT.contains("description:"),
+            "codex context prompt should have description"
+        );
+    }
+
+    #[test]
+    fn test_codex_decision_prompt_contains_workflow() {
+        assert!(CODEX_DECISION_PROMPT.contains("Decision Graph Management"));
+        assert!(CODEX_DECISION_PROMPT.contains("deciduous add"));
+        assert!(CODEX_DECISION_PROMPT.contains("deciduous link"));
+        assert!(CODEX_DECISION_PROMPT.contains("$ARGUMENTS"));
+    }
+
+    #[test]
+    fn test_codex_context_prompt_contains_recovery() {
+        assert!(CODEX_CONTEXT_PROMPT.contains("Context Recovery"));
+        assert!(CODEX_CONTEXT_PROMPT.contains("deciduous nodes"));
+        assert!(CODEX_CONTEXT_PROMPT.contains("deciduous edges"));
+    }
+
+    #[test]
+    fn test_codex_build_test_prompt_has_frontmatter() {
+        assert!(CODEX_BUILD_TEST_PROMPT.starts_with("---"));
+        assert!(CODEX_BUILD_TEST_PROMPT.contains("description:"));
+        assert!(CODEX_BUILD_TEST_PROMPT.contains("cargo test"));
+    }
+
+    #[test]
+    fn test_codex_serve_ui_prompt_has_frontmatter() {
+        assert!(CODEX_SERVE_UI_PROMPT.starts_with("---"));
+        assert!(CODEX_SERVE_UI_PROMPT.contains("description:"));
+        assert!(CODEX_SERVE_UI_PROMPT.contains("deciduous serve"));
+    }
+
+    #[test]
+    fn test_codex_sync_graph_prompt_has_frontmatter() {
+        assert!(CODEX_SYNC_GRAPH_PROMPT.starts_with("---"));
+        assert!(CODEX_SYNC_GRAPH_PROMPT.contains("description:"));
+        assert!(CODEX_SYNC_GRAPH_PROMPT.contains("deciduous sync"));
+    }
+
+    // === Codex Gitignore Tests ===
+
+    #[test]
+    fn test_add_codex_to_gitignore_creates_new() {
+        let temp = TempDir::new().unwrap();
+
+        add_codex_to_gitignore(temp.path()).unwrap();
+
+        let gitignore_path = temp.path().join(".gitignore");
+        assert!(gitignore_path.exists());
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+
+        // Check all Codex entries are present
+        assert!(content.contains(".codex/*"));
+        assert!(content.contains("!.codex/prompts/"));
+        assert!(content.contains("!.codex/prompts/**"));
+    }
+
+    #[test]
+    fn test_add_codex_to_gitignore_preserves_existing() {
+        let temp = TempDir::new().unwrap();
+        let gitignore_path = temp.path().join(".gitignore");
+
+        // Create existing gitignore
+        fs::write(&gitignore_path, "node_modules/\n*.log").unwrap();
+
+        add_codex_to_gitignore(temp.path()).unwrap();
+
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+        assert!(content.contains("node_modules/"));
+        assert!(content.contains(".codex/*"));
+    }
+
+    #[test]
+    fn test_add_codex_to_gitignore_idempotent() {
+        let temp = TempDir::new().unwrap();
+
+        // Run twice
+        add_codex_to_gitignore(temp.path()).unwrap();
+        add_codex_to_gitignore(temp.path()).unwrap();
+
+        let gitignore_path = temp.path().join(".gitignore");
+        let content = fs::read_to_string(&gitignore_path).unwrap();
+
+        // Should only appear once
+        let count = content.matches(".codex/*").count();
+        assert_eq!(count, 1, "Entry should only appear once");
     }
 }
