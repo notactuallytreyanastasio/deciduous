@@ -215,3 +215,15 @@ diesel::table! {
         sequence_num -> Integer,         // For ordering multiple tool calls
     }
 }
+
+// ============================================================================
+// Span-Node Linking - Tracks which decision nodes were created during which spans
+// ============================================================================
+
+diesel::table! {
+    span_nodes (span_id, node_id) {
+        span_id -> Integer,              // FK to trace_spans.id
+        node_id -> Integer,              // FK to decision_nodes.id
+        created_at -> Text,              // When the link was created
+    }
+}

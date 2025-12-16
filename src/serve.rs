@@ -98,6 +98,24 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         // API: Toggle roadmap item checkbox (POST /api/roadmap/checkbox)
         (&Method::Post, "/api/roadmap/checkbox") => handle_toggle_checkbox(request),
 
+        // API: Get traces linked to a node
+        (&Method::Get, p) if p.starts_with("/api/nodes/") && p.ends_with("/traces") => {
+            // Parse /api/nodes/{node_id}/traces
+            let path_without_traces = p.strip_suffix("/traces").unwrap_or("");
+            let node_id_str = path_without_traces.strip_prefix("/api/nodes/").unwrap_or("");
+            if let Ok(node_id) = node_id_str.parse::<i32>() {
+                let trace_info = get_node_trace_info(node_id);
+                let json = serde_json::to_string(&ApiResponse::success(trace_info))?;
+
+                let response = Response::from_string(json).with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+                return request.respond(response);
+            }
+            let response = Response::from_string("Invalid node ID").with_status_code(400);
+            request.respond(response)
+        }
+
         // API: Get trace sessions
         (&Method::Get, "/api/traces") => {
             let sessions = get_trace_sessions();
@@ -121,12 +139,32 @@ fn handle_request(request: Request) -> std::io::Result<()> {
             request.respond(response)
         }
 
+        // API: Get nodes for a span
+        (&Method::Get, p) if p.starts_with("/api/traces/spans/") && p.ends_with("/nodes") => {
+            // Parse /api/traces/spans/{span_id}/nodes
+            let path_without_nodes = p.strip_suffix("/nodes").unwrap_or("");
+            let span_id_str = path_without_nodes.strip_prefix("/api/traces/spans/").unwrap_or("");
+            if let Ok(span_id) = span_id_str.parse::<i32>() {
+                let nodes = get_span_nodes(span_id);
+                let json = serde_json::to_string(&ApiResponse::success(nodes))?;
+
+                let response = Response::from_string(json).with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+                return request.respond(response);
+            }
+            let response = Response::from_string("Invalid span ID").with_status_code(400);
+            request.respond(response)
+        }
+
         // API: Get trace content for a span
         (&Method::Get, p) if p.starts_with("/api/traces/") && p.contains("/spans/") => {
             // Parse /api/traces/{session_id}/spans/{span_id}
+            // URL split: ["", "api", "traces", "session_id", "spans", "span_id"]
+            // Index:       0     1       2          3           4        5
             let parts: Vec<&str> = p.split('/').collect();
-            if parts.len() >= 5 {
-                if let Ok(span_id) = parts[4].parse::<i32>() {
+            if parts.len() >= 6 {
+                if let Ok(span_id) = parts[5].parse::<i32>() {
                     let content = get_trace_content(span_id);
                     let json = serde_json::to_string(&ApiResponse::success(content))?;
 
@@ -191,9 +229,32 @@ fn get_trace_sessions() -> Vec<crate::db::TraceSession> {
     }
 }
 
-fn get_trace_spans(session_id: &str) -> Vec<crate::db::TraceSpan> {
+/// Span with node count for API response
+#[derive(serde::Serialize)]
+struct SpanWithNodeCount {
+    #[serde(flatten)]
+    span: crate::db::TraceSpan,
+    node_count: i64,
+}
+
+fn get_trace_spans(session_id: &str) -> Vec<SpanWithNodeCount> {
     match Database::open() {
-        Ok(db) => db.get_trace_spans(session_id).unwrap_or_default(),
+        Ok(db) => {
+            let spans = db.get_trace_spans(session_id).unwrap_or_default();
+            let span_ids: Vec<i32> = spans.iter().map(|s| s.id).collect();
+            let node_counts = db.get_node_counts_for_spans(&span_ids).unwrap_or_default();
+
+            spans
+                .into_iter()
+                .map(|span| {
+                    let count = node_counts.get(&span.id).copied().unwrap_or(0);
+                    SpanWithNodeCount {
+                        span,
+                        node_count: count,
+                    }
+                })
+                .collect()
+        }
         Err(_) => vec![],
     }
 }
@@ -202,6 +263,50 @@ fn get_trace_content(span_id: i32) -> Vec<crate::db::TraceContent> {
     match Database::open() {
         Ok(db) => db.get_trace_content(span_id).unwrap_or_default(),
         Err(_) => vec![],
+    }
+}
+
+fn get_span_nodes(span_id: i32) -> Vec<crate::db::DecisionNode> {
+    match Database::open() {
+        Ok(db) => db.get_nodes_for_span(span_id).unwrap_or_default(),
+        Err(_) => vec![],
+    }
+}
+
+/// Trace info for a node - includes span and session details
+#[derive(serde::Serialize)]
+struct NodeTraceInfo {
+    spans: Vec<SpanWithSession>,
+}
+
+#[derive(serde::Serialize)]
+struct SpanWithSession {
+    span_id: i32,
+    sequence_num: i32,
+    session_id: String,
+    model: Option<String>,
+    duration_ms: Option<i32>,
+    started_at: String,
+}
+
+fn get_node_trace_info(node_id: i32) -> NodeTraceInfo {
+    match Database::open() {
+        Ok(db) => {
+            let spans = db.get_spans_for_node(node_id).unwrap_or_default();
+            let spans_with_session: Vec<SpanWithSession> = spans
+                .into_iter()
+                .map(|s| SpanWithSession {
+                    span_id: s.id,
+                    sequence_num: s.sequence_num,
+                    session_id: s.session_id,
+                    model: s.model,
+                    duration_ms: s.duration_ms,
+                    started_at: s.started_at,
+                })
+                .collect();
+            NodeTraceInfo { spans: spans_with_session }
+        }
+        Err(_) => NodeTraceInfo { spans: vec![] },
     }
 }
 

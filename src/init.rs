@@ -106,7 +106,7 @@ Based on $ARGUMENTS:
 ### Optional Flags for Nodes
 - `-c, --confidence <0-100>` - Confidence level
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
-- `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-f, --files "src/main.py,lib/utils.js"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
 - `--no-branch` - Skip branch auto-detection
 - `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
@@ -780,6 +780,37 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 ```
 
 PR workflow: Export patch → commit patch file → PR → teammates apply.
+
+### API Trace Capture
+
+Capture Claude API traffic to correlate decisions with actual API work:
+
+```bash
+# Run Claude through the deciduous proxy
+deciduous proxy -- claude
+
+# View traces in TUI (press 't' for Trace view)
+deciduous tui
+
+# View traces in web viewer (click "Traces" tab)
+deciduous serve
+```
+
+**Auto-linking**: When running through `deciduous proxy`, any `deciduous add` commands automatically link to the active API span. You'll see output like:
+
+```
+Created action #42 "Implementing auth" [traced: span #7]
+```
+
+This lets you see exactly which API calls produced which decisions - perfect for "vibe coding" visibility.
+
+**Trace commands:**
+```bash
+deciduous trace sessions              # List all sessions
+deciduous trace spans <session_id>    # List spans in a session
+deciduous trace link <session_id> <node_id>   # Manual linking
+deciduous trace prune --days 30       # Cleanup old traces
+```
 "#;
 
 /// Claude Code agents.toml - defines domain-specific subagents for the project
@@ -1301,6 +1332,21 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 ```
 
 PR workflow: Export patch → commit patch file → PR → teammates apply.
+
+### API Trace Capture
+
+Capture Claude API traffic to correlate decisions with actual work:
+
+```bash
+deciduous proxy -- claude   # Run with tracing
+deciduous tui               # Press 't' for Trace view
+deciduous serve             # Click "Traces" tab
+```
+
+**Auto-linking**: `deciduous add` commands through proxy automatically link to active spans:
+```
+Created action #42 "Implementing auth" [traced: span #7]
+```
 "#;
 
 // ============================================================================
@@ -1349,7 +1395,7 @@ Based on $ARGUMENTS:
 ### Optional Flags for Nodes
 - `-c, --confidence <0-100>` - Confidence level
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
-- `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-f, --files "src/main.py,lib/utils.js"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
 - `--no-branch` - Skip branch auto-detection
 - `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
@@ -1435,6 +1481,13 @@ EOF
 | `observation` | Related goal/action/decision |
 | `decision` | Parent goal (if any) |
 | `goal` | Can be a root (no parent needed) |
+
+## API Trace Capture
+
+When running through `deciduous proxy`, nodes auto-link to API spans:
+```bash
+deciduous proxy -- claude   # Run with tracing
+```
 
 ## The Rule
 
@@ -1608,6 +1661,15 @@ deciduous diff export --branch $(git rev-parse --abbrev-ref HEAD) \
 git add .deciduous/patches/
 ```
 
+## API Trace Capture
+
+When running through `deciduous proxy`, decisions auto-link to API spans:
+
+```bash
+deciduous proxy -- claude   # Run with tracing
+deciduous tui               # Press 't' for Trace view
+```
+
 ## Why This Matters
 
 - Context loss during compaction loses your reasoning
@@ -1627,9 +1689,26 @@ Build the project and run the test suite.
 
 ## Instructions
 
-1. Run the full build and test cycle:
+1. Detect the project type and run appropriate build/test commands:
+
+   **Rust (Cargo.toml exists):**
    ```bash
-   cargo build --release && cargo test
+   cargo build && cargo test
+   ```
+
+   **Node.js (package.json exists):**
+   ```bash
+   npm install && npm test
+   ```
+
+   **Python (pyproject.toml or setup.py exists):**
+   ```bash
+   pip install -e . && pytest
+   ```
+
+   **Go (go.mod exists):**
+   ```bash
+   go build ./... && go test ./...
    ```
 
 2. If tests fail, analyze the failures and explain:
@@ -1640,18 +1719,7 @@ Build the project and run the test suite.
 
 3. If all tests pass, report success and any warnings from the build.
 
-4. If the user specifies a specific test pattern, run only those tests:
-   ```bash
-   cargo test <pattern>
-   ```
-
-## Test categories in this project
-- `test_public_exports` - API verification
-- `test_filter_graph` - Graph filtering
-- `test_extract_commit` - Commit extraction from metadata
-- `test_extract_confidence` - Confidence extraction from metadata
-- `test_graph_to_dot` - DOT export
-- `test_generate_writeup` - PR writeup generation
+4. If $ARGUMENTS specifies a test pattern, run only those tests.
 
 $ARGUMENTS
 "#;
@@ -1768,7 +1836,7 @@ Based on $ARGUMENTS:
 ### Optional Flags for Nodes
 - `-c, --confidence <0-100>` - Confidence level
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
-- `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-f, --files "src/main.py,lib/utils.js"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
 - `--no-branch` - Skip branch auto-detection
 - `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
@@ -1848,6 +1916,13 @@ deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
 | `observation` | Related goal/action/decision |
 | `decision` | Parent goal (if any) |
 | `goal` | Can be a root (no parent needed) |
+
+## API Trace Capture
+
+When running through `deciduous proxy`, nodes auto-link to API spans:
+```bash
+deciduous proxy -- claude   # Run with tracing
+```
 
 ## The Rule
 
@@ -2022,6 +2097,15 @@ deciduous diff export --branch $(git rev-parse --abbrev-ref HEAD) \
 git add .deciduous/patches/
 ```
 
+## API Trace Capture
+
+When running through `deciduous proxy`, decisions auto-link to API spans:
+
+```bash
+deciduous proxy -- claude   # Run with tracing
+deciduous tui               # Press 't' for Trace view
+```
+
 ## Why This Matters
 
 - Context loss during compaction loses your reasoning
@@ -2042,9 +2126,26 @@ Build the project and run the test suite.
 
 ## Instructions
 
-1. Run the full build and test cycle:
+1. Detect the project type and run appropriate build/test commands:
+
+   **Rust (Cargo.toml exists):**
    ```bash
-   cargo build --release && cargo test
+   cargo build && cargo test
+   ```
+
+   **Node.js (package.json exists):**
+   ```bash
+   npm install && npm test
+   ```
+
+   **Python (pyproject.toml or setup.py exists):**
+   ```bash
+   pip install -e . && pytest
+   ```
+
+   **Go (go.mod exists):**
+   ```bash
+   go build ./... && go test ./...
    ```
 
 2. If tests fail, analyze the failures and explain:
@@ -2055,18 +2156,7 @@ Build the project and run the test suite.
 
 3. If all tests pass, report success and any warnings from the build.
 
-4. If $PATTERN specifies a specific test pattern, run only those tests:
-   ```bash
-   cargo test $PATTERN
-   ```
-
-## Test categories in this project
-- `test_public_exports` - API verification
-- `test_filter_graph` - Graph filtering
-- `test_extract_commit` - Commit extraction from metadata
-- `test_extract_confidence` - Confidence extraction from metadata
-- `test_graph_to_dot` - DOT export
-- `test_generate_writeup` - PR writeup generation
+4. If $PATTERN specifies a test pattern, filter tests accordingly.
 
 $ARGUMENTS
 "#;
@@ -2138,7 +2228,7 @@ This should be run before any push to main to ensure the live site has the lates
 "#;
 
 /// Initialize deciduous in the current directory
-pub fn init_project(editor: Editor) -> Result<(), String> {
+pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
     let cwd =
         std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
@@ -2155,15 +2245,24 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             .cyan()
             .bold()
     );
-    println!("   Directory: {}\n", cwd.display());
+    println!("   Directory: {}", cwd.display());
+    if force {
+        println!("   Mode: {} (overwriting existing files)\n", "force".yellow());
+    } else {
+        println!();
+    }
 
     // 1. Create .deciduous directory (shared between all editors)
     let deciduous_dir = cwd.join(".deciduous");
     create_dir_if_missing(&deciduous_dir)?;
 
-    // 1b. Create default config.toml if it doesn't exist
+    // 1b. Create default config.toml if it doesn't exist (or overwrite with force)
     let config_path = deciduous_dir.join("config.toml");
-    write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
+    if force {
+        write_file_overwrite(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
+    } else {
+        write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
+    }
 
     // 2. Initialize database by opening it (creates tables)
     let db_path = deciduous_dir.join("deciduous.db");
@@ -2189,20 +2288,36 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
 
             // Write decision.md slash command
             let decision_path = claude_dir.join("decision.md");
-            write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+            if force {
+                write_file_overwrite(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+            } else {
+                write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+            }
 
-            // Write context.md slash command
-            let context_path = claude_dir.join("context.md");
-            write_file_if_missing(&context_path, RECOVER_MD, ".claude/commands/recover.md")?;
+            // Write recover.md slash command (context recovery)
+            let recover_path = claude_dir.join("recover.md");
+            if force {
+                write_file_overwrite(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+            } else {
+                write_file_if_missing(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+            }
 
             // Write agents.toml for subagent configuration
             let claude_base = cwd.join(".claude");
             let agents_path = claude_base.join("agents.toml");
-            write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
+            if force {
+                write_file_overwrite(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
+            } else {
+                write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
+            }
 
-            // Append to or create CLAUDE.md
+            // Handle CLAUDE.md - append if missing, replace section if force
             let claude_md_path = cwd.join("CLAUDE.md");
-            append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+            if force {
+                write_file_overwrite(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+            } else {
+                append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+            }
         }
         Editor::Windsurf => {
             // Create .windsurf directory
@@ -2215,128 +2330,122 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
 
             // Write deciduous.md rule (Always On - main workflow)
             let deciduous_rule_path = windsurf_rules.join("deciduous.md");
-            write_file_if_missing(
-                &deciduous_rule_path,
-                WINDSURF_DECIDUOUS_RULE,
-                ".windsurf/rules/deciduous.md",
-            )?;
+            if force {
+                write_file_overwrite(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+            } else {
+                write_file_if_missing(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+            }
 
-            // Write context.md rule (Model-triggered - for session recovery)
-            let context_path = windsurf_rules.join("context.md");
-            write_file_if_missing(
-                &context_path,
-                WINDSURF_RECOVER_RULE,
-                ".windsurf/rules/recover.md",
-            )?;
+            // Write recover.md rule (Model-triggered - for session recovery)
+            let recover_path = windsurf_rules.join("recover.md");
+            if force {
+                write_file_overwrite(&recover_path, WINDSURF_RECOVER_RULE, ".windsurf/rules/recover.md")?;
+            } else {
+                write_file_if_missing(&recover_path, WINDSURF_RECOVER_RULE, ".windsurf/rules/recover.md")?;
+            }
 
             // Write memories.md (project-level memories Cascade auto-retrieves)
             let memories_path = windsurf_base.join("memories.md");
-            write_file_if_missing(&memories_path, WINDSURF_MEMORIES, ".windsurf/memories.md")?;
+            if force {
+                write_file_overwrite(&memories_path, WINDSURF_MEMORIES, ".windsurf/memories.md")?;
+            } else {
+                write_file_if_missing(&memories_path, WINDSURF_MEMORIES, ".windsurf/memories.md")?;
+            }
 
-            // Append to or create AGENTS.md
+            // Handle AGENTS.md - append if missing, overwrite if force
             let agents_md_path = cwd.join("AGENTS.md");
-            append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            if force {
+                write_file_overwrite(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            } else {
+                append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            }
         }
         Editor::Opencode => {
             // Create .opencode/command directory (note: singular "command", not "commands")
             let opencode_cmd_dir = cwd.join(".opencode").join("command");
             create_dir_if_missing(&opencode_cmd_dir)?;
 
+            // Helper to write file with force support
+            let write_cmd = |path: &Path, content: &str, name: &str| -> Result<(), String> {
+                if force {
+                    write_file_overwrite(path, content, name)
+                } else {
+                    write_file_if_missing(path, content, name)
+                }
+            };
+
             // Write decision.md command
             let decision_path = opencode_cmd_dir.join("decision.md");
-            write_file_if_missing(
-                &decision_path,
-                OPENCODE_DECISION_CMD,
-                ".opencode/command/decision.md",
-            )?;
+            write_cmd(&decision_path, OPENCODE_DECISION_CMD, ".opencode/command/decision.md")?;
 
-            // Write context.md command
-            let context_path = opencode_cmd_dir.join("context.md");
-            write_file_if_missing(
-                &context_path,
-                OPENCODE_RECOVER_CMD,
-                ".opencode/command/recover.md",
-            )?;
+            // Write recover.md command (context recovery)
+            let recover_path = opencode_cmd_dir.join("recover.md");
+            write_cmd(&recover_path, OPENCODE_RECOVER_CMD, ".opencode/command/recover.md")?;
 
             // Write build-test.md command
             let build_test_path = opencode_cmd_dir.join("build-test.md");
-            write_file_if_missing(
-                &build_test_path,
-                OPENCODE_BUILD_TEST_CMD,
-                ".opencode/command/build-test.md",
-            )?;
+            write_cmd(&build_test_path, OPENCODE_BUILD_TEST_CMD, ".opencode/command/build-test.md")?;
 
             // Write serve-ui.md command
             let serve_ui_path = opencode_cmd_dir.join("serve-ui.md");
-            write_file_if_missing(
-                &serve_ui_path,
-                OPENCODE_SERVE_UI_CMD,
-                ".opencode/command/serve-ui.md",
-            )?;
+            write_cmd(&serve_ui_path, OPENCODE_SERVE_UI_CMD, ".opencode/command/serve-ui.md")?;
 
             // Write sync-graph.md command
             let sync_graph_path = opencode_cmd_dir.join("sync-graph.md");
-            write_file_if_missing(
-                &sync_graph_path,
-                OPENCODE_SYNC_GRAPH_CMD,
-                ".opencode/command/sync-graph.md",
-            )?;
+            write_cmd(&sync_graph_path, OPENCODE_SYNC_GRAPH_CMD, ".opencode/command/sync-graph.md")?;
 
-            // Append to or create AGENTS.md (OpenCode uses AGENTS.md like Windsurf)
+            // Handle AGENTS.md - append if missing, overwrite if force
             let agents_md_path = cwd.join("AGENTS.md");
-            append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            if force {
+                write_file_overwrite(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            } else {
+                append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            }
         }
         Editor::Codex => {
             // Create .codex/prompts directory (top-level only, Codex doesn't read subdirs)
             let codex_prompts_dir = cwd.join(".codex").join("prompts");
             create_dir_if_missing(&codex_prompts_dir)?;
 
+            // Helper to write file with force support
+            let write_prompt = |path: &Path, content: &str, name: &str| -> Result<(), String> {
+                if force {
+                    write_file_overwrite(path, content, name)
+                } else {
+                    write_file_if_missing(path, content, name)
+                }
+            };
+
             // Write decision.md prompt
             let decision_path = codex_prompts_dir.join("decision.md");
-            write_file_if_missing(
-                &decision_path,
-                CODEX_DECISION_PROMPT,
-                ".codex/prompts/decision.md",
-            )?;
+            write_prompt(&decision_path, CODEX_DECISION_PROMPT, ".codex/prompts/decision.md")?;
 
-            // Write context.md prompt
-            let context_path = codex_prompts_dir.join("context.md");
-            write_file_if_missing(
-                &context_path,
-                CODEX_RECOVER_PROMPT,
-                ".codex/prompts/recover.md",
-            )?;
+            // Write recover.md prompt (context recovery)
+            let recover_path = codex_prompts_dir.join("recover.md");
+            write_prompt(&recover_path, CODEX_RECOVER_PROMPT, ".codex/prompts/recover.md")?;
 
             // Write build-test.md prompt
             let build_test_path = codex_prompts_dir.join("build-test.md");
-            write_file_if_missing(
-                &build_test_path,
-                CODEX_BUILD_TEST_PROMPT,
-                ".codex/prompts/build-test.md",
-            )?;
+            write_prompt(&build_test_path, CODEX_BUILD_TEST_PROMPT, ".codex/prompts/build-test.md")?;
 
             // Write serve-ui.md prompt
             let serve_ui_path = codex_prompts_dir.join("serve-ui.md");
-            write_file_if_missing(
-                &serve_ui_path,
-                CODEX_SERVE_UI_PROMPT,
-                ".codex/prompts/serve-ui.md",
-            )?;
+            write_prompt(&serve_ui_path, CODEX_SERVE_UI_PROMPT, ".codex/prompts/serve-ui.md")?;
 
             // Write sync-graph.md prompt
             let sync_graph_path = codex_prompts_dir.join("sync-graph.md");
-            write_file_if_missing(
-                &sync_graph_path,
-                CODEX_SYNC_GRAPH_PROMPT,
-                ".codex/prompts/sync-graph.md",
-            )?;
+            write_prompt(&sync_graph_path, CODEX_SYNC_GRAPH_PROMPT, ".codex/prompts/sync-graph.md")?;
 
             // Add Codex-specific entries to .gitignore (selective ignoring)
             add_codex_to_gitignore(&cwd)?;
 
-            // Append to or create AGENTS.md (Codex uses AGENTS.md like Windsurf/OpenCode)
+            // Handle AGENTS.md - append if missing, overwrite if force
             let agents_md_path = cwd.join("AGENTS.md");
-            append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            if force {
+                write_file_overwrite(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            } else {
+                append_config_md(&agents_md_path, AGENTS_MD_SECTION, "AGENTS.md")?;
+            }
         }
     }
 
@@ -3013,7 +3122,7 @@ mod tests {
     fn test_opencode_build_test_cmd_has_frontmatter() {
         assert!(OPENCODE_BUILD_TEST_CMD.starts_with("---"));
         assert!(OPENCODE_BUILD_TEST_CMD.contains("description:"));
-        assert!(OPENCODE_BUILD_TEST_CMD.contains("cargo test"));
+        assert!(OPENCODE_BUILD_TEST_CMD.contains("Build and Test"));
     }
 
     #[test]
@@ -3281,7 +3390,7 @@ This should be preserved."#;
     fn test_codex_build_test_prompt_has_frontmatter() {
         assert!(CODEX_BUILD_TEST_PROMPT.starts_with("---"));
         assert!(CODEX_BUILD_TEST_PROMPT.contains("description:"));
-        assert!(CODEX_BUILD_TEST_PROMPT.contains("cargo test"));
+        assert!(CODEX_BUILD_TEST_PROMPT.contains("Build and Test"));
     }
 
     #[test]

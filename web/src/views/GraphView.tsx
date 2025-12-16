@@ -8,9 +8,8 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import * as d3 from 'd3';
 import type { DecisionNode, GraphData } from '../types/graph';
-import { getConfidence, getCommit, truncate } from '../types/graph';
-import { tracePath } from '../utils/graphProcessing';
-import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
+import { getConfidence, truncate } from '../types/graph';
+import { DetailPanel } from '../components/DetailPanel';
 import { TypeFilters, FilterValue } from '../components/TypeFilters';
 import { NODE_COLORS, getNodeColor } from '../utils/colors';
 
@@ -226,9 +225,6 @@ export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
       );
   }, [selectedNode]);
 
-  // Get path to root for selected node
-  const pathToRoot = selectedNode ? tracePath(selectedNode.id, graphData) : [];
-
   return (
     <div style={styles.container}>
       {/* Controls */}
@@ -260,104 +256,15 @@ export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
       {/* Detail Panel */}
       {selectedNode && (
         <div style={styles.detailPanel}>
-          <button onClick={handleCloseDetail} style={styles.closeBtn}>×</button>
-
-          <div style={styles.detailHeader}>
-            <TypeBadge type={selectedNode.node_type} />
-            <ConfidenceBadge confidence={getConfidence(selectedNode)} />
-            <CommitBadge commit={getCommit(selectedNode)} />
-          </div>
-
-          <h3 style={styles.detailTitle}>{selectedNode.title}</h3>
-          <p style={styles.detailMeta}>
-            Node #{selectedNode.id} · {new Date(selectedNode.created_at).toLocaleString()}
-          </p>
-
-          {selectedNode.description && (
-            <div style={styles.detailSection}>
-              <h4 style={styles.sectionTitle}>Description</h4>
-              <p style={styles.description}>{selectedNode.description}</p>
-            </div>
-          )}
-
-          {pathToRoot.length > 1 && (
-            <div style={styles.detailSection}>
-              <h4 style={styles.sectionTitle}>Path to Root</h4>
-              {pathToRoot.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => handleSelectNodeById(n.id)}
-                  style={styles.pathNode}
-                >
-                  <TypeBadge type={n.node_type} size="sm" />
-                  <span>{truncate(n.title, 35)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Connections */}
-          <ConnectionsList
+          <DetailPanel
             node={selectedNode}
             graphData={graphData}
             onSelectNode={handleSelectNodeById}
+            onClose={handleCloseDetail}
           />
         </div>
       )}
     </div>
-  );
-};
-
-// =============================================================================
-// Connections List
-// =============================================================================
-
-interface ConnectionsListProps {
-  node: DecisionNode;
-  graphData: GraphData;
-  onSelectNode: (id: number) => void;
-}
-
-const ConnectionsList: React.FC<ConnectionsListProps> = ({ node, graphData, onSelectNode }) => {
-  const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
-  const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
-
-  const getNode = (id: number) => graphData.nodes.find(n => n.id === id);
-
-  return (
-    <>
-      {incoming.length > 0 && (
-        <div style={styles.detailSection}>
-          <h4 style={styles.sectionTitle}>Incoming ({incoming.length})</h4>
-          {incoming.map(e => {
-            const n = getNode(e.from_node_id);
-            return (
-              <div key={e.id} onClick={() => onSelectNode(e.from_node_id)} style={styles.connection}>
-                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
-                <span>{truncate(n?.title || 'Unknown', 30)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {outgoing.length > 0 && (
-        <div style={styles.detailSection}>
-          <h4 style={styles.sectionTitle}>Outgoing ({outgoing.length})</h4>
-          {outgoing.map(e => {
-            const n = getNode(e.to_node_id);
-            return (
-              <div key={e.id} onClick={() => onSelectNode(e.to_node_id)} style={styles.connection}>
-                <EdgeBadge type={e.edge_type} />
-                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
-                <span>{truncate(n?.title || 'Unknown', 25)}</span>
-                {e.rationale && <span style={styles.rationale}>{e.rationale}</span>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </>
   );
 };
 

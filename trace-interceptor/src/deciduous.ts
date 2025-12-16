@@ -50,9 +50,44 @@ export class DeciduousClient {
   }
 
   /**
-   * Record a complete span (request + response)
+   * Start a new span before making an API call (for active tracking)
+   * Returns the span ID which should be set as DECIDUOUS_TRACE_SPAN env var
    */
-  async recordSpan(data: SpanData): Promise<number | null> {
+  async startSpan(userPreview?: string): Promise<number | null> {
+    if (!this.sessionId) {
+      console.error('[deciduous-trace] No active session');
+      return null;
+    }
+
+    try {
+      // Use simple command without user_preview to avoid shell escaping issues
+      // The user_preview will be sent via recordSpan which uses stdin
+      const result = execSync(
+        `${this.deciduousBin} trace span-start --session ${this.sessionId}`,
+        {
+          encoding: 'utf8',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        }
+      );
+
+      const parsed: RecordSpanResponse = JSON.parse(result.trim());
+
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        console.error(`[deciduous-trace] Started span #${parsed.span_id}`);
+      }
+
+      return parsed.span_id;
+    } catch (error) {
+      console.error('[deciduous-trace] Failed to start span:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Record/complete a span (request + response)
+   * If spanId is provided, completes an existing span; otherwise creates a new one
+   */
+  async recordSpan(data: SpanData, spanId?: number): Promise<number | null> {
     if (!this.sessionId) {
       console.error('[deciduous-trace] No active session');
       return null;
@@ -60,8 +95,13 @@ export class DeciduousClient {
 
     try {
       const input = JSON.stringify(data);
+      const args = [`trace`, `record`, `--session`, this.sessionId, `--stdin`];
+      if (spanId !== undefined) {
+        args.push(`--span-id`, spanId.toString());
+      }
+
       const result = execSync(
-        `${this.deciduousBin} trace record --session ${this.sessionId} --stdin`,
+        `${this.deciduousBin} ${args.join(' ')}`,
         {
           encoding: 'utf8',
           input,

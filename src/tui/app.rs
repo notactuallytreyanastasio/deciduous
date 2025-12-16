@@ -503,7 +503,14 @@ impl App {
     pub fn load_trace_spans(&mut self, session_id: &str) {
         match self.db.get_trace_spans(session_id) {
             Ok(spans) => {
+                // Get span IDs for node count lookup
+                let span_ids: Vec<i32> = spans.iter().map(|s| s.id).collect();
                 self.trace_state.set_spans(spans);
+
+                // Load node counts for all spans
+                if let Ok(counts) = self.db.get_node_counts_for_spans(&span_ids) {
+                    self.trace_state.set_node_counts(counts);
+                }
             }
             Err(e) => {
                 self.set_status(format!("Failed to load spans: {}", e));
@@ -519,6 +526,16 @@ impl App {
             }
             Err(e) => {
                 self.set_status(format!("Failed to load content: {}", e));
+            }
+        }
+
+        // Also load nodes for this span (for Nodes tab)
+        match self.db.get_nodes_for_span(span_id) {
+            Ok(nodes) => {
+                self.trace_state.set_detail_nodes(nodes);
+            }
+            Err(_) => {
+                self.trace_state.set_detail_nodes(vec![]);
             }
         }
     }

@@ -125,6 +125,12 @@ async function interceptedFetch(input, init) {
         }
     }
     const userPreview = requestBody ? extractUserPreview(requestBody) : undefined;
+    // Start span BEFORE making the request (active span tracking)
+    // This enables nodes created during the API call to be linked to this span
+    const spanId = await deciduous.startSpan(userPreview);
+    if (spanId !== null) {
+        process.env.DECIDUOUS_TRACE_SPAN = spanId.toString();
+    }
     // Make the actual request
     const response = await originalFetch(input, init);
     // Handle streaming response
@@ -137,7 +143,11 @@ async function interceptedFetch(input, init) {
                 duration_ms: duration,
                 user_preview: userPreview,
             };
-            await deciduous.recordSpan(spanData);
+            await deciduous.recordSpan(spanData, spanId ?? undefined);
+            // NOTE: Don't delete DECIDUOUS_TRACE_SPAN here!
+            // Tools are executed AFTER the API response completes but BEFORE the next API call.
+            // The span ID needs to persist so `deciduous add` can link nodes to this span.
+            // The env var will be overwritten when the next span starts (line 145).
         };
         // Wrap the response body
         const wrappedBody = (0, stream_parser_1.createAccumulatingStream)(response.body, accumulator, onComplete);
@@ -155,7 +165,9 @@ async function interceptedFetch(input, init) {
         duration_ms: duration,
         user_preview: userPreview,
     };
-    await deciduous.recordSpan(spanData);
+    await deciduous.recordSpan(spanData, spanId ?? undefined);
+    // NOTE: Don't delete DECIDUOUS_TRACE_SPAN here!
+    // Same as streaming case - tools run after response, need span ID.
     return response;
 }
 /**

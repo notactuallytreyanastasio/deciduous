@@ -38,17 +38,49 @@ var DeciduousClient = class {
     }
   }
   /**
-   * Record a complete span (request + response)
+   * Start a new span before making an API call (for active tracking)
+   * Returns the span ID which should be set as DECIDUOUS_TRACE_SPAN env var
    */
-  async recordSpan(data) {
+  async startSpan(userPreview) {
+    if (!this.sessionId) {
+      console.error("[deciduous-trace] No active session");
+      return null;
+    }
+    try {
+      const result = (0, import_child_process.execSync)(
+        `${this.deciduousBin} trace span-start --session ${this.sessionId}`,
+        {
+          encoding: "utf8",
+          stdio: ["pipe", "pipe", "pipe"]
+        }
+      );
+      const parsed = JSON.parse(result.trim());
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        console.error(`[deciduous-trace] Started span #${parsed.span_id}`);
+      }
+      return parsed.span_id;
+    } catch (error) {
+      console.error("[deciduous-trace] Failed to start span:", error);
+      return null;
+    }
+  }
+  /**
+   * Record/complete a span (request + response)
+   * If spanId is provided, completes an existing span; otherwise creates a new one
+   */
+  async recordSpan(data, spanId) {
     if (!this.sessionId) {
       console.error("[deciduous-trace] No active session");
       return null;
     }
     try {
       const input = JSON.stringify(data);
+      const args = [`trace`, `record`, `--session`, this.sessionId, `--stdin`];
+      if (spanId !== void 0) {
+        args.push(`--span-id`, spanId.toString());
+      }
       const result = (0, import_child_process.execSync)(
-        `${this.deciduousBin} trace record --session ${this.sessionId} --stdin`,
+        `${this.deciduousBin} ${args.join(" ")}`,
         {
           encoding: "utf8",
           input,
@@ -268,6 +300,28 @@ function extractUserPreview(body) {
   }
   return void 0;
 }
+function extractSystemPrompt(body) {
+  if (!body.system) return void 0;
+  if (typeof body.system === "string") {
+    return body.system;
+  }
+  const textBlocks = body.system.filter((b) => b.type === "text" && b.text);
+  return textBlocks.map((b) => b.text).join("\n") || void 0;
+}
+function extractToolDefinitions(body) {
+  if (!body.tools || !Array.isArray(body.tools)) return void 0;
+  const defs = [];
+  for (const tool of body.tools) {
+    if (typeof tool === "object" && tool !== null && "name" in tool) {
+      defs.push({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.input_schema
+      });
+    }
+  }
+  return defs.length > 0 ? defs : void 0;
+}
 function parseNonStreamingResponse(data) {
   let thinking = "";
   let response = "";
@@ -326,6 +380,13 @@ async function interceptedFetch(input, init) {
     }
   }
   const userPreview = requestBody ? extractUserPreview(requestBody) : void 0;
+  const systemPrompt = requestBody ? extractSystemPrompt(requestBody) : void 0;
+  const toolDefs = requestBody ? extractToolDefinitions(requestBody) : void 0;
+  const messageCount = requestBody?.messages?.length;
+  const spanId = await deciduous.startSpan(userPreview);
+  if (spanId !== null) {
+    process.env.DECIDUOUS_TRACE_SPAN = spanId.toString();
+  }
   const response = await originalFetch(input, init);
   if (isStreamingResponse(response)) {
     const accumulator = new ResponseAccumulator();
@@ -334,9 +395,12 @@ async function interceptedFetch(input, init) {
       const spanData2 = {
         ...accumulator.finalize(),
         duration_ms: duration2,
-        user_preview: userPreview
+        user_preview: userPreview,
+        system_prompt: systemPrompt,
+        tool_definitions: toolDefs,
+        message_count: messageCount
       };
-      await deciduous.recordSpan(spanData2);
+      await deciduous.recordSpan(spanData2, spanId ?? void 0);
     };
     const wrappedBody = createAccumulatingStream(
       response.body,
@@ -354,9 +418,12 @@ async function interceptedFetch(input, init) {
   const spanData = {
     ...parseNonStreamingResponse(responseData),
     duration_ms: duration,
-    user_preview: userPreview
+    user_preview: userPreview,
+    system_prompt: systemPrompt,
+    tool_definitions: toolDefs,
+    message_count: messageCount
   };
-  await deciduous.recordSpan(spanData);
+  await deciduous.recordSpan(spanData, spanId ?? void 0);
   return response;
 }
 function install() {
