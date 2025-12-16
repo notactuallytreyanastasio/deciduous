@@ -2455,6 +2455,12 @@ impl Database {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
+        // Get the span to find its session_id
+        let span: TraceSpan = trace_spans::table
+            .filter(trace_spans::id.eq(span_id))
+            .first(&mut conn)?;
+
+        // Update the span
         diesel::update(trace_spans::table.filter(trace_spans::id.eq(span_id)))
             .set((
                 trace_spans::completed_at.eq(Some(&now)),
@@ -2470,6 +2476,26 @@ impl Database {
                 trace_spans::tool_names.eq(tool_names),
             ))
             .execute(&mut conn)?;
+
+        // Update session totals incrementally
+        if input_tokens.is_some() || output_tokens.is_some() || cache_read.is_some() || cache_write.is_some() {
+            diesel::update(trace_sessions::table.filter(trace_sessions::session_id.eq(&span.session_id)))
+                .set((
+                    trace_sessions::total_input_tokens.eq(
+                        trace_sessions::total_input_tokens + input_tokens.unwrap_or(0)
+                    ),
+                    trace_sessions::total_output_tokens.eq(
+                        trace_sessions::total_output_tokens + output_tokens.unwrap_or(0)
+                    ),
+                    trace_sessions::total_cache_read.eq(
+                        trace_sessions::total_cache_read + cache_read.unwrap_or(0)
+                    ),
+                    trace_sessions::total_cache_write.eq(
+                        trace_sessions::total_cache_write + cache_write.unwrap_or(0)
+                    ),
+                ))
+                .execute(&mut conn)?;
+        }
 
         Ok(())
     }
