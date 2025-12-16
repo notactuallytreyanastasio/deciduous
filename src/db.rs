@@ -1400,14 +1400,25 @@ impl Database {
     pub fn get_graph(&self) -> Result<DecisionGraph> {
         let nodes = self.get_all_nodes()?;
         let edges = self.get_all_edges()?;
-        Ok(DecisionGraph { nodes, edges, config: None })
+        Ok(DecisionGraph {
+            nodes,
+            edges,
+            config: None,
+        })
     }
 
     /// Get full graph with config included (for export)
-    pub fn get_graph_with_config(&self, config: Option<crate::config::Config>) -> Result<DecisionGraph> {
+    pub fn get_graph_with_config(
+        &self,
+        config: Option<crate::config::Config>,
+    ) -> Result<DecisionGraph> {
         let nodes = self.get_all_nodes()?;
         let edges = self.get_all_edges()?;
-        Ok(DecisionGraph { nodes, edges, config })
+        Ok(DecisionGraph {
+            nodes,
+            edges,
+            config,
+        })
     }
 
     // ========================================================================

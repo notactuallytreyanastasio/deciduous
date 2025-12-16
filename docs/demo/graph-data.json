@@ -6599,6 +6599,215 @@
       "created_at": "2025-12-15T19:38:06.752426-05:00",
       "updated_at": "2025-12-15T19:38:06.752426-05:00",
       "metadata_json": "{\"branch\":\"feature/opencode-commands\",\"commit\":\"c86fb2a\",\"confidence\":90}"
+    },
+    {
+      "id": 602,
+      "change_id": "68c04a51-5f9c-429c-95b8-c2841babd2d3",
+      "node_type": "action",
+      "title": "Fixed callout threshold from 20px to 45px",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:59:14.150766-05:00",
+      "updated_at": "2025-12-15T19:59:14.150766-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"5d705aa\",\"confidence\":95}"
+    },
+    {
+      "id": 603,
+      "change_id": "ad003d0f-2d08-46d9-be81-4ed0868d1b53",
+      "node_type": "goal",
+      "title": "Parameterize web UI state in URL for deep linking and sharing",
+      "description": null,
+      "status": "completed",
+      "created_at": "2025-12-15T20:09:29.027729-05:00",
+      "updated_at": "2025-12-15T20:38:54.088855-05:00",
+      "metadata_json": "{\"branch\":\"feature/web-url-state\",\"confidence\":90,\"prompt\":\"User asked to parameterize selections and state in the web UI\"}"
+    },
+    {
+      "id": 604,
+      "change_id": "1a73be6a-2462-4c99-b395-5db39113d6dd",
+      "node_type": "action",
+      "title": "Integrated URL state into DagView and SearchBar",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T20:17:20.368748-05:00",
+      "updated_at": "2025-12-15T20:17:20.368748-05:00",
+      "metadata_json": "{\"branch\":\"feature/web-url-state\",\"confidence\":90,\"files\":[\"web/src/views/DagView.tsx\",\"web/src/components/SearchBar.tsx\",\"web/src/hooks/useUrlState.ts\"]}"
+    },
+    {
+      "id": 605,
+      "change_id": "e63c743c-5872-4208-ba69-4dd536070570",
+      "node_type": "outcome",
+      "title": "URL state feature committed and pushed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T20:19:32.264663-05:00",
+      "updated_at": "2025-12-15T20:19:32.264663-05:00",
+      "metadata_json": "{\"branch\":\"feature/web-url-state\",\"commit\":\"9a22b68\",\"confidence\":95}"
+    },
+    {
+      "id": 606,
+      "change_id": "17b0b0da-ff84-4306-b0a9-7a8c2e13f5fc",
+      "node_type": "outcome",
+      "title": "PR #105 created with decision graph writeup",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T20:21:46.015863-05:00",
+      "updated_at": "2025-12-15T20:21:46.015863-05:00",
+      "metadata_json": "{\"branch\":\"feature/web-url-state\",\"confidence\":95}"
+    },
+    {
+      "id": 607,
+      "change_id": "63d17d46-48a9-463f-8f4b-76f1ccd48789",
+      "node_type": "outcome",
+      "title": "PR #105 merged - URL state feature complete",
+      "description": null,
+      "status": "completed",
+      "created_at": "2025-12-15T20:38:48.227723-05:00",
+      "updated_at": "2025-12-15T20:38:54.096320-05:00",
+      "metadata_json": "{\"branch\":\"feature/web-url-state\",\"confidence\":100}"
+    },
+    {
+      "id": 608,
+      "change_id": "5a56a6be-4fcc-4bab-9705-9b119edb47cc",
+      "node_type": "goal",
+      "title": "Add subagents roadmap and fix context command collision",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T20:51:40.997589-05:00",
+      "updated_at": "2025-12-15T20:51:40.997589-05:00",
+      "metadata_json": "{\"branch\":\"feature/subagents-roadmap-context-rename\",\"confidence\":95,\"prompt\":\"User asked to add subagents system to roadmap and fix /context naming collision\"}"
+    },
+    {
+      "id": 609,
+      "change_id": "c4f10298-11a6-40aa-a5ea-201855bb11d6",
+      "node_type": "outcome",
+      "title": "PR #113 created with roadmap updates and /recover rename",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T20:51:41.017322-05:00",
+      "updated_at": "2025-12-15T20:51:41.017322-05:00",
+      "metadata_json": "{\"branch\":\"feature/subagents-roadmap-context-rename\",\"confidence\":95}"
+    },
+    {
+      "id": 610,
+      "change_id": "1ea44bac-8806-477d-ac73-f91061ffbe84",
+      "node_type": "action",
+      "title": "Updated /context to /recover across entire codebase",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:27:12.084069-05:00",
+      "updated_at": "2025-12-15T22:27:12.084069-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"src/init.rs\",\"docs/index.html\",\"docs/story.html\",\"web/src/views/StoryView.tsx\"]}"
+    },
+    {
+      "id": 611,
+      "change_id": "fa962e47-5170-4005-a6b1-7ff488f1e195",
+      "node_type": "outcome",
+      "title": "PR #113 updated with comprehensive rename and roadmap additions",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:27:13.795067-05:00",
+      "updated_at": "2025-12-15T22:27:13.795067-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 612,
+      "change_id": "474a7c4e-060b-4af6-9612-145eac583564",
+      "node_type": "goal",
+      "title": "Fix CI failure in PR #114 - type validation script",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:27:14.605063-05:00",
+      "updated_at": "2025-12-15T22:27:14.605063-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User asked to investigate failing build on PR #114\"}"
+    },
+    {
+      "id": 613,
+      "change_id": "b25e93d8-a741-4267-af6d-34b6ff0051b9",
+      "node_type": "action",
+      "title": "Fixed validate-types.sh multiline array extraction with awk",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:28:47.157629-05:00",
+      "updated_at": "2025-12-15T22:28:47.157629-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 614,
+      "change_id": "255fb827-9698-4e9f-812e-ca2004108b37",
+      "node_type": "outcome",
+      "title": "PR #115 created for validate-types.sh fix",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:28:48.059206-05:00",
+      "updated_at": "2025-12-15T22:28:48.059206-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 615,
+      "change_id": "b8807727-c03d-4bc4-bf82-033ab57136e1",
+      "node_type": "goal",
+      "title": "Add cargo fmt requirement to CI and pre-commit hooks",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:28:49.516537-05:00",
+      "updated_at": "2025-12-15T22:28:49.516537-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User: build rust-fmt into the pre-commit hooks, build tools, GH actions runners\"}"
+    },
+    {
+      "id": 616,
+      "change_id": "60d47331-67d0-4686-a992-fc03491be5ec",
+      "node_type": "action",
+      "title": "Added cargo fmt check to pre-commit hooks and GitHub Actions",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:28:55.218191-05:00",
+      "updated_at": "2025-12-15T22:28:55.218191-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 617,
+      "change_id": "48cadf72-83ad-4635-81dd-8e310b6a88a0",
+      "node_type": "outcome",
+      "title": "PR #117 created for cargo fmt requirement",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:28:55.990542-05:00",
+      "updated_at": "2025-12-15T22:28:55.990542-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 618,
+      "change_id": "74464ca9-db48-43bf-a632-80b8ffce33be",
+      "node_type": "goal",
+      "title": "Add external repository support for commit links",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:30:10.728938-05:00",
+      "updated_at": "2025-12-15T22:30:10.728938-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"Allow documenting history of external projects while commit links point to correct repository\"}"
+    },
+    {
+      "id": 619,
+      "change_id": "7df7cf56-0f90-41c2-b8b6-8551f278ad6c",
+      "node_type": "action",
+      "title": "Implemented github.commit_repo config and web viewer integration",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:30:11.670987-05:00",
+      "updated_at": "2025-12-15T22:30:11.670987-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 620,
+      "change_id": "33bc87e0-9113-49b8-900a-41917168d37a",
+      "node_type": "outcome",
+      "title": "PR #116 created for external repository commit links",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T22:30:13.529662-05:00",
+      "updated_at": "2025-12-15T22:30:13.529662-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
     }
   ],
   "edges": [
@@ -12398,6 +12607,149 @@
       "weight": 1.0,
       "rationale": "Bug fix iteration",
       "created_at": "2025-12-15T19:22:49.029053-05:00"
+    },
+    {
+      "id": 528,
+      "from_node_id": 604,
+      "to_node_id": 605,
+      "from_change_id": "1a73be6a-2462-4c99-b395-5db39113d6dd",
+      "to_change_id": "e63c743c-5872-4208-ba69-4dd536070570",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation completed",
+      "created_at": "2025-12-15T20:19:32.274491-05:00"
+    },
+    {
+      "id": 529,
+      "from_node_id": 603,
+      "to_node_id": 604,
+      "from_change_id": "ad003d0f-2d08-46d9-be81-4ed0868d1b53",
+      "to_change_id": "1a73be6a-2462-4c99-b395-5db39113d6dd",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing URL state",
+      "created_at": "2025-12-15T20:21:04.824096-05:00"
+    },
+    {
+      "id": 530,
+      "from_node_id": 605,
+      "to_node_id": 606,
+      "from_change_id": "e63c743c-5872-4208-ba69-4dd536070570",
+      "to_change_id": "17b0b0da-ff84-4306-b0a9-7a8c2e13f5fc",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR opened",
+      "created_at": "2025-12-15T20:21:46.025908-05:00"
+    },
+    {
+      "id": 531,
+      "from_node_id": 606,
+      "to_node_id": 607,
+      "from_change_id": "17b0b0da-ff84-4306-b0a9-7a8c2e13f5fc",
+      "to_change_id": "63d17d46-48a9-463f-8f4b-76f1ccd48789",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Merged to main",
+      "created_at": "2025-12-15T20:38:48.237014-05:00"
+    },
+    {
+      "id": 532,
+      "from_node_id": 608,
+      "to_node_id": 609,
+      "from_change_id": "5a56a6be-4fcc-4bab-9705-9b119edb47cc",
+      "to_change_id": "c4f10298-11a6-40aa-a5ea-201855bb11d6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation",
+      "created_at": "2025-12-15T20:51:41.025807-05:00"
+    },
+    {
+      "id": 533,
+      "from_node_id": 608,
+      "to_node_id": 610,
+      "from_change_id": "5a56a6be-4fcc-4bab-9705-9b119edb47cc",
+      "to_change_id": "1ea44bac-8806-477d-ac73-f91061ffbe84",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation",
+      "created_at": "2025-12-15T22:27:12.095617-05:00"
+    },
+    {
+      "id": 534,
+      "from_node_id": 610,
+      "to_node_id": 611,
+      "from_change_id": "1ea44bac-8806-477d-ac73-f91061ffbe84",
+      "to_change_id": "fa962e47-5170-4005-a6b1-7ff488f1e195",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR updated",
+      "created_at": "2025-12-15T22:27:13.804549-05:00"
+    },
+    {
+      "id": 535,
+      "from_node_id": 612,
+      "to_node_id": 613,
+      "from_change_id": "474a7c4e-060b-4af6-9612-145eac583564",
+      "to_change_id": "b25e93d8-a741-4267-af6d-34b6ff0051b9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fix implementation for CI failure",
+      "created_at": "2025-12-15T22:29:06.968205-05:00"
+    },
+    {
+      "id": 536,
+      "from_node_id": 613,
+      "to_node_id": 614,
+      "from_change_id": "b25e93d8-a741-4267-af6d-34b6ff0051b9",
+      "to_change_id": "255fb827-9698-4e9f-812e-ca2004108b37",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action resulted in PR creation",
+      "created_at": "2025-12-15T22:29:08.253573-05:00"
+    },
+    {
+      "id": 537,
+      "from_node_id": 615,
+      "to_node_id": 616,
+      "from_change_id": "b8807727-c03d-4bc4-bf82-033ab57136e1",
+      "to_change_id": "60d47331-67d0-4686-a992-fc03491be5ec",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of cargo fmt requirement",
+      "created_at": "2025-12-15T22:29:09.732435-05:00"
+    },
+    {
+      "id": 538,
+      "from_node_id": 616,
+      "to_node_id": 617,
+      "from_change_id": "60d47331-67d0-4686-a992-fc03491be5ec",
+      "to_change_id": "48cadf72-83ad-4635-81dd-8e310b6a88a0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action resulted in PR creation",
+      "created_at": "2025-12-15T22:29:10.697372-05:00"
+    },
+    {
+      "id": 539,
+      "from_node_id": 618,
+      "to_node_id": 619,
+      "from_change_id": "74464ca9-db48-43bf-a632-80b8ffce33be",
+      "to_change_id": "7df7cf56-0f90-41c2-b8b6-8551f278ad6c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of external repo support",
+      "created_at": "2025-12-15T22:30:22.282775-05:00"
+    },
+    {
+      "id": 540,
+      "from_node_id": 619,
+      "to_node_id": 620,
+      "from_change_id": "7df7cf56-0f90-41c2-b8b6-8551f278ad6c",
+      "to_change_id": "33bc87e0-9113-49b8-900a-41917168d37a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action resulted in PR creation",
+      "created_at": "2025-12-15T22:30:22.293558-05:00"
     }
   ]
 }

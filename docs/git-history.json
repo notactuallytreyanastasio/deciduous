@@ -1,7 +1,23 @@
 [
   {
-    "hash": "d94a0979a81705bd8dc843ad40160d2b59fd9235",
-    "short_hash": "d94a097",
+    "hash": "c65b4bbe5e41fe781e168807f0f5e557088a2fef",
+    "short_hash": "c65b4bb",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T22:36:52-05:00",
+    "message": "release: v0.8.12\n\n### Added\n- Shell completion subcommand for bash, zsh, fish, powershell (#114)\n- External repository support for commit links (#116)\n- cargo fmt requirement in pre-commit hooks and CI (#117)\n\n### Fixed\n- Multiline array definitions in type validation script (#115)",
+    "files_changed": 8
+  },
+  {
+    "hash": "9a22b687c78a805772bc7ace691f54e2633762b3",
+    "short_hash": "9a22b68",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T20:19:03-05:00",
+    "message": "feat(web): add URL state for deep linking and sharing\n\n- Add useUrlState hook for syncing view state with URL parameters\n- Support node, search, view, chains, focus, fullscreen params\n- Update SearchBar to accept controlled query (backwards compatible)\n- Add Copy Link button to top bar for sharing current view\n- Enable browser back/forward navigation support",
+    "files_changed": 5
+  },
+  {
+    "hash": "5d705aa2390a341f9e077bd6ccaf5f5f89e33757",
+    "short_hash": "5d705aa",
     "author": "Bobby Nathan",
     "date": "2025-12-15T19:57:12-05:00",
     "message": "fix(web): increase minimum readable size threshold for callouts\n\nIncreased MIN_READABLE_SIZE from 20px to 45px so callout lines\nappear at reasonable zoom levels. At 35% zoom, nodes are only\n21px tall - too small to read text but was passing old threshold.",
