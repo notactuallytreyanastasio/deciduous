@@ -273,7 +273,7 @@ fn get_span_nodes(span_id: i32) -> Vec<crate::db::DecisionNode> {
     }
 }
 
-/// Trace info for a node - includes span and session details
+/// Trace info for a node - includes span and session details with content previews
 #[derive(serde::Serialize)]
 struct NodeTraceInfo {
     spans: Vec<SpanWithSession>,
@@ -287,6 +287,11 @@ struct SpanWithSession {
     model: Option<String>,
     duration_ms: Option<i32>,
     started_at: String,
+    // Content previews for inline display
+    thinking_preview: Option<String>,
+    response_preview: Option<String>,
+    tool_names: Option<String>,
+    user_preview: Option<String>,
 }
 
 fn get_node_trace_info(node_id: i32) -> NodeTraceInfo {
@@ -302,6 +307,10 @@ fn get_node_trace_info(node_id: i32) -> NodeTraceInfo {
                     model: s.model,
                     duration_ms: s.duration_ms,
                     started_at: s.started_at,
+                    thinking_preview: s.thinking_preview,
+                    response_preview: s.response_preview,
+                    tool_names: s.tool_names,
+                    user_preview: s.user_preview,
                 })
                 .collect();
             NodeTraceInfo { spans: spans_with_session }

@@ -11,7 +11,7 @@ import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl
 import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
 import { formatDuration, getModelShortName } from '../types/trace';
 
-// Trace info for a node
+// Trace info for a node - includes span content for context
 interface SpanWithSession {
   span_id: number;
   sequence_num: number;
@@ -19,6 +19,11 @@ interface SpanWithSession {
   model: string | null;
   duration_ms: number | null;
   started_at: string;
+  // Content previews
+  thinking_preview: string | null;
+  response_preview: string | null;
+  tool_names: string | null;
+  user_preview: string | null;
 }
 
 interface NodeTraceInfo {
@@ -32,6 +37,7 @@ interface DetailPanelProps {
   onClose?: () => void;
   repo?: string;
   gitHistory?: GitCommit[];
+  onNavigateToTrace?: (sessionId: string, spanId: number) => void;
 }
 
 // Look up commit info from gitHistory by hash
@@ -47,8 +53,10 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   onClose,
   repo,
   gitHistory = [],
+  onNavigateToTrace,
 }) => {
   const [traceInfo, setTraceInfo] = useState<NodeTraceInfo | null>(null);
+  const [expandedSpan, setExpandedSpan] = useState<number | null>(null);
 
   // Fetch trace info when node changes
   useEffect(() => {
@@ -181,22 +189,71 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
       {traceInfo && traceInfo.spans.length > 0 && (
         <div style={styles.section}>
           <h3 style={styles.sectionTitle}>Created During Trace</h3>
-          {traceInfo.spans.map((span) => (
-            <div key={span.span_id} style={styles.traceInfo}>
-              <div style={styles.traceHeader}>
-                <span style={styles.traceSpan}>Span #{span.sequence_num}</span>
-                {span.model && (
-                  <span style={styles.traceModel}>{getModelShortName(span.model)}</span>
-                )}
-                {span.duration_ms && (
-                  <span style={styles.traceDuration}>{formatDuration(span.duration_ms)}</span>
+          {traceInfo.spans.map((span) => {
+            const isExpanded = expandedSpan === span.span_id;
+            const hasContent = span.thinking_preview || span.response_preview || span.tool_names;
+            return (
+              <div key={span.span_id} style={styles.traceInfo}>
+                <div
+                  style={{...styles.traceHeader, cursor: hasContent ? 'pointer' : 'default'}}
+                  onClick={() => hasContent && setExpandedSpan(isExpanded ? null : span.span_id)}
+                >
+                  <span style={styles.traceSpan}>
+                    {hasContent && <span style={{marginRight: '4px'}}>{isExpanded ? '▼' : '▶'}</span>}
+                    Span #{span.sequence_num}
+                  </span>
+                  {span.model && (
+                    <span style={styles.traceModel}>{getModelShortName(span.model)}</span>
+                  )}
+                  {span.duration_ms && (
+                    <span style={styles.traceDuration}>{formatDuration(span.duration_ms)}</span>
+                  )}
+                  {onNavigateToTrace && (
+                    <button
+                      style={styles.traceLink}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onNavigateToTrace(span.session_id, span.span_id);
+                      }}
+                      title="View in Trace"
+                    >
+                      ↗
+                    </button>
+                  )}
+                </div>
+                <div style={styles.traceSession}>
+                  Session: {span.session_id.slice(0, 8)}
+                  {span.tool_names && (
+                    <span style={styles.traceTools}> · Tools: {span.tool_names}</span>
+                  )}
+                </div>
+
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div style={styles.traceContent}>
+                    {span.user_preview && (
+                      <div style={styles.traceContentBlock}>
+                        <div style={styles.traceContentLabel}>User</div>
+                        <div style={styles.traceContentText}>{span.user_preview}</div>
+                      </div>
+                    )}
+                    {span.thinking_preview && (
+                      <div style={styles.traceContentBlock}>
+                        <div style={styles.traceContentLabel}>Thinking</div>
+                        <div style={styles.traceContentText}>{span.thinking_preview}</div>
+                      </div>
+                    )}
+                    {span.response_preview && (
+                      <div style={styles.traceContentBlock}>
+                        <div style={styles.traceContentLabel}>Response</div>
+                        <div style={styles.traceContentText}>{span.response_preview}</div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-              <div style={styles.traceSession}>
-                Session: {span.session_id.slice(0, 8)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -453,5 +510,45 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#57606a',
     fontFamily: 'monospace',
+  },
+  traceLink: {
+    marginLeft: 'auto',
+    padding: '2px 6px',
+    border: '1px solid #d4a72c',
+    borderRadius: '4px',
+    backgroundColor: 'transparent',
+    color: '#d4a72c',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: 600,
+  },
+  traceTools: {
+    color: '#6e7781',
+  },
+  traceContent: {
+    marginTop: '10px',
+    paddingTop: '10px',
+    borderTop: '1px solid #f0d77a',
+  },
+  traceContentBlock: {
+    marginBottom: '10px',
+  },
+  traceContentLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#57606a',
+    textTransform: 'uppercase',
+    marginBottom: '4px',
+  },
+  traceContentText: {
+    fontSize: '12px',
+    color: '#24292f',
+    lineHeight: 1.5,
+    whiteSpace: 'pre-wrap',
+    backgroundColor: '#fffef5',
+    padding: '8px',
+    borderRadius: '4px',
+    maxHeight: '150px',
+    overflow: 'auto',
   },
 };
