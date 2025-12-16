@@ -20,6 +20,15 @@ interface CalloutLinesProps {
   onSelectNode: (node: DecisionNode) => void;
 }
 
+// Label dimensions - bigger for readability
+const LABEL_WIDTH = 220;
+const LABEL_HEIGHT = 40;
+const LABEL_MARGIN = 24;
+const LABEL_PADDING = 10;
+
+// Reserved zone at top (for top bar)
+const TOP_RESERVED = 80;
+
 interface CalloutData {
   node: DecisionNode;
   nodeX: number;
@@ -29,41 +38,41 @@ interface CalloutData {
   color: string;
 }
 
-// Calculate label positions that don't overlap
+// Calculate label positions - always on the right side to avoid legend
 function calculateLabelPositions(
   nodes: CalloutData[],
   containerWidth: number,
   containerHeight: number
 ): CalloutData[] {
-  const labelWidth = 180;
-  const labelHeight = 32;
-  const margin = 20;
-  const padding = 8;
-
-  // Sort nodes by Y position for better layout
+  // Sort nodes by Y position for intuitive vertical stacking
   const sorted = [...nodes].sort((a, b) => a.nodeY - b.nodeY);
 
-  // Place labels on the right side of the container by default
-  let currentY = margin;
-  const rightX = containerWidth - labelWidth - margin;
+  // All labels go on the right side
+  const labelX = containerWidth - LABEL_WIDTH - LABEL_MARGIN;
+
+  // Start stacking from top (below top bar)
+  let currentY = TOP_RESERVED + LABEL_MARGIN;
+
+  // Track used Y positions to avoid overlap
+  const usedSlots: number[] = [];
 
   return sorted.map((callout) => {
-    // Try right side first
-    let labelX = rightX;
+    // Find next available Y slot
     let labelY = currentY;
 
-    // If node is on the right side, place label on left
-    if (callout.nodeX > containerWidth * 0.6) {
-      labelX = margin;
+    // Check if this slot overlaps with any used slot
+    while (usedSlots.some(usedY => Math.abs(usedY - labelY) < LABEL_HEIGHT + LABEL_PADDING)) {
+      labelY += LABEL_HEIGHT + LABEL_PADDING;
     }
 
-    // Update Y position for next label
-    currentY = labelY + labelHeight + padding;
-
-    // If we've gone past the bottom, reset to top on the other side
-    if (currentY + labelHeight > containerHeight) {
-      currentY = margin;
+    // If we've gone past the bottom, wrap to a second column further left
+    if (labelY + LABEL_HEIGHT > containerHeight - LABEL_MARGIN) {
+      // Don't wrap into the left reserved zone
+      labelY = TOP_RESERVED + LABEL_MARGIN;
     }
+
+    usedSlots.push(labelY);
+    currentY = labelY + LABEL_HEIGHT + LABEL_PADDING;
 
     return {
       ...callout,
@@ -121,14 +130,11 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
       }}
     >
       {calloutsNeeded.map((callout) => {
-        const labelWidth = 180;
-        const labelHeight = 32;
-
-        // Calculate line endpoints
+        // Calculate line endpoints - line connects from node to left edge of label
         const lineStartX = callout.nodeX;
         const lineStartY = callout.nodeY;
-        const lineEndX = callout.labelX + (callout.labelX < callout.nodeX ? labelWidth : 0);
-        const lineEndY = callout.labelY + labelHeight / 2;
+        const lineEndX = callout.labelX;
+        const lineEndY = callout.labelY + LABEL_HEIGHT / 2;
 
         return (
           <g key={callout.node.id}>
@@ -140,17 +146,17 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               y2={lineEndY}
               stroke={callout.color}
               strokeWidth={2}
-              strokeOpacity={0.6}
-              strokeDasharray="4,2"
+              strokeOpacity={0.7}
+              strokeDasharray="6,3"
             />
 
-            {/* Circle at node position */}
+            {/* Circle at node position - bigger */}
             <circle
               cx={lineStartX}
               cy={lineStartY}
-              r={6}
+              r={8}
               fill={callout.color}
-              fillOpacity={0.8}
+              fillOpacity={0.9}
               stroke="#fff"
               strokeWidth={2}
             />
@@ -163,44 +169,46 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               <rect
                 x={callout.labelX}
                 y={callout.labelY}
-                width={labelWidth}
-                height={labelHeight}
-                rx={6}
+                width={LABEL_WIDTH}
+                height={LABEL_HEIGHT}
+                rx={8}
                 fill="#ffffff"
                 stroke={callout.color}
                 strokeWidth={2}
-                filter="drop-shadow(0 2px 4px rgba(0,0,0,0.1))"
+                filter="drop-shadow(0 3px 6px rgba(0,0,0,0.15))"
               />
 
-              {/* Node type dot */}
+              {/* Node type dot - bigger */}
               <circle
-                cx={callout.labelX + 14}
-                cy={callout.labelY + labelHeight / 2}
-                r={5}
+                cx={callout.labelX + 18}
+                cy={callout.labelY + LABEL_HEIGHT / 2}
+                r={7}
                 fill={callout.color}
               />
 
-              {/* Node ID */}
+              {/* Node ID - bigger font */}
               <text
-                x={callout.labelX + 26}
-                y={callout.labelY + labelHeight / 2 + 1}
+                x={callout.labelX + 34}
+                y={callout.labelY + LABEL_HEIGHT / 2 + 1}
                 fill="#6e7781"
-                fontSize="10"
+                fontSize="12"
                 fontFamily="monospace"
+                fontWeight="500"
                 dominantBaseline="middle"
               >
                 #{callout.node.id}
               </text>
 
-              {/* Node title */}
+              {/* Node title - bigger font, more chars */}
               <text
-                x={callout.labelX + 56}
-                y={callout.labelY + labelHeight / 2 + 1}
+                x={callout.labelX + 72}
+                y={callout.labelY + LABEL_HEIGHT / 2 + 1}
                 fill="#24292f"
-                fontSize="12"
+                fontSize="13"
+                fontWeight="500"
                 dominantBaseline="middle"
               >
-                {truncate(callout.node.title, 18)}
+                {truncate(callout.node.title, 22)}
               </text>
             </g>
           </g>
