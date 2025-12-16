@@ -6929,6 +6929,28 @@
       "created_at": "2025-12-15T23:05:07.908787-05:00",
       "updated_at": "2025-12-15T23:05:07.908787-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+    },
+    {
+      "id": 632,
+      "change_id": "0b286d9c-d1d2-4f7a-9ea2-c36157d45936",
+      "node_type": "goal",
+      "title": "Fix 100 node limit in chain view",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T23:46:58.406245-05:00",
+      "updated_at": "2025-12-15T23:46:58.406245-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User reported nodes limited to 100 when viewing single chain\"}"
+    },
+    {
+      "id": 633,
+      "change_id": "084c9a24-e6db-43f8-b88c-0a6fca3dab5b",
+      "node_type": "action",
+      "title": "Enhanced BFS to traverse both outgoing and incoming edges for full connected component",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T23:46:59.913357-05:00",
+      "updated_at": "2025-12-15T23:46:59.913357-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -12948,6 +12970,17 @@
       "weight": 1.0,
       "rationale": "Roadmap section added",
       "created_at": "2025-12-15T23:05:15.370954-05:00"
+    },
+    {
+      "id": 548,
+      "from_node_id": 632,
+      "to_node_id": 633,
+      "from_change_id": "0b286d9c-d1d2-4f7a-9ea2-c36157d45936",
+      "to_change_id": "084c9a24-e6db-43f8-b88c-0a6fca3dab5b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Fix implementation",
+      "created_at": "2025-12-15T23:47:07.457386-05:00"
     }
   ]
 }

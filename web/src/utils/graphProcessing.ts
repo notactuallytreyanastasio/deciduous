@@ -23,6 +23,9 @@ import { getCommit } from '../types/graph';
 /** Session gap threshold in milliseconds (4 hours) */
 export const SESSION_GAP_MS = 4 * 60 * 60 * 1000;
 
+/** Maximum nodes per chain (0 = unlimited, which is the default) */
+export const MAX_CHAIN_NODES = 0;
+
 // =============================================================================
 // Adjacency Lists
 // =============================================================================
@@ -85,6 +88,7 @@ export function buildChains(graphData: GraphData): Chain[] {
 
   /**
    * Build a single chain starting from rootId using BFS
+   * Traverses ALL connected nodes without any limit
    */
   function buildChain(rootId: number): Chain | null {
     if (visited.has(rootId)) return null;
@@ -96,6 +100,7 @@ export function buildChains(graphData: GraphData): Chain[] {
     };
     const queue = [rootId];
 
+    // BFS traversal - no node limit, traverse entire connected component
     while (queue.length > 0) {
       const nodeId = queue.shift()!;
       if (visited.has(nodeId)) continue;
@@ -107,11 +112,22 @@ export function buildChains(graphData: GraphData): Chain[] {
         if (!chain.root) chain.root = node;
       }
 
-      // Add outgoing edges and nodes to queue
+      // Add outgoing edges and nodes to queue (follow all connections)
       outgoing.get(nodeId)?.forEach(({ to, edge }) => {
         if (!visited.has(to)) {
           queue.push(to);
           chain.edges.push(edge);
+        }
+      });
+
+      // Also follow incoming edges to ensure we get the full connected component
+      incoming.get(nodeId)?.forEach(({ from, edge }) => {
+        if (!visited.has(from)) {
+          queue.push(from);
+          // Only add edge if not already in chain
+          if (!chain.edges.some(e => e.id === edge.id)) {
+            chain.edges.push(edge);
+          }
         }
       });
     }

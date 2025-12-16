@@ -1,11 +1,11 @@
 [
   {
-    "hash": "15e520ec0fac86c24bd352b482746e8a095c7142",
-    "short_hash": "15e520e",
+    "hash": "b5027264cfe6a3aeb158c8270c0af8b157ef9b4e",
+    "short_hash": "b502726",
     "author": "Bobby Nathan",
     "date": "2025-12-15T23:05:16-05:00",
     "message": "docs(roadmap): add Historical Linkages section\n\nNew roadmap section for making external artifacts first-class graph citizens:\n- Document nodes (new node types: document, release, conversation, pr_body)\n- Release notes as graph nodes with edges to constituent goals\n- Git tags as graph anchors with time-travel capability\n- PR bodies integrated into graph\n- Conversation threads as decision context\n- Writeups and design docs linkage\n- Cross-repository linkages and federation\n- Extended graph querying\n- Import/export document linkages",
-    "files_changed": 1
+    "files_changed": 5
   },
   {
     "hash": "2cca5b32ccc6c27b99c3e023f2d5e4c3307b5b63",
