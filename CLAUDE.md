@@ -27,28 +27,47 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
-### CRITICAL: Capture User Prompts When Semantically Meaningful
+### CRITICAL: Capture VERBATIM User Prompts
 
-**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
+**BAD - summaries are useless for context recovery:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add auth" -p "User asked: add login to the app"
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose auth method" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding approach"
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation. Make sure to add rate limiting
+on the login endpoint to prevent brute force attacks.
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
+- Root `goal` nodes: YES - the FULL original request
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and flow through the graph via connections.
+**Updating prompts on existing nodes:**
+```bash
+# Add or update a prompt retroactively
+deciduous prompt <node_id> "full verbatim prompt here"
+
+# Read from stdin for multi-line
+cat prompt.txt | deciduous prompt <node_id>
+```
+
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer detail panel.
 
 ### ⚠️ CRITICAL: Maintain Connections
 
@@ -73,11 +92,18 @@ deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
 
 # Metadata flags
-# -c, --confidence 0-100   Confidence level
-# -p, --prompt "..."       Store the user prompt (use when semantically meaningful)
-# -f, --files "a.rs,b.rs"  Associate files
-# -b, --branch <name>      Git branch (auto-detected)
-# --commit <hash|HEAD>     Link to git commit (use HEAD for current commit)
+# -c, --confidence 0-100     Confidence level
+# -p, --prompt "..."         Store user prompt (short, single-line)
+# --prompt-stdin             Read prompt from stdin (multi-line, preferred)
+# -f, --files "a.rs,b.rs"    Associate files
+# -b, --branch <name>        Git branch (auto-detected)
+# --commit <hash|HEAD>       Link to git commit (use HEAD for current commit)
+
+# Update prompts on existing nodes
+deciduous prompt <node_id> "prompt text"   # Short prompt
+deciduous prompt <node_id> << 'EOF'        # Multi-line from stdin
+Full verbatim prompt here...
+EOF
 
 # Branch filtering
 deciduous nodes --branch main

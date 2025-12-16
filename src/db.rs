@@ -1346,6 +1346,41 @@ impl Database {
         Ok(())
     }
 
+    /// Update a node's prompt in metadata_json
+    pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Get current metadata
+        let current_meta: Option<String> = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .select(decision_nodes::metadata_json)
+            .first(&mut conn)?;
+
+        // Parse existing metadata or create new
+        let mut meta: serde_json::Value = current_meta
+            .as_ref()
+            .and_then(|m| serde_json::from_str(m).ok())
+            .unwrap_or_else(|| serde_json::json!({}));
+
+        // Add/update prompt field
+        if let Some(obj) = meta.as_object_mut() {
+            obj.insert("prompt".to_string(), serde_json::json!(prompt));
+        }
+
+        let new_meta = serde_json::to_string(&meta)
+            .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
+
+        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+            .set((
+                decision_nodes::metadata_json.eq(Some(new_meta)),
+                decision_nodes::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
     /// Get all nodes
     pub fn get_all_nodes(&self) -> Result<Vec<DecisionNode>> {
         let mut conn = self.get_conn()?;

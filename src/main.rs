@@ -80,6 +80,10 @@ enum Command {
         #[arg(short, long)]
         prompt: Option<String>,
 
+        /// Read prompt from stdin (for multi-line prompts)
+        #[arg(long)]
+        prompt_stdin: bool,
+
         /// Files associated with this node (comma-separated)
         #[arg(short, long)]
         files: Option<String>,
@@ -117,6 +121,15 @@ enum Command {
 
         /// New status: pending, active, completed, rejected
         status: String,
+    },
+
+    /// Update or add a prompt to an existing node
+    Prompt {
+        /// Node ID to update
+        id: i32,
+
+        /// The prompt text (omit to read from stdin)
+        prompt: Option<String>,
     },
 
     /// List all nodes
@@ -513,10 +526,40 @@ fn main() {
             confidence,
             commit,
             prompt,
+            prompt_stdin,
             files,
             branch,
             no_branch,
         } => {
+            // Handle prompt from stdin if requested
+            let effective_prompt = if prompt_stdin {
+                use std::io::{self, Read};
+                let mut buffer = String::new();
+                io::stdin().read_to_string(&mut buffer).ok();
+                let trimmed = buffer.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
+            } else {
+                prompt
+            };
+
+            // Warn if prompt looks like a summary (too short)
+            if let Some(ref p) = effective_prompt {
+                if p.len() < 200 {
+                    eprintln!(
+                        "{} Prompt is only {} chars. This looks like a summary, not a full prompt.",
+                        "Warning:".yellow(),
+                        p.len()
+                    );
+                    eprintln!(
+                        "         Capture the {} user message for better context recovery.",
+                        "verbatim".bold()
+                    );
+                }
+            }
             // Auto-detect branch if not specified and not disabled
             let effective_branch = if no_branch {
                 None
@@ -539,7 +582,7 @@ fn main() {
                 description.as_deref(),
                 confidence,
                 effective_commit.as_deref(),
-                prompt.as_deref(),
+                effective_prompt.as_deref(),
                 files.as_deref(),
                 effective_branch.as_deref(),
             ) {
@@ -551,11 +594,10 @@ fn main() {
                         .as_ref()
                         .map(|c| format!(" [commit: {}]", &c[..7.min(c.len())]))
                         .unwrap_or_default();
-                    let prompt_str = if prompt.is_some() {
-                        " [prompt saved]"
-                    } else {
-                        ""
-                    };
+                    let prompt_str = effective_prompt
+                        .as_ref()
+                        .map(|p| format!(" [prompt: {} chars]", p.len()))
+                        .unwrap_or_default();
                     let files_str = files
                         .as_ref()
                         .map(|f| format!(" [files: {}]", f))
@@ -613,6 +655,50 @@ fn main() {
                 std::process::exit(1);
             }
         },
+
+        Command::Prompt { id, prompt } => {
+            // Read prompt from stdin if not provided as argument
+            let effective_prompt = match prompt {
+                Some(p) => p,
+                None => {
+                    use std::io::{self, Read};
+                    let mut buffer = String::new();
+                    io::stdin().read_to_string(&mut buffer).ok();
+                    buffer.trim().to_string()
+                }
+            };
+
+            if effective_prompt.is_empty() {
+                eprintln!("{} No prompt provided", "Error:".red());
+                std::process::exit(1);
+            }
+
+            // Warn if prompt looks like a summary
+            if effective_prompt.len() < 200 {
+                eprintln!(
+                    "{} Prompt is only {} chars. This looks like a summary, not a full prompt.",
+                    "Warning:".yellow(),
+                    effective_prompt.len()
+                );
+                eprintln!(
+                    "         Capture the {} user message for better context recovery.",
+                    "verbatim".bold()
+                );
+            }
+
+            match db.update_node_prompt(id, &effective_prompt) {
+                Ok(()) => println!(
+                    "{} node {} prompt ({} chars)",
+                    "Updated".green(),
+                    id,
+                    effective_prompt.len()
+                ),
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
 
         Command::Nodes { branch, node_type } => {
             match db.get_all_nodes() {

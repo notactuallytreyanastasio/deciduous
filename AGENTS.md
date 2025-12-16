@@ -28,26 +28,41 @@ ALWAYS → Sync frequently so the live graph updates
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | You complete a git commit | `action` with `--commit` | Include the commit hash |
 
-### CRITICAL: Capture User Prompts When Semantically Meaningful
+### CRITICAL: Capture VERBATIM User Prompts
 
-**Use `--prompt` / `-p` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
+**BAD - summaries are useless for context recovery:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add dark mode" -c 90 -p "User asked: can you add a dark mode toggle?"
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add dark mode" -p "User asked: can you add dark mode?"
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose theme storage" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding implementation"
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add dark mode" -c 90 --prompt-stdin << 'EOF'
+I'd like to add a dark mode toggle to the app settings. It should remember the
+user's preference in localStorage, and ideally respect the system preference
+by default. Can you also make sure the transition between themes is smooth?
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to CSS variables" -c 85 -p "User said: use CSS variables instead"
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
+- Root `goal` nodes: YES - the FULL original request
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
+
+**Updating prompts on existing nodes:**
+```bash
+deciduous prompt <node_id> "full verbatim prompt here"
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
+```
 
 ### The Loop - Follow This EVERY Time
 

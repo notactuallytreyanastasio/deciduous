@@ -120,28 +120,43 @@ deciduous add action "Implemented auth" -c 90 --commit HEAD
 deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
-## CRITICAL: Capture User Prompts When Semantically Meaningful
+## CRITICAL: Capture VERBATIM User Prompts
 
-**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
+**BAD - summaries are useless for context recovery:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add auth" -p "User asked: add login to the app"
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose auth method" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding approach"
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation.
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
+- Root `goal` nodes: YES - the FULL original request
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and flow through the graph via connections.
+**Updating prompts on existing nodes:**
+```bash
+deciduous prompt <node_id> "full verbatim prompt here"
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
+```
+
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
 
 ## Branch-Based Grouping
 
@@ -623,28 +638,43 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
-### CRITICAL: Capture User Prompts When Semantically Meaningful
+### CRITICAL: Capture VERBATIM User Prompts
 
-**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
+**BAD - summaries are useless for context recovery:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add auth" -p "User asked: add login to the app"
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose auth method" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding approach"
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation.
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
+- Root `goal` nodes: YES - the FULL original request
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and flow through the graph via connections.
+**Updating prompts on existing nodes:**
+```bash
+deciduous prompt <node_id> "full verbatim prompt here"
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
+```
+
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
 
 ### ⚠️ CRITICAL: Maintain Connections
 
@@ -781,29 +811,34 @@ This project uses Deciduous for persistent decision tracking. You MUST log decis
 - **Something completed** → `deciduous add outcome "Result" -c 95`
 </logging_triggers>
 
-## CRITICAL: Capture User Prompts When Semantically Meaningful
+## CRITICAL: Capture VERBATIM User Prompts
 
 <prompt_capture>
-**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** Capture full messages word-for-word.
 
+**BAD - summaries are useless for context recovery:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+deciduous add goal "Add auth" -p "User asked: add login to the app"  # DON'T DO THIS
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose auth method" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding approach"
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub.
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+# Update prompts on existing nodes
+deciduous prompt <node_id> << 'EOF'
+The full verbatim user message goes here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
+- Root `goal` nodes: YES - the FULL original request
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
-
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and flow through the graph via connections.
 </prompt_capture>
 
 ## MANDATORY: The Feedback Loop
@@ -1053,28 +1088,43 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
-### CRITICAL: Capture User Prompts When Semantically Meaningful
+### CRITICAL: Capture VERBATIM User Prompts
 
-**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
+**BAD - summaries are useless for context recovery:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add auth" -p "User asked: add login to the app"
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose auth method" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding approach"
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation.
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
+- Root `goal` nodes: YES - the FULL original request
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and flow through the graph via connections.
+**Updating prompts on existing nodes:**
+```bash
+deciduous prompt <node_id> "full verbatim prompt here"
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
+```
+
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
 
 ### ⚠️ CRITICAL: Maintain Connections
 
@@ -1237,26 +1287,32 @@ deciduous add action "Implemented auth" -c 90 --commit HEAD
 deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
-## CRITICAL: Capture User Prompts When Semantically Meaningful
+## CRITICAL: Capture VERBATIM User Prompts
 
-**Use `-p` / `--prompt` when a user request triggers new work or changes direction.** Don't add prompts to every node - only when a prompt is the actual catalyst.
+**Prompts must be the EXACT user message, not a summary.** Capture full messages word-for-word.
 
+**BAD - summaries are useless:**
 ```bash
-# New feature request - capture the prompt on the goal
-deciduous add goal "Add auth" -c 90 -p "User asked: add login to the app"
+deciduous add goal "Add auth" -p "User asked: add login"  # DON'T DO THIS
+```
 
-# Downstream work links back - no prompt needed (it flows via edges)
-deciduous add decision "Choose auth method" -c 75
-deciduous link <goal_id> <decision_id> -r "Deciding approach"
+**GOOD - verbatim prompts enable context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub.
+EOF
 
-# BUT if the user gives new direction mid-stream, capture that too
-deciduous add action "Switch to OAuth" -c 85 -p "User said: use OAuth instead"
+# Update prompts on existing nodes
+deciduous prompt <node_id> << 'EOF'
+The full verbatim user message here...
+EOF
 ```
 
 **When to capture prompts:**
-- Root `goal` nodes: YES - the original request
-- Major direction changes: YES - when user redirects the work
-- Routine downstream nodes: NO - they inherit context via edges
+- Root `goal` nodes: YES - the FULL original request
+- Major direction changes: YES - when user redirects
 
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
