@@ -18,6 +18,7 @@ import { SearchBar } from '../components/SearchBar';
 import { CalloutLines } from '../components/CalloutLines';
 import { MiniMap } from '../components/MiniMap';
 import { useNodeVisibility } from '../hooks/useNodeVisibility';
+import { useUrlState } from '../hooks/useUrlState';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
 
 interface DagViewProps {
@@ -47,7 +48,6 @@ interface DagreEdgeData {
   edge: DecisionEdge;
 }
 
-type ViewMode = 'recent' | 'all' | 'single';
 
 // Default number of recent chains to show
 const DEFAULT_RECENT_CHAINS = 8;
@@ -69,17 +69,29 @@ function sortChainsByRecency(chains: Chain[]): Chain[] {
 export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory = [] }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
-  const [focusChainIndex, setFocusChainIndex] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1);
 
-  // New state for recency filtering
-  const [viewMode, setViewMode] = useState<ViewMode>('recent');
-  const [recentChainCount, setRecentChainCount] = useState(DEFAULT_RECENT_CHAINS);
-  // Detect mobile for responsive defaults
+  // URL-synced state for deep linking and sharing
+  const {
+    state: urlState,
+    setSelectedNodeId,
+    setSearchQuery,
+    setViewMode,
+    setRecentChainCount,
+    setFocusChainIndex,
+    setIsFullscreen,
+    copyLinkToClipboard,
+  } = useUrlState();
+
+  // Derive selected node from URL state
+  const selectedNode = useMemo(() => {
+    if (urlState.selectedNodeId === null) return null;
+    return graphData.nodes.find(n => n.id === urlState.selectedNodeId) ?? null;
+  }, [urlState.selectedNodeId, graphData.nodes]);
+
+  // Local UI state (not URL-synced)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-  const [isFullscreen, setIsFullscreen] = useState(!isMobile); // Fullscreen by default on desktop only
-  const [isControlsCollapsed, setIsControlsCollapsed] = useState(isMobile); // Collapsed by default on mobile
+  const [isControlsCollapsed, setIsControlsCollapsed] = useState(isMobile);
 
   // Search state - highlighted node IDs from search
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<number>>(new Set());
@@ -114,14 +126,14 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
   // Determine which chains to show based on view mode
   const visibleChains = useMemo(() => {
-    if (viewMode === 'single' && focusChainIndex !== null) {
-      return [chains[focusChainIndex]].filter(Boolean);
+    if (urlState.viewMode === 'single' && urlState.focusChainIndex !== null) {
+      return [chains[urlState.focusChainIndex]].filter(Boolean);
     }
-    if (viewMode === 'recent') {
-      return goalChains.slice(0, recentChainCount);
+    if (urlState.viewMode === 'recent') {
+      return goalChains.slice(0, urlState.recentChainCount);
     }
     return sortedChains; // 'all' mode
-  }, [viewMode, focusChainIndex, chains, goalChains, sortedChains, recentChainCount]);
+  }, [urlState.viewMode, urlState.focusChainIndex, chains, goalChains, sortedChains, urlState.recentChainCount]);
 
   // Get all visible node IDs from visible chains
   const visibleNodeIds = useMemo(() => {
@@ -133,30 +145,29 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   }, [visibleChains]);
 
   // Calculate how many chains are hidden
-  const hiddenChainCount = goalChains.length - (viewMode === 'recent' ? recentChainCount : 0);
+  const hiddenChainCount = goalChains.length - (urlState.viewMode === 'recent' ? urlState.recentChainCount : 0);
 
   const handleSelectNode = useCallback((node: DecisionNode) => {
-    setSelectedNode(node);
-  }, []);
+    setSelectedNodeId(node.id);
+  }, [setSelectedNodeId]);
 
   const handleSelectNodeById = useCallback((id: number) => {
-    const node = graphData.nodes.find(n => n.id === id);
-    if (node) setSelectedNode(node);
-  }, [graphData.nodes]);
+    setSelectedNodeId(id);
+  }, [setSelectedNodeId]);
 
   // State for custom expand input
   const [expandInputVisible, setExpandInputVisible] = useState(false);
   const [expandInputValue, setExpandInputValue] = useState('');
 
   const handleShowMore = useCallback((count: number = 1) => {
-    setRecentChainCount(prev => Math.min(prev + count, goalChains.length));
+    setRecentChainCount(Math.min(urlState.recentChainCount + count, goalChains.length));
     setExpandInputVisible(false);
     setExpandInputValue('');
-  }, [goalChains.length]);
+  }, [urlState.recentChainCount, goalChains.length, setRecentChainCount]);
 
   const handleShowLess = useCallback((count: number = 1) => {
-    setRecentChainCount(prev => Math.max(prev - count, 1));
-  }, []);
+    setRecentChainCount(Math.max(urlState.recentChainCount - count, 1));
+  }, [urlState.recentChainCount, setRecentChainCount]);
 
   const handleExpandSubmit = useCallback(() => {
     const num = parseInt(expandInputValue, 10);
@@ -167,17 +178,17 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
   const handleShowAll = useCallback(() => {
     setViewMode('all');
-  }, []);
+  }, [setViewMode]);
 
   const handleShowRecent = useCallback(() => {
     setViewMode('recent');
     setRecentChainCount(DEFAULT_RECENT_CHAINS);
     setFocusChainIndex(null);
-  }, []);
+  }, [setViewMode, setRecentChainCount, setFocusChainIndex]);
 
   const toggleFullscreen = useCallback(() => {
-    setIsFullscreen(prev => !prev);
-  }, []);
+    setIsFullscreen(!urlState.isFullscreen);
+  }, [urlState.isFullscreen, setIsFullscreen]);
 
   const toggleControls = useCallback(() => {
     setIsControlsCollapsed(prev => !prev);
@@ -186,13 +197,13 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Handle Escape key to exit fullscreen
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isFullscreen) {
+      if (e.key === 'Escape' && urlState.isFullscreen) {
         setIsFullscreen(false);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isFullscreen]);
+  }, [urlState.isFullscreen, setIsFullscreen]);
 
   const handleFocusChain = useCallback((index: number | null) => {
     if (index === null) {
@@ -202,7 +213,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       setViewMode('single');
       setFocusChainIndex(index);
     }
-  }, []);
+  }, [setViewMode, setFocusChainIndex]);
 
   // Navigate to a specific node (pan/zoom to bring it into view)
   const handleNavigateToNode = useCallback((node: DecisionNode) => {
@@ -230,8 +241,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       );
 
     // Also open the node modal
-    setSelectedNode(node);
-  }, [nodePositions]);
+    setSelectedNodeId(node.id);
+  }, [nodePositions, setSelectedNodeId]);
 
   // Build and render DAG
   useEffect(() => {
@@ -468,12 +479,12 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   return (
     <div style={{
       ...styles.container,
-      ...(isFullscreen ? styles.fullscreenContainer : {}),
+      ...(urlState.isFullscreen ? styles.fullscreenContainer : {}),
     }}>
       {/* Top Bar - Recency Filter */}
       <div style={{
         ...styles.topBar,
-        ...(isFullscreen ? styles.fullscreenTopBar : {}),
+        ...(urlState.isFullscreen ? styles.fullscreenTopBar : {}),
       }}>
         <div style={styles.topBarLeft}>
           <SearchBar
@@ -482,21 +493,23 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             onSelectNode={handleSelectNode}
             onHighlightNodes={setHighlightedNodeIds}
             placeholder="Search nodes, commits..."
+            query={urlState.searchQuery}
+            onQueryChange={setSearchQuery}
           />
         </div>
 
         <div style={styles.topBarCenter}>
-          {viewMode === 'recent' && (
+          {urlState.viewMode === 'recent' && (
             <>
               {/* -1 button - disabled when only 1 chain shown */}
               <button
                 onClick={() => handleShowLess(1)}
                 style={{
                   ...styles.topBarBtnDanger,
-                  ...(recentChainCount <= 1 ? styles.topBarBtnDisabled : {}),
+                  ...(urlState.recentChainCount <= 1 ? styles.topBarBtnDisabled : {}),
                 }}
-                disabled={recentChainCount <= 1}
-                title={recentChainCount <= 1 ? "Already showing minimum" : "Show one fewer goal chain"}
+                disabled={urlState.recentChainCount <= 1}
+                title={urlState.recentChainCount <= 1 ? "Already showing minimum" : "Show one fewer goal chain"}
               >
                 −1 Chain
               </button>
@@ -560,19 +573,19 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
               </button>
 
               {/* Reset button - only when expanded beyond default */}
-              {recentChainCount > DEFAULT_RECENT_CHAINS && (
+              {urlState.recentChainCount > DEFAULT_RECENT_CHAINS && (
                 <button onClick={handleShowRecent} style={styles.topBarBtnSecondary}>
                   Reset to {DEFAULT_RECENT_CHAINS}
                 </button>
               )}
             </>
           )}
-          {viewMode === 'all' && (
+          {urlState.viewMode === 'all' && (
             <button onClick={handleShowRecent} style={styles.topBarBtn}>
               Show Recent Only
             </button>
           )}
-          {viewMode === 'single' && (
+          {urlState.viewMode === 'single' && (
             <button onClick={handleShowRecent} style={styles.topBarBtn}>
               Back to Recent
             </button>
@@ -590,17 +603,27 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           <span style={styles.topBarStatDivider}>·</span>
           <span style={styles.topBarStat}>{visibleChains.length} chains</span>
           <button
+            onClick={async () => {
+              await copyLinkToClipboard();
+              // Brief visual feedback could be added via state if desired
+            }}
+            style={styles.copyLinkBtn}
+            title="Copy shareable link to clipboard"
+          >
+            🔗 Copy Link
+          </button>
+          <button
             onClick={toggleFullscreen}
             style={styles.fullscreenBtn}
-            title={isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
+            title={urlState.isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
           >
-            {isFullscreen ? '⤓' : '⤢'}
+            {urlState.isFullscreen ? '⤓' : '⤢'}
           </button>
         </div>
       </div>
 
       {/* Hidden chains indicator */}
-      {viewMode === 'recent' && hiddenChainCount > 0 && (
+      {urlState.viewMode === 'recent' && hiddenChainCount > 0 && (
         <div style={styles.hiddenIndicator}>
           <span style={styles.hiddenIndicatorText}>
             + {hiddenChainCount} older goal chain{hiddenChainCount !== 1 ? 's' : ''} not shown
@@ -615,7 +638,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       <div style={{
         ...styles.controls,
         ...(isControlsCollapsed ? styles.controlsCollapsed : {}),
-        ...(isFullscreen ? styles.controlsFullscreen : {}),
+        ...(urlState.isFullscreen ? styles.controlsFullscreen : {}),
       }}>
         <button
           onClick={toggleControls}
@@ -630,7 +653,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             <div style={styles.section}>
               <label style={styles.label}>Jump to Chain</label>
               <select
-                value={focusChainIndex ?? ''}
+                value={urlState.focusChainIndex ?? ''}
                 onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
                 style={styles.select}
               >
@@ -693,7 +716,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
       {/* Detail Modal */}
       {selectedNode && (
-        <div style={styles.modalBackdrop} onClick={() => setSelectedNode(null)}>
+        <div style={styles.modalBackdrop} onClick={() => setSelectedNodeId(null)}>
           <div style={styles.modal} onClick={e => e.stopPropagation()}>
             <div style={styles.modalHeader}>
               <div style={styles.modalHeaderLeft}>
@@ -701,7 +724,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
                 <ConfidenceBadge confidence={getConfidence(selectedNode)} />
                 <CommitBadge commit={getCommit(selectedNode)} />
               </div>
-              <button onClick={() => setSelectedNode(null)} style={styles.modalCloseBtn}>×</button>
+              <button onClick={() => setSelectedNodeId(null)} style={styles.modalCloseBtn}>×</button>
             </div>
 
             <h2 style={styles.modalTitle}>{selectedNode.title}</h2>
@@ -937,6 +960,18 @@ const styles: Record<string, React.CSSProperties> = {
   },
   topBarStatDivider: {
     color: '#d0d7de',
+  },
+  copyLinkBtn: {
+    marginLeft: '12px',
+    padding: '6px 12px',
+    backgroundColor: '#ddf4ff',
+    border: '1px solid #54aeff',
+    borderRadius: '6px',
+    color: '#0969da',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
   },
   fullscreenBtn: {
     marginLeft: '12px',
