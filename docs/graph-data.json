@@ -6489,6 +6489,83 @@
       "created_at": "2025-12-15T18:53:17.785448-05:00",
       "updated_at": "2025-12-15T18:53:17.785448-05:00",
       "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-a\",\"confidence\":90,\"files\":[\"web/src/views/DagView.tsx\",\"web/src/components/SearchBar.tsx\"]}"
+    },
+    {
+      "id": 592,
+      "change_id": "881e6f4e-afbb-4c44-b447-03c583967982",
+      "node_type": "outcome",
+      "title": "Created PR #101 for Approach A",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T18:55:03.193746-05:00",
+      "updated_at": "2025-12-15T18:55:03.193746-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-a\",\"commit\":\"09829ff\",\"confidence\":95}"
+    },
+    {
+      "id": 593,
+      "change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "node_type": "goal",
+      "title": "Implement Approach B: Callouts First",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T18:55:27.927379-05:00",
+      "updated_at": "2025-12-15T18:55:27.927379-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":85,\"prompt\":\"Building callouts first approach - callout lines for small nodes, visibility tracking, mini-map for off-screen indicators\"}"
+    },
+    {
+      "id": 594,
+      "change_id": "ec336b63-41e2-4854-a08d-65e4f015def0",
+      "node_type": "action",
+      "title": "Created CalloutLines component",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T18:56:22.703009-05:00",
+      "updated_at": "2025-12-15T18:56:22.703009-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":90,\"files\":[\"web/src/components/CalloutLines.tsx\"]}"
+    },
+    {
+      "id": 595,
+      "change_id": "913891df-4da1-4c1a-ac5b-d8cf77fe5f8e",
+      "node_type": "action",
+      "title": "Created MiniMap component",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T18:57:07.933607-05:00",
+      "updated_at": "2025-12-15T18:57:07.933607-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":90,\"files\":[\"web/src/components/MiniMap.tsx\"]}"
+    },
+    {
+      "id": 596,
+      "change_id": "e382c514-a164-4107-93c0-a4f2011fb27c",
+      "node_type": "action",
+      "title": "Integrated CalloutLines and MiniMap into DagView",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T18:59:25.010990-05:00",
+      "updated_at": "2025-12-15T18:59:25.010990-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":90,\"files\":[\"web/src/views/DagView.tsx\"]}"
+    },
+    {
+      "id": 597,
+      "change_id": "4c7cd64c-7d01-4629-859c-f89ae2b9cd12",
+      "node_type": "outcome",
+      "title": "Created PR #102 for Approach B",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:00:42.659950-05:00",
+      "updated_at": "2025-12-15T19:00:42.659950-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"commit\":\"cb4d2c2\",\"confidence\":95}"
+    },
+    {
+      "id": 598,
+      "change_id": "468960b7-ae33-4709-bc14-e0c8f3a68bc5",
+      "node_type": "outcome",
+      "title": "Both implementation approaches completed with PRs",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:00:47.566585-05:00",
+      "updated_at": "2025-12-15T19:00:47.566585-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -12178,6 +12255,94 @@
       "weight": 1.0,
       "rationale": "Integration step",
       "created_at": "2025-12-15T18:53:17.805559-05:00"
+    },
+    {
+      "id": 518,
+      "from_node_id": 587,
+      "to_node_id": 592,
+      "from_change_id": "6dbd5da8-e321-44fa-adf3-f715a7f87a09",
+      "to_change_id": "881e6f4e-afbb-4c44-b447-03c583967982",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created",
+      "created_at": "2025-12-15T18:55:03.202245-05:00"
+    },
+    {
+      "id": 519,
+      "from_node_id": 582,
+      "to_node_id": 593,
+      "from_change_id": "8040b5e5-68fc-42b2-b103-85d74aaa0968",
+      "to_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Approach B implementation",
+      "created_at": "2025-12-15T18:55:35.842295-05:00"
+    },
+    {
+      "id": 520,
+      "from_node_id": 585,
+      "to_node_id": 593,
+      "from_change_id": "b8ff3f8a-9e92-4c11-b5c1-81f3ecb5e2aa",
+      "to_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementing this option",
+      "created_at": "2025-12-15T18:55:35.849708-05:00"
+    },
+    {
+      "id": 521,
+      "from_node_id": 593,
+      "to_node_id": 594,
+      "from_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "to_change_id": "ec336b63-41e2-4854-a08d-65e4f015def0",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Callout lines implementation",
+      "created_at": "2025-12-15T18:56:22.710142-05:00"
+    },
+    {
+      "id": 522,
+      "from_node_id": 593,
+      "to_node_id": 595,
+      "from_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "to_change_id": "913891df-4da1-4c1a-ac5b-d8cf77fe5f8e",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Minimap for off-screen indicators",
+      "created_at": "2025-12-15T18:57:07.942861-05:00"
+    },
+    {
+      "id": 523,
+      "from_node_id": 593,
+      "to_node_id": 596,
+      "from_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "to_change_id": "e382c514-a164-4107-93c0-a4f2011fb27c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Integration step",
+      "created_at": "2025-12-15T18:59:25.019854-05:00"
+    },
+    {
+      "id": 524,
+      "from_node_id": 593,
+      "to_node_id": 597,
+      "from_change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+      "to_change_id": "4c7cd64c-7d01-4629-859c-f89ae2b9cd12",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created",
+      "created_at": "2025-12-15T19:00:42.668974-05:00"
+    },
+    {
+      "id": 525,
+      "from_node_id": 582,
+      "to_node_id": 598,
+      "from_change_id": "8040b5e5-68fc-42b2-b103-85d74aaa0968",
+      "to_change_id": "468960b7-ae33-4709-bc14-e0c8f3a68bc5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Goal achieved",
+      "created_at": "2025-12-15T19:00:47.573722-05:00"
     }
   ]
 }
