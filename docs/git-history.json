@@ -1,11 +1,11 @@
 [
   {
-    "hash": "598a861d2055592a5e3598cc8eb2290136795948",
-    "short_hash": "598a861",
+    "hash": "15e520ec0fac86c24bd352b482746e8a095c7142",
+    "short_hash": "15e520e",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T22:53:46-05:00",
-    "message": "docs: sync decision graph with v0.8.13 external repo fix\n\nAdded nodes 625-629 documenting the git-history.json preservation fix:\n- Decision: Handle git-history.json in external repo mode\n- Options: Skip regeneration (chosen) vs API fetch (rejected)\n- Action: Implementation in PR #118\n- Outcome: v0.8.13 released",
-    "files_changed": 4
+    "date": "2025-12-15T23:05:16-05:00",
+    "message": "docs(roadmap): add Historical Linkages section\n\nNew roadmap section for making external artifacts first-class graph citizens:\n- Document nodes (new node types: document, release, conversation, pr_body)\n- Release notes as graph nodes with edges to constituent goals\n- Git tags as graph anchors with time-travel capability\n- PR bodies integrated into graph\n- Conversation threads as decision context\n- Writeups and design docs linkage\n- Cross-repository linkages and federation\n- Extended graph querying\n- Import/export document linkages",
+    "files_changed": 1
   },
   {
     "hash": "2cca5b32ccc6c27b99c3e023f2d5e4c3307b5b63",

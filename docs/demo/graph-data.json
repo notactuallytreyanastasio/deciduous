@@ -6907,6 +6907,28 @@
       "created_at": "2025-12-15T22:53:25.618460-05:00",
       "updated_at": "2025-12-15T22:53:25.618460-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":99,\"prompt\":\"PR #118 merged, deciduous sync now preserves git-history.json in external repo mode\"}"
+    },
+    {
+      "id": 630,
+      "change_id": "066973b1-30ed-450e-bca8-c83436b201b8",
+      "node_type": "goal",
+      "title": "Add Historical Linkages section to roadmap",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T23:05:06.344968-05:00",
+      "updated_at": "2025-12-15T23:05:06.344968-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User: link documents, release notes, tags, etc as part of the graph - make external artifacts first-class citizens in the metadata model\"}"
+    },
+    {
+      "id": 631,
+      "change_id": "7986348b-d666-4908-a497-aacfe8fea654",
+      "node_type": "action",
+      "title": "Added Historical Linkages roadmap section with 9 feature items",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T23:05:07.908787-05:00",
+      "updated_at": "2025-12-15T23:05:07.908787-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
     }
   ],
   "edges": [
@@ -12915,6 +12937,17 @@
       "weight": 1.0,
       "rationale": "Fix shipped",
       "created_at": "2025-12-15T22:53:25.625644-05:00"
+    },
+    {
+      "id": 547,
+      "from_node_id": 630,
+      "to_node_id": 631,
+      "from_change_id": "066973b1-30ed-450e-bca8-c83436b201b8",
+      "to_change_id": "7986348b-d666-4908-a497-aacfe8fea654",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Roadmap section added",
+      "created_at": "2025-12-15T23:05:15.370954-05:00"
     }
   ]
 }

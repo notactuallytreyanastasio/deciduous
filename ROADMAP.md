@@ -874,6 +874,84 @@
 
 ---
 
+### Historical Linkages - Documents as Graph Citizens
+<!-- roadmap:section id="a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d" -->
+*External artifacts become first-class nodes in the decision graph, not just metadata*
+
+This goes beyond simple integrations - documents, release notes, tags, PR bodies, and conversations become **part of the real graph and metadata model**.
+
+- [ ] **Document nodes**
+  <!-- roadmap:item id="d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a" outcome_change_id="" -->
+  - New node types: `document`, `release`, `conversation`, `pr_body`
+  - Documents link to decision nodes they reference
+  - Bidirectional: decisions can cite documents, documents can embed decision context
+  - Full-text search across document content
+  - Version tracking for document evolution
+
+- [ ] **Release notes as graph nodes**
+  <!-- roadmap:item id="e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b" outcome_change_id="" -->
+  - Each release becomes a node linked to its constituent goals/outcomes
+  - `deciduous release create v0.9.0` - auto-generates release node
+  - Release node has edges to all completed goals since last release
+  - Queryable: "What decisions led to v0.8.0?" → traverse the graph
+  - Release changelogs derived from graph traversal, not manual writing
+
+- [ ] **Git tags as graph anchors**
+  <!-- roadmap:item id="f3a4b5c6-d7e8-9f0a-1b2c-3d4e5f6a7b8c" outcome_change_id="" -->
+  - Tags sync to the graph automatically
+  - `v0.8.12` tag creates a snapshot node capturing graph state at that point
+  - Time-travel: view graph as it existed at any tagged version
+  - Diff tags: "What changed in the graph between v0.8.0 and v0.9.0?"
+
+- [ ] **PR bodies integrated into graph**
+  <!-- roadmap:item id="a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d" outcome_change_id="" -->
+  - PR description becomes a document node linked to branch's decisions
+  - PR comments can reference graph nodes: "This implements decision #42"
+  - Auto-populate PR template with links to relevant decision nodes
+  - Review comments link back to graph for context
+  - Merged PR triggers outcome nodes automatically
+
+- [ ] **Conversation threads as decision context**
+  <!-- roadmap:item id="b5c6d7e8-f9a0-1b2c-3d4e-5f6a7b8c9d0e" outcome_change_id="" -->
+  - Chat/discussion threads can be attached to decisions
+  - "Why did we choose X?" → link to the Slack/Discord/GitHub discussion
+  - Conversation summaries as nodes (AI-generated or manual)
+  - Preserve the human context that influenced decisions
+  - Search discussions by linked decision nodes
+
+- [ ] **Writeups and design docs**
+  <!-- roadmap:item id="c6d7e8f9-a0b1-2c3d-4e5f-6a7b8c9d0e1f" outcome_change_id="" -->
+  - RFC/ADR documents become graph nodes
+  - Design doc links to the decisions it proposes
+  - Implementation decisions link back to the design doc
+  - Track drift: "Design said X, but we implemented Y because..."
+  - `deciduous writeup` output becomes a linkable document node
+
+- [ ] **Cross-repository linkages**
+  <!-- roadmap:item id="d7e8f9a0-b1c2-3d4e-5f6a-7b8c9d0e1f2a" outcome_change_id="" -->
+  - Link decisions across different projects/repos
+  - "Phoenix Framework decision #123 influenced our decision #456"
+  - External project graphs can be referenced (read-only links)
+  - Useful for documenting dependencies on upstream choices
+  - Federation: query across multiple project graphs
+
+- [ ] **Query the extended graph**
+  <!-- roadmap:item id="e8f9a0b1-c2d3-4e5f-6a7b-8c9d0e1f2a3b" outcome_change_id="" -->
+  - `deciduous query "show all PRs related to goal #42"`
+  - `deciduous query "what conversations mentioned auth decisions?"`
+  - `deciduous query "release notes that cite this outcome"`
+  - Graph traversal includes document nodes seamlessly
+  - Filter by document type, date range, author
+
+- [ ] **Import/export document linkages**
+  <!-- roadmap:item id="f9a0b1c2-d3e4-5f6a-7b8c-9d0e1f2a3b4c" outcome_change_id="" -->
+  - Export decision graph with all linked documents
+  - Import external documentation into the graph
+  - Markdown files can declare graph links in frontmatter
+  - `deciduous import-docs ./docs/*.md` - scan for decision references
+
+---
+
 ## Future Enhancements
 <!-- roadmap:section id="00400a97-3edd-4b3d-a9b2-8a2ef30aa110" -->
 - [ ] Support for additional editors (Cursor, Copilot, etc.)
