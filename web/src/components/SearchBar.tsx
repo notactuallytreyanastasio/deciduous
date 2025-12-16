@@ -25,6 +25,10 @@ interface SearchBarProps {
   onSelectNode: (node: DecisionNode) => void;
   onHighlightNodes: (nodeIds: Set<number>) => void;
   placeholder?: string;
+  /** Controlled query value (for URL state sync) */
+  query?: string;
+  /** Callback when query changes (for URL state sync) */
+  onQueryChange?: (query: string) => void;
 }
 
 // Debounce hook
@@ -64,8 +68,14 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onSelectNode,
   onHighlightNodes,
   placeholder = 'Search nodes, commits, prompts...',
+  query: controlledQuery,
+  onQueryChange,
 }) => {
-  const [query, setQuery] = useState('');
+  // Support both controlled and uncontrolled modes
+  const [internalQuery, setInternalQuery] = useState('');
+  const isControlled = controlledQuery !== undefined;
+  const query = isControlled ? controlledQuery : internalQuery;
+  const setQuery = isControlled ? (onQueryChange || (() => {})) : setInternalQuery;
   const [isFocused, setIsFocused] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
