@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { DecisionNode, GraphData, GitCommit } from '../types/graph';
 import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
@@ -37,7 +38,6 @@ interface DetailPanelProps {
   onClose?: () => void;
   repo?: string;
   gitHistory?: GitCommit[];
-  onNavigateToTrace?: (sessionId: string, spanId: number) => void;
 }
 
 // Look up commit info from gitHistory by hash
@@ -53,10 +53,15 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   onClose,
   repo,
   gitHistory = [],
-  onNavigateToTrace,
 }) => {
+  const navigate = useNavigate();
   const [traceInfo, setTraceInfo] = useState<NodeTraceInfo | null>(null);
   const [expandedSpan, setExpandedSpan] = useState<number | null>(null);
+
+  // Navigate to trace view with specific session/span
+  const navigateToTrace = (sessionId: string, spanId: number) => {
+    navigate(`/traces?session=${sessionId.slice(0, 8)}&span=${spanId}`);
+  };
 
   // Fetch trace info when node changes
   useEffect(() => {
@@ -195,7 +200,7 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
             return (
               <div key={span.span_id} style={styles.traceInfo}>
                 <div
-                  style={{...styles.traceHeader, cursor: hasContent ? 'pointer' : 'default'}}
+                  style={{...styles.traceHeader, cursor: 'pointer'}}
                   onClick={() => hasContent && setExpandedSpan(isExpanded ? null : span.span_id)}
                 >
                   <span style={styles.traceSpan}>
@@ -208,21 +213,22 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
                   {span.duration_ms && (
                     <span style={styles.traceDuration}>{formatDuration(span.duration_ms)}</span>
                   )}
-                  {onNavigateToTrace && (
-                    <button
-                      style={styles.traceLink}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onNavigateToTrace(span.session_id, span.span_id);
-                      }}
-                      title="View in Trace"
-                    >
-                      ↗
-                    </button>
-                  )}
+                  <button
+                    style={styles.traceLink}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateToTrace(span.session_id, span.span_id);
+                    }}
+                    title="View full span in Traces"
+                  >
+                    ↗ View
+                  </button>
                 </div>
                 <div style={styles.traceSession}>
-                  Session: {span.session_id.slice(0, 8)}
+                  Session: <span
+                    style={styles.sessionLink}
+                    onClick={() => navigateToTrace(span.session_id, span.span_id)}
+                  >{span.session_id.slice(0, 8)}</span>
                   {span.tool_names && (
                     <span style={styles.traceTools}> · Tools: {span.tool_names}</span>
                   )}
@@ -510,6 +516,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#57606a',
     fontFamily: 'monospace',
+  },
+  sessionLink: {
+    color: '#0969da',
+    cursor: 'pointer',
+    textDecoration: 'underline',
   },
   traceLink: {
     marginLeft: 'auto',

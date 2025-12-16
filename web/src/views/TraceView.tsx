@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   TraceSession,
   TraceSpan,
@@ -22,16 +23,46 @@ import {
 // =============================================================================
 
 const TraceView: React.FC = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sessions, setSessions] = useState<TraceSession[]>([]);
   const [expandedSession, setExpandedSession] = useState<string | null>(null);
   const [spans, setSpans] = useState<TraceSpan[]>([]);
   const [expandedSpan, setExpandedSpan] = useState<number | null>(null);
   const [spanContent, setSpanContent] = useState<Record<number, TraceContent[]>>({});
+  const [initialNavDone, setInitialNavDone] = useState(false);
 
   // Fetch sessions on mount
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  // Handle URL params for deep linking (after sessions load)
+  useEffect(() => {
+    if (sessions.length === 0 || initialNavDone) return;
+
+    const sessionParam = searchParams.get('session');
+    const spanParam = searchParams.get('span');
+
+    if (sessionParam) {
+      // Find session that starts with this ID
+      const matchingSession = sessions.find(s => s.session_id.startsWith(sessionParam));
+      if (matchingSession) {
+        setExpandedSession(matchingSession.session_id);
+        fetchSpans(matchingSession.session_id).then(() => {
+          if (spanParam) {
+            const spanId = parseInt(spanParam, 10);
+            if (!isNaN(spanId)) {
+              setExpandedSpan(spanId);
+              fetchContent(matchingSession.session_id, spanId);
+            }
+          }
+        });
+      }
+      // Clear params after navigation
+      setSearchParams({}, { replace: true });
+    }
+    setInitialNavDone(true);
+  }, [sessions, searchParams, initialNavDone]);
 
   const fetchSessions = async () => {
     try {
@@ -45,16 +76,18 @@ const TraceView: React.FC = () => {
     }
   };
 
-  const fetchSpans = async (sessionId: string) => {
+  const fetchSpans = async (sessionId: string): Promise<TraceSpan[]> => {
     try {
       const res = await fetch(`/api/traces/${sessionId}`);
       const data = await res.json();
       if (data.ok && data.data) {
         setSpans(data.data);
+        return data.data;
       }
     } catch (e) {
       console.error('Failed to fetch spans:', e);
     }
+    return [];
   };
 
   const fetchContent = async (sessionId: string, spanId: number) => {
