@@ -6566,6 +6566,17 @@
       "created_at": "2025-12-15T19:00:47.566585-05:00",
       "updated_at": "2025-12-15T19:00:47.566585-05:00",
       "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":95}"
+    },
+    {
+      "id": 599,
+      "change_id": "b014f762-06ae-411d-84fd-b17e9fae1dc8",
+      "node_type": "action",
+      "title": "Widened callout labels to 280px, 32-char truncation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:15:24.831676-05:00",
+      "updated_at": "2025-12-15T19:15:24.831676-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"commit\":\"7a358fb\",\"confidence\":85}"
     }
   ],
   "edges": [
@@ -12343,6 +12354,17 @@
       "weight": 1.0,
       "rationale": "Goal achieved",
       "created_at": "2025-12-15T19:00:47.573722-05:00"
+    },
+    {
+      "id": 526,
+      "from_node_id": 586,
+      "to_node_id": 599,
+      "from_change_id": "cca99032-0290-4163-929f-3310f41fd85f",
+      "to_change_id": "b014f762-06ae-411d-84fd-b17e9fae1dc8",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Iterating on callout UI based on user feedback",
+      "created_at": "2025-12-15T19:15:30.318857-05:00"
     }
   ]
 }

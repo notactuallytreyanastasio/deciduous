@@ -58,10 +58,15 @@ export function useNodeVisibility(
 
     nodePositions.forEach((pos, nodeId) => {
       // Transform graph coordinates to screen coordinates
-      const screenX = pos.x * zoom + transform.x;
-      const screenY = pos.y * zoom + transform.y;
+      // Note: pos.x and pos.y are CENTER coordinates from dagre
+      const screenCenterX = pos.x * zoom + transform.x;
+      const screenCenterY = pos.y * zoom + transform.y;
       const screenWidth = pos.width * zoom;
       const screenHeight = pos.height * zoom;
+
+      // Calculate top-left corner for bounds checking
+      const screenX = screenCenterX - screenWidth / 2;
+      const screenY = screenCenterY - screenHeight / 2;
 
       // Check if node is in viewport (with some padding)
       const padding = 50;

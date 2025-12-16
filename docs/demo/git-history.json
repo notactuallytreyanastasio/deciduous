@@ -1,11 +1,19 @@
 [
   {
-    "hash": "2c930ad4af19da13a4581fd53dddcdec092b71fd",
-    "short_hash": "2c930ad",
+    "hash": "7a358fb86b5906fe7a42ec7f5694005a86d1ca67",
+    "short_hash": "7a358fb",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T19:12:49-05:00",
-    "message": "fix(web): improve callout positioning and sizing\n\n- Labels now always stack on right side (avoids legend collision)\n- Bigger labels (220x40) with larger fonts for readability\n- Better vertical stacking with overlap prevention\n- Larger node indicator circles (r=8)\n- Cleaner line styling",
-    "files_changed": 4
+    "date": "2025-12-15T19:14:54-05:00",
+    "message": "feat(callouts): wider labels to show more title text\n\n- Increased label width from 220px to 280px\n- Increased truncation limit from 22 to 32 chars\n- Reduced margin to better fit on screen",
+    "files_changed": 18
+  },
+  {
+    "hash": "7a358fb86b5906fe7a42ec7f5694005a86d1ca67",
+    "short_hash": "7a358fb",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T19:14:54-05:00",
+    "message": "feat(callouts): wider labels to show more title text\n\n- Increased label width from 220px to 280px\n- Increased truncation limit from 22 to 32 chars\n- Reduced margin to better fit on screen",
+    "files_changed": 18
   },
   {
     "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",

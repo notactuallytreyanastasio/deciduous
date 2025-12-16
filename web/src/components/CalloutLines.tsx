@@ -5,7 +5,7 @@
  * Used when search matches are visible but too small to read.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { DecisionNode } from '../types/graph';
 import { truncate } from '../types/graph';
 import { getNodeColor } from '../utils/colors';
@@ -25,6 +25,13 @@ const LABEL_WIDTH = 280;
 const LABEL_HEIGHT = 40;
 const LABEL_MARGIN = 16;
 const LABEL_PADDING = 10;
+
+// Expanded hover card dimensions
+const HOVER_WIDTH = 320;
+const HOVER_HEIGHT = 120;
+
+// Circle size at node position
+const NODE_CIRCLE_RADIUS = 12;
 
 // Reserved zone at top (for top bar)
 const TOP_RESERVED = 80;
@@ -90,6 +97,9 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   containerHeight,
   onSelectNode,
 }) => {
+  // Track which node is being hovered
+  const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null);
+
   // Get nodes that need callouts (too-small but highlighted)
   const calloutsNeeded = useMemo(() => {
     const callouts: CalloutData[] = [];
@@ -136,6 +146,19 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
         const lineEndX = callout.labelX;
         const lineEndY = callout.labelY + LABEL_HEIGHT / 2;
 
+        const isHovered = hoveredNodeId === callout.node.id;
+
+        // Calculate hover card position (above the label, clamped to viewport)
+        let hoverX = callout.labelX;
+        let hoverY = callout.labelY - HOVER_HEIGHT - 8;
+        if (hoverY < TOP_RESERVED) {
+          hoverY = callout.labelY + LABEL_HEIGHT + 8;
+        }
+        // Clamp horizontally
+        if (hoverX + HOVER_WIDTH > containerWidth - LABEL_MARGIN) {
+          hoverX = containerWidth - HOVER_WIDTH - LABEL_MARGIN;
+        }
+
         return (
           <g key={callout.node.id}>
             {/* Connection line */}
@@ -145,26 +168,32 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               x2={lineEndX}
               y2={lineEndY}
               stroke={callout.color}
-              strokeWidth={2}
-              strokeOpacity={0.7}
+              strokeWidth={isHovered ? 3 : 2}
+              strokeOpacity={isHovered ? 1 : 0.7}
               strokeDasharray="6,3"
             />
 
-            {/* Circle at node position - bigger */}
+            {/* Circle at node position - bigger and interactive */}
             <circle
               cx={lineStartX}
               cy={lineStartY}
-              r={8}
+              r={isHovered ? NODE_CIRCLE_RADIUS + 4 : NODE_CIRCLE_RADIUS}
               fill={callout.color}
-              fillOpacity={0.9}
+              fillOpacity={isHovered ? 1 : 0.9}
               stroke="#fff"
-              strokeWidth={2}
+              strokeWidth={isHovered ? 3 : 2}
+              style={{ pointerEvents: 'auto', cursor: 'pointer', transition: 'r 0.15s, stroke-width 0.15s' }}
+              onMouseEnter={() => setHoveredNodeId(callout.node.id)}
+              onMouseLeave={() => setHoveredNodeId(null)}
+              onClick={() => onSelectNode(callout.node)}
             />
 
             {/* Label box */}
             <g
               style={{ pointerEvents: 'auto', cursor: 'pointer' }}
               onClick={() => onSelectNode(callout.node)}
+              onMouseEnter={() => setHoveredNodeId(callout.node.id)}
+              onMouseLeave={() => setHoveredNodeId(null)}
             >
               <rect
                 x={callout.labelX}
@@ -173,12 +202,12 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 height={LABEL_HEIGHT}
                 rx={8}
                 fill="#ffffff"
-                stroke={callout.color}
-                strokeWidth={2}
+                stroke={isHovered ? '#0969da' : callout.color}
+                strokeWidth={isHovered ? 3 : 2}
                 filter="drop-shadow(0 3px 6px rgba(0,0,0,0.15))"
               />
 
-              {/* Node type dot - bigger */}
+              {/* Node type dot */}
               <circle
                 cx={callout.labelX + 18}
                 cy={callout.labelY + LABEL_HEIGHT / 2}
@@ -186,7 +215,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 fill={callout.color}
               />
 
-              {/* Node ID - bigger font */}
+              {/* Node ID */}
               <text
                 x={callout.labelX + 34}
                 y={callout.labelY + LABEL_HEIGHT / 2 + 1}
@@ -199,7 +228,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 #{callout.node.id}
               </text>
 
-              {/* Node title - bigger font, more chars */}
+              {/* Node title */}
               <text
                 x={callout.labelX + 72}
                 y={callout.labelY + LABEL_HEIGHT / 2 + 1}
@@ -211,6 +240,94 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 {truncate(callout.node.title, 32)}
               </text>
             </g>
+
+            {/* Hover card with more details */}
+            {isHovered && (
+              <g style={{ pointerEvents: 'auto' }}>
+                <rect
+                  x={hoverX}
+                  y={hoverY}
+                  width={HOVER_WIDTH}
+                  height={HOVER_HEIGHT}
+                  rx={10}
+                  fill="#ffffff"
+                  stroke="#d0d7de"
+                  strokeWidth={1}
+                  filter="drop-shadow(0 4px 12px rgba(0,0,0,0.2))"
+                />
+
+                {/* Type badge */}
+                <rect
+                  x={hoverX + 12}
+                  y={hoverY + 12}
+                  width={70}
+                  height={22}
+                  rx={4}
+                  fill={callout.color}
+                  fillOpacity={0.15}
+                />
+                <text
+                  x={hoverX + 47}
+                  y={hoverY + 23}
+                  fill={callout.color}
+                  fontSize="11"
+                  fontWeight="600"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
+                  {callout.node.node_type.toUpperCase()}
+                </text>
+
+                {/* Node ID */}
+                <text
+                  x={hoverX + 92}
+                  y={hoverY + 23}
+                  fill="#6e7781"
+                  fontSize="12"
+                  fontFamily="monospace"
+                  dominantBaseline="middle"
+                >
+                  #{callout.node.id}
+                </text>
+
+                {/* Full title */}
+                <text
+                  x={hoverX + 12}
+                  y={hoverY + 50}
+                  fill="#24292f"
+                  fontSize="14"
+                  fontWeight="600"
+                  dominantBaseline="middle"
+                >
+                  {truncate(callout.node.title, 40)}
+                </text>
+
+                {/* Description preview */}
+                <text
+                  x={hoverX + 12}
+                  y={hoverY + 72}
+                  fill="#57606a"
+                  fontSize="12"
+                  dominantBaseline="middle"
+                >
+                  {callout.node.description
+                    ? truncate(callout.node.description, 50)
+                    : 'No description'}
+                </text>
+
+                {/* Click hint */}
+                <text
+                  x={hoverX + 12}
+                  y={hoverY + 100}
+                  fill="#8b949e"
+                  fontSize="11"
+                  fontStyle="italic"
+                  dominantBaseline="middle"
+                >
+                  Click to view full details
+                </text>
+              </g>
+            )}
           </g>
         );
       })}
