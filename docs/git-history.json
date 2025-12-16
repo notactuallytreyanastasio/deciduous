@@ -1,11 +1,35 @@
 [
   {
-    "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",
-    "short_hash": "cb4d2c2",
+    "hash": "d94a0979a81705bd8dc843ad40160d2b59fd9235",
+    "short_hash": "d94a097",
     "author": "Bobby Nathan",
-    "date": "2025-12-15T18:59:52-05:00",
-    "message": "feat(web): implement Approach B - Callouts First for graph explorer\n\nImplementation of the Callouts First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add CalloutLines component that draws lines from tiny nodes to labels\n- Add MiniMap component showing off-screen match indicators\n- Integrate components into DagView with:\n  - Callout lines for too-small search matches\n  - Mini overview map with viewport indicator\n  - Click-to-navigate from minimap to off-screen nodes\n- Track node positions and graph bounds for visualization\n\nThis approach prioritizes in-graph visual indicators (callout lines)\nover a floating panel, keeping attention on the graph itself.",
+    "date": "2025-12-15T19:57:12-05:00",
+    "message": "fix(web): increase minimum readable size threshold for callouts\n\nIncreased MIN_READABLE_SIZE from 20px to 45px so callout lines\nappear at reasonable zoom levels. At 35% zoom, nodes are only\n21px tall - too small to read text but was passing old threshold.",
     "files_changed": 7
+  },
+  {
+    "hash": "c86fb2a07f2331495dfa3171ce0431f7f18ad480",
+    "short_hash": "c86fb2a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T19:37:34-05:00",
+    "message": "feat: add OpenCode slash commands for deciduous workflow\n\n- /build-test: Build and run tests\n- /context: Recover context from decision graph\n- /decision: Manage decision graph nodes and edges\n- /serve-ui: Start web UI server\n- /sync-graph: Export graph data\n\nAlso adds:\n- .deciduous/config.toml for branch configuration\n- GitHub workflow for cleaning up decision graph PNGs after PR merge",
+    "files_changed": 7
+  },
+  {
+    "hash": "ea2e7dc8170e53aadb402054ab4657d67870ac2b",
+    "short_hash": "ea2e7dc",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T19:22:21-05:00",
+    "message": "fix(callouts): fix visibility detection and add hover previews\n\n- Fix viewport calculation (use top-left coords, not center)\n- Bigger node indicator circles (r=12 instead of r=8)\n- Add hover state with expanded preview card\n- Show type badge, full title, description on hover\n- Interactive circles that respond to mouse",
+    "files_changed": 8
+  },
+  {
+    "hash": "7a358fb86b5906fe7a42ec7f5694005a86d1ca67",
+    "short_hash": "7a358fb",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T19:14:54-05:00",
+    "message": "feat(callouts): wider labels to show more title text\n\n- Increased label width from 220px to 280px\n- Increased truncation limit from 22 to 32 chars\n- Reduced margin to better fit on screen",
+    "files_changed": 18
   },
   {
     "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",

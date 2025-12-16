@@ -27,7 +27,8 @@ export interface UseNodeVisibilityResult {
 }
 
 // Minimum size in pixels for a node to be considered "readable"
-const MIN_READABLE_SIZE = 20;
+// Node text is 12px, so we need at least ~45px height for legibility
+const MIN_READABLE_SIZE = 45;
 
 /**
  * Hook to track node visibility based on viewport and zoom

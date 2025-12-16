@@ -6566,6 +6566,39 @@
       "created_at": "2025-12-15T19:00:47.566585-05:00",
       "updated_at": "2025-12-15T19:00:47.566585-05:00",
       "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"confidence\":95}"
+    },
+    {
+      "id": 599,
+      "change_id": "b014f762-06ae-411d-84fd-b17e9fae1dc8",
+      "node_type": "action",
+      "title": "Widened callout labels to 280px, 32-char truncation",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:15:24.831676-05:00",
+      "updated_at": "2025-12-15T19:15:24.831676-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"commit\":\"7a358fb\",\"confidence\":85}"
+    },
+    {
+      "id": 600,
+      "change_id": "21129692-73c3-4ec2-9500-59b7230c4c20",
+      "node_type": "action",
+      "title": "Fixed callout visibility detection and added hover previews",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:22:42.695877-05:00",
+      "updated_at": "2025-12-15T19:22:42.695877-05:00",
+      "metadata_json": "{\"branch\":\"feature/graph-explorer-approach-b\",\"commit\":\"ea2e7dc\",\"confidence\":90}"
+    },
+    {
+      "id": 601,
+      "change_id": "46b4383f-e7cb-4ffd-8654-beb73281b295",
+      "node_type": "action",
+      "title": "Created PR #104 for OpenCode slash commands",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-15T19:38:06.752426-05:00",
+      "updated_at": "2025-12-15T19:38:06.752426-05:00",
+      "metadata_json": "{\"branch\":\"feature/opencode-commands\",\"commit\":\"c86fb2a\",\"confidence\":90}"
     }
   ],
   "edges": [
@@ -12343,6 +12376,28 @@
       "weight": 1.0,
       "rationale": "Goal achieved",
       "created_at": "2025-12-15T19:00:47.573722-05:00"
+    },
+    {
+      "id": 526,
+      "from_node_id": 586,
+      "to_node_id": 599,
+      "from_change_id": "cca99032-0290-4163-929f-3310f41fd85f",
+      "to_change_id": "b014f762-06ae-411d-84fd-b17e9fae1dc8",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Iterating on callout UI based on user feedback",
+      "created_at": "2025-12-15T19:15:30.318857-05:00"
+    },
+    {
+      "id": 527,
+      "from_node_id": 599,
+      "to_node_id": 600,
+      "from_change_id": "b014f762-06ae-411d-84fd-b17e9fae1dc8",
+      "to_change_id": "21129692-73c3-4ec2-9500-59b7230c4c20",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Bug fix iteration",
+      "created_at": "2025-12-15T19:22:49.029053-05:00"
     }
   ]
 }
