@@ -274,10 +274,15 @@ deciduous add observation "Title" -c 70
 
 # Node metadata
 -c, --confidence <0-100>     # Confidence level
--p, --prompt "..."           # User prompt that triggered this
+-p, --prompt "..."           # User prompt (short, single-line)
+--prompt-stdin               # Read prompt from stdin (multi-line, preferred)
 -f, --files "a.rs,b.rs"      # Associated files
 -b, --branch <name>          # Git branch (auto-detected)
 --commit <hash|HEAD>         # Link to git commit
+
+# Update prompts on existing nodes
+deciduous prompt <id> "text" # Set prompt text
+deciduous prompt <id>        # Read prompt from stdin
 
 # Connect nodes
 deciduous link <from> <to> -r "reason"

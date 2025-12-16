@@ -1,11 +1,11 @@
 [
   {
-    "hash": "c6690c457bf9bff14bce1a62772854180d7dede5",
-    "short_hash": "c6690c4",
+    "hash": "b06b3edd33a600c839189063df5b58b3c3f13cf7",
+    "short_hash": "b06b3ed",
     "author": "Bobby Nathan",
-    "date": "2025-12-16T00:01:03-05:00",
-    "message": "docs: add web viewer rebuild instructions and sync graph data\n\n- Document web viewer rebuild process in CLAUDE.md and AGENTS.md\n- Explain chain building BFS traversal (follows both directions)\n- Sync graph data with latest nodes/edges\n- Update embedded viewer and demo HTML",
-    "files_changed": 11
+    "date": "2025-12-16T00:59:54-05:00",
+    "message": "Merge remote-tracking branch 'origin/main' into prompt-capture-improvements",
+    "files_changed": 0
   },
   {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",
