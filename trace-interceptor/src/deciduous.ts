@@ -12,13 +12,20 @@ export class DeciduousClient {
   constructor() {
     // Use DECIDUOUS_BIN env var or default to 'deciduous'
     this.deciduousBin = process.env.DECIDUOUS_BIN || 'deciduous';
+    // Use existing session from proxy command if available
+    this.sessionId = process.env.DECIDUOUS_TRACE_SESSION || null;
   }
 
   /**
-   * Start a new trace session
+   * Start or resume a trace session
+   * If DECIDUOUS_TRACE_SESSION is set (by proxy command), use that session
+   * Otherwise, start a new one
    */
   async startSession(): Promise<string> {
     if (this.sessionId) {
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        console.error(`[deciduous-trace] Using existing session: ${this.sessionId.slice(0, 8)}`);
+      }
       return this.sessionId;
     }
 
@@ -77,9 +84,20 @@ export class DeciduousClient {
 
   /**
    * End the current trace session
+   * Note: If session was provided by proxy (DECIDUOUS_TRACE_SESSION),
+   * the proxy handles ending it, so we just clear our reference
    */
   async endSession(): Promise<void> {
     if (!this.sessionId) {
+      return;
+    }
+
+    // If session was provided by proxy, don't end it - proxy handles that
+    if (process.env.DECIDUOUS_TRACE_SESSION) {
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        console.error(`[deciduous-trace] Session managed by proxy, not ending`);
+      }
+      this.sessionId = null;
       return;
     }
 

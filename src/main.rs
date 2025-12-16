@@ -3093,15 +3093,14 @@ fn main() {
                 std::process::exit(1);
             }
 
-            // Find the interceptor loader
-            let interceptor_path = find_interceptor_path();
-            if interceptor_path.is_none() {
-                eprintln!("{} Trace interceptor not found", "Error:".red());
-                eprintln!("Build the interceptor first:");
-                eprintln!("  cd trace-interceptor && npm install && npm run build");
-                std::process::exit(1);
-            }
-            let interceptor_path = interceptor_path.unwrap();
+            // Ensure the embedded interceptor is installed
+            let interceptor_path = match deciduous::interceptor::ensure_interceptor_installed() {
+                Ok(path) => path,
+                Err(e) => {
+                    eprintln!("{} Installing trace interceptor: {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            };
 
             // Generate session ID and start trace session
             let session_id = uuid::Uuid::new_v4().to_string();
@@ -3175,12 +3174,18 @@ fn main() {
                 format!("{} {}", existing_node_options, node_options)
             };
 
+            // Get path to this deciduous binary for the interceptor
+            let deciduous_bin = std::env::current_exe()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| "deciduous".to_string());
+
             // Spawn child process
             let (cmd, args) = command.split_first().unwrap();
             let mut child = match std::process::Command::new(cmd)
                 .args(args)
                 .env("NODE_OPTIONS", &full_node_options)
                 .env("DECIDUOUS_TRACE_SESSION", &session_id)
+                .env("DECIDUOUS_BIN", &deciduous_bin)
                 .spawn()
             {
                 Ok(c) => c,
@@ -3254,60 +3259,6 @@ fn truncate(s: &str, max_len: usize) -> String {
         let truncated: String = s.chars().take(char_len).collect();
         format!("{}...", truncated)
     }
-}
-
-/// Find the trace interceptor loader path
-fn find_interceptor_path() -> Option<PathBuf> {
-    // Check standard locations in order:
-    // 1. DECIDUOUS_INTERCEPTOR env var
-    // 2. ~/.deciduous/trace-interceptor/interceptor-loader.js
-    // 3. trace-interceptor/dist/interceptor-loader.js (relative to cwd)
-    // 4. trace-interceptor/dist/interceptor-loader.js (relative to exe)
-
-    // 1. Env var override
-    if let Ok(path) = std::env::var("DECIDUOUS_INTERCEPTOR") {
-        let p = PathBuf::from(path);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-
-    // 2. User home directory
-    if let Ok(home) = std::env::var("HOME") {
-        let p = PathBuf::from(home)
-            .join(".deciduous")
-            .join("trace-interceptor")
-            .join("interceptor-loader.js");
-        if p.exists() {
-            return Some(p);
-        }
-    }
-
-    // 3. Relative to current directory
-    if let Ok(cwd) = std::env::current_dir() {
-        let p = cwd
-            .join("trace-interceptor")
-            .join("dist")
-            .join("interceptor-loader.js");
-        if p.exists() {
-            return Some(p);
-        }
-    }
-
-    // 4. Relative to executable
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(exe_dir) = exe.parent() {
-            let p = exe_dir
-                .join("trace-interceptor")
-                .join("dist")
-                .join("interceptor-loader.js");
-            if p.exists() {
-                return Some(p);
-            }
-        }
-    }
-
-    None
 }
 
 // =============================================================================

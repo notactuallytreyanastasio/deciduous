@@ -98,6 +98,48 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         // API: Toggle roadmap item checkbox (POST /api/roadmap/checkbox)
         (&Method::Post, "/api/roadmap/checkbox") => handle_toggle_checkbox(request),
 
+        // API: Get trace sessions
+        (&Method::Get, "/api/traces") => {
+            let sessions = get_trace_sessions();
+            let json = serde_json::to_string(&ApiResponse::success(sessions))?;
+
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            request.respond(response)
+        }
+
+        // API: Get trace spans for a session
+        (&Method::Get, p) if p.starts_with("/api/traces/") && !p.contains("/spans/") => {
+            let session_id = p.strip_prefix("/api/traces/").unwrap_or("");
+            let spans = get_trace_spans(session_id);
+            let json = serde_json::to_string(&ApiResponse::success(spans))?;
+
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            request.respond(response)
+        }
+
+        // API: Get trace content for a span
+        (&Method::Get, p) if p.starts_with("/api/traces/") && p.contains("/spans/") => {
+            // Parse /api/traces/{session_id}/spans/{span_id}
+            let parts: Vec<&str> = p.split('/').collect();
+            if parts.len() >= 5 {
+                if let Ok(span_id) = parts[4].parse::<i32>() {
+                    let content = get_trace_content(span_id);
+                    let json = serde_json::to_string(&ApiResponse::success(content))?;
+
+                    let response = Response::from_string(json).with_header(
+                        Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                    );
+                    return request.respond(response);
+                }
+            }
+            let response = Response::from_string("Invalid span ID").with_status_code(400);
+            request.respond(response)
+        }
+
         // 404
         _ => {
             let response = Response::from_string("Not found").with_status_code(404);
@@ -138,6 +180,27 @@ fn get_command_log() -> Vec<crate::db::CommandLog> {
 fn get_roadmap_items() -> Vec<RoadmapItem> {
     match Database::open() {
         Ok(db) => db.get_all_roadmap_items().unwrap_or_default(),
+        Err(_) => vec![],
+    }
+}
+
+fn get_trace_sessions() -> Vec<crate::db::TraceSession> {
+    match Database::open() {
+        Ok(db) => db.get_trace_sessions(100).unwrap_or_default(),
+        Err(_) => vec![],
+    }
+}
+
+fn get_trace_spans(session_id: &str) -> Vec<crate::db::TraceSpan> {
+    match Database::open() {
+        Ok(db) => db.get_trace_spans(session_id).unwrap_or_default(),
+        Err(_) => vec![],
+    }
+}
+
+fn get_trace_content(span_id: i32) -> Vec<crate::db::TraceContent> {
+    match Database::open() {
+        Ok(db) => db.get_trace_content(span_id).unwrap_or_default(),
         Err(_) => vec![],
     }
 }

@@ -5,10 +5,12 @@
   "main": "dist/interceptor-loader.js",
   "scripts": {
     "build": "tsc",
-    "watch": "tsc --watch"
+    "watch": "tsc --watch",
+    "bundle": "esbuild src/interceptor-loader.ts --bundle --platform=node --target=node18 --outfile=dist/bundle.js"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
+    "esbuild": "^0.24.0",
     "typescript": "^5.0.0"
   },
   "engines": {

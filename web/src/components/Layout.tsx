@@ -17,7 +17,7 @@ interface LayoutProps {
   onBranchChange?: (branch: string | null) => void;
 }
 
-type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story';
+type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story' | 'traces';
 
 const TABS: { id: ViewTab; label: string; path: string }[] = [
   { id: 'story', label: 'Story', path: '/story' },
@@ -26,6 +26,7 @@ const TABS: { id: ViewTab; label: string; path: string }[] = [
   { id: 'timeline', label: 'Timeline', path: '/timeline' },
   { id: 'graph', label: 'Graph', path: '/graph' },
   { id: 'roadmap', label: 'Roadmap', path: '/roadmap' },
+  { id: 'traces', label: 'Traces', path: '/traces' },
 ];
 
 export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, branches, selectedBranch, onBranchChange }) => {
@@ -38,6 +39,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
     if (path === '/timeline') return 'timeline';
     if (path === '/graph') return 'graph';
     if (path === '/roadmap') return 'roadmap';
+    if (path === '/traces') return 'traces';
     return 'dag'; // Default to DAG
   };
 
