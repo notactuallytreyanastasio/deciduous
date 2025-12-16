@@ -1589,8 +1589,8 @@ This should be run before any push to main to ensure the live site has the lates
 
 /// Initialize deciduous in the current directory
 pub fn init_project(editor: Editor) -> Result<(), String> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| format!("Could not get current directory: {}", e))?;
+    let cwd =
+        std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
     let editor_name = match editor {
         Editor::Claude => "Claude Code",
@@ -1598,7 +1598,12 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
         Editor::Opencode => "OpenCode",
     };
 
-    println!("\n{}", format!("Initializing Deciduous for {}...", editor_name).cyan().bold());
+    println!(
+        "\n{}",
+        format!("Initializing Deciduous for {}...", editor_name)
+            .cyan()
+            .bold()
+    );
     println!("   Directory: {}\n", cwd.display());
 
     // 1. Create .deciduous directory (shared between all editors)
@@ -1612,7 +1617,10 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     // 2. Initialize database by opening it (creates tables)
     let db_path = deciduous_dir.join("deciduous.db");
     if db_path.exists() {
-        println!("   {} .deciduous/deciduous.db (already exists, preserving data)", "Skipping".yellow());
+        println!(
+            "   {} .deciduous/deciduous.db (already exists, preserving data)",
+            "Skipping".yellow()
+        );
     } else {
         println!("   {} .deciduous/deciduous.db", "Creating".green());
     }
@@ -1651,11 +1659,19 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
 
             // Write deciduous.md rule (Always On - main workflow)
             let deciduous_rule_path = windsurf_rules.join("deciduous.md");
-            write_file_if_missing(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+            write_file_if_missing(
+                &deciduous_rule_path,
+                WINDSURF_DECIDUOUS_RULE,
+                ".windsurf/rules/deciduous.md",
+            )?;
 
             // Write context.md rule (Model-triggered - for session recovery)
             let context_path = windsurf_rules.join("context.md");
-            write_file_if_missing(&context_path, WINDSURF_CONTEXT_RULE, ".windsurf/rules/context.md")?;
+            write_file_if_missing(
+                &context_path,
+                WINDSURF_CONTEXT_RULE,
+                ".windsurf/rules/context.md",
+            )?;
 
             // Write memories.md (project-level memories Cascade auto-retrieves)
             let memories_path = windsurf_base.join("memories.md");
@@ -1672,23 +1688,43 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
 
             // Write decision.md command
             let decision_path = opencode_cmd_dir.join("decision.md");
-            write_file_if_missing(&decision_path, OPENCODE_DECISION_CMD, ".opencode/command/decision.md")?;
+            write_file_if_missing(
+                &decision_path,
+                OPENCODE_DECISION_CMD,
+                ".opencode/command/decision.md",
+            )?;
 
             // Write context.md command
             let context_path = opencode_cmd_dir.join("context.md");
-            write_file_if_missing(&context_path, OPENCODE_CONTEXT_CMD, ".opencode/command/context.md")?;
+            write_file_if_missing(
+                &context_path,
+                OPENCODE_CONTEXT_CMD,
+                ".opencode/command/context.md",
+            )?;
 
             // Write build-test.md command
             let build_test_path = opencode_cmd_dir.join("build-test.md");
-            write_file_if_missing(&build_test_path, OPENCODE_BUILD_TEST_CMD, ".opencode/command/build-test.md")?;
+            write_file_if_missing(
+                &build_test_path,
+                OPENCODE_BUILD_TEST_CMD,
+                ".opencode/command/build-test.md",
+            )?;
 
             // Write serve-ui.md command
             let serve_ui_path = opencode_cmd_dir.join("serve-ui.md");
-            write_file_if_missing(&serve_ui_path, OPENCODE_SERVE_UI_CMD, ".opencode/command/serve-ui.md")?;
+            write_file_if_missing(
+                &serve_ui_path,
+                OPENCODE_SERVE_UI_CMD,
+                ".opencode/command/serve-ui.md",
+            )?;
 
             // Write sync-graph.md command
             let sync_graph_path = opencode_cmd_dir.join("sync-graph.md");
-            write_file_if_missing(&sync_graph_path, OPENCODE_SYNC_GRAPH_CMD, ".opencode/command/sync-graph.md")?;
+            write_file_if_missing(
+                &sync_graph_path,
+                OPENCODE_SYNC_GRAPH_CMD,
+                ".opencode/command/sync-graph.md",
+            )?;
 
             // Append to or create AGENTS.md (OpenCode uses AGENTS.md like Windsurf)
             let agents_md_path = cwd.join("AGENTS.md");
@@ -1707,11 +1743,19 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
 
         // Cleanup workflow for PR graph assets
         let cleanup_path = workflows_dir.join("cleanup-decision-graphs.yml");
-        write_file_if_missing(&cleanup_path, CLEANUP_WORKFLOW, ".github/workflows/cleanup-decision-graphs.yml")?;
+        write_file_if_missing(
+            &cleanup_path,
+            CLEANUP_WORKFLOW,
+            ".github/workflows/cleanup-decision-graphs.yml",
+        )?;
 
         // Deploy workflow for GitHub Pages
         let deploy_path = workflows_dir.join("deploy-pages.yml");
-        write_file_if_missing(&deploy_path, DEPLOY_PAGES_WORKFLOW, ".github/workflows/deploy-pages.yml")?;
+        write_file_if_missing(
+            &deploy_path,
+            DEPLOY_PAGES_WORKFLOW,
+            ".github/workflows/deploy-pages.yml",
+        )?;
     }
 
     // 6. Create docs/ directory for GitHub Pages
@@ -1734,19 +1778,33 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     // 9. Create .nojekyll for GitHub Pages (prevents Jekyll processing)
     let nojekyll_path = docs_dir.join(".nojekyll");
     if !nojekyll_path.exists() {
-        fs::write(&nojekyll_path, "")
-            .map_err(|e| format!("Could not write .nojekyll: {}", e))?;
+        fs::write(&nojekyll_path, "").map_err(|e| format!("Could not write .nojekyll: {}", e))?;
         println!("   {} docs/.nojekyll", "Creating".green());
     }
 
-    println!("\n{}", format!("Deciduous initialized for {}!", editor_name).green().bold());
+    println!(
+        "\n{}",
+        format!("Deciduous initialized for {}!", editor_name)
+            .green()
+            .bold()
+    );
     println!("\nNext steps:");
-    println!("  1. Run {} to start the local graph viewer", "deciduous serve".cyan());
-    println!("  2. Run {} to export graph for GitHub Pages", "deciduous sync".cyan());
+    println!(
+        "  1. Run {} to start the local graph viewer",
+        "deciduous serve".cyan()
+    );
+    println!(
+        "  2. Run {} to export graph for GitHub Pages",
+        "deciduous sync".cyan()
+    );
 
     match editor {
         Editor::Claude => {
-            println!("  3. Use {} or {} slash commands", "/decision".cyan(), "/context".cyan());
+            println!(
+                "  3. Use {} or {} slash commands",
+                "/decision".cyan(),
+                "/context".cyan()
+            );
         }
         Editor::Windsurf => {
             println!("  3. Rules created in {}", ".windsurf/rules/".cyan());
@@ -1754,9 +1812,18 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             println!("     - {} (model-triggered)", "context.md".cyan());
             println!("     - {} (auto-retrieved)", ".windsurf/memories.md".cyan());
             println!();
-            println!("{}", "  ⚠️  IMPORTANT: Verify rule activation in Windsurf:".yellow().bold());
+            println!(
+                "{}",
+                "  ⚠️  IMPORTANT: Verify rule activation in Windsurf:"
+                    .yellow()
+                    .bold()
+            );
             println!("     Open Windsurf → Cascade → Customizations (gear icon)");
-            println!("     Ensure {} is set to {}", "deciduous.md".cyan(), "\"Always On\"".green());
+            println!(
+                "     Ensure {} is set to {}",
+                "deciduous.md".cyan(),
+                "\"Always On\"".green()
+            );
         }
         Editor::Opencode => {
             println!("  3. Commands created in {}", ".opencode/command/".cyan());
@@ -1770,10 +1837,16 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
     }
 
     println!();
-    println!("  4. Commit and push: {}", "git add docs/ .github/ && git push".cyan());
+    println!(
+        "  4. Commit and push: {}",
+        "git add docs/ .github/ && git push".cyan()
+    );
     println!("  5. Enable GitHub Pages (Settings → Pages → Source: Deploy from branch, gh-pages)");
     println!();
-    println!("Your graph will be live at: {}", "https://<user>.github.io/<repo>/".cyan());
+    println!(
+        "Your graph will be live at: {}",
+        "https://<user>.github.io/<repo>/".cyan()
+    );
     println!();
 
     Ok(())
@@ -1790,23 +1863,29 @@ fn create_dir_if_missing(path: &Path) -> Result<(), String> {
 
 fn write_file_if_missing(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
     if path.exists() {
-        println!("   {} {} (already exists)", "Skipping".yellow(), display_name);
+        println!(
+            "   {} {} (already exists)",
+            "Skipping".yellow(),
+            display_name
+        );
     } else {
-        fs::write(path, content)
-            .map_err(|e| format!("Could not write {}: {}", display_name, e))?;
+        fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
         println!("   {} {}", "Creating".green(), display_name);
     }
     Ok(())
 }
 
 fn write_file_overwrite(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
-    fs::write(path, content)
-        .map_err(|e| format!("Could not write {}: {}", display_name, e))?;
+    fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
     println!("   {} {}", "Updated".green(), display_name);
     Ok(())
 }
 
-fn replace_config_md_section(path: &Path, section_content: &str, file_name: &str) -> Result<(), String> {
+fn replace_config_md_section(
+    path: &Path,
+    section_content: &str,
+    file_name: &str,
+) -> Result<(), String> {
     // Look for either variant of our section header
     let markers = [
         "## Decision Graph Workflow",
@@ -1816,13 +1895,11 @@ fn replace_config_md_section(path: &Path, section_content: &str, file_name: &str
     let section_end_pattern = "\n## ";
 
     if path.exists() {
-        let existing = fs::read_to_string(path)
-            .map_err(|e| format!("Could not read {}: {}", file_name, e))?;
+        let existing =
+            fs::read_to_string(path).map_err(|e| format!("Could not read {}: {}", file_name, e))?;
 
         // Find the start of our section (try each marker)
-        let start_idx = markers.iter()
-            .filter_map(|m| existing.find(m))
-            .min();
+        let start_idx = markers.iter().filter_map(|m| existing.find(m)).min();
 
         if let Some(start) = start_idx {
             // Find the end of our section (next ## heading after our section starts)
@@ -1843,7 +1920,12 @@ fn replace_config_md_section(path: &Path, section_content: &str, file_name: &str
             let new_content = if after.is_empty() {
                 format!("{}{}", before, section_content.trim_start())
             } else {
-                format!("{}{}\n{}", before, section_content.trim(), after.trim_start())
+                format!(
+                    "{}{}\n{}",
+                    before,
+                    section_content.trim(),
+                    after.trim_start()
+                )
             };
 
             fs::write(path, new_content)
@@ -1871,8 +1953,8 @@ fn replace_config_md_section(path: &Path, section_content: &str, file_name: &str
 
 /// Update tooling files to the latest version (overwrites existing)
 pub fn update_tooling(editor: Editor) -> Result<(), String> {
-    let cwd = std::env::current_dir()
-        .map_err(|e| format!("Could not get current directory: {}", e))?;
+    let cwd =
+        std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
     let editor_name = match editor {
         Editor::Claude => "Claude Code",
@@ -1880,7 +1962,12 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
         Editor::Opencode => "OpenCode",
     };
 
-    println!("\n{}", format!("Updating Deciduous tooling for {}...", editor_name).cyan().bold());
+    println!(
+        "\n{}",
+        format!("Updating Deciduous tooling for {}...", editor_name)
+            .cyan()
+            .bold()
+    );
     println!("   Directory: {}\n", cwd.display());
 
     // Update config.toml (only if .deciduous exists)
@@ -1889,7 +1976,10 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
         let config_path = deciduous_dir.join("config.toml");
         write_file_overwrite(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
     } else {
-        println!("   {} .deciduous/ not found - run 'deciduous init' first", "Warning:".yellow());
+        println!(
+            "   {} .deciduous/ not found - run 'deciduous init' first",
+            "Warning:".yellow()
+        );
     }
 
     match editor {
@@ -1919,11 +2009,19 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
 
             // Overwrite deciduous.md rule
             let deciduous_rule_path = windsurf_rules.join("deciduous.md");
-            write_file_overwrite(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+            write_file_overwrite(
+                &deciduous_rule_path,
+                WINDSURF_DECIDUOUS_RULE,
+                ".windsurf/rules/deciduous.md",
+            )?;
 
             // Overwrite context.md rule
             let context_path = windsurf_rules.join("context.md");
-            write_file_overwrite(&context_path, WINDSURF_CONTEXT_RULE, ".windsurf/rules/context.md")?;
+            write_file_overwrite(
+                &context_path,
+                WINDSURF_CONTEXT_RULE,
+                ".windsurf/rules/context.md",
+            )?;
 
             // Overwrite memories.md
             let memories_path = windsurf_base.join("memories.md");
@@ -1940,23 +2038,43 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
 
             // Overwrite decision.md command
             let decision_path = opencode_cmd_dir.join("decision.md");
-            write_file_overwrite(&decision_path, OPENCODE_DECISION_CMD, ".opencode/command/decision.md")?;
+            write_file_overwrite(
+                &decision_path,
+                OPENCODE_DECISION_CMD,
+                ".opencode/command/decision.md",
+            )?;
 
             // Overwrite context.md command
             let context_path = opencode_cmd_dir.join("context.md");
-            write_file_overwrite(&context_path, OPENCODE_CONTEXT_CMD, ".opencode/command/context.md")?;
+            write_file_overwrite(
+                &context_path,
+                OPENCODE_CONTEXT_CMD,
+                ".opencode/command/context.md",
+            )?;
 
             // Overwrite build-test.md command
             let build_test_path = opencode_cmd_dir.join("build-test.md");
-            write_file_overwrite(&build_test_path, OPENCODE_BUILD_TEST_CMD, ".opencode/command/build-test.md")?;
+            write_file_overwrite(
+                &build_test_path,
+                OPENCODE_BUILD_TEST_CMD,
+                ".opencode/command/build-test.md",
+            )?;
 
             // Overwrite serve-ui.md command
             let serve_ui_path = opencode_cmd_dir.join("serve-ui.md");
-            write_file_overwrite(&serve_ui_path, OPENCODE_SERVE_UI_CMD, ".opencode/command/serve-ui.md")?;
+            write_file_overwrite(
+                &serve_ui_path,
+                OPENCODE_SERVE_UI_CMD,
+                ".opencode/command/serve-ui.md",
+            )?;
 
             // Overwrite sync-graph.md command
             let sync_graph_path = opencode_cmd_dir.join("sync-graph.md");
-            write_file_overwrite(&sync_graph_path, OPENCODE_SYNC_GRAPH_CMD, ".opencode/command/sync-graph.md")?;
+            write_file_overwrite(
+                &sync_graph_path,
+                OPENCODE_SYNC_GRAPH_CMD,
+                ".opencode/command/sync-graph.md",
+            )?;
 
             // Update AGENTS.md section
             let agents_md_path = cwd.join("AGENTS.md");
@@ -1964,7 +2082,12 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
         }
     }
 
-    println!("\n{}", format!("Tooling updated for {}!", editor_name).green().bold());
+    println!(
+        "\n{}",
+        format!("Tooling updated for {}!", editor_name)
+            .green()
+            .bold()
+    );
     println!("\nUpdated files contain the latest:");
     println!("  - Branch-based grouping with config.toml");
     println!("  - Graph integrity auditing workflows");
@@ -1979,11 +2102,15 @@ fn append_config_md(path: &Path, section_content: &str, file_name: &str) -> Resu
     let marker = "## Decision Graph Workflow";
 
     if path.exists() {
-        let existing = fs::read_to_string(path)
-            .map_err(|e| format!("Could not read {}: {}", file_name, e))?;
+        let existing =
+            fs::read_to_string(path).map_err(|e| format!("Could not read {}: {}", file_name, e))?;
 
         if existing.contains(marker) {
-            println!("   {} {} (workflow section already present)", "Skipping".yellow(), file_name);
+            println!(
+                "   {} {} (workflow section already present)",
+                "Skipping".yellow(),
+                file_name
+            );
             return Ok(());
         }
 
@@ -1991,12 +2118,15 @@ fn append_config_md(path: &Path, section_content: &str, file_name: &str) -> Resu
         let new_content = format!("{}\n{}", existing.trim_end(), section_content);
         fs::write(path, new_content)
             .map_err(|e| format!("Could not update {}: {}", file_name, e))?;
-        println!("   {} {} (added workflow section)", "Updated".green(), file_name);
+        println!(
+            "   {} {} (added workflow section)",
+            "Updated".green(),
+            file_name
+        );
     } else {
         // Create new file
         let content = format!("# Project Instructions\n{}", section_content);
-        fs::write(path, content)
-            .map_err(|e| format!("Could not create {}: {}", file_name, e))?;
+        fs::write(path, content).map_err(|e| format!("Could not create {}: {}", file_name, e))?;
         println!("   {} {}", "Creating".green(), file_name);
     }
 
@@ -2011,13 +2141,20 @@ fn add_to_gitignore(cwd: &Path) -> Result<(), String> {
         let existing = fs::read_to_string(&gitignore_path)
             .map_err(|e| format!("Could not read .gitignore: {}", e))?;
 
-        if existing.lines().any(|line| line.trim() == entry || line.trim() == ".deciduous") {
+        if existing
+            .lines()
+            .any(|line| line.trim() == entry || line.trim() == ".deciduous")
+        {
             // Already in gitignore
             return Ok(());
         }
 
         // Append
-        let new_content = format!("{}\n\n# Deciduous database (local)\n{}\n", existing.trim_end(), entry);
+        let new_content = format!(
+            "{}\n\n# Deciduous database (local)\n{}\n",
+            existing.trim_end(),
+            entry
+        );
         fs::write(&gitignore_path, new_content)
             .map_err(|e| format!("Could not update .gitignore: {}", e))?;
         println!("   {} .gitignore (added .deciduous/)", "Updated".green());
@@ -2067,15 +2204,30 @@ mod tests {
 
     #[test]
     fn test_decision_md_has_required_frontmatter() {
-        assert!(DECISION_MD.starts_with("---"), "decision.md should start with frontmatter");
-        assert!(DECISION_MD.contains("description:"), "decision.md should have description");
-        assert!(DECISION_MD.contains("allowed-tools:"), "decision.md should have allowed-tools");
+        assert!(
+            DECISION_MD.starts_with("---"),
+            "decision.md should start with frontmatter"
+        );
+        assert!(
+            DECISION_MD.contains("description:"),
+            "decision.md should have description"
+        );
+        assert!(
+            DECISION_MD.contains("allowed-tools:"),
+            "decision.md should have allowed-tools"
+        );
     }
 
     #[test]
     fn test_context_md_has_required_frontmatter() {
-        assert!(CONTEXT_MD.starts_with("---"), "context.md should start with frontmatter");
-        assert!(CONTEXT_MD.contains("description:"), "context.md should have description");
+        assert!(
+            CONTEXT_MD.starts_with("---"),
+            "context.md should start with frontmatter"
+        );
+        assert!(
+            CONTEXT_MD.contains("description:"),
+            "context.md should have description"
+        );
     }
 
     #[test]
@@ -2087,22 +2239,40 @@ mod tests {
 
     #[test]
     fn test_windsurf_rule_has_required_frontmatter() {
-        assert!(WINDSURF_DECIDUOUS_RULE.starts_with("---"), "windsurf rule should start with frontmatter");
-        assert!(WINDSURF_DECIDUOUS_RULE.contains("alwaysApply:"), "windsurf rule should have alwaysApply");
+        assert!(
+            WINDSURF_DECIDUOUS_RULE.starts_with("---"),
+            "windsurf rule should start with frontmatter"
+        );
+        assert!(
+            WINDSURF_DECIDUOUS_RULE.contains("alwaysApply:"),
+            "windsurf rule should have alwaysApply"
+        );
     }
 
     // === OpenCode Template Tests ===
 
     #[test]
     fn test_opencode_decision_cmd_has_required_frontmatter() {
-        assert!(OPENCODE_DECISION_CMD.starts_with("---"), "opencode decision cmd should start with frontmatter");
-        assert!(OPENCODE_DECISION_CMD.contains("description:"), "opencode decision cmd should have description");
+        assert!(
+            OPENCODE_DECISION_CMD.starts_with("---"),
+            "opencode decision cmd should start with frontmatter"
+        );
+        assert!(
+            OPENCODE_DECISION_CMD.contains("description:"),
+            "opencode decision cmd should have description"
+        );
     }
 
     #[test]
     fn test_opencode_context_cmd_has_required_frontmatter() {
-        assert!(OPENCODE_CONTEXT_CMD.starts_with("---"), "opencode context cmd should start with frontmatter");
-        assert!(OPENCODE_CONTEXT_CMD.contains("description:"), "opencode context cmd should have description");
+        assert!(
+            OPENCODE_CONTEXT_CMD.starts_with("---"),
+            "opencode context cmd should start with frontmatter"
+        );
+        assert!(
+            OPENCODE_CONTEXT_CMD.contains("description:"),
+            "opencode context cmd should have description"
+        );
     }
 
     #[test]

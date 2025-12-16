@@ -3,7 +3,7 @@
 //! Implements jj-inspired change_id based syncing between local databases
 //! and version-controlled patch files.
 
-use crate::db::{Database, DecisionNode, DecisionEdge};
+use crate::db::{Database, DecisionEdge, DecisionNode};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::Path;
@@ -61,7 +61,11 @@ pub struct PatchEdge {
 
 impl GraphPatch {
     /// Create a new empty patch
-    pub fn new(author: Option<String>, branch: Option<String>, base_commit: Option<String>) -> Self {
+    pub fn new(
+        author: Option<String>,
+        branch: Option<String>,
+        base_commit: Option<String>,
+    ) -> Self {
         Self {
             version: "1.0".to_string(),
             author,
@@ -77,8 +81,7 @@ impl GraphPatch {
     pub fn load(path: &Path) -> Result<Self, String> {
         let content = std::fs::read_to_string(path)
             .map_err(|e| format!("Failed to read patch file: {}", e))?;
-        serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse patch JSON: {}", e))
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse patch JSON: {}", e))
     }
 
     /// Save the patch to a JSON file
@@ -92,8 +95,7 @@ impl GraphPatch {
                 .map_err(|e| format!("Failed to create directory: {}", e))?;
         }
 
-        std::fs::write(path, content)
-            .map_err(|e| format!("Failed to write patch file: {}", e))
+        std::fs::write(path, content).map_err(|e| format!("Failed to write patch file: {}", e))
     }
 
     /// Add a node to the patch
@@ -154,33 +156,34 @@ impl Database {
         let mut patch = GraphPatch::new(author, current_branch, base_commit);
 
         // Filter nodes
-        let nodes: Vec<&DecisionNode> = all_nodes.iter().filter(|n| {
-            // Filter by node IDs if specified
-            if let Some(ref ids) = node_ids {
-                if !ids.contains(&n.id) {
-                    return false;
-                }
-            }
-
-            // Filter by branch if specified
-            if let Some(branch) = branch_filter {
-                if let Some(ref meta) = n.metadata_json {
-                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(meta) {
-                        if let Some(node_branch) = json.get("branch").and_then(|b| b.as_str()) {
-                            return node_branch == branch;
-                        }
+        let nodes: Vec<&DecisionNode> = all_nodes
+            .iter()
+            .filter(|n| {
+                // Filter by node IDs if specified
+                if let Some(ref ids) = node_ids {
+                    if !ids.contains(&n.id) {
+                        return false;
                     }
                 }
-                return false; // No branch metadata and branch filter specified
-            }
 
-            true
-        }).collect();
+                // Filter by branch if specified
+                if let Some(branch) = branch_filter {
+                    if let Some(ref meta) = n.metadata_json {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(meta) {
+                            if let Some(node_branch) = json.get("branch").and_then(|b| b.as_str()) {
+                                return node_branch == branch;
+                            }
+                        }
+                    }
+                    return false; // No branch metadata and branch filter specified
+                }
+
+                true
+            })
+            .collect();
 
         // Collect change_ids of nodes being exported
-        let change_ids: HashSet<&str> = nodes.iter()
-            .map(|n| n.change_id.as_str())
-            .collect();
+        let change_ids: HashSet<&str> = nodes.iter().map(|n| n.change_id.as_str()).collect();
 
         // Add nodes to patch
         for node in &nodes {
@@ -190,7 +193,9 @@ impl Database {
         // Add edges where BOTH endpoints are in the patch
         // Note: We use AND, not OR, because applying a patch requires both nodes to exist
         for edge in &all_edges {
-            if let (Some(ref from_cid), Some(ref to_cid)) = (&edge.from_change_id, &edge.to_change_id) {
+            if let (Some(ref from_cid), Some(ref to_cid)) =
+                (&edge.from_change_id, &edge.to_change_id)
+            {
                 if change_ids.contains(from_cid.as_str()) && change_ids.contains(to_cid.as_str()) {
                     patch.add_edge(edge);
                 }
@@ -201,17 +206,21 @@ impl Database {
     }
 
     /// Apply a patch to the database
-    pub fn apply_patch(&self, patch: &GraphPatch, dry_run: bool) -> Result<ApplyResult, crate::db::DbError> {
+    pub fn apply_patch(
+        &self,
+        patch: &GraphPatch,
+        dry_run: bool,
+    ) -> Result<ApplyResult, crate::db::DbError> {
         let mut result = ApplyResult::default();
 
         // Get existing change_ids
         let existing_nodes = self.get_all_nodes()?;
-        let existing_change_ids: HashSet<String> = existing_nodes.iter()
-            .map(|n| n.change_id.clone())
-            .collect();
+        let existing_change_ids: HashSet<String> =
+            existing_nodes.iter().map(|n| n.change_id.clone()).collect();
 
         // Track newly added change_ids -> local ids
-        let mut change_id_to_local_id: std::collections::HashMap<String, i32> = existing_nodes.iter()
+        let mut change_id_to_local_id: std::collections::HashMap<String, i32> = existing_nodes
+            .iter()
             .map(|n| (n.change_id.clone(), n.id))
             .collect();
 
@@ -224,30 +233,54 @@ impl Database {
 
             if !dry_run {
                 // Get branch from metadata
-                let branch = patch_node.metadata_json.as_ref()
+                let branch = patch_node
+                    .metadata_json
+                    .as_ref()
                     .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                    .and_then(|j| j.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()));
+                    .and_then(|j| {
+                        j.get("branch")
+                            .and_then(|b| b.as_str())
+                            .map(|s| s.to_string())
+                    });
 
-                let confidence = patch_node.metadata_json.as_ref()
+                let confidence = patch_node
+                    .metadata_json
+                    .as_ref()
                     .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                    .and_then(|j| j.get("confidence").and_then(|c| c.as_u64()).map(|c| c as u8));
+                    .and_then(|j| {
+                        j.get("confidence")
+                            .and_then(|c| c.as_u64())
+                            .map(|c| c as u8)
+                    });
 
-                let prompt = patch_node.metadata_json.as_ref()
+                let prompt = patch_node
+                    .metadata_json
+                    .as_ref()
                     .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                    .and_then(|j| j.get("prompt").and_then(|p| p.as_str()).map(|s| s.to_string()));
+                    .and_then(|j| {
+                        j.get("prompt")
+                            .and_then(|p| p.as_str())
+                            .map(|s| s.to_string())
+                    });
 
-                let files = patch_node.metadata_json.as_ref()
+                let files = patch_node
+                    .metadata_json
+                    .as_ref()
                     .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                    .and_then(|j| j.get("files").and_then(|f| {
-                        if let Some(arr) = f.as_array() {
-                            Some(arr.iter()
-                                .filter_map(|v| v.as_str())
-                                .collect::<Vec<_>>()
-                                .join(","))
-                        } else {
-                            None
-                        }
-                    }));
+                    .and_then(|j| {
+                        j.get("files").and_then(|f| {
+                            if let Some(arr) = f.as_array() {
+                                Some(
+                                    arr.iter()
+                                        .filter_map(|v| v.as_str())
+                                        .collect::<Vec<_>>()
+                                        .join(","),
+                                )
+                            } else {
+                                None
+                            }
+                        })
+                    });
 
                 // Create node with explicit change_id
                 let local_id = self.create_node_with_change_id(
@@ -270,12 +303,11 @@ impl Database {
 
         // Get existing edges (by change_id pairs)
         let existing_edges = self.get_all_edges()?;
-        let existing_edge_keys: HashSet<(String, String, String)> = existing_edges.iter()
-            .filter_map(|e| {
-                match (&e.from_change_id, &e.to_change_id) {
-                    (Some(from), Some(to)) => Some((from.clone(), to.clone(), e.edge_type.clone())),
-                    _ => None,
-                }
+        let existing_edge_keys: HashSet<(String, String, String)> = existing_edges
+            .iter()
+            .filter_map(|e| match (&e.from_change_id, &e.to_change_id) {
+                (Some(from), Some(to)) => Some((from.clone(), to.clone(), e.edge_type.clone())),
+                _ => None,
             })
             .collect();
 
@@ -299,7 +331,12 @@ impl Database {
             match (from_id, to_id) {
                 (Some(&from), Some(&to)) => {
                     if !dry_run {
-                        self.create_edge(from, to, &patch_edge.edge_type, patch_edge.rationale.as_deref())?;
+                        self.create_edge(
+                            from,
+                            to,
+                            &patch_edge.edge_type,
+                            patch_edge.rationale.as_deref(),
+                        )?;
                     }
                     result.edges_added += 1;
                 }
@@ -410,11 +447,7 @@ mod tests {
 
     #[test]
     fn test_patch_serialization_roundtrip() {
-        let mut patch = GraphPatch::new(
-            Some("bob".to_string()),
-            Some("main".to_string()),
-            None,
-        );
+        let mut patch = GraphPatch::new(Some("bob".to_string()), Some("main".to_string()), None);
 
         patch.add_node(&sample_node(1, "cid-1", "goal", "Goal 1"));
         patch.add_node(&sample_node(2, "cid-2", "action", "Action 1"));
@@ -523,7 +556,13 @@ mod tests {
         let json = serde_json::to_string(&patch).expect("serialize with special chars");
         let restored: GraphPatch = serde_json::from_str(&json).expect("deserialize");
 
-        assert_eq!(restored.nodes[0].title, "Handle \"quotes\" and 'apostrophes'");
-        assert_eq!(restored.nodes[0].description, Some("Line1\nLine2\tTabbed".to_string()));
+        assert_eq!(
+            restored.nodes[0].title,
+            "Handle \"quotes\" and 'apostrophes'"
+        );
+        assert_eq!(
+            restored.nodes[0].description,
+            Some("Line1\nLine2\tTabbed".to_string())
+        );
     }
 }

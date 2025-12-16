@@ -73,8 +73,10 @@ check_files() {
 
 # Extract node types from Rust TUI
 extract_rust_node_types() {
-    # Look for the const array definition, not usages
-    grep 'pub const NODE_TYPES' "$RUST_TUI_TYPES" | \
+    # Handle both single-line and multi-line array definitions
+    # Use awk to print from pattern start until first line containing ];
+    awk '/pub const NODE_TYPES/{found=1} found{print; if(/\];/) exit}' "$RUST_TUI_TYPES" | \
+        tr '\n' ' ' | \
         sed 's/.*\[//' | sed 's/\].*//' | \
         tr ',' '\n' | \
         sed 's/.*"\([^"]*\)".*/\1/' | \
@@ -97,8 +99,10 @@ extract_schema_node_types() {
 
 # Extract edge types from Rust TUI
 extract_rust_edge_types() {
-    # Look for the const array definition, not usages
-    grep 'pub const EDGE_TYPES' "$RUST_TUI_TYPES" | \
+    # Handle both single-line and multi-line array definitions
+    # Use awk to print from pattern start until first line containing ];
+    awk '/pub const EDGE_TYPES/{found=1} found{print; if(/\];/) exit}' "$RUST_TUI_TYPES" | \
+        tr '\n' ' ' | \
         sed 's/.*\[//' | sed 's/\].*//' | \
         tr ',' '\n' | \
         sed 's/.*"\([^"]*\)".*/\1/' | \
@@ -121,8 +125,10 @@ extract_schema_edge_types() {
 
 # Extract node statuses from Rust TUI
 extract_rust_node_statuses() {
-    # Look for the const array definition, not usages
-    grep 'pub const NODE_STATUSES' "$RUST_TUI_TYPES" | \
+    # Handle both single-line and multi-line array definitions
+    # Use awk to print from pattern start until first line containing ];
+    awk '/pub const NODE_STATUSES/{found=1} found{print; if(/\];/) exit}' "$RUST_TUI_TYPES" | \
+        tr '\n' ' ' | \
         sed 's/.*\[//' | sed 's/\].*//' | \
         tr ',' '\n' | \
         sed 's/.*"\([^"]*\)".*/\1/' | \

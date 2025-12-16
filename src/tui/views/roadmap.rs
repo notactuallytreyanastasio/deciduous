@@ -22,7 +22,7 @@ use crate::db::RoadmapItem;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum RoadmapViewMode {
     #[default]
-    Active,    // Show incomplete items
+    Active, // Show incomplete items
     Completed, // Show completed items
 }
 
@@ -55,7 +55,9 @@ pub struct RoadmapState {
 /// - It's in a "Completed" section (case-insensitive)
 pub fn is_item_complete(item: &RoadmapItem) -> bool {
     let checkbox_checked = item.checkbox_state == "checked";
-    let in_completed_section = item.section.as_deref()
+    let in_completed_section = item
+        .section
+        .as_deref()
         .map(|s| s.to_lowercase().contains("completed"))
         .unwrap_or(false);
     checkbox_checked || in_completed_section
@@ -91,7 +93,8 @@ pub fn is_section_header(item: &RoadmapItem) -> bool {
 /// Filter items by view mode, excluding section headers
 pub fn filter_by_mode(items: &[RoadmapItem], mode: RoadmapViewMode) -> Vec<RoadmapItem> {
     // First filter out section headers - they're not real tasks
-    let tasks: Vec<_> = items.iter()
+    let tasks: Vec<_> = items
+        .iter()
         .filter(|item| !is_section_header(item))
         .collect();
 
@@ -116,7 +119,10 @@ pub fn group_by_section(items: &[RoadmapItem]) -> Vec<(String, Vec<&RoadmapItem>
     let mut groups: BTreeMap<String, Vec<&RoadmapItem>> = BTreeMap::new();
 
     for item in items {
-        let section = item.section.clone().unwrap_or_else(|| "(No Section)".to_string());
+        let section = item
+            .section
+            .clone()
+            .unwrap_or_else(|| "(No Section)".to_string());
         groups.entry(section).or_default().push(item);
     }
 
@@ -173,9 +179,7 @@ pub fn truncate_str(s: &str, max_len: usize) -> String {
 /// Count items by completion status
 pub fn count_by_status(items: &[RoadmapItem]) -> (usize, usize) {
     // Only count actual tasks, not section headers
-    let tasks: Vec<_> = items.iter()
-        .filter(|i| !is_section_header(i))
-        .collect();
+    let tasks: Vec<_> = items.iter().filter(|i| !is_section_header(i)).collect();
     let complete = tasks.iter().filter(|i| is_item_complete(i)).count();
     let active = tasks.len() - complete;
     (active, complete)
@@ -246,9 +250,8 @@ impl RoadmapState {
 
     /// Page down (Ctrl-D)
     pub fn page_down(&mut self, page_size: usize) {
-        let new_index = (self.selected_index + page_size).min(
-            self.visible_items.len().saturating_sub(1)
-        );
+        let new_index =
+            (self.selected_index + page_size).min(self.visible_items.len().saturating_sub(1));
         self.selected_index = new_index;
         self.ensure_visible(20);
     }
@@ -283,26 +286,21 @@ impl RoadmapState {
     pub fn selected_issue_url(&self) -> Option<String> {
         let repo = self.github_repo.as_ref()?;
         self.selected_item().and_then(|item| {
-            item.github_issue_number.map(|num| {
-                format!("https://github.com/{}/issues/{}", repo, num)
-            })
+            item.github_issue_number
+                .map(|num| format!("https://github.com/{}/issues/{}", repo, num))
         })
     }
 
     /// Get selected item ID and current checkbox state (for toggling)
     pub fn selected_item_checkbox_info(&self) -> Option<(i32, String)> {
-        self.selected_item().map(|item| {
-            (item.id, item.checkbox_state.clone())
-        })
+        self.selected_item()
+            .map(|item| (item.id, item.checkbox_state.clone()))
     }
 
     /// Ensure selection is visible in viewport
     fn ensure_visible(&mut self, visible_items: usize) {
-        self.scroll_offset = calculate_scroll(
-            self.selected_index,
-            self.scroll_offset,
-            visible_items,
-        );
+        self.scroll_offset =
+            calculate_scroll(self.selected_index, self.scroll_offset, visible_items);
     }
 }
 
@@ -332,7 +330,11 @@ fn draw_list(frame: &mut Frame, state: &RoadmapState, area: Rect) {
     // Draw tab bar at top
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(3), Constraint::Min(1), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(3),
+            Constraint::Min(1),
+            Constraint::Length(1),
+        ])
         .split(area);
 
     // Tab bar
@@ -391,7 +393,12 @@ fn draw_list(frame: &mut Frame, state: &RoadmapState, area: Rect) {
             // Add item (2 lines)
             if lines_used + 2 <= max_lines {
                 let is_selected = idx == state.selected_index;
-                list_items.push(render_item_grouped(item, display_idx, is_selected, inner_area.width));
+                list_items.push(render_item_grouped(
+                    item,
+                    display_idx,
+                    is_selected,
+                    inner_area.width,
+                ));
                 display_idx += 1;
                 lines_used += 2;
             } else {
@@ -408,7 +415,13 @@ fn draw_list(frame: &mut Frame, state: &RoadmapState, area: Rect) {
 }
 
 /// Draw the tab bar showing Active/Completed tabs
-fn draw_tab_bar(frame: &mut Frame, state: &RoadmapState, area: Rect, active_count: usize, complete_count: usize) {
+fn draw_tab_bar(
+    frame: &mut Frame,
+    state: &RoadmapState,
+    area: Rect,
+    active_count: usize,
+    complete_count: usize,
+) {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray))
@@ -436,7 +449,10 @@ fn draw_tab_bar(frame: &mut Frame, state: &RoadmapState, area: Rect, active_coun
         Span::raw("  "),
         Span::styled(format!(" Completed ({}) ", complete_count), completed_style),
         Span::raw("  "),
-        Span::styled("Shift+Tab to switch", Style::default().fg(Color::DarkGray).italic()),
+        Span::styled(
+            "Shift+Tab to switch",
+            Style::default().fg(Color::DarkGray).italic(),
+        ),
     ]);
 
     let tabs_widget = Paragraph::new(tabs);
@@ -462,8 +478,8 @@ fn draw_help_bar(frame: &mut Frame, area: Rect) {
         Span::raw(":help"),
     ]);
 
-    let help_widget = Paragraph::new(help)
-        .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+    let help_widget =
+        Paragraph::new(help).style(Style::default().bg(Color::DarkGray).fg(Color::White));
     frame.render_widget(help_widget, area);
 }
 
@@ -478,7 +494,12 @@ fn render_section_header(section: &str, _width: u16) -> ListItem<'static> {
 }
 
 /// Render a roadmap item (grouped under section, no section name shown)
-fn render_item_grouped(item: &RoadmapItem, index: usize, is_selected: bool, width: u16) -> ListItem<'static> {
+fn render_item_grouped(
+    item: &RoadmapItem,
+    index: usize,
+    is_selected: bool,
+    width: u16,
+) -> ListItem<'static> {
     // Line 1: indent, number, checkbox, title
     let mut line1_spans = vec![];
 
@@ -527,13 +548,23 @@ fn render_item_grouped(item: &RoadmapItem, index: usize, is_selected: bool, widt
             Some("closed") => Style::default().fg(Color::Magenta),
             _ => Style::default().fg(Color::DarkGray),
         };
-        let state_char = if item.github_issue_state.as_deref() == Some("closed") { "+" } else { "o" };
-        line2_spans.push(Span::styled(format!("#{}[{}]", issue_num, state_char), issue_style));
+        let state_char = if item.github_issue_state.as_deref() == Some("closed") {
+            "+"
+        } else {
+            "o"
+        };
+        line2_spans.push(Span::styled(
+            format!("#{}[{}]", issue_num, state_char),
+            issue_style,
+        ));
     }
 
     // Outcome indicator
     if item.outcome_change_id.is_some() {
-        line2_spans.push(Span::styled(" [outcome]", Style::default().fg(Color::Yellow)));
+        line2_spans.push(Span::styled(
+            " [outcome]",
+            Style::default().fg(Color::Yellow),
+        ));
     }
 
     let style = if is_selected {
@@ -542,15 +573,17 @@ fn render_item_grouped(item: &RoadmapItem, index: usize, is_selected: bool, widt
         Style::default()
     };
 
-    ListItem::new(vec![
-        Line::from(line1_spans),
-        Line::from(line2_spans),
-    ]).style(style)
+    ListItem::new(vec![Line::from(line1_spans), Line::from(line2_spans)]).style(style)
 }
 
 /// Render a single roadmap item as a ListItem (legacy, kept for reference)
 #[allow(dead_code)]
-fn render_item(item: &RoadmapItem, index: usize, is_selected: bool, width: u16) -> ListItem<'static> {
+fn render_item(
+    item: &RoadmapItem,
+    index: usize,
+    is_selected: bool,
+    width: u16,
+) -> ListItem<'static> {
     // Line 1: Number, checkbox, title
     let mut line1_spans = vec![];
 
@@ -606,13 +639,23 @@ fn render_item(item: &RoadmapItem, index: usize, is_selected: bool, width: u16) 
             Some("closed") => Style::default().fg(Color::Magenta),
             _ => Style::default().fg(Color::DarkGray),
         };
-        let state_char = if item.github_issue_state.as_deref() == Some("closed") { "+" } else { "o" };
-        status_parts.push(Span::styled(format!(" #{}[{}]", issue_num, state_char), issue_style));
+        let state_char = if item.github_issue_state.as_deref() == Some("closed") {
+            "+"
+        } else {
+            "o"
+        };
+        status_parts.push(Span::styled(
+            format!(" #{}[{}]", issue_num, state_char),
+            issue_style,
+        ));
     }
 
     // Outcome indicator
     if item.outcome_change_id.is_some() {
-        status_parts.push(Span::styled(" [outcome]", Style::default().fg(Color::Yellow)));
+        status_parts.push(Span::styled(
+            " [outcome]",
+            Style::default().fg(Color::Yellow),
+        ));
     }
 
     line2_spans.extend(status_parts);
@@ -630,7 +673,8 @@ fn render_item(item: &RoadmapItem, index: usize, is_selected: bool, width: u16) 
         Line::from(line1_spans),
         Line::from(line2_spans),
         line3,
-    ]).style(style)
+    ])
+    .style(style)
 }
 
 /// Draw the detail panel for selected item
@@ -644,8 +688,7 @@ fn draw_detail(frame: &mut Frame, state: &RoadmapState, area: Rect) {
     frame.render_widget(block, area);
 
     let Some(item) = state.selected_item() else {
-        let empty = Paragraph::new("No item selected")
-            .style(Style::default().fg(Color::DarkGray));
+        let empty = Paragraph::new("No item selected").style(Style::default().fg(Color::DarkGray));
         frame.render_widget(empty, inner_area);
         return;
     };
@@ -691,36 +734,73 @@ fn draw_detail(frame: &mut Frame, state: &RoadmapState, area: Rect) {
     )));
 
     // Checkbox status
-    let checkbox_icon = if item.checkbox_state == "checked" { "[x]" } else { "[ ]" };
-    let checkbox_status = if item.checkbox_state == "checked" { "Checked" } else { "Unchecked" };
-    let checkbox_color = if item.checkbox_state == "checked" { Color::Green } else { Color::Red };
+    let checkbox_icon = if item.checkbox_state == "checked" {
+        "[x]"
+    } else {
+        "[ ]"
+    };
+    let checkbox_status = if item.checkbox_state == "checked" {
+        "Checked"
+    } else {
+        "Unchecked"
+    };
+    let checkbox_color = if item.checkbox_state == "checked" {
+        Color::Green
+    } else {
+        Color::Red
+    };
     lines.push(Line::from(vec![
-        Span::styled(format!("{} Checkbox: ", checkbox_icon), Style::default().fg(checkbox_color)),
+        Span::styled(
+            format!("{} Checkbox: ", checkbox_icon),
+            Style::default().fg(checkbox_color),
+        ),
         Span::styled(checkbox_status, Style::default().fg(checkbox_color)),
     ]));
 
     // Outcome status
-    let outcome_icon = if item.outcome_change_id.is_some() { "[+]" } else { "[-]" };
-    let outcome_color = if item.outcome_change_id.is_some() { Color::Green } else { Color::Red };
+    let outcome_icon = if item.outcome_change_id.is_some() {
+        "[+]"
+    } else {
+        "[-]"
+    };
+    let outcome_color = if item.outcome_change_id.is_some() {
+        Color::Green
+    } else {
+        Color::Red
+    };
     let outcome_text = match &item.outcome_change_id {
         Some(id) => format!("Linked ({})", &id[..8.min(id.len())]),
         None => "Not linked".to_string(),
     };
     lines.push(Line::from(vec![
-        Span::styled(format!("{} Outcome: ", outcome_icon), Style::default().fg(outcome_color)),
+        Span::styled(
+            format!("{} Outcome: ", outcome_icon),
+            Style::default().fg(outcome_color),
+        ),
         Span::styled(outcome_text, Style::default().fg(outcome_color)),
     ]));
 
     // GitHub issue status
-    let issue_icon = if item.github_issue_state.as_deref() == Some("closed") { "[+]" } else { "[-]" };
-    let issue_color = if item.github_issue_state.as_deref() == Some("closed") { Color::Green } else { Color::Red };
+    let issue_icon = if item.github_issue_state.as_deref() == Some("closed") {
+        "[+]"
+    } else {
+        "[-]"
+    };
+    let issue_color = if item.github_issue_state.as_deref() == Some("closed") {
+        Color::Green
+    } else {
+        Color::Red
+    };
     let issue_text = match (item.github_issue_number, &item.github_issue_state) {
         (Some(num), Some(state)) => format!("#{} ({})", num, state),
         (Some(num), None) => format!("#{}", num),
         _ => "No issue".to_string(),
     };
     lines.push(Line::from(vec![
-        Span::styled(format!("{} Issue: ", issue_icon), Style::default().fg(issue_color)),
+        Span::styled(
+            format!("{} Issue: ", issue_icon),
+            Style::default().fg(issue_color),
+        ),
         Span::styled(issue_text, Style::default().fg(issue_color)),
     ]));
 
@@ -732,7 +812,11 @@ fn draw_detail(frame: &mut Frame, state: &RoadmapState, area: Rect) {
     } else {
         "[INCOMPLETE]"
     };
-    let status_color = if is_complete { Color::Green } else { Color::Yellow };
+    let status_color = if is_complete {
+        Color::Green
+    } else {
+        Color::Yellow
+    };
     lines.push(Line::from(Span::styled(
         status_text,
         Style::default().fg(status_color).bold(),
@@ -769,11 +853,24 @@ fn draw_detail(frame: &mut Frame, state: &RoadmapState, area: Rect) {
 mod tests {
     use super::*;
 
-    fn make_item(id: i32, title: &str, checkbox: &str, outcome: Option<&str>, issue_state: Option<&str>) -> RoadmapItem {
+    fn make_item(
+        id: i32,
+        title: &str,
+        checkbox: &str,
+        outcome: Option<&str>,
+        issue_state: Option<&str>,
+    ) -> RoadmapItem {
         make_item_with_section(id, title, checkbox, outcome, issue_state, "In Progress")
     }
 
-    fn make_item_with_section(id: i32, title: &str, checkbox: &str, outcome: Option<&str>, issue_state: Option<&str>, section: &str) -> RoadmapItem {
+    fn make_item_with_section(
+        id: i32,
+        title: &str,
+        checkbox: &str,
+        outcome: Option<&str>,
+        issue_state: Option<&str>,
+        section: &str,
+    ) -> RoadmapItem {
         RoadmapItem {
             id,
             change_id: format!("change-{}", id),
@@ -782,7 +879,11 @@ mod tests {
             section: Some(section.to_string()),
             parent_id: None,
             checkbox_state: checkbox.to_string(),
-            github_issue_number: if issue_state.is_some() { Some(id) } else { None },
+            github_issue_number: if issue_state.is_some() {
+                Some(id)
+            } else {
+                None
+            },
             github_issue_state: issue_state.map(|s| s.to_string()),
             outcome_node_id: if outcome.is_some() { Some(id) } else { None },
             outcome_change_id: outcome.map(|s| s.to_string()),
@@ -802,11 +903,13 @@ mod tests {
         assert!(is_item_complete(&checked));
 
         // In "Completed" section -> complete (even with unchecked checkbox)
-        let in_completed = make_item_with_section(2, "In Completed", "unchecked", None, None, "Completed");
+        let in_completed =
+            make_item_with_section(2, "In Completed", "unchecked", None, None, "Completed");
         assert!(is_item_complete(&in_completed));
 
         // Case insensitive section check
-        let in_completed_case = make_item_with_section(3, "Case", "unchecked", None, None, "COMPLETED ITEMS");
+        let in_completed_case =
+            make_item_with_section(3, "Case", "unchecked", None, None, "COMPLETED ITEMS");
         assert!(is_item_complete(&in_completed_case));
 
         // Unchecked and not in completed section -> not complete
@@ -814,7 +917,8 @@ mod tests {
         assert!(!is_item_complete(&unchecked));
 
         // Both checked AND in completed section -> still complete
-        let both = make_item_with_section(5, "Both", "checked", Some("o"), Some("closed"), "Completed");
+        let both =
+            make_item_with_section(5, "Both", "checked", Some("o"), Some("closed"), "Completed");
         assert!(is_item_complete(&both));
     }
 
@@ -825,7 +929,13 @@ mod tests {
         assert!(is_item_fully_synced(&synced));
 
         // Missing checkbox -> not synced
-        let no_checkbox = make_item(2, "No Checkbox", "unchecked", Some("outcome-2"), Some("closed"));
+        let no_checkbox = make_item(
+            2,
+            "No Checkbox",
+            "unchecked",
+            Some("outcome-2"),
+            Some("closed"),
+        );
         assert!(!is_item_fully_synced(&no_checkbox));
 
         // Missing outcome -> not synced
@@ -861,7 +971,8 @@ mod tests {
         assert!(!is_item_partial(&none_met));
 
         // In completed section but not synced -> partial
-        let in_section = make_item_with_section(5, "In Section", "unchecked", None, None, "Completed");
+        let in_section =
+            make_item_with_section(5, "In Section", "unchecked", None, None, "Completed");
         assert!(is_item_partial(&in_section));
     }
 
@@ -882,9 +993,9 @@ mod tests {
     #[test]
     fn test_filter_by_mode() {
         let items = vec![
-            make_item(1, "Section Header", "none", None, None),                       // section header - excluded
-            make_item(2, "Checked", "checked", None, None),                           // complete (checked)
-            make_item(3, "Unchecked", "unchecked", None, None),                        // active
+            make_item(1, "Section Header", "none", None, None), // section header - excluded
+            make_item(2, "Checked", "checked", None, None),     // complete (checked)
+            make_item(3, "Unchecked", "unchecked", None, None), // active
             make_item_with_section(4, "In Completed", "unchecked", None, None, "Completed"), // complete (section)
         ];
 
@@ -901,15 +1012,15 @@ mod tests {
     #[test]
     fn test_count_by_status() {
         let items = vec![
-            make_item(1, "Section Header", "none", None, None),                       // section header - excluded
-            make_item(2, "Checked", "checked", None, None),                           // complete
-            make_item(3, "Unchecked 1", "unchecked", None, None),                      // active
-            make_item(4, "Unchecked 2", "unchecked", None, None),                      // active
+            make_item(1, "Section Header", "none", None, None), // section header - excluded
+            make_item(2, "Checked", "checked", None, None),     // complete
+            make_item(3, "Unchecked 1", "unchecked", None, None), // active
+            make_item(4, "Unchecked 2", "unchecked", None, None), // active
             make_item_with_section(5, "In Completed", "unchecked", None, None, "Completed"), // complete
         ];
 
         let (active, complete) = count_by_status(&items);
-        assert_eq!(active, 2);   // Unchecked 1, Unchecked 2
+        assert_eq!(active, 2); // Unchecked 1, Unchecked 2
         assert_eq!(complete, 2); // Checked, In Completed (section header excluded)
     }
 
@@ -944,8 +1055,8 @@ mod tests {
     fn test_roadmap_state_toggle_mode() {
         let mut state = RoadmapState::new();
         state.set_items(vec![
-            make_item(1, "Checked", "checked", None, None),      // complete (checked)
-            make_item(2, "Active", "unchecked", None, None),     // active
+            make_item(1, "Checked", "checked", None, None), // complete (checked)
+            make_item(2, "Active", "unchecked", None, None), // active
         ]);
 
         // Default is Active mode - only unchecked items
@@ -994,9 +1105,13 @@ mod tests {
     #[test]
     fn test_selected_issue_url_without_repo() {
         let mut state = RoadmapState::new();
-        state.set_items(vec![
-            make_item(1, "With Issue", "unchecked", None, Some("open")),
-        ]);
+        state.set_items(vec![make_item(
+            1,
+            "With Issue",
+            "unchecked",
+            None,
+            Some("open"),
+        )]);
 
         // Without github_repo set, should return None even if item has issue
         state.selected_index = 0;

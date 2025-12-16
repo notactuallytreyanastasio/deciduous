@@ -67,13 +67,13 @@ fn node_shape(node_type: &str) -> &'static str {
 /// Get the fill color for a node type
 fn node_color(node_type: &str) -> &'static str {
     match node_type {
-        "goal" => "#FFE4B5",      // Moccasin (warm yellow)
-        "decision" => "#E6E6FA",   // Lavender
-        "option" => "#E0FFFF",     // Light cyan
-        "action" => "#90EE90",     // Light green
-        "outcome" => "#87CEEB",    // Sky blue
+        "goal" => "#FFE4B5",        // Moccasin (warm yellow)
+        "decision" => "#E6E6FA",    // Lavender
+        "option" => "#E0FFFF",      // Light cyan
+        "action" => "#90EE90",      // Light green
+        "outcome" => "#87CEEB",     // Sky blue
         "observation" => "#DDA0DD", // Plum
-        _ => "#F5F5F5",            // White smoke
+        _ => "#F5F5F5",             // White smoke
     }
 }
 
@@ -90,11 +90,11 @@ fn edge_style(edge_type: &str) -> &'static str {
 /// Get the edge color based on edge type
 fn edge_color(edge_type: &str) -> &'static str {
     match edge_type {
-        "chosen" => "#228B22",     // Forest green
-        "rejected" => "#DC143C",   // Crimson
-        "blocks" => "#FF4500",     // Orange red
-        "enables" => "#4169E1",    // Royal blue
-        _ => "#333333",            // Dark gray
+        "chosen" => "#228B22",   // Forest green
+        "rejected" => "#DC143C", // Crimson
+        "blocks" => "#FF4500",   // Orange red
+        "enables" => "#4169E1",  // Royal blue
+        _ => "#333333",          // Dark gray
     }
 }
 
@@ -131,7 +131,10 @@ fn extract_commit(metadata: &Option<String>) -> Option<String> {
     metadata.as_ref().and_then(|m| {
         serde_json::from_str::<serde_json::Value>(m)
             .ok()
-            .and_then(|v| v.get("commit").and_then(|c| c.as_str().map(|s| s.to_string())))
+            .and_then(|v| {
+                v.get("commit")
+                    .and_then(|c| c.as_str().map(|s| s.to_string()))
+            })
     })
 }
 
@@ -279,7 +282,10 @@ pub fn parse_node_range(spec: &str) -> Vec<i32> {
         if part.contains('-') {
             let parts: Vec<&str> = part.split('-').collect();
             if parts.len() == 2 {
-                if let (Ok(start), Ok(end)) = (parts[0].trim().parse::<i32>(), parts[1].trim().parse::<i32>()) {
+                if let (Ok(start), Ok(end)) = (
+                    parts[0].trim().parse::<i32>(),
+                    parts[1].trim().parse::<i32>(),
+                ) {
                     for id in start..=end {
                         ids.push(id);
                     }
@@ -491,7 +497,10 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         if image_url.is_some() {
             wln!(writeup, "</details>\n");
         } else {
-            wln!(writeup, "*Render with: `dot -Tpng graph.dot -o graph.png`*\n");
+            wln!(
+                writeup,
+                "*Render with: `dot -Tpng graph.dot -o graph.png`*\n"
+            );
         }
     }
 

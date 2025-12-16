@@ -5,12 +5,12 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
 };
 
-use syntect::highlighting::{ThemeSet, Style as SyntectStyle};
-use syntect::parsing::SyntaxSet;
 use syntect::easy::HighlightLines;
+use syntect::highlighting::{Style as SyntectStyle, ThemeSet};
+use syntect::parsing::SyntaxSet;
 
-use super::app::{App, Mode, View, ModalContent, ModalSection};
-use super::views::{timeline, dag, detail, roadmap};
+use super::app::{App, ModalContent, ModalSection, Mode, View};
+use super::views::{dag, detail, roadmap, timeline};
 use super::widgets::file_picker;
 
 // Lazy static syntax highlighting resources
@@ -25,10 +25,10 @@ pub fn draw(frame: &mut Frame, app: &App) {
 
     // Main layout: header, content, footer
     let main_layout = Layout::vertical([
-        Constraint::Length(1),  // Header
-        Constraint::Length(1),  // Filter bar
-        Constraint::Min(10),    // Content
-        Constraint::Length(1),  // Footer/status
+        Constraint::Length(1), // Header
+        Constraint::Length(1), // Filter bar
+        Constraint::Min(10),   // Content
+        Constraint::Length(1), // Footer/status
     ])
     .split(area);
 
@@ -43,11 +43,9 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Timeline => {
             if app.detail_expanded {
                 // Split content horizontally
-                let content_layout = Layout::horizontal([
-                    Constraint::Percentage(50),
-                    Constraint::Percentage(50),
-                ])
-                .split(main_layout[2]);
+                let content_layout =
+                    Layout::horizontal([Constraint::Percentage(50), Constraint::Percentage(50)])
+                        .split(main_layout[2]);
 
                 timeline::draw(frame, app, content_layout[0]);
                 detail::draw(frame, app, content_layout[1]);
@@ -102,8 +100,8 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         view_name, node_count, total_nodes, edge_count, refresh_indicator
     );
 
-    let header = Paragraph::new(header_text)
-        .style(Style::default().bg(Color::Blue).fg(Color::White).bold());
+    let header =
+        Paragraph::new(header_text).style(Style::default().bg(Color::Blue).fg(Color::White).bold());
 
     frame.render_widget(header, area);
 }
@@ -112,7 +110,15 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
     let mut spans = vec![Span::raw(" Filters: ")];
 
     // Type filter buttons
-    let types = ["All", "goal", "decision", "option", "action", "outcome", "observation"];
+    let types = [
+        "All",
+        "goal",
+        "decision",
+        "option",
+        "action",
+        "outcome",
+        "observation",
+    ];
     for t in types {
         let is_active = match &app.type_filter {
             None => t == "All",
@@ -134,7 +140,10 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
             &app.branch_search_query,
             Style::default().fg(Color::Cyan),
         ));
-        spans.push(Span::styled("_", Style::default().fg(Color::Cyan).rapid_blink()));
+        spans.push(Span::styled(
+            "_",
+            Style::default().fg(Color::Cyan).rapid_blink(),
+        ));
 
         // Show matches
         if !app.branch_search_matches.is_empty() {
@@ -146,12 +155,19 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
             ));
             if app.branch_search_matches.len() > 1 {
                 spans.push(Span::styled(
-                    format!(" ({}/{})", app.branch_search_index + 1, app.branch_search_matches.len()),
+                    format!(
+                        " ({}/{})",
+                        app.branch_search_index + 1,
+                        app.branch_search_matches.len()
+                    ),
                     Style::default().fg(Color::DarkGray),
                 ));
             }
         } else {
-            spans.push(Span::styled(" (no matches)", Style::default().fg(Color::Red)));
+            spans.push(Span::styled(
+                " (no matches)",
+                Style::default().fg(Color::Red),
+            ));
         }
     } else {
         spans.push(Span::raw("│ Branch: "));
@@ -174,12 +190,14 @@ fn draw_filter_bar(frame: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(Color::Cyan),
         ));
         if app.mode == Mode::Search {
-            spans.push(Span::styled("_", Style::default().fg(Color::Cyan).rapid_blink()));
+            spans.push(Span::styled(
+                "_",
+                Style::default().fg(Color::Cyan).rapid_blink(),
+            ));
         }
     }
 
-    let filter_bar = Paragraph::new(Line::from(spans))
-        .style(Style::default().bg(Color::DarkGray));
+    let filter_bar = Paragraph::new(Line::from(spans)).style(Style::default().bg(Color::DarkGray));
 
     frame.render_widget(filter_bar, area);
 }
@@ -193,12 +211,8 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
                 "j/k:move  o:files  O:commit  s:story  p:preview  F:browse  /:search  f:type  b:branch  q:quit"
             }
         }
-        View::Dag => {
-            "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit"
-        }
-        View::Roadmap => {
-            "j/k:move  r:refresh  Tab:Timeline  ?:help  q:quit"
-        }
+        View::Dag => "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit",
+        View::Roadmap => "j/k:move  r:refresh  Tab:Timeline  ?:help  q:quit",
     };
 
     // Show status message if present, otherwise show keybinds
@@ -315,13 +329,32 @@ fn draw_modal(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Clear, popup_area);
 
     match modal {
-        ModalContent::Commit { hash, node_title, commit_message, diff_lines, files } => {
-            draw_commit_modal(frame, app, area, hash, node_title, commit_message, diff_lines, files);
+        ModalContent::Commit {
+            hash,
+            node_title,
+            commit_message,
+            diff_lines,
+            files,
+        } => {
+            draw_commit_modal(
+                frame,
+                app,
+                area,
+                hash,
+                node_title,
+                commit_message,
+                diff_lines,
+                files,
+            );
         }
         ModalContent::NodeDetail { node_id } => {
             let node_info = if let Some(node) = app.graph.nodes.iter().find(|n| n.id == *node_id) {
-                format!("\n  {} - {}\n\n  {}", node.node_type.to_uppercase(), node.title,
-                    node.description.as_deref().unwrap_or("No description"))
+                format!(
+                    "\n  {} - {}\n\n  {}",
+                    node.node_type.to_uppercase(),
+                    node.title,
+                    node.description.as_deref().unwrap_or("No description")
+                )
             } else {
                 format!("Node {} not found", node_id)
             };
@@ -371,7 +404,8 @@ fn draw_file_preview_modal(frame: &mut Frame, app: &App, area: Rect, path: &str,
         .unwrap_or("txt");
 
     // Get syntax for this file type
-    let syntax = PS.find_syntax_by_extension(extension)
+    let syntax = PS
+        .find_syntax_by_extension(extension)
         .unwrap_or_else(|| PS.find_syntax_plain_text());
 
     let theme = &TS.themes["base16-mocha.dark"];
@@ -382,30 +416,37 @@ fn draw_file_preview_modal(frame: &mut Frame, app: &App, area: Rect, path: &str,
     let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
 
     // Build syntax-highlighted lines - convert to owned spans
-    let styled_lines: Vec<Line> = lines.iter().enumerate().map(|(i, line)| {
-        let line_num = format!("{:4} │ ", i + 1);
-        let code_with_newline = format!("{}\n", line);
+    let styled_lines: Vec<Line> = lines
+        .iter()
+        .enumerate()
+        .map(|(i, line)| {
+            let line_num = format!("{:4} │ ", i + 1);
+            let code_with_newline = format!("{}\n", line);
 
-        let mut spans: Vec<Span> = vec![
-            Span::styled(line_num, Style::default().fg(Color::DarkGray))
-        ];
+            let mut spans: Vec<Span> =
+                vec![Span::styled(line_num, Style::default().fg(Color::DarkGray))];
 
-        // Highlight the line and convert syntect styles to ratatui styles
-        if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
-            for (style, text) in highlighted {
-                let ratatui_style = syntect_to_ratatui_style(style);
-                // Clone the text to make it owned
-                spans.push(Span::styled(text.to_string(), ratatui_style));
+            // Highlight the line and convert syntect styles to ratatui styles
+            if let Ok(highlighted) = highlighter.highlight_line(&code_with_newline, &PS) {
+                for (style, text) in highlighted {
+                    let ratatui_style = syntect_to_ratatui_style(style);
+                    // Clone the text to make it owned
+                    spans.push(Span::styled(text.to_string(), ratatui_style));
+                }
+            } else {
+                spans.push(Span::raw(line.to_string()));
             }
-        } else {
-            spans.push(Span::raw(line.to_string()));
-        }
 
-        Line::from(spans)
-    }).collect();
+            Line::from(spans)
+        })
+        .collect();
 
-    let scroll_info = format!(" File Preview - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
-        path, scroll_offset + 1, total_lines);
+    let scroll_info = format!(
+        " File Preview - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
+        path,
+        scroll_offset + 1,
+        total_lines
+    );
 
     let modal_widget = Paragraph::new(styled_lines)
         .block(
@@ -450,7 +491,8 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
         .unwrap_or("txt");
 
     // Get syntax for this file type
-    let syntax = PS.find_syntax_by_extension(extension)
+    let syntax = PS
+        .find_syntax_by_extension(extension)
         .unwrap_or_else(|| PS.find_syntax_plain_text());
 
     let theme = &TS.themes["base16-mocha.dark"];
@@ -482,84 +524,107 @@ fn draw_diff_modal(frame: &mut Frame, app: &App, area: Rect, path: &str, diff: &
     let scroll_offset = app.modal_scroll.offset.min(total_lines.saturating_sub(1));
 
     // Build styled lines with syntax highlighting + diff colors
-    let styled_lines: Vec<Line> = diff_lines.iter().map(|line| {
-        if line.starts_with("@@") {
-            // Hunk header - cyan
-            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Cyan)))
-        } else if line.starts_with("diff ") || line.starts_with("index ") || line.starts_with("+++") || line.starts_with("---") {
-            // Diff metadata - yellow
-            Line::from(Span::styled(line.to_string(), Style::default().fg(Color::Yellow)))
-        } else if line.starts_with('+') && line.len() > 1 {
-            // Added line - use highlighted version with green tint
-            let code = &line[1..];
-            let mut spans: Vec<Span> = vec![
-                Span::styled("+", Style::default().fg(Color::Green).bold())
-            ];
+    let styled_lines: Vec<Line> = diff_lines
+        .iter()
+        .map(|line| {
+            if line.starts_with("@@") {
+                // Hunk header - cyan
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(Color::Cyan),
+                ))
+            } else if line.starts_with("diff ")
+                || line.starts_with("index ")
+                || line.starts_with("+++")
+                || line.starts_with("---")
+            {
+                // Diff metadata - yellow
+                Line::from(Span::styled(
+                    line.to_string(),
+                    Style::default().fg(Color::Yellow),
+                ))
+            } else if line.starts_with('+') && line.len() > 1 {
+                // Added line - use highlighted version with green tint
+                let code = &line[1..];
+                let mut spans: Vec<Span> =
+                    vec![Span::styled("+", Style::default().fg(Color::Green).bold())];
 
-            if let Some(highlighted) = highlighted_file.get(code) {
-                for (style, text) in highlighted {
-                    let fg = style.foreground;
-                    // Tint towards green while preserving some syntax color
-                    let tinted = Color::Rgb(
-                        (fg.r as u16 * 6 / 10) as u8,
-                        ((fg.g as u16 * 6 / 10) + 90).min(255) as u8,
-                        (fg.b as u16 * 6 / 10) as u8,
-                    );
-                    spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                if let Some(highlighted) = highlighted_file.get(code) {
+                    for (style, text) in highlighted {
+                        let fg = style.foreground;
+                        // Tint towards green while preserving some syntax color
+                        let tinted = Color::Rgb(
+                            (fg.r as u16 * 6 / 10) as u8,
+                            ((fg.g as u16 * 6 / 10) + 90).min(255) as u8,
+                            (fg.b as u16 * 6 / 10) as u8,
+                        );
+                        spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                    }
+                } else {
+                    spans.push(Span::styled(
+                        code.to_string(),
+                        Style::default().fg(Color::Green),
+                    ));
                 }
-            } else {
-                spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Green)));
-            }
-            Line::from(spans)
-        } else if line.starts_with('-') && line.len() > 1 {
-            // Removed line - use highlighted version with red tint
-            let code = &line[1..];
-            let mut spans: Vec<Span> = vec![
-                Span::styled("-", Style::default().fg(Color::Red).bold())
-            ];
+                Line::from(spans)
+            } else if line.starts_with('-') && line.len() > 1 {
+                // Removed line - use highlighted version with red tint
+                let code = &line[1..];
+                let mut spans: Vec<Span> =
+                    vec![Span::styled("-", Style::default().fg(Color::Red).bold())];
 
-            if let Some(highlighted) = highlighted_file.get(code) {
-                for (style, text) in highlighted {
-                    let fg = style.foreground;
-                    // Tint towards red while preserving some syntax color
-                    let tinted = Color::Rgb(
-                        ((fg.r as u16 * 6 / 10) + 90).min(255) as u8,
-                        (fg.g as u16 * 6 / 10) as u8,
-                        (fg.b as u16 * 6 / 10) as u8,
-                    );
-                    spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                if let Some(highlighted) = highlighted_file.get(code) {
+                    for (style, text) in highlighted {
+                        let fg = style.foreground;
+                        // Tint towards red while preserving some syntax color
+                        let tinted = Color::Rgb(
+                            ((fg.r as u16 * 6 / 10) + 90).min(255) as u8,
+                            (fg.g as u16 * 6 / 10) as u8,
+                            (fg.b as u16 * 6 / 10) as u8,
+                        );
+                        spans.push(Span::styled(text.clone(), Style::default().fg(tinted)));
+                    }
+                } else {
+                    spans.push(Span::styled(
+                        code.to_string(),
+                        Style::default().fg(Color::Red),
+                    ));
                 }
-            } else {
-                spans.push(Span::styled(code.to_string(), Style::default().fg(Color::Red)));
-            }
-            Line::from(spans)
-        } else if line.starts_with(' ') && line.len() > 1 {
-            // Context line - use highlighted version normally
-            let code = &line[1..];
-            let mut spans: Vec<Span> = vec![
-                Span::styled(" ", Style::default())
-            ];
+                Line::from(spans)
+            } else if line.starts_with(' ') && line.len() > 1 {
+                // Context line - use highlighted version normally
+                let code = &line[1..];
+                let mut spans: Vec<Span> = vec![Span::styled(" ", Style::default())];
 
-            if let Some(highlighted) = highlighted_file.get(code) {
-                for (style, text) in highlighted {
-                    let ratatui_style = syntect_to_ratatui_style(*style);
-                    spans.push(Span::styled(text.clone(), ratatui_style));
+                if let Some(highlighted) = highlighted_file.get(code) {
+                    for (style, text) in highlighted {
+                        let ratatui_style = syntect_to_ratatui_style(*style);
+                        spans.push(Span::styled(text.clone(), ratatui_style));
+                    }
+                } else {
+                    spans.push(Span::raw(code.to_string()));
                 }
+                Line::from(spans)
+            } else if line.starts_with('+') || line.starts_with('-') {
+                // Empty +/- line
+                let color = if line.starts_with('+') {
+                    Color::Green
+                } else {
+                    Color::Red
+                };
+                Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
             } else {
-                spans.push(Span::raw(code.to_string()));
+                Line::from(Span::raw(line.to_string()))
             }
-            Line::from(spans)
-        } else if line.starts_with('+') || line.starts_with('-') {
-            // Empty +/- line
-            let color = if line.starts_with('+') { Color::Green } else { Color::Red };
-            Line::from(Span::styled(line.to_string(), Style::default().fg(color)))
-        } else {
-            Line::from(Span::raw(line.to_string()))
-        }
-    }).collect();
+        })
+        .collect();
 
-    let scroll_info = format!(" File Diff - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
-        path, scroll_offset + 1, total_lines);
+    let scroll_info = format!(
+        " File Diff - {} [j/k:scroll g/G:top/bot o:open q:close] (line {}/{}) ",
+        path,
+        scroll_offset + 1,
+        total_lines
+    );
 
     let modal_widget = Paragraph::new(styled_lines)
         .block(
@@ -609,7 +674,11 @@ fn draw_commit_modal(
     let message_lines: Vec<&str> = commit_message.lines().collect();
     // Header (3 lines) + message + files list + spacing
     let files_display = if files.len() > 3 {
-        format!("{} (+{} more)", files.iter().take(3).cloned().collect::<Vec<_>>().join(", "), files.len() - 3)
+        format!(
+            "{} (+{} more)",
+            files.iter().take(3).cloned().collect::<Vec<_>>().join(", "),
+            files.len() - 3
+        )
     } else {
         files.join(", ")
     };
@@ -618,7 +687,7 @@ fn draw_commit_modal(
     // Split into top (commit info) and bottom (diff) sections
     let layout = Layout::vertical([
         Constraint::Length(top_section_height),
-        Constraint::Min(5),  // Diff section takes the rest
+        Constraint::Min(5), // Diff section takes the rest
     ])
     .split(inner_area);
 
@@ -630,7 +699,11 @@ fn draw_commit_modal(
     let bottom_focused = app.commit_modal.section == ModalSection::Bottom;
 
     // === Top section: Commit info ===
-    let top_border_color = if top_focused { Color::Cyan } else { Color::DarkGray };
+    let top_border_color = if top_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let mut top_lines: Vec<Line> = vec![
         Line::from(vec![
@@ -651,7 +724,10 @@ fn draw_commit_modal(
 
     // Add commit message lines (capped at 8)
     for line in message_lines.iter().take(8) {
-        top_lines.push(Line::from(Span::styled(*line, Style::default().fg(Color::White))));
+        top_lines.push(Line::from(Span::styled(
+            *line,
+            Style::default().fg(Color::White),
+        )));
     }
     if message_lines.len() > 8 {
         top_lines.push(Line::from(Span::styled(
@@ -672,69 +748,97 @@ fn draw_commit_modal(
     frame.render_widget(top_widget, top_area);
 
     // === Bottom section: Diff (pre-processed, no I/O during render) ===
-    let bottom_border_color = if bottom_focused { Color::Cyan } else { Color::DarkGray };
+    let bottom_border_color = if bottom_focused {
+        Color::Cyan
+    } else {
+        Color::DarkGray
+    };
 
     let total_diff_lines = diff_lines.len();
-    let scroll_offset = app.commit_modal.diff_scroll.min(total_diff_lines.saturating_sub(1));
+    let scroll_offset = app
+        .commit_modal
+        .diff_scroll
+        .min(total_diff_lines.saturating_sub(1));
 
     // Convert pre-processed diff lines to styled Lines using cached syntax highlighting
     use super::app::DiffLineType;
-    let styled_diff_lines: Vec<Line> = diff_lines.iter().map(|diff_line| {
-        match diff_line.line_type {
-            DiffLineType::Hunk => {
-                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Cyan)))
-            }
-            DiffLineType::Header => {
-                Line::from(Span::styled(diff_line.content.clone(), Style::default().fg(Color::Yellow)))
-            }
-            DiffLineType::Added => {
-                // Show '+' in green, then syntax highlighted content
-                let mut spans = vec![Span::styled("+", Style::default().fg(Color::Green))];
-                if diff_line.styled_spans.is_empty() {
-                    // Fallback: just show content in green
-                    let content = if diff_line.content.len() > 1 { &diff_line.content[1..] } else { "" };
-                    spans.push(Span::styled(content.to_string(), Style::default().fg(Color::Green)));
-                } else {
-                    // Use pre-computed syntax highlighting with green background tint
-                    for (color, text) in &diff_line.styled_spans {
-                        spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+    let styled_diff_lines: Vec<Line> = diff_lines
+        .iter()
+        .map(|diff_line| {
+            match diff_line.line_type {
+                DiffLineType::Hunk => Line::from(Span::styled(
+                    diff_line.content.clone(),
+                    Style::default().fg(Color::Cyan),
+                )),
+                DiffLineType::Header => Line::from(Span::styled(
+                    diff_line.content.clone(),
+                    Style::default().fg(Color::Yellow),
+                )),
+                DiffLineType::Added => {
+                    // Show '+' in green, then syntax highlighted content
+                    let mut spans = vec![Span::styled("+", Style::default().fg(Color::Green))];
+                    if diff_line.styled_spans.is_empty() {
+                        // Fallback: just show content in green
+                        let content = if diff_line.content.len() > 1 {
+                            &diff_line.content[1..]
+                        } else {
+                            ""
+                        };
+                        spans.push(Span::styled(
+                            content.to_string(),
+                            Style::default().fg(Color::Green),
+                        ));
+                    } else {
+                        // Use pre-computed syntax highlighting with green background tint
+                        for (color, text) in &diff_line.styled_spans {
+                            spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                        }
                     }
+                    Line::from(spans)
                 }
-                Line::from(spans)
-            }
-            DiffLineType::Removed => {
-                // Show '-' in red, then syntax highlighted content
-                let mut spans = vec![Span::styled("-", Style::default().fg(Color::Red))];
-                if diff_line.styled_spans.is_empty() {
-                    // Fallback: just show content in red
-                    let content = if diff_line.content.len() > 1 { &diff_line.content[1..] } else { "" };
-                    spans.push(Span::styled(content.to_string(), Style::default().fg(Color::Red)));
-                } else {
-                    // Use pre-computed syntax highlighting
-                    for (color, text) in &diff_line.styled_spans {
-                        spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                DiffLineType::Removed => {
+                    // Show '-' in red, then syntax highlighted content
+                    let mut spans = vec![Span::styled("-", Style::default().fg(Color::Red))];
+                    if diff_line.styled_spans.is_empty() {
+                        // Fallback: just show content in red
+                        let content = if diff_line.content.len() > 1 {
+                            &diff_line.content[1..]
+                        } else {
+                            ""
+                        };
+                        spans.push(Span::styled(
+                            content.to_string(),
+                            Style::default().fg(Color::Red),
+                        ));
+                    } else {
+                        // Use pre-computed syntax highlighting
+                        for (color, text) in &diff_line.styled_spans {
+                            spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                        }
                     }
+                    Line::from(spans)
                 }
-                Line::from(spans)
-            }
-            DiffLineType::Context => {
-                // Show ' ' then syntax highlighted content
-                let mut spans = vec![Span::raw(" ")];
-                if diff_line.styled_spans.is_empty() {
-                    let content = if diff_line.content.len() > 1 { &diff_line.content[1..] } else { "" };
-                    spans.push(Span::raw(content.to_string()));
-                } else {
-                    for (color, text) in &diff_line.styled_spans {
-                        spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                DiffLineType::Context => {
+                    // Show ' ' then syntax highlighted content
+                    let mut spans = vec![Span::raw(" ")];
+                    if diff_line.styled_spans.is_empty() {
+                        let content = if diff_line.content.len() > 1 {
+                            &diff_line.content[1..]
+                        } else {
+                            ""
+                        };
+                        spans.push(Span::raw(content.to_string()));
+                    } else {
+                        for (color, text) in &diff_line.styled_spans {
+                            spans.push(Span::styled(text.clone(), Style::default().fg(*color)));
+                        }
                     }
+                    Line::from(spans)
                 }
-                Line::from(spans)
+                DiffLineType::Other => Line::from(Span::raw(diff_line.content.clone())),
             }
-            DiffLineType::Other => {
-                Line::from(Span::raw(diff_line.content.clone()))
-            }
-        }
-    }).collect();
+        })
+        .collect();
 
     let scroll_info = if total_diff_lines == 0 {
         " Diff [q:close] (no diff available) ".to_string()
@@ -814,14 +918,13 @@ fn draw_goal_story_modal(frame: &mut Frame, app: &App, goal_id: i32, area: Rect)
     // Get the goal and its descendants
     let descendants = app.get_goal_descendants(goal_id);
 
-    let goal_title = app.get_node_by_id(goal_id)
+    let goal_title = app
+        .get_node_by_id(goal_id)
         .map(|n| n.title.as_str())
         .unwrap_or("Unknown Goal");
 
     // Build hierarchical text representation
-    let mut lines: Vec<Line> = vec![
-        Line::from(""),
-    ];
+    let mut lines: Vec<Line> = vec![Line::from("")];
 
     for (_id, node, depth) in &descendants {
         let indent = "  ".repeat(*depth);

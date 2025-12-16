@@ -3,15 +3,15 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use crossterm::event::{MouseEvent, MouseEventKind, MouseButton};
+use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::style::Color;
+use syntect::easy::HighlightLines;
 use syntect::highlighting::ThemeSet;
 use syntect::parsing::SyntaxSet;
-use syntect::easy::HighlightLines;
 
-use crate::{Database, DecisionGraph, DecisionNode, DecisionEdge};
 use super::types;
 use super::views::roadmap::RoadmapState;
+use crate::{Database, DecisionEdge, DecisionGraph, DecisionNode};
 
 // Lazy static syntax highlighting resources
 lazy_static::lazy_static! {
@@ -50,13 +50,23 @@ pub enum ModalContent {
         hash: String,
         node_title: String,
         commit_message: String,
-        diff_lines: Vec<StyledDiffLine>,  // Pre-rendered diff lines
+        diff_lines: Vec<StyledDiffLine>, // Pre-rendered diff lines
         files: Vec<String>,
     },
-    NodeDetail { node_id: i32 },
-    GoalStory { goal_id: i32 },
-    FilePreview { path: String, content: String },
-    FileDiff { path: String, diff: String },
+    NodeDetail {
+        node_id: i32,
+    },
+    GoalStory {
+        goal_id: i32,
+    },
+    FilePreview {
+        path: String,
+        content: String,
+    },
+    FileDiff {
+        path: String,
+        diff: String,
+    },
 }
 
 /// Pre-rendered diff line with styling info
@@ -70,11 +80,11 @@ pub struct StyledDiffLine {
 
 #[derive(Debug, Clone, Copy)]
 pub enum DiffLineType {
-    Header,      // diff, index, +++, ---
-    Hunk,        // @@
-    Added,       // +
-    Removed,     // -
-    Context,     // space
+    Header,  // diff, index, +++, ---
+    Hunk,    // @@
+    Added,   // +
+    Removed, // -
+    Context, // space
     Other,
 }
 
@@ -170,7 +180,7 @@ pub struct App {
     pub current_view: View,
     pub selected_index: usize,
     pub scroll_offset: usize,
-    pub reverse_order: bool,  // true = chronological (oldest first), false = newest first
+    pub reverse_order: bool, // true = chronological (oldest first), false = newest first
 
     // Detail panel
     pub detail_expanded: bool,
@@ -215,7 +225,7 @@ pub struct App {
 
     // Detail panel file browser
     pub detail_file_index: usize,
-    pub detail_in_files: bool,  // true when navigating files section
+    pub detail_in_files: bool, // true when navigating files section
 
     // Pending files to open in editor (set by app, consumed by main loop)
     pub pending_editor_files: Option<Vec<String>>,
@@ -249,7 +259,7 @@ impl App {
             current_view: View::Timeline,
             selected_index: 0,
             scroll_offset: 0,
-            reverse_order: false,  // Default: newest first
+            reverse_order: false, // Default: newest first
             detail_expanded: true,
             detail_scroll: 0,
             type_filter: None,
@@ -416,7 +426,8 @@ impl App {
 
     pub fn page_down(&mut self) {
         let page_size = (self.viewport_height as usize).saturating_sub(6);
-        self.selected_index = (self.selected_index + page_size).min(self.filtered_nodes.len().saturating_sub(1));
+        self.selected_index =
+            (self.selected_index + page_size).min(self.filtered_nodes.len().saturating_sub(1));
         self.ensure_visible();
     }
 
@@ -560,7 +571,14 @@ impl App {
 
     /// Cycle through type filters
     pub fn cycle_type_filter(&mut self) {
-        let types = ["goal", "decision", "option", "action", "outcome", "observation"];
+        let types = [
+            "goal",
+            "decision",
+            "option",
+            "action",
+            "outcome",
+            "observation",
+        ];
         self.type_filter = match &self.type_filter {
             None => Some(types[0].to_string()),
             Some(current) => {
@@ -648,8 +666,11 @@ impl App {
                         // Classify line type
                         let line_type = if line.starts_with("@@") {
                             DiffLineType::Hunk
-                        } else if line.starts_with("diff ") || line.starts_with("index ")
-                            || line.starts_with("+++") || line.starts_with("---") {
+                        } else if line.starts_with("diff ")
+                            || line.starts_with("index ")
+                            || line.starts_with("+++")
+                            || line.starts_with("---")
+                        {
                             DiffLineType::Header
                         } else if line.starts_with('+') {
                             DiffLineType::Added
@@ -675,17 +696,23 @@ impl App {
                         }
 
                         // Compute styled spans for content lines
-                        let styled_spans = if matches!(line_type, DiffLineType::Added | DiffLineType::Removed | DiffLineType::Context) {
+                        let styled_spans = if matches!(
+                            line_type,
+                            DiffLineType::Added | DiffLineType::Removed | DiffLineType::Context
+                        ) {
                             // Strip the leading +/- or space for highlighting
                             let code_content = if line.len() > 1 { &line[1..] } else { "" };
 
                             if let Some(ref mut hl) = highlighter {
                                 // Use syntax highlighting
                                 if let Ok(ranges) = hl.highlight_line(code_content, &PS) {
-                                    ranges.iter().map(|(style, text)| {
-                                        let color = syntect_to_ratatui_color(style.foreground);
-                                        (color, text.to_string())
-                                    }).collect()
+                                    ranges
+                                        .iter()
+                                        .map(|(style, text)| {
+                                            let color = syntect_to_ratatui_color(style.foreground);
+                                            (color, text.to_string())
+                                        })
+                                        .collect()
                                 } else {
                                     vec![(Color::White, code_content.to_string())]
                                 }
@@ -755,7 +782,8 @@ impl App {
             ModalSection::Bottom => {
                 // Scroll the diff section
                 let max_scroll = self.commit_modal.diff_total_lines.saturating_sub(10);
-                self.commit_modal.diff_scroll = (self.commit_modal.diff_scroll + amount).min(max_scroll);
+                self.commit_modal.diff_scroll =
+                    (self.commit_modal.diff_scroll + amount).min(max_scroll);
             }
         }
     }
@@ -772,7 +800,8 @@ impl App {
                     self.commit_modal.section = ModalSection::Top;
                 } else {
                     // Scroll diff up
-                    self.commit_modal.diff_scroll = self.commit_modal.diff_scroll.saturating_sub(amount);
+                    self.commit_modal.diff_scroll =
+                        self.commit_modal.diff_scroll.saturating_sub(amount);
                 }
             }
         }
@@ -893,7 +922,8 @@ impl App {
     /// Move to next match in branch search
     pub fn branch_search_next(&mut self) {
         if !self.branch_search_matches.is_empty() {
-            self.branch_search_index = (self.branch_search_index + 1) % self.branch_search_matches.len();
+            self.branch_search_index =
+                (self.branch_search_index + 1) % self.branch_search_matches.len();
         }
     }
 
@@ -938,14 +968,19 @@ impl App {
         super::state::get_descendants(goal_id, &self.graph.nodes, &self.graph.edges)
             .into_iter()
             .filter_map(|(node_id, depth)| {
-                self.get_node_by_id(node_id).map(|node| (node_id, node, depth))
+                self.get_node_by_id(node_id)
+                    .map(|node| (node_id, node, depth))
             })
             .collect()
     }
 
     /// Get all goals in the graph
     pub fn get_goals(&self) -> Vec<&DecisionNode> {
-        self.graph.nodes.iter().filter(|n| n.node_type == "goal").collect()
+        self.graph
+            .nodes
+            .iter()
+            .filter(|n| n.node_type == "goal")
+            .collect()
     }
 
     /// Get files for currently selected node
@@ -974,7 +1009,12 @@ impl App {
         let files = self.get_current_files();
         if !files.is_empty() && self.detail_file_index + 1 < files.len() {
             self.detail_file_index += 1;
-            self.set_status(format!("File {}/{}: {}", self.detail_file_index + 1, files.len(), files[self.detail_file_index]));
+            self.set_status(format!(
+                "File {}/{}: {}",
+                self.detail_file_index + 1,
+                files.len(),
+                files[self.detail_file_index]
+            ));
         }
     }
 
@@ -983,7 +1023,12 @@ impl App {
         if self.detail_file_index > 0 {
             self.detail_file_index -= 1;
             let files = self.get_current_files();
-            self.set_status(format!("File {}/{}: {}", self.detail_file_index + 1, files.len(), files[self.detail_file_index]));
+            self.set_status(format!(
+                "File {}/{}: {}",
+                self.detail_file_index + 1,
+                files.len(),
+                files[self.detail_file_index]
+            ));
         }
     }
 
@@ -998,8 +1043,8 @@ impl App {
         let path = &files[self.detail_file_index.min(files.len() - 1)];
 
         // Read raw file content - UI will handle formatting and syntax highlighting
-        let content = std::fs::read_to_string(path)
-            .unwrap_or_else(|e| format!("Error reading file: {}", e));
+        let content =
+            std::fs::read_to_string(path).unwrap_or_else(|e| format!("Error reading file: {}", e));
 
         self.modal = Some(ModalContent::FilePreview {
             path: path.clone(),

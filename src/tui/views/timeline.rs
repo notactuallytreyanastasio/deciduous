@@ -116,8 +116,7 @@ pub fn draw(frame: &mut Frame, app: &App, area: Rect) {
         let scroll_pos = if app.filtered_nodes.is_empty() {
             0
         } else {
-            (app.scroll_offset * (inner_area.height as usize - 1))
-                / app.filtered_nodes.len()
+            (app.scroll_offset * (inner_area.height as usize - 1)) / app.filtered_nodes.len()
         };
 
         // Simple scroll bar on the right edge

@@ -302,6 +302,37 @@ deciduous diff export -o patch.json
 deciduous diff apply patches/*.json
 deciduous diff status
 deciduous migrate            # Add change_id columns
+
+# Shell completion
+deciduous completion bash    # Generate bash completions
+deciduous completion zsh     # Generate zsh completions
+deciduous completion fish    # Generate fish completions
+```
+
+---
+
+## Shell Completion
+
+Enable tab completion for commands, options, and arguments.
+
+**Zsh** (add to `~/.zshrc`):
+```bash
+source <(deciduous completion zsh)
+```
+
+**Bash** (add to `~/.bashrc`):
+```bash
+source <(deciduous completion bash)
+```
+
+**Fish** (add to `~/.config/fish/config.fish`):
+```fish
+deciduous completion fish | source
+```
+
+**PowerShell** (add to profile):
+```powershell
+deciduous completion powershell | Out-String | Invoke-Expression
 ```
 
 ---
@@ -344,11 +375,23 @@ cargo build --release
 ./target/release/deciduous --help
 ```
 
-**Optional:** graphviz for PNG export
+### macOS Dependencies
+
+The `syntect` crate (used for syntax highlighting in the TUI) requires `libiconv`:
+
 ```bash
-brew install graphviz    # macOS
-apt install graphviz     # Ubuntu/Debian
+brew install libiconv
+export LIBRARY_PATH="/opt/homebrew/opt/libiconv/lib:$LIBRARY_PATH"
+cargo build --release
 ```
+
+Add the `LIBRARY_PATH` export to your shell profile (`.zshrc` or `.bashrc`) to make it permanent.
+
+### Optional Dependencies
+
+| Dependency | Required For | Install |
+|------------|--------------|---------|
+| graphviz | `deciduous dot --png` | `brew install graphviz` (macOS) / `apt install graphviz` (Ubuntu) |
 
 ---
 

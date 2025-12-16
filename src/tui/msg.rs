@@ -155,7 +155,12 @@ impl ViewKind {
 ///
 /// This is a pure function - no side effects, just pattern matching.
 /// The result is a message that describes what the user intended.
-pub fn key_to_msg(code: KeyCode, modifiers: KeyModifiers, modal_open: bool, search_active: bool) -> Msg {
+pub fn key_to_msg(
+    code: KeyCode,
+    modifiers: KeyModifiers,
+    modal_open: bool,
+    search_active: bool,
+) -> Msg {
     // Handle search mode first
     if search_active {
         return match code {
@@ -190,7 +195,7 @@ pub fn key_to_msg(code: KeyCode, modifiers: KeyModifiers, modal_open: bool, sear
         KeyCode::Char('k') | KeyCode::Up => Msg::MoveUp,
         KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => Msg::PageDown,
         KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => Msg::PageUp,
-        KeyCode::Char('g') => Msg::JumpToTop,  // Simplified - real vim needs 'gg'
+        KeyCode::Char('g') => Msg::JumpToTop, // Simplified - real vim needs 'gg'
         KeyCode::Char('G') => Msg::JumpToBottom,
         KeyCode::PageDown => Msg::PageDown,
         KeyCode::PageUp => Msg::PageUp,
@@ -217,7 +222,7 @@ pub fn key_to_msg(code: KeyCode, modifiers: KeyModifiers, modal_open: bool, sear
 
         // Detail panel
         KeyCode::Char('l') | KeyCode::Right => Msg::DetailScrollDown, // In detail context
-        KeyCode::Char('h') | KeyCode::Left => Msg::DetailScrollUp,   // In detail context
+        KeyCode::Char('h') | KeyCode::Left => Msg::DetailScrollUp,    // In detail context
         KeyCode::Enter => Msg::ToggleDetailPanel,
 
         // Modals
@@ -288,31 +293,70 @@ mod tests {
 
     #[test]
     fn test_key_to_msg_navigation() {
-        assert_eq!(key_to_msg(KeyCode::Char('j'), KeyModifiers::NONE, false, false), Msg::MoveDown);
-        assert_eq!(key_to_msg(KeyCode::Char('k'), KeyModifiers::NONE, false, false), Msg::MoveUp);
-        assert_eq!(key_to_msg(KeyCode::Down, KeyModifiers::NONE, false, false), Msg::MoveDown);
-        assert_eq!(key_to_msg(KeyCode::Up, KeyModifiers::NONE, false, false), Msg::MoveUp);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('j'), KeyModifiers::NONE, false, false),
+            Msg::MoveDown
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('k'), KeyModifiers::NONE, false, false),
+            Msg::MoveUp
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Down, KeyModifiers::NONE, false, false),
+            Msg::MoveDown
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Up, KeyModifiers::NONE, false, false),
+            Msg::MoveUp
+        );
     }
 
     #[test]
     fn test_key_to_msg_quit() {
-        assert_eq!(key_to_msg(KeyCode::Char('q'), KeyModifiers::NONE, false, false), Msg::Quit);
-        assert_eq!(key_to_msg(KeyCode::Char('c'), KeyModifiers::CONTROL, false, false), Msg::Quit);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('q'), KeyModifiers::NONE, false, false),
+            Msg::Quit
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('c'), KeyModifiers::CONTROL, false, false),
+            Msg::Quit
+        );
     }
 
     #[test]
     fn test_key_to_msg_search_mode() {
-        assert_eq!(key_to_msg(KeyCode::Char('a'), KeyModifiers::NONE, false, true), Msg::SearchInput('a'));
-        assert_eq!(key_to_msg(KeyCode::Enter, KeyModifiers::NONE, false, true), Msg::SearchConfirm);
-        assert_eq!(key_to_msg(KeyCode::Esc, KeyModifiers::NONE, false, true), Msg::SearchCancel);
-        assert_eq!(key_to_msg(KeyCode::Backspace, KeyModifiers::NONE, false, true), Msg::SearchBackspace);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('a'), KeyModifiers::NONE, false, true),
+            Msg::SearchInput('a')
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Enter, KeyModifiers::NONE, false, true),
+            Msg::SearchConfirm
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Esc, KeyModifiers::NONE, false, true),
+            Msg::SearchCancel
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Backspace, KeyModifiers::NONE, false, true),
+            Msg::SearchBackspace
+        );
     }
 
     #[test]
     fn test_key_to_msg_modal_mode() {
-        assert_eq!(key_to_msg(KeyCode::Char('j'), KeyModifiers::NONE, true, false), Msg::ModalScrollDown);
-        assert_eq!(key_to_msg(KeyCode::Char('k'), KeyModifiers::NONE, true, false), Msg::ModalScrollUp);
-        assert_eq!(key_to_msg(KeyCode::Esc, KeyModifiers::NONE, true, false), Msg::CloseModal);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('j'), KeyModifiers::NONE, true, false),
+            Msg::ModalScrollDown
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('k'), KeyModifiers::NONE, true, false),
+            Msg::ModalScrollUp
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Esc, KeyModifiers::NONE, true, false),
+            Msg::CloseModal
+        );
     }
 
     #[test]
@@ -340,69 +384,162 @@ mod tests {
     #[test]
     fn test_key_to_msg_actions() {
         // Test action keys - these trigger side effects
-        assert_eq!(key_to_msg(KeyCode::Char('o'), KeyModifiers::NONE, false, false), Msg::OpenFiles);
-        assert_eq!(key_to_msg(KeyCode::Char('r'), KeyModifiers::NONE, false, false), Msg::RefreshGraph);
-        assert_eq!(key_to_msg(KeyCode::Char('y'), KeyModifiers::NONE, false, false), Msg::CopyToClipboard);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('o'), KeyModifiers::NONE, false, false),
+            Msg::OpenFiles
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('r'), KeyModifiers::NONE, false, false),
+            Msg::RefreshGraph
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('y'), KeyModifiers::NONE, false, false),
+            Msg::CopyToClipboard
+        );
     }
 
     #[test]
     fn test_key_to_msg_view_switching() {
-        assert_eq!(key_to_msg(KeyCode::Tab, KeyModifiers::NONE, false, false), Msg::NextView);
-        assert_eq!(key_to_msg(KeyCode::Tab, KeyModifiers::SHIFT, false, false), Msg::PrevView);
-        assert_eq!(key_to_msg(KeyCode::Char('1'), KeyModifiers::NONE, false, false), Msg::SwitchToView(ViewKind::Timeline));
-        assert_eq!(key_to_msg(KeyCode::Char('2'), KeyModifiers::NONE, false, false), Msg::SwitchToView(ViewKind::Dag));
-        assert_eq!(key_to_msg(KeyCode::Char('3'), KeyModifiers::NONE, false, false), Msg::SwitchToView(ViewKind::Graph));
+        assert_eq!(
+            key_to_msg(KeyCode::Tab, KeyModifiers::NONE, false, false),
+            Msg::NextView
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Tab, KeyModifiers::SHIFT, false, false),
+            Msg::PrevView
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('1'), KeyModifiers::NONE, false, false),
+            Msg::SwitchToView(ViewKind::Timeline)
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('2'), KeyModifiers::NONE, false, false),
+            Msg::SwitchToView(ViewKind::Dag)
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('3'), KeyModifiers::NONE, false, false),
+            Msg::SwitchToView(ViewKind::Graph)
+        );
     }
 
     #[test]
     fn test_key_to_msg_filtering() {
-        assert_eq!(key_to_msg(KeyCode::Char('t'), KeyModifiers::NONE, false, false), Msg::CycleTypeFilter);
-        assert_eq!(key_to_msg(KeyCode::Char('b'), KeyModifiers::NONE, false, false), Msg::CycleBranchFilter);
-        assert_eq!(key_to_msg(KeyCode::Char('B'), KeyModifiers::NONE, false, false), Msg::OpenBranchSearch);
-        assert_eq!(key_to_msg(KeyCode::Char('/'), KeyModifiers::NONE, false, false), Msg::OpenBranchSearch);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('t'), KeyModifiers::NONE, false, false),
+            Msg::CycleTypeFilter
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('b'), KeyModifiers::NONE, false, false),
+            Msg::CycleBranchFilter
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('B'), KeyModifiers::NONE, false, false),
+            Msg::OpenBranchSearch
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('/'), KeyModifiers::NONE, false, false),
+            Msg::OpenBranchSearch
+        );
     }
 
     #[test]
     fn test_key_to_msg_modals() {
-        assert_eq!(key_to_msg(KeyCode::Char('?'), KeyModifiers::NONE, false, false), Msg::ToggleHelp);
-        assert_eq!(key_to_msg(KeyCode::Char('P'), KeyModifiers::NONE, false, false), Msg::OpenPromptModal);
-        assert_eq!(key_to_msg(KeyCode::Esc, KeyModifiers::NONE, false, false), Msg::CloseModal);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('?'), KeyModifiers::NONE, false, false),
+            Msg::ToggleHelp
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('P'), KeyModifiers::NONE, false, false),
+            Msg::OpenPromptModal
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Esc, KeyModifiers::NONE, false, false),
+            Msg::CloseModal
+        );
     }
 
     #[test]
     fn test_key_to_msg_file_browser() {
-        assert_eq!(key_to_msg(KeyCode::Char('F'), KeyModifiers::NONE, false, false), Msg::ToggleFileBrowser);
-        assert_eq!(key_to_msg(KeyCode::Char('p'), KeyModifiers::NONE, false, false), Msg::PreviewFile);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('F'), KeyModifiers::NONE, false, false),
+            Msg::ToggleFileBrowser
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('p'), KeyModifiers::NONE, false, false),
+            Msg::PreviewFile
+        );
     }
 
     #[test]
     fn test_key_to_msg_detail_panel() {
-        assert_eq!(key_to_msg(KeyCode::Enter, KeyModifiers::NONE, false, false), Msg::ToggleDetailPanel);
-        assert_eq!(key_to_msg(KeyCode::Char('l'), KeyModifiers::NONE, false, false), Msg::DetailScrollDown);
-        assert_eq!(key_to_msg(KeyCode::Char('h'), KeyModifiers::NONE, false, false), Msg::DetailScrollUp);
+        assert_eq!(
+            key_to_msg(KeyCode::Enter, KeyModifiers::NONE, false, false),
+            Msg::ToggleDetailPanel
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('l'), KeyModifiers::NONE, false, false),
+            Msg::DetailScrollDown
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('h'), KeyModifiers::NONE, false, false),
+            Msg::DetailScrollUp
+        );
     }
 
     #[test]
     fn test_key_to_msg_page_navigation() {
-        assert_eq!(key_to_msg(KeyCode::Char('d'), KeyModifiers::CONTROL, false, false), Msg::PageDown);
-        assert_eq!(key_to_msg(KeyCode::Char('u'), KeyModifiers::CONTROL, false, false), Msg::PageUp);
-        assert_eq!(key_to_msg(KeyCode::PageDown, KeyModifiers::NONE, false, false), Msg::PageDown);
-        assert_eq!(key_to_msg(KeyCode::PageUp, KeyModifiers::NONE, false, false), Msg::PageUp);
-        assert_eq!(key_to_msg(KeyCode::Char('g'), KeyModifiers::NONE, false, false), Msg::JumpToTop);
-        assert_eq!(key_to_msg(KeyCode::Char('G'), KeyModifiers::NONE, false, false), Msg::JumpToBottom);
-        assert_eq!(key_to_msg(KeyCode::Home, KeyModifiers::NONE, false, false), Msg::JumpToTop);
-        assert_eq!(key_to_msg(KeyCode::End, KeyModifiers::NONE, false, false), Msg::JumpToBottom);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('d'), KeyModifiers::CONTROL, false, false),
+            Msg::PageDown
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('u'), KeyModifiers::CONTROL, false, false),
+            Msg::PageUp
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::PageDown, KeyModifiers::NONE, false, false),
+            Msg::PageDown
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::PageUp, KeyModifiers::NONE, false, false),
+            Msg::PageUp
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('g'), KeyModifiers::NONE, false, false),
+            Msg::JumpToTop
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('G'), KeyModifiers::NONE, false, false),
+            Msg::JumpToBottom
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Home, KeyModifiers::NONE, false, false),
+            Msg::JumpToTop
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::End, KeyModifiers::NONE, false, false),
+            Msg::JumpToBottom
+        );
     }
 
     #[test]
     fn test_key_to_msg_goal_story() {
-        assert_eq!(key_to_msg(KeyCode::Char('s'), KeyModifiers::NONE, false, false), Msg::ToggleGoalStory);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('s'), KeyModifiers::NONE, false, false),
+            Msg::ToggleGoalStory
+        );
     }
 
     #[test]
     fn test_key_to_msg_unhandled() {
         // Keys that aren't mapped should return Noop
-        assert_eq!(key_to_msg(KeyCode::Char('z'), KeyModifiers::NONE, false, false), Msg::Noop);
-        assert_eq!(key_to_msg(KeyCode::Char('x'), KeyModifiers::NONE, false, false), Msg::Noop);
+        assert_eq!(
+            key_to_msg(KeyCode::Char('z'), KeyModifiers::NONE, false, false),
+            Msg::Noop
+        );
+        assert_eq!(
+            key_to_msg(KeyCode::Char('x'), KeyModifiers::NONE, false, false),
+            Msg::Noop
+        );
     }
 }

@@ -3,8 +3,8 @@
 //! These tests exercise the full CLI workflow using a temporary database.
 //! They verify that commands work end-to-end without mocking.
 
-use std::process::Command;
 use std::path::PathBuf;
+use std::process::Command;
 use tempfile::TempDir;
 
 /// Helper to run deciduous CLI with a specific database path
@@ -56,6 +56,81 @@ fn test_version_command() {
 }
 
 // =============================================================================
+// Shell Completion Tests
+// =============================================================================
+
+#[test]
+fn test_completion_zsh() {
+    let output = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["completion", "zsh"])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(
+        output.status.success(),
+        "completion zsh failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(
+        out.contains("#compdef deciduous"),
+        "zsh completion should contain #compdef"
+    );
+}
+
+#[test]
+fn test_completion_bash() {
+    let output = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["completion", "bash"])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(
+        output.status.success(),
+        "completion bash failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(
+        out.contains("_deciduous"),
+        "bash completion should contain _deciduous function"
+    );
+}
+
+#[test]
+fn test_completion_fish() {
+    let output = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["completion", "fish"])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(
+        output.status.success(),
+        "completion fish failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(
+        out.contains("complete -c deciduous"),
+        "fish completion should contain complete command"
+    );
+}
+
+#[test]
+fn test_completion_help() {
+    let output = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["completion", "--help"])
+        .output()
+        .expect("Failed to execute");
+
+    assert!(output.status.success());
+    let out = stdout(&output);
+    assert!(out.contains("bash"));
+    assert!(out.contains("zsh"));
+    assert!(out.contains("fish"));
+}
+
+// =============================================================================
 // Node CRUD Tests
 // =============================================================================
 
@@ -65,19 +140,21 @@ fn test_add_and_list_nodes() {
     let db_path = temp_dir.path().join("test.db");
 
     // Add a goal node
-    let output = run_deciduous(
-        &["add", "goal", "Test Goal", "-c", "90"],
-        &db_path,
+    let output = run_deciduous(&["add", "goal", "Test Goal", "-c", "90"], &db_path);
+    assert!(
+        output.status.success(),
+        "add goal failed: {}",
+        stderr(&output)
     );
-    assert!(output.status.success(), "add goal failed: {}", stderr(&output));
     assert!(stdout(&output).contains("Created node"));
 
     // Add an action node
-    let output = run_deciduous(
-        &["add", "action", "Test Action", "-c", "85"],
-        &db_path,
+    let output = run_deciduous(&["add", "action", "Test Action", "-c", "85"], &db_path);
+    assert!(
+        output.status.success(),
+        "add action failed: {}",
+        stderr(&output)
     );
-    assert!(output.status.success(), "add action failed: {}", stderr(&output));
 
     // List nodes
     let output = run_deciduous(&["nodes"], &db_path);
@@ -97,15 +174,25 @@ fn test_add_node_with_all_metadata() {
     // Add node with all optional fields
     let output = run_deciduous(
         &[
-            "add", "goal", "Full Metadata Goal",
-            "-c", "95",
-            "-p", "User asked: implement feature X",
-            "-f", "src/main.rs,src/lib.rs",
-            "-b", "feature-branch",
+            "add",
+            "goal",
+            "Full Metadata Goal",
+            "-c",
+            "95",
+            "-p",
+            "User asked: implement feature X",
+            "-f",
+            "src/main.rs,src/lib.rs",
+            "-b",
+            "feature-branch",
         ],
         &db_path,
     );
-    assert!(output.status.success(), "add with metadata failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "add with metadata failed: {}",
+        stderr(&output)
+    );
 
     // Verify node was created
     let output = run_deciduous(&["nodes"], &db_path);
@@ -117,15 +204,24 @@ fn test_add_all_node_types() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    let node_types = ["goal", "decision", "option", "action", "outcome", "observation"];
+    let node_types = [
+        "goal",
+        "decision",
+        "option",
+        "action",
+        "outcome",
+        "observation",
+    ];
 
     for node_type in &node_types {
         let title = format!("Test {}", node_type);
-        let output = run_deciduous(
-            &["add", node_type, &title, "-c", "80"],
-            &db_path,
+        let output = run_deciduous(&["add", node_type, &title, "-c", "80"], &db_path);
+        assert!(
+            output.status.success(),
+            "add {} failed: {}",
+            node_type,
+            stderr(&output)
         );
-        assert!(output.status.success(), "add {} failed: {}", node_type, stderr(&output));
     }
 
     // List and verify all types present
@@ -150,10 +246,7 @@ fn test_link_nodes() {
     run_deciduous(&["add", "action", "Action", "-c", "85"], &db_path);
 
     // Link them
-    let output = run_deciduous(
-        &["link", "1", "2", "-r", "Goal leads to action"],
-        &db_path,
-    );
+    let output = run_deciduous(&["link", "1", "2", "-r", "Goal leads to action"], &db_path);
     assert!(output.status.success(), "link failed: {}", stderr(&output));
     assert!(stdout(&output).contains("Created edge"));
 
@@ -184,7 +277,15 @@ fn test_link_with_edge_types() {
     assert!(output.status.success());
 
     let output = run_deciduous(
-        &["link", "1", "3", "-t", "rejected", "-r", "Smaller community"],
+        &[
+            "link",
+            "1",
+            "3",
+            "-t",
+            "rejected",
+            "-r",
+            "Smaller community",
+        ],
         &db_path,
     );
     assert!(output.status.success());
@@ -210,7 +311,11 @@ fn test_update_node_status() {
 
     // Update status
     let output = run_deciduous(&["status", "1", "completed"], &db_path);
-    assert!(output.status.success(), "status update failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "status update failed: {}",
+        stderr(&output)
+    );
 
     // Verify status changed
     let output = run_deciduous(&["nodes"], &db_path);
@@ -233,13 +338,16 @@ fn test_graph_json_export() {
 
     // Export graph as JSON
     let output = run_deciduous(&["graph"], &db_path);
-    assert!(output.status.success(), "graph export failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "graph export failed: {}",
+        stderr(&output)
+    );
 
     let out = stdout(&output);
 
     // Verify it's valid JSON with expected structure
-    let json: serde_json::Value = serde_json::from_str(&out)
-        .expect("Output should be valid JSON");
+    let json: serde_json::Value = serde_json::from_str(&out).expect("Output should be valid JSON");
 
     assert!(json.get("nodes").is_some(), "JSON should have nodes");
     assert!(json.get("edges").is_some(), "JSON should have edges");
@@ -260,7 +368,11 @@ fn test_dot_export() {
 
     // Export as DOT
     let output = run_deciduous(&["dot"], &db_path);
-    assert!(output.status.success(), "dot export failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "dot export failed: {}",
+        stderr(&output)
+    );
 
     let out = stdout(&output);
     assert!(out.contains("digraph"));
@@ -307,7 +419,11 @@ fn test_command_log() {
 
     // Check command log
     let output = run_deciduous(&["commands"], &db_path);
-    assert!(output.status.success(), "commands failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "commands failed: {}",
+        stderr(&output)
+    );
 
     let out = stdout(&output);
     // Command log should show something
@@ -327,7 +443,11 @@ fn test_link_nonexistent_nodes() {
     let output = run_deciduous(&["link", "999", "998"], &db_path);
 
     // Should fail gracefully
-    assert!(!output.status.success() || stderr(&output).contains("Error") || stderr(&output).contains("not found"));
+    assert!(
+        !output.status.success()
+            || stderr(&output).contains("Error")
+            || stderr(&output).contains("not found")
+    );
 }
 
 #[test]
@@ -358,7 +478,10 @@ fn test_diff_export_import() {
 
     // Create some nodes
     run_deciduous(&["add", "goal", "Patch Test Goal", "-c", "90"], &db_path);
-    run_deciduous(&["add", "action", "Patch Test Action", "-c", "85"], &db_path);
+    run_deciduous(
+        &["add", "action", "Patch Test Action", "-c", "85"],
+        &db_path,
+    );
     run_deciduous(&["link", "1", "2", "-r", "test link"], &db_path);
 
     // Export patch
@@ -366,13 +489,16 @@ fn test_diff_export_import() {
         &["diff", "export", "-o", patch_path.to_str().unwrap()],
         &db_path,
     );
-    assert!(output.status.success(), "diff export failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "diff export failed: {}",
+        stderr(&output)
+    );
 
     // Verify patch file exists and is valid JSON
-    let patch_content = std::fs::read_to_string(&patch_path)
-        .expect("Patch file should exist");
-    let patch: serde_json::Value = serde_json::from_str(&patch_content)
-        .expect("Patch should be valid JSON");
+    let patch_content = std::fs::read_to_string(&patch_path).expect("Patch file should exist");
+    let patch: serde_json::Value =
+        serde_json::from_str(&patch_content).expect("Patch should be valid JSON");
 
     assert!(patch.get("nodes").is_some());
     assert!(patch.get("edges").is_some());
@@ -399,7 +525,11 @@ fn test_diff_dry_run() {
         &db_path2,
     );
 
-    assert!(output.status.success(), "diff apply dry-run failed: {}", stderr(&output));
+    assert!(
+        output.status.success(),
+        "diff apply dry-run failed: {}",
+        stderr(&output)
+    );
     let out = stdout(&output);
     // Dry run should report what would be added
     assert!(out.contains("added") || out.contains("would"));

@@ -9,8 +9,8 @@
 
 pub mod app;
 pub mod events;
-pub mod msg;    // TEA message types (what happened)
-pub mod state;  // Pure state transformations (functional core)
+pub mod msg; // TEA message types (what happened)
+pub mod state; // Pure state transformations (functional core)
 pub mod types;
 pub mod ui;
 pub mod update; // TEA update function (state transitions)
@@ -156,9 +156,7 @@ fn open_files_in_editor<B: Backend + std::io::Write>(
 
     // Open each file in editor
     for file in files {
-        let status = Command::new(&editor)
-            .arg(file)
-            .status();
+        let status = Command::new(&editor).arg(file).status();
 
         if let Err(e) = status {
             eprintln!("Failed to open {}: {}", file, e);

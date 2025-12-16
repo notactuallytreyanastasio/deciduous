@@ -51,12 +51,16 @@ pub mod tui;
 
 pub use config::Config;
 pub use db::{
-    CommandLog, Database, DbRecord, DbSummary, DecisionEdge, DecisionGraph, DecisionNode,
-    DecisionContext, DecisionSession, CheckboxState, RoadmapItem, RoadmapSyncState, RoadmapConflict,
-    GitHubIssueCache, CURRENT_SCHEMA, get_current_git_branch, get_current_git_commit, build_metadata_json,
+    build_metadata_json, get_current_git_branch, get_current_git_commit, CheckboxState, CommandLog,
+    Database, DbRecord, DbSummary, DecisionContext, DecisionEdge, DecisionGraph, DecisionNode,
+    DecisionSession, GitHubIssueCache, RoadmapConflict, RoadmapItem, RoadmapSyncState,
+    CURRENT_SCHEMA,
 };
-pub use diff::{GraphPatch, PatchNode, PatchEdge, ApplyResult};
-pub use export::{graph_to_dot, generate_pr_writeup, filter_graph_from_roots, filter_graph_by_ids, parse_node_range, DotConfig, WriteupConfig};
+pub use diff::{ApplyResult, GraphPatch, PatchEdge, PatchNode};
+pub use export::{
+    filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
+    parse_node_range, DotConfig, WriteupConfig,
+};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]

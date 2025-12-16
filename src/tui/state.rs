@@ -9,7 +9,7 @@
 //!
 //! The "imperative shell" (app.rs, events.rs) handles I/O and calls these pure functions.
 
-use crate::{DecisionNode, DecisionEdge};
+use crate::{DecisionEdge, DecisionNode};
 use std::collections::{HashSet, VecDeque};
 
 // =============================================================================
@@ -178,10 +178,7 @@ impl Chain {
 /// Build chains from graph data (goal roots with all descendants)
 pub fn build_chains(nodes: &[DecisionNode], edges: &[DecisionEdge]) -> Vec<Chain> {
     // Find all goal nodes (these are chain roots)
-    let goal_nodes: Vec<_> = nodes
-        .iter()
-        .filter(|n| n.node_type == "goal")
-        .collect();
+    let goal_nodes: Vec<_> = nodes.iter().filter(|n| n.node_type == "goal").collect();
 
     goal_nodes
         .into_iter()
@@ -301,10 +298,7 @@ pub fn get_descendants(
 
 /// Get unique branches from nodes
 pub fn get_unique_branches(nodes: &[DecisionNode]) -> Vec<String> {
-    let mut branches: Vec<String> = nodes
-        .iter()
-        .filter_map(super::types::get_branch)
-        .collect();
+    let mut branches: Vec<String> = nodes.iter().filter_map(super::types::get_branch).collect();
     branches.sort();
     branches.dedup();
     branches
@@ -325,7 +319,14 @@ pub fn filter_branch_matches(branches: &[String], query: &str) -> Vec<String> {
 
 /// Cycle through type filters
 pub fn cycle_type_filter(current: Option<&str>) -> Option<String> {
-    const TYPES: &[&str] = &["goal", "decision", "option", "action", "outcome", "observation"];
+    const TYPES: &[&str] = &[
+        "goal",
+        "decision",
+        "option",
+        "action",
+        "outcome",
+        "observation",
+    ];
     match current {
         None => Some(TYPES[0].to_string()),
         Some(c) => {
@@ -525,10 +526,7 @@ mod tests {
             make_node(2, "decision", "Decision", None),
             make_node(3, "action", "Action", None),
         ];
-        let edges = vec![
-            make_edge(1, 1, 2),
-            make_edge(2, 2, 3),
-        ];
+        let edges = vec![make_edge(1, 1, 2), make_edge(2, 2, 3)];
 
         // From action, should find root goal
         assert_eq!(find_root_goal(3, &nodes, &edges), Some(1));
@@ -549,21 +547,29 @@ mod tests {
             make_node(2, "decision", "Decision", None),
             make_node(3, "action", "Action", None),
         ];
-        let edges = vec![
-            make_edge(1, 1, 2),
-            make_edge(2, 2, 3),
-        ];
+        let edges = vec![make_edge(1, 1, 2), make_edge(2, 2, 3)];
 
         let descendants = get_descendants(1, &nodes, &edges);
         assert_eq!(descendants.len(), 3);
-        assert!(descendants.iter().any(|(id, depth)| *id == 1 && *depth == 0));
-        assert!(descendants.iter().any(|(id, depth)| *id == 2 && *depth == 1));
-        assert!(descendants.iter().any(|(id, depth)| *id == 3 && *depth == 2));
+        assert!(descendants
+            .iter()
+            .any(|(id, depth)| *id == 1 && *depth == 0));
+        assert!(descendants
+            .iter()
+            .any(|(id, depth)| *id == 2 && *depth == 1));
+        assert!(descendants
+            .iter()
+            .any(|(id, depth)| *id == 3 && *depth == 2));
     }
 
     // --- Chain Recency Tests ---
 
-    fn make_node_with_updated(id: i32, node_type: &str, title: &str, updated_at: &str) -> DecisionNode {
+    fn make_node_with_updated(
+        id: i32,
+        node_type: &str,
+        title: &str,
+        updated_at: &str,
+    ) -> DecisionNode {
         DecisionNode {
             id,
             change_id: format!("change-{}", id),
@@ -584,9 +590,7 @@ mod tests {
             make_node(2, "decision", "Decision", None),
             make_node(3, "goal", "Goal 2", None),
         ];
-        let edges = vec![
-            make_edge(1, 1, 2),
-        ];
+        let edges = vec![make_edge(1, 1, 2)];
 
         let chains = build_chains(&nodes, &edges);
         assert_eq!(chains.len(), 2); // Two goals = two chains
@@ -662,10 +666,7 @@ mod tests {
             make_node(2, "decision", "Dec", None),
             make_node(3, "action", "Act", None),
         ];
-        let edges = vec![
-            make_edge(1, 1, 2),
-            make_edge(2, 2, 3),
-        ];
+        let edges = vec![make_edge(1, 1, 2), make_edge(2, 2, 3)];
 
         let chains = build_chains(&nodes, &edges);
         let visible = filter_nodes_by_chains(&chains);
@@ -681,7 +682,10 @@ mod tests {
     #[test]
     fn test_cycle_type_filter() {
         assert_eq!(cycle_type_filter(None), Some("goal".to_string()));
-        assert_eq!(cycle_type_filter(Some("goal")), Some("decision".to_string()));
+        assert_eq!(
+            cycle_type_filter(Some("goal")),
+            Some("decision".to_string())
+        );
         assert_eq!(cycle_type_filter(Some("observation")), None);
     }
 
@@ -689,15 +693,25 @@ mod tests {
     fn test_cycle_branch_filter() {
         let branches = vec!["main".to_string(), "feature".to_string()];
 
-        assert_eq!(cycle_branch_filter(None, &branches), Some("main".to_string()));
-        assert_eq!(cycle_branch_filter(Some("main"), &branches), Some("feature".to_string()));
+        assert_eq!(
+            cycle_branch_filter(None, &branches),
+            Some("main".to_string())
+        );
+        assert_eq!(
+            cycle_branch_filter(Some("main"), &branches),
+            Some("feature".to_string())
+        );
         assert_eq!(cycle_branch_filter(Some("feature"), &branches), None);
         assert_eq!(cycle_branch_filter(None, &[]), None);
     }
 
     #[test]
     fn test_filter_branch_matches() {
-        let branches = vec!["main".to_string(), "feature-auth".to_string(), "feature-ui".to_string()];
+        let branches = vec![
+            "main".to_string(),
+            "feature-auth".to_string(),
+            "feature-ui".to_string(),
+        ];
 
         let matches = filter_branch_matches(&branches, "feature");
         assert_eq!(matches.len(), 2);
