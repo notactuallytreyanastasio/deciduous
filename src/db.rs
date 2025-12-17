@@ -2475,6 +2475,14 @@ impl Database {
                 {
                     continue;
                 }
+                // Skip Claude Code internal requests (title generation, warmup)
+                if trimmed.starts_with("Please write a 5-10 word title")
+                    || trimmed.starts_with("Please write a five to ten word title")
+                    || trimmed == "Warmup"
+                    || trimmed.starts_with("You are now a prompt suggestion generator")
+                {
+                    continue;
+                }
                 // Found a good user prompt
                 result.insert(span.session_id.clone(), preview.clone());
             }
