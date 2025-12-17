@@ -181,12 +181,16 @@ git status                # Current state
 
 ## Quick Reference
 
+**IMPORTANT: Always use the Makefile for builds and tests.** The Makefile sets up required library paths (e.g., libiconv on macOS). Never run `cargo` commands directly.
+
 ```bash
 # Build
-cargo build --release
+make release              # Build release binary
+make release-full         # Build everything: trace-interceptor + web + binary
 
 # Run tests
-cargo test
+make test                 # Run all tests
+make test-verbose         # Run tests with output
 
 # Initialize in a new project
 deciduous init
@@ -297,22 +301,21 @@ trace-interceptor/       # Node.js API interceptor (bundled into binary)
 
 ### Rebuild Process
 
-After modifying any `web/src/**` files:
+After modifying any `web/src/**` or `trace-interceptor/src/**` files:
 
 ```bash
-# 1. Build the web viewer (outputs singlefile HTML)
-cd web && npm run build && cd ..
+# Full rebuild (recommended) - builds trace-interceptor, web viewer, and Rust binary
+make release-full
 
-# 2. Copy to embedded locations (use absolute paths)
-cp /path/to/deciduous/web/dist/index.html /path/to/deciduous/src/viewer.html
-cp /path/to/deciduous/web/dist/index.html /path/to/deciduous/docs/demo/index.html
-
-# 3. Run Rust tests to ensure nothing broke
-cargo test
-
-# 4. Build release binary
-cargo build --release
+# Or step by step:
+make trace-build          # Build trace interceptor (tsc + esbuild bundle)
+make web-build            # Build web viewer (outputs singlefile HTML)
+make trace-clear-cache    # Clear cached interceptor (forces re-extraction)
+make test                 # Run tests
+make release              # Build release binary
 ```
+
+**IMPORTANT:** Always use `make release-full` when modifying trace-interceptor or web code. This ensures the bundled JS and embedded HTML are updated correctly.
 
 ### Chain/Graph Processing Notes
 
@@ -559,17 +562,31 @@ Linked sessions show a green badge in the UI and are preserved during pruning.
 
 ## Development Rules
 
+### ⚠️ ALWAYS Use the Makefile
+
+**Never run `cargo` commands directly.** The Makefile sets up required environment variables (e.g., `LIBRARY_PATH` for libiconv on macOS). Direct cargo commands will fail on some systems.
+
+```bash
+# WRONG - will fail on macOS
+cargo build --release
+cargo test
+
+# CORRECT - always use make
+make release
+make test
+```
+
 ### Code Quality - MANDATORY
 
 1. **ALWAYS run tests before committing:**
    ```bash
-   cargo test
+   make test
    ```
    Do NOT commit if tests fail.
 
 2. **ALWAYS ensure code compiles:**
    ```bash
-   cargo build --release
+   make release
    ```
    Do NOT commit code that doesn't compile.
 
@@ -580,15 +597,16 @@ Linked sessions show a green badge in the UI and are preserved during pruning.
 
 4. **Run clippy for lints:**
    ```bash
-   cargo clippy
+   make lint
    ```
 
 ### Pre-Commit Checklist
 
 ```bash
-cargo test              # All tests pass?
-cargo build --release   # Compiles cleanly?
-cargo clippy            # No warnings?
+make test      # All tests pass?
+make release   # Compiles cleanly?
+make lint      # No warnings?
+make fmt-check # Formatting correct?
 ```
 
 Only commit if ALL pass.
@@ -616,8 +634,8 @@ Follow semver strictly: `MAJOR.MINOR.PATCH`
 
 2. **Run full test suite:**
    ```bash
-   cargo test
-   cargo build --release
+   make test
+   make release
    ```
 
 3. **Update CHANGELOG (if exists) or commit message with release notes**
@@ -672,8 +690,8 @@ Follow semver strictly: `MAJOR.MINOR.PATCH`
 # 1. Bump version
 sed -i '' 's/version = "0.3.4"/version = "0.3.5"/' Cargo.toml
 
-# 2. Test
-cargo test && cargo build --release
+# 2. Test (always use make!)
+make test && make release
 
 # 3. Commit
 git add Cargo.toml Cargo.lock
