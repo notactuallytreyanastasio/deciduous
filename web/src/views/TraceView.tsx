@@ -332,7 +332,7 @@ const TraceView: React.FC = () => {
                                             <span style={styles.toolType}>{tool.type === 'tool_input' ? 'INPUT' : 'OUTPUT'}</span>
                                             {tool.content.length > 500 && <span style={{ color: '#888', fontSize: '11px', marginLeft: '8px' }}>({tool.content.length.toLocaleString()} chars)</span>}
                                           </div>
-                                          <div style={{ ...styles.toolContent, maxHeight: '300px', overflow: 'auto' }}>
+                                          <div style={styles.toolContent}>
                                             {tool.content}
                                           </div>
                                         </div>
@@ -343,11 +343,11 @@ const TraceView: React.FC = () => {
                                   </div>
                                 )}
 
-                                {/* System prompt (collapsed by default, scrollable) */}
+                                {/* System prompt (collapsed by default) */}
                                 {system && (
                                   <details style={styles.systemDetails}>
                                     <summary style={styles.systemSummary}>📋 System Prompt ({system.length.toLocaleString()} chars)</summary>
-                                    <div style={{ ...styles.systemBox, maxHeight: '400px', overflow: 'auto' }}>
+                                    <div style={styles.systemBox}>
                                       {system}
                                     </div>
                                   </details>
@@ -627,8 +627,6 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
-    maxHeight: '150px',
-    overflow: 'auto',
     color: '#1e40af',
   },
   thinkingBox: {
@@ -640,8 +638,6 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
-    maxHeight: '200px',
-    overflow: 'auto',
     color: '#92400e',
   },
   responseBox: {
@@ -653,8 +649,6 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
-    maxHeight: '200px',
-    overflow: 'auto',
     color: '#166534',
   },
   toolBlock: {
@@ -687,8 +681,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontFamily: 'monospace',
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
-    maxHeight: '120px',
-    overflow: 'auto',
     color: '#374151',
   },
   systemDetails: {
@@ -709,8 +701,6 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.4,
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
-    maxHeight: '150px',
-    overflow: 'auto',
     color: '#6b21a8',
     marginTop: '6px',
   },
