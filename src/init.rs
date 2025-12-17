@@ -537,82 +537,125 @@ git add .deciduous/patches/
 /// Decision Logger Skill - autonomously triggers Claude to log decisions
 const DECISION_LOGGER_SKILL: &str = r#"---
 name: decision-logger
-description: |
-  Log decisions to the decision graph when working on features, fixing bugs, or making architectural choices.
-  USE THIS SKILL when:
-  - User asks for a new feature or change (log as goal)
-  - Choosing between implementation approaches (log as decision)
-  - About to write or modify code (log as action)
-  - Completing work or encountering results (log as outcome)
-  - Noticing something important about the codebase (log as observation)
+description: Log all work to the decision graph with deciduous CLI. ALWAYS use when starting tasks, implementing features, fixing bugs, planning, refactoring, choosing approaches, or making any code changes. Creates persistent memory that survives context loss.
 ---
 
-# Decision Graph Logging
+# Decision Graph Logger
 
-Track every goal, decision, and outcome in the decision graph. This creates persistent memory that survives context loss.
+**MANDATORY: Log decisions in real-time as you work.** The decision graph is your persistent memory.
 
-## When to Log (Automatic Triggers)
+## Start EVERY Task with a Goal
 
-| Situation | Node Type | Example |
-|-----------|-----------|---------|
-| User requests new feature | `goal` | "Add user authentication" |
-| Choosing between approaches | `decision` | "Choose between JWT vs sessions" |
-| Considering an option | `option` | "Use JWT with refresh tokens" |
-| About to write/edit code | `action` | "Implementing JWT auth middleware" |
-| Work completed or failed | `outcome` | "JWT auth working" or "JWT approach failed" |
-| Important observation | `observation` | "Existing code uses cookie-based sessions" |
-
-## Commands
+When the user asks for ANYTHING, IMMEDIATELY create a goal node FIRST:
 
 ```bash
-# Create nodes (always include confidence -c)
-deciduous add goal "Title" -c 90 -p "User's exact request"
-deciduous add decision "Title" -c 75
-deciduous add action "Title" -c 85
-deciduous add outcome "Title" -c 90
-deciduous add observation "Title" -c 80
+deciduous add goal "Brief title" -c 90 --prompt-stdin << 'EOF'
+<user's exact request, verbatim>
+EOF
+```
 
-# CRITICAL: Link nodes immediately after creation
+Do this BEFORE exploring code, BEFORE planning, BEFORE anything else.
+
+## Node Types - Use ALL of Them Granularly
+
+| When This Happens | Log This | Command |
+|-------------------|----------|---------|
+| User requests anything | `goal` | `deciduous add goal "..." -c 90 --prompt-stdin` |
+| Choosing between approaches | `decision` | `deciduous add decision "..." -c 75` |
+| Each alternative considered | `option` | `deciduous add option "..." -c 70` |
+| About to write/edit code | `action` | `deciduous add action "..." -c 85` |
+| Code change completed | `outcome` | `deciduous add outcome "..." -c 90` |
+| Something failed | `outcome` | `deciduous add outcome "Failed: ..." -c 90` |
+| Noticed something in codebase | `observation` | `deciduous add observation "..." -c 80` |
+
+## Granular Tracking
+
+**Log frequently, not just milestones:**
+- Multiple `action` nodes per goal (one per file change or logical step)
+- Multiple `outcome` nodes (one per completed step)
+- `observation` nodes when you discover anything relevant
+- `decision` nodes for ANY choice, not just big architectural ones
+
+## Link IMMEDIATELY After Creating Nodes
+
+```bash
+# Every node except root goals MUST link to a parent
 deciduous link <parent_id> <child_id> -r "Reason for connection"
-
-# After git commits, link to the graph
-deciduous add action "Committed feature X" -c 90 --commit HEAD
-
-# View the graph
-deciduous nodes
-deciduous edges
 ```
 
-## Rules
+**Linking rules:**
+- `action` → links to `goal` or `decision` that spawned it
+- `outcome` → links to `action` that produced it
+- `option` → links to `decision` it belongs to
+- `observation` → links to relevant `goal` or `action`
+- `decision` → links to `goal` or parent `decision`
 
-1. **Log BEFORE acting** - Create the action node before writing code
-2. **Link IMMEDIATELY** - Every node except root goals must have a parent
-3. **Capture verbatim prompts** - Use `-p` with the user's exact words for goals
-4. **Include confidence** - Always use `-c` flag (0-100)
-5. **Log outcomes** - Both successes AND failures get logged
-
-## Confidence Guidelines
-
-- 90-100: Certain, verified, tested
-- 75-89: High confidence, likely correct
-- 50-74: Moderate confidence, some uncertainty
-- Below 50: Experimental, speculative
-
-## The Memory Loop
+## The Workflow
 
 ```
-User Request → Log goal with -p
-    ↓
-Choose Approach → Log decision + options
-    ↓
-Start Coding → Log action FIRST
-    ↓
-Complete Work → Log outcome, link to parent
-    ↓
-Git Commit → Log with --commit HEAD
+1. USER REQUEST ARRIVES
+   ↓
+   deciduous add goal "..." --prompt-stdin    ← ALWAYS FIRST
+   ↓
+2. EXPLORE/PLAN
+   ↓
+   deciduous add observation "Found X in codebase" (if relevant)
+   deciduous link <goal> <obs> -r "Discovery"
+   ↓
+3. CHOOSE APPROACH (if multiple options)
+   ↓
+   deciduous add decision "How to implement X"
+   deciduous link <goal> <decision> -r "Design choice"
+   deciduous add option "Approach A"
+   deciduous add option "Approach B"
+   deciduous link <decision> <option> -r "Considered"
+   ↓
+4. BEFORE EACH CODE CHANGE
+   ↓
+   deciduous add action "Implement X in file.py"
+   deciduous link <goal_or_decision> <action> -r "Implementation step"
+   ↓
+5. MAKE THE CODE CHANGE
+   ↓
+6. AFTER CHANGE COMPLETES
+   ↓
+   deciduous add outcome "X implemented successfully" (or "Failed: reason")
+   deciduous link <action> <outcome> -r "Result"
+   ↓
+7. REPEAT 4-6 FOR EACH STEP
+   ↓
+8. FINAL OUTCOME
+   ↓
+   deciduous add outcome "Feature complete" -c 95
+   deciduous link <goal> <outcome> -r "Goal achieved"
 ```
 
-**Remember**: The decision graph is your persistent memory. Log as you work, not after.
+## Confidence Levels
+
+| Level | Meaning | Use For |
+|-------|---------|---------|
+| 90-100 | Certain, verified | Completed work, user-confirmed goals |
+| 75-89 | High confidence | Actions about to take, solid plans |
+| 50-74 | Moderate | Experimental approaches, uncertain fixes |
+| Below 50 | Speculative | Risky changes, untested ideas |
+
+## After Git Commits
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Committed auth feature" -c 95 --commit HEAD
+deciduous link <parent_action> <commit_action> -r "Git commit"
+```
+
+## Remember
+
+- **Goal FIRST** - Before any other work
+- **Log BEFORE acting** - Create action, then write code
+- **Log AFTER completing** - Outcomes capture results
+- **Link IMMEDIATELY** - No orphan nodes
+- **Granular > Sparse** - More nodes = better context recovery
+- **Failures matter** - Log unsuccessful outcomes too
+- **This IS your memory** - The graph survives context loss, you don't
 "#;
 
 const CLEANUP_WORKFLOW: &str = r#"name: Cleanup Decision Graph PNGs

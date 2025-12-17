@@ -81,9 +81,9 @@
           pname = "deciduous-trace-interceptor";
           version = "0.1.0";
           src = ./trace-interceptor;
-          npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # Will need updating
+          npmDepsHash = "sha256-Vq918124VdB1h+NzqD1bTiNe2k7c+xcjg01KIlU0cdM=";
 
-          # Skip npm scripts that aren't needed during build
+          # Skip default npm build
           dontNpmBuild = true;
 
           buildPhase = ''
@@ -95,8 +95,8 @@
 
           installPhase = ''
             runHook preInstall
-            mkdir -p $out
-            cp -r dist $out/
+            mkdir -p $out/dist
+            cp -r dist/* $out/dist/
             runHook postInstall
           '';
         };
@@ -106,7 +106,7 @@
           pname = "deciduous-viewer";
           version = "0.1.0";
           src = ./web;
-          npmDepsHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; # Will need updating
+          npmDepsHash = "sha256-31qclPLawpYm05FW7M0voHKLxwXSneImZjhGYkOx3c4=";
 
           buildPhase = ''
             runHook preBuild
@@ -116,8 +116,8 @@
 
           installPhase = ''
             runHook preInstall
-            mkdir -p $out
-            cp -r dist $out/
+            mkdir -p $out/dist
+            cp -r dist/* $out/dist/
             runHook postInstall
           '';
         };
@@ -147,18 +147,12 @@
           };
         } // commonEnv);
 
-        # Full build with embedded web viewer (equivalent to make release-full)
-        # This requires manual steps to embed the viewer.html - see devShell scripts
-        deciduousFull = deciduous;
-
       in
       {
         # Packages
         packages = {
           default = deciduous;
-          inherit deciduous;
-          # These can be built when npm hashes are updated:
-          # inherit traceInterceptor webViewer;
+          inherit deciduous traceInterceptor webViewer;
         };
 
         # Checks (run with `nix flake check`)
@@ -239,17 +233,46 @@
               export LIBRARY_PATH="${pkgs.libiconv}/lib:''${LIBRARY_PATH:-}"
             ''}
 
-            echo "Deciduous development shell"
+            # Helper function for full builds (equivalent to make release-full)
+            nix-build-full() {
+              echo "Building trace-interceptor..."
+              (cd trace-interceptor && npm install && npm run build && npm run bundle) || return 1
+
+              echo "Building web viewer..."
+              (cd web && npm install && npm run build) || return 1
+
+              echo "Copying viewer to src/..."
+              cp web/dist/index.html src/viewer.html
+              cp web/dist/index.html docs/demo/index.html
+
+              echo "Clearing trace interceptor cache..."
+              rm -rf ~/.deciduous/trace-interceptor
+
+              echo "Building Rust binary..."
+              cargo build --release || return 1
+
+              echo ""
+              echo "Full release build complete: target/release/deciduous"
+            }
+
+            # Export the function
+            export -f nix-build-full
+
+            echo "========================================"
+            echo "  Deciduous Development Shell (Nix)"
+            echo "========================================"
             echo ""
-            echo "Available commands:"
+            echo "Rust commands:"
             echo "  cargo build --release    Build release binary"
             echo "  cargo test               Run tests"
             echo "  cargo clippy             Run linter"
             echo "  cargo fmt                Format code"
             echo ""
-            echo "Node.js builds:"
-            echo "  cd trace-interceptor && npm install && npm run build && npm run bundle"
-            echo "  cd web && npm install && npm run build"
+            echo "Nix commands:"
+            echo "  nix build                Build deciduous package"
+            echo "  nix build .#webViewer    Build web viewer only"
+            echo "  nix build .#traceInterceptor  Build trace interceptor"
+            echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
             echo ""
             echo "Full rebuild (equivalent to make release-full):"
             echo "  nix-build-full"
