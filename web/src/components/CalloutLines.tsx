@@ -864,12 +864,14 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 </text>
               )}
 
-              {/* Zoom to Node Button */}
+              {/* + Button: zoom AND show bottom-left panel */}
               <g
                 style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  // Just zoom to the node - panel opens on card click
+                  // Show bottom-left panel with node info
+                  setExpandedNodeId(callout.node.id);
+                  // Zoom to the node
                   if (onNavigateToNode) {
                     onNavigateToNode(callout.node);
                   }
@@ -971,11 +973,12 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
           {truncate(expandedNode.title, 50)}
         </h3>
 
-        {/* Go to Node button */}
+        {/* Go to Node button - zooms to the node */}
         <button
           onClick={() => {
-            handleCardClick(expandedNode);
-            setExpandedNodeId(null);
+            if (onNavigateToNode) {
+              onNavigateToNode(expandedNode);
+            }
           }}
           style={{
             width: '100%',
@@ -1006,8 +1009,10 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 <div
                   key={node.id}
                   onClick={() => {
-                    handleCardClick(node);
-                    setExpandedNodeId(null);
+                    if (onNavigateToNode) {
+                      onNavigateToNode(node);
+                    }
+                    setExpandedNodeId(node.id);
                   }}
                   style={{
                     display: 'flex',
@@ -1072,8 +1077,11 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 <div
                   key={node.id}
                   onClick={() => {
-                    handleCardClick(node);
-                    setExpandedNodeId(null);
+                    // Zoom to node and update panel to show its info
+                    if (onNavigateToNode) {
+                      onNavigateToNode(node);
+                    }
+                    setExpandedNodeId(node.id);
                   }}
                   style={{
                     display: 'flex',

@@ -433,7 +433,7 @@ dependencies = [
 
 [[package]]
 name = "deciduous"
-version = "0.8.18"
+version = "0.8.19"
 dependencies = [
  "chrono",
  "clap",

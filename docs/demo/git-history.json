@@ -1,11 +1,11 @@
 [
   {
-    "hash": "67f3b11a19e7e90941190bfebde5b1df0f694469",
-    "short_hash": "67f3b11",
+    "hash": "f7cb041a47ef948fa387195328b787b58b82c1b0",
+    "short_hash": "f7cb041",
     "author": "Bobby Nathan",
-    "date": "2025-12-17T15:25:26-05:00",
-    "message": "fix: separate zoom button from chain panel\n\n- + button now only zooms to node\n- Click card to open chain panel\n- Cleaner UX: zoom first, explore chain if needed\n\nrelease: v0.8.17",
-    "files_changed": 15
+    "date": "2025-12-17T15:59:08-05:00",
+    "message": "release: v0.8.18 - clean rebuild of viewer",
+    "files_changed": 4
   },
   {
     "hash": "8ee414ae27b8875fe95b4ae207c5c362c3ce7d47",
@@ -24,12 +24,12 @@
     "files_changed": 6
   },
   {
-    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
-    "short_hash": "157aa70",
+    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
+    "short_hash": "9e9953a",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
-    "files_changed": 5
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 3
   },
   {
     "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
@@ -40,12 +40,12 @@
     "files_changed": 4
   },
   {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
+    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
+    "short_hash": "157aa70",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
   },
   {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",

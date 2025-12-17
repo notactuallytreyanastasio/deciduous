@@ -259,10 +259,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         zoomBehaviorRef.current.transform,
         d3.zoomIdentity.translate(targetX, targetY).scale(targetScale)
       );
-
-    // Also open the node modal
-    setSelectedNodeId(node.id);
-  }, [nodePositions, setSelectedNodeId]);
+    // Don't open modal here - let user click on panel or node to open it
+  }, [nodePositions]);
 
   // Build and render DAG
   useEffect(() => {
