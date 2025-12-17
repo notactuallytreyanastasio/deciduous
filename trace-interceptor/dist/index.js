@@ -106,6 +106,30 @@ function isSystemInjectedText(text) {
     return false;
 }
 /**
+ * Check if this is an internal check request that should be skipped
+ * Claude Code sends these haiku requests for quota/capability checks
+ */
+function isInternalCheckRequest(body) {
+    if (!body.messages || body.messages.length === 0)
+        return false;
+    // Internal checks use haiku models
+    if (!body.model?.includes('haiku'))
+        return false;
+    // Check if all user messages are internal check messages
+    for (const msg of body.messages) {
+        if (msg.role !== 'user')
+            continue;
+        if (typeof msg.content === 'string') {
+            const trimmed = msg.content.trim();
+            // Known internal check messages
+            if (trimmed === 'quota' || trimmed === 'foo' || trimmed === '#') {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+/**
  * Extract user message preview from request body
  * Looks for actual user text content, skipping:
  * - tool_result blocks (these are tool outputs, not user input)
@@ -354,6 +378,13 @@ async function interceptedFetch(input, init) {
                 debugLog(` Body parse error: ${e}`);
             }
         }
+    }
+    // Skip internal check requests (haiku quota/capability checks)
+    if (requestBody && isInternalCheckRequest(requestBody)) {
+        if (process.env.DECIDUOUS_TRACE_DEBUG) {
+            debugLog(' Skipping internal check request');
+        }
+        return originalFetch(input, init);
     }
     const userPreview = requestBody ? extractUserPreview(requestBody) : undefined;
     if (process.env.DECIDUOUS_TRACE_DEBUG) {
