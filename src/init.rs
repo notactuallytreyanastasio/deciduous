@@ -537,20 +537,24 @@ git add .deciduous/patches/
 /// Decision Logger Skill - autonomously triggers Claude to log decisions
 const DECIDUOUS_SKILL: &str = r#"---
 name: deciduous
-description: Log decisions to the decision graph when working on features, fixing bugs, or making architectural choices.
+description: Plan, implement, track, and reflect on your work goals and decisions.
 ---
 
-# Decision Graph Logging
+# Planning & Decision Graph Logging
 
 Track every goal, decision, and outcome in the decision graph. This creates persistent memory that survives context loss.
-ALWAYS LOG BEFORE YOU CODE, NOT AFTER.
-When drafting a plan create the GOAL node.
-User Decisions should be tracked
+
+- ALWAYS LOG BEFORE YOU CODE, NOT AFTER.
+- Log at the granularity of TODOs or task items.
+- When drafting a plan create the GOAL node.
+- User Decisions should be tracked
 
 ## When to Log (Automatic Triggers)
 
 | Situation | Node Type | Example |
 |-----------|-----------|---------|
+| In plan mode  | `goal` | "Add user authentication" |
+| TODO / Task Item | `action` | "Implementing JWT auth middleware" |
 | User requests new feature | `goal` | "Add user authentication" |
 | Choosing between approaches | `decision` | "Choose between JWT vs sessions" |
 | Considering an option | `option` | "Use JWT with refresh tokens" |
