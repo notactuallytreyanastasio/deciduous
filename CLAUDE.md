@@ -205,6 +205,45 @@ deciduous dot --png -o docs/decision-graph.dot
 deciduous writeup -t "Feature X" --nodes 1-15 -o PR-WRITEUP.md
 ```
 
+## Subagents - Domain-Specific Context
+
+**Use subagents to scope work to specific parts of the codebase.**
+
+When working on this project, identify which domain the work belongs to and use the appropriate subagent context. Subagent definitions are in `.claude/agents.toml`.
+
+### Available Subagents
+
+| Agent | Domain | Key Files |
+|-------|--------|-----------|
+| `rust-core` | CLI, database, export/sync | `src/main.rs`, `src/db.rs`, `src/export.rs` |
+| `tui` | Terminal UI with Ratatui | `src/tui/**/*.rs` |
+| `web` | React/TypeScript viewer | `web/src/**/*.{ts,tsx}` |
+| `tooling` | Editor integrations | `.claude/`, `.windsurf/`, `src/init.rs` |
+| `docs` | Documentation, guides | `docs/`, `README.md`, `ROADMAP.md` |
+| `ci` | Build, Actions, releases | `.github/workflows/`, `scripts/` |
+
+### How to Use Subagents
+
+When spawning a Task for exploration or implementation:
+
+1. **Identify the domain** from the file patterns in `.claude/agents.toml`
+2. **Include the subagent context** in your Task prompt
+3. **Scope file searches** to the relevant patterns
+
+Example: For TUI work, spawn an Explore agent with:
+```
+"Focus on src/tui/. This is the TUI agent domain - Ratatui widgets, TEA pattern, vim navigation. See .claude/agents.toml for full context."
+```
+
+### Why Subagents Matter
+
+- **Reduced context overhead**: Focus on relevant files only
+- **Domain expertise**: Each agent has specialized instructions
+- **Parallel work**: Multiple agents can work on different domains simultaneously
+- **Consistency**: Same patterns applied across similar work
+
+---
+
 ## Architecture
 
 ```

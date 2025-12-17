@@ -1,0 +1,180 @@
+# Deciduous Project Subagents
+# Domain-specific agents for working on different parts of the codebase.
+#
+# When working on a specific domain, spawn a Task with subagent_type="Explore" or
+# "general-purpose" and include the relevant agent's context in the prompt.
+#
+# Usage: When you identify work belongs to a specific domain, reference this config
+# and scope your exploration/work to the relevant file patterns.
+
+[agents.rust-core]
+name = "Rust Core"
+description = "CLI commands, database layer, export/sync logic"
+file_patterns = [
+    "src/main.rs",
+    "src/db.rs",
+    "src/lib.rs",
+    "src/serve.rs",
+    "src/export.rs",
+    "src/diff.rs",
+    "src/config.rs",
+    "src/schema.rs",
+    "src/github.rs",
+    "src/roadmap.rs",
+    "Cargo.toml",
+    "Cargo.lock"
+]
+exclude_patterns = ["src/tui/**"]
+focus_areas = [
+    "Diesel ORM and SQLite database operations",
+    "CLI command dispatch and argument parsing",
+    "JSON/DOT export and PR writeup generation",
+    "Multi-user sync with diff/patch system",
+    "HTTP server for web UI (serve.rs)"
+]
+instructions = """
+When working on Rust core:
+- Run `cargo test` before and after changes
+- Run `cargo clippy` to check for lints
+- Follow existing patterns in db.rs for database operations
+- Use the macro patterns in export.rs (w!, wln!) for output
+- Maintain backwards compatibility with existing CLI commands
+"""
+
+[agents.tui]
+name = "TUI Agent"
+description = "Terminal UI with Ratatui - views, modals, navigation, keybindings"
+file_patterns = [
+    "src/tui/**/*.rs",
+    "src/tui/app.rs",
+    "src/tui/mod.rs"
+]
+focus_areas = [
+    "Ratatui widgets and rendering",
+    "TEA (The Elm Architecture) pattern - Model/Update/View",
+    "Vim-style navigation (j/k/g/G)",
+    "Modal dialogs and state management",
+    "Syntax highlighting with syntect"
+]
+instructions = """
+When working on TUI:
+- Follow TEA pattern: pure state transformations in state.rs, messages in msg.rs
+- Views should be pure rendering functions with no side effects
+- Test state transformations independently from rendering
+- Use crossterm for terminal events, ratatui for rendering
+- Check src/tui/views/ for existing view implementations
+"""
+
+[agents.web]
+name = "Web Viewer Agent"
+description = "React + TypeScript + D3/Dagre web viewer"
+file_patterns = [
+    "web/src/**/*.ts",
+    "web/src/**/*.tsx",
+    "web/src/views/**",
+    "web/src/components/**",
+    "web/src/hooks/**",
+    "web/src/utils/**",
+    "web/src/types/**",
+    "web/package.json",
+    "web/vite.config.ts",
+    "web/tsconfig.json"
+]
+focus_areas = [
+    "React components and hooks",
+    "D3.js and Dagre for graph visualization",
+    "TypeScript types matching Rust backend",
+    "Vite build system",
+    "URL state management for deep linking"
+]
+instructions = """
+When working on web viewer:
+- After changes, rebuild: cd web && npm run build
+- Copy output: cp web/dist/index.html src/viewer.html
+- Types in web/src/types/graph.ts must match Rust JSON output
+- Run `npm run typecheck` to verify types
+- Test in browser with `deciduous serve`
+"""
+
+[agents.tooling]
+name = "Tooling/Templates Agent"
+description = "Editor integrations, slash commands, rules, and init templates"
+file_patterns = [
+    ".claude/**/*.md",
+    ".claude/**/*.toml",
+    ".windsurf/**/*.md",
+    ".opencode/**/*.md",
+    ".codex/**/*.md",
+    "CLAUDE.md",
+    "AGENTS.md",
+    "src/init.rs"
+]
+focus_areas = [
+    "Claude Code slash commands and configuration",
+    "Windsurf rules and memories",
+    "OpenCode and Codex prompt templates",
+    "Template sync between actual files and src/init.rs",
+    "Editor-agnostic deciduous workflow instructions"
+]
+instructions = """
+When working on tooling:
+- CRITICAL: If you modify .claude/commands/*.md, also update src/init.rs templates
+- Templates in init.rs MUST match actual files to avoid drift
+- Test with: deciduous init --claude (in a temp directory)
+- Each editor has different syntax (frontmatter, triggers, etc.)
+- Keep instructions consistent across all editors
+"""
+
+[agents.docs]
+name = "Documentation Agent"
+description = "User-facing docs, guides, roadmap management"
+file_patterns = [
+    "docs/**/*.html",
+    "docs/**/*.md",
+    "README.md",
+    "ROADMAP.md",
+    "CHANGELOG.md",
+    "docs/tutorial/**"
+]
+exclude_patterns = [
+    "docs/graph-data.json",
+    "docs/git-history.json",
+    "docs/demo/**"
+]
+focus_areas = [
+    "User-facing documentation and guides",
+    "GitHub Pages site content",
+    "Roadmap item management",
+    "Tutorial content"
+]
+instructions = """
+When working on docs:
+- Keep README.md focused on quick start and essentials
+- ROADMAP.md has special HTML comments for tracking - preserve them
+- Tutorial pages should be narrative, not reference docs
+- Run `deciduous sync` to update graph-data.json for the demo
+"""
+
+[agents.ci]
+name = "CI/CD Agent"
+description = "Build scripts, GitHub Actions, release automation"
+file_patterns = [
+    "scripts/**",
+    ".github/workflows/**",
+    ".github/**",
+    "Cargo.toml",
+    "Makefile"
+]
+focus_areas = [
+    "GitHub Actions workflows",
+    "Pre-commit hooks and validation scripts",
+    "Release automation",
+    "Cross-platform builds"
+]
+instructions = """
+When working on CI/CD:
+- Test workflows locally when possible (act or manual simulation)
+- Keep workflows fast - use caching
+- Validate that all checks pass before merging
+- Release process: version bump -> test -> tag -> publish
+"""

@@ -80,37 +80,39 @@
 ### Subagent System for Codebase Domains
 <!-- roadmap:section id="a1b2c3d4-5e6f-7890-abcd-ef1234567890" -->
 *Specialized agents for each part of the deciduous codebase*
-- [ ] **Set up domain-specific subagents**
+- [x] **Set up domain-specific subagents**
   <!-- roadmap:item id="d4e5f6a7-b8c9-0d1e-2f3a-4b5c6d7e8f9a" outcome_change_id="" -->
   - Each domain gets a specialized agent with focused context and tools
   - Agents can work in parallel on different parts of the codebase
   - Reduces context overhead by scoping to relevant files/patterns
-- [ ] **Rust Core Agent** (`src/` excluding `src/tui/`)
+  - **Implemented**: `.claude/agents.toml` with 6 domain agents
+  - **Integrated**: CLAUDE.md references agents, `deciduous init --claude` creates template
+- [x] **Rust Core Agent** (`src/` excluding `src/tui/`)
   <!-- roadmap:item id="e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b" outcome_change_id="" -->
   - CLI commands, database layer, export/sync logic
   - Diesel ORM, SQLite, command dispatch
   - Focus: `src/main.rs`, `src/db.rs`, `src/lib.rs`, `src/serve.rs`
-- [ ] **TUI Agent** (`src/tui/`)
+- [x] **TUI Agent** (`src/tui/`)
   <!-- roadmap:item id="f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c" outcome_change_id="" -->
   - Terminal UI with Ratatui
   - Views, modals, navigation, keybindings
   - Focus: `src/tui/app.rs`, `src/tui/views/`, `src/tui/widgets/`
-- [ ] **Web Viewer Agent** (`web/`)
+- [x] **Web Viewer Agent** (`web/`)
   <!-- roadmap:item id="a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d" outcome_change_id="" -->
   - React + TypeScript + D3/Dagre
   - Components, hooks, views, styling
   - Focus: `web/src/views/`, `web/src/components/`, `web/src/hooks/`
-- [ ] **Tooling/Templates Agent** (`.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md`)
+- [x] **Tooling/Templates Agent** (`.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md`)
   <!-- roadmap:item id="b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e" outcome_change_id="" -->
   - Editor integrations, slash commands, rules
   - Template sync with `src/init.rs`
   - Focus: `.claude/commands/`, `.windsurf/rules/`, tooling docs
-- [ ] **Documentation Agent** (`docs/`, `README.md`, `ROADMAP.md`)
+- [x] **Documentation Agent** (`docs/`, `README.md`, `ROADMAP.md`)
   <!-- roadmap:item id="c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f" outcome_change_id="" -->
   - User-facing docs, guides, roadmap management
   - GitHub Pages content
   - Focus: `docs/`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`
-- [ ] **CI/CD Agent** (`scripts/`, `.github/`)
+- [x] **CI/CD Agent** (`scripts/`, `.github/`)
   <!-- roadmap:item id="d0e1f2a3-b4c5-6d7e-8f9a-0b1c2d3e4f5a" outcome_change_id="" -->
   - Build scripts, GitHub Actions, release automation
   - Pre-commit hooks, validation
