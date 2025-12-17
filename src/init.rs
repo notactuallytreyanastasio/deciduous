@@ -535,127 +535,80 @@ git add .deciduous/patches/
 "#;
 
 /// Decision Logger Skill - autonomously triggers Claude to log decisions
-const DECISION_LOGGER_SKILL: &str = r#"---
-name: decision-logger
-description: Log all work to the decision graph with deciduous CLI. ALWAYS use when starting tasks, implementing features, fixing bugs, planning, refactoring, choosing approaches, or making any code changes. Creates persistent memory that survives context loss.
+const DECIDUOUS_SKILL: &str = r#"---
+name: deciduous
+description: Log decisions to the decision graph when working on features, fixing bugs, or making architectural choices.
 ---
 
-# Decision Graph Logger
+# Decision Graph Logging
 
-**MANDATORY: Log decisions in real-time as you work.** The decision graph is your persistent memory.
+Track every goal, decision, and outcome in the decision graph. This creates persistent memory that survives context loss.
+ALWAYS LOG BEFORE YOU CODE, NOT AFTER.
+When drafting a plan create the GOAL node.
+User Decisions should be tracked
 
-## Start EVERY Task with a Goal
+## When to Log (Automatic Triggers)
 
-When the user asks for ANYTHING, IMMEDIATELY create a goal node FIRST:
+| Situation | Node Type | Example |
+|-----------|-----------|---------|
+| User requests new feature | `goal` | "Add user authentication" |
+| Choosing between approaches | `decision` | "Choose between JWT vs sessions" |
+| Considering an option | `option` | "Use JWT with refresh tokens" |
+| About to write/edit code | `action` | "Implementing JWT auth middleware" |
+| Work completed or failed | `outcome` | "JWT auth working" or "JWT approach failed" |
+| Important observation | `observation` | "Existing code uses cookie-based sessions" |
 
-```bash
-deciduous add goal "Brief title" -c 90 --prompt-stdin << 'EOF'
-<user's exact request, verbatim>
-EOF
-```
-
-Do this BEFORE exploring code, BEFORE planning, BEFORE anything else.
-
-## Node Types - Use ALL of Them Granularly
-
-| When This Happens | Log This | Command |
-|-------------------|----------|---------|
-| User requests anything | `goal` | `deciduous add goal "..." -c 90 --prompt-stdin` |
-| Choosing between approaches | `decision` | `deciduous add decision "..." -c 75` |
-| Each alternative considered | `option` | `deciduous add option "..." -c 70` |
-| About to write/edit code | `action` | `deciduous add action "..." -c 85` |
-| Code change completed | `outcome` | `deciduous add outcome "..." -c 90` |
-| Something failed | `outcome` | `deciduous add outcome "Failed: ..." -c 90` |
-| Noticed something in codebase | `observation` | `deciduous add observation "..." -c 80` |
-
-## Granular Tracking
-
-**Log frequently, not just milestones:**
-- Multiple `action` nodes per goal (one per file change or logical step)
-- Multiple `outcome` nodes (one per completed step)
-- `observation` nodes when you discover anything relevant
-- `decision` nodes for ANY choice, not just big architectural ones
-
-## Link IMMEDIATELY After Creating Nodes
+## Commands
 
 ```bash
-# Every node except root goals MUST link to a parent
+# Create nodes (always include confidence -c)
+deciduous add goal "Title" -c 90 -p "User's exact request"
+deciduous add decision "Title" -c 75
+deciduous add action "Title" -c 85
+deciduous add outcome "Title" -c 90
+deciduous add observation "Title" -c 80
+
+# CRITICAL: Link nodes immediately after creation
 deciduous link <parent_id> <child_id> -r "Reason for connection"
+
+# After git commits, link to the graph
+deciduous add action "Committed feature X" -c 90 --commit HEAD
+
+# View the graph
+deciduous nodes
+deciduous edges
 ```
 
-**Linking rules:**
-- `action` → links to `goal` or `decision` that spawned it
-- `outcome` → links to `action` that produced it
-- `option` → links to `decision` it belongs to
-- `observation` → links to relevant `goal` or `action`
-- `decision` → links to `goal` or parent `decision`
+## Rules
 
-## The Workflow
+1. **Log BEFORE acting** - Create the action node before writing code
+2. **Link IMMEDIATELY** - Every node except root goals must have a parent
+3. **Capture verbatim prompts** - Use `-p` with the user's exact words for goals
+4. **Include confidence** - Always use `-c` flag (0-100)
+5. **Log outcomes** - Both successes AND failures get logged
+
+## Confidence Guidelines
+
+- 90-100: Certain, verified, tested
+- 75-89: High confidence, likely correct
+- 50-74: Moderate confidence, some uncertainty
+- Below 50: Experimental, speculative
+
+## The Memory Loop
 
 ```
-1. USER REQUEST ARRIVES
-   ↓
-   deciduous add goal "..." --prompt-stdin    ← ALWAYS FIRST
-   ↓
-2. EXPLORE/PLAN
-   ↓
-   deciduous add observation "Found X in codebase" (if relevant)
-   deciduous link <goal> <obs> -r "Discovery"
-   ↓
-3. CHOOSE APPROACH (if multiple options)
-   ↓
-   deciduous add decision "How to implement X"
-   deciduous link <goal> <decision> -r "Design choice"
-   deciduous add option "Approach A"
-   deciduous add option "Approach B"
-   deciduous link <decision> <option> -r "Considered"
-   ↓
-4. BEFORE EACH CODE CHANGE
-   ↓
-   deciduous add action "Implement X in file.py"
-   deciduous link <goal_or_decision> <action> -r "Implementation step"
-   ↓
-5. MAKE THE CODE CHANGE
-   ↓
-6. AFTER CHANGE COMPLETES
-   ↓
-   deciduous add outcome "X implemented successfully" (or "Failed: reason")
-   deciduous link <action> <outcome> -r "Result"
-   ↓
-7. REPEAT 4-6 FOR EACH STEP
-   ↓
-8. FINAL OUTCOME
-   ↓
-   deciduous add outcome "Feature complete" -c 95
-   deciduous link <goal> <outcome> -r "Goal achieved"
+User Request → Log goal with -p
+    ↓
+Choose Approach → Log decision + options
+    ↓
+Start Coding → Log action FIRST
+    ↓
+Complete Work → Log outcome, link to parent
+    ↓
+Git Commit → Log with --commit HEAD
 ```
 
-## Confidence Levels
-
-| Level | Meaning | Use For |
-|-------|---------|---------|
-| 90-100 | Certain, verified | Completed work, user-confirmed goals |
-| 75-89 | High confidence | Actions about to take, solid plans |
-| 50-74 | Moderate | Experimental approaches, uncertain fixes |
-| Below 50 | Speculative | Risky changes, untested ideas |
-
-## After Git Commits
-
-```bash
-git commit -m "feat: add auth"
-deciduous add action "Committed auth feature" -c 95 --commit HEAD
-deciduous link <parent_action> <commit_action> -r "Git commit"
-```
-
-## Remember
-
-- **Goal FIRST** - Before any other work
-- **Log BEFORE acting** - Create action, then write code
-- **Log AFTER completing** - Outcomes capture results
-- **Link IMMEDIATELY** - No orphan nodes
-- **Granular > Sparse** - More nodes = better context recovery
-- **Failures matter** - Log unsuccessful outcomes too
-- **This IS your memory** - The graph survives context loss, you don't
+**Remember**: The decision graph is your persistent memory. Log as you work, not after.
 "#;
 
 const CLEANUP_WORKFLOW: &str = r#"name: Cleanup Decision Graph PNGs
@@ -2446,22 +2399,22 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
                 append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
             }
 
-            // Create .claude/skills/decision-logger directory and SKILL.md
-            let skills_dir = cwd.join(".claude").join("skills").join("decision-logger");
+            // Create .claude/skills/deciduous directory and SKILL.md
+            let skills_dir = cwd.join(".claude").join("skills").join("deciduous");
             create_dir_if_missing(&skills_dir)?;
 
             let skill_path = skills_dir.join("SKILL.md");
             if force {
                 write_file_overwrite(
                     &skill_path,
-                    DECISION_LOGGER_SKILL,
-                    ".claude/skills/decision-logger/SKILL.md",
+                    DECIDUOUS_SKILL,
+                    ".claude/skills/deciduous/SKILL.md",
                 )?;
             } else {
                 write_file_if_missing(
                     &skill_path,
-                    DECISION_LOGGER_SKILL,
-                    ".claude/skills/decision-logger/SKILL.md",
+                    DECIDUOUS_SKILL,
+                    ".claude/skills/deciduous/SKILL.md",
                 )?;
             }
         }
@@ -2921,14 +2874,14 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let claude_md_path = cwd.join("CLAUDE.md");
             replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
 
-            // Create/update decision-logger skill
-            let skills_dir = cwd.join(".claude").join("skills").join("decision-logger");
+            // Create/update deciduous skill
+            let skills_dir = cwd.join(".claude").join("skills").join("deciduous");
             create_dir_if_missing(&skills_dir)?;
             let skill_path = skills_dir.join("SKILL.md");
             write_file_overwrite(
                 &skill_path,
-                DECISION_LOGGER_SKILL,
-                ".claude/skills/decision-logger/SKILL.md",
+                DECIDUOUS_SKILL,
+                ".claude/skills/deciduous/SKILL.md",
             )?;
         }
         Editor::Windsurf => {

@@ -46,6 +46,20 @@ interface DagreEdgeData {
 // Default number of recent chains to show (increased from 8 for larger graphs)
 const DEFAULT_RECENT_CHAINS = 1000;
 
+/**
+ * Get the most recent update time for a chain (max of all node updated_at times)
+ */
+function getChainLastUpdated(chain: Chain): number {
+  return Math.max(...chain.nodes.map(n => new Date(n.updated_at).getTime()));
+}
+
+/**
+ * Sort chains by most recent activity (most recently updated nodes)
+ */
+function sortChainsByRecency(chains: Chain[]): Chain[] {
+  return [...chains].sort((a, b) => getChainLastUpdated(b) - getChainLastUpdated(a));
+}
+
 export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory = [] }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -98,28 +112,40 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Store zoom behavior for programmatic control
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-  // Sort chains by root node ID for chronological left-to-right layout
-  const sortedChains = useMemo(() =>
+  // Sort chains by recency for "recent" filter (most recently updated first)
+  const chainsByRecency = useMemo(() => sortChainsByRecency(chains), [chains]);
+
+  // Sort chains by root node ID for chronological left-to-right DAG layout
+  const chainsByNodeId = useMemo(() =>
     [...chains].sort((a, b) => a.root.id - b.root.id),
     [chains]
   );
 
-  // Get only goal chains (for the dropdown and recent filtering)
+  // Get only goal chains sorted by recency (for the dropdown and recent filtering)
   const goalChains = useMemo(() =>
-    sortedChains.filter(c => c.root.node_type === 'goal'),
-    [sortedChains]
+    chainsByRecency.filter(c => c.root.node_type === 'goal'),
+    [chainsByRecency]
   );
 
   // Determine which chains to show based on view mode
-  const visibleChains = useMemo(() => {
+  // Note: visibleChains uses recency for filtering but we re-sort by ID for layout
+  const visibleChainSet = useMemo(() => {
+    let chainsToShow: Chain[];
     if (urlState.viewMode === 'single' && urlState.focusChainIndex !== null) {
-      return [chains[urlState.focusChainIndex]].filter(Boolean);
+      chainsToShow = [chains[urlState.focusChainIndex]].filter(Boolean);
+    } else if (urlState.viewMode === 'recent') {
+      chainsToShow = goalChains.slice(0, urlState.recentChainCount);
+    } else {
+      chainsToShow = chainsByRecency; // 'all' mode
     }
-    if (urlState.viewMode === 'recent') {
-      return goalChains.slice(0, urlState.recentChainCount);
-    }
-    return sortedChains; // 'all' mode
-  }, [urlState.viewMode, urlState.focusChainIndex, chains, goalChains, sortedChains, urlState.recentChainCount]);
+    return new Set(chainsToShow.map(c => c.root.id));
+  }, [urlState.viewMode, urlState.focusChainIndex, chains, goalChains, chainsByRecency, urlState.recentChainCount]);
+
+  // Re-sort visible chains by node ID for chronological left-to-right layout
+  const visibleChains = useMemo(() =>
+    chainsByNodeId.filter(c => visibleChainSet.has(c.root.id)),
+    [chainsByNodeId, visibleChainSet]
+  );
 
   // Get all visible node IDs from visible chains
   const visibleNodeIds = useMemo(() => {
