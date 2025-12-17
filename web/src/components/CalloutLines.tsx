@@ -850,6 +850,10 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 onClick={(e) => {
                   e.stopPropagation();
                   setExpandedNodeId(callout.node.id);
+                  // Pan/zoom to the node when expanding
+                  if (onNavigateToNode) {
+                    onNavigateToNode(callout.node);
+                  }
                 }}
               >
                 <rect
@@ -906,30 +910,23 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
 
         return (
           <foreignObject x="0" y="0" width="100%" height="100%">
+            {/* Bottom-left panel - no overlay, graph stays interactive */}
             <div
               style={{
                 position: 'fixed',
-                inset: 0,
-                backgroundColor: 'rgba(0,0,0,0.5)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                bottom: 20,
+                left: 20,
+                width: 380,
+                maxHeight: 'calc(100vh - 120px)',
+                backgroundColor: '#fff',
+                borderRadius: 12,
+                padding: 20,
+                overflow: 'auto',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                border: '1px solid #d0d7de',
                 zIndex: 1000,
               }}
-              onClick={() => setExpandedNodeId(null)}
             >
-              <div
-                style={{
-                  backgroundColor: '#fff',
-                  borderRadius: 12,
-                  padding: 24,
-                  maxWidth: 600,
-                  maxHeight: '80vh',
-                  overflow: 'auto',
-                  boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
-                }}
-                onClick={(e) => e.stopPropagation()}
-              >
                 {/* Modal Header */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1092,7 +1089,6 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                     </div>
                   )}
                 </div>
-              </div>
             </div>
           </foreignObject>
         );
