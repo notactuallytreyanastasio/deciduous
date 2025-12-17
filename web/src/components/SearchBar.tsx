@@ -158,13 +158,13 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       }
     }
 
-    // Node type priority: goal > outcome > decision > option > action > observation
+    // Node type priority: outcome > goal > action > option > decision > observation
     const typePriority: Record<string, number> = {
-      goal: 0,
-      outcome: 1,
-      decision: 2,
+      outcome: 0,
+      goal: 1,
+      action: 2,
       option: 3,
-      action: 4,
+      decision: 4,
       observation: 5,
     };
 

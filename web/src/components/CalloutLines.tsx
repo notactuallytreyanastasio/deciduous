@@ -328,6 +328,12 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   const [mobileSelectedNode, setMobileSelectedNode] = useState<DecisionNode | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [expandedNodeId, setExpandedNodeId] = useState<number | null>(null);
+  const [chainSearch, setChainSearch] = useState('');
+
+  // Clear chain search when expanded node changes
+  useEffect(() => {
+    setChainSearch('');
+  }, [expandedNodeId]);
 
   // Helper to get node by ID
   const getNode = (id: number) => nodes.find(n => n.id === id);
@@ -483,9 +489,22 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
       const bPriority = NODE_TYPE_PRIORITY[b.node_type] ?? 99;
       return aPriority - bPriority;
     };
+    // Filter by search if present
+    const lowerSearch = chainSearch.toLowerCase().trim();
+    const matchesSearch = (node: DecisionNode) => {
+      if (!lowerSearch) return true;
+      return (
+        node.title.toLowerCase().includes(lowerSearch) ||
+        node.node_type.toLowerCase().includes(lowerSearch) ||
+        node.description?.toLowerCase().includes(lowerSearch) ||
+        String(node.id).includes(lowerSearch)
+      );
+    };
     return {
-      ancestors: [...chain.ancestors].sort(sortByType),
-      descendants: [...chain.descendants].sort(sortByType),
+      ancestors: [...chain.ancestors].filter(matchesSearch).sort(sortByType),
+      descendants: [...chain.descendants].filter(matchesSearch).sort(sortByType),
+      totalAncestors: chain.ancestors.length,
+      totalDescendants: chain.descendants.length,
     };
   })() : null;
 
@@ -864,7 +883,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 </text>
               )}
 
-              {/* + Button: zoom AND show bottom-left panel */}
+              {/* Chain Button: zoom AND show bottom-left panel with ancestors/descendants */}
               <g
                 style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                 onClick={(e) => {
@@ -877,26 +896,28 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   }
                 }}
               >
+                <title>View node chain (ancestors/descendants)</title>
                 <rect
-                  x={callout.cardX + CARD_WIDTH - 40}
+                  x={callout.cardX + CARD_WIDTH - 54}
                   y={callout.cardY + 8}
-                  width={26}
+                  width={40}
                   height={26}
                   rx={6}
                   fill={isHovered ? '#0969da' : '#f6f8fa'}
                   stroke={isHovered ? '#0969da' : '#d0d7de'}
                   strokeWidth={1}
                 />
+                {/* Tree/chain icon */}
                 <text
-                  x={callout.cardX + CARD_WIDTH - 27}
+                  x={callout.cardX + CARD_WIDTH - 34}
                   y={callout.cardY + 21}
                   fill={isHovered ? '#fff' : '#57606a'}
-                  fontSize="16"
+                  fontSize="11"
                   fontWeight="600"
                   textAnchor="middle"
                   dominantBaseline="middle"
                 >
-                  +
+                  Chain
                 </text>
               </g>
             </g>
@@ -924,8 +945,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
           position: 'absolute',
           bottom: 16,
           left: 16,
-          width: 320,
-          maxHeight: 'calc(100vh - 200px)',
+          width: 400,
+          maxHeight: 'calc(100vh - 160px)',
           backgroundColor: '#fff',
           borderRadius: 10,
           padding: 16,
@@ -990,22 +1011,43 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
             fontSize: 13,
             fontWeight: 500,
             cursor: 'pointer',
-            marginBottom: 16,
+            marginBottom: 12,
           }}
         >
           Go to Node
         </button>
 
+        {/* Chain Search Input */}
+        <div style={{ marginBottom: 12 }}>
+          <input
+            type="text"
+            value={chainSearch}
+            onChange={(e) => setChainSearch(e.target.value)}
+            placeholder="Filter chain..."
+            style={{
+              width: '100%',
+              padding: '6px 10px',
+              fontSize: 12,
+              border: '1px solid #d0d7de',
+              borderRadius: 6,
+              backgroundColor: '#f6f8fa',
+              outline: 'none',
+            }}
+          />
+        </div>
+
         {/* Ancestors Section */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
-            UPSTREAM ({chainData.ancestors.length})
+            UPSTREAM {chainSearch ? `(${chainData.ancestors.length}/${chainData.totalAncestors})` : `(${chainData.ancestors.length})`}
           </div>
           {chainData.ancestors.length === 0 ? (
-            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>Root node</div>
+            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>
+              {chainSearch && chainData.totalAncestors > 0 ? 'No matches' : 'Root node'}
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {chainData.ancestors.slice(0, 5).map((node) => (
+              {chainData.ancestors.slice(0, chainSearch ? 15 : 5).map((node) => (
                 <div
                   key={node.id}
                   onClick={() => {
@@ -1042,8 +1084,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   </span>
                 </div>
               ))}
-              {chainData.ancestors.length > 5 && (
-                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.ancestors.length - 5} more</div>
+              {chainData.ancestors.length > (chainSearch ? 15 : 5) && (
+                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.ancestors.length - (chainSearch ? 15 : 5)} more</div>
               )}
             </div>
           )}
@@ -1067,13 +1109,15 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
         {/* Descendants Section */}
         <div>
           <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
-            DOWNSTREAM ({chainData.descendants.length})
+            DOWNSTREAM {chainSearch ? `(${chainData.descendants.length}/${chainData.totalDescendants})` : `(${chainData.descendants.length})`}
           </div>
           {chainData.descendants.length === 0 ? (
-            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>Leaf node</div>
+            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>
+              {chainSearch && chainData.totalDescendants > 0 ? 'No matches' : 'Leaf node'}
+            </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {chainData.descendants.slice(0, 5).map((node) => (
+              {chainData.descendants.slice(0, chainSearch ? 15 : 5).map((node) => (
                 <div
                   key={node.id}
                   onClick={() => {
@@ -1111,8 +1155,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   </span>
                 </div>
               ))}
-              {chainData.descendants.length > 5 && (
-                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.descendants.length - 5} more</div>
+              {chainData.descendants.length > (chainSearch ? 15 : 5) && (
+                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.descendants.length - (chainSearch ? 15 : 5)} more</div>
               )}
             </div>
           )}
