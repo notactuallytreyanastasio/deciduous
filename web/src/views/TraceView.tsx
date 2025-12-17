@@ -279,8 +279,31 @@ const TraceView: React.FC = () => {
                         const tools = getToolsContent(span.id);
                         const system = getContent(span.id, 'system');
 
+                        // Detect if this is a subagent/internal request vs real user prompt
+                        const isSubagentPrompt = (text: string | null | undefined): boolean => {
+                          if (!text) return false;
+                          const t = text.trim();
+                          // Known internal patterns
+                          if (t === 'Warmup' || t === 'quota' || t === 'foo' || t === '#') return true;
+                          if (t.startsWith('Please write a') && t.includes('word title')) return true;
+                          // Subagent task patterns
+                          if (t.startsWith('Explore the codebase')) return true;
+                          if (t.startsWith('Search for ')) return true;
+                          if (t.startsWith('Look for:') || t.startsWith('Look for ')) return true;
+                          if (t.startsWith('Command:')) return true;
+                          if (t.startsWith('Find ') && (t.includes('in the codebase') || t.includes('files'))) return true;
+                          if (t.startsWith('Analyze ') && t.includes('code')) return true;
+                          if (t.startsWith('Read ') && t.includes('file')) return true;
+                          if (t.startsWith('Check ') && (t.includes('implementation') || t.includes('code'))) return true;
+                          // JSON output (tool results being fed back)
+                          if (t.startsWith('{') && t.includes('"')) return true;
+                          if (t.startsWith('[') && t.includes('{')) return true;
+                          return false;
+                        };
+
                         // Build span summary - prioritize showing user prompt clearly
                         const hasUserPrompt = !!span.user_preview;
+                        const isSubagent = isSubagentPrompt(span.user_preview);
                         const spanSummary = span.user_preview
                           || span.response_preview?.slice(0, 60)
                           || (span.tool_names ? `Tools: ${span.tool_names}` : null)
@@ -321,9 +344,13 @@ const TraceView: React.FC = () => {
                               {span.node_count && span.node_count > 0 && (
                                 <span style={styles.nodeCount}>+{span.node_count} nodes</span>
                               )}
-                              {/* Span summary - show user prompt with indicator */}
+                              {/* Span summary - show prompt with appropriate indicator */}
                               <span style={styles.spanSummary}>
-                                {hasUserPrompt && <span style={styles.promptIndicator}>👤 </span>}
+                                {hasUserPrompt && (
+                                  <span style={styles.promptIndicator}>
+                                    {isSubagent ? '🤖 ' : '👤 '}
+                                  </span>
+                                )}
                                 {spanSummary.length > 60 ? spanSummary.slice(0, 60) + '…' : spanSummary}
                               </span>
                             </div>
@@ -340,11 +367,15 @@ const TraceView: React.FC = () => {
                                   )}
                                 </div>
 
-                                {/* User Message */}
+                                {/* User/Subagent Message */}
                                 {span.user_preview && (
                                   <div style={styles.contentSection}>
-                                    <div style={styles.contentLabel}>👤 USER</div>
-                                    <div style={styles.userBox}>{span.user_preview}</div>
+                                    <div style={styles.contentLabel}>
+                                      {isSubagent ? '🤖 SUBAGENT TASK' : '👤 USER'}
+                                    </div>
+                                    <div style={isSubagent ? styles.subagentBox : styles.userBox}>
+                                      {span.user_preview}
+                                    </div>
                                   </div>
                                 )}
 
@@ -683,6 +714,17 @@ const styles: Record<string, React.CSSProperties> = {
     whiteSpace: 'pre-wrap',
     wordBreak: 'break-word',
     color: '#1e40af',
+  },
+  subagentBox: {
+    backgroundColor: '#f3e8ff',
+    border: '1px solid #c4b5fd',
+    borderRadius: '6px',
+    padding: '10px',
+    fontSize: '12px',
+    lineHeight: 1.5,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    color: '#6b21a8',
   },
   thinkingBox: {
     backgroundColor: '#fef3c7',
