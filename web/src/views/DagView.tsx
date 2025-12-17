@@ -46,20 +46,6 @@ interface DagreEdgeData {
 // Default number of recent chains to show (increased from 8 for larger graphs)
 const DEFAULT_RECENT_CHAINS = 1000;
 
-/**
- * Get the most recent update time for a chain (max of all node updated_at times)
- */
-function getChainLastUpdated(chain: Chain): number {
-  return Math.max(...chain.nodes.map(n => new Date(n.updated_at).getTime()));
-}
-
-/**
- * Sort chains by most recent activity (most recently updated nodes)
- */
-function sortChainsByRecency(chains: Chain[]): Chain[] {
-  return [...chains].sort((a, b) => getChainLastUpdated(b) - getChainLastUpdated(a));
-}
-
 export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory = [] }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,8 +98,11 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Store zoom behavior for programmatic control
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-  // Sort chains by recency for display
-  const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
+  // Sort chains by root node ID for chronological left-to-right layout
+  const sortedChains = useMemo(() =>
+    [...chains].sort((a, b) => a.root.id - b.root.id),
+    [chains]
+  );
 
   // Get only goal chains (for the dropdown and recent filtering)
   const goalChains = useMemo(() =>
@@ -267,13 +256,12 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
     svg.selectAll('*').remove();
 
-    // Filter nodes based on visibility
-    const visibleNodes = graphData.nodes.filter(n => visibleNodeIds.has(n.id));
+    // Filter edges based on visibility
     const visibleEdges = graphData.edges.filter(
       e => visibleNodeIds.has(e.from_node_id) && visibleNodeIds.has(e.to_node_id)
     );
 
-    if (visibleNodes.length === 0) return;
+    if (visibleNodeIds.size === 0) return;
 
     // Create Dagre graph
     const g = new dagre.graphlib.Graph();
@@ -286,12 +274,19 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     });
     g.setDefaultEdgeLabel(() => ({}));
 
-    // Add nodes
-    visibleNodes.forEach(node => {
-      g.setNode(String(node.id), {
-        width: 150,
-        height: 60,
-        node,
+    // Add nodes in chain order (sorted by root ID) for chronological left-to-right layout
+    // This ensures dagre processes nodes from earlier chains first
+    const addedNodeIds = new Set<number>();
+    visibleChains.forEach(chain => {
+      chain.nodes.forEach(node => {
+        if (!addedNodeIds.has(node.id)) {
+          g.setNode(String(node.id), {
+            width: 150,
+            height: 60,
+            node,
+          });
+          addedNodeIds.add(node.id);
+        }
       });
     });
 
@@ -486,7 +481,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     return () => {
       svg.on('.zoom', null);
     };
-  }, [graphData, visibleNodeIds, handleSelectNode, highlightedNodeIds]);
+  }, [graphData, visibleNodeIds, visibleChains, handleSelectNode, highlightedNodeIds]);
 
   return (
     <div style={{
