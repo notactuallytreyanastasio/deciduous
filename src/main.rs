@@ -3251,6 +3251,11 @@ fn main() {
                 }
             };
 
+            // Check if debug output is enabled (default: silent to avoid TUI interference)
+            let trace_debug = std::env::var("DECIDUOUS_TRACE_DEBUG")
+                .map(|v| v == "1" || v == "true")
+                .unwrap_or(false);
+
             // Generate session ID and start trace session
             let session_id = uuid::Uuid::new_v4().to_string();
             let working_dir = std::env::current_dir()
@@ -3271,11 +3276,13 @@ fn main() {
                 Some(&cmd_str),
             ) {
                 Ok(_) => {
-                    println!(
-                        "{} Started trace session {}",
-                        "Trace:".cyan(),
-                        &session_id[..8]
-                    );
+                    if trace_debug {
+                        println!(
+                            "{} Started trace session {}",
+                            "Trace:".cyan(),
+                            &session_id[..8]
+                        );
+                    }
                 }
                 Err(e) => {
                     eprintln!("{} Starting trace session: {}", "Error:".red(), e);
@@ -3293,13 +3300,15 @@ fn main() {
                         .max_by_key(|n| &n.created_at)
                     {
                         if let Err(e) = db.link_trace_session_to_node(&session_id, goal.id) {
-                            eprintln!(
-                                "{} Auto-linking to goal #{}: {}",
-                                "Warning:".yellow(),
-                                goal.id,
-                                e
-                            );
-                        } else {
+                            if trace_debug {
+                                eprintln!(
+                                    "{} Auto-linking to goal #{}: {}",
+                                    "Warning:".yellow(),
+                                    goal.id,
+                                    e
+                                );
+                            }
+                        } else if trace_debug {
                             println!(
                                 "  {} Linked to goal #{}: {}",
                                 "→".yellow(),
@@ -3367,23 +3376,25 @@ fn main() {
                 eprintln!("{} Ending trace session: {}", "Warning:".yellow(), e);
             }
 
-            // Get session stats
-            if let Ok(Some(session)) = db.get_trace_session(&session_id) {
-                println!("\n{} Session {} ended", "Trace:".cyan(), &session_id[..8]);
-                println!(
-                    "  Tokens: {}↓ {}↑ (cache: {}r {}w)",
-                    session.total_input_tokens,
-                    session.total_output_tokens,
-                    session.total_cache_read,
-                    session.total_cache_write
-                );
+            // Get session stats (only if debug enabled)
+            if trace_debug {
+                if let Ok(Some(session)) = db.get_trace_session(&session_id) {
+                    println!("\n{} Session {} ended", "Trace:".cyan(), &session_id[..8]);
+                    println!(
+                        "  Tokens: {}↓ {}↑ (cache: {}r {}w)",
+                        session.total_input_tokens,
+                        session.total_output_tokens,
+                        session.total_cache_read,
+                        session.total_cache_write
+                    );
 
-                if let Ok(spans) = db.get_trace_spans(&session_id) {
-                    println!("  Spans: {}", spans.len());
-                }
+                    if let Ok(spans) = db.get_trace_spans(&session_id) {
+                        println!("  Spans: {}", spans.len());
+                    }
 
-                if let Some(node_id) = session.linked_node_id {
-                    println!("  Linked: node #{}", node_id);
+                    if let Some(node_id) = session.linked_node_id {
+                        println!("  Linked: node #{}", node_id);
+                    }
                 }
             }
 
