@@ -185,6 +185,59 @@
           };
         } // commonEnv);
 
+        # Helper script: nix-help
+        nixHelp = pkgs.writeShellScriptBin "nix-help" ''
+          echo "========================================"
+          echo "  Deciduous Development Shell (Nix)"
+          echo "========================================"
+          echo ""
+          echo "Cargo commands:"
+          echo "  cargo build --release    Build release binary (uses existing viewer.html)"
+          echo "  cargo test               Run tests"
+          echo "  cargo clippy             Run linter"
+          echo "  cargo fmt                Format code"
+          echo ""
+          echo "Nix build commands:"
+          echo "  nix build                Full build with embedded web viewer (default)"
+          echo "  nix build .#minimal      Minimal build without rebuilding web viewer"
+          echo "  nix build .#webViewer    Build web viewer only"
+          echo "  nix build .#traceInterceptor  Build trace interceptor only"
+          echo ""
+          echo "Nix run/check commands:"
+          echo "  nix run                  Run deciduous (full build)"
+          echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
+          echo ""
+          echo "Dev workflow (impure, modifies source tree):"
+          echo "  nix-build-full           Build everything locally (like make release-full)"
+          echo ""
+          echo "Help:"
+          echo "  nix-help                 Show this menu"
+          echo ""
+        '';
+
+        # Helper script: nix-build-full (equivalent to make release-full)
+        nixBuildFull = pkgs.writeShellScriptBin "nix-build-full" ''
+          set -e
+          echo "Building trace-interceptor..."
+          (cd trace-interceptor && npm install && npm run build && npm run bundle)
+
+          echo "Building web viewer..."
+          (cd web && npm install && npm run build)
+
+          echo "Copying viewer to src/..."
+          cp web/dist/index.html src/viewer.html
+          cp web/dist/index.html docs/demo/index.html
+
+          echo "Clearing trace interceptor cache..."
+          rm -rf ~/.deciduous/trace-interceptor
+
+          echo "Building Rust binary..."
+          cargo build --release
+
+          echo ""
+          echo "Full release build complete: target/release/deciduous"
+        '';
+
       in
       {
         # Packages
@@ -242,30 +295,31 @@
           checks = self.checks.${system};
 
           # Additional packages for development
-          packages = with pkgs; [
-            # Rust tools (from crane's devShell via rustToolchain)
-            # rustToolchain is already included by craneLib.devShell
+          packages = [
+            # DevShell helper scripts
+            nixHelp
+            nixBuildFull
 
             # Node.js for web viewer and trace-interceptor
-            nodejs_20
-            nodePackages.npm
-            nodePackages.typescript
+            pkgs.nodejs_20
+            pkgs.nodePackages.npm
+            pkgs.nodePackages.typescript
 
             # SQLite tools
-            sqlite
+            pkgs.sqlite
 
             # Optional: graphviz for DOT -> PNG conversion
-            graphviz
+            pkgs.graphviz
 
             # Optional: diesel CLI for database migrations
-            diesel-cli
+            pkgs.diesel-cli
 
             # Git (usually already available, but explicit)
-            git
+            pkgs.git
 
             # Useful development tools
-            cargo-watch
-            cargo-edit
+            pkgs.cargo-watch
+            pkgs.cargo-edit
           ] ++ darwinDeps;
 
           # Environment variables for development
@@ -277,62 +331,6 @@
               # macOS: Set library path for libiconv (needed by diesel/sqlite)
               export LIBRARY_PATH="${pkgs.libiconv}/lib:''${LIBRARY_PATH:-}"
             ''}
-
-            # Helper function to display help menu
-            nix-help() {
-              echo "========================================"
-              echo "  Deciduous Development Shell (Nix)"
-              echo "========================================"
-              echo ""
-              echo "Cargo commands:"
-              echo "  cargo build --release    Build release binary (uses existing viewer.html)"
-              echo "  cargo test               Run tests"
-              echo "  cargo clippy             Run linter"
-              echo "  cargo fmt                Format code"
-              echo ""
-              echo "Nix build commands:"
-              echo "  nix build                Full build with embedded web viewer (default)"
-              echo "  nix build .#minimal      Minimal build without rebuilding web viewer"
-              echo "  nix build .#webViewer    Build web viewer only"
-              echo "  nix build .#traceInterceptor  Build trace interceptor only"
-              echo ""
-              echo "Nix run/check commands:"
-              echo "  nix run                  Run deciduous (full build)"
-              echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
-              echo ""
-              echo "Dev workflow (impure, modifies source tree):"
-              echo "  nix-build-full           Build everything locally (like make release-full)"
-              echo ""
-              echo "Help:"
-              echo "  nix-help                 Show this menu"
-              echo ""
-            }
-
-            # Helper function for full builds (equivalent to make release-full)
-            nix-build-full() {
-              echo "Building trace-interceptor..."
-              (cd trace-interceptor && npm install && npm run build && npm run bundle) || return 1
-
-              echo "Building web viewer..."
-              (cd web && npm install && npm run build) || return 1
-
-              echo "Copying viewer to src/..."
-              cp web/dist/index.html src/viewer.html
-              cp web/dist/index.html docs/demo/index.html
-
-              echo "Clearing trace interceptor cache..."
-              rm -rf ~/.deciduous/trace-interceptor
-
-              echo "Building Rust binary..."
-              cargo build --release || return 1
-
-              echo ""
-              echo "Full release build complete: target/release/deciduous"
-            }
-
-            # Export functions
-            export -f nix-help
-            export -f nix-build-full
 
             # Show help on shell entry
             nix-help
