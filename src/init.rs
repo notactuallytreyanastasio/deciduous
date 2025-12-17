@@ -2466,9 +2466,17 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
             // Write recover.md rule (Model-triggered - for session recovery)
             let recover_path = windsurf_rules.join("recover.md");
             if force {
-                write_file_overwrite(&recover_path, WINDSURF_RECOVER_RULE, ".windsurf/rules/recover.md")?;
+                write_file_overwrite(
+                    &recover_path,
+                    WINDSURF_RECOVER_RULE,
+                    ".windsurf/rules/recover.md",
+                )?;
             } else {
-                write_file_if_missing(&recover_path, WINDSURF_RECOVER_RULE, ".windsurf/rules/recover.md")?;
+                write_file_if_missing(
+                    &recover_path,
+                    WINDSURF_RECOVER_RULE,
+                    ".windsurf/rules/recover.md",
+                )?;
             }
 
             // Write memories.md (project-level memories Cascade auto-retrieves)
@@ -2511,7 +2519,11 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
 
             // Write recover.md command (context recovery)
             let recover_path = opencode_cmd_dir.join("recover.md");
-            write_cmd(&recover_path, OPENCODE_RECOVER_CMD, ".opencode/command/recover.md")?;
+            write_cmd(
+                &recover_path,
+                OPENCODE_RECOVER_CMD,
+                ".opencode/command/recover.md",
+            )?;
 
             // Write build-test.md command
             let build_test_path = opencode_cmd_dir.join("build-test.md");

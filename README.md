@@ -47,18 +47,21 @@ This isn't documentation written after the fact. It's a real-time record of *how
 ## Who Uses It
 
 **You, the developer:**
+
 - Think through decisions more carefully by structuring them
 - Remember why you made choices months later
 - Review complex PRs by understanding the decision flow, not just the diff
 - Onboard to unfamiliar codebases by reading the decision history
 
 **Your AI assistant:**
+
 - Recover context after session boundaries or compaction
 - Understand decisions made before its context window
 - Build on previous reasoning instead of starting fresh
 - Leave a queryable trail for future sessions
 
 **Your team:**
+
 - Share decision context across PRs via patch files
 - Review PRs with full visibility into the reasoning
 - Build institutional knowledge that survives employee turnover
@@ -84,8 +87,13 @@ deciduous init --codex    # For Codex
 ```
 
 This creates:
+
 - `.deciduous/deciduous.db` — SQLite database for the graph
-- Editor-specific tooling (`.claude/commands/`, `.windsurf/rules/`, `.opencode/command/`, or `.codex/prompts/`)
+- Editor-specific tooling:
+  - **Claude Code**: `.claude/commands/deciduous.decision.md`, `.claude/commands/deciduous.recover.md`, `.claude/skills/deciduous/SKILL.md`
+  - **Windsurf**: `.windsurf/rules/deciduous.md`
+  - **OpenCode**: `.opencode/command/deciduous.md`
+  - **Codex**: `.codex/prompts/deciduous.*.md` (decision, recover, build-test, serve-ui, sync-graph)
 - `docs/` — Static web viewer (deployable to GitHub Pages)
 - `CLAUDE.md` or `AGENTS.md` — Project instructions with the logging workflow
 
@@ -123,7 +131,7 @@ Your graph will be live at `https://<user>.github.io/<repo>/`
 ```
 SESSION START
     |
-Run /recover → Query past decisions
+Run /deciduous.recover → Query past decisions
     |
 DO WORK → Log BEFORE each action
     |
@@ -167,7 +175,7 @@ Two full-featured interfaces for browsing the graph—use whichever fits your wo
 deciduous serve --port 3000
 ```
 
-A browser-based interface with four visualization modes, branch filtering, and auto-refresh. Deploy to GitHub Pages for shareable, always-up-to-date graphs.
+A browser-based interface with five visualization modes, branch filtering, and auto-refresh. Deploy to GitHub Pages for shareable, always-up-to-date graphs.
 
 | View | Purpose |
 |------|---------|
@@ -175,8 +183,9 @@ A browser-based interface with four visualization modes, branch filtering, and a
 | **Timeline** | Chronological view merged with git commits—trace decisions to code |
 | **Graph** | Force-directed interactive visualization—explore connections, zoom, pan |
 | **DAG** | Hierarchical goal→decision→outcome flow—understand structure at a glance |
+| **Traces** | API call history with token usage, thinking blocks, and response content |
 
-Features: branch dropdown filter, node search, stats bar with counts, click-to-expand details, recency sorting, responsive layout.
+Features: branch dropdown filter, node search, stats bar with counts, click-to-expand details, trace session deep-linking, recency sorting, responsive layout.
 
 ### Terminal UI
 
@@ -193,13 +202,14 @@ A rich terminal interface for when you're already in the shell. Vim-style naviga
 | `/` | Search by title or description |
 | `f` | Filter by node type (goal, decision, action, etc.) |
 | `b`/`B` | Filter by branch / fuzzy branch search |
+| `t` | Switch to Trace view (API call history) |
 | `o` | Open associated files in your editor |
 | `O` | View linked commit with full diff |
 | `p`/`d` | Preview file content / show file diff (syntax highlighted) |
 | `s` | Show goal story—hierarchical view from goal to outcomes |
 | `?` | Help |
 
-Features: auto-refresh on database changes, file browser panel, commit detail modal, syntax highlighting via the same engine as `bat`.
+Features: auto-refresh on database changes, file browser panel, commit detail modal, trace session viewer, syntax highlighting via the same engine as `bat`.
 
 ---
 
@@ -274,12 +284,23 @@ deciduous trace prune --days 30       # Clean up old traces
 ```
 
 The proxy intercepts Anthropic API calls, recording:
+
 - Token usage (input/output/cache)
 - Model selection and duration
 - Thinking blocks and responses
 - Tool calls and their results
 
-Link trace sessions to decision nodes to see exactly which API calls went into implementing a feature.
+### Auto-Linking
+
+When running through `deciduous proxy`, any `deciduous add` commands automatically link to the active API span:
+
+```text
+Created action #42 "Implementing auth" [traced: span #7]
+```
+
+This creates traceability between your decisions and the exact API calls that produced them—perfect for understanding token usage and "vibe coding" visibility.
+
+You can also manually link trace sessions to decision nodes to see which API calls went into implementing a feature.
 
 > **Inspiration:** The trace capture approach was inspired by [badlogic/lemmy/claude-trace](https://github.com/badlogic/lemmy/tree/main/apps/claude-trace).
 
@@ -364,21 +385,25 @@ deciduous completion fish    # Generate fish completions
 Enable tab completion for commands, options, and arguments.
 
 **Zsh** (add to `~/.zshrc`):
+
 ```bash
 source <(deciduous completion zsh)
 ```
 
 **Bash** (add to `~/.bashrc`):
+
 ```bash
 source <(deciduous completion bash)
 ```
 
 **Fish** (add to `~/.config/fish/config.fish`):
+
 ```fish
 deciduous completion fish | source
 ```
 
 **PowerShell** (add to profile):
+
 ```powershell
 deciduous completion powershell | Out-String | Invoke-Expression
 ```
@@ -390,6 +415,7 @@ deciduous completion powershell | Out-String | Invoke-Expression
 Nodes are automatically tagged with the current git branch.
 
 **Configuration** (`.deciduous/config.toml`):
+
 ```toml
 [branch]
 main_branches = ["main", "master"]
@@ -407,6 +433,7 @@ deciduous add goal "Note" --no-branch # No branch tag
 ## GitHub Pages Deployment
 
 `deciduous init` creates GitHub workflows that:
+
 1. Deploy your graph viewer to GitHub Pages on push to main
 2. Clean up branch-specific PNGs after PR merge
 
