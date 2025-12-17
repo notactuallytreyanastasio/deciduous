@@ -76,6 +76,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     state: urlState,
     setSelectedNodeId,
     setSearchQuery,
+    setSearchSort,
     setViewMode,
     setRecentChainCount,
     setFocusChainIndex,
@@ -495,6 +496,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             placeholder="Search nodes, commits..."
             query={urlState.searchQuery}
             onQueryChange={setSearchQuery}
+            sortOrder={urlState.searchSort}
+            onSortOrderChange={setSearchSort}
           />
         </div>
 

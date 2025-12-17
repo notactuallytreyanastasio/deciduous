@@ -8,10 +8,12 @@
 import { useState, useEffect, useCallback } from 'react';
 
 export type ViewMode = 'recent' | 'all' | 'single';
+export type SearchSortOrder = 'newest' | 'oldest';
 
 export interface UrlState {
   selectedNodeId: number | null;
   searchQuery: string;
+  searchSort: SearchSortOrder;
   viewMode: ViewMode;
   recentChainCount: number;
   focusChainIndex: number | null;
@@ -32,6 +34,7 @@ function parseUrlParams(): UrlState {
 
   const nodeParam = params.get('node');
   const searchParam = params.get('search') || params.get('q');
+  const sortParam = params.get('sort');
   const viewParam = params.get('view');
   const chainsParam = params.get('chains');
   const focusParam = params.get('focus');
@@ -40,6 +43,7 @@ function parseUrlParams(): UrlState {
   return {
     selectedNodeId: nodeParam ? parseInt(nodeParam, 10) : null,
     searchQuery: searchParam || '',
+    searchSort: (sortParam === 'oldest' || sortParam === 'newest') ? sortParam : 'newest',
     viewMode: (viewParam === 'all' || viewParam === 'single' || viewParam === 'recent')
       ? viewParam
       : 'recent',
@@ -56,6 +60,7 @@ function getDefaultState(): UrlState {
   return {
     selectedNodeId: null,
     searchQuery: '',
+    searchSort: 'newest',
     viewMode: 'recent',
     recentChainCount: DEFAULT_CHAIN_COUNT,
     focusChainIndex: null,
@@ -74,6 +79,9 @@ function stateToQueryString(state: UrlState): string {
   }
   if (state.searchQuery) {
     params.set('search', state.searchQuery);
+  }
+  if (state.searchSort !== 'newest') {
+    params.set('sort', state.searchSort);
   }
   if (state.viewMode !== 'recent') {
     params.set('view', state.viewMode);
@@ -110,6 +118,7 @@ export interface UseUrlStateResult {
   state: UrlState;
   setSelectedNodeId: (id: number | null) => void;
   setSearchQuery: (query: string) => void;
+  setSearchSort: (sort: SearchSortOrder) => void;
   setViewMode: (mode: ViewMode) => void;
   setRecentChainCount: (count: number) => void;
   setFocusChainIndex: (index: number | null) => void;
@@ -163,6 +172,10 @@ export function useUrlState(): UseUrlStateResult {
     setState(prev => ({ ...prev, searchQuery: query }));
   }, []);
 
+  const setSearchSort = useCallback((sort: SearchSortOrder) => {
+    setState(prev => ({ ...prev, searchSort: sort }));
+  }, []);
+
   const setViewMode = useCallback((mode: ViewMode) => {
     setState(prev => ({ ...prev, viewMode: mode }));
   }, []);
@@ -206,6 +219,7 @@ export function useUrlState(): UseUrlStateResult {
     state,
     setSelectedNodeId,
     setSearchQuery,
+    setSearchSort,
     setViewMode,
     setRecentChainCount,
     setFocusChainIndex,

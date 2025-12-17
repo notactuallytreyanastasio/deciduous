@@ -19,6 +19,8 @@ interface SearchResult {
   commitInfo?: GitCommit;
 }
 
+export type SearchSortOrder = 'newest' | 'oldest';
+
 interface SearchBarProps {
   nodes: DecisionNode[];
   gitHistory?: GitCommit[];
@@ -29,6 +31,10 @@ interface SearchBarProps {
   query?: string;
   /** Callback when query changes (for URL state sync) */
   onQueryChange?: (query: string) => void;
+  /** Sort order: 'newest' (default) or 'oldest' first */
+  sortOrder?: SearchSortOrder;
+  /** Callback when sort order changes */
+  onSortOrderChange?: (order: SearchSortOrder) => void;
 }
 
 // Debounce hook
@@ -70,6 +76,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = 'Search nodes, commits, prompts...',
   query: controlledQuery,
   onQueryChange,
+  sortOrder = 'newest',
+  onSortOrderChange,
 }) => {
   // Support both controlled and uncontrolled modes
   const [internalQuery, setInternalQuery] = useState('');
@@ -150,15 +158,17 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       }
     }
 
-    // Sort by relevance: title matches first, then by recency
+    // Sort by relevance: title matches first, then by date (configurable order)
     return results.sort((a, b) => {
       // Title matches are most relevant
       if (a.matchType === 'title' && b.matchType !== 'title') return -1;
       if (b.matchType === 'title' && a.matchType !== 'title') return 1;
-      // Then by recency
-      return new Date(b.node.updated_at).getTime() - new Date(a.node.updated_at).getTime();
+      // Then by date - ascending (oldest) or descending (newest)
+      const aTime = new Date(a.node.updated_at).getTime();
+      const bTime = new Date(b.node.updated_at).getTime();
+      return sortOrder === 'oldest' ? aTime - bTime : bTime - aTime;
     });
-  }, [debouncedQuery, nodes, commitMap]);
+  }, [debouncedQuery, nodes, commitMap, sortOrder]);
 
   // All results for highlighting (unlimited), limited for dropdown display
   const dropdownResults = useMemo(() => searchResults.slice(0, 15), [searchResults]);
@@ -304,6 +314,19 @@ export const SearchBar: React.FC<SearchBarProps> = ({
                 ? `Showing 15 of ${searchResults.length} · All ${searchResults.length} highlighted`
                 : '↑↓ navigate · Enter select · Esc close'}
             </span>
+            {onSortOrderChange && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onSortOrderChange(sortOrder === 'newest' ? 'oldest' : 'newest');
+                }}
+                style={styles.sortToggle}
+                title={`Sort by ${sortOrder === 'newest' ? 'oldest' : 'newest'} first`}
+              >
+                {sortOrder === 'newest' ? '↓ Newest' : '↑ Oldest'}
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -442,10 +465,24 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '8px 12px',
     backgroundColor: '#f6f8fa',
     borderTop: '1px solid #d0d7de',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
   footerHint: {
     fontSize: '11px',
     color: '#6e7781',
+  },
+  sortToggle: {
+    fontSize: '11px',
+    color: '#0969da',
+    backgroundColor: '#ddf4ff',
+    border: '1px solid #0969da33',
+    borderRadius: '4px',
+    padding: '2px 8px',
+    cursor: 'pointer',
+    fontWeight: 500,
+    transition: 'background-color 0.15s',
   },
   noResults: {
     padding: '16px',
