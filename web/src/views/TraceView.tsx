@@ -235,7 +235,8 @@ const TraceView: React.FC = () => {
                         const tools = getToolsContent(span.id);
                         const system = getContent(span.id, 'system');
 
-                        // Build span summary
+                        // Build span summary - prioritize showing user prompt clearly
+                        const hasUserPrompt = !!span.user_preview;
                         const spanSummary = span.user_preview
                           || span.response_preview?.slice(0, 60)
                           || (span.tool_names ? `Tools: ${span.tool_names}` : null)
@@ -272,8 +273,9 @@ const TraceView: React.FC = () => {
                               {span.node_count && span.node_count > 0 && (
                                 <span style={styles.nodeCount}>+{span.node_count} nodes</span>
                               )}
-                              {/* Span summary - most important */}
+                              {/* Span summary - show user prompt with indicator */}
                               <span style={styles.spanSummary}>
+                                {hasUserPrompt && <span style={styles.promptIndicator}>👤 </span>}
                                 {spanSummary.length > 60 ? spanSummary.slice(0, 60) + '…' : spanSummary}
                               </span>
                             </div>
@@ -582,6 +584,9 @@ const styles: Record<string, React.CSSProperties> = {
     textOverflow: 'ellipsis',
     whiteSpace: 'nowrap',
     flex: 1,
+  },
+  promptIndicator: {
+    opacity: 0.7,
   },
   spanContent: {
     backgroundColor: '#fffbeb',
