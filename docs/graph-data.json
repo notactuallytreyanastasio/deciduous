@@ -7380,6 +7380,17 @@
       "created_at": "2025-12-17T14:33:28.475328-05:00",
       "updated_at": "2025-12-17T14:33:28.475328-05:00",
       "metadata_json": "{\"branch\":\"feature/configurable-search-sort\",\"confidence\":90,\"prompt\":\"User reported: panel shows briefly then disappears, panel too big, zoom confusing trackpad vs graph. Fixed by: moving panel outside SVG, smaller width (320px), prevent browser pinch zoom, always fullscreen mode\"}"
+    },
+    {
+      "id": 673,
+      "change_id": "f0eaadaf-4fe2-4c57-a1f2-47410f9c6960",
+      "node_type": "outcome",
+      "title": "Released v0.8.16 with viewer fixes",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T14:36:53.054614-05:00",
+      "updated_at": "2025-12-17T14:36:53.054614-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"8ee414a\",\"confidence\":95,\"prompt\":\"Released: chain panel stability, always fullscreen, zoom isolation, search sort. PR #161 merged, GitHub release created\"}"
     }
   ],
   "edges": [
@@ -13762,6 +13773,17 @@
       "weight": 1.0,
       "rationale": "Implementation of viewer fixes",
       "created_at": "2025-12-17T14:33:33.584194-05:00"
+    },
+    {
+      "id": 581,
+      "from_node_id": 672,
+      "to_node_id": 673,
+      "from_change_id": "dfb05927-8134-4af9-9bb6-fc9854b69633",
+      "to_change_id": "f0eaadaf-4fe2-4c57-a1f2-47410f9c6960",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Action resulted in successful release",
+      "created_at": "2025-12-17T14:37:02.503827-05:00"
     }
   ]
 }

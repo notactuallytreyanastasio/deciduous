@@ -554,10 +554,10 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               onClick={() => handleCardClick(callout.node)}
             />
 
-            {/* Rich card */}
+            {/* Rich card - click to show chain panel */}
             <g
               style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-              onClick={() => handleCardClick(callout.node)}
+              onClick={() => setExpandedNodeId(callout.node.id)}
               onMouseEnter={() => setHoveredNodeId(callout.node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
             >
@@ -864,13 +864,12 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                 </text>
               )}
 
-              {/* Expand Chain Button */}
+              {/* Zoom to Node Button */}
               <g
                 style={{ pointerEvents: 'auto', cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  setExpandedNodeId(callout.node.id);
-                  // Pan/zoom to the node when expanding
+                  // Just zoom to the node - panel opens on card click
                   if (onNavigateToNode) {
                     onNavigateToNode(callout.node);
                   }
