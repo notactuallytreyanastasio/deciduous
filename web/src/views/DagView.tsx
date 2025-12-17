@@ -93,8 +93,21 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   }, [urlState.selectedNodeId, graphData.nodes]);
 
   // Local UI state (not URL-synced)
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth < 768);
   const [isControlsCollapsed, setIsControlsCollapsed] = useState(isMobile);
+
+  // Listen for resize to update mobile state
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      if (mobile) {
+        setIsControlsCollapsed(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // Search state - highlighted node IDs from search
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<number>>(new Set());
@@ -677,8 +690,12 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       <div style={{
         ...styles.topBar,
         ...(isFullscreen ? styles.fullscreenTopBar : {}),
+        ...(isMobile ? styles.topBarMobile : {}),
       }}>
-        <div style={styles.topBarLeft}>
+        <div style={{
+          ...styles.topBarLeft,
+          ...(isMobile ? styles.topBarLeftMobile : {}),
+        }}>
           <SearchBar
             nodes={graphData.nodes}
             gitHistory={gitHistory}
@@ -692,7 +709,10 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           />
         </div>
 
-        <div style={styles.topBarCenter}>
+        <div style={{
+          ...styles.topBarCenter,
+          ...(isMobile ? styles.topBarCenterMobile : {}),
+        }}>
           {urlState.viewMode === 'recent' && (
             <>
               {/* -1 button - disabled when only 1 chain shown */}
@@ -801,7 +821,10 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           </select>
         </div>
 
-        <div style={styles.topBarRight}>
+        <div style={{
+          ...styles.topBarRight,
+          ...(isMobile ? styles.topBarRightMobile : {}),
+        }}>
           {highlightedNodeIds.size > 0 && (
             <>
               <span style={styles.matchCount}>{highlightedNodeIds.size} matches</span>
@@ -823,15 +846,17 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           </button>
         </div>
 
-        {/* Floating mini legend at top center */}
-        <div style={styles.floatingLegend}>
-          {Object.entries(NODE_COLORS).map(([type, color]) => (
-            <div key={type} style={styles.floatingLegendItem} title={type}>
-              <div style={{ ...styles.floatingLegendDot, backgroundColor: color }} />
-              <span style={styles.floatingLegendLabel}>{type.slice(0, 3)}</span>
-            </div>
-          ))}
-        </div>
+        {/* Floating mini legend at top center - hidden on mobile */}
+        {!isMobile && (
+          <div style={styles.floatingLegend}>
+            {Object.entries(NODE_COLORS).map(([type, color]) => (
+              <div key={type} style={styles.floatingLegendItem} title={type}>
+                <div style={{ ...styles.floatingLegendDot, backgroundColor: color }} />
+                <span style={styles.floatingLegendLabel}>{type.slice(0, 3)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Hidden chains indicator */}
@@ -846,7 +871,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         </div>
       )}
 
-      {/* Side Controls */}
+      {/* Side Controls - hidden on mobile */}
+      {!isMobile && (
       <div style={{
         ...styles.controls,
         ...(isControlsCollapsed ? styles.controlsCollapsed : {}),
@@ -911,6 +937,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           </>
         )}
       </div>
+      )}
 
       {/* SVG Container */}
       <div ref={containerRef} style={styles.svgContainer}>
@@ -1248,6 +1275,24 @@ const styles: Record<string, React.CSSProperties> = {
   },
   fullscreenTopBar: {
     padding: '8px 20px',
+  },
+  topBarMobile: {
+    flexDirection: 'column',
+    padding: '8px 12px',
+    gap: '8px',
+  },
+  topBarLeftMobile: {
+    maxWidth: '100%',
+    width: '100%',
+  },
+  topBarCenterMobile: {
+    flexWrap: 'wrap',
+    width: '100%',
+    justifyContent: 'flex-start',
+  },
+  topBarRightMobile: {
+    width: '100%',
+    justifyContent: 'space-between',
   },
   // Hidden chains indicator - visual hint of more content
   hiddenIndicator: {
