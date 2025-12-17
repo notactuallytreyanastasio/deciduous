@@ -2,14 +2,56 @@
 /**
  * Client for communicating with the deciduous CLI
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeciduousClient = void 0;
 const child_process_1 = require("child_process");
-// Silent logging helper - only logs if DECIDUOUS_TRACE_DEBUG is explicitly set
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+// Debug logging to file (NEVER stdout/stderr - breaks Claude's TUI)
+// Note: This duplicates the logic from index.ts to avoid circular imports
+const DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ?
+    path.join(process.env.HOME || '/tmp', '.deciduous', 'trace-debug.log') : null;
 const debugLog = (msg) => {
-    if (process.env.DECIDUOUS_TRACE_DEBUG === '1' || process.env.DECIDUOUS_TRACE_DEBUG === 'true') {
-        // Write to stderr but with a format that won't trigger error detection
-        process.stderr.write(`[deciduous] ${msg}\n`);
+    if (DEBUG_LOG) {
+        try {
+            fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} [client] ${msg}\n`);
+        }
+        catch {
+            // Ignore write errors
+        }
     }
 };
 class DeciduousClient {

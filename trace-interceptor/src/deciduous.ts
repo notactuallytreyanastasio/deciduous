@@ -3,13 +3,22 @@
  */
 
 import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
 import type { SpanData, StartSessionResponse, RecordSpanResponse } from './types';
 
-// Silent logging helper - only logs if DECIDUOUS_TRACE_DEBUG is explicitly set
+// Debug logging to file (NEVER stdout/stderr - breaks Claude's TUI)
+// Note: This duplicates the logic from index.ts to avoid circular imports
+const DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ?
+  path.join(process.env.HOME || '/tmp', '.deciduous', 'trace-debug.log') : null;
+
 const debugLog = (msg: string) => {
-  if (process.env.DECIDUOUS_TRACE_DEBUG === '1' || process.env.DECIDUOUS_TRACE_DEBUG === 'true') {
-    // Write to stderr but with a format that won't trigger error detection
-    process.stderr.write(`[deciduous] ${msg}\n`);
+  if (DEBUG_LOG) {
+    try {
+      fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} [client] ${msg}\n`);
+    } catch {
+      // Ignore write errors
+    }
   }
 };
 

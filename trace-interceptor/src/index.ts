@@ -15,12 +15,31 @@ import * as path from 'path';
 // Store original fetch
 const originalFetch = globalThis.fetch;
 
-// Debug logging to file
+// Debug logging to file (NEVER stdout/stderr - breaks Claude's TUI)
 const DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ?
   path.join(process.env.HOME || '/tmp', '.deciduous', 'trace-debug.log') : null;
 
-function debugLog(msg: string): void {
+let debugLogInitialized = false;
+
+function initDebugLog(): void {
+  if (!DEBUG_LOG || debugLogInitialized) return;
+  debugLogInitialized = true;
+  try {
+    // Ensure directory exists
+    const dir = path.dirname(DEBUG_LOG);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    // Truncate log file on each run
+    fs.writeFileSync(DEBUG_LOG, `=== Trace debug started: ${new Date().toISOString()} ===\n`);
+  } catch {
+    // Ignore errors
+  }
+}
+
+export function debugLog(msg: string): void {
   if (DEBUG_LOG) {
+    if (!debugLogInitialized) initDebugLog();
     try {
       fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} ${msg}\n`);
     } catch {

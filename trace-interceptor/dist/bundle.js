@@ -24,10 +24,16 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // src/deciduous.ts
 var import_child_process = require("child_process");
+var fs = __toESM(require("fs"));
+var path = __toESM(require("path"));
+var DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ? path.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
 var debugLog = (msg) => {
-  if (process.env.DECIDUOUS_TRACE_DEBUG === "1" || process.env.DECIDUOUS_TRACE_DEBUG === "true") {
-    process.stderr.write(`[deciduous] ${msg}
+  if (DEBUG_LOG) {
+    try {
+      fs.appendFileSync(DEBUG_LOG, `${(/* @__PURE__ */ new Date()).toISOString()} [client] ${msg}
 `);
+    } catch {
+    }
   }
 };
 var DeciduousClient = class {
@@ -152,13 +158,13 @@ var DeciduousClient = class {
 };
 
 // src/stream-parser.ts
-var fs = __toESM(require("fs"));
-var path = __toESM(require("path"));
-var DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ? path.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
+var fs2 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
+var DEBUG_LOG2 = process.env.DECIDUOUS_TRACE_DEBUG ? path2.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
 function debugLog2(msg) {
-  if (DEBUG_LOG) {
+  if (DEBUG_LOG2) {
     try {
-      fs.appendFileSync(DEBUG_LOG, `${(/* @__PURE__ */ new Date()).toISOString()} [stream] ${msg}
+      fs2.appendFileSync(DEBUG_LOG2, `${(/* @__PURE__ */ new Date()).toISOString()} [stream] ${msg}
 `);
     } catch {
     }
@@ -311,14 +317,29 @@ function createAccumulatingStream(originalBody, accumulator, onComplete) {
 }
 
 // src/index.ts
-var fs2 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+var fs3 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
 var originalFetch = globalThis.fetch;
-var DEBUG_LOG2 = process.env.DECIDUOUS_TRACE_DEBUG ? path2.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
+var DEBUG_LOG3 = process.env.DECIDUOUS_TRACE_DEBUG ? path3.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
+var debugLogInitialized = false;
+function initDebugLog() {
+  if (!DEBUG_LOG3 || debugLogInitialized) return;
+  debugLogInitialized = true;
+  try {
+    const dir = path3.dirname(DEBUG_LOG3);
+    if (!fs3.existsSync(dir)) {
+      fs3.mkdirSync(dir, { recursive: true });
+    }
+    fs3.writeFileSync(DEBUG_LOG3, `=== Trace debug started: ${(/* @__PURE__ */ new Date()).toISOString()} ===
+`);
+  } catch {
+  }
+}
 function debugLog3(msg) {
-  if (DEBUG_LOG2) {
+  if (DEBUG_LOG3) {
+    if (!debugLogInitialized) initDebugLog();
     try {
-      fs2.appendFileSync(DEBUG_LOG2, `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
+      fs3.appendFileSync(DEBUG_LOG3, `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
 `);
     } catch {
     }
