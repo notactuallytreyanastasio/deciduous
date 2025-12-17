@@ -1,19 +1,19 @@
 [
   {
-    "hash": "559749ddc1992431371a788202afc8c1bb8d1088",
-    "short_hash": "559749d",
+    "hash": "998e1b347396c7cf7ebfaecfb5d14ce7bef2a269",
+    "short_hash": "998e1b3",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T14:17:01-05:00",
+    "message": "fix(web): move chain panel to bottom-left, auto-pan on expand",
+    "files_changed": 3
+  },
+  {
+    "hash": "a2733c94fe1e972a60bcb5a140ef84503b1bd62e",
+    "short_hash": "a2733c9",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:30:47-05:00",
     "message": "release: v0.8.15",
     "files_changed": 6
-  },
-  {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
   },
   {
     "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
@@ -22,6 +22,14 @@
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 4
+  },
+  {
+    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
+    "short_hash": "9e9953a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 3
   },
   {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
