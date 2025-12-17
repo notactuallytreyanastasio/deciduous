@@ -223,6 +223,9 @@
           echo "Nix run/check commands:"
           echo "  nix run                  Run deciduous (full build)"
           echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
+          echo "  nix run .#test           Run tests only"
+          echo "  nix run .#clippy         Run clippy lints only"
+          echo "  nix run .#fmt-check      Check formatting only"
           echo ""
           echo "Dev workflow (impure, modifies source tree):"
           echo "  nix-build-full           Build everything locally (like make release-full)"
@@ -316,11 +319,28 @@
                 mainProgram = "deciduous";
               };
             };
+            mkCheckApp = name: check: description: {
+              type = "app";
+              program = toString (pkgs.writeShellScript "run-${name}" ''
+                echo "Running ${name}..."
+                nix build .#checks.${system}.${check} --print-build-logs
+                echo "✓ ${name} passed"
+              '');
+              meta = {
+                inherit description;
+                homepage = "https://github.com/notactuallytreyanastasio/deciduous";
+              };
+            };
           in
           {
             default = mkAppWithMeta deciduousFull "Decision graph tooling for AI-assisted development";
             deciduous = mkAppWithMeta deciduousFull "Decision graph tooling for AI-assisted development";
             minimal = mkAppWithMeta deciduous "Decision graph tooling (minimal build without embedded web viewer)";
+
+            # Development/CI apps
+            test = mkCheckApp "test" "deciduous-test" "Run cargo tests";
+            clippy = mkCheckApp "clippy" "deciduous-clippy" "Run clippy lints";
+            fmt-check = mkCheckApp "fmt-check" "deciduous-fmt" "Check code formatting";
           };
 
         # Development shell
