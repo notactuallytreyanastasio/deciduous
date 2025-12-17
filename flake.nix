@@ -135,11 +135,49 @@
           buildInputs = commonBuildInputs;
           nativeBuildInputs = commonNativeBuildInputs;
 
-          # Run clippy as part of the build for extra safety
-          cargoClippyExtraArgs = "--all-targets -- -D warnings";
-
           meta = with pkgs.lib; {
             description = "Decision graph tooling for AI-assisted development";
+            homepage = "https://github.com/notactuallytreyanastasio/deciduous";
+            license = licenses.mit;
+            maintainers = [ ];
+            mainProgram = "deciduous";
+          };
+        } // commonEnv);
+
+        # Read Cargo.toml contents for crane (needed when source is a derivation)
+        cargoTomlContents = builtins.readFile ./Cargo.toml;
+
+        # Full release source with embedded web viewer
+        # Uses the filtered source as base, patches in the built viewer
+        srcFull = pkgs.runCommand "deciduous-src-full" { } ''
+          cp -r ${src} $out
+          chmod -R u+w $out
+          cp ${webViewer}/dist/index.html $out/src/viewer.html
+        '';
+
+        # Cargo artifacts for full build
+        # Must provide cargoTomlContents since srcFull is a derivation
+        cargoArtifactsFull = craneLib.buildDepsOnly ({
+          pname = "deciduous";
+          version = "0.8.15";
+          src = srcFull;
+          inherit cargoTomlContents;
+          buildInputs = commonBuildInputs;
+          nativeBuildInputs = commonNativeBuildInputs;
+        } // commonEnv);
+
+        # Full release binary with embedded web viewer (equivalent to make release-full)
+        deciduousFull = craneLib.buildPackage ({
+          pname = "deciduous";
+          version = "0.8.15";
+          src = srcFull;
+          inherit cargoTomlContents;
+          cargoArtifacts = cargoArtifactsFull;
+          buildInputs = commonBuildInputs;
+          nativeBuildInputs = commonNativeBuildInputs;
+
+          meta = with pkgs.lib; {
+            description = "Decision graph tooling for AI-assisted development (with embedded web viewer)";
             homepage = "https://github.com/notactuallytreyanastasio/deciduous";
             license = licenses.mit;
             maintainers = [ ];
@@ -151,8 +189,12 @@
       {
         # Packages
         packages = {
-          default = deciduous;
-          inherit deciduous traceInterceptor webViewer;
+          # Default is the full build with embedded web viewer
+          default = deciduousFull;
+          full = deciduousFull;
+          # Minimal build without web viewer (faster, smaller)
+          minimal = deciduous;
+          inherit deciduous deciduousFull traceInterceptor webViewer;
         };
 
         # Checks (run with `nix flake check`)
@@ -184,9 +226,12 @@
         # Apps (run with `nix run`)
         apps = {
           default = flake-utils.lib.mkApp {
-            drv = deciduous;
+            drv = deciduousFull;
           };
           deciduous = flake-utils.lib.mkApp {
+            drv = deciduousFull;
+          };
+          minimal = flake-utils.lib.mkApp {
             drv = deciduous;
           };
         };
@@ -262,20 +307,24 @@
             echo "  Deciduous Development Shell (Nix)"
             echo "========================================"
             echo ""
-            echo "Rust commands:"
-            echo "  cargo build --release    Build release binary"
+            echo "Cargo commands:"
+            echo "  cargo build --release    Build release binary (uses existing viewer.html)"
             echo "  cargo test               Run tests"
             echo "  cargo clippy             Run linter"
             echo "  cargo fmt                Format code"
             echo ""
-            echo "Nix commands:"
-            echo "  nix build                Build deciduous package"
+            echo "Nix build commands:"
+            echo "  nix build                Full build with embedded web viewer (default)"
+            echo "  nix build .#minimal      Minimal build without rebuilding web viewer"
             echo "  nix build .#webViewer    Build web viewer only"
-            echo "  nix build .#traceInterceptor  Build trace interceptor"
+            echo "  nix build .#traceInterceptor  Build trace interceptor only"
+            echo ""
+            echo "Nix run/check commands:"
+            echo "  nix run                  Run deciduous (full build)"
             echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
             echo ""
-            echo "Full rebuild (equivalent to make release-full):"
-            echo "  nix-build-full"
+            echo "Dev workflow (impure, modifies source tree):"
+            echo "  nix-build-full           Build everything locally (like make release-full)"
             echo ""
           '';
 

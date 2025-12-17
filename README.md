@@ -443,6 +443,31 @@ Add the `LIBRARY_PATH` export to your shell profile (`.zshrc` or `.bashrc`) to m
 
 ---
 
+## Nix Flake
+
+A `flake.nix` is provided for reproducible builds and development environments.
+
+```bash
+# Build (full build with embedded web viewer)
+nix build
+
+# Build minimal (without rebuilding web viewer)
+nix build .#minimal
+
+# Run directly
+nix run
+
+# Enter development shell
+nix develop
+
+# Run all checks (build, clippy, test, fmt)
+nix flake check
+```
+
+The devShell includes: Rust toolchain with rust-analyzer, Node.js 20, SQLite, graphviz, diesel-cli, cargo-watch, and all required dependencies for macOS/Linux.
+
+---
+
 ## Why "deciduous"?
 
 It almost has the word "decision" in it, and they're trees.
