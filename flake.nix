@@ -304,17 +304,24 @@
         };
 
         # Apps (run with `nix run`)
-        apps = {
-          default = flake-utils.lib.mkApp {
-            drv = deciduousFull;
+        apps =
+          let
+            mkAppWithMeta = drv: description: {
+              type = "app";
+              program = "${drv}/bin/deciduous";
+              meta = {
+                inherit description;
+                homepage = "https://github.com/notactuallytreyanastasio/deciduous";
+                license = pkgs.lib.licenses.mit;
+                mainProgram = "deciduous";
+              };
+            };
+          in
+          {
+            default = mkAppWithMeta deciduousFull "Decision graph tooling for AI-assisted development";
+            deciduous = mkAppWithMeta deciduousFull "Decision graph tooling for AI-assisted development";
+            minimal = mkAppWithMeta deciduous "Decision graph tooling (minimal build without embedded web viewer)";
           };
-          deciduous = flake-utils.lib.mkApp {
-            drv = deciduousFull;
-          };
-          minimal = flake-utils.lib.mkApp {
-            drv = deciduous;
-          };
-        };
 
         # Development shell
         devShells.default = craneLib.devShell {
