@@ -7,6 +7,7 @@
  */
 import { DeciduousClient } from './deciduous';
 import { ResponseAccumulator } from './stream-parser';
+export declare function debugLog(msg: string): void;
 /**
  * Install the interceptor
  */
