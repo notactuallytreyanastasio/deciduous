@@ -4,11 +4,11 @@
  * Draws SVG callout lines from tiny nodes to floating labels.
  * Used when search matches are visible but too small to read.
  *
- * Desktop: Rich cards on the right side with proper spacing
+ * Desktop: Scrollable panel on right with HTML cards
  * Mobile: Tappable circles that open bottom sheet
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import type { DecisionNode, DecisionEdge } from '../types/graph';
 import { truncate } from '../types/graph';
 import { getNodeColor } from '../utils/colors';
@@ -26,17 +26,15 @@ interface CalloutLinesProps {
   onNavigateToNode?: (node: DecisionNode) => void;
 }
 
-// Desktop: Rich card dimensions - taller for connection info
-const CARD_WIDTH = 420;
-const CARD_HEIGHT = 180;
-const CARD_GAP = 12;
-const CARD_MARGIN = 20;
+// Desktop card dimensions
+const CARD_WIDTH = 380;
+const CARD_MARGIN = 12;
 
 // Circle at node position
 const NODE_CIRCLE_RADIUS = 10;
 
 // Reserved zones
-const TOP_RESERVED = 70;
+const TOP_RESERVED = 55;
 const RIGHT_PANEL_WIDTH = CARD_WIDTH + CARD_MARGIN * 2;
 
 // Mobile breakpoint
@@ -62,42 +60,8 @@ interface CalloutData {
   node: DecisionNode;
   nodeX: number;
   nodeY: number;
-  cardX: number;
-  cardY: number;
   color: string;
   connections: ConnectionInfo;
-}
-
-// Calculate card positions - stack on right side with proper spacing
-function calculateCardPositions(
-  nodes: CalloutData[],
-  containerWidth: number,
-  containerHeight: number
-): CalloutData[] {
-  // Sort by Y position for intuitive ordering
-  const sorted = [...nodes].sort((a, b) => a.nodeY - b.nodeY);
-
-  // Cards go on the right side
-  const cardX = containerWidth - CARD_WIDTH - CARD_MARGIN;
-
-  // Stack from top
-  let currentY = TOP_RESERVED;
-
-  return sorted.map((callout, index) => {
-    const cardY = currentY;
-    currentY += CARD_HEIGHT + CARD_GAP;
-
-    // If we run out of space, wrap (though ideally limit results)
-    if (currentY > containerHeight - CARD_MARGIN && index < sorted.length - 1) {
-      currentY = TOP_RESERVED;
-    }
-
-    return {
-      ...callout,
-      cardX,
-      cardY,
-    };
-  });
 }
 
 // Mobile bottom sheet component
@@ -314,6 +278,146 @@ const NODE_TYPE_PRIORITY: Record<string, number> = {
   observation: 5,
 };
 
+// Result Card Component - HTML-based for proper scrolling
+const ResultCard: React.FC<{
+  callout: CalloutData;
+  isHovered: boolean;
+  onHover: (nodeId: number | null) => void;
+  onExpand: (nodeId: number) => void;
+  onNavigate: (node: DecisionNode) => void;
+  onOpenModal: (node: DecisionNode) => void;
+}> = ({ callout, isHovered, onHover, onExpand, onNavigate, onOpenModal }) => {
+  const conf = getConfidence(callout.node);
+
+  return (
+    <div
+      style={{
+        backgroundColor: '#fff',
+        border: `1px solid ${isHovered ? callout.color : '#d0d7de'}`,
+        borderLeft: `4px solid ${callout.color}`,
+        borderRadius: 8,
+        padding: 12,
+        marginBottom: 10,
+        cursor: 'pointer',
+        boxShadow: isHovered ? '0 4px 12px rgba(0,0,0,0.12)' : '0 1px 3px rgba(0,0,0,0.08)',
+        transition: 'all 0.15s',
+      }}
+      onMouseEnter={() => onHover(callout.node.id)}
+      onMouseLeave={() => onHover(null)}
+      onClick={() => onExpand(callout.node.id)}
+    >
+      {/* Row 1: Type badge + confidence + node ID + Chain button */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span
+          style={{
+            backgroundColor: callout.color + '20',
+            color: callout.color,
+            padding: '3px 8px',
+            borderRadius: 4,
+            fontSize: 10,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenModal(callout.node);
+          }}
+          title="Click to open modal and snap to node"
+        >
+          {callout.node.node_type.toUpperCase()}
+        </span>
+        {conf !== null && (
+          <span
+            style={{
+              backgroundColor: conf >= 80 ? '#dcfce7' : conf >= 50 ? '#fef3c7' : '#fee2e2',
+              color: conf >= 80 ? '#16a34a' : conf >= 50 ? '#d97706' : '#dc2626',
+              padding: '3px 8px',
+              borderRadius: 4,
+              fontSize: 10,
+              fontWeight: 600,
+            }}
+          >
+            {conf}%
+          </span>
+        )}
+        <span style={{ color: '#6e7781', fontFamily: 'monospace', fontSize: 11 }}>
+          #{callout.node.id}
+        </span>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onNavigate(callout.node);
+            onExpand(callout.node.id);
+          }}
+          style={{
+            marginLeft: 'auto',
+            padding: '4px 10px',
+            backgroundColor: isHovered ? '#0969da' : '#f6f8fa',
+            color: isHovered ? '#fff' : '#57606a',
+            border: `1px solid ${isHovered ? '#0969da' : '#d0d7de'}`,
+            borderRadius: 4,
+            fontSize: 11,
+            fontWeight: 500,
+            cursor: 'pointer',
+            transition: 'all 0.15s',
+          }}
+          title="View node chain"
+        >
+          Chain
+        </button>
+      </div>
+
+      {/* Row 2: Title */}
+      <div style={{ fontSize: 13, fontWeight: 600, color: '#24292f', marginBottom: 6 }}>
+        {truncate(callout.node.title, 50)}
+      </div>
+
+      {/* Row 3: Connections summary */}
+      <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#6e7781' }}>
+        <span>
+          <strong style={{ color: '#57606a' }}>INCOMING</strong> ({callout.connections.incoming.length})
+        </span>
+        <span>
+          <strong style={{ color: '#57606a' }}>OUTGOING</strong> ({callout.connections.outgoing.length})
+        </span>
+      </div>
+
+      {/* Row 4: Connection preview */}
+      {callout.connections.incoming.length > 0 && (
+        <div style={{ marginTop: 8, padding: '6px 8px', backgroundColor: '#f6f8fa', borderRadius: 4, fontSize: 11 }}>
+          <span
+            style={{
+              backgroundColor: getNodeColor(callout.connections.incoming[0].node.node_type) + '20',
+              color: getNodeColor(callout.connections.incoming[0].node.node_type),
+              padding: '1px 6px',
+              borderRadius: 3,
+              fontSize: 9,
+              fontWeight: 600,
+              marginRight: 6,
+              cursor: 'pointer',
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenModal(callout.connections.incoming[0].node);
+            }}
+            title="Click to open modal and snap to node"
+          >
+            {callout.connections.incoming[0].node.node_type.toUpperCase()}
+          </span>
+          <span style={{ color: '#24292f' }}>
+            {truncate(callout.connections.incoming[0].node.title, 35)}
+          </span>
+          {callout.connections.incoming.length > 1 && (
+            <span style={{ color: '#9ca3af', marginLeft: 8 }}>
+              +{callout.connections.incoming.length - 1}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const CalloutLines: React.FC<CalloutLinesProps> = ({
   nodes,
   edges,
@@ -329,6 +433,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   const [isMobile, setIsMobile] = useState(false);
   const [expandedNodeId, setExpandedNodeId] = useState<number | null>(null);
   const [chainSearch, setChainSearch] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
 
   // Clear chain search when expanded node changes
   useEffect(() => {
@@ -342,8 +447,14 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   const handleCardClick = (node: DecisionNode) => {
     if (onNavigateToNode) {
       onNavigateToNode(node);
-    } else {
-      onSelectNode(node);
+    }
+  };
+
+  // Handle opening modal and snapping to node
+  const handleOpenModal = (node: DecisionNode) => {
+    onSelectNode(node);
+    if (onNavigateToNode) {
+      onNavigateToNode(node);
     }
   };
 
@@ -386,15 +497,14 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
         node,
         nodeX: visibility.screenX + visibility.screenWidth / 2,
         nodeY: visibility.screenY + visibility.screenHeight / 2,
-        cardX: 0,
-        cardY: 0,
         color: getNodeColor(node.node_type),
         connections,
       });
     });
 
-    return calculateCardPositions(callouts, containerWidth, containerHeight);
-  }, [nodes, edges, highlightedNodeIds, visibilityMap, containerWidth, containerHeight]);
+    // Sort by Y position for intuitive ordering
+    return callouts.sort((a, b) => a.nodeY - b.nodeY);
+  }, [nodes, edges, highlightedNodeIds, visibilityMap]);
 
   // Keep expanded panel even if no callouts (node might have scrolled into view)
   const expandedNode = expandedNodeId !== null ? getNode(expandedNodeId) : null;
@@ -481,7 +591,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
     );
   }
 
-  // Build chain data for expanded node (outside render to avoid recalc)
+  // Build chain data for expanded node
   const chainData = expandedNode ? (() => {
     const chain = buildChainTree(expandedNodeId!, nodes, edges);
     const sortByType = (a: DecisionNode, b: DecisionNode) => {
@@ -508,661 +618,369 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
     };
   })() : null;
 
-  // Desktop: rich cards on the right side
+  // Calculate panel position - right side minus the panel width
+  const panelX = containerWidth - RIGHT_PANEL_WIDTH;
+
+  // Desktop: SVG for lines, HTML for scrollable cards panel
   return (
     <>
-    <svg
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 40,
-      }}
-    >
-      {/* Background panel for cards area */}
-      {calloutsNeeded.length > 0 && (
-        <rect
-          x={containerWidth - RIGHT_PANEL_WIDTH}
-          y={0}
-          width={RIGHT_PANEL_WIDTH}
-          height={containerHeight}
-          fill="#f6f8fa"
-          fillOpacity={0.85}
-        />
-      )}
-
-      {calloutsNeeded.map((callout) => {
-        const isHovered = hoveredNodeId === callout.node.id;
-
-        // Line from node to card
-        const lineEndX = callout.cardX;
-        const lineEndY = callout.cardY + CARD_HEIGHT / 2;
-
-        return (
-          <g key={callout.node.id}>
-            {/* Connection line - curved bezier */}
-            <path
-              d={`M ${callout.nodeX} ${callout.nodeY}
-                  Q ${callout.nodeX + (lineEndX - callout.nodeX) * 0.5} ${callout.nodeY}
-                    ${lineEndX} ${lineEndY}`}
-              stroke={callout.color}
-              strokeWidth={isHovered ? 3 : 2}
-              strokeOpacity={isHovered ? 0.9 : 0.5}
-              fill="none"
-              strokeDasharray={isHovered ? 'none' : '8,4'}
-            />
-
-            {/* Circle at node position */}
-            <circle
-              cx={callout.nodeX}
-              cy={callout.nodeY}
-              r={isHovered ? NODE_CIRCLE_RADIUS + 3 : NODE_CIRCLE_RADIUS}
-              fill={callout.color}
-              stroke="#fff"
-              strokeWidth={2}
-              style={{
-                pointerEvents: 'auto',
-                cursor: 'pointer',
-                transition: 'r 0.15s',
-              }}
-              onMouseEnter={() => setHoveredNodeId(callout.node.id)}
-              onMouseLeave={() => setHoveredNodeId(null)}
-              onClick={() => handleCardClick(callout.node)}
-            />
-
-            {/* Rich card - click to show chain panel */}
-            <g
-              style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-              onClick={() => setExpandedNodeId(callout.node.id)}
-              onMouseEnter={() => setHoveredNodeId(callout.node.id)}
-              onMouseLeave={() => setHoveredNodeId(null)}
-            >
-              {/* Card background */}
-              <rect
-                x={callout.cardX}
-                y={callout.cardY}
-                width={CARD_WIDTH}
-                height={CARD_HEIGHT}
-                rx={10}
-                fill="#ffffff"
-                stroke={isHovered ? callout.color : '#d0d7de'}
-                strokeWidth={isHovered ? 2 : 1}
-                filter={isHovered ? 'drop-shadow(0 6px 16px rgba(0,0,0,0.18))' : 'drop-shadow(0 2px 6px rgba(0,0,0,0.1))'}
-              />
-
-              {/* Colored left border accent */}
-              <rect
-                x={callout.cardX}
-                y={callout.cardY}
-                width={4}
-                height={CARD_HEIGHT}
-                rx={2}
-                fill={callout.color}
-              />
-
-              {/* Row 1: Type badge + confidence + node ID + date */}
-              {/* Type badge */}
-              <rect
-                x={callout.cardX + 14}
-                y={callout.cardY + 10}
-                width={72}
-                height={20}
-                rx={4}
-                fill={callout.color}
-                fillOpacity={0.15}
-              />
-              <text
-                x={callout.cardX + 50}
-                y={callout.cardY + 20}
-                fill={callout.color}
-                fontSize="10"
-                fontWeight="600"
-                textAnchor="middle"
-                dominantBaseline="middle"
-              >
-                {callout.node.node_type.toUpperCase()}
-              </text>
-
-              {/* Confidence badge */}
-              {(() => {
-                const conf = getConfidence(callout.node);
-                if (conf === null) return null;
-                return (
-                  <>
-                    <rect
-                      x={callout.cardX + 92}
-                      y={callout.cardY + 10}
-                      width={42}
-                      height={20}
-                      rx={4}
-                      fill={conf >= 80 ? '#22c55e' : conf >= 50 ? '#f59e0b' : '#ef4444'}
-                      fillOpacity={0.15}
-                    />
-                    <text
-                      x={callout.cardX + 113}
-                      y={callout.cardY + 20}
-                      fill={conf >= 80 ? '#16a34a' : conf >= 50 ? '#d97706' : '#dc2626'}
-                      fontSize="10"
-                      fontWeight="600"
-                      textAnchor="middle"
-                      dominantBaseline="middle"
-                    >
-                      {conf}%
-                    </text>
-                  </>
-                );
-              })()}
-
-              {/* Node ID */}
-              <text
-                x={callout.cardX + 145}
-                y={callout.cardY + 20}
-                fill="#6e7781"
-                fontSize="11"
-                fontFamily="monospace"
-                fontWeight="500"
-                dominantBaseline="middle"
-              >
-                Node #{callout.node.id}
-              </text>
-
-              {/* Date */}
-              <text
-                x={callout.cardX + CARD_WIDTH - 14}
-                y={callout.cardY + 20}
-                fill="#8b949e"
-                fontSize="10"
-                textAnchor="end"
-                dominantBaseline="middle"
-              >
-                {new Date(callout.node.created_at).toLocaleDateString()}
-              </text>
-
-              {/* Row 2: Title */}
-              <text
-                x={callout.cardX + 14}
-                y={callout.cardY + 44}
-                fill="#24292f"
-                fontSize="14"
-                fontWeight="600"
-                dominantBaseline="middle"
-              >
-                {truncate(callout.node.title, 48)}
-              </text>
-
-              {/* Row 3: Description (if any) */}
-              {callout.node.description && (
-                <text
-                  x={callout.cardX + 14}
-                  y={callout.cardY + 64}
-                  fill="#57606a"
-                  fontSize="12"
-                  dominantBaseline="middle"
-                >
-                  {truncate(callout.node.description, 55)}
-                </text>
-              )}
-
-              {/* Separator line */}
-              <line
-                x1={callout.cardX + 14}
-                y1={callout.cardY + 82}
-                x2={callout.cardX + CARD_WIDTH - 14}
-                y2={callout.cardY + 82}
-                stroke="#e5e7eb"
-                strokeWidth={1}
-              />
-
-              {/* Row 4: Connections section */}
-              {/* INCOMING label and count */}
-              <text
-                x={callout.cardX + 14}
-                y={callout.cardY + 98}
-                fill="#6e7781"
-                fontSize="9"
-                fontWeight="600"
-                dominantBaseline="middle"
-                letterSpacing="0.5"
-              >
-                INCOMING ({callout.connections.incoming.length})
-              </text>
-
-              {/* Incoming connection preview */}
-              {callout.connections.incoming.length > 0 ? (
-                <g>
-                  {callout.connections.incoming.slice(0, 1).map((conn, idx) => (
-                    <g key={`in-${idx}`}>
-                      <rect
-                        x={callout.cardX + 14}
-                        y={callout.cardY + 106}
-                        width={CARD_WIDTH - 28}
-                        height={24}
-                        rx={4}
-                        fill="#f6f8fa"
-                      />
-                      <rect
-                        x={callout.cardX + 18}
-                        y={callout.cardY + 110}
-                        width={50}
-                        height={16}
-                        rx={3}
-                        fill={getNodeColor(conn.node.node_type)}
-                        fillOpacity={0.15}
-                      />
-                      <text
-                        x={callout.cardX + 43}
-                        y={callout.cardY + 118}
-                        fill={getNodeColor(conn.node.node_type)}
-                        fontSize="8"
-                        fontWeight="600"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {conn.node.node_type.toUpperCase()}
-                      </text>
-                      <text
-                        x={callout.cardX + 74}
-                        y={callout.cardY + 118}
-                        fill="#24292f"
-                        fontSize="11"
-                        dominantBaseline="middle"
-                      >
-                        {truncate(conn.node.title, 38)}
-                      </text>
-                    </g>
-                  ))}
-                  {callout.connections.incoming.length > 1 && (
-                    <text
-                      x={callout.cardX + CARD_WIDTH - 14}
-                      y={callout.cardY + 118}
-                      fill="#6e7781"
-                      fontSize="9"
-                      textAnchor="end"
-                      dominantBaseline="middle"
-                    >
-                      +{callout.connections.incoming.length - 1} more
-                    </text>
-                  )}
-                </g>
-              ) : (
-                <text
-                  x={callout.cardX + 14}
-                  y={callout.cardY + 118}
-                  fill="#9ca3af"
-                  fontSize="10"
-                  fontStyle="italic"
-                  dominantBaseline="middle"
-                >
-                  No incoming connections
-                </text>
-              )}
-
-              {/* OUTGOING label and count */}
-              <text
-                x={callout.cardX + 14}
-                y={callout.cardY + 140}
-                fill="#6e7781"
-                fontSize="9"
-                fontWeight="600"
-                dominantBaseline="middle"
-                letterSpacing="0.5"
-              >
-                OUTGOING ({callout.connections.outgoing.length})
-              </text>
-
-              {/* Outgoing connection preview */}
-              {callout.connections.outgoing.length > 0 ? (
-                <g>
-                  {callout.connections.outgoing.slice(0, 1).map((conn, idx) => (
-                    <g key={`out-${idx}`}>
-                      <rect
-                        x={callout.cardX + 14}
-                        y={callout.cardY + 148}
-                        width={CARD_WIDTH - 28}
-                        height={24}
-                        rx={4}
-                        fill="#f6f8fa"
-                      />
-                      <rect
-                        x={callout.cardX + 18}
-                        y={callout.cardY + 152}
-                        width={50}
-                        height={16}
-                        rx={3}
-                        fill={getNodeColor(conn.node.node_type)}
-                        fillOpacity={0.15}
-                      />
-                      <text
-                        x={callout.cardX + 43}
-                        y={callout.cardY + 160}
-                        fill={getNodeColor(conn.node.node_type)}
-                        fontSize="8"
-                        fontWeight="600"
-                        textAnchor="middle"
-                        dominantBaseline="middle"
-                      >
-                        {conn.node.node_type.toUpperCase()}
-                      </text>
-                      <text
-                        x={callout.cardX + 74}
-                        y={callout.cardY + 160}
-                        fill="#24292f"
-                        fontSize="11"
-                        dominantBaseline="middle"
-                      >
-                        {truncate(conn.node.title, 38)}
-                      </text>
-                    </g>
-                  ))}
-                  {callout.connections.outgoing.length > 1 && (
-                    <text
-                      x={callout.cardX + CARD_WIDTH - 14}
-                      y={callout.cardY + 160}
-                      fill="#6e7781"
-                      fontSize="9"
-                      textAnchor="end"
-                      dominantBaseline="middle"
-                    >
-                      +{callout.connections.outgoing.length - 1} more
-                    </text>
-                  )}
-                </g>
-              ) : (
-                <text
-                  x={callout.cardX + 14}
-                  y={callout.cardY + 160}
-                  fill="#9ca3af"
-                  fontSize="10"
-                  fontStyle="italic"
-                  dominantBaseline="middle"
-                >
-                  No outgoing connections
-                </text>
-              )}
-
-              {/* Chain Button: zoom AND show bottom-left panel with ancestors/descendants */}
-              <g
-                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  // Show bottom-left panel with node info
-                  setExpandedNodeId(callout.node.id);
-                  // Zoom to the node
-                  if (onNavigateToNode) {
-                    onNavigateToNode(callout.node);
-                  }
-                }}
-              >
-                <title>View node chain (ancestors/descendants)</title>
-                <rect
-                  x={callout.cardX + CARD_WIDTH - 54}
-                  y={callout.cardY + 8}
-                  width={40}
-                  height={26}
-                  rx={6}
-                  fill={isHovered ? '#0969da' : '#f6f8fa'}
-                  stroke={isHovered ? '#0969da' : '#d0d7de'}
-                  strokeWidth={1}
-                />
-                {/* Tree/chain icon */}
-                <text
-                  x={callout.cardX + CARD_WIDTH - 34}
-                  y={callout.cardY + 21}
-                  fill={isHovered ? '#fff' : '#57606a'}
-                  fontSize="11"
-                  fontWeight="600"
-                  textAnchor="middle"
-                  dominantBaseline="middle"
-                >
-                  Chain
-                </text>
-              </g>
-            </g>
-          </g>
-        );
-      })}
-
-      {/* Match count header */}
-      <text
-        x={containerWidth - RIGHT_PANEL_WIDTH + CARD_MARGIN}
-        y={TOP_RESERVED - 16}
-        fill="#57606a"
-        fontSize="12"
-        fontWeight="500"
-      >
-        {calloutsNeeded.length} match{calloutsNeeded.length !== 1 ? 'es' : ''} found
-      </text>
-
-    </svg>
-
-    {/* Chain Panel - outside SVG for proper DOM rendering */}
-    {expandedNode && chainData && (
-      <div
+      {/* SVG Layer for connection lines only */}
+      <svg
         style={{
           position: 'absolute',
-          bottom: 16,
-          left: 16,
-          width: 400,
-          maxHeight: 'calc(100vh - 160px)',
-          backgroundColor: '#fff',
-          borderRadius: 10,
-          padding: 16,
-          overflow: 'auto',
-          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-          border: '1px solid #d0d7de',
-          zIndex: 50,
-          pointerEvents: 'auto',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          zIndex: 40,
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span
-              style={{
-                backgroundColor: getNodeColor(expandedNode.node_type) + '20',
-                color: getNodeColor(expandedNode.node_type),
-                padding: '3px 8px',
-                borderRadius: 4,
-                fontSize: 10,
-                fontWeight: 600,
-              }}
-            >
-              {expandedNode.node_type.toUpperCase()}
-            </span>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>#{expandedNode.id}</span>
-          </div>
-          <button
-            onClick={() => setExpandedNodeId(null)}
-            style={{
-              background: 'none',
-              border: 'none',
-              fontSize: 20,
-              cursor: 'pointer',
-              color: '#6e7781',
-              padding: 0,
-              lineHeight: 1,
-            }}
-          >
-            ×
-          </button>
-        </div>
+        {calloutsNeeded.map((callout) => {
+          const isHovered = hoveredNodeId === callout.node.id;
+          // Line goes to the panel edge
+          const lineEndX = panelX;
+          const lineEndY = Math.min(
+            Math.max(callout.nodeY, TOP_RESERVED + 40),
+            containerHeight - 40
+          );
 
-        <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
-          {truncate(expandedNode.title, 50)}
-        </h3>
+          return (
+            <g key={callout.node.id}>
+              {/* Connection line - curved bezier */}
+              <path
+                d={`M ${callout.nodeX} ${callout.nodeY}
+                    Q ${callout.nodeX + (lineEndX - callout.nodeX) * 0.5} ${callout.nodeY}
+                      ${lineEndX} ${lineEndY}`}
+                stroke={callout.color}
+                strokeWidth={isHovered ? 3 : 2}
+                strokeOpacity={isHovered ? 0.9 : 0.5}
+                fill="none"
+                strokeDasharray={isHovered ? 'none' : '8,4'}
+              />
 
-        {/* Go to Node button - zooms to the node */}
-        <button
-          onClick={() => {
-            if (onNavigateToNode) {
-              onNavigateToNode(expandedNode);
-            }
-          }}
+              {/* Circle at node position */}
+              <circle
+                cx={callout.nodeX}
+                cy={callout.nodeY}
+                r={isHovered ? NODE_CIRCLE_RADIUS + 3 : NODE_CIRCLE_RADIUS}
+                fill={callout.color}
+                stroke="#fff"
+                strokeWidth={2}
+                style={{
+                  pointerEvents: 'auto',
+                  cursor: 'pointer',
+                  transition: 'r 0.15s',
+                }}
+                onMouseEnter={() => setHoveredNodeId(callout.node.id)}
+                onMouseLeave={() => setHoveredNodeId(null)}
+                onClick={() => handleCardClick(callout.node)}
+              />
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* HTML Panel for scrollable cards */}
+      {calloutsNeeded.length > 0 && (
+        <div
+          ref={panelRef}
           style={{
-            width: '100%',
-            padding: '8px 12px',
-            backgroundColor: '#0969da',
-            color: '#fff',
-            border: 'none',
-            borderRadius: 6,
-            fontSize: 13,
-            fontWeight: 500,
-            cursor: 'pointer',
-            marginBottom: 12,
+            position: 'absolute',
+            top: TOP_RESERVED,
+            right: 0,
+            width: RIGHT_PANEL_WIDTH,
+            bottom: 0,
+            backgroundColor: 'rgba(246, 248, 250, 0.95)',
+            borderLeft: '1px solid #d0d7de',
+            zIndex: 41,
+            display: 'flex',
+            flexDirection: 'column',
+            pointerEvents: 'auto',
           }}
         >
-          Go to Node
-        </button>
-
-        {/* Chain Search Input */}
-        <div style={{ marginBottom: 12 }}>
-          <input
-            type="text"
-            value={chainSearch}
-            onChange={(e) => setChainSearch(e.target.value)}
-            placeholder="Filter chain..."
-            style={{
-              width: '100%',
-              padding: '6px 10px',
-              fontSize: 12,
-              border: '1px solid #d0d7de',
-              borderRadius: 6,
-              backgroundColor: '#f6f8fa',
-              outline: 'none',
-            }}
-          />
-        </div>
-
-        {/* Ancestors Section */}
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
-            UPSTREAM {chainSearch ? `(${chainData.ancestors.length}/${chainData.totalAncestors})` : `(${chainData.ancestors.length})`}
+          {/* Header */}
+          <div style={{
+            padding: '10px 12px',
+            borderBottom: '1px solid #d0d7de',
+            backgroundColor: '#fff',
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: '#57606a' }}>
+              {calloutsNeeded.length} match{calloutsNeeded.length !== 1 ? 'es' : ''} found
+            </span>
           </div>
-          {chainData.ancestors.length === 0 ? (
-            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>
-              {chainSearch && chainData.totalAncestors > 0 ? 'No matches' : 'Root node'}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {chainData.ancestors.slice(0, chainSearch ? 15 : 5).map((node) => (
-                <div
-                  key={node.id}
-                  onClick={() => {
-                    if (onNavigateToNode) {
-                      onNavigateToNode(node);
-                    }
-                    setExpandedNodeId(node.id);
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 8px',
-                    backgroundColor: '#f6f8fa',
-                    borderRadius: 4,
-                    cursor: 'pointer',
-                    fontSize: 12,
-                  }}
-                >
-                  <span
-                    style={{
-                      backgroundColor: getNodeColor(node.node_type) + '20',
-                      color: getNodeColor(node.node_type),
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      fontSize: 9,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {node.node_type.slice(0, 3).toUpperCase()}
-                  </span>
-                  <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {truncate(node.title, 30)}
-                  </span>
-                </div>
-              ))}
-              {chainData.ancestors.length > (chainSearch ? 15 : 5) && (
-                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.ancestors.length - (chainSearch ? 15 : 5)} more</div>
-              )}
-            </div>
-          )}
-        </div>
 
-        {/* Current Node */}
+          {/* Scrollable cards area */}
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: CARD_MARGIN,
+          }}>
+            {calloutsNeeded.map((callout) => (
+              <ResultCard
+                key={callout.node.id}
+                callout={callout}
+                isHovered={hoveredNodeId === callout.node.id}
+                onHover={setHoveredNodeId}
+                onExpand={setExpandedNodeId}
+                onNavigate={handleCardClick}
+                onOpenModal={handleOpenModal}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Chain Panel - outside SVG for proper DOM rendering */}
+      {expandedNode && chainData && (
         <div
           style={{
-            padding: '8px 10px',
-            backgroundColor: getNodeColor(expandedNode.node_type) + '15',
-            borderLeft: `3px solid ${getNodeColor(expandedNode.node_type)}`,
-            borderRadius: 4,
-            marginBottom: 16,
-            fontSize: 12,
+            position: 'absolute',
+            bottom: 16,
+            left: 16,
+            width: 380,
+            height: '50%',
+            minHeight: 300,
+            maxHeight: 'calc(100vh - 160px)',
+            backgroundColor: '#fff',
+            borderRadius: 10,
+            display: 'flex',
+            flexDirection: 'column',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            border: '1px solid #d0d7de',
+            zIndex: 50,
+            pointerEvents: 'auto',
+            resize: 'vertical',
+            overflow: 'hidden',
           }}
         >
-          <div style={{ fontSize: 10, color: '#6e7781', marginBottom: 2 }}>CURRENT</div>
-          <div style={{ fontWeight: 600 }}>{truncate(expandedNode.title, 35)}</div>
-        </div>
-
-        {/* Descendants Section */}
-        <div>
-          <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
-            DOWNSTREAM {chainSearch ? `(${chainData.descendants.length}/${chainData.totalDescendants})` : `(${chainData.descendants.length})`}
-          </div>
-          {chainData.descendants.length === 0 ? (
-            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>
-              {chainSearch && chainData.totalDescendants > 0 ? 'No matches' : 'Leaf node'}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {chainData.descendants.slice(0, chainSearch ? 15 : 5).map((node) => (
-                <div
-                  key={node.id}
-                  onClick={() => {
-                    // Zoom to node and update panel to show its info
-                    if (onNavigateToNode) {
-                      onNavigateToNode(node);
-                    }
-                    setExpandedNodeId(node.id);
-                  }}
+          {/* Fixed Header */}
+          <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    padding: '6px 8px',
-                    backgroundColor: '#f6f8fa',
+                    backgroundColor: getNodeColor(expandedNode.node_type) + '20',
+                    color: getNodeColor(expandedNode.node_type),
+                    padding: '3px 8px',
                     borderRadius: 4,
+                    fontSize: 10,
+                    fontWeight: 600,
                     cursor: 'pointer',
-                    fontSize: 12,
                   }}
+                  onClick={() => handleOpenModal(expandedNode)}
+                  title="Click to open modal"
                 >
-                  <span
-                    style={{
-                      backgroundColor: getNodeColor(node.node_type) + '20',
-                      color: getNodeColor(node.node_type),
-                      padding: '1px 5px',
-                      borderRadius: 3,
-                      fontSize: 9,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {node.node_type.slice(0, 3).toUpperCase()}
-                  </span>
-                  <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {truncate(node.title, 30)}
-                  </span>
+                  {expandedNode.node_type.toUpperCase()}
+                </span>
+                <span style={{ fontWeight: 600, fontSize: 14 }}>#{expandedNode.id}</span>
+              </div>
+              <button
+                onClick={() => setExpandedNodeId(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  color: '#6e7781',
+                  padding: 0,
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+              {truncate(expandedNode.title, 50)}
+            </h3>
+
+            {/* Go to Node button - zooms to the node */}
+            <button
+              onClick={() => {
+                if (onNavigateToNode) {
+                  onNavigateToNode(expandedNode);
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '8px 12px',
+                backgroundColor: '#0969da',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                marginBottom: 12,
+              }}
+            >
+              Go to Node
+            </button>
+
+            {/* Chain Search Input */}
+            <input
+              type="text"
+              value={chainSearch}
+              onChange={(e) => setChainSearch(e.target.value)}
+              placeholder="Filter chain..."
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                fontSize: 12,
+                border: '1px solid #d0d7de',
+                borderRadius: 6,
+                backgroundColor: '#f6f8fa',
+                outline: 'none',
+                boxSizing: 'border-box',
+              }}
+            />
+          </div>
+
+          {/* Scrollable Content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: 16 }}>
+            {/* Ancestors Section */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
+                UPSTREAM {chainSearch ? `(${chainData.ancestors.length}/${chainData.totalAncestors})` : `(${chainData.ancestors.length})`}
+              </div>
+              {chainData.ancestors.length === 0 ? (
+                <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>
+                  {chainSearch && chainData.totalAncestors > 0 ? 'No matches' : 'Root node'}
                 </div>
-              ))}
-              {chainData.descendants.length > (chainSearch ? 15 : 5) && (
-                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.descendants.length - (chainSearch ? 15 : 5)} more</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {chainData.ancestors.slice(0, chainSearch ? 15 : 5).map((node) => (
+                    <div
+                      key={node.id}
+                      onClick={() => {
+                        if (onNavigateToNode) {
+                          onNavigateToNode(node);
+                        }
+                        setExpandedNodeId(node.id);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 8px',
+                        backgroundColor: '#f6f8fa',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        fontSize: 12,
+                      }}
+                    >
+                      <span
+                        style={{
+                          backgroundColor: getNodeColor(node.node_type) + '20',
+                          color: getNodeColor(node.node_type),
+                          padding: '1px 5px',
+                          borderRadius: 3,
+                          fontSize: 9,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenModal(node);
+                        }}
+                        title="Click to open modal"
+                      >
+                        {node.node_type.slice(0, 3).toUpperCase()}
+                      </span>
+                      <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {truncate(node.title, 30)}
+                      </span>
+                    </div>
+                  ))}
+                  {chainData.ancestors.length > (chainSearch ? 15 : 5) && (
+                    <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.ancestors.length - (chainSearch ? 15 : 5)} more</div>
+                  )}
+                </div>
               )}
             </div>
-          )}
+
+            {/* Current Node */}
+            <div
+              style={{
+                padding: '8px 10px',
+                backgroundColor: getNodeColor(expandedNode.node_type) + '15',
+                borderLeft: `3px solid ${getNodeColor(expandedNode.node_type)}`,
+                borderRadius: 4,
+                marginBottom: 16,
+                fontSize: 12,
+              }}
+            >
+              <div style={{ fontSize: 10, color: '#6e7781', marginBottom: 2 }}>CURRENT</div>
+              <div style={{ fontWeight: 600 }}>{truncate(expandedNode.title, 35)}</div>
+            </div>
+
+            {/* Descendants Section */}
+            <div>
+              <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
+                DOWNSTREAM {chainSearch ? `(${chainData.descendants.length}/${chainData.totalDescendants})` : `(${chainData.descendants.length})`}
+              </div>
+              {chainData.descendants.length === 0 ? (
+                <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>
+                  {chainSearch && chainData.totalDescendants > 0 ? 'No matches' : 'Leaf node'}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {chainData.descendants.slice(0, chainSearch ? 15 : 5).map((node) => (
+                    <div
+                      key={node.id}
+                      onClick={() => {
+                        // Zoom to node and update panel to show its info
+                        if (onNavigateToNode) {
+                          onNavigateToNode(node);
+                        }
+                        setExpandedNodeId(node.id);
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '6px 8px',
+                        backgroundColor: '#f6f8fa',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        fontSize: 12,
+                      }}
+                    >
+                      <span
+                        style={{
+                          backgroundColor: getNodeColor(node.node_type) + '20',
+                          color: getNodeColor(node.node_type),
+                          padding: '1px 5px',
+                          borderRadius: 3,
+                          fontSize: 9,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenModal(node);
+                        }}
+                        title="Click to open modal"
+                      >
+                        {node.node_type.slice(0, 3).toUpperCase()}
+                      </span>
+                      <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {truncate(node.title, 30)}
+                      </span>
+                    </div>
+                  ))}
+                  {chainData.descendants.length > (chainSearch ? 15 : 5) && (
+                    <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.descendants.length - (chainSearch ? 15 : 5)} more</div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    )}
+      )}
     </>
   );
 };

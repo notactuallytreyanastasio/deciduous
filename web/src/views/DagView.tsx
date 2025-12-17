@@ -11,7 +11,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import * as d3 from 'd3';
 import dagre from 'dagre';
-import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
+import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit, NodeType } from '../types/graph';
 import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { SearchBar } from '../components/SearchBar';
@@ -107,6 +107,22 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Graph bounds for minimap
   const [graphBounds, setGraphBounds] = useState({ minX: 0, maxX: 1000, minY: 0, maxY: 1000 });
 
+  // Node type filtering - which types to hide
+  const [hiddenNodeTypes, setHiddenNodeTypes] = useState<Set<NodeType>>(new Set());
+
+  // Toggle a node type's visibility
+  const toggleNodeType = useCallback((type: NodeType) => {
+    setHiddenNodeTypes(prev => {
+      const next = new Set(prev);
+      if (next.has(type)) {
+        next.delete(type);
+      } else {
+        next.add(type);
+      }
+      return next;
+    });
+  }, []);
+
   // Node visibility tracking
   const { visibilityMap } = useNodeVisibility(
     svgRef,
@@ -147,16 +163,142 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     return ids;
   }, [visibleChains]);
 
+  // Filter graph data based on hidden node types and compute transitive edges
+  const filteredGraphData = useMemo(() => {
+    if (hiddenNodeTypes.size === 0) {
+      return graphData;
+    }
+
+    // Filter nodes
+    const filteredNodes = graphData.nodes.filter(n =>
+      !hiddenNodeTypes.has(n.node_type as NodeType)
+    );
+    const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+
+    // Build adjacency maps for the original graph
+    const outgoingEdges = new Map<number, number[]>();
+    const incomingEdges = new Map<number, number[]>();
+    graphData.edges.forEach(e => {
+      if (!outgoingEdges.has(e.from_node_id)) {
+        outgoingEdges.set(e.from_node_id, []);
+      }
+      outgoingEdges.get(e.from_node_id)!.push(e.to_node_id);
+
+      if (!incomingEdges.has(e.to_node_id)) {
+        incomingEdges.set(e.to_node_id, []);
+      }
+      incomingEdges.get(e.to_node_id)!.push(e.from_node_id);
+    });
+
+    // Function to find all reachable visible nodes from a starting node
+    // going in a specific direction through hidden nodes
+    const findReachableVisible = (startId: number, direction: 'forward' | 'backward'): number[] => {
+      const reachable: number[] = [];
+      const visited = new Set<number>();
+      const queue = [startId];
+
+      while (queue.length > 0) {
+        const current = queue.shift()!;
+        if (visited.has(current)) continue;
+        visited.add(current);
+
+        const neighbors = direction === 'forward'
+          ? outgoingEdges.get(current) || []
+          : incomingEdges.get(current) || [];
+
+        for (const neighbor of neighbors) {
+          if (filteredNodeIds.has(neighbor)) {
+            // Visible node - add to reachable
+            reachable.push(neighbor);
+          } else {
+            // Hidden node - continue traversing
+            queue.push(neighbor);
+          }
+        }
+      }
+
+      return reachable;
+    };
+
+    // Compute transitive edges
+    const transitiveEdges: DecisionEdge[] = [];
+    const edgeSet = new Set<string>(); // To avoid duplicates
+
+    // For each visible node, find all visible nodes reachable through hidden nodes
+    filteredNodes.forEach(node => {
+      // Find downstream visible nodes
+      const reachable = findReachableVisible(node.id, 'forward');
+      reachable.forEach(targetId => {
+        const key = `${node.id}-${targetId}`;
+        if (!edgeSet.has(key)) {
+          edgeSet.add(key);
+          transitiveEdges.push({
+            id: -1, // Synthetic edge
+            from_node_id: node.id,
+            to_node_id: targetId,
+            from_change_id: null,
+            to_change_id: null,
+            edge_type: 'transitive' as DecisionEdge['edge_type'], // Cast for synthetic transitive edges
+            weight: null,
+            rationale: null,
+            created_at: new Date().toISOString(),
+          });
+        }
+      });
+    });
+
+    // Keep only edges between visible nodes (direct edges)
+    const directEdges = graphData.edges.filter(e =>
+      filteredNodeIds.has(e.from_node_id) && filteredNodeIds.has(e.to_node_id)
+    );
+
+    // Combine direct edges with transitive edges (avoid duplicates)
+    const allEdges = [...directEdges];
+    directEdges.forEach(e => edgeSet.add(`${e.from_node_id}-${e.to_node_id}`));
+    transitiveEdges.forEach(e => {
+      const key = `${e.from_node_id}-${e.to_node_id}`;
+      if (!edgeSet.has(key)) {
+        allEdges.push(e);
+      }
+    });
+
+    return {
+      ...graphData,
+      nodes: filteredNodes,
+      edges: allEdges,
+    };
+  }, [graphData, hiddenNodeTypes]);
+
   // Calculate how many chains are hidden
   const hiddenChainCount = goalChains.length - (urlState.viewMode === 'recent' ? urlState.recentChainCount : 0);
 
-  const handleSelectNode = useCallback((node: DecisionNode) => {
-    setSelectedNodeId(node.id);
-  }, [setSelectedNodeId]);
+  // handleSelectNode is defined later after handleNavigateToNode
 
   const handleSelectNodeById = useCallback((id: number) => {
     setSelectedNodeId(id);
-  }, [setSelectedNodeId]);
+    // Snap to node when opening modal from connections list
+    const node = graphData.nodes.find(n => n.id === id);
+    if (node) {
+      // Use a small timeout to let the modal render first
+      setTimeout(() => {
+        const pos = nodePositions.get(id);
+        if (pos && svgRef.current && containerRef.current && zoomBehaviorRef.current) {
+          const svg = d3.select(svgRef.current);
+          const width = containerRef.current.clientWidth;
+          const height = containerRef.current.clientHeight;
+          const targetScale = 1.2;
+          const targetX = width / 2 - pos.x * targetScale;
+          const targetY = height / 2 - pos.y * targetScale;
+          svg.transition()
+            .duration(500)
+            .call(
+              zoomBehaviorRef.current!.transform,
+              d3.zoomIdentity.translate(targetX, targetY).scale(targetScale)
+            );
+        }
+      }, 50);
+    }
+  }, [setSelectedNodeId, graphData.nodes, nodePositions]);
 
   // State for custom expand input
   const [expandInputVisible, setExpandInputVisible] = useState(false);
@@ -262,6 +404,13 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     // Don't open modal here - let user click on panel or node to open it
   }, [nodePositions]);
 
+  // Select node and snap to it (opens modal and pans to node)
+  const handleSelectNode = useCallback((node: DecisionNode) => {
+    setSelectedNodeId(node.id);
+    // Also snap to the node when opening modal
+    handleNavigateToNode(node);
+  }, [setSelectedNodeId, handleNavigateToNode]);
+
   // Build and render DAG
   useEffect(() => {
     if (!svgRef.current || !containerRef.current) return;
@@ -273,9 +422,9 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
     svg.selectAll('*').remove();
 
-    // Filter nodes based on visibility
-    const visibleNodes = graphData.nodes.filter(n => visibleNodeIds.has(n.id));
-    const visibleEdges = graphData.edges.filter(
+    // Filter nodes based on visibility AND type filtering
+    const visibleNodes = filteredGraphData.nodes.filter(n => visibleNodeIds.has(n.id));
+    const visibleEdges = filteredGraphData.edges.filter(
       e => visibleNodeIds.has(e.from_node_id) && visibleNodeIds.has(e.to_node_id)
     );
 
@@ -381,14 +530,24 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         .y(d => d.y)
         .curve(d3.curveBasis);
 
+      // Determine dash style for edge type
+      const edgeType = edgeData.edge_type as string; // Cast to allow comparison with 'transitive'
+      let dashArray: string | null = null;
+      if (edgeType === 'rejected') {
+        dashArray = '5,5';
+      } else if (edgeType === 'transitive') {
+        dashArray = '3,6'; // Different pattern for transitive edges
+      }
+
+      const isTransitive = edgeType === 'transitive';
       d3.select(this)
         .append('path')
         .attr('d', line(edge.points))
         .attr('fill', 'none')
-        .attr('stroke', getEdgeColor(edgeData.edge_type))
-        .attr('stroke-width', 2)
-        .attr('stroke-opacity', 0.6)
-        .attr('stroke-dasharray', edgeData.edge_type === 'rejected' ? '5,5' : null)
+        .attr('stroke', isTransitive ? '#9ca3af' : getEdgeColor(edgeData.edge_type))
+        .attr('stroke-width', isTransitive ? 1.5 : 2)
+        .attr('stroke-opacity', isTransitive ? 0.5 : 0.6)
+        .attr('stroke-dasharray', dashArray)
         .attr('marker-end', 'url(#arrowhead)');
     });
 
@@ -492,7 +651,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     return () => {
       svg.on('.zoom', null);
     };
-  }, [graphData, visibleNodeIds, handleSelectNode, highlightedNodeIds]);
+  }, [graphData, filteredGraphData, visibleNodeIds, handleSelectNode, highlightedNodeIds]);
 
   return (
     <div style={{
@@ -610,6 +769,21 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
               Back to Recent
             </button>
           )}
+
+          {/* Jump to Chain - moved to top bar */}
+          <select
+            value={urlState.focusChainIndex ?? ''}
+            onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
+            style={styles.topBarSelect}
+            title="Jump to a specific goal chain"
+          >
+            <option value="">Jump to Chain...</option>
+            {goalChains.map((chain) => (
+              <option key={chain.root.id} value={chains.indexOf(chain)}>
+                {truncate(chain.root.title, 30)}
+              </option>
+            ))}
+          </select>
         </div>
 
         <div style={styles.topBarRight}>
@@ -632,6 +806,16 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           >
             🔗 Copy Link
           </button>
+        </div>
+
+        {/* Floating mini legend at top center */}
+        <div style={styles.floatingLegend}>
+          {Object.entries(NODE_COLORS).map(([type, color]) => (
+            <div key={type} style={styles.floatingLegendItem} title={type}>
+              <div style={{ ...styles.floatingLegendDot, backgroundColor: color }} />
+              <span style={styles.floatingLegendLabel}>{type.slice(0, 3)}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -663,30 +847,47 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
         {!isControlsCollapsed && (
           <>
-            <div style={styles.section}>
-              <label style={styles.label}>Jump to Chain</label>
-              <select
-                value={urlState.focusChainIndex ?? ''}
-                onChange={e => handleFocusChain(e.target.value ? Number(e.target.value) : null)}
-                style={styles.select}
-              >
-                <option value="">Recent Chains</option>
-                {goalChains.map((chain) => (
-                  <option key={chain.root.id} value={chains.indexOf(chain)}>
-                    {truncate(chain.root.title, 30)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             <div style={styles.legend}>
               <div style={styles.legendTitle}>Node Types</div>
-              {Object.entries(NODE_COLORS).map(([type, color]) => (
-                <div key={type} style={styles.legendItem}>
-                  <div style={{ ...styles.legendDot, backgroundColor: color }} />
-                  <span>{type}</span>
-                </div>
-              ))}
+              <div style={styles.filterHint}>Click to hide/show</div>
+              {Object.entries(NODE_COLORS).map(([type, color]) => {
+                const isHidden = hiddenNodeTypes.has(type as NodeType);
+                return (
+                  <div
+                    key={type}
+                    style={{
+                      ...styles.legendItem,
+                      opacity: isHidden ? 0.4 : 1,
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => toggleNodeType(type as NodeType)}
+                    title={isHidden ? `Show ${type} nodes` : `Hide ${type} nodes`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!isHidden}
+                      onChange={() => toggleNodeType(type as NodeType)}
+                      style={{ marginRight: 6, cursor: 'pointer' }}
+                    />
+                    <div style={{
+                      ...styles.legendDot,
+                      backgroundColor: color,
+                      opacity: isHidden ? 0.3 : 1,
+                    }} />
+                    <span style={{
+                      textDecoration: isHidden ? 'line-through' : 'none',
+                    }}>{type}</span>
+                  </div>
+                );
+              })}
+              {hiddenNodeTypes.size > 0 && (
+                <button
+                  onClick={() => setHiddenNodeTypes(new Set())}
+                  style={styles.showAllBtn}
+                >
+                  Show all types
+                </button>
+              )}
             </div>
 
             <div style={styles.zoomInfo}>
@@ -703,8 +904,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         {/* Callout Lines for too-small nodes */}
         {highlightedNodeIds.size > 0 && (
           <CalloutLines
-            nodes={graphData.nodes}
-            edges={graphData.edges}
+            nodes={filteredGraphData.nodes}
+            edges={filteredGraphData.edges}
             highlightedNodeIds={highlightedNodeIds}
             visibilityMap={visibilityMap}
             containerWidth={containerDimensions.width}
@@ -989,6 +1190,47 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'background-color 0.15s',
   },
+  topBarSelect: {
+    padding: '6px 10px',
+    fontSize: '12px',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    backgroundColor: '#fff',
+    color: '#24292f',
+    cursor: 'pointer',
+    marginLeft: '8px',
+    maxWidth: '200px',
+  },
+  floatingLegend: {
+    position: 'absolute',
+    top: '10px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '4px 12px',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: '16px',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.1)',
+    zIndex: 5,
+  },
+  floatingLegendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  floatingLegendDot: {
+    width: '8px',
+    height: '8px',
+    borderRadius: '50%',
+  },
+  floatingLegendLabel: {
+    fontSize: '9px',
+    color: '#6e7781',
+    textTransform: 'uppercase',
+    fontWeight: 500,
+  },
   fullscreenTopBar: {
     padding: '8px 20px',
   },
@@ -1099,6 +1341,23 @@ const styles: Record<string, React.CSSProperties> = {
     width: '10px',
     height: '10px',
     borderRadius: '50%',
+  },
+  filterHint: {
+    fontSize: '9px',
+    color: '#8b949e',
+    marginBottom: '8px',
+    fontStyle: 'italic',
+  },
+  showAllBtn: {
+    marginTop: '8px',
+    padding: '4px 8px',
+    fontSize: '10px',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    color: '#0969da',
+    width: '100%',
   },
   zoomInfo: {
     marginTop: '15px',

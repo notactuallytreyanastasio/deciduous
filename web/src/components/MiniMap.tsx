@@ -2,10 +2,11 @@
  * MiniMap Component
  *
  * A small overview of the graph showing the current viewport and
- * indicators for off-screen search matches.
+ * indicators for off-screen search matches. Now collapsible to avoid
+ * overlapping with search results panel.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { DecisionNode } from '../types/graph';
 import { getNodeColor } from '../utils/colors';
 import type { VisibilityInfo } from '../hooks/useNodeVisibility';
@@ -35,6 +36,7 @@ export const MiniMap: React.FC<MiniMapProps> = ({
   zoom,
   onNavigateToNode,
 }) => {
+  const [isCollapsed, setIsCollapsed] = useState(false);
   // Calculate scale to fit graph in minimap
   const scale = useMemo(() => {
     const graphWidth = graphBounds.maxX - graphBounds.minX;
@@ -79,11 +81,34 @@ export const MiniMap: React.FC<MiniMapProps> = ({
     return null;
   }
 
+  // Collapsed state - just show a small indicator
+  if (isCollapsed) {
+    return (
+      <div style={styles.collapsedContainer}>
+        <button
+          onClick={() => setIsCollapsed(false)}
+          style={styles.expandBtn}
+          title="Show off-screen matches"
+        >
+          <span style={styles.expandIcon}>↗</span>
+          <span style={styles.collapsedCount}>{offScreenMatches.length}</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.title}>Off-screen matches</span>
+        <span style={styles.title}>OFF-SCREEN MATCHES</span>
         <span style={styles.count}>{offScreenMatches.length}</span>
+        <button
+          onClick={() => setIsCollapsed(true)}
+          style={styles.collapseBtn}
+          title="Collapse minimap"
+        >
+          ✕
+        </button>
       </div>
 
       <svg width={MINIMAP_WIDTH} height={MINIMAP_HEIGHT} style={styles.svg}>
@@ -161,27 +186,57 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     position: 'absolute',
     bottom: '20px',
-    right: '20px',
+    left: '220px', // Positioned to the right of the controls panel
     backgroundColor: '#ffffff',
     border: '1px solid #d0d7de',
     borderRadius: '8px',
     boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-    zIndex: 50,
+    zIndex: 45, // Below controls panel
     overflow: 'hidden',
+  },
+  collapsedContainer: {
+    position: 'absolute',
+    bottom: '20px',
+    left: '220px',
+    zIndex: 45,
+  },
+  expandBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '8px 12px',
+    backgroundColor: '#fff',
+    border: '1px solid #d0d7de',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+    transition: 'background-color 0.15s',
+  },
+  expandIcon: {
+    fontSize: '14px',
+    color: '#57606a',
+  },
+  collapsedCount: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#cf222e',
+    backgroundColor: '#ffebe9',
+    padding: '2px 8px',
+    borderRadius: '10px',
   },
   header: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: '8px',
     padding: '8px 12px',
     borderBottom: '1px solid #d0d7de',
     backgroundColor: '#f6f8fa',
   },
   title: {
-    fontSize: '11px',
+    fontSize: '10px',
     fontWeight: 600,
     color: '#57606a',
-    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
   },
   count: {
     fontSize: '11px',
@@ -190,6 +245,17 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#ffebe9',
     padding: '2px 6px',
     borderRadius: '10px',
+  },
+  collapseBtn: {
+    marginLeft: 'auto',
+    padding: '2px 6px',
+    backgroundColor: 'transparent',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    color: '#57606a',
+    transition: 'background-color 0.15s',
   },
   svg: {
     display: 'block',
