@@ -22,6 +22,8 @@ interface CalloutLinesProps {
   containerWidth: number;
   containerHeight: number;
   onSelectNode: (node: DecisionNode) => void;
+  /** Pan/zoom to node location */
+  onNavigateToNode?: (node: DecisionNode) => void;
 }
 
 // Desktop: Rich card dimensions - taller for connection info
@@ -253,6 +255,65 @@ const MobileBottomSheet: React.FC<{
   );
 };
 
+// Build full chain tree (all ancestors and descendants)
+function buildChainTree(
+  nodeId: number,
+  nodes: DecisionNode[],
+  edges: DecisionEdge[]
+): { ancestors: DecisionNode[]; descendants: DecisionNode[] } {
+  const ancestors: DecisionNode[] = [];
+  const descendants: DecisionNode[] = [];
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  // BFS for ancestors (nodes pointing TO this node)
+  const ancestorQueue = [nodeId];
+  const ancestorVisited = new Set<number>([nodeId]);
+  while (ancestorQueue.length > 0) {
+    const current = ancestorQueue.shift()!;
+    const incoming = edges.filter(e => e.to_node_id === current);
+    for (const edge of incoming) {
+      if (!ancestorVisited.has(edge.from_node_id)) {
+        ancestorVisited.add(edge.from_node_id);
+        const node = nodeMap.get(edge.from_node_id);
+        if (node) {
+          ancestors.push(node);
+          ancestorQueue.push(edge.from_node_id);
+        }
+      }
+    }
+  }
+
+  // BFS for descendants (nodes this points TO)
+  const descendantQueue = [nodeId];
+  const descendantVisited = new Set<number>([nodeId]);
+  while (descendantQueue.length > 0) {
+    const current = descendantQueue.shift()!;
+    const outgoing = edges.filter(e => e.from_node_id === current);
+    for (const edge of outgoing) {
+      if (!descendantVisited.has(edge.to_node_id)) {
+        descendantVisited.add(edge.to_node_id);
+        const node = nodeMap.get(edge.to_node_id);
+        if (node) {
+          descendants.push(node);
+          descendantQueue.push(edge.to_node_id);
+        }
+      }
+    }
+  }
+
+  return { ancestors, descendants };
+}
+
+// Node type priority for sorting
+const NODE_TYPE_PRIORITY: Record<string, number> = {
+  goal: 0,
+  outcome: 1,
+  decision: 2,
+  option: 3,
+  action: 4,
+  observation: 5,
+};
+
 export const CalloutLines: React.FC<CalloutLinesProps> = ({
   nodes,
   edges,
@@ -261,13 +322,24 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   containerWidth,
   containerHeight,
   onSelectNode,
+  onNavigateToNode,
 }) => {
   const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null);
   const [mobileSelectedNode, setMobileSelectedNode] = useState<DecisionNode | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [expandedNodeId, setExpandedNodeId] = useState<number | null>(null);
 
   // Helper to get node by ID
   const getNode = (id: number) => nodes.find(n => n.id === id);
+
+  // Handle card click - navigate (pan/zoom) to node
+  const handleCardClick = (node: DecisionNode) => {
+    if (onNavigateToNode) {
+      onNavigateToNode(node);
+    } else {
+      onSelectNode(node);
+    }
+  };
 
   // Detect mobile
   useEffect(() => {
@@ -459,13 +531,13 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               }}
               onMouseEnter={() => setHoveredNodeId(callout.node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
-              onClick={() => onSelectNode(callout.node)}
+              onClick={() => handleCardClick(callout.node)}
             />
 
             {/* Rich card */}
             <g
               style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-              onClick={() => onSelectNode(callout.node)}
+              onClick={() => handleCardClick(callout.node)}
               onMouseEnter={() => setHoveredNodeId(callout.node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
             >
@@ -771,6 +843,37 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   No outgoing connections
                 </text>
               )}
+
+              {/* Expand Chain Button */}
+              <g
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedNodeId(callout.node.id);
+                }}
+              >
+                <rect
+                  x={callout.cardX + CARD_WIDTH - 40}
+                  y={callout.cardY + 8}
+                  width={26}
+                  height={26}
+                  rx={6}
+                  fill={isHovered ? '#0969da' : '#f6f8fa'}
+                  stroke={isHovered ? '#0969da' : '#d0d7de'}
+                  strokeWidth={1}
+                />
+                <text
+                  x={callout.cardX + CARD_WIDTH - 27}
+                  y={callout.cardY + 21}
+                  fill={isHovered ? '#fff' : '#57606a'}
+                  fontSize="16"
+                  fontWeight="600"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
+                  +
+                </text>
+              </g>
             </g>
           </g>
         );
@@ -786,6 +889,214 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
       >
         {calloutsNeeded.length} match{calloutsNeeded.length !== 1 ? 'es' : ''} found
       </text>
+
+      {/* Chain Modal Overlay */}
+      {expandedNodeId !== null && (() => {
+        const expandedNode = getNode(expandedNodeId);
+        if (!expandedNode) return null;
+
+        const chain = buildChainTree(expandedNodeId, nodes, edges);
+        const sortByType = (a: DecisionNode, b: DecisionNode) => {
+          const aPriority = NODE_TYPE_PRIORITY[a.node_type] ?? 99;
+          const bPriority = NODE_TYPE_PRIORITY[b.node_type] ?? 99;
+          return aPriority - bPriority;
+        };
+        const sortedAncestors = [...chain.ancestors].sort(sortByType);
+        const sortedDescendants = [...chain.descendants].sort(sortByType);
+
+        return (
+          <foreignObject x="0" y="0" width="100%" height="100%">
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                backgroundColor: 'rgba(0,0,0,0.5)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 1000,
+              }}
+              onClick={() => setExpandedNodeId(null)}
+            >
+              <div
+                style={{
+                  backgroundColor: '#fff',
+                  borderRadius: 12,
+                  padding: 24,
+                  maxWidth: 600,
+                  maxHeight: '80vh',
+                  overflow: 'auto',
+                  boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Modal Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span
+                      style={{
+                        backgroundColor: getNodeColor(expandedNode.node_type) + '20',
+                        color: getNodeColor(expandedNode.node_type),
+                        padding: '4px 10px',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontWeight: 600,
+                      }}
+                    >
+                      {expandedNode.node_type.toUpperCase()}
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: 16 }}>#{expandedNode.id}</span>
+                  </div>
+                  <button
+                    onClick={() => setExpandedNodeId(null)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      fontSize: 24,
+                      cursor: 'pointer',
+                      color: '#6e7781',
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <h2 style={{ margin: '0 0 16px', fontSize: 18 }}>{expandedNode.title}</h2>
+
+                {/* Go to Node button */}
+                <button
+                  onClick={() => {
+                    handleCardClick(expandedNode);
+                    setExpandedNodeId(null);
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '10px 16px',
+                    backgroundColor: '#0969da',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    fontSize: 14,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    marginBottom: 20,
+                  }}
+                >
+                  Go to Node (Pan & Zoom)
+                </button>
+
+                {/* Ancestors Section */}
+                <div style={{ marginBottom: 20 }}>
+                  <h3 style={{ margin: '0 0 10px', fontSize: 13, color: '#6e7781', fontWeight: 600 }}>
+                    UPSTREAM ({sortedAncestors.length})
+                  </h3>
+                  {sortedAncestors.length === 0 ? (
+                    <div style={{ color: '#9ca3af', fontSize: 13, fontStyle: 'italic' }}>Root node - no ancestors</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {sortedAncestors.map((node) => (
+                        <div
+                          key={node.id}
+                          onClick={() => {
+                            handleCardClick(node);
+                            setExpandedNodeId(null);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '8px 12px',
+                            backgroundColor: '#f6f8fa',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            border: '1px solid #e5e7eb',
+                          }}
+                        >
+                          <span
+                            style={{
+                              backgroundColor: getNodeColor(node.node_type) + '20',
+                              color: getNodeColor(node.node_type),
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: 10,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {node.node_type.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: 12, color: '#6e7781', fontFamily: 'monospace' }}>#{node.id}</span>
+                          <span style={{ fontSize: 13, color: '#24292f', flex: 1 }}>{truncate(node.title, 45)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Current Node Indicator */}
+                <div
+                  style={{
+                    padding: '12px 16px',
+                    backgroundColor: getNodeColor(expandedNode.node_type) + '15',
+                    borderLeft: `4px solid ${getNodeColor(expandedNode.node_type)}`,
+                    borderRadius: 6,
+                    marginBottom: 20,
+                  }}
+                >
+                  <div style={{ fontSize: 11, color: '#6e7781', marginBottom: 4 }}>CURRENT NODE</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{truncate(expandedNode.title, 50)}</div>
+                </div>
+
+                {/* Descendants Section */}
+                <div>
+                  <h3 style={{ margin: '0 0 10px', fontSize: 13, color: '#6e7781', fontWeight: 600 }}>
+                    DOWNSTREAM ({sortedDescendants.length})
+                  </h3>
+                  {sortedDescendants.length === 0 ? (
+                    <div style={{ color: '#9ca3af', fontSize: 13, fontStyle: 'italic' }}>Leaf node - no descendants</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {sortedDescendants.map((node) => (
+                        <div
+                          key={node.id}
+                          onClick={() => {
+                            handleCardClick(node);
+                            setExpandedNodeId(null);
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 10,
+                            padding: '8px 12px',
+                            backgroundColor: '#f6f8fa',
+                            borderRadius: 6,
+                            cursor: 'pointer',
+                            border: '1px solid #e5e7eb',
+                          }}
+                        >
+                          <span
+                            style={{
+                              backgroundColor: getNodeColor(node.node_type) + '20',
+                              color: getNodeColor(node.node_type),
+                              padding: '2px 8px',
+                              borderRadius: 4,
+                              fontSize: 10,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {node.node_type.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: 12, color: '#6e7781', fontFamily: 'monospace' }}>#{node.id}</span>
+                          <span style={{ fontSize: 13, color: '#24292f', flex: 1 }}>{truncate(node.title, 45)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </foreignObject>
+        );
+      })()}
     </svg>
   );
 };

@@ -158,12 +158,28 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       }
     }
 
-    // Sort by relevance: title matches first, then by date (configurable order)
+    // Node type priority: goal > outcome > decision > option > action > observation
+    const typePriority: Record<string, number> = {
+      goal: 0,
+      outcome: 1,
+      decision: 2,
+      option: 3,
+      action: 4,
+      observation: 5,
+    };
+
+    // Sort by: 1) title matches, 2) node type priority, 3) date
     return results.sort((a, b) => {
       // Title matches are most relevant
       if (a.matchType === 'title' && b.matchType !== 'title') return -1;
       if (b.matchType === 'title' && a.matchType !== 'title') return 1;
-      // Then by date - ascending (oldest) or descending (newest)
+
+      // Then by node type priority
+      const aPriority = typePriority[a.node.node_type] ?? 99;
+      const bPriority = typePriority[b.node.node_type] ?? 99;
+      if (aPriority !== bPriority) return aPriority - bPriority;
+
+      // Then by date - ascending (oldest) or descending (newest) within type
       const aTime = new Date(a.node.updated_at).getTime();
       const bTime = new Date(b.node.updated_at).getTime();
       return sortOrder === 'oldest' ? aTime - bTime : bTime - aTime;

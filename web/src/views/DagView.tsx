@@ -700,6 +700,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             containerWidth={containerDimensions.width}
             containerHeight={containerDimensions.height}
             onSelectNode={handleSelectNode}
+            onNavigateToNode={handleNavigateToNode}
           />
         )}
 
