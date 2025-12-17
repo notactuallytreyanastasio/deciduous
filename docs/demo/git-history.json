@@ -1,7 +1,15 @@
 [
   {
-    "hash": "559749ddc1992431371a788202afc8c1bb8d1088",
-    "short_hash": "559749d",
+    "hash": "998e1b347396c7cf7ebfaecfb5d14ce7bef2a269",
+    "short_hash": "998e1b3",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T14:17:01-05:00",
+    "message": "fix(web): move chain panel to bottom-left, auto-pan on expand",
+    "files_changed": 3
+  },
+  {
+    "hash": "a2733c94fe1e972a60bcb5a140ef84503b1bd62e",
+    "short_hash": "a2733c9",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:30:47-05:00",
     "message": "release: v0.8.15",

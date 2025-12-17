@@ -22,6 +22,8 @@ interface CalloutLinesProps {
   containerWidth: number;
   containerHeight: number;
   onSelectNode: (node: DecisionNode) => void;
+  /** Pan/zoom to node location */
+  onNavigateToNode?: (node: DecisionNode) => void;
 }
 
 // Desktop: Rich card dimensions - taller for connection info
@@ -253,6 +255,65 @@ const MobileBottomSheet: React.FC<{
   );
 };
 
+// Build full chain tree (all ancestors and descendants)
+function buildChainTree(
+  nodeId: number,
+  nodes: DecisionNode[],
+  edges: DecisionEdge[]
+): { ancestors: DecisionNode[]; descendants: DecisionNode[] } {
+  const ancestors: DecisionNode[] = [];
+  const descendants: DecisionNode[] = [];
+  const nodeMap = new Map(nodes.map(n => [n.id, n]));
+
+  // BFS for ancestors (nodes pointing TO this node)
+  const ancestorQueue = [nodeId];
+  const ancestorVisited = new Set<number>([nodeId]);
+  while (ancestorQueue.length > 0) {
+    const current = ancestorQueue.shift()!;
+    const incoming = edges.filter(e => e.to_node_id === current);
+    for (const edge of incoming) {
+      if (!ancestorVisited.has(edge.from_node_id)) {
+        ancestorVisited.add(edge.from_node_id);
+        const node = nodeMap.get(edge.from_node_id);
+        if (node) {
+          ancestors.push(node);
+          ancestorQueue.push(edge.from_node_id);
+        }
+      }
+    }
+  }
+
+  // BFS for descendants (nodes this points TO)
+  const descendantQueue = [nodeId];
+  const descendantVisited = new Set<number>([nodeId]);
+  while (descendantQueue.length > 0) {
+    const current = descendantQueue.shift()!;
+    const outgoing = edges.filter(e => e.from_node_id === current);
+    for (const edge of outgoing) {
+      if (!descendantVisited.has(edge.to_node_id)) {
+        descendantVisited.add(edge.to_node_id);
+        const node = nodeMap.get(edge.to_node_id);
+        if (node) {
+          descendants.push(node);
+          descendantQueue.push(edge.to_node_id);
+        }
+      }
+    }
+  }
+
+  return { ancestors, descendants };
+}
+
+// Node type priority for sorting
+const NODE_TYPE_PRIORITY: Record<string, number> = {
+  goal: 0,
+  outcome: 1,
+  decision: 2,
+  option: 3,
+  action: 4,
+  observation: 5,
+};
+
 export const CalloutLines: React.FC<CalloutLinesProps> = ({
   nodes,
   edges,
@@ -261,13 +322,24 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   containerWidth,
   containerHeight,
   onSelectNode,
+  onNavigateToNode,
 }) => {
   const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null);
   const [mobileSelectedNode, setMobileSelectedNode] = useState<DecisionNode | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [expandedNodeId, setExpandedNodeId] = useState<number | null>(null);
 
   // Helper to get node by ID
   const getNode = (id: number) => nodes.find(n => n.id === id);
+
+  // Handle card click - navigate (pan/zoom) to node
+  const handleCardClick = (node: DecisionNode) => {
+    if (onNavigateToNode) {
+      onNavigateToNode(node);
+    } else {
+      onSelectNode(node);
+    }
+  };
 
   // Detect mobile
   useEffect(() => {
@@ -318,7 +390,10 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
     return calculateCardPositions(callouts, containerWidth, containerHeight);
   }, [nodes, edges, highlightedNodeIds, visibilityMap, containerWidth, containerHeight]);
 
-  if (calloutsNeeded.length === 0) {
+  // Keep expanded panel even if no callouts (node might have scrolled into view)
+  const expandedNode = expandedNodeId !== null ? getNode(expandedNodeId) : null;
+
+  if (calloutsNeeded.length === 0 && !expandedNode) {
     return null;
   }
 
@@ -400,8 +475,23 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
     );
   }
 
+  // Build chain data for expanded node (outside render to avoid recalc)
+  const chainData = expandedNode ? (() => {
+    const chain = buildChainTree(expandedNodeId!, nodes, edges);
+    const sortByType = (a: DecisionNode, b: DecisionNode) => {
+      const aPriority = NODE_TYPE_PRIORITY[a.node_type] ?? 99;
+      const bPriority = NODE_TYPE_PRIORITY[b.node_type] ?? 99;
+      return aPriority - bPriority;
+    };
+    return {
+      ancestors: [...chain.ancestors].sort(sortByType),
+      descendants: [...chain.descendants].sort(sortByType),
+    };
+  })() : null;
+
   // Desktop: rich cards on the right side
   return (
+    <>
     <svg
       style={{
         position: 'absolute',
@@ -414,14 +504,16 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
       }}
     >
       {/* Background panel for cards area */}
-      <rect
-        x={containerWidth - RIGHT_PANEL_WIDTH}
-        y={0}
-        width={RIGHT_PANEL_WIDTH}
-        height={containerHeight}
-        fill="#f6f8fa"
-        fillOpacity={0.85}
-      />
+      {calloutsNeeded.length > 0 && (
+        <rect
+          x={containerWidth - RIGHT_PANEL_WIDTH}
+          y={0}
+          width={RIGHT_PANEL_WIDTH}
+          height={containerHeight}
+          fill="#f6f8fa"
+          fillOpacity={0.85}
+        />
+      )}
 
       {calloutsNeeded.map((callout) => {
         const isHovered = hoveredNodeId === callout.node.id;
@@ -459,13 +551,13 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               }}
               onMouseEnter={() => setHoveredNodeId(callout.node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
-              onClick={() => onSelectNode(callout.node)}
+              onClick={() => handleCardClick(callout.node)}
             />
 
             {/* Rich card */}
             <g
               style={{ pointerEvents: 'auto', cursor: 'pointer' }}
-              onClick={() => onSelectNode(callout.node)}
+              onClick={() => handleCardClick(callout.node)}
               onMouseEnter={() => setHoveredNodeId(callout.node.id)}
               onMouseLeave={() => setHoveredNodeId(null)}
             >
@@ -771,6 +863,41 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   No outgoing connections
                 </text>
               )}
+
+              {/* Expand Chain Button */}
+              <g
+                style={{ pointerEvents: 'auto', cursor: 'pointer' }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpandedNodeId(callout.node.id);
+                  // Pan/zoom to the node when expanding
+                  if (onNavigateToNode) {
+                    onNavigateToNode(callout.node);
+                  }
+                }}
+              >
+                <rect
+                  x={callout.cardX + CARD_WIDTH - 40}
+                  y={callout.cardY + 8}
+                  width={26}
+                  height={26}
+                  rx={6}
+                  fill={isHovered ? '#0969da' : '#f6f8fa'}
+                  stroke={isHovered ? '#0969da' : '#d0d7de'}
+                  strokeWidth={1}
+                />
+                <text
+                  x={callout.cardX + CARD_WIDTH - 27}
+                  y={callout.cardY + 21}
+                  fill={isHovered ? '#fff' : '#57606a'}
+                  fontSize="16"
+                  fontWeight="600"
+                  textAnchor="middle"
+                  dominantBaseline="middle"
+                >
+                  +
+                </text>
+              </g>
             </g>
           </g>
         );
@@ -786,7 +913,206 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
       >
         {calloutsNeeded.length} match{calloutsNeeded.length !== 1 ? 'es' : ''} found
       </text>
+
     </svg>
+
+    {/* Chain Panel - outside SVG for proper DOM rendering */}
+    {expandedNode && chainData && (
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 16,
+          left: 16,
+          width: 320,
+          maxHeight: 'calc(100vh - 200px)',
+          backgroundColor: '#fff',
+          borderRadius: 10,
+          padding: 16,
+          overflow: 'auto',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+          border: '1px solid #d0d7de',
+          zIndex: 50,
+          pointerEvents: 'auto',
+        }}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span
+              style={{
+                backgroundColor: getNodeColor(expandedNode.node_type) + '20',
+                color: getNodeColor(expandedNode.node_type),
+                padding: '3px 8px',
+                borderRadius: 4,
+                fontSize: 10,
+                fontWeight: 600,
+              }}
+            >
+              {expandedNode.node_type.toUpperCase()}
+            </span>
+            <span style={{ fontWeight: 600, fontSize: 14 }}>#{expandedNode.id}</span>
+          </div>
+          <button
+            onClick={() => setExpandedNodeId(null)}
+            style={{
+              background: 'none',
+              border: 'none',
+              fontSize: 20,
+              cursor: 'pointer',
+              color: '#6e7781',
+              padding: 0,
+              lineHeight: 1,
+            }}
+          >
+            ×
+          </button>
+        </div>
+
+        <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+          {truncate(expandedNode.title, 50)}
+        </h3>
+
+        {/* Go to Node button */}
+        <button
+          onClick={() => {
+            handleCardClick(expandedNode);
+            setExpandedNodeId(null);
+          }}
+          style={{
+            width: '100%',
+            padding: '8px 12px',
+            backgroundColor: '#0969da',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 6,
+            fontSize: 13,
+            fontWeight: 500,
+            cursor: 'pointer',
+            marginBottom: 16,
+          }}
+        >
+          Go to Node
+        </button>
+
+        {/* Ancestors Section */}
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
+            UPSTREAM ({chainData.ancestors.length})
+          </div>
+          {chainData.ancestors.length === 0 ? (
+            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>Root node</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {chainData.ancestors.slice(0, 5).map((node) => (
+                <div
+                  key={node.id}
+                  onClick={() => {
+                    handleCardClick(node);
+                    setExpandedNodeId(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 8px',
+                    backgroundColor: '#f6f8fa',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      backgroundColor: getNodeColor(node.node_type) + '20',
+                      color: getNodeColor(node.node_type),
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      fontSize: 9,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {node.node_type.slice(0, 3).toUpperCase()}
+                  </span>
+                  <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {truncate(node.title, 30)}
+                  </span>
+                </div>
+              ))}
+              {chainData.ancestors.length > 5 && (
+                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.ancestors.length - 5} more</div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Current Node */}
+        <div
+          style={{
+            padding: '8px 10px',
+            backgroundColor: getNodeColor(expandedNode.node_type) + '15',
+            borderLeft: `3px solid ${getNodeColor(expandedNode.node_type)}`,
+            borderRadius: 4,
+            marginBottom: 16,
+            fontSize: 12,
+          }}
+        >
+          <div style={{ fontSize: 10, color: '#6e7781', marginBottom: 2 }}>CURRENT</div>
+          <div style={{ fontWeight: 600 }}>{truncate(expandedNode.title, 35)}</div>
+        </div>
+
+        {/* Descendants Section */}
+        <div>
+          <div style={{ fontSize: 11, color: '#6e7781', fontWeight: 600, marginBottom: 6 }}>
+            DOWNSTREAM ({chainData.descendants.length})
+          </div>
+          {chainData.descendants.length === 0 ? (
+            <div style={{ color: '#9ca3af', fontSize: 12, fontStyle: 'italic' }}>Leaf node</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {chainData.descendants.slice(0, 5).map((node) => (
+                <div
+                  key={node.id}
+                  onClick={() => {
+                    handleCardClick(node);
+                    setExpandedNodeId(null);
+                  }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 8px',
+                    backgroundColor: '#f6f8fa',
+                    borderRadius: 4,
+                    cursor: 'pointer',
+                    fontSize: 12,
+                  }}
+                >
+                  <span
+                    style={{
+                      backgroundColor: getNodeColor(node.node_type) + '20',
+                      color: getNodeColor(node.node_type),
+                      padding: '1px 5px',
+                      borderRadius: 3,
+                      fontSize: 9,
+                      fontWeight: 600,
+                    }}
+                  >
+                    {node.node_type.slice(0, 3).toUpperCase()}
+                  </span>
+                  <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {truncate(node.title, 30)}
+                  </span>
+                </div>
+              ))}
+              {chainData.descendants.length > 5 && (
+                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.descendants.length - 5} more</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

@@ -76,12 +76,15 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     state: urlState,
     setSelectedNodeId,
     setSearchQuery,
+    setSearchSort,
     setViewMode,
     setRecentChainCount,
     setFocusChainIndex,
-    setIsFullscreen,
     copyLinkToClipboard,
   } = useUrlState();
+
+  // Always fullscreen - no mini view
+  const isFullscreen = true;
 
   // Derive selected node from URL state
   const selectedNode = useMemo(() => {
@@ -186,24 +189,41 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     setFocusChainIndex(null);
   }, [setViewMode, setRecentChainCount, setFocusChainIndex]);
 
-  const toggleFullscreen = useCallback(() => {
-    setIsFullscreen(!urlState.isFullscreen);
-  }, [urlState.isFullscreen, setIsFullscreen]);
+  // Fullscreen toggle removed - always fullscreen
 
   const toggleControls = useCallback(() => {
     setIsControlsCollapsed(prev => !prev);
   }, []);
 
-  // Handle Escape key to exit fullscreen
+  // Escape key closes selected node modal
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && urlState.isFullscreen) {
-        setIsFullscreen(false);
+      if (e.key === 'Escape' && selectedNode) {
+        setSelectedNodeId(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [urlState.isFullscreen, setIsFullscreen]);
+  }, [selectedNode, setSelectedNodeId]);
+
+  // Prevent browser zoom on wheel events (trackpad pinch sends wheel with ctrlKey)
+  // This allows D3 zoom to handle all zoom gestures on the graph
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const preventBrowserZoom = (e: WheelEvent) => {
+      // Trackpad pinch zoom sends wheel events with ctrlKey=true
+      // Prevent browser from zooming the page
+      if (e.ctrlKey) {
+        e.preventDefault();
+      }
+    };
+
+    // Must use passive: false to be able to preventDefault
+    container.addEventListener('wheel', preventBrowserZoom, { passive: false });
+    return () => container.removeEventListener('wheel', preventBrowserZoom);
+  }, []);
 
   const handleFocusChain = useCallback((index: number | null) => {
     if (index === null) {
@@ -479,12 +499,12 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   return (
     <div style={{
       ...styles.container,
-      ...(urlState.isFullscreen ? styles.fullscreenContainer : {}),
+      ...(isFullscreen ? styles.fullscreenContainer : {}),
     }}>
       {/* Top Bar - Recency Filter */}
       <div style={{
         ...styles.topBar,
-        ...(urlState.isFullscreen ? styles.fullscreenTopBar : {}),
+        ...(isFullscreen ? styles.fullscreenTopBar : {}),
       }}>
         <div style={styles.topBarLeft}>
           <SearchBar
@@ -495,6 +515,8 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             placeholder="Search nodes, commits..."
             query={urlState.searchQuery}
             onQueryChange={setSearchQuery}
+            sortOrder={urlState.searchSort}
+            onSortOrderChange={setSearchSort}
           />
         </div>
 
@@ -612,13 +634,6 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           >
             🔗 Copy Link
           </button>
-          <button
-            onClick={toggleFullscreen}
-            style={styles.fullscreenBtn}
-            title={urlState.isFullscreen ? 'Exit fullscreen (Esc)' : 'Enter fullscreen'}
-          >
-            {urlState.isFullscreen ? '⤓' : '⤢'}
-          </button>
         </div>
       </div>
 
@@ -638,7 +653,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       <div style={{
         ...styles.controls,
         ...(isControlsCollapsed ? styles.controlsCollapsed : {}),
-        ...(urlState.isFullscreen ? styles.controlsFullscreen : {}),
+        ...(isFullscreen ? styles.controlsFullscreen : {}),
       }}>
         <button
           onClick={toggleControls}
@@ -697,6 +712,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             containerWidth={containerDimensions.width}
             containerHeight={containerDimensions.height}
             onSelectNode={handleSelectNode}
+            onNavigateToNode={handleNavigateToNode}
           />
         )}
 
@@ -975,17 +991,6 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: 'pointer',
     transition: 'background-color 0.15s',
   },
-  fullscreenBtn: {
-    marginLeft: '12px',
-    padding: '6px 10px',
-    backgroundColor: '#f6f8fa',
-    border: '1px solid #d0d7de',
-    borderRadius: '6px',
-    color: '#24292f',
-    fontSize: '14px',
-    cursor: 'pointer',
-    transition: 'background-color 0.15s',
-  },
   fullscreenTopBar: {
     padding: '8px 20px',
   },
@@ -1107,10 +1112,15 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     minHeight: 0,
     backgroundColor: '#f6f8fa',
+    // Prevent browser zoom gestures from interfering with graph zoom
+    touchAction: 'none',
+    overflow: 'hidden',
   },
   svg: {
     width: '100%',
     height: '100%',
+    // Prevent touch events from triggering page zoom
+    touchAction: 'none',
   },
   // Modal styles
   modalBackdrop: {
