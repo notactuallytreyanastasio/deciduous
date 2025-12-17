@@ -185,8 +185,8 @@
           };
         } // commonEnv);
 
-        # Helper script: nix-help
-        nixHelp = pkgs.writeShellScriptBin "nix-help" ''
+        # Helper script: menu
+        menu = pkgs.writeShellScriptBin "menu" ''
           echo "========================================"
           echo "  Deciduous Development Shell (Nix)"
           echo "========================================"
@@ -211,7 +211,7 @@
           echo "  nix-build-full           Build everything locally (like make release-full)"
           echo ""
           echo "Help:"
-          echo "  nix-help                 Show this menu"
+          echo "  menu                     Show this menu"
           echo ""
         '';
 
@@ -297,7 +297,7 @@
           # Additional packages for development
           packages = [
             # DevShell helper scripts
-            nixHelp
+            menu
             nixBuildFull
 
             # Node.js for web viewer and trace-interceptor
@@ -332,8 +332,8 @@
               export LIBRARY_PATH="${pkgs.libiconv}/lib:''${LIBRARY_PATH:-}"
             ''}
 
-            # Show help on shell entry
-            nix-help
+            # Show menu on shell entry
+            menu
           '';
 
           # Set environment variables
