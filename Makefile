@@ -1,7 +1,13 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
+.PHONY: build release release-full debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
 
 # Default target
 all: release
+
+# Detect macOS and set library path for libiconv if needed
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+    export LIBRARY_PATH := /opt/homebrew/opt/libiconv/lib:$(LIBRARY_PATH)
+endif
 
 # Build targets
 release:
@@ -11,6 +17,13 @@ debug:
 	cargo build
 
 build: release
+
+# Full release build: web viewer + Rust binary
+release-full: web-build
+	cp $(WEB_DIR)/dist/index.html src/viewer.html
+	cp $(WEB_DIR)/dist/index.html docs/demo/index.html
+	cargo build --release
+	@echo "Full release build complete: target/release/deciduous"
 
 # Testing
 test:
@@ -215,6 +228,7 @@ help:
 	@echo "Build:"
 	@echo "  make              Build release binary"
 	@echo "  make release      Build release binary"
+	@echo "  make release-full Build web viewer + release binary (full rebuild)"
 	@echo "  make debug        Build debug binary"
 	@echo ""
 	@echo "Test:"

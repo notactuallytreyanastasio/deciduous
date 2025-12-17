@@ -24,6 +24,9 @@ export interface TraceSession {
   total_cache_write: number;
   linked_node_id: number | null;
   linked_change_id: string | null;
+  // Enriched fields from API
+  display_name: string | null;
+  linked_node_title: string | null;
 }
 
 // =============================================================================

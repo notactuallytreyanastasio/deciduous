@@ -34,21 +34,47 @@ function isStreamingResponse(response: Response): boolean {
 
 /**
  * Extract user message preview from request body
+ * Looks for actual text content, skipping tool_result blocks
  */
 function extractUserPreview(body: AnthropicRequest): string | undefined {
   if (!body.messages) return undefined;
 
-  // Find the last user message
+  // Find the last user message with actual text content
   for (let i = body.messages.length - 1; i >= 0; i--) {
     const msg = body.messages[i];
     if (msg.role === 'user') {
       if (typeof msg.content === 'string') {
-        return msg.content.slice(0, 500);
+        const trimmed = msg.content.trim();
+        // Skip very short or system-like content
+        if (trimmed.length > 10 && !trimmed.startsWith('<system')) {
+          return trimmed.slice(0, 500);
+        }
+      } else if (Array.isArray(msg.content)) {
+        // Look for text blocks, skip tool_result blocks
+        for (const block of msg.content) {
+          if (block.type === 'text' && block.text) {
+            const trimmed = block.text.trim();
+            // Skip very short or system-like content
+            if (trimmed.length > 10 && !trimmed.startsWith('<system')) {
+              return trimmed.slice(0, 500);
+            }
+          }
+        }
       }
-      // Array of content blocks
-      const textBlocks = msg.content.filter((b) => b.type === 'text' && b.text);
-      if (textBlocks.length > 0 && textBlocks[0].text) {
-        return textBlocks[0].text.slice(0, 500);
+    }
+  }
+
+  // If no good user text found, try to get SOMETHING useful
+  // Look at assistant messages for context (what was Claude responding to?)
+  for (let i = body.messages.length - 1; i >= 0; i--) {
+    const msg = body.messages[i];
+    if (msg.role === 'assistant') {
+      if (typeof msg.content === 'string' && msg.content.trim().length > 20) {
+        // Use first line of assistant response as context hint
+        const firstLine = msg.content.trim().split('\n')[0];
+        if (firstLine.length > 10) {
+          return `[continuing] ${firstLine.slice(0, 450)}`;
+        }
       }
     }
   }

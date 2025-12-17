@@ -290,11 +290,30 @@ function extractUserPreview(body) {
     const msg = body.messages[i];
     if (msg.role === "user") {
       if (typeof msg.content === "string") {
-        return msg.content.slice(0, 500);
+        const trimmed = msg.content.trim();
+        if (trimmed.length > 10 && !trimmed.startsWith("<system")) {
+          return trimmed.slice(0, 500);
+        }
+      } else if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "text" && block.text) {
+            const trimmed = block.text.trim();
+            if (trimmed.length > 10 && !trimmed.startsWith("<system")) {
+              return trimmed.slice(0, 500);
+            }
+          }
+        }
       }
-      const textBlocks = msg.content.filter((b) => b.type === "text" && b.text);
-      if (textBlocks.length > 0 && textBlocks[0].text) {
-        return textBlocks[0].text.slice(0, 500);
+    }
+  }
+  for (let i = body.messages.length - 1; i >= 0; i--) {
+    const msg = body.messages[i];
+    if (msg.role === "assistant") {
+      if (typeof msg.content === "string" && msg.content.trim().length > 20) {
+        const firstLine = msg.content.trim().split("\n")[0];
+        if (firstLine.length > 10) {
+          return `[continuing] ${firstLine.slice(0, 450)}`;
+        }
       }
     }
   }

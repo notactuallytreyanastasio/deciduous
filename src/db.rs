@@ -1646,6 +1646,16 @@ impl Database {
         Ok(nodes)
     }
 
+    /// Get a single node by ID
+    pub fn get_node_by_id(&self, node_id: i32) -> Result<Option<DecisionNode>> {
+        let mut conn = self.get_conn()?;
+        let node = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)
+            .optional()?;
+        Ok(node)
+    }
+
     /// Get all edges
     pub fn get_all_edges(&self) -> Result<Vec<DecisionEdge>> {
         let mut conn = self.get_conn()?;
@@ -2425,6 +2435,48 @@ impl Database {
             .limit(limit)
             .load::<TraceSession>(&mut conn)?;
         Ok(sessions)
+    }
+
+    /// Get first meaningful user_preview for each session (for display summaries)
+    /// Finds the first span with a user_preview that looks like a real user message
+    pub fn get_session_first_prompts(
+        &self,
+        session_ids: &[String],
+    ) -> Result<std::collections::HashMap<String, String>> {
+        let mut conn = self.get_conn()?;
+
+        // Get all spans with user_preview for these sessions, ordered by sequence
+        let spans: Vec<TraceSpan> = trace_spans::table
+            .filter(trace_spans::session_id.eq_any(session_ids))
+            .filter(trace_spans::user_preview.is_not_null())
+            .order((trace_spans::session_id.asc(), trace_spans::sequence_num.asc()))
+            .load(&mut conn)?;
+
+        let mut result = std::collections::HashMap::new();
+        for span in spans {
+            // Skip if we already have a prompt for this session
+            if result.contains_key(&span.session_id) {
+                continue;
+            }
+
+            if let Some(ref preview) = span.user_preview {
+                // Skip very short previews or system-looking content
+                let trimmed = preview.trim();
+                if trimmed.len() < 10 {
+                    continue;
+                }
+                // Skip system reminders and command outputs
+                if trimmed.starts_with("<system-reminder>")
+                    || trimmed.starts_with("<policy_spec>")
+                    || trimmed.starts_with("Command:")
+                {
+                    continue;
+                }
+                // Found a good user prompt
+                result.insert(span.session_id.clone(), preview.clone());
+            }
+        }
+        Ok(result)
     }
 
     /// Create a trace span

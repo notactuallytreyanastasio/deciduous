@@ -222,9 +222,64 @@ fn get_roadmap_items() -> Vec<RoadmapItem> {
     }
 }
 
-fn get_trace_sessions() -> Vec<crate::db::TraceSession> {
+/// Session with display name for API response
+#[derive(serde::Serialize)]
+struct SessionWithSummary {
+    #[serde(flatten)]
+    session: crate::db::TraceSession,
+    /// Display name: linked node title, or first user prompt, or session ID
+    display_name: Option<String>,
+    /// Linked node title if session is linked
+    linked_node_title: Option<String>,
+}
+
+fn get_trace_sessions() -> Vec<SessionWithSummary> {
     match Database::open() {
-        Ok(db) => db.get_trace_sessions(100).unwrap_or_default(),
+        Ok(db) => {
+            let sessions = db.get_trace_sessions(100).unwrap_or_default();
+            if sessions.is_empty() {
+                return vec![];
+            }
+
+            // Collect session IDs for batch query
+            let session_ids: Vec<String> = sessions.iter().map(|s| s.session_id.clone()).collect();
+
+            // Get first prompts for all sessions
+            let first_prompts = db.get_session_first_prompts(&session_ids).unwrap_or_default();
+
+            // Get linked node titles
+            let linked_node_ids: Vec<i32> = sessions
+                .iter()
+                .filter_map(|s| s.linked_node_id)
+                .collect();
+
+            let mut node_titles: std::collections::HashMap<i32, String> = std::collections::HashMap::new();
+            for node_id in linked_node_ids {
+                if let Ok(Some(node)) = db.get_node_by_id(node_id) {
+                    node_titles.insert(node_id, node.title);
+                }
+            }
+
+            // Build enriched sessions
+            sessions
+                .into_iter()
+                .map(|session| {
+                    let linked_node_title = session
+                        .linked_node_id
+                        .and_then(|id| node_titles.get(&id).cloned());
+
+                    let display_name = linked_node_title
+                        .clone()
+                        .or_else(|| first_prompts.get(&session.session_id).cloned());
+
+                    SessionWithSummary {
+                        session,
+                        display_name,
+                        linked_node_title,
+                    }
+                })
+                .collect()
+        }
         Err(_) => vec![],
     }
 }
