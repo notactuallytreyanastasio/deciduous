@@ -32,6 +32,7 @@ const TraceView: React.FC = () => {
   const [sessionSpans, setSessionSpans] = useState<Record<string, TraceSpan[]>>({});
   const [expandedSpans, setExpandedSpans] = useState<Set<number>>(new Set());
   const [spanContent, setSpanContent] = useState<Record<number, TraceContent[]>>({});
+  const [highlightedSpans, setHighlightedSpans] = useState<Set<number>>(new Set());
   const [initialNavDone, setInitialNavDone] = useState(false);
 
   // Fetch sessions on mount
@@ -39,23 +40,66 @@ const TraceView: React.FC = () => {
     fetchSessions();
   }, []);
 
+  // Parse span IDs from URL param (supports: "17", "17,18,19", "17-20", "17-20,25")
+  const parseSpanIds = (param: string): number[] => {
+    const ids: number[] = [];
+    const parts = param.split(',');
+    for (const part of parts) {
+      if (part.includes('-')) {
+        const [start, end] = part.split('-').map(s => parseInt(s.trim(), 10));
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let i = start; i <= end; i++) {
+            ids.push(i);
+          }
+        }
+      } else {
+        const id = parseInt(part.trim(), 10);
+        if (!isNaN(id)) ids.push(id);
+      }
+    }
+    return ids;
+  };
+
   // Handle URL params for deep linking (after sessions load)
   useEffect(() => {
     if (sessions.length === 0 || initialNavDone) return;
 
     const sessionParam = searchParams.get('session');
     const spanParam = searchParams.get('span');
+    const spansParam = searchParams.get('spans'); // Multiple spans: "17,18" or "17-20"
 
     if (sessionParam) {
       const matchingSession = sessions.find(s => s.session_id.startsWith(sessionParam));
       if (matchingSession) {
         setExpandedSessions(new Set([matchingSession.session_id]));
-        fetchSpans(matchingSession.session_id).then(() => {
-          if (spanParam) {
-            const spanId = parseInt(spanParam, 10);
-            if (!isNaN(spanId)) {
-              setExpandedSpans(new Set([spanId]));
-              fetchContent(matchingSession.session_id, spanId);
+        fetchSpans(matchingSession.session_id).then((spans) => {
+          // Parse span IDs to highlight/expand
+          let spanIds: number[] = [];
+          if (spansParam) {
+            spanIds = parseSpanIds(spansParam);
+          } else if (spanParam) {
+            spanIds = parseSpanIds(spanParam);
+          }
+
+          if (spanIds.length > 0) {
+            // Map sequence numbers to actual span IDs if needed
+            const actualSpanIds = spanIds.map(seqNum => {
+              const span = spans.find(s => s.sequence_num === seqNum || s.id === seqNum);
+              return span?.id;
+            }).filter((id): id is number => id !== undefined);
+
+            if (actualSpanIds.length > 0) {
+              setExpandedSpans(new Set(actualSpanIds));
+              setHighlightedSpans(new Set(actualSpanIds));
+              // Fetch content for all highlighted spans
+              actualSpanIds.forEach(id => fetchContent(matchingSession.session_id, id));
+              // Scroll to first span after a brief delay for rendering
+              setTimeout(() => {
+                const firstSpanEl = document.getElementById(`span-${actualSpanIds[0]}`);
+                if (firstSpanEl) {
+                  firstSpanEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }, 100);
             }
           }
         });
@@ -242,12 +286,16 @@ const TraceView: React.FC = () => {
                           || (span.tool_names ? `Tools: ${span.tool_names}` : null)
                           || '(API call)';
 
+                        const isHighlighted = highlightedSpans.has(span.id);
+
                         return (
                           <div
                             key={span.id}
+                            id={`span-${span.id}`}
                             style={{
                               ...styles.spanWrapper,
                               ...(spanType === 'subagent' ? styles.spanIndented : {}),
+                              ...(isHighlighted ? styles.spanHighlighted : {}),
                             }}
                           >
                             {/* Span Header */}
@@ -524,6 +572,14 @@ const styles: Record<string, React.CSSProperties> = {
   },
   spanWrapper: {
     marginBottom: '4px',
+  },
+  spanHighlighted: {
+    backgroundColor: 'rgba(250, 204, 21, 0.2)',
+    borderRadius: '8px',
+    padding: '4px',
+    margin: '-4px',
+    marginBottom: '4px',
+    boxShadow: '0 0 0 2px rgba(250, 204, 21, 0.5)',
   },
   spanIndented: {
     marginLeft: '20px',
