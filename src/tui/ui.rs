@@ -217,7 +217,9 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         }
         View::Dag => "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit",
         View::Roadmap => "j/k:move  r:refresh  Tab:Timeline  ?:help  q:quit",
-        View::Trace => "j/k:move  Enter:expand  Esc:back  l:link  u:unlink  r:refresh  Tab:view  q:quit",
+        View::Trace => {
+            "j/k:move  Enter:expand  Esc:back  l:link  u:unlink  r:refresh  Tab:view  q:quit"
+        }
     };
 
     // Show status message if present, otherwise show keybinds

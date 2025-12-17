@@ -13,13 +13,14 @@ use std::path::PathBuf;
 const INTERCEPTOR_JS: &str = include_str!("../trace-interceptor/dist/bundle.js");
 
 /// Version marker to detect when the embedded JS changes
-/// Format: SHA256 of first 100 bytes (avoids computing hash of entire bundle)
+/// Format: Hash of ENTIRE bundle content (not just first N bytes!)
 fn bundle_version() -> String {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
     let mut hasher = DefaultHasher::new();
-    INTERCEPTOR_JS[..INTERCEPTOR_JS.len().min(100)].hash(&mut hasher);
+    // Hash the ENTIRE bundle - changes anywhere will trigger re-extraction
+    INTERCEPTOR_JS.hash(&mut hasher);
     format!("{:016x}", hasher.finish())
 }
 
@@ -29,7 +30,10 @@ fn bundle_version() -> String {
 /// and only re-extracted if the embedded bundle has changed.
 pub fn ensure_interceptor_installed() -> std::io::Result<PathBuf> {
     let home = std::env::var("HOME").map_err(|_| {
-        std::io::Error::new(std::io::ErrorKind::NotFound, "HOME environment variable not set")
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "HOME environment variable not set",
+        )
     })?;
 
     let interceptor_dir = PathBuf::from(home)

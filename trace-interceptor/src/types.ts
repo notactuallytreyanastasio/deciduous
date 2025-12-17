@@ -18,10 +18,17 @@ export interface SpanData {
   thinking?: string;
   response?: string;
   tool_calls?: ToolCall[];
+  tool_results?: ToolResult[];      // Results from previous tool calls (from request)
   // New fields for comprehensive tracing
   system_prompt?: string;           // The hidden system instructions
   tool_definitions?: ToolDefinition[]; // Available tools with schemas
   message_count?: number;           // Number of messages in conversation
+}
+
+export interface ToolResult {
+  tool_use_id: string;
+  content: string;                  // The tool's output
+  is_error?: boolean;
 }
 
 export interface ToolDefinition {
@@ -45,11 +52,19 @@ export interface RecordSpanResponse {
   span_id: number;
 }
 
+export interface ContentBlock {
+  type: string;
+  text?: string;
+  tool_use_id?: string;     // For tool_result blocks
+  content?: string | ContentBlock[];  // For tool_result blocks (can be string or nested blocks)
+  is_error?: boolean;       // For tool_result blocks
+}
+
 export interface AnthropicRequest {
   model?: string;
   messages?: Array<{
     role: string;
-    content: string | Array<{ type: string; text?: string }>;
+    content: string | ContentBlock[];
   }>;
   system?: string | Array<{ type: string; text?: string }>;
   tools?: unknown[];

@@ -760,7 +760,9 @@ fn main() {
                     let trace_str = if let Ok(span_id_str) = std::env::var("DECIDUOUS_TRACE_SPAN") {
                         if let Ok(span_id) = span_id_str.parse::<i32>() {
                             match db.link_span_to_node_via_table(span_id, id) {
-                                Ok(()) => format!(" [traced: span #{}]", span_id).cyan().to_string(),
+                                Ok(()) => {
+                                    format!(" [traced: span #{}]", span_id).cyan().to_string()
+                                }
                                 Err(_) => String::new(),
                             }
                         } else {
@@ -2705,9 +2707,11 @@ fn main() {
             match action {
                 TraceAction::Start { cwd, command } => {
                     let session_id = uuid::Uuid::new_v4().to_string();
-                    let working_dir = cwd
-                        .map(|p| p.to_string_lossy().to_string())
-                        .or_else(|| std::env::current_dir().ok().map(|p| p.to_string_lossy().to_string()));
+                    let working_dir = cwd.map(|p| p.to_string_lossy().to_string()).or_else(|| {
+                        std::env::current_dir()
+                            .ok()
+                            .map(|p| p.to_string_lossy().to_string())
+                    });
 
                     // Get git branch
                     let git_branch = std::process::Command::new("git")
@@ -2734,19 +2738,24 @@ fn main() {
                     }
                 }
 
-                TraceAction::End { session_id, summary } => {
-                    match db.end_trace_session(&session_id, summary.as_deref()) {
-                        Ok(()) => {
-                            println!("{} Trace session ended", "Success:".green());
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
+                TraceAction::End {
+                    session_id,
+                    summary,
+                } => match db.end_trace_session(&session_id, summary.as_deref()) {
+                    Ok(()) => {
+                        println!("{} Trace session ended", "Success:".green());
                     }
-                }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                },
 
-                TraceAction::Record { session, span_id: existing_span_id, stdin } => {
+                TraceAction::Record {
+                    session,
+                    span_id: existing_span_id,
+                    stdin,
+                } => {
                     if !stdin {
                         eprintln!("{} --stdin is required", "Error:".red());
                         std::process::exit(1);
@@ -2813,6 +2822,7 @@ fn main() {
                             thinking_preview,
                             response_preview,
                             tool_names,
+                            user_preview,
                         ) {
                             eprintln!("{} Completing span: {}", "Error:".red(), e);
                             std::process::exit(1);
@@ -2831,12 +2841,20 @@ fn main() {
                                 let tool_use_id = tool["id"].as_str();
                                 if let Some(input) = tool["input"].as_str() {
                                     let _ = db.add_trace_content(
-                                        span_id, "tool_input", input, tool_name, tool_use_id,
+                                        span_id,
+                                        "tool_input",
+                                        input,
+                                        tool_name,
+                                        tool_use_id,
                                     );
                                 }
                                 if let Some(output) = tool["output"].as_str() {
                                     let _ = db.add_trace_content(
-                                        span_id, "tool_output", output, tool_name, tool_use_id,
+                                        span_id,
+                                        "tool_output",
+                                        output,
+                                        tool_name,
+                                        tool_use_id,
                                     );
                                 }
                             }
@@ -2844,14 +2862,44 @@ fn main() {
 
                         // Store system prompt if provided (captured from request)
                         if let Some(system_prompt) = span_data["system_prompt"].as_str() {
-                            let _ = db.add_trace_content(span_id, "system", system_prompt, None, None);
+                            let _ =
+                                db.add_trace_content(span_id, "system", system_prompt, None, None);
                         }
 
                         // Store tool definitions if provided (captured from request)
                         if let Some(tool_defs) = span_data["tool_definitions"].as_array() {
-                            let tool_defs_json = serde_json::to_string(tool_defs).unwrap_or_default();
+                            let tool_defs_json =
+                                serde_json::to_string(tool_defs).unwrap_or_default();
                             if !tool_defs_json.is_empty() && tool_defs_json != "[]" {
-                                let _ = db.add_trace_content(span_id, "tool_definitions", &tool_defs_json, None, None);
+                                let _ = db.add_trace_content(
+                                    span_id,
+                                    "tool_definitions",
+                                    &tool_defs_json,
+                                    None,
+                                    None,
+                                );
+                            }
+                        }
+
+                        // Store tool results if provided (from previous tool calls in request)
+                        if let Some(tool_results) = span_data["tool_results"].as_array() {
+                            for result in tool_results {
+                                let tool_use_id = result["tool_use_id"].as_str();
+                                if let Some(content) = result["content"].as_str() {
+                                    let is_error = result["is_error"].as_bool().unwrap_or(false);
+                                    let content_type = if is_error {
+                                        "tool_error"
+                                    } else {
+                                        "tool_output"
+                                    };
+                                    let _ = db.add_trace_content(
+                                        span_id,
+                                        content_type,
+                                        content,
+                                        None,
+                                        tool_use_id,
+                                    );
+                                }
                             }
                         }
                     }
@@ -2860,16 +2908,17 @@ fn main() {
                     println!(r#"{{"span_id": {}}}"#, span_id);
                 }
 
-                TraceAction::SpanStart { session, model, user_preview } => {
+                TraceAction::SpanStart {
+                    session,
+                    model,
+                    user_preview,
+                } => {
                     // Create a pending span and return its ID
                     // This enables active span tracking - the interceptor sets
                     // DECIDUOUS_TRACE_SPAN so nodes created during the span
                     // can be automatically linked
-                    match db.create_trace_span(
-                        &session,
-                        model.as_deref(),
-                        user_preview.as_deref(),
-                    ) {
+                    match db.create_trace_span(&session, model.as_deref(), user_preview.as_deref())
+                    {
                         Ok(span_id) => {
                             // Output JSON for the interceptor to parse
                             println!(r#"{{"span_id": {}}}"#, span_id);
@@ -2935,69 +2984,75 @@ fn main() {
                     }
                 }
 
-                TraceAction::Spans { session_id, show_thinking } => {
-                    match db.get_trace_spans(&session_id) {
-                        Ok(spans) => {
-                            if spans.is_empty() {
-                                println!("No spans found for session {}.", &session_id[..8]);
-                                return;
-                            }
+                TraceAction::Spans {
+                    session_id,
+                    show_thinking,
+                } => match db.get_trace_spans(&session_id) {
+                    Ok(spans) => {
+                        if spans.is_empty() {
+                            println!("No spans found for session {}.", &session_id[..8]);
+                            return;
+                        }
+
+                        println!(
+                            "{} ({} spans)\n",
+                            format!("Session {}", &session_id[..8]).cyan(),
+                            spans.len()
+                        );
+
+                        for span in &spans {
+                            let duration = span
+                                .duration_ms
+                                .map(|d| format!("{}ms", d))
+                                .unwrap_or_else(|| "...".to_string());
+
+                            let tokens = match (span.input_tokens, span.output_tokens) {
+                                (Some(i), Some(o)) => format!("{}↓ {}↑", i, o),
+                                _ => "".to_string(),
+                            };
+
+                            let linked_str = match span.linked_node_id {
+                                Some(id) => format!("→ #{}", id).yellow().to_string(),
+                                None => "".to_string(),
+                            };
 
                             println!(
-                                "{} ({} spans)\n",
-                                format!("Session {}", &session_id[..8]).cyan(),
-                                spans.len()
+                                "  #{} [{}] {} {} {}",
+                                span.id,
+                                duration.dimmed(),
+                                tokens.dimmed(),
+                                span.model.as_deref().unwrap_or(""),
+                                linked_str
                             );
 
-                            for span in &spans {
-                                let duration = span
-                                    .duration_ms
-                                    .map(|d| format!("{}ms", d))
-                                    .unwrap_or_else(|| "...".to_string());
+                            if let Some(ref tools) = span.tool_names {
+                                println!("      tools: {}", tools.dimmed());
+                            }
 
-                                let tokens = match (span.input_tokens, span.output_tokens) {
-                                    (Some(i), Some(o)) => format!("{}↓ {}↑", i, o),
-                                    _ => "".to_string(),
-                                };
-
-                                let linked_str = match span.linked_node_id {
-                                    Some(id) => format!("→ #{}", id).yellow().to_string(),
-                                    None => "".to_string(),
-                                };
-
-                                println!(
-                                    "  #{} [{}] {} {} {}",
-                                    span.id,
-                                    duration.dimmed(),
-                                    tokens.dimmed(),
-                                    span.model.as_deref().unwrap_or(""),
-                                    linked_str
-                                );
-
-                                if let Some(ref tools) = span.tool_names {
-                                    println!("      tools: {}", tools.dimmed());
-                                }
-
-                                if show_thinking {
-                                    if let Some(ref thinking) = span.thinking_preview {
-                                        let preview = if thinking.len() > 100 {
-                                            format!("{}...", &thinking[..100])
-                                        } else {
-                                            thinking.clone()
-                                        };
-                                        println!("      thinking: {}", preview.dimmed());
-                                    }
+                            if show_thinking {
+                                if let Some(ref thinking) = span.thinking_preview {
+                                    let preview = if thinking.len() > 100 {
+                                        format!("{}...", &thinking[..100])
+                                    } else {
+                                        thinking.clone()
+                                    };
+                                    println!("      thinking: {}", preview.dimmed());
                                 }
                             }
                         }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
                     }
-                }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                },
 
-                TraceAction::Show { span_id, thinking, response, tools } => {
+                TraceAction::Show {
+                    span_id,
+                    thinking,
+                    response,
+                    tools,
+                } => {
                     let show_all = !thinking && !response && !tools;
 
                     match db.get_trace_span(span_id) {
@@ -3032,7 +3087,9 @@ fn main() {
                                 let show = show_all
                                     || (thinking && item.content_type == "thinking")
                                     || (response && item.content_type == "response")
-                                    || (tools && (item.content_type == "tool_input" || item.content_type == "tool_output"));
+                                    || (tools
+                                        && (item.content_type == "tool_input"
+                                            || item.content_type == "tool_output"));
 
                                 if show {
                                     let label = match item.content_type.as_str() {
@@ -3041,11 +3098,13 @@ fn main() {
                                         "tool_input" => format!(
                                             "Tool Input ({})",
                                             item.tool_name.as_deref().unwrap_or("?")
-                                        ).yellow(),
+                                        )
+                                        .yellow(),
                                         "tool_output" => format!(
                                             "Tool Output ({})",
                                             item.tool_name.as_deref().unwrap_or("?")
-                                        ).cyan(),
+                                        )
+                                        .cyan(),
                                         _ => item.content_type.clone().normal(),
                                     };
 
@@ -3062,7 +3121,11 @@ fn main() {
                     }
                 }
 
-                TraceAction::Link { node_id, session, span } => {
+                TraceAction::Link {
+                    node_id,
+                    session,
+                    span,
+                } => {
                     if session.is_none() && span.is_none() {
                         eprintln!("{} Specify --session or --span", "Error:".red());
                         std::process::exit(1);
@@ -3138,7 +3201,11 @@ fn main() {
                     }
                 }
 
-                TraceAction::Prune { days, keep_linked, dry_run } => {
+                TraceAction::Prune {
+                    days,
+                    keep_linked,
+                    dry_run,
+                } => {
                     if dry_run {
                         println!(
                             "{} Would prune traces older than {} days{}",
@@ -3245,10 +3312,7 @@ fn main() {
             }
 
             // Build environment with NODE_OPTIONS
-            let node_options = format!(
-                "--require {}",
-                interceptor_path.to_string_lossy()
-            );
+            let node_options = format!("--require {}", interceptor_path.to_string_lossy());
             let existing_node_options = std::env::var("NODE_OPTIONS").unwrap_or_default();
             let full_node_options = if existing_node_options.is_empty() {
                 node_options
@@ -3305,11 +3369,7 @@ fn main() {
 
             // Get session stats
             if let Ok(Some(session)) = db.get_trace_session(&session_id) {
-                println!(
-                    "\n{} Session {} ended",
-                    "Trace:".cyan(),
-                    &session_id[..8]
-                );
+                println!("\n{} Session {} ended", "Trace:".cyan(), &session_id[..8]);
                 println!(
                     "  Tokens: {}↓ {}↑ (cache: {}r {}w)",
                     session.total_input_tokens,

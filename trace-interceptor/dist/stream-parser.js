@@ -2,9 +2,54 @@
 /**
  * SSE stream parser and response accumulator
  */
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ResponseAccumulator = void 0;
 exports.createAccumulatingStream = createAccumulatingStream;
+const fs = __importStar(require("fs"));
+const path = __importStar(require("path"));
+const DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ?
+    path.join(process.env.HOME || '/tmp', '.deciduous', 'trace-debug.log') : null;
+function debugLog(msg) {
+    if (DEBUG_LOG) {
+        try {
+            fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} [stream] ${msg}\n`);
+        }
+        catch { /* ignore */ }
+    }
+}
 class ResponseAccumulator {
     thinking = '';
     response = '';
@@ -60,6 +105,7 @@ class ResponseAccumulator {
                         name: event.content_block.name,
                         input: '',
                     });
+                    debugLog(`tool_use start: ${event.content_block.name} (${event.content_block.id})`);
                 }
                 break;
             case 'content_block_delta':
@@ -70,11 +116,13 @@ class ResponseAccumulator {
                     else if (event.delta.type === 'text_delta' && event.delta.text) {
                         this.response += event.delta.text;
                     }
-                    else if (event.delta.type === 'input_json_delta' && event.delta.text) {
-                        // Tool input comes as partial JSON
-                        if (this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
+                    else if (event.delta.type === 'input_json_delta') {
+                        // Tool input comes as partial_json, not text!
+                        const partialJson = event.delta.partial_json;
+                        if (partialJson && this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
                             this.toolCalls[this.currentToolIndex].input =
-                                (this.toolCalls[this.currentToolIndex].input || '') + event.delta.text;
+                                (this.toolCalls[this.currentToolIndex].input || '') + partialJson;
+                            debugLog(`input_json_delta: +${partialJson.length} chars for tool ${this.currentToolIndex}`);
                         }
                     }
                 }
@@ -111,6 +159,12 @@ class ResponseAccumulator {
      * Get the accumulated span data
      */
     finalize() {
+        if (this.toolCalls.length > 0) {
+            debugLog(`finalize: ${this.toolCalls.length} tool calls`);
+            for (const tc of this.toolCalls) {
+                debugLog(`  - ${tc.name}: input len=${tc.input?.length || 0}`);
+            }
+        }
         return {
             model: this.model,
             request_id: this.requestId,

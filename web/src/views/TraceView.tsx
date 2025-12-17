@@ -328,9 +328,10 @@ const TraceView: React.FC = () => {
                                           <div style={styles.toolHeader}>
                                             <span style={styles.toolName}>{tool.name || 'Tool'}</span>
                                             <span style={styles.toolType}>{tool.type === 'tool_input' ? 'INPUT' : 'OUTPUT'}</span>
+                                            {tool.content.length > 500 && <span style={{ color: '#888', fontSize: '11px', marginLeft: '8px' }}>({tool.content.length.toLocaleString()} chars)</span>}
                                           </div>
-                                          <div style={styles.toolContent}>
-                                            {tool.content.length > 500 ? tool.content.slice(0, 500) + '…' : tool.content}
+                                          <div style={{ ...styles.toolContent, maxHeight: '300px', overflow: 'auto' }}>
+                                            {tool.content}
                                           </div>
                                         </div>
                                       ))
@@ -340,12 +341,12 @@ const TraceView: React.FC = () => {
                                   </div>
                                 )}
 
-                                {/* System prompt (collapsed by default) */}
+                                {/* System prompt (collapsed by default, scrollable) */}
                                 {system && (
                                   <details style={styles.systemDetails}>
-                                    <summary style={styles.systemSummary}>📋 System Prompt ({system.length} chars)</summary>
-                                    <div style={styles.systemBox}>
-                                      {system.length > 2000 ? system.slice(0, 2000) + '…' : system}
+                                    <summary style={styles.systemSummary}>📋 System Prompt ({system.length.toLocaleString()} chars)</summary>
+                                    <div style={{ ...styles.systemBox, maxHeight: '400px', overflow: 'auto' }}>
+                                      {system}
                                     </div>
                                   </details>
                                 )}

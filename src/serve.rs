@@ -102,7 +102,9 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         (&Method::Get, p) if p.starts_with("/api/nodes/") && p.ends_with("/traces") => {
             // Parse /api/nodes/{node_id}/traces
             let path_without_traces = p.strip_suffix("/traces").unwrap_or("");
-            let node_id_str = path_without_traces.strip_prefix("/api/nodes/").unwrap_or("");
+            let node_id_str = path_without_traces
+                .strip_prefix("/api/nodes/")
+                .unwrap_or("");
             if let Ok(node_id) = node_id_str.parse::<i32>() {
                 let trace_info = get_node_trace_info(node_id);
                 let json = serde_json::to_string(&ApiResponse::success(trace_info))?;
@@ -143,7 +145,9 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         (&Method::Get, p) if p.starts_with("/api/traces/spans/") && p.ends_with("/nodes") => {
             // Parse /api/traces/spans/{span_id}/nodes
             let path_without_nodes = p.strip_suffix("/nodes").unwrap_or("");
-            let span_id_str = path_without_nodes.strip_prefix("/api/traces/spans/").unwrap_or("");
+            let span_id_str = path_without_nodes
+                .strip_prefix("/api/traces/spans/")
+                .unwrap_or("");
             if let Ok(span_id) = span_id_str.parse::<i32>() {
                 let nodes = get_span_nodes(span_id);
                 let json = serde_json::to_string(&ApiResponse::success(nodes))?;
@@ -245,15 +249,16 @@ fn get_trace_sessions() -> Vec<SessionWithSummary> {
             let session_ids: Vec<String> = sessions.iter().map(|s| s.session_id.clone()).collect();
 
             // Get first prompts for all sessions
-            let first_prompts = db.get_session_first_prompts(&session_ids).unwrap_or_default();
+            let first_prompts = db
+                .get_session_first_prompts(&session_ids)
+                .unwrap_or_default();
 
             // Get linked node titles
-            let linked_node_ids: Vec<i32> = sessions
-                .iter()
-                .filter_map(|s| s.linked_node_id)
-                .collect();
+            let linked_node_ids: Vec<i32> =
+                sessions.iter().filter_map(|s| s.linked_node_id).collect();
 
-            let mut node_titles: std::collections::HashMap<i32, String> = std::collections::HashMap::new();
+            let mut node_titles: std::collections::HashMap<i32, String> =
+                std::collections::HashMap::new();
             for node_id in linked_node_ids {
                 if let Ok(Some(node)) = db.get_node_by_id(node_id) {
                     node_titles.insert(node_id, node.title);
@@ -368,7 +373,9 @@ fn get_node_trace_info(node_id: i32) -> NodeTraceInfo {
                     user_preview: s.user_preview,
                 })
                 .collect();
-            NodeTraceInfo { spans: spans_with_session }
+            NodeTraceInfo {
+                spans: spans_with_session,
+            }
         }
         Err(_) => NodeTraceInfo { spans: vec![] },
     }

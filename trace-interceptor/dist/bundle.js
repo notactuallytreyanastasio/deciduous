@@ -1,4 +1,26 @@
 "use strict";
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf;
+var __hasOwnProp = Object.prototype.hasOwnProperty;
+var __copyProps = (to, from, except, desc) => {
+  if (from && typeof from === "object" || typeof from === "function") {
+    for (let key of __getOwnPropNames(from))
+      if (!__hasOwnProp.call(to, key) && key !== except)
+        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+  }
+  return to;
+};
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
+  mod
+));
 
 // src/deciduous.ts
 var import_child_process = require("child_process");
@@ -136,6 +158,18 @@ var DeciduousClient = class {
 };
 
 // src/stream-parser.ts
+var fs = __toESM(require("fs"));
+var path = __toESM(require("path"));
+var DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ? path.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
+function debugLog(msg) {
+  if (DEBUG_LOG) {
+    try {
+      fs.appendFileSync(DEBUG_LOG, `${(/* @__PURE__ */ new Date()).toISOString()} [stream] ${msg}
+`);
+    } catch {
+    }
+  }
+}
 var ResponseAccumulator = class {
   thinking = "";
   response = "";
@@ -189,6 +223,7 @@ var ResponseAccumulator = class {
             name: event.content_block.name,
             input: ""
           });
+          debugLog(`tool_use start: ${event.content_block.name} (${event.content_block.id})`);
         }
         break;
       case "content_block_delta":
@@ -197,9 +232,11 @@ var ResponseAccumulator = class {
             this.thinking += event.delta.thinking;
           } else if (event.delta.type === "text_delta" && event.delta.text) {
             this.response += event.delta.text;
-          } else if (event.delta.type === "input_json_delta" && event.delta.text) {
-            if (this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
-              this.toolCalls[this.currentToolIndex].input = (this.toolCalls[this.currentToolIndex].input || "") + event.delta.text;
+          } else if (event.delta.type === "input_json_delta") {
+            const partialJson = event.delta.partial_json;
+            if (partialJson && this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
+              this.toolCalls[this.currentToolIndex].input = (this.toolCalls[this.currentToolIndex].input || "") + partialJson;
+              debugLog(`input_json_delta: +${partialJson.length} chars for tool ${this.currentToolIndex}`);
             }
           }
         }
@@ -235,6 +272,12 @@ var ResponseAccumulator = class {
    * Get the accumulated span data
    */
   finalize() {
+    if (this.toolCalls.length > 0) {
+      debugLog(`finalize: ${this.toolCalls.length} tool calls`);
+      for (const tc of this.toolCalls) {
+        debugLog(`  - ${tc.name}: input len=${tc.input?.length || 0}`);
+      }
+    }
     return {
       model: this.model,
       request_id: this.requestId,
@@ -274,7 +317,19 @@ function createAccumulatingStream(originalBody, accumulator, onComplete) {
 }
 
 // src/index.ts
+var fs2 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
 var originalFetch = globalThis.fetch;
+var DEBUG_LOG2 = process.env.DECIDUOUS_TRACE_DEBUG ? path2.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
+function debugLog2(msg) {
+  if (DEBUG_LOG2) {
+    try {
+      fs2.appendFileSync(DEBUG_LOG2, `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
+`);
+    } catch {
+    }
+  }
+}
 var client = null;
 function isAnthropicApi(input) {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -284,38 +339,70 @@ function isStreamingResponse(response) {
   const contentType = response.headers.get("content-type");
   return contentType?.includes("text/event-stream") || false;
 }
+function isSystemInjectedText(text) {
+  const trimmed = text.trim();
+  if (trimmed === "quota" || trimmed === "foo" || trimmed === "#") return true;
+  if (trimmed.startsWith("<system-reminder>")) return true;
+  if (trimmed.startsWith("<system>")) return true;
+  if (trimmed.startsWith("<policy_spec>")) return true;
+  if (trimmed.startsWith("<context>")) return true;
+  if (trimmed.startsWith("<command-message>")) return true;
+  if (trimmed.startsWith("Files modified by user:")) return true;
+  if (trimmed.startsWith("Files modified by other")) return true;
+  return false;
+}
 function extractUserPreview(body) {
-  if (!body.messages) return void 0;
-  for (let i = body.messages.length - 1; i >= 0; i--) {
-    const msg = body.messages[i];
-    if (msg.role === "user") {
-      if (typeof msg.content === "string") {
-        const trimmed = msg.content.trim();
-        if (trimmed.length > 10 && !trimmed.startsWith("<system")) {
-          return trimmed.slice(0, 500);
-        }
-      } else if (Array.isArray(msg.content)) {
-        for (const block of msg.content) {
-          if (block.type === "text" && block.text) {
-            const trimmed = block.text.trim();
-            if (trimmed.length > 10 && !trimmed.startsWith("<system")) {
-              return trimmed.slice(0, 500);
-            }
-          }
-        }
-      }
+  if (!body.messages || body.messages.length === 0) {
+    if (process.env.DECIDUOUS_TRACE_DEBUG) {
+      debugLog2(" extractUserPreview: no messages");
+    }
+    return void 0;
+  }
+  if (process.env.DECIDUOUS_TRACE_DEBUG) {
+    debugLog2(` extractUserPreview: ${body.messages.length} messages`);
+    for (let i = 0; i < body.messages.length; i++) {
+      const m = body.messages[i];
+      const contentDesc = typeof m.content === "string" ? `string(${m.content.length}): "${m.content.slice(0, 30)}..."` : Array.isArray(m.content) ? `array[${m.content.length}]: ${m.content.map((b) => b.type).join(",")}` : "unknown";
+      debugLog2(`   msg[${i}] role=${m.role} content=${contentDesc}`);
     }
   }
   for (let i = body.messages.length - 1; i >= 0; i--) {
     const msg = body.messages[i];
-    if (msg.role === "assistant") {
-      if (typeof msg.content === "string" && msg.content.trim().length > 20) {
-        const firstLine = msg.content.trim().split("\n")[0];
-        if (firstLine.length > 10) {
-          return `[continuing] ${firstLine.slice(0, 450)}`;
+    if (msg.role !== "user") continue;
+    if (typeof msg.content === "string") {
+      const text = msg.content.trim();
+      const filtered = isSystemInjectedText(text);
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        debugLog2(` msg[${i}] string: len=${text.length}, filtered=${filtered}, text="${text.slice(0, 40)}"`);
+      }
+      if (text.length > 0 && !filtered) {
+        return text.slice(0, 500);
+      }
+      continue;
+    }
+    if (Array.isArray(msg.content)) {
+      const blocks = msg.content;
+      const textBlocks = blocks.filter((b) => b.type === "text");
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        debugLog2(` msg[${i}] array: ${blocks.length} blocks, ${textBlocks.length} text blocks`);
+      }
+      for (const block of textBlocks) {
+        if (typeof block.text === "string") {
+          const text = block.text.trim();
+          const filtered = isSystemInjectedText(text);
+          if (process.env.DECIDUOUS_TRACE_DEBUG) {
+            debugLog2(`   text block: len=${text.length}, filtered=${filtered}, text="${text.slice(0, 40)}"`);
+          }
+          if (text.length > 0 && !filtered) {
+            return text.slice(0, 500);
+          }
         }
       }
+      continue;
     }
+  }
+  if (process.env.DECIDUOUS_TRACE_DEBUG) {
+    debugLog2(" No user text found in any message");
   }
   return void 0;
 }
@@ -340,6 +427,33 @@ function extractToolDefinitions(body) {
     }
   }
   return defs.length > 0 ? defs : void 0;
+}
+function extractToolResults(body) {
+  if (!body.messages || body.messages.length === 0) return void 0;
+  const results = [];
+  for (const msg of body.messages) {
+    if (msg.role !== "user") continue;
+    if (!Array.isArray(msg.content)) continue;
+    for (const block of msg.content) {
+      if (block.type === "tool_result" && block.tool_use_id) {
+        let content;
+        if (typeof block.content === "string") {
+          content = block.content;
+        } else if (Array.isArray(block.content)) {
+          content = block.content.filter((b) => b.type === "text" && b.text).map((b) => b.text).join("\n");
+        } else {
+          content = "";
+        }
+        results.push({
+          tool_use_id: block.tool_use_id,
+          content: content.slice(0, 5e3),
+          // Limit to 5KB per result
+          is_error: block.is_error
+        });
+      }
+    }
+  }
+  return results.length > 0 ? results : void 0;
 }
 function parseNonStreamingResponse(data) {
   let thinking = "";
@@ -384,6 +498,10 @@ async function ensureSession() {
   return client;
 }
 async function interceptedFetch(input, init) {
+  if (process.env.DECIDUOUS_TRACE_DEBUG) {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    debugLog2(` FETCH: ${url.slice(0, 60)}...`);
+  }
   if (!isAnthropicApi(input)) {
     return originalFetch(input, init);
   }
@@ -392,15 +510,44 @@ async function interceptedFetch(input, init) {
   let requestBody;
   if (init?.body) {
     try {
-      requestBody = JSON.parse(
-        typeof init.body === "string" ? init.body : new TextDecoder().decode(init.body)
-      );
-    } catch {
+      let bodyStr;
+      if (typeof init.body === "string") {
+        bodyStr = init.body;
+      } else if (init.body instanceof Uint8Array || init.body instanceof ArrayBuffer) {
+        bodyStr = new TextDecoder().decode(init.body);
+      } else if (ArrayBuffer.isView(init.body)) {
+        bodyStr = new TextDecoder().decode(init.body);
+      } else {
+        if (init.body && typeof init.body.toString === "function") {
+          const strVal = String(init.body);
+          if (strVal !== "[object Object]" && strVal !== "[object ReadableStream]") {
+            bodyStr = strVal;
+          } else {
+            bodyStr = "";
+          }
+        } else {
+          bodyStr = "";
+        }
+      }
+      if (bodyStr) {
+        requestBody = JSON.parse(bodyStr);
+        if (process.env.DECIDUOUS_TRACE_DEBUG) {
+          debugLog2(` Parsed body, messages: ${requestBody?.messages?.length || 0}`);
+        }
+      }
+    } catch (e) {
+      if (process.env.DECIDUOUS_TRACE_DEBUG) {
+        debugLog2(` Body parse error: ${e}`);
+      }
     }
   }
   const userPreview = requestBody ? extractUserPreview(requestBody) : void 0;
+  if (process.env.DECIDUOUS_TRACE_DEBUG) {
+    debugLog2(` userPreview: ${userPreview ? userPreview.slice(0, 50) + "..." : "null"}`);
+  }
   const systemPrompt = requestBody ? extractSystemPrompt(requestBody) : void 0;
   const toolDefs = requestBody ? extractToolDefinitions(requestBody) : void 0;
+  const toolResults = requestBody ? extractToolResults(requestBody) : void 0;
   const messageCount = requestBody?.messages?.length;
   const spanId = await deciduous.startSpan(userPreview);
   if (spanId !== null) {
@@ -417,6 +564,7 @@ async function interceptedFetch(input, init) {
         user_preview: userPreview,
         system_prompt: systemPrompt,
         tool_definitions: toolDefs,
+        tool_results: toolResults,
         message_count: messageCount
       };
       await deciduous.recordSpan(spanData2, spanId ?? void 0);
@@ -440,6 +588,7 @@ async function interceptedFetch(input, init) {
     user_preview: userPreview,
     system_prompt: systemPrompt,
     tool_definitions: toolDefs,
+    tool_results: toolResults,
     message_count: messageCount
   };
   await deciduous.recordSpan(spanData, spanId ?? void 0);
@@ -468,7 +617,7 @@ function install() {
     process.exit(0);
   });
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
-    console.error("[deciduous-trace] Interceptor installed");
+    debugLog2(" Interceptor installed");
   }
 }
 

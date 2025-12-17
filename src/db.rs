@@ -763,10 +763,10 @@ pub enum DbError {
 impl std::fmt::Display for DbError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            DbError::Connection(msg) => write!(f, "Connection error: {}", msg),
-            DbError::Query(e) => write!(f, "Query error: {}", e),
-            DbError::Pool(e) => write!(f, "Pool error: {}", e),
-            DbError::Validation(msg) => write!(f, "{}", msg),
+            DbError::Connection(msg) => write!(f, "Connection error: {msg}"),
+            DbError::Query(e) => write!(f, "Query error: {e}"),
+            DbError::Pool(e) => write!(f, "Pool error: {e}"),
+            DbError::Validation(msg) => write!(f, "{msg}"),
         }
     }
 }
@@ -2449,7 +2449,10 @@ impl Database {
         let spans: Vec<TraceSpan> = trace_spans::table
             .filter(trace_spans::session_id.eq_any(session_ids))
             .filter(trace_spans::user_preview.is_not_null())
-            .order((trace_spans::session_id.asc(), trace_spans::sequence_num.asc()))
+            .order((
+                trace_spans::session_id.asc(),
+                trace_spans::sequence_num.asc(),
+            ))
             .load(&mut conn)?;
 
         let mut result = std::collections::HashMap::new();
@@ -2555,6 +2558,7 @@ impl Database {
         thinking_preview: Option<&str>,
         response_preview: Option<&str>,
         tool_names: Option<&str>,
+        user_preview: Option<&str>,
     ) -> Result<()> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -2578,27 +2582,30 @@ impl Database {
                 trace_spans::thinking_preview.eq(thinking_preview),
                 trace_spans::response_preview.eq(response_preview),
                 trace_spans::tool_names.eq(tool_names),
+                trace_spans::user_preview.eq(user_preview),
             ))
             .execute(&mut conn)?;
 
         // Update session totals incrementally
-        if input_tokens.is_some() || output_tokens.is_some() || cache_read.is_some() || cache_write.is_some() {
-            diesel::update(trace_sessions::table.filter(trace_sessions::session_id.eq(&span.session_id)))
-                .set((
-                    trace_sessions::total_input_tokens.eq(
-                        trace_sessions::total_input_tokens + input_tokens.unwrap_or(0)
-                    ),
-                    trace_sessions::total_output_tokens.eq(
-                        trace_sessions::total_output_tokens + output_tokens.unwrap_or(0)
-                    ),
-                    trace_sessions::total_cache_read.eq(
-                        trace_sessions::total_cache_read + cache_read.unwrap_or(0)
-                    ),
-                    trace_sessions::total_cache_write.eq(
-                        trace_sessions::total_cache_write + cache_write.unwrap_or(0)
-                    ),
-                ))
-                .execute(&mut conn)?;
+        if input_tokens.is_some()
+            || output_tokens.is_some()
+            || cache_read.is_some()
+            || cache_write.is_some()
+        {
+            diesel::update(
+                trace_sessions::table.filter(trace_sessions::session_id.eq(&span.session_id)),
+            )
+            .set((
+                trace_sessions::total_input_tokens
+                    .eq(trace_sessions::total_input_tokens + input_tokens.unwrap_or(0)),
+                trace_sessions::total_output_tokens
+                    .eq(trace_sessions::total_output_tokens + output_tokens.unwrap_or(0)),
+                trace_sessions::total_cache_read
+                    .eq(trace_sessions::total_cache_read + cache_read.unwrap_or(0)),
+                trace_sessions::total_cache_write
+                    .eq(trace_sessions::total_cache_write + cache_write.unwrap_or(0)),
+            ))
+            .execute(&mut conn)?;
         }
 
         Ok(())
@@ -2758,8 +2765,7 @@ impl Database {
     /// Prune old trace data (sessions and their spans/content)
     pub fn prune_traces(&self, days: u32, keep_linked: bool) -> Result<(usize, usize, usize)> {
         let mut conn = self.get_conn()?;
-        let cutoff =
-            chrono::Local::now() - chrono::Duration::days(i64::from(days));
+        let cutoff = chrono::Local::now() - chrono::Duration::days(i64::from(days));
         let cutoff_str = cutoff.to_rfc3339();
 
         // Find sessions to delete
@@ -2793,10 +2799,9 @@ impl Database {
                 .execute(&mut conn)?;
 
         // Delete spans
-        let spans_deleted = diesel::delete(
-            trace_spans::table.filter(trace_spans::session_id.eq_any(&session_ids)),
-        )
-        .execute(&mut conn)?;
+        let spans_deleted =
+            diesel::delete(trace_spans::table.filter(trace_spans::session_id.eq_any(&session_ids)))
+                .execute(&mut conn)?;
 
         // Delete sessions
         let sessions_deleted = diesel::delete(
@@ -2890,7 +2895,10 @@ impl Database {
     }
 
     /// Get node counts for multiple spans at once (for efficient list display)
-    pub fn get_node_counts_for_spans(&self, span_ids: &[i32]) -> Result<std::collections::HashMap<i32, i64>> {
+    pub fn get_node_counts_for_spans(
+        &self,
+        span_ids: &[i32],
+    ) -> Result<std::collections::HashMap<i32, i64>> {
         let mut conn = self.get_conn()?;
 
         // Query all links for the given span IDs

@@ -10,7 +10,10 @@
 
 use ratatui::{
     prelude::*,
-    widgets::{Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState, Wrap},
+    widgets::{
+        Block, Borders, List, ListItem, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState,
+        Wrap,
+    },
 };
 
 use crate::db::{DecisionNode, TraceContent, TraceSession, TraceSpan};
@@ -253,8 +256,7 @@ impl TraceState {
             }
             TraceViewMode::Spans => {
                 if !self.spans.is_empty() {
-                    self.selected_span_idx =
-                        (self.selected_span_idx + 1).min(self.spans.len() - 1);
+                    self.selected_span_idx = (self.selected_span_idx + 1).min(self.spans.len() - 1);
                     self.ensure_span_visible(20);
                 }
             }
@@ -307,8 +309,8 @@ impl TraceState {
     pub fn page_down(&mut self, page_size: usize) {
         match self.view_mode {
             TraceViewMode::Sessions => {
-                self.selected_session_idx =
-                    (self.selected_session_idx + page_size).min(self.sessions.len().saturating_sub(1));
+                self.selected_session_idx = (self.selected_session_idx + page_size)
+                    .min(self.sessions.len().saturating_sub(1));
                 self.ensure_session_visible(20);
             }
             TraceViewMode::Spans => {
@@ -435,8 +437,10 @@ impl TraceState {
 
         self.detail_content
             .iter()
-            .filter(|c| c.content_type == content_type ||
-                       (self.detail_tab == DetailTab::Tools && c.content_type == "tool_output"))
+            .filter(|c| {
+                c.content_type == content_type
+                    || (self.detail_tab == DetailTab::Tools && c.content_type == "tool_output")
+            })
             .map(|c| {
                 if self.detail_tab == DetailTab::Tools {
                     if let Some(ref name) = c.tool_name {
@@ -463,11 +467,8 @@ impl TraceState {
     }
 
     fn ensure_span_visible(&mut self, visible_items: usize) {
-        self.span_scroll = calculate_scroll(
-            self.selected_span_idx,
-            self.span_scroll,
-            visible_items,
-        );
+        self.span_scroll =
+            calculate_scroll(self.selected_span_idx, self.span_scroll, visible_items);
     }
 }
 
@@ -488,7 +489,11 @@ pub fn draw(frame: &mut Frame, state: &TraceState, area: Rect) {
 fn draw_sessions(frame: &mut Frame, state: &TraceState, area: Rect) {
     let block = Block::default()
         .title(" Trace Sessions ")
-        .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray));
 
@@ -496,10 +501,12 @@ fn draw_sessions(frame: &mut Frame, state: &TraceState, area: Rect) {
     frame.render_widget(block, area);
 
     if state.sessions.is_empty() {
-        let help = Paragraph::new("No trace sessions found.\n\nRun `deciduous proxy -- claude` to capture API traffic.")
-            .style(Style::default().fg(Color::DarkGray))
-            .alignment(Alignment::Center)
-            .wrap(Wrap { trim: false });
+        let help = Paragraph::new(
+            "No trace sessions found.\n\nRun `deciduous proxy -- claude` to capture API traffic.",
+        )
+        .style(Style::default().fg(Color::DarkGray))
+        .alignment(Alignment::Center)
+        .wrap(Wrap { trim: false });
         frame.render_widget(help, inner);
         return;
     }
@@ -556,7 +563,10 @@ fn draw_sessions(frame: &mut Frame, state: &TraceState, area: Rect) {
         let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight);
         frame.render_stateful_widget(
             scrollbar,
-            inner.inner(Margin { horizontal: 0, vertical: 0 }),
+            inner.inner(Margin {
+                horizontal: 0,
+                vertical: 0,
+            }),
             &mut scrollbar_state,
         );
     }
@@ -584,7 +594,11 @@ fn draw_spans(frame: &mut Frame, state: &TraceState, area: Rect) {
 fn draw_spans_list(frame: &mut Frame, state: &TraceState, area: Rect, title: &str) {
     let block = Block::default()
         .title(title)
-        .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        .title_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray));
 
@@ -613,8 +627,14 @@ fn draw_spans_list(frame: &mut Frame, state: &TraceState, area: Rect, title: &st
             // Format: #seq | model | duration | tokens | tools | nodes
             let model = model_short_name(span.model.as_deref());
             let duration = format_duration_ms(span.duration_ms);
-            let tokens_in = span.input_tokens.map(|t| format_tokens(t)).unwrap_or("-".into());
-            let tokens_out = span.output_tokens.map(|t| format_tokens(t)).unwrap_or("-".into());
+            let tokens_in = span
+                .input_tokens
+                .map(|t| format_tokens(t))
+                .unwrap_or("-".into());
+            let tokens_out = span
+                .output_tokens
+                .map(|t| format_tokens(t))
+                .unwrap_or("-".into());
             let tools = span.tool_names.as_deref().unwrap_or("-");
             let tools_short = truncate_str(tools, 15);
 
@@ -673,9 +693,10 @@ fn draw_span_preview(frame: &mut Frame, state: &TraceState, area: Rect) {
 
         // Thinking preview
         if let Some(ref thinking) = span.thinking_preview {
-            lines.push(Line::from(vec![
-                Span::styled("Thinking: ", Style::default().fg(Color::Yellow)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "Thinking: ",
+                Style::default().fg(Color::Yellow),
+            )]));
             for line in thinking.lines().take(5) {
                 lines.push(Line::from(format!("  {}", truncate_str(line, 60))));
             }
@@ -684,9 +705,10 @@ fn draw_span_preview(frame: &mut Frame, state: &TraceState, area: Rect) {
 
         // Response preview
         if let Some(ref response) = span.response_preview {
-            lines.push(Line::from(vec![
-                Span::styled("Response: ", Style::default().fg(Color::Green)),
-            ]));
+            lines.push(Line::from(vec![Span::styled(
+                "Response: ",
+                Style::default().fg(Color::Green),
+            )]));
             for line in response.lines().take(5) {
                 lines.push(Line::from(format!("  {}", truncate_str(line, 60))));
             }
@@ -728,7 +750,8 @@ fn draw_span_detail(frame: &mut Frame, state: &TraceState, area: Rect) {
             frame.render_widget(para, inner);
         } else {
             // Render nodes list
-            let lines: Vec<Line> = state.detail_nodes
+            let lines: Vec<Line> = state
+                .detail_nodes
                 .iter()
                 .map(|node| {
                     let type_color = match node.node_type.as_str() {
@@ -740,14 +763,19 @@ fn draw_span_detail(frame: &mut Frame, state: &TraceState, area: Rect) {
                         _ => Color::White,
                     };
                     Line::from(vec![
-                        Span::styled(format!("#{:<3} ", node.id), Style::default().fg(Color::DarkGray)),
-                        Span::styled(format!("[{}] ", node.node_type), Style::default().fg(type_color)),
+                        Span::styled(
+                            format!("#{:<3} ", node.id),
+                            Style::default().fg(Color::DarkGray),
+                        ),
+                        Span::styled(
+                            format!("[{}] ", node.node_type),
+                            Style::default().fg(type_color),
+                        ),
                         Span::raw(&node.title),
                     ])
                 })
                 .collect();
-            let para = Paragraph::new(lines)
-                .style(Style::default().fg(Color::White));
+            let para = Paragraph::new(lines).style(Style::default().fg(Color::White));
             frame.render_widget(para, inner);
         }
         return;
@@ -817,8 +845,7 @@ fn draw_detail_tabs(frame: &mut Frame, state: &TraceState, area: Rect) {
     ));
 
     let line = Line::from(line_spans);
-    let para = Paragraph::new(vec![Line::from(""), line])
-        .alignment(Alignment::Left);
+    let para = Paragraph::new(vec![Line::from(""), line]).alignment(Alignment::Left);
 
     let block = Block::default()
         .borders(Borders::BOTTOM)
@@ -852,7 +879,10 @@ mod tests {
 
     #[test]
     fn test_model_short_name() {
-        assert_eq!(model_short_name(Some("claude-3-5-sonnet-20241022")), "sonnet");
+        assert_eq!(
+            model_short_name(Some("claude-3-5-sonnet-20241022")),
+            "sonnet"
+        );
         assert_eq!(model_short_name(Some("claude-opus-4")), "opus");
         assert_eq!(model_short_name(Some("claude-3-5-haiku-20241022")), "haiku");
         assert_eq!(model_short_name(None), "-");

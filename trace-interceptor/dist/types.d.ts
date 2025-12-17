@@ -17,6 +17,20 @@ export interface SpanData {
     thinking?: string;
     response?: string;
     tool_calls?: ToolCall[];
+    tool_results?: ToolResult[];
+    system_prompt?: string;
+    tool_definitions?: ToolDefinition[];
+    message_count?: number;
+}
+export interface ToolResult {
+    tool_use_id: string;
+    content: string;
+    is_error?: boolean;
+}
+export interface ToolDefinition {
+    name: string;
+    description?: string;
+    input_schema?: unknown;
 }
 export interface ToolCall {
     id?: string;
@@ -30,14 +44,18 @@ export interface StartSessionResponse {
 export interface RecordSpanResponse {
     span_id: number;
 }
+export interface ContentBlock {
+    type: string;
+    text?: string;
+    tool_use_id?: string;
+    content?: string | ContentBlock[];
+    is_error?: boolean;
+}
 export interface AnthropicRequest {
     model?: string;
     messages?: Array<{
         role: string;
-        content: string | Array<{
-            type: string;
-            text?: string;
-        }>;
+        content: string | ContentBlock[];
     }>;
     system?: string | Array<{
         type: string;

@@ -3,6 +3,19 @@
  */
 
 import type { SSEEvent, SpanData, ToolCall } from './types';
+import * as fs from 'fs';
+import * as path from 'path';
+
+const DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ?
+  path.join(process.env.HOME || '/tmp', '.deciduous', 'trace-debug.log') : null;
+
+function debugLog(msg: string): void {
+  if (DEBUG_LOG) {
+    try {
+      fs.appendFileSync(DEBUG_LOG, `${new Date().toISOString()} [stream] ${msg}\n`);
+    } catch { /* ignore */ }
+  }
+}
 
 export class ResponseAccumulator {
   private thinking = '';
@@ -63,6 +76,7 @@ export class ResponseAccumulator {
             name: event.content_block.name,
             input: '',
           });
+          debugLog(`tool_use start: ${event.content_block.name} (${event.content_block.id})`);
         }
         break;
 
@@ -72,11 +86,13 @@ export class ResponseAccumulator {
             this.thinking += event.delta.thinking;
           } else if (event.delta.type === 'text_delta' && event.delta.text) {
             this.response += event.delta.text;
-          } else if (event.delta.type === 'input_json_delta' && event.delta.text) {
-            // Tool input comes as partial JSON
-            if (this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
+          } else if (event.delta.type === 'input_json_delta') {
+            // Tool input comes as partial_json, not text!
+            const partialJson = (event.delta as { partial_json?: string }).partial_json;
+            if (partialJson && this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
               this.toolCalls[this.currentToolIndex].input =
-                (this.toolCalls[this.currentToolIndex].input || '') + event.delta.text;
+                (this.toolCalls[this.currentToolIndex].input || '') + partialJson;
+              debugLog(`input_json_delta: +${partialJson.length} chars for tool ${this.currentToolIndex}`);
             }
           }
         }
@@ -118,6 +134,12 @@ export class ResponseAccumulator {
    * Get the accumulated span data
    */
   finalize(): Omit<SpanData, 'duration_ms'> {
+    if (this.toolCalls.length > 0) {
+      debugLog(`finalize: ${this.toolCalls.length} tool calls`);
+      for (const tc of this.toolCalls) {
+        debugLog(`  - ${tc.name}: input len=${tc.input?.length || 0}`);
+      }
+    }
     return {
       model: this.model,
       request_id: this.requestId,

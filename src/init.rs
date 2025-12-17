@@ -2247,7 +2247,10 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
     );
     println!("   Directory: {}", cwd.display());
     if force {
-        println!("   Mode: {} (overwriting existing files)\n", "force".yellow());
+        println!(
+            "   Mode: {} (overwriting existing files)\n",
+            "force".yellow()
+        );
     } else {
         println!();
     }
@@ -2331,9 +2334,17 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
             // Write deciduous.md rule (Always On - main workflow)
             let deciduous_rule_path = windsurf_rules.join("deciduous.md");
             if force {
-                write_file_overwrite(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+                write_file_overwrite(
+                    &deciduous_rule_path,
+                    WINDSURF_DECIDUOUS_RULE,
+                    ".windsurf/rules/deciduous.md",
+                )?;
             } else {
-                write_file_if_missing(&deciduous_rule_path, WINDSURF_DECIDUOUS_RULE, ".windsurf/rules/deciduous.md")?;
+                write_file_if_missing(
+                    &deciduous_rule_path,
+                    WINDSURF_DECIDUOUS_RULE,
+                    ".windsurf/rules/deciduous.md",
+                )?;
             }
 
             // Write recover.md rule (Model-triggered - for session recovery)
@@ -2376,7 +2387,11 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
 
             // Write decision.md command
             let decision_path = opencode_cmd_dir.join("decision.md");
-            write_cmd(&decision_path, OPENCODE_DECISION_CMD, ".opencode/command/decision.md")?;
+            write_cmd(
+                &decision_path,
+                OPENCODE_DECISION_CMD,
+                ".opencode/command/decision.md",
+            )?;
 
             // Write recover.md command (context recovery)
             let recover_path = opencode_cmd_dir.join("recover.md");
@@ -2384,15 +2399,27 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
 
             // Write build-test.md command
             let build_test_path = opencode_cmd_dir.join("build-test.md");
-            write_cmd(&build_test_path, OPENCODE_BUILD_TEST_CMD, ".opencode/command/build-test.md")?;
+            write_cmd(
+                &build_test_path,
+                OPENCODE_BUILD_TEST_CMD,
+                ".opencode/command/build-test.md",
+            )?;
 
             // Write serve-ui.md command
             let serve_ui_path = opencode_cmd_dir.join("serve-ui.md");
-            write_cmd(&serve_ui_path, OPENCODE_SERVE_UI_CMD, ".opencode/command/serve-ui.md")?;
+            write_cmd(
+                &serve_ui_path,
+                OPENCODE_SERVE_UI_CMD,
+                ".opencode/command/serve-ui.md",
+            )?;
 
             // Write sync-graph.md command
             let sync_graph_path = opencode_cmd_dir.join("sync-graph.md");
-            write_cmd(&sync_graph_path, OPENCODE_SYNC_GRAPH_CMD, ".opencode/command/sync-graph.md")?;
+            write_cmd(
+                &sync_graph_path,
+                OPENCODE_SYNC_GRAPH_CMD,
+                ".opencode/command/sync-graph.md",
+            )?;
 
             // Handle AGENTS.md - append if missing, overwrite if force
             let agents_md_path = cwd.join("AGENTS.md");
@@ -2418,7 +2445,11 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
 
             // Write decision.md prompt
             let decision_path = codex_prompts_dir.join("decision.md");
-            write_prompt(&decision_path, CODEX_DECISION_PROMPT, ".codex/prompts/decision.md")?;
+            write_prompt(
+                &decision_path,
+                CODEX_DECISION_PROMPT,
+                ".codex/prompts/decision.md",
+            )?;
 
             // Write recover.md prompt (context recovery)
             let recover_path = codex_prompts_dir.join("recover.md");
@@ -2426,15 +2457,27 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
 
             // Write build-test.md prompt
             let build_test_path = codex_prompts_dir.join("build-test.md");
-            write_prompt(&build_test_path, CODEX_BUILD_TEST_PROMPT, ".codex/prompts/build-test.md")?;
+            write_prompt(
+                &build_test_path,
+                CODEX_BUILD_TEST_PROMPT,
+                ".codex/prompts/build-test.md",
+            )?;
 
             // Write serve-ui.md prompt
             let serve_ui_path = codex_prompts_dir.join("serve-ui.md");
-            write_prompt(&serve_ui_path, CODEX_SERVE_UI_PROMPT, ".codex/prompts/serve-ui.md")?;
+            write_prompt(
+                &serve_ui_path,
+                CODEX_SERVE_UI_PROMPT,
+                ".codex/prompts/serve-ui.md",
+            )?;
 
             // Write sync-graph.md prompt
             let sync_graph_path = codex_prompts_dir.join("sync-graph.md");
-            write_prompt(&sync_graph_path, CODEX_SYNC_GRAPH_PROMPT, ".codex/prompts/sync-graph.md")?;
+            write_prompt(
+                &sync_graph_path,
+                CODEX_SYNC_GRAPH_PROMPT,
+                ".codex/prompts/sync-graph.md",
+            )?;
 
             // Add Codex-specific entries to .gitignore (selective ignoring)
             add_codex_to_gitignore(&cwd)?;
