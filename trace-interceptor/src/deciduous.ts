@@ -5,6 +5,14 @@
 import { execSync } from 'child_process';
 import type { SpanData, StartSessionResponse, RecordSpanResponse } from './types';
 
+// Silent logging helper - only logs if DECIDUOUS_TRACE_DEBUG is explicitly set
+const debugLog = (msg: string) => {
+  if (process.env.DECIDUOUS_TRACE_DEBUG === '1' || process.env.DECIDUOUS_TRACE_DEBUG === 'true') {
+    // Write to stderr but with a format that won't trigger error detection
+    process.stderr.write(`[deciduous] ${msg}\n`);
+  }
+};
+
 export class DeciduousClient {
   private sessionId: string | null = null;
   private deciduousBin: string;
@@ -23,9 +31,7 @@ export class DeciduousClient {
    */
   async startSession(): Promise<string> {
     if (this.sessionId) {
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Using existing session: ${this.sessionId.slice(0, 8)}`);
-      }
+      debugLog(`Using existing session: ${this.sessionId.slice(0, 8)}`);
       return this.sessionId;
     }
 
@@ -38,13 +44,11 @@ export class DeciduousClient {
       const parsed: StartSessionResponse = JSON.parse(result.trim());
       this.sessionId = parsed.session_id;
 
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Started session: ${this.sessionId.slice(0, 8)}`);
-      }
+      debugLog(`Started session: ${this.sessionId.slice(0, 8)}`);
 
       return this.sessionId;
     } catch (error) {
-      console.error('[deciduous-trace] Failed to start session:', error);
+      debugLog(`Failed to start session: ${error}`);
       throw error;
     }
   }
@@ -55,7 +59,7 @@ export class DeciduousClient {
    */
   async startSpan(userPreview?: string): Promise<number | null> {
     if (!this.sessionId) {
-      console.error('[deciduous-trace] No active session');
+      debugLog('No active session');
       return null;
     }
 
@@ -72,13 +76,11 @@ export class DeciduousClient {
 
       const parsed: RecordSpanResponse = JSON.parse(result.trim());
 
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Started span #${parsed.span_id}`);
-      }
+      debugLog(`Started span #${parsed.span_id}`);
 
       return parsed.span_id;
     } catch (error) {
-      console.error('[deciduous-trace] Failed to start span:', error);
+      debugLog(`Failed to start span: ${error}`);
       return null;
     }
   }
@@ -89,7 +91,7 @@ export class DeciduousClient {
    */
   async recordSpan(data: SpanData, spanId?: number): Promise<number | null> {
     if (!this.sessionId) {
-      console.error('[deciduous-trace] No active session');
+      debugLog('No active session');
       return null;
     }
 
@@ -111,13 +113,11 @@ export class DeciduousClient {
 
       const parsed: RecordSpanResponse = JSON.parse(result.trim());
 
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Recorded span #${parsed.span_id}`);
-      }
+      debugLog(`Recorded span #${parsed.span_id}`);
 
       return parsed.span_id;
     } catch (error) {
-      console.error('[deciduous-trace] Failed to record span:', error);
+      debugLog(`Failed to record span: ${error}`);
       return null;
     }
   }
@@ -134,9 +134,7 @@ export class DeciduousClient {
 
     // If session was provided by proxy, don't end it - proxy handles that
     if (process.env.DECIDUOUS_TRACE_SESSION) {
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Session managed by proxy, not ending`);
-      }
+      debugLog('Session managed by proxy, not ending');
       this.sessionId = null;
       return;
     }
@@ -147,11 +145,9 @@ export class DeciduousClient {
         { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }
       );
 
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Ended session: ${this.sessionId.slice(0, 8)}`);
-      }
+      debugLog(`Ended session: ${this.sessionId.slice(0, 8)}`);
     } catch (error) {
-      console.error('[deciduous-trace] Failed to end session:', error);
+      debugLog(`Failed to end session: ${error}`);
     } finally {
       this.sessionId = null;
     }

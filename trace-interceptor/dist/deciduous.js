@@ -5,6 +5,13 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DeciduousClient = void 0;
 const child_process_1 = require("child_process");
+// Silent logging helper - only logs if DECIDUOUS_TRACE_DEBUG is explicitly set
+const debugLog = (msg) => {
+    if (process.env.DECIDUOUS_TRACE_DEBUG === '1' || process.env.DECIDUOUS_TRACE_DEBUG === 'true') {
+        // Write to stderr but with a format that won't trigger error detection
+        process.stderr.write(`[deciduous] ${msg}\n`);
+    }
+};
 class DeciduousClient {
     sessionId = null;
     deciduousBin;
@@ -21,22 +28,18 @@ class DeciduousClient {
      */
     async startSession() {
         if (this.sessionId) {
-            if (process.env.DECIDUOUS_TRACE_DEBUG) {
-                console.error(`[deciduous-trace] Using existing session: ${this.sessionId.slice(0, 8)}`);
-            }
+            debugLog(`Using existing session: ${this.sessionId.slice(0, 8)}`);
             return this.sessionId;
         }
         try {
             const result = (0, child_process_1.execSync)(`${this.deciduousBin} trace start --command "claude"`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
             const parsed = JSON.parse(result.trim());
             this.sessionId = parsed.session_id;
-            if (process.env.DECIDUOUS_TRACE_DEBUG) {
-                console.error(`[deciduous-trace] Started session: ${this.sessionId.slice(0, 8)}`);
-            }
+            debugLog(`Started session: ${this.sessionId.slice(0, 8)}`);
             return this.sessionId;
         }
         catch (error) {
-            console.error('[deciduous-trace] Failed to start session:', error);
+            debugLog(`Failed to start session: ${error}`);
             throw error;
         }
     }
@@ -46,7 +49,7 @@ class DeciduousClient {
      */
     async startSpan(userPreview) {
         if (!this.sessionId) {
-            console.error('[deciduous-trace] No active session');
+            debugLog('No active session');
             return null;
         }
         try {
@@ -57,13 +60,11 @@ class DeciduousClient {
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
             const parsed = JSON.parse(result.trim());
-            if (process.env.DECIDUOUS_TRACE_DEBUG) {
-                console.error(`[deciduous-trace] Started span #${parsed.span_id}`);
-            }
+            debugLog(`Started span #${parsed.span_id}`);
             return parsed.span_id;
         }
         catch (error) {
-            console.error('[deciduous-trace] Failed to start span:', error);
+            debugLog(`Failed to start span: ${error}`);
             return null;
         }
     }
@@ -73,7 +74,7 @@ class DeciduousClient {
      */
     async recordSpan(data, spanId) {
         if (!this.sessionId) {
-            console.error('[deciduous-trace] No active session');
+            debugLog('No active session');
             return null;
         }
         try {
@@ -88,13 +89,11 @@ class DeciduousClient {
                 stdio: ['pipe', 'pipe', 'pipe'],
             });
             const parsed = JSON.parse(result.trim());
-            if (process.env.DECIDUOUS_TRACE_DEBUG) {
-                console.error(`[deciduous-trace] Recorded span #${parsed.span_id}`);
-            }
+            debugLog(`Recorded span #${parsed.span_id}`);
             return parsed.span_id;
         }
         catch (error) {
-            console.error('[deciduous-trace] Failed to record span:', error);
+            debugLog(`Failed to record span: ${error}`);
             return null;
         }
     }
@@ -109,20 +108,16 @@ class DeciduousClient {
         }
         // If session was provided by proxy, don't end it - proxy handles that
         if (process.env.DECIDUOUS_TRACE_SESSION) {
-            if (process.env.DECIDUOUS_TRACE_DEBUG) {
-                console.error(`[deciduous-trace] Session managed by proxy, not ending`);
-            }
+            debugLog('Session managed by proxy, not ending');
             this.sessionId = null;
             return;
         }
         try {
             (0, child_process_1.execSync)(`${this.deciduousBin} trace end ${this.sessionId}`, { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
-            if (process.env.DECIDUOUS_TRACE_DEBUG) {
-                console.error(`[deciduous-trace] Ended session: ${this.sessionId.slice(0, 8)}`);
-            }
+            debugLog(`Ended session: ${this.sessionId.slice(0, 8)}`);
         }
         catch (error) {
-            console.error('[deciduous-trace] Failed to end session:', error);
+            debugLog(`Failed to end session: ${error}`);
         }
         finally {
             this.sessionId = null;
