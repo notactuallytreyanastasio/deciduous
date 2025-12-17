@@ -278,6 +278,36 @@
               export LIBRARY_PATH="${pkgs.libiconv}/lib:''${LIBRARY_PATH:-}"
             ''}
 
+            # Helper function to display help menu
+            nix-help() {
+              echo "========================================"
+              echo "  Deciduous Development Shell (Nix)"
+              echo "========================================"
+              echo ""
+              echo "Cargo commands:"
+              echo "  cargo build --release    Build release binary (uses existing viewer.html)"
+              echo "  cargo test               Run tests"
+              echo "  cargo clippy             Run linter"
+              echo "  cargo fmt                Format code"
+              echo ""
+              echo "Nix build commands:"
+              echo "  nix build                Full build with embedded web viewer (default)"
+              echo "  nix build .#minimal      Minimal build without rebuilding web viewer"
+              echo "  nix build .#webViewer    Build web viewer only"
+              echo "  nix build .#traceInterceptor  Build trace interceptor only"
+              echo ""
+              echo "Nix run/check commands:"
+              echo "  nix run                  Run deciduous (full build)"
+              echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
+              echo ""
+              echo "Dev workflow (impure, modifies source tree):"
+              echo "  nix-build-full           Build everything locally (like make release-full)"
+              echo ""
+              echo "Help:"
+              echo "  nix-help                 Show this menu"
+              echo ""
+            }
+
             # Helper function for full builds (equivalent to make release-full)
             nix-build-full() {
               echo "Building trace-interceptor..."
@@ -300,32 +330,12 @@
               echo "Full release build complete: target/release/deciduous"
             }
 
-            # Export the function
+            # Export functions
+            export -f nix-help
             export -f nix-build-full
 
-            echo "========================================"
-            echo "  Deciduous Development Shell (Nix)"
-            echo "========================================"
-            echo ""
-            echo "Cargo commands:"
-            echo "  cargo build --release    Build release binary (uses existing viewer.html)"
-            echo "  cargo test               Run tests"
-            echo "  cargo clippy             Run linter"
-            echo "  cargo fmt                Format code"
-            echo ""
-            echo "Nix build commands:"
-            echo "  nix build                Full build with embedded web viewer (default)"
-            echo "  nix build .#minimal      Minimal build without rebuilding web viewer"
-            echo "  nix build .#webViewer    Build web viewer only"
-            echo "  nix build .#traceInterceptor  Build trace interceptor only"
-            echo ""
-            echo "Nix run/check commands:"
-            echo "  nix run                  Run deciduous (full build)"
-            echo "  nix flake check          Run all checks (build, clippy, test, fmt)"
-            echo ""
-            echo "Dev workflow (impure, modifies source tree):"
-            echo "  nix-build-full           Build everything locally (like make release-full)"
-            echo ""
+            # Show help on shell entry
+            nix-help
           '';
 
           # Set environment variables
