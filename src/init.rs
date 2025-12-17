@@ -782,6 +782,82 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 PR workflow: Export patch → commit patch file → PR → teammates apply.
 "#;
 
+/// Claude Code agents.toml - defines domain-specific subagents for the project
+/// NOTE: This is a template for NEW projects. The deciduous repo itself has a more
+/// detailed version at .claude/agents.toml that should be kept in sync.
+const CLAUDE_AGENTS_TOML: &str = r#"# Project Subagents Configuration
+# Domain-specific agents for working on different parts of the codebase.
+#
+# When working on a specific domain, spawn a Task with subagent_type="Explore" or
+# "general-purpose" and include the relevant agent's context in the prompt.
+#
+# Customize this file for YOUR project's structure. The domains below are examples.
+
+# Example: Backend/Core agent
+# [agents.backend]
+# name = "Backend Agent"
+# description = "API routes, database models, business logic"
+# file_patterns = [
+#     "src/**/*.rs",
+#     "src/**/*.py",
+#     "app/**/*.py"
+# ]
+# focus_areas = [
+#     "Database operations",
+#     "API endpoints",
+#     "Business logic"
+# ]
+# instructions = """
+# When working on backend:
+# - Run tests before and after changes
+# - Follow existing patterns for new endpoints
+# - Maintain backwards compatibility
+# """
+
+# Example: Frontend agent
+# [agents.frontend]
+# name = "Frontend Agent"
+# description = "UI components, state management, styling"
+# file_patterns = [
+#     "web/src/**/*.ts",
+#     "web/src/**/*.tsx",
+#     "src/components/**"
+# ]
+# focus_areas = [
+#     "React components",
+#     "State management",
+#     "Styling and layout"
+# ]
+# instructions = """
+# When working on frontend:
+# - Test in browser after changes
+# - Follow component patterns
+# - Keep accessibility in mind
+# """
+
+# Example: Infrastructure agent
+# [agents.infra]
+# name = "Infrastructure Agent"
+# description = "CI/CD, deployment, configuration"
+# file_patterns = [
+#     ".github/workflows/**",
+#     "Dockerfile",
+#     "docker-compose.yml",
+#     "scripts/**"
+# ]
+# focus_areas = [
+#     "GitHub Actions",
+#     "Docker configuration",
+#     "Deployment scripts"
+# ]
+# instructions = """
+# When working on infrastructure:
+# - Test workflows locally when possible
+# - Keep builds fast with caching
+# - Document any manual steps
+# """
+"#;
+
 // ============================================================================
 // WINDSURF-SPECIFIC TEMPLATES
 // ============================================================================
@@ -2118,6 +2194,11 @@ pub fn init_project(editor: Editor) -> Result<(), String> {
             // Write context.md slash command
             let context_path = claude_dir.join("context.md");
             write_file_if_missing(&context_path, RECOVER_MD, ".claude/commands/recover.md")?;
+
+            // Write agents.toml for subagent configuration
+            let claude_base = cwd.join(".claude");
+            let agents_path = claude_base.join("agents.toml");
+            write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
 
             // Append to or create CLAUDE.md
             let claude_md_path = cwd.join("CLAUDE.md");
