@@ -7369,6 +7369,17 @@
       "created_at": "2025-12-17T14:27:24.951467-05:00",
       "updated_at": "2025-12-17T14:27:24.951467-05:00",
       "metadata_json": "{\"branch\":\"feature/configurable-search-sort\",\"confidence\":90,\"prompt\":\"User reported: bottom-left panel disappears after showing briefly, panel too big for viewport, zoom confusing (page vs graph), need fullscreen-only mode\"}"
+    },
+    {
+      "id": 672,
+      "change_id": "dfb05927-8134-4af9-9bb6-fc9854b69633",
+      "node_type": "action",
+      "title": "Fix chain panel and zoom behavior",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T14:33:28.475328-05:00",
+      "updated_at": "2025-12-17T14:33:28.475328-05:00",
+      "metadata_json": "{\"branch\":\"feature/configurable-search-sort\",\"confidence\":90,\"prompt\":\"User reported: panel shows briefly then disappears, panel too big, zoom confusing trackpad vs graph. Fixed by: moving panel outside SVG, smaller width (320px), prevent browser pinch zoom, always fullscreen mode\"}"
     }
   ],
   "edges": [
@@ -13740,6 +13751,17 @@
       "weight": 1.0,
       "rationale": "Abandoned after testing revealed broken zooming",
       "created_at": "2025-12-17T00:54:59.952754-05:00"
+    },
+    {
+      "id": 580,
+      "from_node_id": 671,
+      "to_node_id": 672,
+      "from_change_id": "acf19c58-fda9-47db-bf91-58e57fe8d32c",
+      "to_change_id": "dfb05927-8134-4af9-9bb6-fc9854b69633",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of viewer fixes",
+      "created_at": "2025-12-17T14:33:33.584194-05:00"
     }
   ]
 }

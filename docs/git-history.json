@@ -1,11 +1,11 @@
 [
   {
-    "hash": "998e1b347396c7cf7ebfaecfb5d14ce7bef2a269",
-    "short_hash": "998e1b3",
+    "hash": "c75619524d856a314bfa9a31b3302888d4c64fb1",
+    "short_hash": "c756195",
     "author": "Bobby Nathan",
-    "date": "2025-12-17T14:17:01-05:00",
-    "message": "fix(web): move chain panel to bottom-left, auto-pan on expand",
-    "files_changed": 3
+    "date": "2025-12-17T14:35:06-05:00",
+    "message": "release: v0.8.16",
+    "files_changed": 6
   },
   {
     "hash": "a2733c94fe1e972a60bcb5a140ef84503b1bd62e",
@@ -16,12 +16,12 @@
     "files_changed": 6
   },
   {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
+    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
+    "short_hash": "157aa70",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
   },
   {
     "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
@@ -32,12 +32,12 @@
     "files_changed": 3
   },
   {
-    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
-    "short_hash": "157aa70",
+    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
+    "short_hash": "e80d20f",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
-    "files_changed": 5
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 4
   },
   {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",
