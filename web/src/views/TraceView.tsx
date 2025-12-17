@@ -379,8 +379,7 @@ const TraceView: React.FC = () => {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    height: '100%',
-    overflow: 'auto',
+    minHeight: '100%',
     backgroundColor: '#fafafa',
     padding: '20px',
     color: '#374151',
