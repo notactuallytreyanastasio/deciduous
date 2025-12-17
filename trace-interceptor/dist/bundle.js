@@ -24,6 +24,12 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 
 // src/deciduous.ts
 var import_child_process = require("child_process");
+var debugLog = (msg) => {
+  if (process.env.DECIDUOUS_TRACE_DEBUG === "1" || process.env.DECIDUOUS_TRACE_DEBUG === "true") {
+    process.stderr.write(`[deciduous] ${msg}
+`);
+  }
+};
 var DeciduousClient = class {
   sessionId = null;
   deciduousBin;
@@ -38,9 +44,7 @@ var DeciduousClient = class {
    */
   async startSession() {
     if (this.sessionId) {
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Using existing session: ${this.sessionId.slice(0, 8)}`);
-      }
+      debugLog(`Using existing session: ${this.sessionId.slice(0, 8)}`);
       return this.sessionId;
     }
     try {
@@ -50,12 +54,10 @@ var DeciduousClient = class {
       );
       const parsed = JSON.parse(result.trim());
       this.sessionId = parsed.session_id;
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Started session: ${this.sessionId.slice(0, 8)}`);
-      }
+      debugLog(`Started session: ${this.sessionId.slice(0, 8)}`);
       return this.sessionId;
     } catch (error) {
-      console.error("[deciduous-trace] Failed to start session:", error);
+      debugLog(`Failed to start session: ${error}`);
       throw error;
     }
   }
@@ -65,7 +67,7 @@ var DeciduousClient = class {
    */
   async startSpan(userPreview) {
     if (!this.sessionId) {
-      console.error("[deciduous-trace] No active session");
+      debugLog("No active session");
       return null;
     }
     try {
@@ -77,12 +79,10 @@ var DeciduousClient = class {
         }
       );
       const parsed = JSON.parse(result.trim());
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Started span #${parsed.span_id}`);
-      }
+      debugLog(`Started span #${parsed.span_id}`);
       return parsed.span_id;
     } catch (error) {
-      console.error("[deciduous-trace] Failed to start span:", error);
+      debugLog(`Failed to start span: ${error}`);
       return null;
     }
   }
@@ -92,7 +92,7 @@ var DeciduousClient = class {
    */
   async recordSpan(data, spanId) {
     if (!this.sessionId) {
-      console.error("[deciduous-trace] No active session");
+      debugLog("No active session");
       return null;
     }
     try {
@@ -110,12 +110,10 @@ var DeciduousClient = class {
         }
       );
       const parsed = JSON.parse(result.trim());
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Recorded span #${parsed.span_id}`);
-      }
+      debugLog(`Recorded span #${parsed.span_id}`);
       return parsed.span_id;
     } catch (error) {
-      console.error("[deciduous-trace] Failed to record span:", error);
+      debugLog(`Failed to record span: ${error}`);
       return null;
     }
   }
@@ -129,9 +127,7 @@ var DeciduousClient = class {
       return;
     }
     if (process.env.DECIDUOUS_TRACE_SESSION) {
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Session managed by proxy, not ending`);
-      }
+      debugLog("Session managed by proxy, not ending");
       this.sessionId = null;
       return;
     }
@@ -140,11 +136,9 @@ var DeciduousClient = class {
         `${this.deciduousBin} trace end ${this.sessionId}`,
         { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }
       );
-      if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        console.error(`[deciduous-trace] Ended session: ${this.sessionId.slice(0, 8)}`);
-      }
+      debugLog(`Ended session: ${this.sessionId.slice(0, 8)}`);
     } catch (error) {
-      console.error("[deciduous-trace] Failed to end session:", error);
+      debugLog(`Failed to end session: ${error}`);
     } finally {
       this.sessionId = null;
     }
@@ -161,7 +155,7 @@ var DeciduousClient = class {
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
 var DEBUG_LOG = process.env.DECIDUOUS_TRACE_DEBUG ? path.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
-function debugLog(msg) {
+function debugLog2(msg) {
   if (DEBUG_LOG) {
     try {
       fs.appendFileSync(DEBUG_LOG, `${(/* @__PURE__ */ new Date()).toISOString()} [stream] ${msg}
@@ -223,7 +217,7 @@ var ResponseAccumulator = class {
             name: event.content_block.name,
             input: ""
           });
-          debugLog(`tool_use start: ${event.content_block.name} (${event.content_block.id})`);
+          debugLog2(`tool_use start: ${event.content_block.name} (${event.content_block.id})`);
         }
         break;
       case "content_block_delta":
@@ -236,7 +230,7 @@ var ResponseAccumulator = class {
             const partialJson = event.delta.partial_json;
             if (partialJson && this.currentToolIndex >= 0 && this.toolCalls[this.currentToolIndex]) {
               this.toolCalls[this.currentToolIndex].input = (this.toolCalls[this.currentToolIndex].input || "") + partialJson;
-              debugLog(`input_json_delta: +${partialJson.length} chars for tool ${this.currentToolIndex}`);
+              debugLog2(`input_json_delta: +${partialJson.length} chars for tool ${this.currentToolIndex}`);
             }
           }
         }
@@ -273,9 +267,9 @@ var ResponseAccumulator = class {
    */
   finalize() {
     if (this.toolCalls.length > 0) {
-      debugLog(`finalize: ${this.toolCalls.length} tool calls`);
+      debugLog2(`finalize: ${this.toolCalls.length} tool calls`);
       for (const tc of this.toolCalls) {
-        debugLog(`  - ${tc.name}: input len=${tc.input?.length || 0}`);
+        debugLog2(`  - ${tc.name}: input len=${tc.input?.length || 0}`);
       }
     }
     return {
@@ -321,7 +315,7 @@ var fs2 = __toESM(require("fs"));
 var path2 = __toESM(require("path"));
 var originalFetch = globalThis.fetch;
 var DEBUG_LOG2 = process.env.DECIDUOUS_TRACE_DEBUG ? path2.join(process.env.HOME || "/tmp", ".deciduous", "trace-debug.log") : null;
-function debugLog2(msg) {
+function debugLog3(msg) {
   if (DEBUG_LOG2) {
     try {
       fs2.appendFileSync(DEBUG_LOG2, `${(/* @__PURE__ */ new Date()).toISOString()} ${msg}
@@ -368,16 +362,16 @@ function isInternalCheckRequest(body) {
 function extractUserPreview(body) {
   if (!body.messages || body.messages.length === 0) {
     if (process.env.DECIDUOUS_TRACE_DEBUG) {
-      debugLog2(" extractUserPreview: no messages");
+      debugLog3(" extractUserPreview: no messages");
     }
     return void 0;
   }
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
-    debugLog2(` extractUserPreview: ${body.messages.length} messages`);
+    debugLog3(` extractUserPreview: ${body.messages.length} messages`);
     for (let i = 0; i < body.messages.length; i++) {
       const m = body.messages[i];
       const contentDesc = typeof m.content === "string" ? `string(${m.content.length}): "${m.content.slice(0, 30)}..."` : Array.isArray(m.content) ? `array[${m.content.length}]: ${m.content.map((b) => b.type).join(",")}` : "unknown";
-      debugLog2(`   msg[${i}] role=${m.role} content=${contentDesc}`);
+      debugLog3(`   msg[${i}] role=${m.role} content=${contentDesc}`);
     }
   }
   for (let i = body.messages.length - 1; i >= 0; i--) {
@@ -387,7 +381,7 @@ function extractUserPreview(body) {
       const text = msg.content.trim();
       const filtered = isSystemInjectedText(text);
       if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        debugLog2(` msg[${i}] string: len=${text.length}, filtered=${filtered}, text="${text.slice(0, 40)}"`);
+        debugLog3(` msg[${i}] string: len=${text.length}, filtered=${filtered}, text="${text.slice(0, 40)}"`);
       }
       if (text.length > 0 && !filtered) {
         return text.slice(0, 500);
@@ -398,14 +392,14 @@ function extractUserPreview(body) {
       const blocks = msg.content;
       const textBlocks = blocks.filter((b) => b.type === "text");
       if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        debugLog2(` msg[${i}] array: ${blocks.length} blocks, ${textBlocks.length} text blocks`);
+        debugLog3(` msg[${i}] array: ${blocks.length} blocks, ${textBlocks.length} text blocks`);
       }
       for (const block of textBlocks) {
         if (typeof block.text === "string") {
           const text = block.text.trim();
           const filtered = isSystemInjectedText(text);
           if (process.env.DECIDUOUS_TRACE_DEBUG) {
-            debugLog2(`   text block: len=${text.length}, filtered=${filtered}, text="${text.slice(0, 40)}"`);
+            debugLog3(`   text block: len=${text.length}, filtered=${filtered}, text="${text.slice(0, 40)}"`);
           }
           if (text.length > 0 && !filtered) {
             return text.slice(0, 500);
@@ -416,7 +410,7 @@ function extractUserPreview(body) {
     }
   }
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
-    debugLog2(" No user text found in any message");
+    debugLog3(" No user text found in any message");
   }
   return void 0;
 }
@@ -514,7 +508,7 @@ async function ensureSession() {
 async function interceptedFetch(input, init) {
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
     const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    debugLog2(` FETCH: ${url.slice(0, 60)}...`);
+    debugLog3(` FETCH: ${url.slice(0, 60)}...`);
   }
   if (!isAnthropicApi(input)) {
     return originalFetch(input, init);
@@ -546,24 +540,24 @@ async function interceptedFetch(input, init) {
       if (bodyStr) {
         requestBody = JSON.parse(bodyStr);
         if (process.env.DECIDUOUS_TRACE_DEBUG) {
-          debugLog2(` Parsed body, messages: ${requestBody?.messages?.length || 0}`);
+          debugLog3(` Parsed body, messages: ${requestBody?.messages?.length || 0}`);
         }
       }
     } catch (e) {
       if (process.env.DECIDUOUS_TRACE_DEBUG) {
-        debugLog2(` Body parse error: ${e}`);
+        debugLog3(` Body parse error: ${e}`);
       }
     }
   }
   if (requestBody && isInternalCheckRequest(requestBody)) {
     if (process.env.DECIDUOUS_TRACE_DEBUG) {
-      debugLog2(" Skipping internal check request");
+      debugLog3(" Skipping internal check request");
     }
     return originalFetch(input, init);
   }
   const userPreview = requestBody ? extractUserPreview(requestBody) : void 0;
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
-    debugLog2(` userPreview: ${userPreview ? userPreview.slice(0, 50) + "..." : "null"}`);
+    debugLog3(` userPreview: ${userPreview ? userPreview.slice(0, 50) + "..." : "null"}`);
   }
   const systemPrompt = requestBody ? extractSystemPrompt(requestBody) : void 0;
   const toolDefs = requestBody ? extractToolDefinitions(requestBody) : void 0;
@@ -637,7 +631,7 @@ function install() {
     process.exit(0);
   });
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
-    debugLog2(" Interceptor installed");
+    debugLog3(" Interceptor installed");
   }
 }
 

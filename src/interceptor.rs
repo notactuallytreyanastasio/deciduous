@@ -6,7 +6,7 @@
 //! This module embeds the compiled JavaScript bundle and extracts it to
 //! `~/.deciduous/trace-interceptor/` on first use.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// Embedded trace interceptor JavaScript bundle
 /// Built from trace-interceptor/src/ using esbuild
@@ -36,9 +36,14 @@ pub fn ensure_interceptor_installed() -> std::io::Result<PathBuf> {
         )
     })?;
 
-    let interceptor_dir = PathBuf::from(home)
-        .join(".deciduous")
-        .join("trace-interceptor");
+    let base_dir = PathBuf::from(home).join(".deciduous");
+    ensure_interceptor_installed_at(&base_dir)
+}
+
+/// Internal: Install the interceptor to a specific base directory
+/// Used by tests to install to a temp directory
+fn ensure_interceptor_installed_at(base_dir: &Path) -> std::io::Result<PathBuf> {
+    let interceptor_dir = base_dir.join("trace-interceptor");
     let interceptor_path = interceptor_dir.join("interceptor.js");
     let version_path = interceptor_dir.join(".version");
 
@@ -82,12 +87,24 @@ mod tests {
 
     #[test]
     fn test_ensure_interceptor_installed() {
-        // This test actually installs to ~/.deciduous/trace-interceptor/
-        // which is fine for testing
-        let result = ensure_interceptor_installed();
+        // Use a temp directory to work in sandboxed builds (Nix, CI)
+        let temp_dir = std::env::temp_dir().join(format!("deciduous-test-{}", std::process::id()));
+
+        let result = ensure_interceptor_installed_at(&temp_dir);
         assert!(result.is_ok());
         let path = result.unwrap();
         assert!(path.exists());
         assert!(path.to_string_lossy().contains("interceptor.js"));
+
+        // Verify content was written
+        let content = std::fs::read_to_string(&path).unwrap();
+        assert!(!content.is_empty());
+
+        // Verify version file exists
+        let version_path = temp_dir.join("trace-interceptor").join(".version");
+        assert!(version_path.exists());
+
+        // Cleanup
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

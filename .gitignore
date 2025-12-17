@@ -51,3 +51,6 @@ deciduous.db
 proptest-regressions/
 trace-interceptor/node_modules/
 .direnv/
+
+# Nix build output symlink
+result

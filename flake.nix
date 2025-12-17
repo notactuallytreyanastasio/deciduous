@@ -106,7 +106,7 @@
           pname = "deciduous-viewer";
           version = "0.1.0";
           src = ./web;
-          npmDepsHash = "sha256-31qclPLawpYm05FW7M0voHKLxwXSneImZjhGYkOx3c4=";
+          npmDepsHash = "sha256-2+OTxPgKsLI8uH3NOO3ebWi6QsIRvfnivWZa24DRPcQ=";
 
           buildPhase = ''
             runHook preBuild
@@ -122,16 +122,34 @@
           '';
         };
 
+        # Read Cargo.toml contents for crane (needed when source is a derivation)
+        cargoTomlContents = builtins.readFile ./Cargo.toml;
+
+        # Minimal source with trace-interceptor (no web viewer)
+        # The Rust code requires trace-interceptor/dist/bundle.js at compile time
+        srcMinimal = pkgs.runCommand "deciduous-src-minimal" { } ''
+          cp -r ${src} $out
+          chmod -R u+w $out
+          mkdir -p $out/trace-interceptor/dist
+          cp ${traceInterceptor}/dist/bundle.js $out/trace-interceptor/dist/bundle.js
+        '';
+
         # Cargo artifacts (dependencies only) - speeds up rebuilds
         cargoArtifacts = craneLib.buildDepsOnly ({
-          inherit src;
+          pname = "deciduous";
+          version = "0.8.15";
+          src = srcMinimal;
+          inherit cargoTomlContents;
           buildInputs = commonBuildInputs;
           nativeBuildInputs = commonNativeBuildInputs;
         } // commonEnv);
 
-        # Main deciduous binary
+        # Main deciduous binary (minimal - no embedded web viewer)
         deciduous = craneLib.buildPackage ({
-          inherit src cargoArtifacts;
+          pname = "deciduous";
+          version = "0.8.15";
+          src = srcMinimal;
+          inherit cargoTomlContents cargoArtifacts;
           buildInputs = commonBuildInputs;
           nativeBuildInputs = commonNativeBuildInputs;
 
@@ -144,15 +162,14 @@
           };
         } // commonEnv);
 
-        # Read Cargo.toml contents for crane (needed when source is a derivation)
-        cargoTomlContents = builtins.readFile ./Cargo.toml;
-
-        # Full release source with embedded web viewer
-        # Uses the filtered source as base, patches in the built viewer
+        # Full release source with embedded web viewer and trace interceptor
+        # Uses the filtered source as base, patches in the built artifacts
         srcFull = pkgs.runCommand "deciduous-src-full" { } ''
           cp -r ${src} $out
           chmod -R u+w $out
           cp ${webViewer}/dist/index.html $out/src/viewer.html
+          mkdir -p $out/trace-interceptor/dist
+          cp ${traceInterceptor}/dist/bundle.js $out/trace-interceptor/dist/bundle.js
         '';
 
         # Cargo artifacts for full build
@@ -251,13 +268,17 @@
         };
 
         # Checks (run with `nix flake check`)
+        # Note: checks use srcMinimal which includes trace-interceptor bundle
         checks = {
           # Build the package
           inherit deciduous;
 
           # Run clippy
           deciduous-clippy = craneLib.cargoClippy ({
-            inherit src cargoArtifacts;
+            pname = "deciduous";
+            version = "0.8.15";
+            src = srcMinimal;
+            inherit cargoTomlContents cargoArtifacts;
             buildInputs = commonBuildInputs;
             nativeBuildInputs = commonNativeBuildInputs;
             cargoClippyExtraArgs = "--all-targets -- -D warnings";
@@ -265,14 +286,20 @@
 
           # Run tests
           deciduous-test = craneLib.cargoTest ({
-            inherit src cargoArtifacts;
+            pname = "deciduous";
+            version = "0.8.15";
+            src = srcMinimal;
+            inherit cargoTomlContents cargoArtifacts;
             buildInputs = commonBuildInputs;
             nativeBuildInputs = commonNativeBuildInputs;
           } // commonEnv);
 
-          # Check formatting
+          # Check formatting (uses original src since formatting doesn't need trace-interceptor)
           deciduous-fmt = craneLib.cargoFmt {
-            inherit src;
+            pname = "deciduous";
+            version = "0.8.15";
+            src = srcMinimal;
+            inherit cargoTomlContents;
           };
         };
 

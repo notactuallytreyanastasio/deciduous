@@ -627,14 +627,8 @@ fn draw_spans_list(frame: &mut Frame, state: &TraceState, area: Rect, title: &st
             // Format: #seq | model | duration | tokens | tools | nodes
             let model = model_short_name(span.model.as_deref());
             let duration = format_duration_ms(span.duration_ms);
-            let tokens_in = span
-                .input_tokens
-                .map(|t| format_tokens(t))
-                .unwrap_or("-".into());
-            let tokens_out = span
-                .output_tokens
-                .map(|t| format_tokens(t))
-                .unwrap_or("-".into());
+            let tokens_in = span.input_tokens.map(format_tokens).unwrap_or("-".into());
+            let tokens_out = span.output_tokens.map(format_tokens).unwrap_or("-".into());
             let tools = span.tool_names.as_deref().unwrap_or("-");
             let tools_short = truncate_str(tools, 15);
 
@@ -810,7 +804,7 @@ fn draw_span_detail(frame: &mut Frame, state: &TraceState, area: Rect) {
 
 /// Draw detail tab bar
 fn draw_detail_tabs(frame: &mut Frame, state: &TraceState, area: Rect) {
-    let tabs = vec![
+    let tabs = [
         ("Thinking", DetailTab::Thinking),
         ("Response", DetailTab::Response),
         ("Tools", DetailTab::Tools),
