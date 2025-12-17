@@ -2370,20 +2370,36 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
             let claude_dir = cwd.join(".claude").join("commands");
             create_dir_if_missing(&claude_dir)?;
 
-            // Write decision.md slash command
-            let decision_path = claude_dir.join("decision.md");
+            // Write deciduous.decision.md slash command
+            let decision_path = claude_dir.join("deciduous.decision.md");
             if force {
-                write_file_overwrite(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+                write_file_overwrite(
+                    &decision_path,
+                    DECISION_MD,
+                    ".claude/commands/deciduous.decision.md",
+                )?;
             } else {
-                write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+                write_file_if_missing(
+                    &decision_path,
+                    DECISION_MD,
+                    ".claude/commands/deciduous.decision.md",
+                )?;
             }
 
-            // Write recover.md slash command (context recovery)
-            let recover_path = claude_dir.join("recover.md");
+            // Write deciduous.recover.md slash command (context recovery)
+            let recover_path = claude_dir.join("deciduous.recover.md");
             if force {
-                write_file_overwrite(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+                write_file_overwrite(
+                    &recover_path,
+                    RECOVER_MD,
+                    ".claude/commands/deciduous.recover.md",
+                )?;
             } else {
-                write_file_if_missing(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+                write_file_if_missing(
+                    &recover_path,
+                    RECOVER_MD,
+                    ".claude/commands/deciduous.recover.md",
+                )?;
             }
 
             // Write agents.toml for subagent configuration
@@ -2543,40 +2559,44 @@ pub fn init_project(editor: Editor, force: bool) -> Result<(), String> {
                 }
             };
 
-            // Write decision.md prompt
-            let decision_path = codex_prompts_dir.join("decision.md");
+            // Write deciduous.decision.md prompt
+            let decision_path = codex_prompts_dir.join("deciduous.decision.md");
             write_prompt(
                 &decision_path,
                 CODEX_DECISION_PROMPT,
-                ".codex/prompts/decision.md",
+                ".codex/prompts/deciduous.decision.md",
             )?;
 
-            // Write recover.md prompt (context recovery)
-            let recover_path = codex_prompts_dir.join("recover.md");
-            write_prompt(&recover_path, CODEX_RECOVER_PROMPT, ".codex/prompts/recover.md")?;
+            // Write deciduous.recover.md prompt (context recovery)
+            let recover_path = codex_prompts_dir.join("deciduous.recover.md");
+            write_prompt(
+                &recover_path,
+                CODEX_RECOVER_PROMPT,
+                ".codex/prompts/deciduous.recover.md",
+            )?;
 
-            // Write build-test.md prompt
-            let build_test_path = codex_prompts_dir.join("build-test.md");
+            // Write deciduous.build-test.md prompt
+            let build_test_path = codex_prompts_dir.join("deciduous.build-test.md");
             write_prompt(
                 &build_test_path,
                 CODEX_BUILD_TEST_PROMPT,
-                ".codex/prompts/build-test.md",
+                ".codex/prompts/deciduous.build-test.md",
             )?;
 
-            // Write serve-ui.md prompt
-            let serve_ui_path = codex_prompts_dir.join("serve-ui.md");
+            // Write deciduous.serve-ui.md prompt
+            let serve_ui_path = codex_prompts_dir.join("deciduous.serve-ui.md");
             write_prompt(
                 &serve_ui_path,
                 CODEX_SERVE_UI_PROMPT,
-                ".codex/prompts/serve-ui.md",
+                ".codex/prompts/deciduous.serve-ui.md",
             )?;
 
-            // Write sync-graph.md prompt
-            let sync_graph_path = codex_prompts_dir.join("sync-graph.md");
+            // Write deciduous.sync-graph.md prompt
+            let sync_graph_path = codex_prompts_dir.join("deciduous.sync-graph.md");
             write_prompt(
                 &sync_graph_path,
                 CODEX_SYNC_GRAPH_PROMPT,
-                ".codex/prompts/sync-graph.md",
+                ".codex/prompts/deciduous.sync-graph.md",
             )?;
 
             // Add Codex-specific entries to .gitignore (selective ignoring)
@@ -2866,13 +2886,21 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let claude_dir = cwd.join(".claude").join("commands");
             create_dir_if_missing(&claude_dir)?;
 
-            // Overwrite decision.md slash command
-            let decision_path = claude_dir.join("decision.md");
-            write_file_overwrite(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+            // Overwrite deciduous.decision.md slash command
+            let decision_path = claude_dir.join("deciduous.decision.md");
+            write_file_overwrite(
+                &decision_path,
+                DECISION_MD,
+                ".claude/commands/deciduous.decision.md",
+            )?;
 
-            // Overwrite context.md slash command
-            let context_path = claude_dir.join("context.md");
-            write_file_overwrite(&context_path, RECOVER_MD, ".claude/commands/recover.md")?;
+            // Overwrite deciduous.recover.md slash command
+            let recover_path = claude_dir.join("deciduous.recover.md");
+            write_file_overwrite(
+                &recover_path,
+                RECOVER_MD,
+                ".claude/commands/deciduous.recover.md",
+            )?;
 
             // Update CLAUDE.md section
             let claude_md_path = cwd.join("CLAUDE.md");
@@ -2973,44 +3001,44 @@ pub fn update_tooling(editor: Editor) -> Result<(), String> {
             let codex_prompts_dir = cwd.join(".codex").join("prompts");
             create_dir_if_missing(&codex_prompts_dir)?;
 
-            // Overwrite decision.md prompt
-            let decision_path = codex_prompts_dir.join("decision.md");
+            // Overwrite deciduous.decision.md prompt
+            let decision_path = codex_prompts_dir.join("deciduous.decision.md");
             write_file_overwrite(
                 &decision_path,
                 CODEX_DECISION_PROMPT,
-                ".codex/prompts/decision.md",
+                ".codex/prompts/deciduous.decision.md",
             )?;
 
-            // Overwrite context.md prompt
-            let context_path = codex_prompts_dir.join("context.md");
+            // Overwrite deciduous.recover.md prompt
+            let recover_path = codex_prompts_dir.join("deciduous.recover.md");
             write_file_overwrite(
-                &context_path,
+                &recover_path,
                 CODEX_RECOVER_PROMPT,
-                ".codex/prompts/recover.md",
+                ".codex/prompts/deciduous.recover.md",
             )?;
 
-            // Overwrite build-test.md prompt
-            let build_test_path = codex_prompts_dir.join("build-test.md");
+            // Overwrite deciduous.build-test.md prompt
+            let build_test_path = codex_prompts_dir.join("deciduous.build-test.md");
             write_file_overwrite(
                 &build_test_path,
                 CODEX_BUILD_TEST_PROMPT,
-                ".codex/prompts/build-test.md",
+                ".codex/prompts/deciduous.build-test.md",
             )?;
 
-            // Overwrite serve-ui.md prompt
-            let serve_ui_path = codex_prompts_dir.join("serve-ui.md");
+            // Overwrite deciduous.serve-ui.md prompt
+            let serve_ui_path = codex_prompts_dir.join("deciduous.serve-ui.md");
             write_file_overwrite(
                 &serve_ui_path,
                 CODEX_SERVE_UI_PROMPT,
-                ".codex/prompts/serve-ui.md",
+                ".codex/prompts/deciduous.serve-ui.md",
             )?;
 
-            // Overwrite sync-graph.md prompt
-            let sync_graph_path = codex_prompts_dir.join("sync-graph.md");
+            // Overwrite deciduous.sync-graph.md prompt
+            let sync_graph_path = codex_prompts_dir.join("deciduous.sync-graph.md");
             write_file_overwrite(
                 &sync_graph_path,
                 CODEX_SYNC_GRAPH_PROMPT,
-                ".codex/prompts/sync-graph.md",
+                ".codex/prompts/deciduous.sync-graph.md",
             )?;
 
             // Update AGENTS.md section
