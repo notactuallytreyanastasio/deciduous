@@ -1,4 +1,4 @@
-.PHONY: build release release-full debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
+.PHONY: build release release-full debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview trace-build trace-clear-cache
 
 # Default target
 all: release
@@ -18,8 +18,18 @@ debug:
 
 build: release
 
-# Full release build: web viewer + Rust binary
-release-full: web-build
+# Build trace interceptor (tsc + esbuild bundle)
+trace-build:
+	cd trace-interceptor && npm install && npm run build && npm run bundle
+	@echo "Trace interceptor built"
+
+# Clear cached interceptor (forces re-extraction on next run)
+trace-clear-cache:
+	rm -rf ~/.deciduous/trace-interceptor
+	@echo "Trace interceptor cache cleared"
+
+# Full release build: trace interceptor + web viewer + Rust binary
+release-full: trace-build web-build trace-clear-cache
 	cp $(WEB_DIR)/dist/index.html src/viewer.html
 	cp $(WEB_DIR)/dist/index.html docs/demo/index.html
 	cargo build --release

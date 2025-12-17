@@ -351,6 +351,20 @@ function isSystemInjectedText(text) {
   if (trimmed.startsWith("Files modified by other")) return true;
   return false;
 }
+function isInternalCheckRequest(body) {
+  if (!body.messages || body.messages.length === 0) return false;
+  if (!body.model?.includes("haiku")) return false;
+  for (const msg of body.messages) {
+    if (msg.role !== "user") continue;
+    if (typeof msg.content === "string") {
+      const trimmed = msg.content.trim();
+      if (trimmed === "quota" || trimmed === "foo" || trimmed === "#") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
 function extractUserPreview(body) {
   if (!body.messages || body.messages.length === 0) {
     if (process.env.DECIDUOUS_TRACE_DEBUG) {
@@ -540,6 +554,12 @@ async function interceptedFetch(input, init) {
         debugLog2(` Body parse error: ${e}`);
       }
     }
+  }
+  if (requestBody && isInternalCheckRequest(requestBody)) {
+    if (process.env.DECIDUOUS_TRACE_DEBUG) {
+      debugLog2(" Skipping internal check request");
+    }
+    return originalFetch(input, init);
   }
   const userPreview = requestBody ? extractUserPreview(requestBody) : void 0;
   if (process.env.DECIDUOUS_TRACE_DEBUG) {
