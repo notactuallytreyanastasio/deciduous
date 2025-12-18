@@ -637,9 +637,31 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
     };
   })() : null;
 
-  // Calculate panel position - right side minus the panel width
-  // Guard against invalid containerWidth (0 on initial render)
-  const panelX = containerWidth > 0 ? containerWidth - RIGHT_PANEL_WIDTH : 0;
+  // Calculate panel position from actual panel element when available
+  const [panelLeftEdge, setPanelLeftEdge] = useState<number | null>(null);
+
+  // Measure the panel's actual position after it renders
+  useEffect(() => {
+    const measurePanel = () => {
+      if (panelRef.current && containerRef.current) {
+        const panelRect = panelRef.current.getBoundingClientRect();
+        const containerRect = containerRef.current.getBoundingClientRect();
+        // Panel's left edge relative to the container's left edge
+        const leftEdge = panelRect.left - containerRect.left;
+        if (leftEdge > 0) {
+          setPanelLeftEdge(leftEdge);
+        }
+      }
+    };
+    // Measure after a short delay to ensure layout is complete
+    const timer = setTimeout(measurePanel, 50);
+    return () => clearTimeout(timer);
+  }, [calloutsNeeded.length, containerWidth, containerHeight]);
+
+  // Use measured position, or fallback to calculation
+  const panelX = panelLeftEdge !== null && panelLeftEdge > 0
+    ? panelLeftEdge
+    : (containerWidth > 0 ? containerWidth - RIGHT_PANEL_WIDTH : 0);
 
   // Always render wrapper to get ref for measuring, but only show content when dimensions are valid
   const dimensionsValid = containerWidth > 0 && containerHeight > 0;

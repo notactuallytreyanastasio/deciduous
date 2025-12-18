@@ -1,11 +1,19 @@
 [
   {
-    "hash": "d94147cb2c9f5e4f79764fa959f7a0b869e8c52d",
-    "short_hash": "d94147c",
+    "hash": "e9f367197578e658a401a7a509ad8c20ca8bf559",
+    "short_hash": "e9f3671",
     "author": "Bobby Nathan",
-    "date": "2025-12-17T17:21:46-05:00",
-    "message": "fix: restore landing page, rebuild viewer with Vite for GH Pages",
-    "files_changed": 6
+    "date": "2025-12-17T17:55:06-05:00",
+    "message": "feat(viewer): UI improvements - collapsible minimap, scrollable results, node filtering\n\n- Minimap now collapsible and positioned in bottom-left to avoid overlapping results\n- Right-hand search results panel is now scrollable with HTML cards instead of SVG\n- Node type badges are clickable to open modal and snap to node\n- Chain panel at bottom-left defaults to 50% height and is resizable\n- Added node type filtering with checkboxes - hidden types show transitive edges\n- Jump to Chain selector moved to top bar for easier access\n- Added floating mini legend at top center showing node types\n- Modal now snaps to selected node when opening",
+    "files_changed": 5
+  },
+  {
+    "hash": "e9f367197578e658a401a7a509ad8c20ca8bf559",
+    "short_hash": "e9f3671",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T17:55:06-05:00",
+    "message": "feat(viewer): UI improvements - collapsible minimap, scrollable results, node filtering\n\n- Minimap now collapsible and positioned in bottom-left to avoid overlapping results\n- Right-hand search results panel is now scrollable with HTML cards instead of SVG\n- Node type badges are clickable to open modal and snap to node\n- Chain panel at bottom-left defaults to 50% height and is resizable\n- Added node type filtering with checkboxes - hidden types show transitive edges\n- Jump to Chain selector moved to top bar for easier access\n- Added floating mini legend at top center showing node types\n- Modal now snaps to selected node when opening",
+    "files_changed": 5
   },
   {
     "hash": "8ee414ae27b8875fe95b4ae207c5c362c3ce7d47",
@@ -32,20 +40,20 @@
     "files_changed": 5
   },
   {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
-  },
-  {
     "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
     "short_hash": "e80d20f",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 4
+  },
+  {
+    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
+    "short_hash": "9e9953a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 3
   },
   {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",
