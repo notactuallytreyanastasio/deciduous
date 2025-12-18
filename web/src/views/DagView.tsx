@@ -104,6 +104,21 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   const [transform, setTransform] = useState({ x: 0, y: 0 });
   const [containerDimensions, setContainerDimensions] = useState({ width: 0, height: 0 });
 
+  // Update container dimensions on mount and resize (independent of DAG building)
+  useEffect(() => {
+    const updateDimensions = () => {
+      if (containerRef.current) {
+        setContainerDimensions({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      }
+    };
+    updateDimensions();
+    window.addEventListener('resize', updateDimensions);
+    return () => window.removeEventListener('resize', updateDimensions);
+  }, []);
+
   // Graph bounds for minimap
   const [graphBounds, setGraphBounds] = useState({ minX: 0, maxX: 1000, minY: 0, maxY: 1000 });
 

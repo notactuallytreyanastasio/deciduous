@@ -423,8 +423,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   edges,
   highlightedNodeIds,
   visibilityMap,
-  containerWidth,
-  containerHeight,
+  containerWidth: passedWidth,
+  containerHeight: passedHeight,
   onSelectNode,
   onNavigateToNode,
 }) => {
@@ -434,6 +434,25 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   const [expandedNodeId, setExpandedNodeId] = useState<number | null>(null);
   const [chainSearch, setChainSearch] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [measuredDimensions, setMeasuredDimensions] = useState({ width: 0, height: 0 });
+
+  // Measure container dimensions directly for accurate line positioning
+  useEffect(() => {
+    const measure = () => {
+      if (containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setMeasuredDimensions({ width: rect.width, height: rect.height });
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  // Use measured dimensions, falling back to passed props
+  const containerWidth = measuredDimensions.width > 0 ? measuredDimensions.width : passedWidth;
+  const containerHeight = measuredDimensions.height > 0 ? measuredDimensions.height : passedHeight;
 
   // Clear chain search when expanded node changes
   useEffect(() => {
@@ -619,11 +638,27 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   })() : null;
 
   // Calculate panel position - right side minus the panel width
-  const panelX = containerWidth - RIGHT_PANEL_WIDTH;
+  // Guard against invalid containerWidth (0 on initial render)
+  const panelX = containerWidth > 0 ? containerWidth - RIGHT_PANEL_WIDTH : 0;
+
+  // Always render wrapper to get ref for measuring, but only show content when dimensions are valid
+  const dimensionsValid = containerWidth > 0 && containerHeight > 0;
 
   // Desktop: SVG for lines, HTML for scrollable cards panel
   return (
-    <>
+    <div
+      ref={containerRef}
+      style={{
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        pointerEvents: 'none',
+      }}
+    >
+      {!dimensionsValid ? null : (
+      <>
       {/* SVG Layer for connection lines only */}
       <svg
         style={{
@@ -981,7 +1016,9 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
           </div>
         </div>
       )}
-    </>
+      </>
+      )}
+    </div>
   );
 };
 
