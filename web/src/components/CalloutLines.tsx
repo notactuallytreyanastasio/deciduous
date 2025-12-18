@@ -679,9 +679,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
         pointerEvents: 'none',
       }}
     >
-      {!dimensionsValid ? null : (
-      <>
-      {/* SVG Layer for connection lines only */}
+      {/* SVG Layer for connection lines only - only render when dimensions are valid */}
+      {dimensionsValid && panelX > 0 && (
       <svg
         style={{
           position: 'absolute',
@@ -737,8 +736,9 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
           );
         })}
       </svg>
+      )}
 
-      {/* HTML Panel for scrollable cards */}
+      {/* HTML Panel for scrollable cards - always render so we can measure it */}
       {calloutsNeeded.length > 0 && (
         <div
           ref={panelRef}
@@ -1037,8 +1037,6 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
             </div>
           </div>
         </div>
-      )}
-      </>
       )}
     </div>
   );
