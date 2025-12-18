@@ -438,6 +438,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   const [measuredDimensions, setMeasuredDimensions] = useState({ width: 0, height: 0 });
 
   // Measure container dimensions directly for accurate line positioning
+  // Re-measure when passed dimensions change (indicates parent resized)
   useEffect(() => {
     const measure = () => {
       if (containerRef.current) {
@@ -445,10 +446,15 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
         setMeasuredDimensions({ width: rect.width, height: rect.height });
       }
     };
+    // Measure immediately and after a short delay to handle layout settling
     measure();
+    const timer = setTimeout(measure, 100);
     window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', measure);
+    };
+  }, [passedWidth, passedHeight]);
 
   // Use measured dimensions, falling back to passed props
   const containerWidth = measuredDimensions.width > 0 ? measuredDimensions.width : passedWidth;
@@ -637,31 +643,9 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
     };
   })() : null;
 
-  // Calculate panel position from actual panel element when available
-  const [panelLeftEdge, setPanelLeftEdge] = useState<number | null>(null);
-
-  // Measure the panel's actual position after it renders
-  useEffect(() => {
-    const measurePanel = () => {
-      if (panelRef.current && containerRef.current) {
-        const panelRect = panelRef.current.getBoundingClientRect();
-        const containerRect = containerRef.current.getBoundingClientRect();
-        // Panel's left edge relative to the container's left edge
-        const leftEdge = panelRect.left - containerRect.left;
-        if (leftEdge > 0) {
-          setPanelLeftEdge(leftEdge);
-        }
-      }
-    };
-    // Measure after a short delay to ensure layout is complete
-    const timer = setTimeout(measurePanel, 50);
-    return () => clearTimeout(timer);
-  }, [calloutsNeeded.length, containerWidth, containerHeight]);
-
-  // Use measured position, or fallback to calculation
-  const panelX = panelLeftEdge !== null && panelLeftEdge > 0
-    ? panelLeftEdge
-    : (containerWidth > 0 ? containerWidth - RIGHT_PANEL_WIDTH : 0);
+  // panelX is simply containerWidth - RIGHT_PANEL_WIDTH
+  // since both nodeX/nodeY and the panel are in the same coordinate system (container-relative)
+  const panelX = containerWidth - RIGHT_PANEL_WIDTH;
 
   // Always render wrapper to get ref for measuring, but only show content when dimensions are valid
   const dimensionsValid = containerWidth > 0 && containerHeight > 0;
