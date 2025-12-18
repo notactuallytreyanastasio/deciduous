@@ -152,3 +152,19 @@ diesel::table! {
         cached_at -> Text,
     }
 }
+
+// ============================================================================
+// Node Metadata Table - Key-Value store for flexible node metadata
+// ============================================================================
+
+diesel::table! {
+    node_metadata (id) {
+        id -> Integer,
+        node_id -> Integer,
+        meta_key -> Text,
+        meta_value -> Text,
+        content_type -> Text,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}

@@ -292,6 +292,12 @@ enum Command {
         action: RoadmapAction,
     },
 
+    /// Manage node metadata (key-value pairs)
+    Meta {
+        #[command(subcommand)]
+        action: MetaAction,
+    },
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
@@ -445,6 +451,60 @@ enum RoadmapAction {
         #[arg(long)]
         complete: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum MetaAction {
+    /// Set a metadata value for a node (creates or updates)
+    Set {
+        /// Node ID
+        node_id: i32,
+
+        /// Metadata key (e.g., pr_body, issue_body, notes, summary, rationale)
+        key: String,
+
+        /// Value (omit to read from stdin)
+        value: Option<String>,
+
+        /// Content type: markdown, text, json, html (default: markdown)
+        #[arg(short = 't', long, default_value = "markdown")]
+        content_type: String,
+    },
+
+    /// Get a metadata value for a node
+    Get {
+        /// Node ID
+        node_id: i32,
+
+        /// Metadata key
+        key: String,
+
+        /// Output raw value without formatting
+        #[arg(long)]
+        raw: bool,
+    },
+
+    /// List all metadata for a node
+    List {
+        /// Node ID (if omitted, lists all metadata)
+        node_id: Option<i32>,
+
+        /// Filter by key pattern
+        #[arg(short, long)]
+        key: Option<String>,
+    },
+
+    /// Delete a metadata entry
+    Delete {
+        /// Node ID
+        node_id: i32,
+
+        /// Metadata key
+        key: String,
+    },
+
+    /// List available standard metadata keys
+    Keys,
 }
 
 fn main() {
@@ -2530,6 +2590,200 @@ fn main() {
                 }
             }
         }
+
+        Command::Meta { action } => match action {
+            MetaAction::Set {
+                node_id,
+                key,
+                value,
+                content_type,
+            } => {
+                // If value is None, read from stdin
+                let actual_value = match value {
+                    Some(v) => v,
+                    None => {
+                        use std::io::Read;
+                        let mut buffer = String::new();
+                        std::io::stdin()
+                            .read_to_string(&mut buffer)
+                            .expect("Failed to read from stdin");
+                        buffer
+                    }
+                };
+
+                match db.set_node_metadata(node_id, &key, &actual_value, &content_type) {
+                    Ok(id) => {
+                        println!(
+                            "{} Set metadata '{}' on node {} (id: {})",
+                            "Success:".green(),
+                            key,
+                            node_id,
+                            id
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            MetaAction::Get { node_id, key, raw } => match db.get_node_metadata(node_id, &key) {
+                Ok(Some(meta)) => {
+                    if raw {
+                        print!("{}", meta.meta_value);
+                    } else {
+                        println!(
+                            "{} Metadata for node {} key '{}':",
+                            "Found:".green(),
+                            node_id,
+                            key
+                        );
+                        println!("  Type: {}", meta.content_type.cyan());
+                        println!("  Updated: {}", meta.updated_at.dimmed());
+                        println!();
+                        println!("{}", meta.meta_value);
+                    }
+                }
+                Ok(None) => {
+                    eprintln!(
+                        "{} No metadata with key '{}' on node {}",
+                        "Not found:".yellow(),
+                        key,
+                        node_id
+                    );
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            },
+
+            MetaAction::List { node_id, key } => {
+                let results = if let Some(nid) = node_id {
+                    match db.get_all_node_metadata(nid) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                } else {
+                    match db.list_all_metadata(key.as_deref()) {
+                        Ok(m) => m,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                };
+
+                if results.is_empty() {
+                    println!("{} No metadata found", "Info:".dimmed());
+                    return;
+                }
+
+                println!("{} {} metadata entries:\n", "Found:".green(), results.len());
+
+                // Group by node_id for display
+                let mut current_node: Option<i32> = None;
+                for meta in &results {
+                    if current_node != Some(meta.node_id) {
+                        if current_node.is_some() {
+                            println!();
+                        }
+                        println!("{} {}", "Node".cyan(), meta.node_id);
+                        current_node = Some(meta.node_id);
+                    }
+
+                    // Truncate value for display
+                    let preview: String = meta
+                        .meta_value
+                        .chars()
+                        .take(60)
+                        .collect::<String>()
+                        .replace('\n', " ");
+                    let truncated = if meta.meta_value.len() > 60 {
+                        format!("{}...", preview)
+                    } else {
+                        preview
+                    };
+
+                    println!(
+                        "  {} [{}] {}",
+                        meta.meta_key.yellow(),
+                        meta.content_type.dimmed(),
+                        truncated.dimmed()
+                    );
+                }
+            }
+
+            MetaAction::Delete { node_id, key } => match db.delete_node_metadata(node_id, &key) {
+                Ok(true) => {
+                    println!(
+                        "{} Deleted metadata '{}' from node {}",
+                        "Success:".green(),
+                        key,
+                        node_id
+                    );
+                }
+                Ok(false) => {
+                    eprintln!(
+                        "{} No metadata with key '{}' on node {}",
+                        "Not found:".yellow(),
+                        key,
+                        node_id
+                    );
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            },
+
+            MetaAction::Keys => {
+                use deciduous::{content_types, meta_keys};
+
+                println!("{}", "Standard Metadata Keys:".cyan());
+                println!();
+                println!(
+                    "  {} - PR body/description (markdown)",
+                    meta_keys::PR_BODY.yellow()
+                );
+                println!(
+                    "  {} - GitHub issue body (markdown)",
+                    meta_keys::ISSUE_BODY.yellow()
+                );
+                println!(
+                    "  {} - General notes or commentary",
+                    meta_keys::NOTES.yellow()
+                );
+                println!("  {} - Summary or abstract", meta_keys::SUMMARY.yellow());
+                println!("  {} - Design rationale", meta_keys::RATIONALE.yellow());
+                println!(
+                    "  {} - Test plan for the change",
+                    meta_keys::TEST_PLAN.yellow()
+                );
+                println!(
+                    "  {} - Related links (JSON array)",
+                    meta_keys::LINKS.yellow()
+                );
+                println!();
+                println!("{}", "Custom Keys:".cyan());
+                println!(
+                    "  Use prefix '{}' for custom keys (e.g., custom:my_key)",
+                    meta_keys::CUSTOM_PREFIX.yellow()
+                );
+                println!();
+                println!("{}", "Content Types:".cyan());
+                println!("  {} - Markdown formatted text", content_types::MARKDOWN);
+                println!("  {} - Plain text", content_types::TEXT);
+                println!("  {} - JSON data", content_types::JSON);
+                println!("  {} - HTML content", content_types::HTML);
+            }
+        },
     }
 }
 

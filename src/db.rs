@@ -3,7 +3,11 @@
 //! Stores decision graphs and command logs for AI-assisted development.
 //! Uses embedded migrations for schema management.
 
-use crate::schema::*;
+use crate::schema::{
+    command_log, decision_context, decision_edges, decision_nodes, decision_sessions,
+    github_issue_cache, node_metadata, roadmap_conflicts, roadmap_items, roadmap_sync_state,
+    schema_versions,
+};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::sqlite::SqliteConnection;
@@ -556,6 +560,65 @@ pub struct GitHubIssueCache {
 }
 
 // ============================================================================
+// Node Metadata - Key-Value store for flexible node metadata
+// ============================================================================
+
+/// Common metadata keys for structured access
+pub mod meta_keys {
+    /// PR body/description markdown
+    pub const PR_BODY: &str = "pr_body";
+    /// GitHub issue body/description
+    pub const ISSUE_BODY: &str = "issue_body";
+    /// General notes or commentary
+    pub const NOTES: &str = "notes";
+    /// Summary or abstract
+    pub const SUMMARY: &str = "summary";
+    /// Design rationale
+    pub const RATIONALE: &str = "rationale";
+    /// Test plan
+    pub const TEST_PLAN: &str = "test_plan";
+    /// Links to related resources (JSON array)
+    pub const LINKS: &str = "links";
+    /// Custom/freeform key prefix
+    pub const CUSTOM_PREFIX: &str = "custom:";
+}
+
+/// Content types for metadata values
+pub mod content_types {
+    pub const MARKDOWN: &str = "markdown";
+    pub const TEXT: &str = "text";
+    pub const JSON: &str = "json";
+    pub const HTML: &str = "html";
+}
+
+/// Insertable node metadata entry
+#[derive(Insertable, Debug)]
+#[diesel(table_name = node_metadata)]
+pub struct NewNodeMetadata<'a> {
+    pub node_id: i32,
+    pub meta_key: &'a str,
+    pub meta_value: &'a str,
+    pub content_type: &'a str,
+    pub created_at: &'a str,
+    pub updated_at: &'a str,
+}
+
+/// Queryable node metadata entry
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = node_metadata)]
+pub struct NodeMetadata {
+    pub id: i32,
+    pub node_id: i32,
+    pub meta_key: String,
+    pub meta_value: String,
+    pub content_type: String,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// ============================================================================
 // Helper structs for raw SQL queries
 // ============================================================================
 
@@ -959,6 +1022,24 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // Node metadata key-value store
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS node_metadata (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                node_id INTEGER NOT NULL,
+                meta_key TEXT NOT NULL,
+                meta_value TEXT NOT NULL,
+                content_type TEXT NOT NULL DEFAULT 'text',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (node_id) REFERENCES decision_nodes(id) ON DELETE CASCADE,
+                UNIQUE(node_id, meta_key)
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
             .execute(&mut conn)?;
@@ -1000,6 +1081,16 @@ impl Database {
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_github_issue_cache_repo ON github_issue_cache(repo, issue_number)").execute(&mut conn)?;
+
+        // Node metadata indexes
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_node_metadata_node_id ON node_metadata(node_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_node_metadata_key ON node_metadata(meta_key)",
+        )
+        .execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -2066,6 +2157,161 @@ impl Database {
         .execute(&mut conn)?;
 
         Ok(deleted)
+    }
+
+    // ========================================================================
+    // Node Metadata Operations (Key-Value)
+    // ========================================================================
+
+    /// Set a metadata value for a node (upserts - creates or updates)
+    pub fn set_node_metadata(
+        &self,
+        node_id: i32,
+        key: &str,
+        value: &str,
+        content_type: &str,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Check if node exists
+        let node_exists = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)
+            .optional()?
+            .is_some();
+
+        if !node_exists {
+            return Err(DbError::Validation(format!(
+                "Node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                node_id
+            )));
+        }
+
+        // Try to find existing metadata with this key
+        let existing = node_metadata::table
+            .filter(node_metadata::node_id.eq(node_id))
+            .filter(node_metadata::meta_key.eq(key))
+            .first::<NodeMetadata>(&mut conn)
+            .optional()?;
+
+        if let Some(meta) = existing {
+            // Update existing
+            diesel::update(node_metadata::table.filter(node_metadata::id.eq(meta.id)))
+                .set((
+                    node_metadata::meta_value.eq(value),
+                    node_metadata::content_type.eq(content_type),
+                    node_metadata::updated_at.eq(&now),
+                ))
+                .execute(&mut conn)?;
+            Ok(meta.id)
+        } else {
+            // Insert new
+            let new_meta = NewNodeMetadata {
+                node_id,
+                meta_key: key,
+                meta_value: value,
+                content_type,
+                created_at: &now,
+                updated_at: &now,
+            };
+
+            diesel::insert_into(node_metadata::table)
+                .values(&new_meta)
+                .execute(&mut conn)?;
+
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(&mut conn)?;
+
+            Ok(id)
+        }
+    }
+
+    /// Get a specific metadata value for a node
+    pub fn get_node_metadata(&self, node_id: i32, key: &str) -> Result<Option<NodeMetadata>> {
+        let mut conn = self.get_conn()?;
+
+        let result = node_metadata::table
+            .filter(node_metadata::node_id.eq(node_id))
+            .filter(node_metadata::meta_key.eq(key))
+            .first::<NodeMetadata>(&mut conn)
+            .optional()?;
+
+        Ok(result)
+    }
+
+    /// Get all metadata for a node
+    pub fn get_all_node_metadata(&self, node_id: i32) -> Result<Vec<NodeMetadata>> {
+        let mut conn = self.get_conn()?;
+
+        let results = node_metadata::table
+            .filter(node_metadata::node_id.eq(node_id))
+            .order(node_metadata::meta_key.asc())
+            .load::<NodeMetadata>(&mut conn)?;
+
+        Ok(results)
+    }
+
+    /// Delete a specific metadata entry for a node
+    pub fn delete_node_metadata(&self, node_id: i32, key: &str) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+
+        let deleted = diesel::delete(
+            node_metadata::table
+                .filter(node_metadata::node_id.eq(node_id))
+                .filter(node_metadata::meta_key.eq(key)),
+        )
+        .execute(&mut conn)?;
+
+        Ok(deleted > 0)
+    }
+
+    /// Delete all metadata for a node
+    pub fn delete_all_node_metadata(&self, node_id: i32) -> Result<usize> {
+        let mut conn = self.get_conn()?;
+
+        let deleted =
+            diesel::delete(node_metadata::table.filter(node_metadata::node_id.eq(node_id)))
+                .execute(&mut conn)?;
+
+        Ok(deleted)
+    }
+
+    /// List all metadata entries (optionally filtered by key pattern)
+    pub fn list_all_metadata(&self, key_pattern: Option<&str>) -> Result<Vec<NodeMetadata>> {
+        let mut conn = self.get_conn()?;
+
+        let results = if let Some(pattern) = key_pattern {
+            node_metadata::table
+                .filter(node_metadata::meta_key.like(format!("%{}%", pattern)))
+                .order((node_metadata::node_id.asc(), node_metadata::meta_key.asc()))
+                .load::<NodeMetadata>(&mut conn)?
+        } else {
+            node_metadata::table
+                .order((node_metadata::node_id.asc(), node_metadata::meta_key.asc()))
+                .load::<NodeMetadata>(&mut conn)?
+        };
+
+        Ok(results)
+    }
+
+    /// Get nodes that have a specific metadata key
+    pub fn get_nodes_with_metadata_key(&self, key: &str) -> Result<Vec<DecisionNode>> {
+        let mut conn = self.get_conn()?;
+
+        let node_ids: Vec<i32> = node_metadata::table
+            .filter(node_metadata::meta_key.eq(key))
+            .select(node_metadata::node_id)
+            .load(&mut conn)?;
+
+        let nodes = decision_nodes::table
+            .filter(decision_nodes::id.eq_any(node_ids))
+            .order(decision_nodes::created_at.desc())
+            .load::<DecisionNode>(&mut conn)?;
+
+        Ok(nodes)
     }
 }
 
