@@ -292,6 +292,12 @@ enum Command {
         action: RoadmapAction,
     },
 
+    /// Manage node attachments (documents, notes, links)
+    Attach {
+        #[command(subcommand)]
+        action: AttachAction,
+    },
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
@@ -445,6 +451,84 @@ enum RoadmapAction {
         #[arg(long)]
         complete: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum AttachAction {
+    /// Add an attachment to a node
+    Add {
+        /// Node ID
+        node_id: i32,
+
+        /// Attachment type: pr_body, issue_body, note, link, test_plan, design_doc, discussion, custom
+        #[arg(short = 't', long, default_value = "note")]
+        attachment_type: String,
+
+        /// Optional title for the attachment
+        #[arg(long)]
+        title: Option<String>,
+
+        /// Content (omit to read from stdin)
+        content: Option<String>,
+
+        /// MIME type: text/markdown, text/plain, text/html, application/json
+        #[arg(short, long, default_value = "text/markdown")]
+        mime: String,
+
+        /// Source URL (for links or external documents)
+        #[arg(short, long)]
+        url: Option<String>,
+    },
+
+    /// View an attachment by ID
+    View {
+        /// Attachment ID
+        id: i32,
+
+        /// Output raw content without formatting
+        #[arg(long)]
+        raw: bool,
+    },
+
+    /// List attachments for a node
+    List {
+        /// Node ID (if omitted, lists all attachments)
+        node_id: Option<i32>,
+
+        /// Filter by attachment type
+        #[arg(short = 't', long)]
+        attachment_type: Option<String>,
+    },
+
+    /// Update an attachment
+    Update {
+        /// Attachment ID
+        id: i32,
+
+        /// New title
+        #[arg(long)]
+        title: Option<String>,
+
+        /// New content (omit to read from stdin, use --no-content to skip)
+        content: Option<String>,
+
+        /// Skip content update (only update title/mime)
+        #[arg(long)]
+        no_content: bool,
+
+        /// New MIME type
+        #[arg(short, long)]
+        mime: Option<String>,
+    },
+
+    /// Delete an attachment
+    Delete {
+        /// Attachment ID
+        id: i32,
+    },
+
+    /// List available attachment types
+    Types,
 }
 
 fn main() {
@@ -2530,6 +2614,265 @@ fn main() {
                 }
             }
         }
+
+        Command::Attach { action } => match action {
+            AttachAction::Add {
+                node_id,
+                attachment_type,
+                title,
+                content,
+                mime,
+                url,
+            } => {
+                // If content is None, read from stdin
+                let actual_content = match content {
+                    Some(c) => c,
+                    None => {
+                        use std::io::Read;
+                        let mut buffer = String::new();
+                        std::io::stdin()
+                            .read_to_string(&mut buffer)
+                            .expect("Failed to read from stdin");
+                        buffer
+                    }
+                };
+
+                match db.add_attachment(
+                    node_id,
+                    &attachment_type,
+                    title.as_deref(),
+                    &actual_content,
+                    &mime,
+                    url.as_deref(),
+                ) {
+                    Ok(id) => {
+                        let title_str = title.as_deref().unwrap_or("(untitled)");
+                        println!(
+                            "{} Added {} attachment '{}' to node {} (id: {})",
+                            "Success:".green(),
+                            attachment_type.cyan(),
+                            title_str,
+                            node_id,
+                            id
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            AttachAction::View { id, raw } => match db.get_attachment(id) {
+                Ok(Some(att)) => {
+                    if raw {
+                        print!("{}", att.content);
+                    } else {
+                        println!(
+                            "{} Attachment #{} on node {}:",
+                            "Found:".green(),
+                            id,
+                            att.node_id
+                        );
+                        println!("  Type: {}", att.attachment_type.cyan());
+                        if let Some(ref title) = att.title {
+                            println!("  Title: {}", title);
+                        }
+                        println!("  MIME: {}", att.mime_type.dimmed());
+                        if let Some(ref url) = att.source_url {
+                            println!("  URL: {}", url.blue());
+                        }
+                        println!("  Updated: {}", att.updated_at.dimmed());
+                        println!();
+                        println!("{}", att.content);
+                    }
+                }
+                Ok(None) => {
+                    eprintln!("{} Attachment #{} not found", "Not found:".yellow(), id);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            },
+
+            AttachAction::List {
+                node_id,
+                attachment_type,
+            } => {
+                let results = if let Some(nid) = node_id {
+                    if let Some(ref atype) = attachment_type {
+                        match db.get_node_attachments_by_type(nid, atype) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        match db.get_node_attachments(nid) {
+                            Ok(a) => a,
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                } else {
+                    match db.list_all_attachments(attachment_type.as_deref()) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                };
+
+                if results.is_empty() {
+                    println!("{} No attachments found", "Info:".dimmed());
+                    return;
+                }
+
+                println!("{} {} attachments:\n", "Found:".green(), results.len());
+
+                // Group by node_id for display
+                let mut current_node: Option<i32> = None;
+                for att in &results {
+                    if current_node != Some(att.node_id) {
+                        if current_node.is_some() {
+                            println!();
+                        }
+                        println!("{} {}", "Node".cyan(), att.node_id);
+                        current_node = Some(att.node_id);
+                    }
+
+                    let title_str = att.title.as_deref().unwrap_or("(untitled)");
+                    let preview: String = att
+                        .content
+                        .chars()
+                        .take(50)
+                        .collect::<String>()
+                        .replace('\n', " ");
+                    let truncated = if att.content.len() > 50 {
+                        format!("{}...", preview)
+                    } else {
+                        preview
+                    };
+
+                    println!(
+                        "  #{} [{}] {} - {}",
+                        att.id.to_string().yellow(),
+                        att.attachment_type.cyan(),
+                        title_str,
+                        truncated.dimmed()
+                    );
+                }
+            }
+
+            AttachAction::Update {
+                id,
+                title,
+                content,
+                no_content,
+                mime,
+            } => {
+                // Get existing attachment
+                let existing = match db.get_attachment(id) {
+                    Ok(Some(a)) => a,
+                    Ok(None) => {
+                        eprintln!("{} Attachment #{} not found", "Not found:".yellow(), id);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                };
+
+                let new_title = title.as_deref().or(existing.title.as_deref());
+                let new_mime = mime.as_deref().unwrap_or(&existing.mime_type);
+                let new_content = if no_content {
+                    existing.content.clone()
+                } else {
+                    match content {
+                        Some(c) => c,
+                        None => {
+                            use std::io::Read;
+                            let mut buffer = String::new();
+                            std::io::stdin()
+                                .read_to_string(&mut buffer)
+                                .expect("Failed to read from stdin");
+                            buffer
+                        }
+                    }
+                };
+
+                match db.update_attachment(id, new_title, &new_content, new_mime) {
+                    Ok(true) => {
+                        println!("{} Updated attachment #{}", "Success:".green(), id);
+                    }
+                    Ok(false) => {
+                        eprintln!("{} Attachment #{} not found", "Not found:".yellow(), id);
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            AttachAction::Delete { id } => match db.delete_attachment(id) {
+                Ok(true) => {
+                    println!("{} Deleted attachment #{}", "Success:".green(), id);
+                }
+                Ok(false) => {
+                    eprintln!("{} Attachment #{} not found", "Not found:".yellow(), id);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            },
+
+            AttachAction::Types => {
+                use deciduous::{attachment_types, mime_types};
+
+                println!("{}", "Attachment Types:".cyan());
+                println!();
+                println!(
+                    "  {} - PR body/description",
+                    attachment_types::PR_BODY.yellow()
+                );
+                println!(
+                    "  {} - GitHub issue body",
+                    attachment_types::ISSUE_BODY.yellow()
+                );
+                println!("  {} - General note", attachment_types::NOTE.yellow());
+                println!(
+                    "  {} - Related link/resource",
+                    attachment_types::LINK.yellow()
+                );
+                println!("  {} - Test plan", attachment_types::TEST_PLAN.yellow());
+                println!(
+                    "  {} - Design document",
+                    attachment_types::DESIGN_DOC.yellow()
+                );
+                println!(
+                    "  {} - Discussion summary",
+                    attachment_types::DISCUSSION.yellow()
+                );
+                println!("  {} - Custom type", attachment_types::CUSTOM.yellow());
+                println!();
+                println!("{}", "MIME Types:".cyan());
+                println!("  {} - Markdown formatted text", mime_types::MARKDOWN);
+                println!("  {} - Plain text", mime_types::PLAIN);
+                println!("  {} - HTML content", mime_types::HTML);
+                println!("  {} - JSON data", mime_types::JSON);
+            }
+        },
     }
 }
 
