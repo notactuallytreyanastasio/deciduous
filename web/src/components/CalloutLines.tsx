@@ -437,28 +437,55 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const [measuredDimensions, setMeasuredDimensions] = useState({ width: 0, height: 0 });
 
+  // Get window dimensions as ultimate fallback
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    height: typeof window !== 'undefined' ? window.innerHeight : 1080,
+  });
+
+  // Track window size changes
+  useEffect(() => {
+    const handleResize = () => {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Measure container dimensions directly for accurate line positioning
   // Re-measure when passed dimensions change (indicates parent resized)
   useEffect(() => {
     const measure = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setMeasuredDimensions({ width: rect.width, height: rect.height });
+        if (rect.width > 0) {
+          setMeasuredDimensions({ width: rect.width, height: rect.height });
+        }
       }
     };
-    // Measure immediately and after a short delay to handle layout settling
+    // Measure immediately and after delays to handle layout settling
     measure();
-    const timer = setTimeout(measure, 100);
+    const timer1 = setTimeout(measure, 50);
+    const timer2 = setTimeout(measure, 200);
     window.addEventListener('resize', measure);
     return () => {
-      clearTimeout(timer);
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       window.removeEventListener('resize', measure);
     };
   }, [passedWidth, passedHeight]);
 
-  // Use measured dimensions, falling back to passed props
-  const containerWidth = measuredDimensions.width > 0 ? measuredDimensions.width : passedWidth;
-  const containerHeight = measuredDimensions.height > 0 ? measuredDimensions.height : passedHeight;
+  // Use measured dimensions, with fallbacks: measured -> passed -> window
+  // The container should be roughly window-sized in fullscreen mode
+  const containerWidth = measuredDimensions.width > 100
+    ? measuredDimensions.width
+    : (passedWidth > 100 ? passedWidth : windowDimensions.width);
+  const containerHeight = measuredDimensions.height > 100
+    ? measuredDimensions.height
+    : (passedHeight > 100 ? passedHeight : windowDimensions.height);
 
   // Clear chain search when expanded node changes
   useEffect(() => {
