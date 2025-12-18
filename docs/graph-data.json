@@ -7391,6 +7391,138 @@
       "created_at": "2025-12-17T14:36:53.054614-05:00",
       "updated_at": "2025-12-17T14:36:53.054614-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"8ee414a\",\"confidence\":95,\"prompt\":\"Released: chain panel stability, always fullscreen, zoom isolation, search sort. PR #161 merged, GitHub release created\"}"
+    },
+    {
+      "id": 674,
+      "change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "node_type": "goal",
+      "title": "Web viewer UI improvements - minimap, filtering, layout",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:41:29.468961-05:00",
+      "updated_at": "2025-12-17T17:41:29.468961-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":90,\"prompt\":\"This is starting to look good.\\n\\nJust to give an experiment\\n\\nmake a branch\\n\\nthen we are gonna look at this\\n\\n1. The mini map shouldnt overlay...make it be collapsible and make it so that its out of the way of that right hand side\\n\\n2. The right hand side list should be scrollable\\n\\n3. If you click an \\\"Action\\\" \\\"Observation\\\" \\\"Goal\\\" \\\"Outcome\\\" or \\\"Option\\\" node badge in the list it will open the modal for just that one record and snap to it on the graph\\n\\n4. Make the bottom left menu taller actually maybe even resizeable defaulting to 50% height\\n\\n5. Add a node filtering option....let us hide nodes not of a certain type and then draw generic lines that \\\"average\\\" the path from the child nodes being skipped from that higher level piece to another, so like if its 5 goals it goes goal to goal with a line but its generalized by traversing the nodes inside to see if they are really \\\"connected\\\"\\n\\n6. move jump to chain to the top bar to the right of the chain addition/subtraction buttons and make the legend tinier and have it hover very top center\"}"
+    },
+    {
+      "id": 675,
+      "change_id": "5459538b-5009-4f98-acfe-02f96364cee4",
+      "node_type": "decision",
+      "title": "UI layout restructuring approach",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:42:11.993445-05:00",
+      "updated_at": "2025-12-17T17:42:11.993445-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":85}"
+    },
+    {
+      "id": 676,
+      "change_id": "2eafe14e-a245-403c-b040-8143c69f3fe5",
+      "node_type": "option",
+      "title": "Restructure CalloutLines to use a fixed panel with scroll, minimap moves to bottom-left corner as collapsible",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:42:21.377578-05:00",
+      "updated_at": "2025-12-17T17:42:21.377578-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":90}"
+    },
+    {
+      "id": 677,
+      "change_id": "3bf1bb49-d522-49a0-93d9-0998046ac778",
+      "node_type": "action",
+      "title": "Implementing minimap as collapsible component in bottom-left",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:42:29.870038-05:00",
+      "updated_at": "2025-12-17T17:42:29.870038-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":85}"
+    },
+    {
+      "id": 678,
+      "change_id": "f98f06e9-b487-47f1-8377-54dee5922eef",
+      "node_type": "outcome",
+      "title": "Minimap is now collapsible and positioned in bottom-left",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:43:38.207820-05:00",
+      "updated_at": "2025-12-17T17:43:38.207820-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":95}"
+    },
+    {
+      "id": 679,
+      "change_id": "9903a579-b21b-4d47-972e-8caebd56b9e6",
+      "node_type": "action",
+      "title": "Making right-hand search results list scrollable with fixed height",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:43:46.873905-05:00",
+      "updated_at": "2025-12-17T17:43:46.873905-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":85}"
+    },
+    {
+      "id": 680,
+      "change_id": "a7cf3fff-8fd1-4cd5-85ca-e2f243fa7378",
+      "node_type": "outcome",
+      "title": "Right panel is now HTML-based and scrollable, badges clickable for modal+snap",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:46:10.764278-05:00",
+      "updated_at": "2025-12-17T17:46:10.764278-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":95}"
+    },
+    {
+      "id": 681,
+      "change_id": "3affa388-82f0-4f02-8d26-ded9313efda7",
+      "node_type": "action",
+      "title": "Adding node type filtering with hidden node traversal",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:46:20.686618-05:00",
+      "updated_at": "2025-12-17T17:46:20.686618-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":80}"
+    },
+    {
+      "id": 682,
+      "change_id": "72191282-f071-44f6-b2a3-6946dbf97782",
+      "node_type": "outcome",
+      "title": "Node type filtering with transitive edges complete",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:49:26.610367-05:00",
+      "updated_at": "2025-12-17T17:49:26.610367-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":95}"
+    },
+    {
+      "id": 683,
+      "change_id": "83bc526b-9067-47aa-b6af-f58afaa9c8d1",
+      "node_type": "action",
+      "title": "Moving Jump to Chain to top bar, legend to top center",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:49:34.745627-05:00",
+      "updated_at": "2025-12-17T17:49:34.745627-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":85}"
+    },
+    {
+      "id": 684,
+      "change_id": "e0fe88a2-d77f-4ca9-a3b8-159bebdc29ff",
+      "node_type": "outcome",
+      "title": "All UI changes implemented",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:51:21.554767-05:00",
+      "updated_at": "2025-12-17T17:51:21.554767-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"confidence\":90}"
+    },
+    {
+      "id": 685,
+      "change_id": "dda1c65b-991c-47c5-bef7-33442eb61f5a",
+      "node_type": "outcome",
+      "title": "PR #162 created for viewer UI improvements",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-17T17:55:47.784348-05:00",
+      "updated_at": "2025-12-17T17:55:47.784348-05:00",
+      "metadata_json": "{\"branch\":\"feature/viewer-ui-improvements\",\"commit\":\"e9f3671\",\"confidence\":100}"
     }
   ],
   "edges": [
@@ -13784,6 +13916,127 @@
       "weight": 1.0,
       "rationale": "Action resulted in successful release",
       "created_at": "2025-12-17T14:37:02.503827-05:00"
+    },
+    {
+      "id": 582,
+      "from_node_id": 674,
+      "to_node_id": 675,
+      "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "to_change_id": "5459538b-5009-4f98-acfe-02f96364cee4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Deciding on implementation approach for UI changes",
+      "created_at": "2025-12-17T17:42:19.839050-05:00"
+    },
+    {
+      "id": 583,
+      "from_node_id": 675,
+      "to_node_id": 676,
+      "from_change_id": "5459538b-5009-4f98-acfe-02f96364cee4",
+      "to_change_id": "2eafe14e-a245-403c-b040-8143c69f3fe5",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Chosen approach",
+      "created_at": "2025-12-17T17:42:28.879506-05:00"
+    },
+    {
+      "id": 584,
+      "from_node_id": 674,
+      "to_node_id": 677,
+      "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "to_change_id": "3bf1bb49-d522-49a0-93d9-0998046ac778",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "First implementation task",
+      "created_at": "2025-12-17T17:42:34.674592-05:00"
+    },
+    {
+      "id": 585,
+      "from_node_id": 677,
+      "to_node_id": 678,
+      "from_change_id": "3bf1bb49-d522-49a0-93d9-0998046ac778",
+      "to_change_id": "f98f06e9-b487-47f1-8377-54dee5922eef",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-17T17:43:45.883017-05:00"
+    },
+    {
+      "id": 586,
+      "from_node_id": 674,
+      "to_node_id": 679,
+      "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "to_change_id": "9903a579-b21b-4d47-972e-8caebd56b9e6",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Second implementation task",
+      "created_at": "2025-12-17T17:43:52.387167-05:00"
+    },
+    {
+      "id": 587,
+      "from_node_id": 679,
+      "to_node_id": 680,
+      "from_change_id": "9903a579-b21b-4d47-972e-8caebd56b9e6",
+      "to_change_id": "a7cf3fff-8fd1-4cd5-85ca-e2f243fa7378",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-17T17:46:18.854955-05:00"
+    },
+    {
+      "id": 588,
+      "from_node_id": 674,
+      "to_node_id": 681,
+      "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "to_change_id": "3affa388-82f0-4f02-8d26-ded9313efda7",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Node type filtering task",
+      "created_at": "2025-12-17T17:46:27.319252-05:00"
+    },
+    {
+      "id": 589,
+      "from_node_id": 681,
+      "to_node_id": 682,
+      "from_change_id": "3affa388-82f0-4f02-8d26-ded9313efda7",
+      "to_change_id": "72191282-f071-44f6-b2a3-6946dbf97782",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-17T17:49:33.394622-05:00"
+    },
+    {
+      "id": 590,
+      "from_node_id": 674,
+      "to_node_id": 683,
+      "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "to_change_id": "83bc526b-9067-47aa-b6af-f58afaa9c8d1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Final UI reorganization task",
+      "created_at": "2025-12-17T17:49:39.888609-05:00"
+    },
+    {
+      "id": 591,
+      "from_node_id": 683,
+      "to_node_id": 684,
+      "from_change_id": "83bc526b-9067-47aa-b6af-f58afaa9c8d1",
+      "to_change_id": "e0fe88a2-d77f-4ca9-a3b8-159bebdc29ff",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2025-12-17T17:51:28.101524-05:00"
+    },
+    {
+      "id": 592,
+      "from_node_id": 674,
+      "to_node_id": 685,
+      "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+      "to_change_id": "dda1c65b-991c-47c5-bef7-33442eb61f5a",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "PR created successfully",
+      "created_at": "2025-12-17T17:55:53.844842-05:00"
     }
   ]
 }
