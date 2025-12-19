@@ -107,6 +107,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) -> bool {
                 match app.current_view {
                     View::Timeline => app.jump_to_top(),
                     View::Roadmap => app.roadmap_state.jump_to_top(),
+                    View::Trace => app.trace_state.jump_to_top(),
                     View::Dag => {} // DAG doesn't have a selection to jump
                 }
                 return false;
@@ -122,6 +123,7 @@ fn handle_normal_mode(app: &mut App, key: KeyEvent) -> bool {
         View::Timeline => handle_timeline_keys(app, key),
         View::Dag => handle_dag_keys(app, key),
         View::Roadmap => handle_roadmap_keys(app, key),
+        View::Trace => handle_trace_keys(app, key),
     }
 }
 
@@ -414,6 +416,159 @@ fn handle_roadmap_keys(app: &mut App, key: KeyEvent) -> bool {
         KeyCode::Esc => {
             if app.roadmap_state.show_detail {
                 app.roadmap_state.show_detail = false;
+            }
+        }
+
+        _ => {}
+    }
+    false
+}
+
+fn handle_trace_keys(app: &mut App, key: KeyEvent) -> bool {
+    use super::views::trace::TraceViewMode;
+
+    match key.code {
+        // Quit
+        KeyCode::Char('q') => return true,
+
+        // Help
+        KeyCode::Char('?') => {
+            app.show_help = true;
+        }
+
+        // Navigation
+        KeyCode::Char('j') | KeyCode::Down => app.trace_state.move_down(),
+        KeyCode::Char('k') | KeyCode::Up => app.trace_state.move_up(),
+
+        // Jump to top (gg - handled via pending_g in normal_mode)
+        KeyCode::Char('g') => {
+            app.pending_g = true;
+        }
+
+        // Jump to bottom (G)
+        KeyCode::Char('G') => {
+            app.trace_state.jump_to_bottom();
+        }
+
+        // Page navigation
+        KeyCode::Char('d') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.trace_state.page_down(10);
+        }
+        KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+            app.trace_state.page_up(10);
+        }
+        KeyCode::PageDown => app.trace_state.page_down(10),
+        KeyCode::PageUp => app.trace_state.page_up(10),
+
+        // Enter - expand session or show span detail
+        KeyCode::Enter => {
+            match app.trace_state.view_mode {
+                TraceViewMode::Sessions => {
+                    if let Some(session_id) = app.trace_state.expand_session() {
+                        app.load_trace_spans(&session_id);
+                    }
+                }
+                TraceViewMode::Spans => {
+                    if let Some(span_id) = app.trace_state.show_span_detail() {
+                        app.load_trace_content(span_id);
+                    }
+                }
+                TraceViewMode::SpanDetail => {
+                    // Already in detail, do nothing
+                }
+            }
+        }
+
+        // Escape - go back
+        KeyCode::Esc => {
+            app.trace_state.handle_escape();
+        }
+
+        // Tab - switch detail tabs in SpanDetail view, or toggle detail in Spans view
+        KeyCode::Tab => {
+            match app.trace_state.view_mode {
+                TraceViewMode::SpanDetail => {
+                    app.trace_state.next_detail_tab();
+                }
+                TraceViewMode::Spans => {
+                    // Toggle to next main view instead
+                    app.toggle_view();
+                }
+                TraceViewMode::Sessions => {
+                    app.toggle_view();
+                }
+            }
+        }
+
+        // Shift+Tab - previous detail tab or toggle view
+        KeyCode::BackTab => {
+            match app.trace_state.view_mode {
+                TraceViewMode::SpanDetail => {
+                    app.trace_state.prev_detail_tab();
+                }
+                _ => {
+                    // Could toggle to previous view, but for now just do nothing
+                }
+            }
+        }
+
+        // Toggle detail preview in spans view
+        KeyCode::Char('p') => {
+            if app.trace_state.view_mode == TraceViewMode::Spans {
+                app.trace_state.toggle_detail();
+            }
+        }
+
+        // Refresh
+        KeyCode::Char('r') => {
+            app.load_trace_sessions();
+            app.set_status("Traces refreshed".to_string());
+        }
+
+        // Link session to a node (simplified - links to most recent goal for now)
+        KeyCode::Char('l') => {
+            if let Some(session) = app.trace_state.selected_session() {
+                let session_id = session.session_id.clone();
+                // Try to find most recent goal node
+                if let Some(goal) = app
+                    .graph
+                    .nodes
+                    .iter()
+                    .filter(|n| n.node_type == "goal")
+                    .max_by_key(|n| &n.created_at)
+                {
+                    let node_id = goal.id;
+                    let node_title = goal.title.clone();
+                    match app.link_trace_session(&session_id, node_id) {
+                        Ok(()) => {
+                            app.set_status(format!("Linked to goal #{}: {}", node_id, node_title));
+                        }
+                        Err(e) => {
+                            app.set_status(format!("Failed to link: {}", e));
+                        }
+                    }
+                } else {
+                    app.set_status("No goal node to link to".to_string());
+                }
+            }
+        }
+
+        // Unlink session
+        KeyCode::Char('u') => {
+            if let Some(session) = app.trace_state.selected_session() {
+                if session.linked_node_id.is_some() {
+                    let session_id = session.session_id.clone();
+                    match app.unlink_trace_session(&session_id) {
+                        Ok(()) => {
+                            app.set_status("Session unlinked".to_string());
+                        }
+                        Err(e) => {
+                            app.set_status(format!("Failed to unlink: {}", e));
+                        }
+                    }
+                } else {
+                    app.set_status("Session not linked to any node".to_string());
+                }
             }
         }
 

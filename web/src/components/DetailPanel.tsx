@@ -5,10 +5,31 @@
  * Used by all views.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { DecisionNode, GraphData, GitCommit } from '../types/graph';
 import { getPrompt, getFiles, getBranch, getCommit, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { NodeBadges, EdgeBadge, StatusBadge } from './NodeBadge';
+import { formatDuration, getModelShortName } from '../types/trace';
+
+// Trace info for a node - includes span content for context
+interface SpanWithSession {
+  span_id: number;
+  sequence_num: number;
+  session_id: string;
+  model: string | null;
+  duration_ms: number | null;
+  started_at: string;
+  // Content previews
+  thinking_preview: string | null;
+  response_preview: string | null;
+  tool_names: string | null;
+  user_preview: string | null;
+}
+
+interface NodeTraceInfo {
+  spans: SpanWithSession[];
+}
 
 interface DetailPanelProps {
   node: DecisionNode | null;
@@ -33,6 +54,38 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
   repo,
   gitHistory = [],
 }) => {
+  const navigate = useNavigate();
+  const [traceInfo, setTraceInfo] = useState<NodeTraceInfo | null>(null);
+  const [expandedSpan, setExpandedSpan] = useState<number | null>(null);
+
+  // Navigate to trace view with specific session/span
+  const navigateToTrace = (sessionId: string, spanId: number) => {
+    navigate(`/traces?session=${sessionId.slice(0, 8)}&span=${spanId}`);
+  };
+
+  // Fetch trace info when node changes
+  useEffect(() => {
+    if (!node) {
+      setTraceInfo(null);
+      return;
+    }
+
+    const fetchTraceInfo = async () => {
+      try {
+        const res = await fetch(`/api/nodes/${node.id}/traces`);
+        const data = await res.json();
+        if (data.ok && data.data) {
+          setTraceInfo(data.data);
+        }
+      } catch (e) {
+        console.error('Failed to fetch trace info:', e);
+        setTraceInfo(null);
+      }
+    };
+
+    fetchTraceInfo();
+  }, [node?.id]);
+
   // Use repo from config if not explicitly passed
   const effectiveRepo = repo ?? getCommitRepo(graphData);
   if (!node) {
@@ -135,6 +188,78 @@ export const DetailPanel: React.FC<DetailPanelProps> = ({
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {traceInfo && traceInfo.spans.length > 0 && (
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>Created During Trace</h3>
+          {traceInfo.spans.map((span) => {
+            const isExpanded = expandedSpan === span.span_id;
+            const hasContent = span.thinking_preview || span.response_preview || span.tool_names;
+            return (
+              <div key={span.span_id} style={styles.traceInfo}>
+                <div
+                  style={{...styles.traceHeader, cursor: 'pointer'}}
+                  onClick={() => hasContent && setExpandedSpan(isExpanded ? null : span.span_id)}
+                >
+                  <span style={styles.traceSpan}>
+                    {hasContent && <span style={{marginRight: '4px'}}>{isExpanded ? '▼' : '▶'}</span>}
+                    Span #{span.sequence_num}
+                  </span>
+                  {span.model && (
+                    <span style={styles.traceModel}>{getModelShortName(span.model)}</span>
+                  )}
+                  {span.duration_ms && (
+                    <span style={styles.traceDuration}>{formatDuration(span.duration_ms)}</span>
+                  )}
+                  <button
+                    style={styles.traceLink}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      navigateToTrace(span.session_id, span.span_id);
+                    }}
+                    title="View full span in Traces"
+                  >
+                    ↗ View
+                  </button>
+                </div>
+                <div style={styles.traceSession}>
+                  Session: <span
+                    style={styles.sessionLink}
+                    onClick={() => navigateToTrace(span.session_id, span.span_id)}
+                  >{span.session_id.slice(0, 8)}</span>
+                  {span.tool_names && (
+                    <span style={styles.traceTools}> · Tools: {span.tool_names}</span>
+                  )}
+                </div>
+
+                {/* Expanded content */}
+                {isExpanded && (
+                  <div style={styles.traceContent}>
+                    {span.user_preview && (
+                      <div style={styles.traceContentBlock}>
+                        <div style={styles.traceContentLabel}>User</div>
+                        <div style={styles.traceContentText}>{span.user_preview}</div>
+                      </div>
+                    )}
+                    {span.thinking_preview && (
+                      <div style={styles.traceContentBlock}>
+                        <div style={styles.traceContentLabel}>Thinking</div>
+                        <div style={styles.traceContentText}>{span.thinking_preview}</div>
+                      </div>
+                    )}
+                    {span.response_preview && (
+                      <div style={styles.traceContentBlock}>
+                        <div style={styles.traceContentLabel}>Response</div>
+                        <div style={styles.traceContentText}>{span.response_preview}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -355,5 +480,86 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '12px',
     color: '#57606a',
     marginTop: '8px',
+  },
+  traceInfo: {
+    backgroundColor: '#fff8e6',
+    border: '1px solid #f0d77a',
+    padding: '12px',
+    borderRadius: '6px',
+    marginBottom: '8px',
+    borderLeft: '3px solid #d4a72c',
+  },
+  traceHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    flexWrap: 'wrap',
+  },
+  traceSpan: {
+    fontWeight: 500,
+    color: '#24292f',
+    fontSize: '13px',
+  },
+  traceModel: {
+    backgroundColor: '#8b5cf6',
+    color: '#fff',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '11px',
+  },
+  traceDuration: {
+    color: '#57606a',
+    fontSize: '12px',
+  },
+  traceSession: {
+    marginTop: '6px',
+    fontSize: '12px',
+    color: '#57606a',
+    fontFamily: 'monospace',
+  },
+  sessionLink: {
+    color: '#0969da',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
+  traceLink: {
+    marginLeft: 'auto',
+    padding: '2px 6px',
+    border: '1px solid #d4a72c',
+    borderRadius: '4px',
+    backgroundColor: 'transparent',
+    color: '#d4a72c',
+    cursor: 'pointer',
+    fontSize: '12px',
+    fontWeight: 600,
+  },
+  traceTools: {
+    color: '#6e7781',
+  },
+  traceContent: {
+    marginTop: '10px',
+    paddingTop: '10px',
+    borderTop: '1px solid #f0d77a',
+  },
+  traceContentBlock: {
+    marginBottom: '10px',
+  },
+  traceContentLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#57606a',
+    textTransform: 'uppercase',
+    marginBottom: '4px',
+  },
+  traceContentText: {
+    fontSize: '12px',
+    color: '#24292f',
+    lineHeight: 1.5,
+    whiteSpace: 'pre-wrap',
+    backgroundColor: '#fffef5',
+    padding: '8px',
+    borderRadius: '4px',
+    maxHeight: '150px',
+    overflow: 'auto',
   },
 };

@@ -11,6 +11,7 @@ use syntect::parsing::SyntaxSet;
 
 use super::types;
 use super::views::roadmap::RoadmapState;
+use super::views::trace::TraceState;
 use crate::{Database, DecisionEdge, DecisionGraph, DecisionNode};
 
 // Lazy static syntax highlighting resources
@@ -30,6 +31,7 @@ pub enum View {
     Timeline,
     Dag,
     Roadmap,
+    Trace,
 }
 
 /// Current input focus
@@ -232,6 +234,9 @@ pub struct App {
 
     // Roadmap view state
     pub roadmap_state: RoadmapState,
+
+    // Trace view state
+    pub trace_state: TraceState,
 }
 
 impl App {
@@ -287,6 +292,7 @@ impl App {
             detail_in_files: false,
             pending_editor_files: None,
             roadmap_state: RoadmapState::new(),
+            trace_state: TraceState::new(),
         })
     }
 
@@ -456,7 +462,12 @@ impl App {
                 self.load_roadmap_items();
                 View::Roadmap
             }
-            View::Roadmap => View::Timeline,
+            View::Roadmap => {
+                // Load trace sessions when switching to trace view
+                self.load_trace_sessions();
+                View::Trace
+            }
+            View::Trace => View::Timeline,
             View::Dag => View::Timeline, // DAG view disabled
         };
     }
@@ -474,6 +485,77 @@ impl App {
                 self.set_status(format!("Failed to load roadmap: {}", e));
             }
         }
+    }
+
+    /// Load trace sessions from database
+    pub fn load_trace_sessions(&mut self) {
+        match self.db.get_trace_sessions(100) {
+            Ok(sessions) => {
+                self.trace_state.set_sessions(sessions);
+            }
+            Err(e) => {
+                self.set_status(format!("Failed to load traces: {}", e));
+            }
+        }
+    }
+
+    /// Load trace spans for a session
+    pub fn load_trace_spans(&mut self, session_id: &str) {
+        match self.db.get_trace_spans(session_id) {
+            Ok(spans) => {
+                // Get span IDs for node count lookup
+                let span_ids: Vec<i32> = spans.iter().map(|s| s.id).collect();
+                self.trace_state.set_spans(spans);
+
+                // Load node counts for all spans
+                if let Ok(counts) = self.db.get_node_counts_for_spans(&span_ids) {
+                    self.trace_state.set_node_counts(counts);
+                }
+            }
+            Err(e) => {
+                self.set_status(format!("Failed to load spans: {}", e));
+            }
+        }
+    }
+
+    /// Load trace content for a span
+    pub fn load_trace_content(&mut self, span_id: i32) {
+        match self.db.get_trace_content(span_id) {
+            Ok(content) => {
+                self.trace_state.set_detail_content(content);
+            }
+            Err(e) => {
+                self.set_status(format!("Failed to load content: {}", e));
+            }
+        }
+
+        // Also load nodes for this span (for Nodes tab)
+        match self.db.get_nodes_for_span(span_id) {
+            Ok(nodes) => {
+                self.trace_state.set_detail_nodes(nodes);
+            }
+            Err(_) => {
+                self.trace_state.set_detail_nodes(vec![]);
+            }
+        }
+    }
+
+    /// Link trace session to a node
+    pub fn link_trace_session(&mut self, session_id: &str, node_id: i32) -> Result<(), String> {
+        self.db
+            .link_trace_session_to_node(session_id, node_id)
+            .map_err(|e| e.to_string())?;
+        self.load_trace_sessions();
+        Ok(())
+    }
+
+    /// Unlink trace session from a node
+    pub fn unlink_trace_session(&mut self, session_id: &str) -> Result<(), String> {
+        self.db
+            .unlink_trace_session(session_id)
+            .map_err(|e| e.to_string())?;
+        self.load_trace_sessions();
+        Ok(())
     }
 
     /// Detect GitHub repo from git remote URL
