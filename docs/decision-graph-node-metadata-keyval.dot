@@ -1,0 +1,43 @@
+digraph DecisionGraph {
+  rankdir=TB;
+  node [fontname="Arial" fontsize=10];
+  edge [fontname="Arial" fontsize=9];
+  label="Node Metadata: Key-Value Approach";
+  labelloc=t;
+  fontsize=14;
+
+  732 [label="[732] Add node metadata system (Key-Value a...\\n(95%)" shape="house" fillcolor="#FFE4B5" style="filled"];
+  733 [label="[733] Choose metadata storage model\\n(90%)" shape="diamond" fillcolor="#E6E6FA" style="filled"];
+  734 [label="[734] Key-Value pairs with typed content\\n(85%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  735 [label="[735] Extend existing metadata_json column\\n(40%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  736 [label="[736] Single large text blob column\\n(30%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  737 [label="[737] Key-value allows querying by specific...\\n(90%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  738 [label="[738] Upsert semantics: one value per key p...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  739 [label="[739] metadata_json already used for confid...\\n(80%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  740 [label="[740] Standard keys (pr_body, issue_body, n...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  741 [label="[741] Content type field enables proper ren...\\n(80%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  742 [label="[742] Created node_metadata table in schema.rs\\n(95%)" shape="box" fillcolor="#90EE90" style="filled"];
+  743 [label="[743] Implemented CRUD methods in db.rs wit...\\n(95%)" shape="box" fillcolor="#90EE90" style="filled"];
+  744 [label="[744] Added meta subcommand with set/get/li...\\n(95%)" shape="box" fillcolor="#90EE90" style="filled"];
+  745 [label="[745] Added stdin support for multi-line me...\\n(90%)" shape="box" fillcolor="#90EE90" style="filled"];
+  746 [label="[746] All 238 tests pass including new meta...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  747 [label="[747] Successfully tested set/get/list/dele...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  748 [label="[748] Feature complete: key-value metadata ...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+
+  732 -> 733 [style="solid" color="#333333" label="Goal requires choosing stor..."];
+  733 -> 734 [style="solid" color="#333333" label="Option considered"];
+  733 -> 735 [style="dashed" color="#DC143C" label="Option considered"];
+  733 -> 736 [style="dashed" color="#DC143C" label="Option considered"];
+  734 -> 737 [style="solid" color="#333333" label="Supports key-value choice"];
+  734 -> 738 [style="solid" color="#333333" label="Supports key-value choice"];
+  734 -> 739 [style="solid" color="#333333" label="Against extending metadata_..."];
+  734 -> 740 [style="solid" color="#333333" label="Supports key-value choice"];
+  734 -> 741 [style="solid" color="#333333" label="Supports key-value choice"];
+  732 -> 742 [style="solid" color="#333333" label="Implementation"];
+  732 -> 743 [style="solid" color="#333333" label="Implementation"];
+  732 -> 744 [style="solid" color="#333333" label="Implementation"];
+  732 -> 745 [style="solid" color="#333333" label="Implementation"];
+  744 -> 746 [style="solid" color="#333333" label="Test result"];
+  744 -> 747 [style="solid" color="#333333" label="Verification"];
+  732 -> 748 [style="solid" color="#333333" label="Goal achieved"];
+}
