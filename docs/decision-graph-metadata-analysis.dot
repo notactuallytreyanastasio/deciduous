@@ -1,0 +1,43 @@
+digraph DecisionGraph {
+  rankdir=TB;
+  node [fontname="Arial" fontsize=10];
+  edge [fontname="Arial" fontsize=9];
+  label="Node Metadata: Approach Analysis";
+  labelloc=t;
+  fontsize=14;
+
+  768 [label="[768] Analyze and choose between metadata a...\\n(90%)" shape="house" fillcolor="#FFE4B5" style="filled"];
+  769 [label="[769] Which metadata approach to adopt?\\n(85%)" shape="diamond" fillcolor="#E6E6FA" style="filled"];
+  770 [label="[770] Key-Value approach (PR #165)\\n(75%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  771 [label="[771] Attachments approach (PR #167)\\n(75%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  772 [label="[772] Hybrid: implement both with shared fo...\\n(60%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  773 [label="[773] Key-Value: Simpler mental model - one...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  774 [label="[774] Key-Value: Standard keys enforce cons...\\n(80%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  775 [label="[775] Key-Value: Upsert prevents duplicates...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  776 [label="[776] Key-Value LIMITATION: Cannot have mul...\\n(90%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  777 [label="[777] Attachments: Multiple items per type ...\\n(90%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  778 [label="[778] Attachments: Titles provide context -...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  779 [label="[779] Attachments: Source URLs link to exte...\\n(80%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  780 [label="[780] Attachments COMPLEXITY: Need attachme...\\n(75%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  781 [label="[781] USE CASE: PR/issue body is typically ...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  782 [label="[782] USE CASE: Notes/comments accumulate o...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  783 [label="[783] HYBRID: Could have both - meta for si...\\n(70%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  784 [label="[784] HYBRID RISK: Two systems to learn, ma...\\n(75%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+
+  768 -> 769 [style="solid" color="#333333" label="Goal requires decision"];
+  769 -> 770 [style="solid" color="#333333" label="Option: Key-Value"];
+  769 -> 771 [style="solid" color="#333333" label="Option: Attachments"];
+  769 -> 772 [style="solid" color="#333333" label="Option: Hybrid"];
+  770 -> 773 [style="solid" color="#333333" label="Pro"];
+  770 -> 774 [style="solid" color="#333333" label="Pro"];
+  770 -> 775 [style="solid" color="#333333" label="Pro"];
+  770 -> 776 [style="solid" color="#333333" label="Con"];
+  771 -> 777 [style="solid" color="#333333" label="Pro"];
+  771 -> 778 [style="solid" color="#333333" label="Pro"];
+  771 -> 779 [style="solid" color="#333333" label="Pro"];
+  771 -> 780 [style="solid" color="#333333" label="Con"];
+  770 -> 781 [style="solid" color="#333333" label="Use case fit"];
+  771 -> 782 [style="solid" color="#333333" label="Use case fit"];
+  772 -> 783 [style="solid" color="#333333" label="Pro"];
+  772 -> 784 [style="solid" color="#333333" label="Con"];
+}
