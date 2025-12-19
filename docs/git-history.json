@@ -1,11 +1,19 @@
 [
   {
-    "hash": "d94147cb2c9f5e4f79764fa959f7a0b869e8c52d",
-    "short_hash": "d94147c",
+    "hash": "e9f367197578e658a401a7a509ad8c20ca8bf559",
+    "short_hash": "e9f3671",
     "author": "Bobby Nathan",
-    "date": "2025-12-17T17:21:46-05:00",
-    "message": "fix: restore landing page, rebuild viewer with Vite for GH Pages",
-    "files_changed": 6
+    "date": "2025-12-17T17:55:06-05:00",
+    "message": "feat(viewer): UI improvements - collapsible minimap, scrollable results, node filtering\n\n- Minimap now collapsible and positioned in bottom-left to avoid overlapping results\n- Right-hand search results panel is now scrollable with HTML cards instead of SVG\n- Node type badges are clickable to open modal and snap to node\n- Chain panel at bottom-left defaults to 50% height and is resizable\n- Added node type filtering with checkboxes - hidden types show transitive edges\n- Jump to Chain selector moved to top bar for easier access\n- Added floating mini legend at top center showing node types\n- Modal now snaps to selected node when opening",
+    "files_changed": 5
+  },
+  {
+    "hash": "179cc65effa4e026922e4419fa1655e6ad3a10a4",
+    "short_hash": "179cc65",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T17:22:56-05:00",
+    "message": "chore: sync git-history after landing page restore",
+    "files_changed": 2
   },
   {
     "hash": "8ee414ae27b8875fe95b4ae207c5c362c3ce7d47",
