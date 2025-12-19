@@ -556,6 +556,69 @@ pub struct GitHubIssueCache {
 }
 
 // ============================================================================
+// Node Attachments - Document-oriented metadata for nodes
+// ============================================================================
+
+/// Attachment types for categorization
+pub mod attachment_types {
+    /// PR body/description
+    pub const PR_BODY: &str = "pr_body";
+    /// GitHub issue body
+    pub const ISSUE_BODY: &str = "issue_body";
+    /// General note
+    pub const NOTE: &str = "note";
+    /// Related link/resource
+    pub const LINK: &str = "link";
+    /// Test plan
+    pub const TEST_PLAN: &str = "test_plan";
+    /// Design document
+    pub const DESIGN_DOC: &str = "design_doc";
+    /// Discussion/conversation summary
+    pub const DISCUSSION: &str = "discussion";
+    /// Custom attachment type
+    pub const CUSTOM: &str = "custom";
+}
+
+/// MIME types for attachment content
+pub mod mime_types {
+    pub const MARKDOWN: &str = "text/markdown";
+    pub const PLAIN: &str = "text/plain";
+    pub const HTML: &str = "text/html";
+    pub const JSON: &str = "application/json";
+}
+
+/// Insertable node attachment
+#[derive(Insertable, Debug)]
+#[diesel(table_name = node_attachments)]
+pub struct NewNodeAttachment<'a> {
+    pub node_id: i32,
+    pub attachment_type: &'a str,
+    pub title: Option<&'a str>,
+    pub content: &'a str,
+    pub mime_type: &'a str,
+    pub source_url: Option<&'a str>,
+    pub created_at: &'a str,
+    pub updated_at: &'a str,
+}
+
+/// Queryable node attachment
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = node_attachments)]
+pub struct NodeAttachment {
+    pub id: i32,
+    pub node_id: i32,
+    pub attachment_type: String,
+    pub title: Option<String>,
+    pub content: String,
+    pub mime_type: String,
+    pub source_url: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+// ============================================================================
 // Helper structs for raw SQL queries
 // ============================================================================
 
@@ -959,6 +1022,25 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // Node attachments table - document-oriented metadata
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS node_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                node_id INTEGER NOT NULL,
+                attachment_type TEXT NOT NULL,
+                title TEXT,
+                content TEXT NOT NULL,
+                mime_type TEXT NOT NULL DEFAULT 'text/markdown',
+                source_url TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (node_id) REFERENCES decision_nodes(id) ON DELETE CASCADE
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
             .execute(&mut conn)?;
@@ -1000,6 +1082,16 @@ impl Database {
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_github_issue_cache_repo ON github_issue_cache(repo, issue_number)").execute(&mut conn)?;
+
+        // Node attachments indexes
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_node_attachments_node_id ON node_attachments(node_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_node_attachments_type ON node_attachments(attachment_type)",
+        )
+        .execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -2066,6 +2158,205 @@ impl Database {
         .execute(&mut conn)?;
 
         Ok(deleted)
+    }
+
+    // ========================================================================
+    // Node Attachments Operations (Document-oriented)
+    // ========================================================================
+
+    /// Add an attachment to a node
+    pub fn add_attachment(
+        &self,
+        node_id: i32,
+        attachment_type: &str,
+        title: Option<&str>,
+        content: &str,
+        mime_type: &str,
+        source_url: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        // Check if node exists
+        let node_exists = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)
+            .optional()?
+            .is_some();
+
+        if !node_exists {
+            return Err(DbError::Validation(format!(
+                "Node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                node_id
+            )));
+        }
+
+        let new_attachment = NewNodeAttachment {
+            node_id,
+            attachment_type,
+            title,
+            content,
+            mime_type,
+            source_url,
+            created_at: &now,
+            updated_at: &now,
+        };
+
+        diesel::insert_into(node_attachments::table)
+            .values(&new_attachment)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Get a specific attachment by ID
+    pub fn get_attachment(&self, id: i32) -> Result<Option<NodeAttachment>> {
+        let mut conn = self.get_conn()?;
+
+        let result = node_attachments::table
+            .filter(node_attachments::id.eq(id))
+            .first::<NodeAttachment>(&mut conn)
+            .optional()?;
+
+        Ok(result)
+    }
+
+    /// Get all attachments for a node
+    pub fn get_node_attachments(&self, node_id: i32) -> Result<Vec<NodeAttachment>> {
+        let mut conn = self.get_conn()?;
+
+        let results = node_attachments::table
+            .filter(node_attachments::node_id.eq(node_id))
+            .order(node_attachments::created_at.desc())
+            .load::<NodeAttachment>(&mut conn)?;
+
+        Ok(results)
+    }
+
+    /// Get attachments for a node filtered by type
+    pub fn get_node_attachments_by_type(
+        &self,
+        node_id: i32,
+        attachment_type: &str,
+    ) -> Result<Vec<NodeAttachment>> {
+        let mut conn = self.get_conn()?;
+
+        let results = node_attachments::table
+            .filter(node_attachments::node_id.eq(node_id))
+            .filter(node_attachments::attachment_type.eq(attachment_type))
+            .order(node_attachments::created_at.desc())
+            .load::<NodeAttachment>(&mut conn)?;
+
+        Ok(results)
+    }
+
+    /// Update an attachment's content
+    pub fn update_attachment(
+        &self,
+        id: i32,
+        title: Option<&str>,
+        content: &str,
+        mime_type: &str,
+    ) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let updated = diesel::update(node_attachments::table.filter(node_attachments::id.eq(id)))
+            .set((
+                node_attachments::title.eq(title),
+                node_attachments::content.eq(content),
+                node_attachments::mime_type.eq(mime_type),
+                node_attachments::updated_at.eq(&now),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(updated > 0)
+    }
+
+    /// Delete an attachment by ID
+    pub fn delete_attachment(&self, id: i32) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+
+        let deleted = diesel::delete(node_attachments::table.filter(node_attachments::id.eq(id)))
+            .execute(&mut conn)?;
+
+        Ok(deleted > 0)
+    }
+
+    /// Delete all attachments for a node
+    pub fn delete_node_attachments(&self, node_id: i32) -> Result<usize> {
+        let mut conn = self.get_conn()?;
+
+        let deleted =
+            diesel::delete(node_attachments::table.filter(node_attachments::node_id.eq(node_id)))
+                .execute(&mut conn)?;
+
+        Ok(deleted)
+    }
+
+    /// List all attachments (optionally filtered by type)
+    pub fn list_all_attachments(
+        &self,
+        attachment_type: Option<&str>,
+    ) -> Result<Vec<NodeAttachment>> {
+        let mut conn = self.get_conn()?;
+
+        let results = if let Some(atype) = attachment_type {
+            node_attachments::table
+                .filter(node_attachments::attachment_type.eq(atype))
+                .order((
+                    node_attachments::node_id.asc(),
+                    node_attachments::created_at.desc(),
+                ))
+                .load::<NodeAttachment>(&mut conn)?
+        } else {
+            node_attachments::table
+                .order((
+                    node_attachments::node_id.asc(),
+                    node_attachments::created_at.desc(),
+                ))
+                .load::<NodeAttachment>(&mut conn)?
+        };
+
+        Ok(results)
+    }
+
+    /// Get nodes that have attachments of a specific type
+    pub fn get_nodes_with_attachment_type(
+        &self,
+        attachment_type: &str,
+    ) -> Result<Vec<DecisionNode>> {
+        let mut conn = self.get_conn()?;
+
+        let node_ids: Vec<i32> = node_attachments::table
+            .filter(node_attachments::attachment_type.eq(attachment_type))
+            .select(node_attachments::node_id)
+            .distinct()
+            .load(&mut conn)?;
+
+        let nodes = decision_nodes::table
+            .filter(decision_nodes::id.eq_any(node_ids))
+            .order(decision_nodes::created_at.desc())
+            .load::<DecisionNode>(&mut conn)?;
+
+        Ok(nodes)
+    }
+
+    /// Count attachments for a node
+    pub fn count_node_attachments(&self, node_id: i32) -> Result<i64> {
+        let mut conn = self.get_conn()?;
+
+        let count: i64 = node_attachments::table
+            .filter(node_attachments::node_id.eq(node_id))
+            .count()
+            .get_result(&mut conn)?;
+
+        Ok(count)
     }
 }
 

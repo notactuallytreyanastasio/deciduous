@@ -152,3 +152,21 @@ diesel::table! {
         cached_at -> Text,
     }
 }
+
+// ============================================================================
+// Node Attachments - Document-oriented metadata for nodes
+// ============================================================================
+
+diesel::table! {
+    node_attachments (id) {
+        id -> Integer,
+        node_id -> Integer,
+        attachment_type -> Text,
+        title -> Nullable<Text>,
+        content -> Text,
+        mime_type -> Text,
+        source_url -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}

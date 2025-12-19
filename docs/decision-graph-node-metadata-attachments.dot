@@ -1,0 +1,43 @@
+digraph DecisionGraph {
+  rankdir=TB;
+  node [fontname="Arial" fontsize=10];
+  edge [fontname="Arial" fontsize=9];
+  label="Node Metadata: Attachments Approach";
+  labelloc=t;
+  fontsize=14;
+
+  749 [label="[749] Add node metadata system (Attachments...\\n(95%)" shape="house" fillcolor="#FFE4B5" style="filled"];
+  750 [label="[750] Choose metadata storage model\\n(90%)" shape="diamond" fillcolor="#E6E6FA" style="filled"];
+  751 [label="[751] Document-oriented attachments with ti...\\n(85%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  752 [label="[752] Key-value pairs (simpler but less fle...\\n(60%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  753 [label="[753] JSON blob in existing column\\n(30%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  754 [label="[754] Attachments allow multiple items of s...\\n(90%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  755 [label="[755] Titles provide human-readable context...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  756 [label="[756] Source URLs enable linking to externa...\\n(85%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  757 [label="[757] MIME type tracking enables proper ren...\\n(80%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  758 [label="[758] Attachment IDs allow direct referenci...\\n(80%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  759 [label="[759] Created node_attachments table in sch...\\n(95%)" shape="box" fillcolor="#90EE90" style="filled"];
+  760 [label="[760] Implemented attachment CRUD methods i...\\n(95%)" shape="box" fillcolor="#90EE90" style="filled"];
+  761 [label="[761] Added attach subcommand with add/view...\\n(95%)" shape="box" fillcolor="#90EE90" style="filled"];
+  762 [label="[762] Added stdin support and source URL tr...\\n(90%)" shape="box" fillcolor="#90EE90" style="filled"];
+  763 [label="[763] All 238 tests pass including new atta...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  764 [label="[764] Successfully tested add/view/list/del...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  765 [label="[765] Feature complete: document-oriented a...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+
+  749 -> 750 [style="solid" color="#333333" label="Goal requires choosing stor..."];
+  750 -> 751 [style="bold" color="#228B22" label="Option chosen"];
+  750 -> 752 [style="dashed" color="#DC143C" label="Option considered"];
+  750 -> 753 [style="dashed" color="#DC143C" label="Option considered"];
+  751 -> 754 [style="solid" color="#333333" label="Supports attachments choice"];
+  751 -> 755 [style="solid" color="#333333" label="Supports attachments choice"];
+  751 -> 756 [style="solid" color="#333333" label="Supports attachments choice"];
+  751 -> 757 [style="solid" color="#333333" label="Supports attachments choice"];
+  751 -> 758 [style="solid" color="#333333" label="Supports attachments choice"];
+  749 -> 759 [style="solid" color="#333333" label="Implementation"];
+  749 -> 760 [style="solid" color="#333333" label="Implementation"];
+  749 -> 761 [style="solid" color="#333333" label="Implementation"];
+  749 -> 762 [style="solid" color="#333333" label="Implementation"];
+  761 -> 763 [style="solid" color="#333333" label="Test result"];
+  761 -> 764 [style="solid" color="#333333" label="Verification"];
+  749 -> 765 [style="solid" color="#333333" label="Goal achieved"];
+}
