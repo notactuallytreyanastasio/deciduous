@@ -1,11 +1,43 @@
 [
   {
-    "hash": "d94147cb2c9f5e4f79764fa959f7a0b869e8c52d",
-    "short_hash": "d94147c",
+    "hash": "07bc4eb9b95c9cc70e0f5eef5a11212e1b4a133b",
+    "short_hash": "07bc4eb",
     "author": "Bobby Nathan",
-    "date": "2025-12-17T17:21:46-05:00",
-    "message": "fix: restore landing page, rebuild viewer with Vite for GH Pages",
+    "date": "2025-12-19T10:13:38-05:00",
+    "message": "release: v0.9.0 - Claude API trace capture, Nix flake, init improvements",
     "files_changed": 6
+  },
+  {
+    "hash": "5eb887f7b8df95cc90e1d3117be7e1798420b8f2",
+    "short_hash": "5eb887f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-18T21:12:21-05:00",
+    "message": "docs: add git-guard implementation plan\n\nDesign document for runtime-enforced git safety rules that work across\nall AI coding tools (Claude Code, Windsurf, OpenCode, Codex).\n\nKey decisions:\n- Rust subcommand (no Python dependency)\n- Thin shell wrappers calling `deciduous git-guard`\n- Git native hooks for universal coverage\n- Block all rebases with guided manual process\n- Codex relies on git hooks only (no AI hooks available)\n\nArchitecture: Three-layer defense\n1. AI tool hooks (PreToolUse/Cascade) - intercept before shell\n2. Git native hooks (pre-commit/pre-push/pre-rebase)\n3. Logging to git.log\n\nSee decision graph nodes 690-731 for full decision history.",
+    "files_changed": 3
+  },
+  {
+    "hash": "0231b1ad1859a815a0fd8a88611983d1b938f7bc",
+    "short_hash": "0231b1a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-18T18:53:02-05:00",
+    "message": "feat: add document-oriented node attachments system\n\nAdds a flexible attachment storage system for nodes, allowing multiple\ntyped documents to be attached. Unlike key-value metadata, attachments\nsupport multiple items of the same type per node.\n\nKey features:\n- New `node_attachments` table with type, title, content, MIME type, and URL\n- Support for multiple attachments of the same type (e.g., multiple notes)\n- Typed attachments: pr_body, issue_body, note, link, test_plan, design_doc, discussion, custom\n- MIME type tracking (markdown, text, html, json)\n- Optional source URLs for links and external documents\n- CLI commands: `attach add`, `attach view`, `attach list`, `attach update`, `attach delete`, `attach types`\n- Support for stdin input for multi-line content",
+    "files_changed": 4
+  },
+  {
+    "hash": "e3c3bdebd179256095ccbf1f2bea99fc568b72f2",
+    "short_hash": "e3c3bde",
+    "author": "Bobby Nathan",
+    "date": "2025-12-18T18:44:59-05:00",
+    "message": "feat: add key-value node metadata system\n\nAdds a flexible metadata storage system for attaching additional context\nto decision graph nodes. This enables storing PR descriptions, issue\nbodies, notes, and other documentation directly on nodes.\n\nKey features:\n- New `node_metadata` table with key-value pairs per node\n- Upsert semantics: setting a key creates or updates\n- Content type tracking (markdown, text, json, html)\n- CLI commands: `meta set`, `meta get`, `meta list`, `meta delete`, `meta keys`\n- Standard keys: pr_body, issue_body, notes, summary, rationale, test_plan, links\n- Support for stdin input for multi-line values\n- Custom keys via `custom:` prefix",
+    "files_changed": 4
+  },
+  {
+    "hash": "e9f367197578e658a401a7a509ad8c20ca8bf559",
+    "short_hash": "e9f3671",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T17:55:06-05:00",
+    "message": "feat(viewer): UI improvements - collapsible minimap, scrollable results, node filtering\n\n- Minimap now collapsible and positioned in bottom-left to avoid overlapping results\n- Right-hand search results panel is now scrollable with HTML cards instead of SVG\n- Node type badges are clickable to open modal and snap to node\n- Chain panel at bottom-left defaults to 50% height and is resizable\n- Added node type filtering with checkboxes - hidden types show transitive edges\n- Jump to Chain selector moved to top bar for easier access\n- Added floating mini legend at top center showing node types\n- Modal now snaps to selected node when opening",
+    "files_changed": 5
   },
   {
     "hash": "8ee414ae27b8875fe95b4ae207c5c362c3ce7d47",
@@ -24,6 +56,14 @@
     "files_changed": 6
   },
   {
+    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
+    "short_hash": "e80d20f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 4
+  },
+  {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
     "short_hash": "157aa70",
     "author": "Bobby Nathan",
@@ -38,14 +78,6 @@
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 3
-  },
-  {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
   },
   {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",
