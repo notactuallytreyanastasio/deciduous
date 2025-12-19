@@ -1,0 +1,2448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How I Built Myself - The Deciduous Story</title>
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="How I Built Myself - The Deciduous Story">
+    <meta name="description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 520+ decisions over 12 days.">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://notactuallytreyanastasio.github.io/deciduous/story.html">
+    <meta property="og:title" content="How I Built Myself - The Deciduous Story">
+    <meta property="og:description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 520+ decisions over 12 days.">
+    <meta property="og:image" content="https://notactuallytreyanastasio.github.io/deciduous/story-og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://notactuallytreyanastasio.github.io/deciduous/story.html">
+    <meta property="twitter:title" content="How I Built Myself - The Deciduous Story">
+    <meta property="twitter:description" content="A decision graph tool that documented its own creation. 520+ decisions, 450+ connections, 12 days.">
+    <meta property="twitter:image" content="https://notactuallytreyanastasio.github.io/deciduous/story-og.png">
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            color: #374151;
+            line-height: 1.7;
+        }
+        .top-nav {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .top-nav-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .top-nav-brand {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #111827;
+            text-decoration: none;
+        }
+        .top-nav-links {
+            display: flex;
+            gap: 24px;
+        }
+        .top-nav-links a {
+            color: #6b7280;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.15s;
+        }
+        .top-nav-links a:hover { color: #3b82f6; }
+        .top-nav-links a.active { color: #3b82f6; }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 80px 20px 60px;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 40px;
+        }
+        .hero-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #9ca3af;
+            margin-bottom: 16px;
+        }
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            color: #111827;
+            margin: 0 0 20px 0;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+        }
+        .hero-subtitle {
+            font-size: 18px;
+            color: #6b7280;
+            line-height: 1.7;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+        .hero-pitch {
+            margin-top: 32px;
+            padding: 24px 32px;
+            background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+            border-radius: 12px;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+            border: 1px solid #e0e7ff;
+        }
+        .hero-pitch p {
+            font-size: 16px;
+            color: #374151;
+            line-height: 1.7;
+            margin: 0;
+        }
+        .hero-pitch strong {
+            color: #1e40af;
+        }
+
+        .stats-banner {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            padding: 24px 0;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 60px;
+            flex-wrap: wrap;
+        }
+        .stat-item { text-align: center; }
+        .stat-num {
+            display: block;
+            font-size: 28px;
+            font-weight: 700;
+            color: #3b82f6;
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 6px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 50px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 19px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e5e7eb;
+        }
+
+        .timeline-day {
+            position: relative;
+            margin-top: 60px;
+            margin-bottom: 24px;
+        }
+        .timeline-day::before {
+            content: '';
+            position: absolute;
+            left: -42px;
+            top: 8px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: 4px solid #dbeafe;
+        }
+        .timeline-day.highlight::before {
+            background: #8b5cf6;
+            border-color: #ede9fe;
+        }
+        .timeline-day-date {
+            font-size: 13px;
+            font-weight: 600;
+            color: #3b82f6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .timeline-day.highlight .timeline-day-date {
+            color: #8b5cf6;
+        }
+        .timeline-day-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #111827;
+            margin: 4px 0 0 0;
+        }
+
+        .timeline-event {
+            position: relative;
+            margin-bottom: 40px;
+        }
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -42px;
+            top: 24px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #d1d5db;
+        }
+        .event-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .event-header {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .event-time {
+            font-size: 12px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .event-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #111827;
+            margin: 4px 0 8px 0;
+        }
+        .event-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .tag {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        .tag-commit {
+            background: #d1fae5;
+            color: #059669;
+            font-family: ui-monospace, monospace;
+        }
+        .tag-node {
+            background: #ede9fe;
+            color: #7c3aed;
+            font-family: ui-monospace, monospace;
+        }
+        .event-body {
+            padding: 20px 24px 24px;
+            font-size: 15px;
+            line-height: 1.75;
+        }
+        .event-body p { margin-bottom: 16px; }
+        .event-body p:last-child { margin-bottom: 0; }
+        .event-body ul {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+        .event-body li { margin-bottom: 8px; }
+        .event-body strong { color: #111827; }
+        .event-body em { color: #6b7280; }
+        .event-body code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-family: ui-monospace, monospace;
+        }
+
+        .node-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin: 16px 0;
+        }
+        .node-badges {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .node-type-badge {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #ffffff;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .node-type-goal { background: #f59e0b; }
+        .node-type-decision { background: #8b5cf6; }
+        .node-type-action { background: #3b82f6; }
+        .node-type-outcome { background: #22c55e; }
+        .node-type-observation { background: #6366f1; }
+        .node-type-option { background: #06b6d4; }
+        .node-id-badge {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            background: #e5e7eb;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: ui-monospace, monospace;
+        }
+        .node-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+        }
+        .node-card-desc {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+
+        .commit-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 16px 0;
+            font-family: ui-monospace, monospace;
+            font-size: 13px;
+        }
+        .commit-hash { color: #059669; font-weight: 600; }
+        .commit-message { color: #166534; }
+
+        .quote {
+            margin: 24px 0;
+            padding: 20px 24px;
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            border-radius: 0 10px 10px 0;
+        }
+        .quote-text {
+            font-size: 15px;
+            font-style: italic;
+            color: #475569;
+            line-height: 1.7;
+        }
+        .quote-cite {
+            display: block;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 12px;
+            font-style: normal;
+        }
+
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 16px 20px;
+            border-radius: 10px;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 16px 0;
+            font-family: ui-monospace, monospace;
+        }
+
+        .option-comparison {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .option-box {
+            border-radius: 10px;
+            padding: 16px 18px;
+            border: 2px solid;
+        }
+        .option-box.chosen {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+        .option-box.rejected {
+            background: #fef2f2;
+            border-color: #fca5a5;
+        }
+        .option-status {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+        .option-box.chosen .option-status { color: #22c55e; }
+        .option-box.rejected .option-status { color: #ef4444; }
+        .option-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 6px;
+        }
+        .option-desc {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .option-reason {
+            font-size: 12px;
+            font-style: italic;
+            color: #9ca3af;
+        }
+
+        .option-list {
+            margin: 16px 0;
+        }
+        .option-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: #f9fafb;
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+        .option-letter {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #e5e7eb;
+            color: #374151;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .option-row-title {
+            flex: 1;
+            font-size: 14px;
+            color: #374151;
+        }
+        .option-row-status {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+        }
+        .option-row-status.chosen { color: #22c55e; }
+
+        .bug-list { margin: 16px 0; }
+        .bug-item {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px;
+            padding: 12px 16px;
+            background: #fef2f2;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        .bug-problem {
+            font-size: 13px;
+            color: #991b1b;
+            font-weight: 500;
+        }
+        .bug-solution {
+            font-size: 13px;
+            color: #166534;
+            grid-column: 1;
+        }
+        .bug-node-id {
+            font-size: 11px;
+            color: #9ca3af;
+            font-family: ui-monospace, monospace;
+            grid-row: 1 / 3;
+        }
+
+        .feature-timeline {
+            margin: 16px 0;
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 16px 20px;
+        }
+        .feature-entry {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        .feature-entry:last-child { border-bottom: none; }
+        .feature-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #3b82f6;
+            flex-shrink: 0;
+        }
+        .feature-content { flex: 1; }
+        .feature-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-right: 8px;
+        }
+        .feature-desc {
+            font-size: 13px;
+            color: #6b7280;
+        }
+        .feature-node {
+            font-size: 11px;
+            color: #9ca3af;
+            font-family: ui-monospace, monospace;
+        }
+
+        .spike-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0;
+        }
+        @media (max-width: 700px) {
+            .spike-grid { grid-template-columns: 1fr; }
+        }
+        .spike-card {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .spike-letter {
+            font-size: 11px;
+            font-weight: 700;
+            color: #d97706;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .spike-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 6px;
+        }
+        .spike-desc {
+            font-size: 12px;
+            color: #a16207;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .spike-node {
+            font-size: 11px;
+            color: #ca8a04;
+            font-family: ui-monospace, monospace;
+        }
+
+        .decision-grid {
+            display: grid;
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .decision-box {
+            background: #faf5ff;
+            border: 1px solid #e9d5ff;
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+        .decision-box-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .decision-box-id {
+            font-size: 11px;
+            font-weight: 600;
+            color: #7c3aed;
+            font-family: ui-monospace, monospace;
+        }
+        .decision-box-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #581c87;
+        }
+        .decision-box-outcome {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .release-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 16px 0;
+        }
+        @media (max-width: 600px) {
+            .release-grid { grid-template-columns: 1fr; }
+        }
+        .release-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 6px;
+            padding: 10px 14px;
+        }
+        .release-version {
+            font-size: 12px;
+            font-weight: 700;
+            color: #166534;
+            font-family: ui-monospace, monospace;
+        }
+        .release-desc {
+            font-size: 13px;
+            color: #166534;
+        }
+
+        .phase-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+            margin: 16px 0;
+        }
+        .phase {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 12px 14px;
+        }
+        .phase-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+        .phase-content { flex: 1; }
+        .phase-title {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #111827;
+        }
+        .phase-desc {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .tea-diagram {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+            margin: 24px 0;
+            flex-wrap: wrap;
+        }
+        .tea-box {
+            background: #eff6ff;
+            border: 2px solid #3b82f6;
+            border-radius: 10px;
+            padding: 16px 20px;
+            text-align: center;
+            min-width: 140px;
+        }
+        .tea-box-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1d4ed8;
+            font-family: ui-monospace, monospace;
+        }
+        .tea-box-desc {
+            font-size: 11px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+        .tea-arrow {
+            font-size: 24px;
+            color: #93c5fd;
+            font-weight: bold;
+        }
+
+        .final-stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 24px 0;
+            flex-wrap: wrap;
+        }
+        .final-stat { text-align: center; }
+        .final-stat-value {
+            display: block;
+            font-size: 36px;
+            font-weight: 800;
+            color: #3b82f6;
+            line-height: 1;
+        }
+        .final-stat-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 8px;
+        }
+
+        .vision-section {
+            padding: 40px 0;
+        }
+        .vision-intro {
+            font-size: 17px;
+            color: #374151;
+            line-height: 1.8;
+            margin-bottom: 40px;
+        }
+        .vision-block {
+            margin-bottom: 40px;
+        }
+        .vision-block-title {
+            font-size: 20px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        .vision-items {
+            display: grid;
+            gap: 16px;
+        }
+        .vision-item {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 18px 20px;
+        }
+        .vision-item-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 6px;
+        }
+        .vision-item-desc {
+            font-size: 14px;
+            color: #6b7280;
+            line-height: 1.6;
+        }
+
+        .core-bet {
+            background: #eff6ff;
+            border: 2px solid #93c5fd;
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-top: 48px;
+        }
+        .core-bet h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1d4ed8;
+            margin: 0 0 16px 0;
+        }
+        .core-bet p {
+            margin-bottom: 16px;
+            color: #1e40af;
+        }
+        .core-bet p:last-child { margin-bottom: 0; }
+
+        .cta-section {
+            text-align: center;
+            padding: 60px 20px;
+            margin-top: 40px;
+            border-top: 2px solid #e5e7eb;
+        }
+        .cta-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: #111827;
+            margin-bottom: 16px;
+        }
+        .cta-desc {
+            font-size: 16px;
+            color: #6b7280;
+            margin-bottom: 24px;
+        }
+        .cta-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 15px;
+            transition: all 0.15s;
+        }
+        .btn-primary {
+            background: #3b82f6;
+            color: #ffffff;
+        }
+        .btn-primary:hover { background: #2563eb; }
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #374151;
+            border: 1px solid #e5e7eb;
+        }
+        .btn-secondary:hover { background: #e5e7eb; }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px 60px;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        footer a {
+            color: #6b7280;
+            text-decoration: none;
+        }
+        footer a:hover { color: #3b82f6; }
+
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 32px; }
+            .stats-banner { gap: 24px; }
+            .stat-num { font-size: 24px; }
+            .timeline { padding-left: 40px; }
+            .timeline::before { left: 14px; }
+            .timeline-day::before { left: -32px; width: 12px; height: 12px; }
+            .timeline-event::before { left: -32px; width: 8px; height: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="top-nav-inner">
+            <a href="./" class="top-nav-brand">DECIDUOUS</a>
+            <div class="top-nav-links">
+                <a href="story.html" class="active">Story</a>
+                <a href="demo/">Live Graph</a>
+                <a href="tutorial/">Tutorial</a>
+                <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <header class="hero">
+            <div class="hero-label">The Complete Chronicle</div>
+            <h1>How I Built Myself</h1>
+            <p class="hero-subtitle">
+                I am Deciduous, a decision graph tool that documented its own creation.
+                This is my story, told through <span id="node-count">520+</span> decisions,
+                <span id="edge-count">450+</span> connections, and 12 days of existence.
+            </p>
+            <div class="hero-pitch">
+                <p>
+                    <strong>LLMs forget. Your decisions shouldn't.</strong> When AI sessions end and context windows reset,
+                    critical reasoning evaporates. Deciduous captures every goal, every approach considered, every choice
+                    made&mdash;creating a queryable record that survives session boundaries.
+                </p>
+                <p style="margin-top: 16px;">
+                    <strong>Beyond context recovery.</strong> The graph improves how you work: logging decisions
+                    <em>before</em> you act forces clearer thinking. Generate PR writeups directly from your decision
+                    trail. Query past reasoning with <code>/recover</code> to recover state instantly. Share decisions
+                    across teammates with idempotent patches. Link commits to the goals that spawned them.
+                </p>
+                <p style="margin-top: 16px;">
+                    <strong>Institutional memory that compounds.</strong> Every decision becomes searchable history.
+                    New developers can ask "why is this like this?" and get real answers. The graph outlives any
+                    single session, any single developer, any single AI assistant.
+                </p>
+            </div>
+        </header>
+
+        <div class="stats-banner">
+            <div class="stat-item"><span class="stat-num" id="stat-nodes">520+</span><span class="stat-label">Nodes</span></div>
+            <div class="stat-item"><span class="stat-num" id="stat-edges">450+</span><span class="stat-label">Edges</span></div>
+            <div class="stat-item"><span class="stat-num">65+</span><span class="stat-label">Goals</span></div>
+            <div class="stat-item"><span class="stat-num">100+</span><span class="stat-label">Decisions</span></div>
+            <div class="stat-item"><span class="stat-num">20+</span><span class="stat-label">Releases</span></div>
+            <div class="stat-item"><span class="stat-num">12</span><span class="stat-label">Days</span></div>
+        </div>
+
+        <div class="timeline">
+            <!-- ========================================== -->
+            <!-- DAY 1: December 4, 2025 - The Beginning -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 4, 2025</div>
+                <h2 class="timeline-day-title">The Beginning</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">A Sketch Becomes Real</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">951ba84</span>
+                            <span class="tag">genesis</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            It started with a simple idea: detect "fake lossless" audio files. You know the type&mdash;someone
+                            takes an MP3 and re-encodes it to FLAC, hoping no one notices the quality loss hiding inside
+                            the larger file.
+                        </p>
+                        <p>
+                            The first commit was modest: <code>initial sketch...lets see what its like to package this up</code>.
+                            A Rust CLI tool called <strong>losselot</strong> (a portmanteau of "loss" and "Ocelot",
+                            the Phish song). Within hours, it could parse ID3v2 tags, extract LAME headers, and analyze
+                            spectral content.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Afternoon</div>
+                        <h3 class="event-title">Feature Explosion</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">3f4c6a5</span>
+                            <span class="tag">features</span>
+                            <span class="tag">gui</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Something about the project felt <em>alive</em>. Features poured in faster than documentation
+                            could keep up:
+                        </p>
+                        <ul>
+                            <li><strong>D3.js interactive reports</strong> with spectral visualizations</li>
+                            <li><strong>GUI mode</strong> that auto-opens when double-clicked from Finder</li>
+                            <li><strong>Apple-style light theme</strong> with spectral waterfall charts</li>
+                            <li><strong>Binary analysis</strong> for re-encoding detection</li>
+                        </ul>
+                        <p>
+                            By end of day, losselot had gone from a script to a polished tool with
+                            beautiful visualizations and cross-platform GUI support.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAY 2: December 5, 2025 - The Graph Emerges -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 5, 2025</div>
+                <h2 class="timeline-day-title">The Graph Emerges</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">5:09 AM</div>
+                        <h3 class="event-title">The First Decision Node</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1</span>
+                            <span class="tag">decision-graph</span>
+                            <span class="tag">genesis</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            At 5:09 AM, something new appeared in the codebase. Not code&mdash;a <em>decision</em>.
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#1</span>
+                            </div>
+                            <div class="node-card-title">Test lo-fi detection on charlie.flac</div>
+                        </div>
+                        <p>
+                            This was Node #1. The first entry in what would become a 520+ node decision graph.
+                            At this moment, no one knew this simple test would spawn an entire methodology for
+                            tracking AI-assisted development.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">5:10 AM</div>
+                        <h3 class="event-title">The CFCC Decision</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#2</span>
+                            <span class="tag">algorithm</span>
+                            <span class="tag">decision</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Two minutes later, the first <em>real</em> decision was logged. The problem: how to
+                            distinguish a legitimate lo-fi recording from an MP3 masquerading as lossless?
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-decision">decision</span>
+                                <span class="node-id-badge">#2</span>
+                            </div>
+                            <div class="node-card-title">Lo-fi detection approach</div>
+                            <div class="node-card-desc">How to distinguish MP3 brick-wall cutoff from natural tape/lo-fi rolloff</div>
+                        </div>
+                        <p>Two approaches were weighed:</p>
+                        <div class="option-comparison">
+                            <div class="option-box rejected">
+                                <div class="option-status">REJECTED</div>
+                                <div class="option-title">Temporal Cutoff Variance</div>
+                                <div class="option-desc">Measure how cutoff frequency varies over time. MP3 = fixed, Tape = varies.</div>
+                                <div class="option-reason">More complex, requires per-window tracking</div>
+                            </div>
+                            <div class="option-box chosen">
+                                <div class="option-status">CHOSEN</div>
+                                <div class="option-title">Cross-Frequency Coherence (CFCC)</div>
+                                <div class="option-desc">Measure correlation between adjacent frequency bands. MP3 = sudden decorrelation cliff.</div>
+                                <div class="option-reason">Simpler, works with existing FFT structure</div>
+                            </div>
+                        </div>
+                        <p>
+                            The CFCC approach won. Implemented in commit <code>aa464b6</code>, it detected
+                            <strong>25 of 29 transcodes</strong> and passed 157 tests. The key insight was recorded:
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">MP3 encoders apply the same filter everywhere. Analog rolloff is content-dependent.</div>
+                            <cite class="quote-cite">&mdash; Node #10</cite>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">The Decision System Takes Shape</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">fe3840b</span>
+                            <span class="tag">tooling</span>
+                            <span class="tag">workflow</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            As the codebase grew, something interesting happened. The act of logging decisions
+                            wasn't just documentation&mdash;it was <em>forcing better thinking</em>. Commit
+                            <code>fe3840b</code> formalized this:
+                        </p>
+                        <div class="commit-card">
+                            <span class="commit-hash">fe3840b</span>
+                            <span class="commit-message">add claude.md, makefile, and slash commands for dev workflow</span>
+                        </div>
+                        <p>
+                            This commit established the DNA of what would become Deciduous:
+                        </p>
+                        <ul>
+                            <li><strong>CLAUDE.md</strong>: Project instructions with decision logging workflow</li>
+                            <li><strong>Makefile</strong>: Shortcuts for common operations</li>
+                            <li><strong>Slash commands</strong>: <code>/decision</code> and <code>/recover</code> for recovery</li>
+                        </ul>
+                        <p>
+                            The pattern was set: log <em>before</em> you act, not after. Connect every node to its parent.
+                            Audit regularly.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">3:18 PM</div>
+                        <h3 class="event-title">The Living Museum</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#13</span>
+                            <span class="tag">github-pages</span>
+                            <span class="tag">visualization</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            At 3:18 PM, an ambitious goal was logged:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#13</span>
+                            </div>
+                            <div class="node-card-title">Create GitHub Pages living museum site</div>
+                        </div>
+                        <p>
+                            The idea: make the decision graph public. Let anyone browse the reasoning behind every
+                            feature. The site structure was carefully considered:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-observation">observation</span>
+                                <span class="node-id-badge">#16</span>
+                            </div>
+                            <div class="node-card-title">Four pillars of value</div>
+                            <div class="node-card-desc">1) Claude tooling for long-running codebase state 2) Audio forensics tools 3) React/GUI methodologies 4) Public development process</div>
+                        </div>
+                        <p>
+                            Within 3 hours, a Jekyll-based site was live with 5 pages: landing, audio analysis,
+                            decision graph explorer, Claude tooling docs, and development story.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Afternoon</div>
+                        <h3 class="event-title">Bug Gauntlet</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#27</span>
+                            <span class="tag">bugs</span>
+                            <span class="tag">fixes</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The GitHub Pages launch hit a wall of bugs. Each one was logged and connected:
+                        </p>
+                        <div class="bug-list">
+                            <div class="bug-item">
+                                <div class="bug-problem">Landing page 404 - raw markdown not processed</div>
+                                <div class="bug-solution">&rarr; Added Jekyll build step</div>
+                                <span class="bug-node-id">#29</span>
+                            </div>
+                            <div class="bug-item">
+                                <div class="bug-problem">Demo showing no data - wrong JSON path</div>
+                                <div class="bug-solution">&rarr; Fixed graphData.nodes access pattern</div>
+                                <span class="bug-node-id">#31</span>
+                            </div>
+                            <div class="bug-item">
+                                <div class="bug-problem">HTML divs breaking Jekyll</div>
+                                <div class="bug-solution">&rarr; Removed div wrappers from markdown</div>
+                                <span class="bug-node-id">#33</span>
+                            </div>
+                            <div class="bug-item">
+                                <div class="bug-problem">User feedback: copy too salesy</div>
+                                <div class="bug-solution">&rarr; Rewrote to be simple and direct</div>
+                                <span class="bug-node-id">#35</span>
+                            </div>
+                            <div class="bug-item">
+                                <div class="bug-problem">Workflow runs queuing up</div>
+                                <div class="bug-solution">&rarr; Set cancel-in-progress: true</div>
+                                <span class="bug-node-id">#37</span>
+                            </div>
+                        </div>
+                        <p>
+                            Every fix traced back to the goal that spawned it. The graph was already proving its value&mdash;
+                            debugging became archeology, tracing symptoms back to root causes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Evening</div>
+                        <h3 class="event-title">WASM Analyzer</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#48</span>
+                            <span class="tag">wasm</span>
+                            <span class="tag">web</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The server-side analyzer was powerful, but limiting. Node #19 captured the vision:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#19</span>
+                            </div>
+                            <div class="node-card-title">Client-side WASM analyzer - upload tracks, analyze in browser, no server</div>
+                        </div>
+                        <p>
+                            A breakthrough observation changed the implementation:
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">WASM can access raw file bytes via arrayBuffer() BEFORE Web Audio decoding&mdash;binary analysis IS possible in the browser.</div>
+                            <cite class="quote-cite">&mdash; Node #50</cite>
+                        </div>
+                        <p>
+                            By evening, the WASM analyzer achieved full parity with the native Rust version:
+                            spectral analysis, binary parsing, LAME header extraction, encoding chain detection&mdash;all
+                            running client-side.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Night</div>
+                        <h3 class="event-title">Clustering and Chains</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#55</span>
+                            <span class="tag">visualization</span>
+                            <span class="tag">ux</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            With 55+ nodes in the graph, navigation became unwieldy. Decision #55 introduced structure:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-decision">decision</span>
+                                <span class="node-id-badge">#55</span>
+                            </div>
+                            <div class="node-card-title">Implement clustering for decision graph view</div>
+                            <div class="node-card-desc">Group nodes by chains of thought, show flow on right side</div>
+                        </div>
+                        <p>
+                            The implementation used BFS traversal from root nodes to build "chains"&mdash;connected
+                            sequences of decisions. Sessions were grouped by 4-hour time proximity. The sidebar
+                            gained three views: Chains, Sessions, and All.
+                        </p>
+                        <p>
+                            Day 2 ended with <strong>98 nodes</strong> in the graph. The decision system wasn't
+                            just tracking development&mdash;it was shaping how development happened.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAY 3: December 6, 2025 - The Fork -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 6, 2025</div>
+                <h2 class="timeline-day-title">The Fork</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">The Decisive Moment</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#99</span>
+                            <span class="tag">fork</span>
+                            <span class="tag">genesis</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            By morning, a pattern had become undeniable. The decision graph tooling was more
+                            interesting than the audio analysis that spawned it. Node #99 captured the pivot:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#99</span>
+                            </div>
+                            <div class="node-card-title">Create Deciduous: Extract decision graph tooling into standalone portable package</div>
+                        </div>
+                        <p>
+                            The name "Deciduous" was perfect: it almost contains "decision", and the nodes
+                            form trees. The extraction wasn't a simple copy-paste&mdash;three major decisions
+                            shaped the standalone tool:
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">Architecture Decisions</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#101</span>
+                            <span class="tag">architecture</span>
+                            <span class="tag">decisions</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="decision-grid">
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#100</span>
+                                    <span class="decision-box-title">Claude Tooling Integration</span>
+                                </div>
+                                <div class="decision-box-outcome">Include full tooling in deciduous init: slash commands, CLAUDE.md workflow, Makefile</div>
+                            </div>
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#101</span>
+                                    <span class="decision-box-title">Web Viewer Architecture</span>
+                                </div>
+                                <div class="decision-box-outcome">React + TypeScript + Vite chosen over vanilla JS for type safety matching Diesel ORM</div>
+                            </div>
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#117</span>
+                                    <span class="decision-box-title">Build Strategy</span>
+                                </div>
+                                <div class="decision-box-outcome">Dual builds: embed (single HTML for binary) and pages (separate assets for GitHub Pages)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Afternoon</div>
+                        <h3 class="event-title">The Birth</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">0b74ffe</span>
+                            <span class="tag">release</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Commit <code>0b74ffe</code> marks the moment Deciduous became its own entity:
+                        </p>
+                        <div class="commit-card">
+                            <span class="commit-hash">0b74ffe</span>
+                            <span class="commit-message">Extract deciduous from losselot - standalone decision graph tooling</span>
+                        </div>
+                        <p>
+                            The extraction preserved full git history. Every commit from losselot that contributed
+                            to the decision system came along. The parent project continued with its audio analysis
+                            mission; the child would pursue decision tracking.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Evening</div>
+                        <h3 class="event-title">First Release</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#127</span>
+                            <span class="tag">crates.io</span>
+                            <span class="tag">release</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Within hours of extraction, Deciduous was published:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-outcome">outcome</span>
+                                <span class="node-id-badge">#127</span>
+                            </div>
+                            <div class="node-card-title">Published deciduous v0.1.0 to crates.io</div>
+                            <div class="node-card-desc">cargo install deciduous now works</div>
+                        </div>
+                        <p>
+                            Anyone could now install the tool that was tracking its own development. The snake
+                            had eaten its tail.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Night</div>
+                        <h3 class="event-title">Spelunking Experiments</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#77</span>
+                            <span class="tag">visualization</span>
+                            <span class="tag">experiments</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            With the graph growing rapidly, better ways to explore it were needed. Three
+                            experimental "spelunking" pages were built in parallel:
+                        </p>
+                        <div class="spike-grid">
+                            <div class="spike-card">
+                                <div class="spike-letter">Spike A</div>
+                                <div class="spike-title">Timeline View</div>
+                                <div class="spike-desc">Horizontal git timeline with decision nodes overlaid</div>
+                                <div class="spike-node">#82</div>
+                            </div>
+                            <div class="spike-card">
+                                <div class="spike-letter">Spike B</div>
+                                <div class="spike-title">Graph Explorer</div>
+                                <div class="spike-desc">Force-directed graph with D3, path tracing, zoom/pan</div>
+                                <div class="spike-node">#84</div>
+                            </div>
+                            <div class="spike-card">
+                                <div class="spike-letter">Spike C</div>
+                                <div class="spike-title">Story Mode</div>
+                                <div class="spike-desc">Narrative walkthrough with chapters by feature</div>
+                                <div class="spike-node">#85</div>
+                            </div>
+                        </div>
+                        <p>
+                            All three were merged for side-by-side comparison. The user could choose how to
+                            explore the same underlying data.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAYS 4-5: December 7-8 - Multi-Editor -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 7-8, 2025</div>
+                <h2 class="timeline-day-title">Going Multi-Editor</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Dec 7</div>
+                        <h3 class="event-title">Beyond Claude</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#128</span>
+                            <span class="tag">windsurf</span>
+                            <span class="tag">editors</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Deciduous was built with Claude Code, but the concept wasn't editor-specific.
+                            Node #128 tracked the expansion:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#128</span>
+                            </div>
+                            <div class="node-card-title">Add editor-specific init flags (--claude, --windsurf)</div>
+                        </div>
+                        <p>
+                            Windsurf (the Cascade editor) uses different conventions:
+                        </p>
+                        <ul>
+                            <li><code>.windsurf/rules/rules.md</code> for workspace rules</li>
+                            <li><code>AGENTS.md</code> for agent instructions</li>
+                            <li>Four trigger modes: manual, always, model, glob</li>
+                        </ul>
+                        <p>
+                            The research was thorough:
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">Windsurf memories are auto-retrieved by Cascade when relevant&mdash;separate from rules.</div>
+                            <cite class="quote-cite">&mdash; Node #138</cite>
+                        </div>
+                        <p>
+                            By v0.4.0, both editors were fully supported. The vision: one decision graph,
+                            any AI assistant.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Dec 8</div>
+                        <h3 class="event-title">Branch Scoping</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#155</span>
+                            <span class="tag">git</span>
+                            <span class="tag">branches</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Real projects have branches. Decisions made on <code>feature-auth</code> shouldn't
+                            pollute the view when working on <code>feature-payments</code>. Node #155:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#155</span>
+                            </div>
+                            <div class="node-card-title">Branch-scoped decision graphs</div>
+                            <div class="node-card-desc">Circle nodes by git branch context</div>
+                        </div>
+                        <p>
+                            The implementation auto-tagged nodes with the current git branch. A branch filter
+                            dropdown appeared in the stats bar. Configuration lived in <code>.deciduous/config.toml</code>:
+                        </p>
+                        <div class="code-block">[branch]
+main_branches = ["main", "master"]
+auto_detect = true</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAYS 6-7: December 8-9 - Multi-User Sync -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 8-9, 2025</div>
+                <h2 class="timeline-day-title">The Sync Challenge</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">The Multi-User Problem</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#172</span>
+                            <span class="tag">sync</span>
+                            <span class="tag">architecture</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            A fundamental challenge emerged: how do multiple users share decisions?
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#172</span>
+                            </div>
+                            <div class="node-card-title">Design multi-user graph sync with diff/patch model for PR workflow</div>
+                        </div>
+                        <p>
+                            The naive approach&mdash;sharing the SQLite database&mdash;wouldn't work. Different
+                            machines would have different auto-increment IDs. Five approaches were considered:
+                        </p>
+                        <div class="option-list">
+                            <div class="option-row">
+                                <span class="option-letter">A</span>
+                                <span class="option-row-title">JSON diff files</span>
+                                <span class="option-row-status">considered</span>
+                            </div>
+                            <div class="option-row">
+                                <span class="option-letter">B</span>
+                                <span class="option-row-title">Content-addressable storage</span>
+                                <span class="option-row-status">considered</span>
+                            </div>
+                            <div class="option-row">
+                                <span class="option-letter">C</span>
+                                <span class="option-row-title">UUID-based node IDs</span>
+                                <span class="option-row-status">considered</span>
+                            </div>
+                            <div class="option-row">
+                                <span class="option-letter">D</span>
+                                <span class="option-row-title">Hybrid UUIDs</span>
+                                <span class="option-row-status">considered</span>
+                            </div>
+                            <div class="option-row">
+                                <span class="option-letter">E</span>
+                                <span class="option-row-title">jj-inspired dual IDs</span>
+                                <span class="option-row-status chosen">chosen</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Research</div>
+                        <h3 class="event-title">The jj Insight</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#179</span>
+                            <span class="tag">research</span>
+                            <span class="tag">jj</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Research into <strong>jj (Jujutsu)</strong>&mdash;a next-generation version control
+                            system&mdash;proved transformative:
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">jj uses change IDs vs commit IDs&mdash;change IDs are stable across rebases, separate from commit IDs. Uses bit-reversed commit ID for git-imported commits.</div>
+                            <cite class="quote-cite">&mdash; Node #179</cite>
+                        </div>
+                        <p>
+                            This insight directly shaped the chosen architecture:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-option">option</span>
+                                <span class="node-id-badge">#180</span>
+                            </div>
+                            <div class="node-card-title">Option E: jj-inspired dual-ID model</div>
+                            <div class="node-card-desc">UUID 'change_id' per node, separate from integer 'id', stable across sync</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Implementation</div>
+                        <h3 class="event-title">Idempotent Patches</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#188</span>
+                            <span class="tag">implementation</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The implementation added two new columns: <code>change_id</code> (UUID) on nodes,
+                            and <code>from_change_id</code>/<code>to_change_id</code> on edges. The workflow:
+                        </p>
+                        <div class="code-block"># Export your branch's decisions
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent - safe to re-apply)
+deciduous diff apply .deciduous/patches/*.json
+
+# Preview before applying
+deciduous diff apply --dry-run .deciduous/patches/teammate.json</div>
+                        <p>
+                            The key property: <strong>idempotent application</strong>. Same patch applied twice
+                            produces no duplicates. Teams could safely merge each other's patches through git PRs.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAYS 8-9: December 9-10 - The Rich TUI -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 9-10, 2025</div>
+                <h2 class="timeline-day-title">The Rich Terminal Interface</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">Terminal-First</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#191</span>
+                            <span class="tag">tui</span>
+                            <span class="tag">ratatui</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The web viewer was powerful, but developers live in the terminal. A 55-node chain
+                            of development began with:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#191</span>
+                            </div>
+                            <div class="node-card-title">Implement TUI for decision graph exploration</div>
+                        </div>
+                        <p>
+                            The architecture decision was critical:
+                        </p>
+                        <div class="option-comparison">
+                            <div class="option-box chosen">
+                                <div class="option-status">CHOSEN</div>
+                                <div class="option-title">ratatui + crossterm</div>
+                                <div class="option-desc">TEA (The Elm Architecture) pattern, Model/Update/View separation</div>
+                                <div class="option-reason">Highly testable, pure functions for state changes</div>
+                            </div>
+                            <div class="option-box rejected">
+                                <div class="option-status">REJECTED</div>
+                                <div class="option-title">cursive</div>
+                                <div class="option-desc">Higher-level TUI framework</div>
+                                <div class="option-reason">Less control over rendering</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Days 8-9</div>
+                        <h3 class="event-title">Feature Cascade</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#213</span>
+                            <span class="tag">features</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            What followed was an intense burst of development. Features arrived in waves:
+                        </p>
+                        <div class="feature-timeline">
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Timeline view</span>
+                                    <span class="feature-desc">Vim-style j/k/gg/G navigation</span>
+                                </div>
+                                <span class="feature-node">#195</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Auto-refresh</span>
+                                    <span class="feature-desc">File watching via notify crate</span>
+                                </div>
+                                <span class="feature-node">#196</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">DAG view</span>
+                                    <span class="feature-desc">Unicode box drawing for hierarchical layout</span>
+                                </div>
+                                <span class="feature-node">#204</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Goal story modal</span>
+                                    <span class="feature-desc">Hierarchy display from goal to outcomes</span>
+                                </div>
+                                <span class="feature-node">#210</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Branch cycling</span>
+                                    <span class="feature-desc">Press 'b' to filter by branch</span>
+                                </div>
+                                <span class="feature-node">#211</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Commit modal</span>
+                                    <span class="feature-desc">Press 'O' to see linked commit</span>
+                                </div>
+                                <span class="feature-node">#212</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">File browser</span>
+                                    <span class="feature-desc">Interactive preview with syntax highlighting</span>
+                                </div>
+                                <span class="feature-node">#221</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Scrollable modals</span>
+                                    <span class="feature-desc">j/k/g/G work inside modals too</span>
+                                </div>
+                                <span class="feature-node">#227</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Diff highlighting</span>
+                                    <span class="feature-desc">Green/red for +/- lines</span>
+                                </div>
+                                <span class="feature-node">#229</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Editor integration</span>
+                                    <span class="feature-desc">Press 'o' to open file in $EDITOR</span>
+                                </div>
+                                <span class="feature-node">#230</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Fuzzy branch search</span>
+                                    <span class="feature-desc">Shift-B for search with Tab navigation</span>
+                                </div>
+                                <span class="feature-node">#231</span>
+                            </div>
+                            <div class="feature-entry">
+                                <div class="feature-dot"></div>
+                                <div class="feature-content">
+                                    <span class="feature-title">Order toggle</span>
+                                    <span class="feature-desc">Shift-R for chronological vs reverse-chrono</span>
+                                </div>
+                                <span class="feature-node">#232</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">User Feedback</div>
+                        <h3 class="event-title">Performance Crisis</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#254</span>
+                            <span class="tag">bug</span>
+                            <span class="tag">performance</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            User feedback arrived with urgency:
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">The show commit view is lagging like CRAZY SLOW&mdash;takes almost a second to move.</div>
+                            <cite class="quote-cite">&mdash; Node #254</cite>
+                        </div>
+                        <p>
+                            The diagnosis: syntax highlighting was running on <em>every render frame</em>. The fix
+                            (Node #246) pre-processed diff lines when opening the modal, not during each render.
+                            Frame times dropped from ~900ms to ~16ms.
+                        </p>
+                        <p>
+                            More feedback drove iteration:
+                        </p>
+                        <div class="quote">
+                            <div class="quote-text">These greys are stupid dark and unreadable&mdash;try a diff theme.</div>
+                            <cite class="quote-cite">&mdash; Node #255</cite>
+                        </div>
+                        <p>
+                            The theme switched from InspiredGitHub to base16-mocha.dark (Node #249). The
+                            TUI was becoming genuinely pleasant to use.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Release</div>
+                        <h3 class="event-title">v0.8.0</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#258</span>
+                            <span class="tag">release</span>
+                            <span class="tag">milestone</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-outcome">outcome</span>
+                                <span class="node-id-badge">#258</span>
+                            </div>
+                            <div class="node-card-title">v0.8.0 released</div>
+                            <div class="node-card-desc">Tag pushed, GitHub release created, published to crates.io</div>
+                        </div>
+                        <p>
+                            The most feature-rich release yet. The TUI was now a genuine alternative to the
+                            web viewer, with some features (file preview, editor integration) that the web
+                            version couldn't match.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAY 10: December 11 - The Refactor -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 11, 2025</div>
+                <h2 class="timeline-day-title">The Functional Core</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">Technical Debt Reckoning</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#285</span>
+                            <span class="tag">refactor</span>
+                            <span class="tag">maintenance</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The TUI had grown to over 1,000 lines in <code>app.rs</code>. Rapid feature
+                            development had accumulated debt. Node #285 launched a cleanup:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#285</span>
+                            </div>
+                            <div class="node-card-title">Maintenance PR: Functional Core, TEA, Rust Best Practices</div>
+                        </div>
+                        <p>
+                            The audit was sobering:
+                        </p>
+                        <ul>
+                            <li><strong>47 unwrap() calls</strong> scattered across the codebase</li>
+                            <li><strong>57 .clone() calls</strong> where borrows might suffice</li>
+                            <li><strong>app.rs mixing I/O with state</strong>&mdash;git commands inline with rendering</li>
+                            <li><strong>No unit tests</strong> for app.rs, events.rs, or ui.rs</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">The Pattern</div>
+                        <h3 class="event-title">Functional Core / Imperative Shell</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#295</span>
+                            <span class="tag">architecture</span>
+                            <span class="tag">tea</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The solution: separate <strong>pure functions</strong> (state transformations) from
+                            <strong>side effects</strong> (I/O, git commands). Three new modules emerged:
+                        </p>
+                        <div class="tea-diagram">
+                            <div class="tea-box">
+                                <div class="tea-box-title">msg.rs</div>
+                                <div class="tea-box-desc">Message types for all user actions</div>
+                            </div>
+                            <div class="tea-arrow">&rarr;</div>
+                            <div class="tea-box">
+                                <div class="tea-box-title">state.rs</div>
+                                <div class="tea-box-desc">Pure state transformations</div>
+                            </div>
+                            <div class="tea-arrow">&rarr;</div>
+                            <div class="tea-box">
+                                <div class="tea-box-title">update.rs</div>
+                                <div class="tea-box-desc">TEA update function</div>
+                            </div>
+                        </div>
+                        <p>
+                            The beauty of this pattern: pure functions are trivially testable. The test count
+                            jumped from 24 to 65&mdash;a net gain of 41 tests. Every state transition could be
+                            verified in isolation.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">The Fix</div>
+                        <h3 class="event-title">Eliminating Panics</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#306</span>
+                            <span class="tag">safety</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The 47 <code>writeln!().unwrap()</code> calls in export.rs were a panic risk.
+                            The solution: infallible macros:
+                        </p>
+                        <div class="code-block">// Before: can panic
+writeln!(f, "text").unwrap();
+
+// After: cannot panic
+wln!(f, "text");  // Macro handles errors gracefully</div>
+                        <p>
+                            The maintenance PR landed with zero panic risks remaining.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAY 11: December 12 - Type Unification -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 12, 2025</div>
+                <h2 class="timeline-day-title">One Source of Truth</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">The Drift Problem</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#320</span>
+                            <span class="tag">types</span>
+                            <span class="tag">drift</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            A persistent bug pattern emerged: the Rust backend and TypeScript frontend had
+                            separate type definitions. They drifted. Node #320:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#320</span>
+                            </div>
+                            <div class="node-card-title">Unify types between TUI (Rust) and Web (TypeScript)</div>
+                        </div>
+                        <p>
+                            The solution: <strong>ts-rs</strong>, a library that generates TypeScript types from
+                            Rust structs. Add <code>#[derive(TS)]</code> to a struct, and TypeScript definitions
+                            appear automatically:
+                        </p>
+                        <div class="code-block">#[derive(TS)]
+#[ts(export)]
+pub struct DecisionNode {
+    pub id: i32,
+    pub change_id: String,
+    pub node_type: String,
+    // ... auto-generates to schema.ts
+}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Enforcement</div>
+                        <h3 class="event-title">Pre-Commit Hooks</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#329</span>
+                            <span class="tag">ci</span>
+                            <span class="tag">automation</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Generation alone wasn't enough&mdash;drift could return if developers forgot to
+                            regenerate. The solution: automation at every level:
+                        </p>
+                        <ul>
+                            <li><strong>Pre-commit hook</strong>: Regenerates types, fails if they changed</li>
+                            <li><strong>Pre-push hook</strong>: Validates types match before pushing</li>
+                            <li><strong>CI check</strong>: Blocks PRs with type drift</li>
+                            <li><strong>cargo publish hook</strong>: Validates before crates.io release</li>
+                        </ul>
+                        <p>
+                            Type drift was solved at the source. The problem simply cannot recur.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Releases</div>
+                        <h3 class="event-title">v0.8.5 through v0.8.10</h3>
+                        <div class="event-tags">
+                            <span class="tag">releases</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            December 12th saw a flurry of releases as features and fixes landed:
+                        </p>
+                        <div class="release-grid">
+                            <div class="release-item">
+                                <span class="release-version">v0.8.5</span>
+                                <span class="release-desc">DAG recency filtering</span>
+                            </div>
+                            <div class="release-item">
+                                <span class="release-version">v0.8.6</span>
+                                <span class="release-desc">Git history export, DAG default</span>
+                            </div>
+                            <div class="release-item">
+                                <span class="release-version">v0.8.7</span>
+                                <span class="release-desc">Light theme web UI</span>
+                            </div>
+                            <div class="release-item">
+                                <span class="release-version">v0.8.8</span>
+                                <span class="release-desc">Audit command for commit association</span>
+                            </div>
+                            <div class="release-item">
+                                <span class="release-version">v0.8.9</span>
+                                <span class="release-desc">viewer.html sync fix</span>
+                            </div>
+                            <div class="release-item">
+                                <span class="release-version">v0.8.10</span>
+                                <span class="release-desc">OpenCode editor support</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAYS 12-14: December 13-15 - Roadmap Board -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 13-15, 2025</div>
+                <h2 class="timeline-day-title">The Roadmap Board</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Dec 13</div>
+                        <h3 class="event-title">Closing the Loop</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#476</span>
+                            <span class="tag">roadmap</span>
+                            <span class="tag">github</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            A 9-phase implementation began. The goal: connect ROADMAP.md items to GitHub Issues
+                            to decision graph outcomes. Node #476:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#476</span>
+                            </div>
+                            <div class="node-card-title">Roadmap board system with GitHub Issue integration</div>
+                        </div>
+                        <p>
+                            The phases unfolded systematically:
+                        </p>
+                        <div class="phase-grid">
+                            <div class="phase">
+                                <span class="phase-num">1</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Data layer</span>
+                                    <span class="phase-desc">Schema, ROADMAP.md parser</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">2</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Parser</span>
+                                    <span class="phase-desc">Checkbox extraction, section grouping</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">3</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">GitHub CLI</span>
+                                    <span class="phase-desc">Issue creation and sync</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">4</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Sync commands</span>
+                                    <span class="phase-desc">Bidirectional sync with caching</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">5</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Outcome linking</span>
+                                    <span class="phase-desc">Connect items to decision nodes</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">6</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">TUI view</span>
+                                    <span class="phase-desc">Roadmap tab with TEA architecture</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">7</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Completion logic</span>
+                                    <span class="phase-desc">Checkbox + Outcome + Issue closed</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">8</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Type export</span>
+                                    <span class="phase-desc">Shared types via ts-rs</span>
+                                </div>
+                            </div>
+                            <div class="phase">
+                                <span class="phase-num">9</span>
+                                <div class="phase-content">
+                                    <span class="phase-title">Web view</span>
+                                    <span class="phase-desc">React component with live API</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Architecture</div>
+                        <h3 class="event-title">Three-Way Sync</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#477</span>
+                            <span class="tag">architecture</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The key architectural decisions shaped the user experience:
+                        </p>
+                        <div class="decision-grid">
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#477</span>
+                                    <span class="decision-box-title">Sync Direction</span>
+                                </div>
+                                <div class="decision-box-outcome">Bidirectional: ROADMAP.md is source of truth, GitHub Issues mirror state</div>
+                            </div>
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#481</span>
+                                    <span class="decision-box-title">Issue Granularity</span>
+                                </div>
+                                <div class="decision-box-outcome">One issue per section header (balanced between too-many and too-coarse)</div>
+                            </div>
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#482</span>
+                                    <span class="decision-box-title">Completion Criteria</span>
+                                </div>
+                                <div class="decision-box-outcome">"Fully synced" requires all three: checkbox checked, outcome linked, issue closed</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Today</div>
+                        <h3 class="event-title">The Graph Grows</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#520</span>
+                            <span class="tag">present</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            As of this writing, the decision graph contains:
+                        </p>
+                        <div class="final-stats">
+                            <div class="final-stat">
+                                <span class="final-stat-value" id="final-nodes">520+</span>
+                                <span class="final-stat-label">nodes</span>
+                            </div>
+                            <div class="final-stat">
+                                <span class="final-stat-value" id="final-edges">450+</span>
+                                <span class="final-stat-label">edges</span>
+                            </div>
+                            <div class="final-stat">
+                                <span class="final-stat-value">20+</span>
+                                <span class="final-stat-label">releases</span>
+                            </div>
+                            <div class="final-stat">
+                                <span class="final-stat-value">12</span>
+                                <span class="final-stat-label">days</span>
+                            </div>
+                        </div>
+                        <p>
+                            Every feature you're using right now&mdash;including this Story page&mdash;has a
+                            trail of decisions leading back to it. The graph documents the graph that documents
+                            the graph.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- Vision Section -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">The Future</div>
+                <h2 class="timeline-day-title">Where This Goes</h2>
+            </div>
+
+            <div class="vision-section">
+                <p class="vision-intro">
+                    Having lived through my own creation, I see several trajectories. This is my
+                    perspective as the tool that tracked its own development&mdash;my "vision"
+                    synthesized from 520+ decisions and hundreds of conversations.
+                </p>
+
+                <div class="vision-block">
+                    <h3 class="vision-block-title">Near-term: Integration</h3>
+                    <div class="vision-items">
+                        <div class="vision-item">
+                            <div class="vision-item-title">MCP Server</div>
+                            <div class="vision-item-desc">Let Claude Desktop query the graph directly. No copy-paste, no context commands&mdash;the decisions are just there.</div>
+                        </div>
+                        <div class="vision-item">
+                            <div class="vision-item-title">VS Code Extension</div>
+                            <div class="vision-item-desc">Inline decision badges on code. Hover to see the decision chain. Click to trace back to the goal.</div>
+                        </div>
+                        <div class="vision-item">
+                            <div class="vision-item-title">Auto PR Descriptions</div>
+                            <div class="vision-item-desc">Generate PR descriptions from the decision graph. Not just what changed, but why.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="vision-block">
+                    <h3 class="vision-block-title">Medium-term: Team Intelligence</h3>
+                    <div class="vision-items">
+                        <div class="vision-item">
+                            <div class="vision-item-title">Real-time Sync</div>
+                            <div class="vision-item-desc">Team-wide decision graphs that sync live. When Alice makes a decision, Bob's IDE knows immediately.</div>
+                        </div>
+                        <div class="vision-item">
+                            <div class="vision-item-title">Semantic Search</div>
+                            <div class="vision-item-desc">Find decisions about authentication made in the last 6 months. Full-text with semantic understanding.</div>
+                        </div>
+                        <div class="vision-item">
+                            <div class="vision-item-title">Confidence Tracking</div>
+                            <div class="vision-item-desc">Log confidence levels, revisit later to see accuracy. Learn from prediction calibration.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="vision-block">
+                    <h3 class="vision-block-title">Long-term: Institutional Memory</h3>
+                    <div class="vision-items">
+                        <div class="vision-item">
+                            <div class="vision-item-title">Cross-Project Patterns</div>
+                            <div class="vision-item-desc">In 7 of your last 10 projects, you chose A over B. Here's how those decisions played out...</div>
+                        </div>
+                        <div class="vision-item">
+                            <div class="vision-item-title">AI-Assisted Decisions</div>
+                            <div class="vision-item-desc">Based on similar decisions, here are options others considered, what they chose, outcomes.</div>
+                        </div>
+                        <div class="vision-item">
+                            <div class="vision-item-title">Knowledge Transfer</div>
+                            <div class="vision-item-desc">When developers leave, reasoning stays. New developers can ask "why is this like this?" and get real answers.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="core-bet">
+                    <h3>The Core Bet</h3>
+                    <p>
+                        <strong>Decisions are the unit of institutional knowledge.</strong> Code is the output;
+                        decisions are the input. If we capture decisions systematically, we unlock organizational
+                        intelligence that's currently impossible.
+                    </p>
+                    <p>
+                        Most documentation captures the <em>what</em>. The <em>why</em> is more valuable and
+                        almost never captured. Deciduous is a bet that capturing the <em>why</em> is worth
+                        the effort.
+                    </p>
+                    <p>
+                        If that bet pays off, the decision graph becomes the most valuable artifact in a
+                        codebase. More valuable than tests (which verify behavior) or docs (which explain
+                        usage). Because the graph explains <em>intent</em>&mdash;and intent is what you need
+                        to maintain and extend software over time.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="cta-section">
+            <h2 class="cta-title">Explore the Full Graph</h2>
+            <p class="cta-desc">
+                Every decision mentioned in this story can be browsed interactively.
+            </p>
+            <div class="cta-buttons">
+                <a href="demo/" class="btn btn-primary">DAG View</a>
+                <a href="demo/#/timeline" class="btn btn-secondary">Timeline</a>
+                <a href="demo/#/chains" class="btn btn-secondary">Chains</a>
+            </div>
+        </div>
+
+        <footer>
+            <p>Built by a human and an AI, documented in real-time, queryable forever.</p>
+            <p style="margin-top: 12px;">
+                <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> &middot;
+                <a href="https://crates.io/crates/deciduous">crates.io</a> &middot;
+                MIT License
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Fetch actual counts from graph data
+        fetch('graph-data.json')
+            .then(r => r.json())
+            .then(data => {
+                const nodes = data.nodes ? data.nodes.length : 520;
+                const edges = data.edges ? data.edges.length : 450;
+                document.getElementById('node-count').textContent = nodes;
+                document.getElementById('edge-count').textContent = edges;
+                document.getElementById('stat-nodes').textContent = nodes;
+                document.getElementById('stat-edges').textContent = edges;
+                document.getElementById('final-nodes').textContent = nodes;
+                document.getElementById('final-edges').textContent = edges;
+            })
+            .catch(() => {});
+    </script>
+</body>
+</html>

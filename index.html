@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deciduous - Decision Graph Tooling</title>
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="Deciduous - Decision Graph Tooling">
+    <meta name="description" content="Track every goal, decision, and outcome in AI-assisted development. Survive context loss. Query your reasoning. Never forget why you chose approach A over B.">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://notactuallytreyanastasio.github.io/deciduous/">
+    <meta property="og:title" content="Deciduous - Decision Graph Tooling">
+    <meta property="og:description" content="Track every goal, decision, and outcome in AI-assisted development. Survive context loss. Query your reasoning. Never forget why you chose approach A over B.">
+    <meta property="og:image" content="https://notactuallytreyanastasio.github.io/deciduous/og-image.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://notactuallytreyanastasio.github.io/deciduous/">
+    <meta property="twitter:title" content="Deciduous - Decision Graph Tooling">
+    <meta property="twitter:description" content="Track every goal, decision, and outcome in AI-assisted development. Survive context loss. Query your reasoning.">
+    <meta property="twitter:image" content="https://notactuallytreyanastasio.github.io/deciduous/og-image.png">
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #24292f;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .top-nav {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #d0d7de;
+        }
+        .top-nav a {
+            color: #57606a;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.15s;
+        }
+        .top-nav a:hover { color: #0969da; }
+
+        .session-demo {
+            background: #1e1e1e;
+            border-radius: 12px;
+            overflow: hidden;
+            margin: 30px 0;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+        .session-header {
+            background: #2d2d2d;
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .session-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .session-dot.red { background: #ff5f56; }
+        .session-dot.yellow { background: #ffbd2e; }
+        .session-dot.green { background: #27c93f; }
+        .session-title {
+            color: #888;
+            font-size: 0.85rem;
+            margin-left: 8px;
+        }
+        .session-content {
+            padding: 20px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            max-height: 400px;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        .session-content::-webkit-scrollbar {
+            width: 8px;
+        }
+        .session-content::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+        .session-content::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+        .session-content::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+        .session-step {
+            opacity: 0;
+            transform: translateY(10px);
+            animation: fadeInStep 0.5s ease forwards;
+            animation-delay: var(--delay);
+            margin-bottom: 16px;
+        }
+        .session-step:last-child { margin-bottom: 0; }
+        @keyframes fadeInStep {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .step-label {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .step-label.user {
+            background: #3b82f6;
+            color: #fff;
+        }
+        .step-label.claude {
+            background: #d97706;
+            color: #fff;
+        }
+        .step-content {
+            color: #e5e5e5;
+            padding-left: 4px;
+        }
+        .step-content.code {
+            color: #7ee787;
+        }
+        .step-output {
+            color: #8b949e;
+            font-size: 0.85rem;
+            margin-top: 4px;
+            padding-left: 4px;
+        }
+        .step-files {
+            color: #f97583;
+            font-size: 0.85rem;
+            margin-top: 4px;
+            padding-left: 4px;
+        }
+        .session-divider {
+            text-align: center;
+            padding: 20px 0;
+            opacity: 0;
+            animation: fadeInStep 0.5s ease forwards;
+            animation-delay: var(--delay);
+        }
+        .session-divider span {
+            background: #374151;
+            color: #9ca3af;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .session-step.recovery .step-label.user {
+            background: #10b981;
+        }
+        .step-recovery-output {
+            background: #1a3a1a;
+            border: 1px solid #22543d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            color: #86efac;
+            font-size: 0.85rem;
+        }
+        .step-recovery-output strong {
+            color: #4ade80;
+        }
+        .replay-btn {
+            margin-left: auto;
+            background: #374151;
+            color: #9ca3af;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .replay-btn:hover {
+            background: #4b5563;
+            color: #e5e7eb;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        header h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            color: #24292f;
+            margin-bottom: 15px;
+            letter-spacing: -1px;
+        }
+        .tagline {
+            font-size: 1.3rem;
+            color: #57606a;
+            margin-bottom: 8px;
+        }
+        .tagline-secondary {
+            font-size: 1rem;
+            color: #6e7781;
+        }
+
+        .stats-banner {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            padding: 24px 0;
+            margin: 20px 0 30px 0;
+            background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%);
+            border-radius: 12px;
+            border: 1px solid #d1fae5;
+            flex-wrap: wrap;
+        }
+        .stat-item { text-align: center; }
+        .stat-num {
+            display: block;
+            font-size: 32px;
+            font-weight: 700;
+            color: #059669;
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #6b7280;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 6px;
+        }
+        .stat-link {
+            text-decoration: none;
+            padding: 12px 16px;
+            border-radius: 8px;
+            transition: all 0.15s;
+        }
+        .stat-link:hover {
+            background: rgba(5, 150, 105, 0.1);
+            transform: translateY(-2px);
+        }
+        .stat-link:hover .stat-num { color: #047857; }
+        .stat-link:hover .stat-label { color: #059669; }
+        .stat-cta {
+            background: rgba(5, 150, 105, 0.08);
+            border: 1px dashed #059669;
+        }
+        .stat-cta .stat-num {
+            font-size: 24px;
+        }
+
+        .elevator-pitch {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 10px;
+            padding: 25px 30px;
+            margin: 30px 0;
+            text-align: left;
+        }
+        .elevator-pitch p {
+            color: #24292f;
+            margin-bottom: 15px;
+            line-height: 1.7;
+        }
+        .elevator-pitch p:last-child { margin-bottom: 0; }
+        .elevator-pitch code {
+            background: #e6ffec;
+            color: #1a7f37;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+
+        .code-block {
+            background: #24292f;
+            color: #f6f8fa;
+            padding: 25px 30px;
+            border-radius: 10px;
+            margin: 40px 0;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.95rem;
+            overflow-x: auto;
+        }
+        .code-block .comment { color: #8b949e; }
+        .code-block .cmd { color: #7ee787; }
+
+        .buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 40px 0;
+            flex-wrap: wrap;
+        }
+        .btn {
+            padding: 12px 24px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.15s;
+        }
+        .btn-primary {
+            background: #2da44e;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #238636; }
+        .btn-secondary {
+            background: #f6f8fa;
+            color: #24292f;
+            border: 1px solid #d0d7de;
+        }
+        .btn-secondary:hover { background: #eaeef2; }
+
+        h2 {
+            font-size: 1.4rem;
+            color: #24292f;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #d0d7de;
+        }
+
+        section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
+        }
+        section:first-of-type {
+            margin-top: 30px;
+            padding-top: 0;
+            border-top: none;
+        }
+        section h2 {
+            border: none;
+            padding-bottom: 0;
+        }
+        section p {
+            color: #57606a;
+            margin-bottom: 15px;
+        }
+        section a {
+            color: #0969da;
+            text-decoration: none;
+        }
+        section a:hover { text-decoration: underline; }
+
+        .proof-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 25px;
+        }
+        @media (max-width: 600px) {
+            .proof-grid { grid-template-columns: 1fr; }
+        }
+        .proof-card {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .proof-card h3 {
+            color: #24292f;
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        .proof-card p {
+            font-size: 0.9rem;
+            margin: 0;
+            color: #57606a;
+        }
+        .proof-card.highlight {
+            background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
+            border-color: #c7d2fe;
+        }
+        .proof-card.highlight h3 { color: #3730a3; }
+
+        .editor-badges {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        .editor-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 16px;
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            font-weight: 500;
+            color: #24292f;
+        }
+        .editor-badge code {
+            background: #e6e6e6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
+        }
+
+        .view-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+        @media (max-width: 700px) {
+            .view-cards { grid-template-columns: 1fr; }
+        }
+        .view-card {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            padding: 20px;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        .view-card:hover {
+            border-color: #0969da;
+            background: #ffffff;
+        }
+        .view-card h3 {
+            color: #24292f;
+            font-size: 1rem;
+            margin-bottom: 8px;
+        }
+        .view-card p {
+            font-size: 0.85rem;
+            margin: 0;
+            color: #57606a;
+        }
+        .view-card .icon {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        .node-types {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+        @media (max-width: 700px) {
+            .node-types { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 450px) {
+            .node-types { grid-template-columns: 1fr; }
+        }
+        .node-type {
+            background: #f6f8fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #d0d7de;
+        }
+        .node-type h3 {
+            color: #24292f;
+            font-size: 0.95rem;
+            margin-bottom: 5px;
+        }
+        .node-type p {
+            font-size: 0.85rem;
+            margin: 0;
+            color: #57606a;
+        }
+        .node-type.goal h3 { color: #d29922; }
+        .node-type.decision h3 { color: #0969da; }
+        .node-type.option h3 { color: #8250df; }
+        .node-type.action h3 { color: #2da44e; }
+        .node-type.outcome h3 { color: #1f6feb; }
+        .node-type.observation h3 { color: #bf3989; }
+
+        .workflow {
+            background: #f6f8fa;
+            padding: 25px;
+            border-radius: 8px;
+            border: 1px solid #d0d7de;
+            margin-top: 20px;
+        }
+        .workflow-step {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .workflow-step:last-child { margin-bottom: 0; }
+        .workflow-num {
+            flex-shrink: 0;
+            width: 28px;
+            height: 28px;
+            background: #2da44e;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.85rem;
+        }
+        .workflow-content h4 {
+            color: #24292f;
+            font-size: 0.95rem;
+            margin-bottom: 4px;
+        }
+        .workflow-content p {
+            font-size: 0.9rem;
+            margin: 0;
+            color: #57606a;
+        }
+        .workflow-content code {
+            background: #e6ffec;
+            color: #1a7f37;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+
+        .demo-section h2 {
+            border: none;
+            padding-bottom: 0;
+            margin-bottom: 20px;
+        }
+        .demo-player-container {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 25px 0;
+        }
+        .demo-player-container iframe {
+            display: block;
+            width: 100%;
+            height: 500px;
+            border: 0;
+        }
+
+        .pr-card {
+            display: block;
+            padding: 16px 20px;
+            margin-bottom: 12px;
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        .pr-card:hover {
+            border-color: #0969da;
+            background: #ffffff;
+        }
+        .pr-number {
+            display: inline-block;
+            background: #ddf4ff;
+            color: #0969da;
+            font-weight: 600;
+            font-size: 0.85rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        .pr-title {
+            color: #24292f;
+            font-weight: 600;
+        }
+        .pr-desc {
+            display: block;
+            color: #57606a;
+            font-size: 0.9rem;
+            margin-top: 8px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            margin-top: 40px;
+            color: #6e7781;
+            font-size: 0.9rem;
+        }
+        footer a { color: #0969da; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+
+        /* Quickstart section */
+        .quickstart-section {
+            margin-top: 50px;
+            padding-top: 30px;
+            border-top: 1px solid #d0d7de;
+        }
+        .quickstart-section h2 {
+            border: none;
+            padding-bottom: 0;
+        }
+        .quickstart-section > p {
+            color: #57606a;
+            margin-bottom: 30px;
+        }
+        .quickstart-step {
+            margin-bottom: 30px;
+        }
+        .quickstart-step-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .quickstart-num {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            background: #2da44e;
+            color: #fff;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1rem;
+        }
+        .quickstart-info h3 {
+            color: #24292f;
+            font-size: 1.1rem;
+            margin: 0 0 4px 0;
+        }
+        .quickstart-info p {
+            color: #57606a;
+            font-size: 0.9rem;
+            margin: 0;
+        }
+        .quickstart-terminal {
+            background: #1e1e1e;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .quickstart-content {
+            padding: 16px 20px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.85rem;
+            line-height: 1.7;
+        }
+        .qs-step {
+            opacity: 0;
+            animation: fadeInStep 0.4s ease forwards;
+            animation-delay: var(--delay);
+        }
+        .qs-prompt {
+            color: #7ee787;
+            margin-right: 8px;
+        }
+        .qs-cmd {
+            color: #e5e5e5;
+        }
+        .qs-output {
+            color: #8b949e;
+            padding-left: 20px;
+        }
+        .qs-success {
+            color: #7ee787;
+            padding-left: 20px;
+        }
+        .qs-comment {
+            color: #6e7681;
+            font-style: italic;
+        }
+        .qs-tree {
+            color: #a5d6ff;
+            padding-left: 20px;
+            font-size: 0.8rem;
+        }
+        .quickstart-cta {
+            display: flex;
+            gap: 15px;
+            margin-top: 40px;
+            justify-content: center;
+        }
+        /* Claude session styling for quickstart */
+        .qs-claude-session .quickstart-content {
+            padding: 16px 20px;
+        }
+        .qs-user-msg {
+            color: #e5e5e5;
+            padding-left: 4px;
+            margin-top: 4px;
+        }
+        .qs-claude-msg {
+            color: #e5e5e5;
+            padding-left: 4px;
+            margin-top: 4px;
+        }
+        .qs-cmd-inline {
+            color: #7ee787;
+            font-size: 0.85rem;
+            padding: 4px 0;
+        }
+        .qs-recovery-box {
+            background: #1a3a1a;
+            border: 1px solid #22543d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            color: #86efac;
+            font-size: 0.85rem;
+        }
+        .qs-recovery-box strong {
+            color: #4ade80;
+        }
+        .qs-tree-line {
+            color: #a5d6ff;
+            display: block;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <nav class="top-nav">
+            <a href="story.html">Story</a>
+            <a href="tutorial/">Tutorial</a>
+            <a href="demo/">Live Graph</a>
+            <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+            <a href="https://crates.io/crates/deciduous">crates.io</a>
+        </nav>
+
+        <header>
+            <h1>DECIDUOUS</h1>
+            <p class="tagline">Decision graph tooling for AI-assisted development.</p>
+            <p class="tagline-secondary">Track every goal, decision, and outcome. Survive context loss. Query your reasoning.</p>
+        </header>
+
+        <div class="session-demo">
+            <div class="session-header">
+                <span class="session-dot red"></span>
+                <span class="session-dot yellow"></span>
+                <span class="session-dot green"></span>
+                <span class="session-title">Claude Code Session</span>
+                <button class="replay-btn" onclick="replayDemo()">Replay</button>
+            </div>
+            <div class="session-content" id="session-content">
+                <!-- Session starts with /recover -->
+                <div class="session-step" style="--delay: 0s">
+                    <div class="step-label user">You</div>
+                    <div class="step-content">/recover</div>
+                </div>
+                <div class="session-step" style="--delay: 1s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">Recovering context from decision graph...</div>
+                </div>
+                <div class="session-step" style="--delay: 2s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous nodes --branch feature/api -n 10</div>
+                    <div class="step-output">Querying recent decisions...</div>
+                </div>
+                <div class="session-step" style="--delay: 3.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-recovery-output">
+                        <strong>Branch:</strong> feature/api<br><br>
+                        <strong>Goal #89:</strong> Build REST API for user management [95%]<br>
+                        &nbsp;&nbsp;↳ <strong>Decision #90:</strong> Choose API framework [85%]<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Option #91:</strong> Axum (chosen) [90%]<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Option #92:</strong> Actix-web (rejected) [70%]<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Action #93:</strong> Implement CRUD endpoints [85%]<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Outcome #94:</strong> Basic CRUD working [90%] [commit: f4e2a1b]<br><br>
+                        <strong>Pending:</strong> Authentication not yet implemented<br>
+                        <strong>Last commit:</strong> f4e2a1b "feat: add user CRUD endpoints"
+                    </div>
+                </div>
+
+                <!-- Claude summarizes -->
+                <div class="session-step" style="--delay: 6s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">You're building a REST API with Axum. CRUD endpoints are done (commit f4e2a1b). Authentication is the next step. What would you like to work on?</div>
+                </div>
+
+                <!-- User continues -->
+                <div class="session-step" style="--delay: 8s">
+                    <div class="step-label user">You</div>
+                    <div class="step-content">Add JWT authentication to protect the endpoints</div>
+                </div>
+
+                <!-- Claude logs goal -->
+                <div class="session-step" style="--delay: 9.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">I'll add JWT auth. Let me log this goal and connect it to the API work.</div>
+                </div>
+                <div class="session-step" style="--delay: 10.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add goal "Add JWT authentication" -c 90 -p "User wants JWT auth for API endpoints"</div>
+                    <div class="step-output">Created node 95 (type: goal) [confidence: 90%] [branch: feature/api]</div>
+                </div>
+                <div class="session-step" style="--delay: 11.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous link 94 95 -r "Building on completed CRUD work"</div>
+                    <div class="step-output">Created edge 112 (94 → 95 via leads_to)</div>
+                </div>
+
+                <!-- Decision point -->
+                <div class="session-step" style="--delay: 13s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">I need to decide on token storage. Let me log the decision and options.</div>
+                </div>
+                <div class="session-step" style="--delay: 14s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add decision "Token storage strategy" -c 80</div>
+                    <div class="step-output">Created node 96 (type: decision) [confidence: 80%]</div>
+                </div>
+                <div class="session-step" style="--delay: 15s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous link 95 96 -r "Must decide before implementing"</div>
+                    <div class="step-output">Created edge 113 (95 → 96 via leads_to)</div>
+                </div>
+
+                <!-- Options -->
+                <div class="session-step" style="--delay: 16.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add option "httpOnly cookies" -c 85 && deciduous add option "localStorage" -c 60</div>
+                    <div class="step-output">Created node 97 (type: option) [confidence: 85%]<br>Created node 98 (type: option) [confidence: 60%]</div>
+                </div>
+                <div class="session-step" style="--delay: 17.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">httpOnly cookies are more secure (XSS resistant). I'll go with that approach.</div>
+                </div>
+
+                <!-- Action -->
+                <div class="session-step" style="--delay: 19s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add action "Implement JWT with httpOnly cookies" -c 85 -f "src/auth.rs,src/middleware.rs"</div>
+                    <div class="step-output">Created node 99 (type: action) [files: src/auth.rs, src/middleware.rs]</div>
+                </div>
+
+                <!-- Implementation -->
+                <div class="session-step" style="--delay: 20.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">Implementing auth middleware...</div>
+                    <div class="step-files">Writing: src/auth.rs, src/middleware.rs, src/routes/login.rs</div>
+                </div>
+
+                <!-- Commit -->
+                <div class="session-step" style="--delay: 22s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">git add -A && git commit -m "feat: add JWT auth with httpOnly cookies"</div>
+                    <div class="step-output">[feature/api c8d3e2f] feat: add JWT auth with httpOnly cookies<br>3 files changed, 189 insertions(+)</div>
+                </div>
+
+                <!-- Outcome -->
+                <div class="session-step" style="--delay: 23.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add outcome "JWT auth implemented" -c 95 --commit HEAD</div>
+                    <div class="step-output">Created node 100 (type: outcome) [confidence: 95%] [commit: c8d3e2f]</div>
+                </div>
+                <div class="session-step" style="--delay: 24.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous link 99 100 -r "Implementation successful"</div>
+                    <div class="step-output">Created edge 118 (99 → 100 via leads_to)</div>
+                </div>
+
+                <!-- Sync -->
+                <div class="session-step" style="--delay: 26s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous sync</div>
+                    <div class="step-output">Exported graph to docs/graph-data.json<br>&nbsp;&nbsp;100 nodes, 118 edges</div>
+                </div>
+
+                <!-- Done -->
+                <div class="session-step" style="--delay: 27.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content">JWT authentication is implemented and linked to commit c8d3e2f. The decision graph now shows the full chain from API goal through auth implementation. What's next?</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-banner">
+            <a href="demo/" class="stat-item stat-link">
+                <span class="stat-num" id="node-count">540+</span>
+                <span class="stat-label">Decisions Tracked</span>
+            </a>
+            <a href="demo/" class="stat-item stat-link">
+                <span class="stat-num" id="edge-count">470+</span>
+                <span class="stat-label">Connections</span>
+            </a>
+            <div class="stat-item">
+                <span class="stat-num">12</span>
+                <span class="stat-label">Days of Development</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-num">100%</span>
+                <span class="stat-label">Self-Documented</span>
+            </div>
+            <a href="demo/" class="stat-item stat-link stat-cta">
+                <span class="stat-num">&rarr;</span>
+                <span class="stat-label">See the Graph</span>
+            </a>
+        </div>
+
+        <div class="elevator-pitch">
+            <p><strong>LLMs forget. Your decisions shouldn't.</strong> When AI sessions end and context windows reset, critical reasoning evaporates. Deciduous captures every goal, every approach considered, every choice made&mdash;creating a queryable record that survives session boundaries.</p>
+            <p><strong>Beyond context recovery.</strong> The graph improves how you work: logging decisions <em>before</em> you act forces clearer thinking. Generate PR writeups directly from your decision trail. Query past reasoning with <code>/recover</code> to recover state instantly. Share decisions across teammates with idempotent patches. Link commits to the goals that spawned them.</p>
+            <p><strong>Institutional memory that compounds.</strong> Every decision becomes searchable history. New developers can ask "why is this like this?" and get real answers. The graph outlives any single session, any single developer, any single AI assistant.</p>
+        </div>
+
+        <section>
+            <h2>Built With Itself</h2>
+            <p>Deciduous isn't theoretical. Every feature was built using deciduous to track its own development. The graph you see is real&mdash;the actual decision trail from building this tool.</p>
+
+            <div class="proof-grid">
+                <div class="proof-card highlight">
+                    <h3>Self-Bootstrapped</h3>
+                    <p>From day one, every goal, decision, and outcome was logged. The tool proved itself by building itself.</p>
+                </div>
+                <div class="proof-card">
+                    <h3>Context Recovery Works</h3>
+                    <p>Multiple sessions lost context. Each time, <code>/recover</code> brought developers back up to speed in seconds.</p>
+                </div>
+                <div class="proof-card">
+                    <h3>Real PR Writeups</h3>
+                    <p>PR descriptions generated directly from the decision graph. No reconstruction from memory.</p>
+                </div>
+                <div class="proof-card">
+                    <h3>Commit Traceability</h3>
+                    <p>Every commit links to the goals that spawned it. Browse the graph to see why any code exists.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Works With Your Editor</h2>
+            <p>Deciduous integrates with AI-assisted development tools through slash commands and project instructions. Set up once, use automatically.</p>
+
+            <div class="editor-badges">
+                <div class="editor-badge">
+                    Claude Code <code>deciduous init</code>
+                </div>
+                <div class="editor-badge">
+                    Windsurf <code>deciduous init --windsurf</code>
+                </div>
+                <div class="editor-badge">
+                    OpenCode <code>deciduous init --opencode</code>
+                </div>
+                <div class="editor-badge">
+                    Codex <code>deciduous init --codex</code>
+                </div>
+            </div>
+
+            <p style="margin-top: 20px; font-size: 0.95rem;">Running <code>init</code> creates slash commands (<code>/recover</code>, <code>/decision</code>) and project instructions that teach your AI assistant the decision-logging workflow.</p>
+        </section>
+
+        <section>
+            <h2>Three Ways to View</h2>
+            <p>Explore your decision graph however you prefer.</p>
+
+            <div class="view-cards">
+                <a href="demo/" class="view-card">
+                    <h3>Web Viewer</h3>
+                    <p>Interactive DAG, timeline, and graph views. Deploy to GitHub Pages for sharing.</p>
+                </a>
+                <div class="view-card">
+                    <h3>Terminal UI</h3>
+                    <p>Vim-style navigation. Search, filter, preview files, view diffs. <code>deciduous tui</code></p>
+                </div>
+                <div class="view-card">
+                    <h3>CLI Queries</h3>
+                    <p>Script and pipe. <code>deciduous nodes</code>, <code>deciduous edges</code>, JSON export.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>The Six Node Types</h2>
+            <p>A simple vocabulary for capturing how software actually gets built.</p>
+
+            <div class="node-types">
+                <div class="node-type goal">
+                    <h3>Goal</h3>
+                    <p>What you're trying to achieve</p>
+                </div>
+                <div class="node-type decision">
+                    <h3>Decision</h3>
+                    <p>Choice points that need resolving</p>
+                </div>
+                <div class="node-type option">
+                    <h3>Option</h3>
+                    <p>Approaches you considered</p>
+                </div>
+                <div class="node-type action">
+                    <h3>Action</h3>
+                    <p>What you actually implemented</p>
+                </div>
+                <div class="node-type outcome">
+                    <h3>Outcome</h3>
+                    <p>Results&mdash;success, failure, or pivot</p>
+                </div>
+                <div class="node-type observation">
+                    <h3>Observation</h3>
+                    <p>Technical insights along the way</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>The Workflow</h2>
+            <p>Deciduous works best when decisions are logged in real-time, not reconstructed later.</p>
+
+            <div class="workflow">
+                <div class="workflow-step">
+                    <div class="workflow-num">1</div>
+                    <div class="workflow-content">
+                        <h4>Start with <code>/recover</code></h4>
+                        <p>Recover state from the decision graph. See recent goals, pending decisions, what was in progress.</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="workflow-num">2</div>
+                    <div class="workflow-content">
+                        <h4>Log before you act</h4>
+                        <p>Create goal and decision nodes before writing code. This forces clearer thinking.</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="workflow-num">3</div>
+                    <div class="workflow-content">
+                        <h4>Link as you go</h4>
+                        <p>Connect actions to goals, outcomes to actions. The graph's value is in its connections.</p>
+                    </div>
+                </div>
+                <div class="workflow-step">
+                    <div class="workflow-num">4</div>
+                    <div class="workflow-content">
+                        <h4>Sync before push</h4>
+                        <p>Run <code>deciduous sync</code> to export the graph. Commit it alongside your code.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="quickstart-section">
+            <h2>Quickstart Guide</h2>
+            <p>Get deciduous running with Claude Code in under 2 minutes.</p>
+
+            <!-- Step 1: Install -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">1</span>
+                    <div class="quickstart-info">
+                        <h3>Install from crates.io</h3>
+                        <p>One command to install the CLI globally.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-install">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.8s">
+                            <span class="qs-output">Downloading deciduous v0.9.x</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.4s">
+                            <span class="qs-output">Compiling deciduous v0.9.x</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.2s">
+                            <span class="qs-success">Installed deciduous to ~/.cargo/bin/deciduous</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Initialize -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">2</span>
+                    <div class="quickstart-info">
+                        <h3>Initialize in your project</h3>
+                        <p>Creates slash commands that teach Claude the workflow.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal" id="qs-init">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Terminal</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project && deciduous init</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 0.8s">
+                            <span class="qs-output">Created .deciduous/deciduous.db</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.2s">
+                            <span class="qs-output">Created .claude/commands/recover.md</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.6s">
+                            <span class="qs-output">Created .claude/commands/decision.md</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2s">
+                            <span class="qs-output">Created CLAUDE.md (project instructions)</span>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.6s">
+                            <span class="qs-success">Ready! Claude will now log decisions automatically.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Ask Claude for a feature -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">3</span>
+                    <div class="quickstart-info">
+                        <h3>Ask Claude for a feature</h3>
+                        <p>Claude automatically logs goals and decisions as it works.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal qs-claude-session" id="qs-nodes">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Claude Code</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <div class="step-label user">You</div>
+                            <div class="qs-user-msg">Add a dark mode toggle to the settings page</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.2s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">I'll add dark mode. Let me log this goal first.</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.2s">
+                            <div class="qs-cmd-inline">deciduous add goal "Add dark mode toggle" -c 90 -p "User requested dark mode"</div>
+                            <div class="qs-success">Created node 1 (type: goal) [confidence: 90%]</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 3.4s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">I need to decide on the theme storage approach.</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 4.2s">
+                            <div class="qs-cmd-inline">deciduous add decision "Theme storage strategy" -c 80</div>
+                            <div class="qs-success">Created node 2 (type: decision)</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 5s">
+                            <div class="qs-cmd-inline">deciduous link 1 2 -r "Must decide before implementing"</div>
+                            <div class="qs-success">Created edge 1 (1 → 2 via leads_to)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4: Claude implements and tracks -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">4</span>
+                    <div class="quickstart-info">
+                        <h3>Claude implements and tracks</h3>
+                        <p>Actions, outcomes, and commits are all linked together.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal qs-claude-session" id="qs-link">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Claude Code</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">I'll use CSS variables with localStorage. Implementing now...</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 1s">
+                            <div class="qs-cmd-inline">deciduous add action "Implement CSS variable theming" -c 85 -f "src/theme.ts,src/styles.css"</div>
+                            <div class="qs-success">Created node 3 (type: action) [files: src/theme.ts, src/styles.css]</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.2s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">Dark mode is working. Committing and logging the outcome.</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 3s">
+                            <div class="qs-cmd-inline">git commit -m "feat: add dark mode toggle"</div>
+                            <div class="qs-output">[main a1b2c3d] feat: add dark mode toggle</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 4s">
+                            <div class="qs-cmd-inline">deciduous add outcome "Dark mode implemented" -c 95 --commit HEAD</div>
+                            <div class="qs-success">Created node 4 (type: outcome) [commit: a1b2c3d]</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 5s">
+                            <div class="qs-cmd-inline">deciduous link 3 4 -r "Implementation successful"</div>
+                            <div class="qs-success">Created edge 3 (3 → 4 via leads_to)</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 5: Recover context later -->
+            <div class="quickstart-step">
+                <div class="quickstart-step-header">
+                    <span class="quickstart-num">5</span>
+                    <div class="quickstart-info">
+                        <h3>Recover context anytime</h3>
+                        <p>New session? Use /recover to pick up where you left off.</p>
+                    </div>
+                </div>
+                <div class="quickstart-terminal qs-claude-session" id="qs-view">
+                    <div class="session-header">
+                        <span class="session-dot red"></span>
+                        <span class="session-dot yellow"></span>
+                        <span class="session-dot green"></span>
+                        <span class="session-title">Claude Code (new session)</span>
+                    </div>
+                    <div class="quickstart-content">
+                        <div class="qs-step" style="--delay: 0s">
+                            <div class="step-label user">You</div>
+                            <div class="qs-user-msg">/recover</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 1s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">Recovering context from decision graph...</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 1.8s">
+                            <div class="qs-cmd-inline">deciduous nodes -n 10</div>
+                        </div>
+                        <div class="qs-step" style="--delay: 2.6s">
+                            <div class="qs-recovery-box">
+                                <strong>Recent work on main:</strong><br><br>
+                                <span class="qs-tree-line">1 [goal] Add dark mode toggle [90%]</span><br>
+                                <span class="qs-tree-line">&nbsp;&nbsp;↳ 2 [decision] Theme storage strategy</span><br>
+                                <span class="qs-tree-line">&nbsp;&nbsp;&nbsp;&nbsp;↳ 3 [action] Implement CSS variable theming</span><br>
+                                <span class="qs-tree-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ 4 [outcome] Dark mode implemented [commit: a1b2c3d]</span>
+                            </div>
+                        </div>
+                        <div class="qs-step" style="--delay: 4s">
+                            <div class="step-label claude">Claude</div>
+                            <div class="qs-claude-msg">You completed dark mode (commit a1b2c3d). The toggle uses CSS variables with localStorage. What would you like to work on next?</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quickstart-cta">
+                <a href="tutorial/" class="btn btn-primary">Full Tutorial</a>
+                <a href="demo/" class="btn btn-secondary">See Live Graph</a>
+            </div>
+        </section>
+
+        <section class="demo-section">
+            <h2>See It In Action</h2>
+            <p>Watch a full session: initialization, decision logging, graph visualization, and context recovery.</p>
+            <div class="demo-player-container">
+                <iframe src="https://asciinema.org/a/761574/iframe?speed=1.4&idleTimeLimit=2&theme=asciinema&preload=1&fit=width"
+                    id="asciicast-iframe-761574"
+                    name="asciicast-iframe-761574"
+                    scrolling="no"
+                    allowfullscreen="true">
+                </iframe>
+            </div>
+        </section>
+
+        <section>
+            <h2>Real PRs Built With Deciduous</h2>
+            <p>Every PR in this repo includes its decision graph. Here are some examples:</p>
+
+            <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/11" class="pr-card">
+                <span class="pr-number">#11</span>
+                <span class="pr-title">Type Unification: TUI + Web with Enforcement Tooling</span>
+                <span class="pr-desc">14 tracked decisions. JSON Schema as canonical source, validation scripts, git hooks, CI enforcement.</span>
+            </a>
+
+            <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/3" class="pr-card">
+                <span class="pr-number">#3</span>
+                <span class="pr-title">Multi-User Graph Sync</span>
+                <span class="pr-desc">jj-inspired diff/patch model for sharing decisions. UUID-based change_ids survive across databases.</span>
+            </a>
+
+            <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/9" class="pr-card">
+                <span class="pr-number">#9</span>
+                <span class="pr-title">TEA Architecture Refactor</span>
+                <span class="pr-desc">Functional core refactor using The Elm Architecture. Full architectural decision trail.</span>
+            </a>
+        </section>
+
+        <section>
+            <h2>The Full Story</h2>
+            <p>Deciduous was extracted from an audio forensics tool called losselot (a portmanteau of "loss" and "Ocelot", the Phish song). What started as an experiment in AI-assisted development became a tool for surviving the fundamental problem with LLM sessions: they forget.</p>
+            <p>The insight was simple. AI sessions end. Context windows reset. Decisions evaporate. But if you capture decisions as they happen&mdash;not reconstructed later&mdash;the reasoning survives.</p>
+            <p><strong>Deciduous is the proof.</strong> Every feature you see was built with Claude Code using deciduous to track the work. When sessions ended, <code>/recover</code> brought the next one up to speed. When PRs needed writeups, the graph generated them. When someone asked "why is this like this?", the answer was one query away.</p>
+            <p><a href="story.html">Read the complete chronicle &rarr;</a></p>
+        </section>
+
+        <footer>
+            <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
+            <a href="https://crates.io/crates/deciduous">crates.io</a> |
+            MIT License
+        </footer>
+    </div>
+
+    <script>
+        // Fetch actual counts from graph data
+        fetch('graph-data.json')
+            .then(r => r.json())
+            .then(data => {
+                if (data.nodes) {
+                    document.getElementById('node-count').textContent = data.nodes.length + '+';
+                }
+                if (data.edges) {
+                    document.getElementById('edge-count').textContent = data.edges.length + '+';
+                }
+            })
+            .catch(() => {
+                // Keep defaults
+            });
+
+        // Auto-scroll as steps appear
+        function setupAutoScroll() {
+            const content = document.getElementById('session-content');
+            const steps = content.querySelectorAll('.session-step, .session-divider');
+
+            steps.forEach(step => {
+                const delay = parseFloat(getComputedStyle(step).getPropertyValue('--delay')) * 1000;
+                setTimeout(() => {
+                    // Slow scroll to show the new step
+                    const targetScroll = step.offsetTop - content.offsetTop - 20;
+                    smoothScrollTo(content, targetScroll, 920);
+                }, delay + 400);
+            });
+        }
+
+        // Custom smooth scroll with configurable duration
+        function smoothScrollTo(element, target, duration) {
+            const start = element.scrollTop;
+            const distance = target - start;
+            let startTime = null;
+
+            function animation(currentTime) {
+                if (!startTime) startTime = currentTime;
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // Ease out cubic
+                const ease = 1 - Math.pow(1 - progress, 3);
+                element.scrollTop = start + distance * ease;
+
+                if (progress < 1) {
+                    requestAnimationFrame(animation);
+                }
+            }
+
+            requestAnimationFrame(animation);
+        }
+
+        // Replay the session demo animation
+        function replayDemo() {
+            const content = document.getElementById('session-content');
+            const steps = content.querySelectorAll('.session-step, .session-divider');
+
+            // Scroll to top first
+            content.scrollTop = 0;
+
+            // Reset all animations
+            steps.forEach(step => {
+                step.style.animation = 'none';
+                step.offsetHeight; // Trigger reflow
+                step.style.animation = null;
+            });
+
+            // Re-setup auto-scroll
+            setupAutoScroll();
+        }
+
+        // Start auto-scroll on page load
+        setupAutoScroll();
+    </script>
+</body>
+</html>
