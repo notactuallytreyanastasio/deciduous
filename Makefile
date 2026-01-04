@@ -1,13 +1,7 @@
-.PHONY: build release release-full debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview trace-build trace-clear-cache
+.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
 
 # Default target
 all: release
-
-# Detect macOS and set library path for libiconv if needed
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-    export LIBRARY_PATH := /opt/homebrew/opt/libiconv/lib:$(LIBRARY_PATH)
-endif
 
 # Build targets
 release:
@@ -17,23 +11,6 @@ debug:
 	cargo build
 
 build: release
-
-# Build trace interceptor (tsc + esbuild bundle)
-trace-build:
-	cd trace-interceptor && npm install && npm run build && npm run bundle
-	@echo "Trace interceptor built"
-
-# Clear cached interceptor (forces re-extraction on next run)
-trace-clear-cache:
-	rm -rf ~/.deciduous/trace-interceptor
-	@echo "Trace interceptor cache cleared"
-
-# Full release build: trace interceptor + web viewer + Rust binary
-release-full: trace-build web-build trace-clear-cache
-	cp $(WEB_DIR)/dist/index.html src/viewer.html
-	cp $(WEB_DIR)/dist/index.html docs/demo/index.html
-	cargo build --release
-	@echo "Full release build complete: target/release/deciduous"
 
 # Testing
 test:
@@ -238,7 +215,6 @@ help:
 	@echo "Build:"
 	@echo "  make              Build release binary"
 	@echo "  make release      Build release binary"
-	@echo "  make release-full Build web viewer + release binary (full rebuild)"
 	@echo "  make debug        Build debug binary"
 	@echo ""
 	@echo "Test:"

@@ -15,7 +15,6 @@ import { GraphView } from './views/GraphView';
 import { DagView } from './views/DagView';
 import { RoadmapView } from './views/RoadmapView';
 import { StoryView } from './views/StoryView';
-import TraceView from './views/TraceView';
 import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
 // Detect if running from deciduous serve (localhost) vs static file (GitHub Pages)
@@ -159,12 +158,6 @@ export const App: React.FC = () => {
             path="/story"
             element={
               <StoryView graphData={filteredGraphData!} gitHistory={gitHistory} />
-            }
-          />
-          <Route
-            path="/traces"
-            element={
-              <TraceView />
             }
           />
           {/* Fallback redirect */}

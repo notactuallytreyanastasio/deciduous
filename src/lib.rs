@@ -44,7 +44,6 @@ pub mod diff;
 pub mod export;
 pub mod github;
 pub mod init;
-pub mod interceptor;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
@@ -55,7 +54,7 @@ pub use db::{
     build_metadata_json, get_current_git_branch, get_current_git_commit, CheckboxState, CommandLog,
     Database, DbRecord, DbSummary, DecisionContext, DecisionEdge, DecisionGraph, DecisionNode,
     DecisionSession, GitHubIssueCache, RoadmapConflict, RoadmapItem, RoadmapSyncState,
-    TraceContent, TraceSession, TraceSpan, CURRENT_SCHEMA,
+    CURRENT_SCHEMA,
 };
 pub use diff::{ApplyResult, GraphPatch, PatchEdge, PatchNode};
 pub use export::{

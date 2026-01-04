@@ -10,7 +10,7 @@ use syntect::highlighting::{Style as SyntectStyle, ThemeSet};
 use syntect::parsing::SyntaxSet;
 
 use super::app::{App, ModalContent, ModalSection, Mode, View};
-use super::views::{dag, detail, roadmap, timeline, trace};
+use super::views::{dag, detail, roadmap, timeline};
 use super::widgets::file_picker;
 
 // Lazy static syntax highlighting resources
@@ -59,9 +59,6 @@ pub fn draw(frame: &mut Frame, app: &App) {
         View::Roadmap => {
             roadmap::draw(frame, &app.roadmap_state, main_layout[2]);
         }
-        View::Trace => {
-            trace::draw(frame, &app.trace_state, main_layout[2]);
-        }
     }
 
     // Draw footer
@@ -86,7 +83,6 @@ fn draw_header(frame: &mut Frame, app: &App, area: Rect) {
         View::Timeline => "Timeline",
         View::Dag => "DAG",
         View::Roadmap => "Roadmap",
-        View::Trace => "Trace",
     };
 
     let node_count = app.filtered_nodes.len();
@@ -217,9 +213,6 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
         }
         View::Dag => "h/j/k/l:pan  +/-:zoom  0:reset  Tab:Timeline  ?:help  q:quit",
         View::Roadmap => "j/k:move  r:refresh  Tab:Timeline  ?:help  q:quit",
-        View::Trace => {
-            "j/k:move  Enter:expand  Esc:back  l:link  u:unlink  r:refresh  Tab:view  q:quit"
-        }
     };
 
     // Show status message if present, otherwise show keybinds

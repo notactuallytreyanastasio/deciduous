@@ -12,8 +12,8 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
-import { truncate, getCommitRepo } from '../types/graph';
-import { DetailPanel } from '../components/DetailPanel';
+import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
+import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { SearchBar } from '../components/SearchBar';
 import { CalloutLines } from '../components/CalloutLines';
 import { MiniMap } from '../components/MiniMap';
@@ -25,6 +25,12 @@ interface DagViewProps {
   graphData: GraphData;
   chains: Chain[];
   gitHistory?: GitCommit[];
+}
+
+// Look up commit info from gitHistory by hash
+function getCommitInfo(hash: string | null, gitHistory: GitCommit[]): GitCommit | null {
+  if (!hash || gitHistory.length === 0) return null;
+  return gitHistory.find(c => c.hash === hash || c.short_hash === hash || c.hash.startsWith(hash)) ?? null;
 }
 
 // Dagre node data type
@@ -112,40 +118,25 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Store zoom behavior for programmatic control
   const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
 
-  // Sort chains by recency for "recent" filter (most recently updated first)
-  const chainsByRecency = useMemo(() => sortChainsByRecency(chains), [chains]);
+  // Sort chains by recency for display
+  const sortedChains = useMemo(() => sortChainsByRecency(chains), [chains]);
 
-  // Sort chains by root node ID for chronological left-to-right DAG layout
-  const chainsByNodeId = useMemo(() =>
-    [...chains].sort((a, b) => a.root.id - b.root.id),
-    [chains]
-  );
-
-  // Get only goal chains sorted by recency (for the dropdown and recent filtering)
+  // Get only goal chains (for the dropdown and recent filtering)
   const goalChains = useMemo(() =>
-    chainsByRecency.filter(c => c.root.node_type === 'goal'),
-    [chainsByRecency]
+    sortedChains.filter(c => c.root.node_type === 'goal'),
+    [sortedChains]
   );
 
   // Determine which chains to show based on view mode
-  // Note: visibleChains uses recency for filtering but we re-sort by ID for layout
-  const visibleChainSet = useMemo(() => {
-    let chainsToShow: Chain[];
+  const visibleChains = useMemo(() => {
     if (urlState.viewMode === 'single' && urlState.focusChainIndex !== null) {
-      chainsToShow = [chains[urlState.focusChainIndex]].filter(Boolean);
-    } else if (urlState.viewMode === 'recent') {
-      chainsToShow = goalChains.slice(0, urlState.recentChainCount);
-    } else {
-      chainsToShow = chainsByRecency; // 'all' mode
+      return [chains[urlState.focusChainIndex]].filter(Boolean);
     }
-    return new Set(chainsToShow.map(c => c.root.id));
-  }, [urlState.viewMode, urlState.focusChainIndex, chains, goalChains, chainsByRecency, urlState.recentChainCount]);
-
-  // Re-sort visible chains by node ID for chronological left-to-right layout
-  const visibleChains = useMemo(() =>
-    chainsByNodeId.filter(c => visibleChainSet.has(c.root.id)),
-    [chainsByNodeId, visibleChainSet]
-  );
+    if (urlState.viewMode === 'recent') {
+      return goalChains.slice(0, urlState.recentChainCount);
+    }
+    return sortedChains; // 'all' mode
+  }, [urlState.viewMode, urlState.focusChainIndex, chains, goalChains, sortedChains, urlState.recentChainCount]);
 
   // Get all visible node IDs from visible chains
   const visibleNodeIds = useMemo(() => {
@@ -282,12 +273,13 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
     svg.selectAll('*').remove();
 
-    // Filter edges based on visibility
+    // Filter nodes based on visibility
+    const visibleNodes = graphData.nodes.filter(n => visibleNodeIds.has(n.id));
     const visibleEdges = graphData.edges.filter(
       e => visibleNodeIds.has(e.from_node_id) && visibleNodeIds.has(e.to_node_id)
     );
 
-    if (visibleNodeIds.size === 0) return;
+    if (visibleNodes.length === 0) return;
 
     // Create Dagre graph
     const g = new dagre.graphlib.Graph();
@@ -300,19 +292,12 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     });
     g.setDefaultEdgeLabel(() => ({}));
 
-    // Add nodes in chain order (sorted by root ID) for chronological left-to-right layout
-    // This ensures dagre processes nodes from earlier chains first
-    const addedNodeIds = new Set<number>();
-    visibleChains.forEach(chain => {
-      chain.nodes.forEach(node => {
-        if (!addedNodeIds.has(node.id)) {
-          g.setNode(String(node.id), {
-            width: 150,
-            height: 60,
-            node,
-          });
-          addedNodeIds.add(node.id);
-        }
+    // Add nodes
+    visibleNodes.forEach(node => {
+      g.setNode(String(node.id), {
+        width: 150,
+        height: 60,
+        node,
       });
     });
 
@@ -507,7 +492,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     return () => {
       svg.on('.zoom', null);
     };
-  }, [graphData, visibleNodeIds, visibleChains, handleSelectNode, highlightedNodeIds]);
+  }, [graphData, visibleNodeIds, handleSelectNode, highlightedNodeIds]);
 
   return (
     <div style={{
@@ -747,19 +732,124 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
       {/* Detail Modal */}
       {selectedNode && (
         <div style={styles.modalBackdrop} onClick={() => setSelectedNodeId(null)}>
-          <div style={styles.detailModal} onClick={e => e.stopPropagation()}>
-            <DetailPanel
+          <div style={styles.modal} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <div style={styles.modalHeaderLeft}>
+                <TypeBadge type={selectedNode.node_type} />
+                <ConfidenceBadge confidence={getConfidence(selectedNode)} />
+                <CommitBadge commit={getCommit(selectedNode)} />
+              </div>
+              <button onClick={() => setSelectedNodeId(null)} style={styles.modalCloseBtn}>×</button>
+            </div>
+
+            <h2 style={styles.modalTitle}>{selectedNode.title}</h2>
+            <p style={styles.modalMeta}>
+              Node #{selectedNode.id} · Created {new Date(selectedNode.created_at).toLocaleString()}
+            </p>
+
+            {/* Commit Message Section */}
+            {(() => {
+              const commitHash = getCommit(selectedNode);
+              const commitInfo = getCommitInfo(commitHash, gitHistory);
+              if (!commitHash) return null;
+              const commitRepo = getCommitRepo(graphData);
+              return (
+                <div style={styles.commitSection}>
+                  <a
+                    href={githubCommitUrl(commitHash, commitRepo)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={styles.commitLink}
+                  >
+                    {shortCommit(commitHash)}
+                  </a>
+                  {commitInfo ? (
+                    <>
+                      <div style={styles.commitMessage}>{commitInfo.message}</div>
+                      <div style={styles.commitMeta}>
+                        by {commitInfo.author} · {new Date(commitInfo.date).toLocaleDateString()}
+                        {commitInfo.files_changed && ` · ${commitInfo.files_changed} files changed`}
+                      </div>
+                    </>
+                  ) : (
+                    <div style={styles.commitMeta}>Commit details not available</div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {selectedNode.description && (
+              <div style={styles.modalSection}>
+                <p style={styles.modalDescription}>{selectedNode.description}</p>
+              </div>
+            )}
+
+            {/* Connections - clickable to navigate */}
+            <ConnectionsList
               node={selectedNode}
               graphData={graphData}
               onSelectNode={handleSelectNodeById}
-              onClose={() => setSelectedNodeId(null)}
-              repo={getCommitRepo(graphData)}
-              gitHistory={gitHistory}
             />
+
+            <div style={styles.modalFooter}>
+              <span style={styles.modalHint}>Click connected nodes to navigate · Click outside or × to close</span>
+            </div>
           </div>
         </div>
       )}
     </div>
+  );
+};
+
+// =============================================================================
+// Connections List
+// =============================================================================
+
+interface ConnectionsListProps {
+  node: DecisionNode;
+  graphData: GraphData;
+  onSelectNode: (id: number) => void;
+}
+
+const ConnectionsList: React.FC<ConnectionsListProps> = ({ node, graphData, onSelectNode }) => {
+  const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
+  const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
+
+  const getNode = (id: number) => graphData.nodes.find(n => n.id === id);
+
+  return (
+    <>
+      {incoming.length > 0 && (
+        <div style={styles.detailSection}>
+          <h4 style={styles.sectionTitle}>Incoming ({incoming.length})</h4>
+          {incoming.map(e => {
+            const n = getNode(e.from_node_id);
+            return (
+              <div key={e.id} onClick={() => onSelectNode(e.from_node_id)} style={styles.connection}>
+                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
+                <span>{truncate(n?.title || 'Unknown', 25)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {outgoing.length > 0 && (
+        <div style={styles.detailSection}>
+          <h4 style={styles.sectionTitle}>Outgoing ({outgoing.length})</h4>
+          {outgoing.map(e => {
+            const n = getNode(e.to_node_id);
+            return (
+              <div key={e.id} onClick={() => onSelectNode(e.to_node_id)} style={styles.connection}>
+                <EdgeBadge type={e.edge_type} />
+                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
+                <span>{truncate(n?.title || 'Unknown', 20)}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
   );
 };
 
@@ -1050,16 +1140,6 @@ const styles: Record<string, React.CSSProperties> = {
     width: '90%',
     maxWidth: '600px',
     maxHeight: '80vh',
-    overflowY: 'auto',
-    border: '1px solid #d0d7de',
-    boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',
-  },
-  detailModal: {
-    backgroundColor: '#ffffff',
-    borderRadius: '12px',
-    width: '90%',
-    maxWidth: '500px',
-    maxHeight: '85vh',
     overflowY: 'auto',
     border: '1px solid #d0d7de',
     boxShadow: '0 8px 32px rgba(0, 0, 0, 0.15)',

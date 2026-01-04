@@ -8689,6 +8689,127 @@
       "created_at": "2025-12-19T10:13:23.010910-05:00",
       "updated_at": "2025-12-19T10:13:23.010910-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":100}"
+    },
+    {
+      "id": 792,
+      "change_id": "396f3d61-6648-4f9b-a959-5dcb5e3ff7c4",
+      "node_type": "outcome",
+      "title": "Released v0.9.0 to crates.io and GitHub",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T10:16:51.234245-05:00",
+      "updated_at": "2025-12-19T10:16:51.234245-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"92c8cea\",\"confidence\":100}"
+    },
+    {
+      "id": 793,
+      "change_id": "0832d9f1-30f8-4c48-ac5a-943deb9486c3",
+      "node_type": "goal",
+      "title": "Update story.html to document v0.9.0 development journey",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:21:41.051230-05:00",
+      "updated_at": "2025-12-19T15:21:41.051230-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":90,\"prompt\":\"create a git worktree. symlink .deciduous/deciduous.db so you write decisions to its graph\\n\\nUSE YOUR SKILLS, YOUR COMMANDS, deciduous CLI, AND THE TRACER WE HAVE TO LOG EVERY DECISION\\n\\nYou want to include the traces as nodes on the graph, and EVERYTHING else, all options|actions|goals|outcomes|observations\\n\\nOnce you have this all running, we want to update your @docs/story.html to tell the rest of the buildup to 0.9.0\\n\\nMake sure to reference the decision graph to figure out what/how to write it up\\n\\nuse your own history to build the rest of the tale, its a demo of yourself so really make it nice. Reference the rest to see the flow/style\\n\\nWork on a branch, make a PR, make sure it builds for GH pages so that I can see that build in the PR preview and check things out beyond locally\"}"
+    },
+    {
+      "id": 794,
+      "change_id": "326bab2a-0594-4b9a-9e5f-5329f1908c1b",
+      "node_type": "action",
+      "title": "Created git worktree and symlinked deciduous.db",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:23:15.881079-05:00",
+      "updated_at": "2025-12-19T15:23:15.881079-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":95}"
+    },
+    {
+      "id": 795,
+      "change_id": "3b17c5cb-0c10-40a0-8627-dcb6f1fe249c",
+      "node_type": "action",
+      "title": "Explored decision graph nodes 306-792 for story content",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:23:26.201825-05:00",
+      "updated_at": "2025-12-19T15:23:26.201825-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":90}"
+    },
+    {
+      "id": 796,
+      "change_id": "16d601e1-8554-4672-a278-7418e44401b9",
+      "node_type": "observation",
+      "title": "Story.html ends at Day 10 (Dec 11) with TEA refactor - nodes 306-307. Graph shows Days 11-15 include: Type Unification, Roadmap System, Graph Search, Trace Capture, Nix Flake, Git Guard, v0.9.0 release",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:23:34.105118-05:00",
+      "updated_at": "2025-12-19T15:23:34.105118-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":95}"
+    },
+    {
+      "id": 797,
+      "change_id": "1f558279-5b8c-4b49-80c0-0c28bd0b65af",
+      "node_type": "decision",
+      "title": "Plan story content structure for Days 15-19",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:23:59.185192-05:00",
+      "updated_at": "2025-12-19T15:23:59.185192-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":90}"
+    },
+    {
+      "id": 798,
+      "change_id": "136f22f0-71aa-4a9a-ba34-19dd5ca43ca2",
+      "node_type": "option",
+      "title": "Days 15-16: Graph Search and Explorer (nodes 562-598)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:24:06.302639-05:00",
+      "updated_at": "2025-12-19T15:24:06.302639-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":95}"
+    },
+    {
+      "id": 799,
+      "change_id": "3c1d3422-5fbc-4cc9-985f-3b7b46cb2a5f",
+      "node_type": "option",
+      "title": "Days 17-18: API Trace Capture + Nix Flake (v0.9.0 features)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:24:06.471813-05:00",
+      "updated_at": "2025-12-19T15:24:06.471813-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":95}"
+    },
+    {
+      "id": 800,
+      "change_id": "eba95a43-a8bc-40a2-b80d-75e93be12c47",
+      "node_type": "option",
+      "title": "Day 19: v0.9.0 Release + Meta-Story (this very update)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:24:06.627557-05:00",
+      "updated_at": "2025-12-19T15:24:06.627557-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":95}"
+    },
+    {
+      "id": 801,
+      "change_id": "5c7a477d-0a37-44d1-91eb-f8411d523016",
+      "node_type": "action",
+      "title": "Writing new timeline entries for Days 15-19 covering Graph Search, Trace Capture, Nix Flake, and v0.9.0",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:24:21.679265-05:00",
+      "updated_at": "2025-12-19T15:24:21.679265-05:00",
+      "metadata_json": "{\"branch\":\"feat/story-0.9.0-update\",\"confidence\":85}"
+    },
+    {
+      "id": 802,
+      "change_id": "a9815ae3-ef46-4ee2-a3f1-49393221a063",
+      "node_type": "goal",
+      "title": "Investigate Claude Code streaming timeout issue - sessions hang when API responses stall mid-stream",
+      "description": null,
+      "status": "pending",
+      "created_at": "2025-12-19T15:52:44.895933-05:00",
+      "updated_at": "2025-12-19T15:52:44.895933-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"User reported Claude Code session hanging. Investigation revealed:\\n- Session f35c7c15 stuck for 21+ min with stop_reason: null\\n- API started streaming but stopped mid-stream\\n- No timeout triggered - client waits indefinitely\\n- PID has CLOSED TCP connections but process still waiting\\nNeed to find where streaming logic lives and add idle timeout.\"}"
     }
   ],
   "edges": [
@@ -16325,6 +16446,105 @@
       "weight": 1.0,
       "rationale": "After rebase",
       "created_at": "2025-12-19T10:13:28.109575-05:00"
+    },
+    {
+      "id": 695,
+      "from_node_id": 791,
+      "to_node_id": 792,
+      "from_change_id": "87bbea67-0204-44f7-b5d3-c639705dc68f",
+      "to_change_id": "396f3d61-6648-4f9b-a959-5dcb5e3ff7c4",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release completed",
+      "created_at": "2025-12-19T10:16:51.241880-05:00"
+    },
+    {
+      "id": 696,
+      "from_node_id": 793,
+      "to_node_id": 794,
+      "from_change_id": "0832d9f1-30f8-4c48-ac5a-943deb9486c3",
+      "to_change_id": "326bab2a-0594-4b9a-9e5f-5329f1908c1b",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Setup step for story update",
+      "created_at": "2025-12-19T15:23:21.755947-05:00"
+    },
+    {
+      "id": 697,
+      "from_node_id": 793,
+      "to_node_id": 795,
+      "from_change_id": "0832d9f1-30f8-4c48-ac5a-943deb9486c3",
+      "to_change_id": "3b17c5cb-0c10-40a0-8627-dcb6f1fe249c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Research for story content",
+      "created_at": "2025-12-19T15:23:26.212572-05:00"
+    },
+    {
+      "id": 698,
+      "from_node_id": 795,
+      "to_node_id": 796,
+      "from_change_id": "3b17c5cb-0c10-40a0-8627-dcb6f1fe249c",
+      "to_change_id": "16d601e1-8554-4672-a278-7418e44401b9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Key finding from exploration",
+      "created_at": "2025-12-19T15:23:34.116111-05:00"
+    },
+    {
+      "id": 699,
+      "from_node_id": 793,
+      "to_node_id": 797,
+      "from_change_id": "0832d9f1-30f8-4c48-ac5a-943deb9486c3",
+      "to_change_id": "1f558279-5b8c-4b49-80c0-0c28bd0b65af",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Planning phase",
+      "created_at": "2025-12-19T15:23:59.194199-05:00"
+    },
+    {
+      "id": 700,
+      "from_node_id": 797,
+      "to_node_id": 798,
+      "from_change_id": "1f558279-5b8c-4b49-80c0-0c28bd0b65af",
+      "to_change_id": "136f22f0-71aa-4a9a-ba34-19dd5ca43ca2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Content block 1",
+      "created_at": "2025-12-19T15:24:06.310771-05:00"
+    },
+    {
+      "id": 701,
+      "from_node_id": 797,
+      "to_node_id": 799,
+      "from_change_id": "1f558279-5b8c-4b49-80c0-0c28bd0b65af",
+      "to_change_id": "3c1d3422-5fbc-4cc9-985f-3b7b46cb2a5f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Content block 2",
+      "created_at": "2025-12-19T15:24:06.480534-05:00"
+    },
+    {
+      "id": 702,
+      "from_node_id": 797,
+      "to_node_id": 800,
+      "from_change_id": "1f558279-5b8c-4b49-80c0-0c28bd0b65af",
+      "to_change_id": "eba95a43-a8bc-40a2-b80d-75e93be12c47",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Content block 3",
+      "created_at": "2025-12-19T15:24:06.637854-05:00"
+    },
+    {
+      "id": 703,
+      "from_node_id": 797,
+      "to_node_id": 801,
+      "from_change_id": "1f558279-5b8c-4b49-80c0-0c28bd0b65af",
+      "to_change_id": "5c7a477d-0a37-44d1-91eb-f8411d523016",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of plan",
+      "created_at": "2025-12-19T15:24:21.689193-05:00"
     }
   ]
 }

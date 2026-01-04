@@ -1,7 +1,15 @@
 [
   {
-    "hash": "07bc4eb9b95c9cc70e0f5eef5a11212e1b4a133b",
-    "short_hash": "07bc4eb",
+    "hash": "5a9743ed5f834e1c3bc0bb5857b3f61e9f990d43",
+    "short_hash": "5a9743e",
+    "author": "Bobby Nathan",
+    "date": "2026-01-04T13:46:30-05:00",
+    "message": "revert: roll back to v0.8.20 state (v0.9.0 yanked)\n\nThe trace capture feature introduced in v0.9.0 causes indefinite hangs.\nRolling back to v0.8.20 to restore stable behavior.\n\nv0.9.0 has been yanked from crates.io.\nThe v0.9.0 code is preserved in git history and can be retrieved via:\n  git diff v0.8.20..backup-v0.9.0-rollback",
+    "files_changed": 57
+  },
+  {
+    "hash": "92c8ceacd3b7b2f0b0cfb06f55df2e08f54c2605",
+    "short_hash": "92c8cea",
     "author": "Bobby Nathan",
     "date": "2025-12-19T10:13:38-05:00",
     "message": "release: v0.9.0 - Claude API trace capture, Nix flake, init improvements",
@@ -56,6 +64,14 @@
     "files_changed": 6
   },
   {
+    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
+    "short_hash": "157aa70",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
+  },
+  {
     "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
     "short_hash": "e80d20f",
     "author": "Bobby Nathan",
@@ -70,14 +86,6 @@
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 3
-  },
-  {
-    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
-    "short_hash": "157aa70",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
-    "files_changed": 5
   },
   {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",
