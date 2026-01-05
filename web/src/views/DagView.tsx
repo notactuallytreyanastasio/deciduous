@@ -12,7 +12,7 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
-import { getConfidence, getCommit, truncate, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
+import { getConfidence, getCommit, getPrompt, getFiles, getBranch, truncate, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { SearchBar } from '../components/SearchBar';
 import { CalloutLines } from '../components/CalloutLines';
@@ -784,6 +784,46 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
               </div>
             )}
 
+            {/* Prompt Section */}
+            {(() => {
+              const prompt = getPrompt(selectedNode);
+              if (!prompt) return null;
+              return (
+                <div style={styles.promptSection}>
+                  <h4 style={styles.promptTitle}>Prompt</h4>
+                  <div style={styles.promptText}>{prompt}</div>
+                </div>
+              );
+            })()}
+
+            {/* Associated Files Section */}
+            {(() => {
+              const files = getFiles(selectedNode);
+              if (!files || files.length === 0) return null;
+              return (
+                <div style={styles.filesSection}>
+                  <h4 style={styles.sectionTitle}>Associated Files</h4>
+                  <div style={styles.filesList}>
+                    {files.map((file, i) => (
+                      <span key={i} style={styles.fileTag}>{file}</span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Branch Section */}
+            {(() => {
+              const branch = getBranch(selectedNode);
+              if (!branch) return null;
+              return (
+                <div style={styles.branchSection}>
+                  <h4 style={styles.sectionTitle}>Branch</h4>
+                  <span style={styles.branchTag}>{branch}</span>
+                </div>
+              );
+            })()}
+
             {/* Connections - clickable to navigate */}
             <ConnectionsList
               node={selectedNode}
@@ -1255,5 +1295,57 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#24292f',
     transition: 'background-color 0.15s',
     border: '1px solid #d0d7de',
+  },
+  // Prompt section styles
+  promptSection: {
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    padding: '16px',
+    borderRadius: '8px',
+    marginBottom: '16px',
+    borderLeft: '3px solid #0969da',
+  },
+  promptTitle: {
+    fontSize: '12px',
+    color: '#57606a',
+    margin: '0 0 10px 0',
+    textTransform: 'uppercase',
+    fontWeight: 600,
+  },
+  promptText: {
+    fontSize: '14px',
+    color: '#24292f',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
+    fontStyle: 'italic',
+  },
+  // Files section styles
+  filesSection: {
+    marginBottom: '16px',
+  },
+  filesList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  fileTag: {
+    backgroundColor: '#ddf4ff',
+    padding: '4px 10px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    color: '#0969da',
+    fontFamily: 'monospace',
+  },
+  // Branch section styles
+  branchSection: {
+    marginBottom: '16px',
+  },
+  branchTag: {
+    backgroundColor: '#dafbe1',
+    color: '#1a7f37',
+    padding: '4px 10px',
+    borderRadius: '4px',
+    fontSize: '12px',
+    fontFamily: 'monospace',
   },
 };
