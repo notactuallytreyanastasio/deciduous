@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deciduous Guide - Decision Graph for AI Development</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-yellow: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #a371f7;
+            --border: #30363d;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        header {
+            text-align: center;
+            padding: 3rem 0;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, var(--accent-green), var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+        }
+
+        nav {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        nav h2 {
+            font-size: 1rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        nav ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.5rem;
+        }
+
+        nav a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        nav a:hover {
+            text-decoration: underline;
+        }
+
+        section {
+            margin-bottom: 4rem;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 2px solid var(--accent);
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            margin: 2rem 0 1rem;
+            color: var(--accent);
+        }
+
+        h4 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--text);
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        code {
+            background: var(--bg-tertiary);
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.9em;
+        }
+
+        pre {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-secondary);
+            color: var(--accent);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .card-title {
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 0.5rem;
+        }
+
+        .warning {
+            background: rgba(210, 153, 34, 0.1);
+            border-left: 4px solid var(--accent-yellow);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .success {
+            background: rgba(63, 185, 80, 0.1);
+            border-left: 4px solid var(--accent-green);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .exercise {
+            background: var(--bg-secondary);
+            border: 2px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .exercise-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-purple);
+            margin-bottom: 1rem;
+        }
+
+        .step {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-left: 3px solid var(--accent);
+        }
+
+        .step-number {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--bg);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+
+        .expanding-section {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .expanding-header {
+            padding: 1rem;
+            background: var(--bg-secondary);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-radius: 8px;
+        }
+
+        .expanding-header:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .expanding-content {
+            padding: 1rem;
+            display: none;
+            border-top: 1px solid var(--border);
+        }
+
+        .expanding-content.active {
+            display: block;
+        }
+
+        .arrow {
+            transition: transform 0.2s;
+        }
+
+        .arrow.rotated {
+            transform: rotate(90deg);
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+        }
+
+        footer a {
+            color: var(--accent);
+        }
+
+        .node-type {
+            display: inline-block;
+            padding: 0.2em 0.6em;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        .node-goal { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
+        .node-decision { background: rgba(88, 166, 255, 0.2); color: var(--accent); }
+        .node-action { background: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
+        .node-outcome { background: rgba(210, 153, 34, 0.2); color: var(--accent-yellow); }
+        .node-observation { background: rgba(139, 148, 158, 0.2); color: var(--text-muted); }
+        .node-option { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Deciduous Guide</h1>
+            <p class="subtitle">Decision Graph Tooling for AI-Assisted Development</p>
+        </header>
+
+        <nav>
+            <h2>Quick Navigation</h2>
+            <ul>
+                <li><a href="#commands">CLI Commands</a></li>
+                <li><a href="#node-types">Node Types</a></li>
+                <li><a href="#edge-types">Edge Types</a></li>
+                <li><a href="#patterns">Usage Patterns</a></li>
+                <li><a href="#exercise">Interactive Exercise</a></li>
+                <li><a href="#hooks">Enforcement Hooks</a></li>
+            </ul>
+        </nav>
+
+        <section id="commands">
+            <h2>CLI Commands Reference</h2>
+
+            <h3>Core Commands</h3>
+            <table>
+                <tr>
+                    <th>Command</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>deciduous init</code></td>
+                    <td>Initialize deciduous in current directory (creates .deciduous/, .claude/, CLAUDE.md)</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous add &lt;type&gt; "title"</code></td>
+                    <td>Add a node (goal, decision, option, action, outcome, observation)</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous link &lt;from&gt; &lt;to&gt;</code></td>
+                    <td>Create edge between nodes</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous nodes</code></td>
+                    <td>List all nodes (filter with --branch, --type)</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous edges</code></td>
+                    <td>List all edges</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous graph</code></td>
+                    <td>Export full graph as JSON</td>
+                </tr>
+            </table>
+
+            <h3>Metadata Flags</h3>
+            <table>
+                <tr>
+                    <th>Flag</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>-c, --confidence &lt;0-100&gt;</code></td>
+                    <td>Confidence level for this node</td>
+                </tr>
+                <tr>
+                    <td><code>-p, --prompt "..."</code></td>
+                    <td>Store the user prompt (short, single-line)</td>
+                </tr>
+                <tr>
+                    <td><code>--prompt-stdin</code></td>
+                    <td>Read prompt from stdin (multi-line, preferred for verbatim capture)</td>
+                </tr>
+                <tr>
+                    <td><code>-f, --files "a.rs,b.rs"</code></td>
+                    <td>Associate files with this node</td>
+                </tr>
+                <tr>
+                    <td><code>-b, --branch &lt;name&gt;</code></td>
+                    <td>Git branch (auto-detected by default)</td>
+                </tr>
+                <tr>
+                    <td><code>--commit &lt;hash|HEAD&gt;</code></td>
+                    <td>Link to a git commit</td>
+                </tr>
+            </table>
+
+            <h3>Viewing & Export</h3>
+            <table>
+                <tr>
+                    <th>Command</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>deciduous serve</code></td>
+                    <td>Start web viewer (default port 3000)</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous tui</code></td>
+                    <td>Start terminal UI</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous sync</code></td>
+                    <td>Export graph to docs/ for GitHub Pages</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous dot --png</code></td>
+                    <td>Generate DOT/PNG visualization</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous writeup</code></td>
+                    <td>Generate PR writeup markdown</td>
+                </tr>
+            </table>
+
+            <h3>Multi-User Sync</h3>
+            <table>
+                <tr>
+                    <th>Command</th>
+                    <th>Description</th>
+                </tr>
+                <tr>
+                    <td><code>deciduous diff export -o file.json</code></td>
+                    <td>Export nodes as a shareable patch</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous diff apply file.json</code></td>
+                    <td>Apply patches (idempotent)</td>
+                </tr>
+                <tr>
+                    <td><code>deciduous diff status</code></td>
+                    <td>List available patches</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="node-types">
+            <h2>Node Types</h2>
+
+            <div class="card">
+                <div class="card-title"><span class="node-type node-goal">goal</span> Goal</div>
+                <p>High-level objective or feature request. Root nodes in the graph.</p>
+                <p><strong>Example:</strong> "Add user authentication to the app"</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="node-type node-decision">decision</span> Decision</div>
+                <p>A choice point where you need to pick between approaches.</p>
+                <p><strong>Example:</strong> "Choose authentication method"</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="node-type node-option">option</span> Option</div>
+                <p>A possible approach for a decision. Always linked to a decision.</p>
+                <p><strong>Example:</strong> "Use JWT tokens", "Use session cookies"</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="node-type node-action">action</span> Action</div>
+                <p>Something you're implementing. Log BEFORE you write code.</p>
+                <p><strong>Example:</strong> "Implementing JWT middleware"</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="node-type node-outcome">outcome</span> Outcome</div>
+                <p>Result of an action - success or failure. Log AFTER completion.</p>
+                <p><strong>Example:</strong> "JWT authentication working", "Build failed due to type errors"</p>
+            </div>
+
+            <div class="card">
+                <div class="card-title"><span class="node-type node-observation">observation</span> Observation</div>
+                <p>Something noticed during work - a finding, data point, or insight.</p>
+                <p><strong>Example:</strong> "Existing code uses sessions, not JWT"</p>
+            </div>
+        </section>
+
+        <section id="edge-types">
+            <h2>Edge Types</h2>
+
+            <table>
+                <tr>
+                    <th>Type</th>
+                    <th>Meaning</th>
+                    <th>Usage</th>
+                </tr>
+                <tr>
+                    <td><code>leads_to</code></td>
+                    <td>Natural progression</td>
+                    <td>goal -> action, action -> outcome</td>
+                </tr>
+                <tr>
+                    <td><code>chosen</code></td>
+                    <td>Selected option</td>
+                    <td>decision -> option (the one picked)</td>
+                </tr>
+                <tr>
+                    <td><code>rejected</code></td>
+                    <td>Not selected</td>
+                    <td>decision -> option (with reason why)</td>
+                </tr>
+                <tr>
+                    <td><code>requires</code></td>
+                    <td>Dependency</td>
+                    <td>action -> prerequisite action</td>
+                </tr>
+                <tr>
+                    <td><code>blocks</code></td>
+                    <td>Preventing progress</td>
+                    <td>blocker -> blocked item</td>
+                </tr>
+                <tr>
+                    <td><code>enables</code></td>
+                    <td>Makes possible</td>
+                    <td>action -> now-possible action</td>
+                </tr>
+            </table>
+        </section>
+
+        <section id="patterns">
+            <h2>Usage Patterns</h2>
+
+            <h3>Pattern 1: Logging Work in Real-Time</h3>
+            <p>The core workflow for using deciduous with Claude Code:</p>
+
+            <pre><code># 1. User makes a request - create goal with verbatim prompt
+deciduous add goal "Add dark mode" -c 90 --prompt-stdin << 'EOF'
+I need dark mode for my app. Users should be able to toggle
+between light and dark themes, and it should remember their
+preference.
+EOF
+
+# 2. Before writing code - log the action
+deciduous add action "Adding theme toggle component" -c 85 -f "src/ThemeToggle.tsx"
+deciduous link 1 2 -r "Implementation step"
+
+# 3. After git commit - log outcome and link
+git commit -m "feat: add theme toggle"
+deciduous add outcome "Theme toggle working" -c 95 --commit HEAD
+deciduous link 2 3 -r "Implementation complete"
+
+# 4. Sync for live viewing
+deciduous sync</code></pre>
+
+            <h3>Pattern 2: Making Decisions</h3>
+            <p>When choosing between approaches:</p>
+
+            <pre><code># Create the decision
+deciduous add decision "Choose state management approach" -c 70
+
+# Add options
+deciduous add option "Use Redux" -c 60
+deciduous add option "Use React Context" -c 75
+deciduous add option "Use Zustand" -c 80
+
+# Link options to decision
+deciduous link 10 11 -r "Option A"
+deciduous link 10 12 -r "Option B"
+deciduous link 10 13 -r "Option C"
+
+# After deciding, mark chosen/rejected
+deciduous link 10 13 -r "Chosen: simpler API, less boilerplate" -t chosen
+deciduous link 10 11 -r "Rejected: too much boilerplate" -t rejected
+deciduous link 10 12 -r "Rejected: context re-renders" -t rejected</code></pre>
+
+            <h3>Pattern 3: Querying the Graph</h3>
+            <p>Learning from past decisions:</p>
+
+            <pre><code># See all nodes
+deciduous nodes
+
+# Filter by type
+deciduous nodes --type decision
+deciduous nodes --type outcome
+
+# Filter by branch
+deciduous nodes --branch feature-auth
+
+# See connections
+deciduous edges
+
+# Export for analysis
+deciduous graph > graph.json</code></pre>
+
+            <h3>Pattern 4: Session Recovery</h3>
+            <p>Starting a new session after context loss:</p>
+
+            <pre><code># What decisions exist?
+deciduous nodes
+
+# How are they connected?
+deciduous edges
+
+# What happened recently?
+deciduous commands
+
+# Check git state
+git status
+git log --oneline -10</code></pre>
+
+            <h3>Pattern 5: Team Collaboration</h3>
+            <p>Sharing decisions with teammates:</p>
+
+            <pre><code># Export your work as a patch
+deciduous diff export --branch my-feature -o .deciduous/patches/my-feature.json
+
+# Commit the patch (NOT the database)
+git add .deciduous/patches/
+git commit -m "docs: add decision patch for feature"
+
+# Teammate applies your patch
+deciduous diff apply .deciduous/patches/my-feature.json
+
+# Patches are idempotent - safe to re-apply
+deciduous diff apply .deciduous/patches/*.json</code></pre>
+        </section>
+
+        <section id="exercise">
+            <h2>Interactive Exercise: Building a Todo App</h2>
+
+            <p>This exercise walks through a real development scenario, showing how the todo list expands as work progresses and new requirements emerge.</p>
+
+            <div class="exercise">
+                <div class="exercise-title">
+                    <span>Exercise: Build a Todo List Feature</span>
+                </div>
+
+                <p>Imagine you're asked to add a todo list feature to an existing app. Here's how the work evolves:</p>
+
+                <div class="expanding-section">
+                    <div class="expanding-header" onclick="toggleSection(this)">
+                        <span><strong>Phase 1:</strong> Initial Request</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="expanding-content">
+                        <p><strong>User says:</strong> "Add a todo list to the app"</p>
+
+                        <div class="step">
+                            <span class="step-number">1</span>
+                            <strong>Create goal node</strong>
+                            <pre><code>deciduous add goal "Add todo list feature" -c 90 --prompt-stdin << 'EOF'
+Add a todo list to the app
+EOF</code></pre>
+                            <p>Output: <code>Created node 1 (type: goal)</code></p>
+                        </div>
+
+                        <p><strong>Initial todo list:</strong></p>
+                        <ul>
+                            <li>[ ] Add basic todo list UI</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="expanding-section">
+                    <div class="expanding-header" onclick="toggleSection(this)">
+                        <span><strong>Phase 2:</strong> Breaking Down the Work</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="expanding-content">
+                        <p>You realize "todo list" is vague. You need to make decisions:</p>
+
+                        <div class="step">
+                            <span class="step-number">2</span>
+                            <strong>Create decision node</strong>
+                            <pre><code>deciduous add decision "Choose todo storage approach" -c 75
+deciduous link 1 2 -r "Need to decide storage"</code></pre>
+                        </div>
+
+                        <div class="step">
+                            <span class="step-number">3</span>
+                            <strong>Add options</strong>
+                            <pre><code>deciduous add option "LocalStorage only" -c 60
+deciduous add option "Backend API with database" -c 80
+deciduous link 2 3 -r "Option: simple"
+deciduous link 2 4 -r "Option: persistent"</code></pre>
+                        </div>
+
+                        <p><strong>Expanded todo list:</strong></p>
+                        <ul>
+                            <li>[ ] Decide on storage approach</li>
+                            <li>[ ] Add basic todo list UI</li>
+                            <li>[ ] Implement storage layer</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="expanding-section">
+                    <div class="expanding-header" onclick="toggleSection(this)">
+                        <span><strong>Phase 3:</strong> Making a Decision</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="expanding-content">
+                        <p>You choose backend API for persistence across devices:</p>
+
+                        <div class="step">
+                            <span class="step-number">4</span>
+                            <strong>Mark decision</strong>
+                            <pre><code>deciduous link 2 4 -r "Chosen: need cross-device sync" -t chosen
+deciduous link 2 3 -r "Rejected: no persistence across devices" -t rejected</code></pre>
+                        </div>
+
+                        <div class="step">
+                            <span class="step-number">5</span>
+                            <strong>Log observation</strong>
+                            <pre><code>deciduous add observation "Existing API uses REST, should follow pattern" -c 85
+deciduous link 1 5 -r "Architecture observation"</code></pre>
+                        </div>
+
+                        <p><strong>Expanded todo list:</strong></p>
+                        <ul>
+                            <li>[x] Decide on storage approach (Backend API)</li>
+                            <li>[ ] Create database schema for todos</li>
+                            <li>[ ] Implement REST endpoints</li>
+                            <li>[ ] Add basic todo list UI</li>
+                            <li>[ ] Connect UI to API</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="expanding-section">
+                    <div class="expanding-header" onclick="toggleSection(this)">
+                        <span><strong>Phase 4:</strong> Implementation</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="expanding-content">
+                        <p>Now you implement, logging actions before code:</p>
+
+                        <div class="step">
+                            <span class="step-number">6</span>
+                            <strong>Before writing schema</strong>
+                            <pre><code>deciduous add action "Creating todos database table" -c 85 -f "migrations/001_todos.sql"
+deciduous link 1 6 -r "Database setup"</code></pre>
+                        </div>
+
+                        <div class="step">
+                            <span class="step-number">7</span>
+                            <strong>After commit</strong>
+                            <pre><code>git add migrations/
+git commit -m "feat: add todos table schema"
+
+deciduous add outcome "Todos table created" -c 95 --commit HEAD
+deciduous link 6 7 -r "Complete"</code></pre>
+                        </div>
+
+                        <p><strong>Expanded todo list (new requirements discovered!):</strong></p>
+                        <ul>
+                            <li>[x] Decide on storage approach (Backend API)</li>
+                            <li>[x] Create database schema for todos</li>
+                            <li>[ ] Implement REST endpoints</li>
+                            <li>[ ] Add basic todo list UI</li>
+                            <li>[ ] Connect UI to API</li>
+                            <li>[ ] <strong>NEW:</strong> Add due dates to todos</li>
+                            <li>[ ] <strong>NEW:</strong> Add priority levels</li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="expanding-section">
+                    <div class="expanding-header" onclick="toggleSection(this)">
+                        <span><strong>Phase 5:</strong> Scope Creep (User Adds Requirements)</span>
+                        <span class="arrow">▶</span>
+                    </div>
+                    <div class="expanding-content">
+                        <p><strong>User says:</strong> "Actually, can todos have categories too?"</p>
+
+                        <div class="step">
+                            <span class="step-number">8</span>
+                            <strong>New goal for scope change</strong>
+                            <pre><code>deciduous add goal "Add categories to todos" -c 85 --prompt-stdin << 'EOF'
+Actually, can todos have categories too?
+EOF
+deciduous link 1 8 -r "Scope expansion"</code></pre>
+                        </div>
+
+                        <div class="step">
+                            <span class="step-number">9</span>
+                            <strong>Decision needed</strong>
+                            <pre><code>deciduous add decision "Category implementation approach" -c 70
+deciduous link 8 9 -r "Need to decide"
+
+deciduous add option "Free-text tags" -c 65
+deciduous add option "Predefined categories" -c 75
+deciduous link 9 10 -r "Flexible but messy"
+deciduous link 9 11 -r "Structured but limited"</code></pre>
+                        </div>
+
+                        <p><strong>Final expanded todo list:</strong></p>
+                        <ul>
+                            <li>[x] Decide on storage approach (Backend API)</li>
+                            <li>[x] Create database schema for todos</li>
+                            <li>[ ] Implement REST endpoints</li>
+                            <li>[ ] Add basic todo list UI</li>
+                            <li>[ ] Connect UI to API</li>
+                            <li>[ ] Add due dates to todos</li>
+                            <li>[ ] Add priority levels</li>
+                            <li>[ ] <strong>NEW:</strong> Decide category approach</li>
+                            <li>[ ] <strong>NEW:</strong> Implement categories</li>
+                            <li>[ ] <strong>NEW:</strong> Add category filter UI</li>
+                        </ul>
+
+                        <div class="success">
+                            <strong>Key Insight:</strong> The decision graph captures WHY the todo list expanded - the user's request is preserved verbatim, decisions are documented, and you can trace how "add a todo list" became 10 tasks.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="hooks">
+            <h2>Enforcement Hooks</h2>
+
+            <p>Deciduous includes Claude Code hooks that enforce decision logging. These are installed automatically with <code>deciduous init</code> or <code>deciduous update</code>.</p>
+
+            <h3>PreToolUse Hook: Require Action Node</h3>
+            <p>Blocks Edit/Write tools if no recent action or goal node exists (within 15 minutes).</p>
+
+            <div class="warning">
+                <strong>If you see this error:</strong><br>
+                <code>DECIDUOUS: No recent action/goal node found</code><br><br>
+                Run one of these before editing:
+                <pre><code>deciduous add goal "What you're trying to achieve" -c 90
+# or
+deciduous add action "What you're about to implement" -c 85</code></pre>
+            </div>
+
+            <h3>PostToolUse Hook: Commit Reminder</h3>
+            <p>After every git commit, reminds you to link it to the decision graph.</p>
+
+            <div class="warning">
+                <strong>After committing, run:</strong>
+                <pre><code>deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+deciduous link &lt;action_id&gt; &lt;outcome_id&gt; -r "Implementation complete"</code></pre>
+            </div>
+
+            <h3>/work Skill</h3>
+            <p>Use the <code>/work</code> slash command to start a transaction:</p>
+            <pre><code>/work "Add user authentication"</code></pre>
+            <p>This creates the goal node automatically, capturing the user's request.</p>
+        </section>
+
+        <footer>
+            <p>
+                <a href="./">View Live Graph</a> |
+                <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
+                <a href="https://crates.io/crates/deciduous">crates.io</a>
+            </p>
+            <p>Built with deciduous - decision graph tooling for AI development</p>
+        </footer>
+    </div>
+
+    <script>
+        function toggleSection(header) {
+            const content = header.nextElementSibling;
+            const arrow = header.querySelector('.arrow');
+            content.classList.toggle('active');
+            arrow.classList.toggle('rotated');
+        }
+    </script>
+</body>
+</html>

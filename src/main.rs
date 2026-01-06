@@ -26,43 +26,11 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Initialize deciduous in current directory
-    Init {
-        /// Initialize for Claude Code (creates .claude/commands/ and CLAUDE.md)
-        #[arg(long, group = "editor")]
-        claude: bool,
+    /// Initialize deciduous in current directory (creates .claude/commands/ and CLAUDE.md)
+    Init {},
 
-        /// Initialize for Windsurf (creates .windsurf/rules/ and AGENTS.md)
-        #[arg(long, group = "editor")]
-        windsurf: bool,
-
-        /// Initialize for OpenCode (creates .opencode/command/ and AGENTS.md)
-        #[arg(long, group = "editor")]
-        opencode: bool,
-
-        /// Initialize for Codex (creates .codex/prompts/ and AGENTS.md)
-        #[arg(long, group = "editor")]
-        codex: bool,
-    },
-
-    /// Update tooling files to latest version (overwrites existing)
-    Update {
-        /// Update Claude Code files (.claude/commands/, CLAUDE.md)
-        #[arg(long, group = "editor")]
-        claude: bool,
-
-        /// Update Windsurf files (.windsurf/rules/, AGENTS.md)
-        #[arg(long, group = "editor")]
-        windsurf: bool,
-
-        /// Update OpenCode files (.opencode/command/, AGENTS.md)
-        #[arg(long, group = "editor")]
-        opencode: bool,
-
-        /// Update Codex files (.codex/prompts/, AGENTS.md)
-        #[arg(long, group = "editor")]
-        codex: bool,
-    },
+    /// Update tooling files to latest version (overwrites existing .claude/ files)
+    Update {},
 
     /// Add a new node to the decision graph
     Add {
@@ -153,6 +121,16 @@ enum Command {
 
     /// List all edges
     Edges,
+
+    /// Show detailed information about a single node
+    Show {
+        /// Node ID to display
+        id: i32,
+
+        /// Show JSON output instead of formatted
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Export full graph as JSON
     Graph,
@@ -451,25 +429,8 @@ fn main() {
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
-    if let Command::Init {
-        claude: _,
-        windsurf,
-        opencode,
-        codex,
-    } = args.command
-    {
-        // Determine editor type: default to Claude if none specified
-        let editor = if windsurf {
-            deciduous::init::Editor::Windsurf
-        } else if opencode {
-            deciduous::init::Editor::Opencode
-        } else if codex {
-            deciduous::init::Editor::Codex
-        } else {
-            deciduous::init::Editor::Claude
-        };
-
-        if let Err(e) = deciduous::init::init_project(editor) {
+    if let Command::Init {} = args.command {
+        if let Err(e) = deciduous::init::init_project() {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -477,25 +438,8 @@ fn main() {
     }
 
     // Handle update separately - it doesn't need an existing database
-    if let Command::Update {
-        claude: _,
-        windsurf,
-        opencode,
-        codex,
-    } = args.command
-    {
-        // Determine editor type: default to Claude if none specified
-        let editor = if windsurf {
-            deciduous::init::Editor::Windsurf
-        } else if opencode {
-            deciduous::init::Editor::Opencode
-        } else if codex {
-            deciduous::init::Editor::Codex
-        } else {
-            deciduous::init::Editor::Claude
-        };
-
-        if let Err(e) = deciduous::init::update_tooling(editor) {
+    if let Command::Update {} = args.command {
+        if let Err(e) = deciduous::init::update_tooling() {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -812,6 +756,154 @@ fn main() {
                 std::process::exit(1);
             }
         },
+
+        Command::Show { id, json } => {
+            match db.get_node(id) {
+                Ok(Some(node)) => {
+                    if json {
+                        // JSON output mode
+                        match serde_json::to_string_pretty(&node) {
+                            Ok(json_str) => println!("{}", json_str),
+                            Err(e) => {
+                                eprintln!("{} Serializing node: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    } else {
+                        // Formatted output mode
+                        let type_colored = match node.node_type.as_str() {
+                            "goal" => node.node_type.yellow().bold(),
+                            "decision" => node.node_type.cyan().bold(),
+                            "action" => node.node_type.green().bold(),
+                            "outcome" => node.node_type.blue().bold(),
+                            "observation" => node.node_type.magenta().bold(),
+                            "option" => node.node_type.white().bold(),
+                            _ => node.node_type.white().bold(),
+                        };
+
+                        println!();
+                        println!("{} {} {}", "Node".bold(), format!("#{}", id).cyan(), type_colored);
+                        println!("{}", "─".repeat(60));
+                        println!("{}: {}", "Title".bold(), node.title);
+
+                        if let Some(desc) = &node.description {
+                            println!("{}: {}", "Description".bold(), desc);
+                        }
+
+                        println!("{}: {}", "Status".bold(), node.status);
+                        println!("{}: {}", "Created".bold(), node.created_at);
+                        println!("{}: {}", "Updated".bold(), node.updated_at);
+
+                        // Parse metadata
+                        if let Some(ref meta_str) = node.metadata_json {
+                            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_str) {
+                                println!();
+                                println!("{}", "Metadata".bold().underline());
+
+                                if let Some(conf) = meta.get("confidence").and_then(|v| v.as_i64()) {
+                                    let conf_colored = if conf >= 80 {
+                                        format!("{}%", conf).green()
+                                    } else if conf >= 50 {
+                                        format!("{}%", conf).yellow()
+                                    } else {
+                                        format!("{}%", conf).red()
+                                    };
+                                    println!("  {}: {}", "Confidence".bold(), conf_colored);
+                                }
+
+                                if let Some(branch) = meta.get("branch").and_then(|v| v.as_str()) {
+                                    println!("  {}: {}", "Branch".bold(), branch.cyan());
+                                }
+
+                                if let Some(commit) = meta.get("commit").and_then(|v| v.as_str()) {
+                                    println!("  {}: {}", "Commit".bold(), commit.yellow());
+                                }
+
+                                if let Some(files) = meta.get("files").and_then(|v| v.as_array()) {
+                                    let file_list: Vec<&str> = files
+                                        .iter()
+                                        .filter_map(|f| f.as_str())
+                                        .collect();
+                                    if !file_list.is_empty() {
+                                        println!("  {}: {}", "Files".bold(), file_list.join(", "));
+                                    }
+                                }
+
+                                if let Some(prompt) = meta.get("prompt").and_then(|v| v.as_str()) {
+                                    println!();
+                                    println!("{}", "Prompt".bold().underline());
+                                    // Word-wrap long prompts
+                                    for line in prompt.lines() {
+                                        println!("  {}", line.italic());
+                                    }
+                                }
+                            }
+                        }
+
+                        // Get edges
+                        if let Ok(edges) = db.get_all_edges() {
+                            let incoming: Vec<_> = edges
+                                .iter()
+                                .filter(|e| e.to_node_id == id)
+                                .collect();
+                            let outgoing: Vec<_> = edges
+                                .iter()
+                                .filter(|e| e.from_node_id == id)
+                                .collect();
+
+                            if !incoming.is_empty() || !outgoing.is_empty() {
+                                println!();
+                                println!("{}", "Connections".bold().underline());
+                            }
+
+                            if !incoming.is_empty() {
+                                println!("  {} ({}):", "Incoming".bold(), incoming.len());
+                                for edge in incoming {
+                                    let rationale = edge.rationale.as_deref().unwrap_or("");
+                                    let edge_type = match edge.edge_type.as_str() {
+                                        "chosen" => edge.edge_type.green(),
+                                        "rejected" => edge.edge_type.red(),
+                                        _ => edge.edge_type.white(),
+                                    };
+                                    if rationale.is_empty() {
+                                        println!("    #{} ─[{}]→ here", edge.from_node_id, edge_type);
+                                    } else {
+                                        println!("    #{} ─[{}]→ here: {}", edge.from_node_id, edge_type, rationale.dimmed());
+                                    }
+                                }
+                            }
+
+                            if !outgoing.is_empty() {
+                                println!("  {} ({}):", "Outgoing".bold(), outgoing.len());
+                                for edge in outgoing {
+                                    let rationale = edge.rationale.as_deref().unwrap_or("");
+                                    let edge_type = match edge.edge_type.as_str() {
+                                        "chosen" => edge.edge_type.green(),
+                                        "rejected" => edge.edge_type.red(),
+                                        _ => edge.edge_type.white(),
+                                    };
+                                    if rationale.is_empty() {
+                                        println!("    here ─[{}]→ #{}", edge_type, edge.to_node_id);
+                                    } else {
+                                        println!("    here ─[{}]→ #{}: {}", edge_type, edge.to_node_id, rationale.dimmed());
+                                    }
+                                }
+                            }
+                        }
+
+                        println!();
+                    }
+                }
+                Ok(None) => {
+                    eprintln!("{} Node #{} not found", "Error:".red(), id);
+                    std::process::exit(1);
+                }
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
 
         Command::Graph => match db.get_graph() {
             Ok(graph) => match serde_json::to_string_pretty(&graph) {
@@ -2812,8 +2904,8 @@ mod tests {
     fn test_keyword_match_real_example() {
         // Real example from the codebase
         let score = keyword_match_score(
-            "Implemented --claude and --windsurf flags for init command",
-            "feat: add --claude and --windsurf flags to init command",
+            "Implemented prompt tracking for decision nodes",
+            "feat: add prompt tracking to decision nodes",
         );
         assert!(
             score > 0.7,
