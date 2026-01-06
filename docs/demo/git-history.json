@@ -1,11 +1,43 @@
 [
   {
-    "hash": "926044a71a5bbd4f794c2a3f9418a17433c08863",
-    "short_hash": "926044a",
+    "hash": "4bef2d18224daa8ef3f4b6d19c28559726d29950",
+    "short_hash": "4bef2d1",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T16:58:29-05:00",
+    "message": "fix: restore landing page (was overwritten by graph viewer)",
+    "files_changed": 5
+  },
+  {
+    "hash": "94000913c59d66e655e8e09f794f06443148f92b",
+    "short_hash": "9400091",
     "author": "Bobby Nathan",
     "date": "2026-01-05T19:12:51-05:00",
     "message": "release: v0.8.22 - git guard, web viewer improvements\n\n- Add git_guard module for git operation safety\n- Improve DagView with prompt, files, branch in modal\n- Add AskResponseModal component\n- Code formatting fixes",
     "files_changed": 5
+  },
+  {
+    "hash": "c71aa8d6b9aa3d8d5fb5f815981aea55de74bbab",
+    "short_hash": "c71aa8d",
+    "author": "Bobby Nathan",
+    "date": "2026-01-05T19:09:06-05:00",
+    "message": "updates",
+    "files_changed": 19
+  },
+  {
+    "hash": "41e4f2c3b399cd0e57b3b0440772e31393403e53",
+    "short_hash": "41e4f2c",
+    "author": "Bobby Nathan",
+    "date": "2026-01-05T16:31:39-05:00",
+    "message": "fix(web): show prompt, files, branch in DagView modal\n\nThe DagView modal was missing prompt, files, and branch display that\nDetailPanel had. Now clicking a node in the DAG view shows the full\nmetadata including verbatim prompts.\n\n- Add prompt section with styled blue border\n- Add associated files as monospace tags\n- Add branch display as green tag\n- Import getPrompt, getFiles, getBranch helpers",
+    "files_changed": 9
+  },
+  {
+    "hash": "9baf10747e8e0ac6a4bc5c623de77fbf962efdab",
+    "short_hash": "9baf107",
+    "author": "Bobby Nathan",
+    "date": "2026-01-04T13:46:30-05:00",
+    "message": "revert: roll back to v0.8.20 state (v0.9.0 yanked)\n\nThe trace capture feature introduced in v0.9.0 causes indefinite hangs.\nRolling back to v0.8.20 to restore stable behavior.\n\nv0.9.0 has been yanked from crates.io.\nThe v0.9.0 code is preserved in git history and can be retrieved via:\n  git diff v0.8.20..backup-v0.9.0-rollback",
+    "files_changed": 57
   },
   {
     "hash": "92c8ceacd3b7b2f0b0cfb06f55df2e08f54c2605",
@@ -40,11 +72,51 @@
     "files_changed": 4
   },
   {
+    "hash": "7f277a93115928aadd22accf282d3e3d3f7fdd0a",
+    "short_hash": "7f277a9",
+    "author": "Bobby Nathan",
+    "date": "2025-12-18T10:11:52-05:00",
+    "message": "fix: use window dimensions as fallback for callout line positioning",
+    "files_changed": 3
+  },
+  {
+    "hash": "8b3e9767aca0019e98553eb97e68d6a0492b815d",
+    "short_hash": "8b3e976",
+    "author": "Bobby Nathan",
+    "date": "2025-12-18T10:03:05-05:00",
+    "message": "fix: use container-relative coordinates for callout lines",
+    "files_changed": 3
+  },
+  {
+    "hash": "b180d9ae8f58e110c49bf3481301efef9e9af122",
+    "short_hash": "b180d9a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T20:26:16-05:00",
+    "message": "fix: callout lines positioning with proper container dimension tracking\n\n- Add dedicated useEffect to update containerDimensions on mount/resize\n- Add containerRef in CalloutLines to measure actual dimensions\n- Guard against rendering lines with invalid (0) dimensions\n- Ensures panelX is calculated from actual container width, not stale value\n\nThis fixes the issue where callout lines were drawn to the wrong position\nbecause containerDimensions was 0 or stale when lines were rendered.",
+    "files_changed": 4
+  },
+  {
+    "hash": "ff054d218c5aaa65b94fbd9df6f97f8ba7dcb53b",
+    "short_hash": "ff054d2",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T18:01:31-05:00",
+    "message": "feat: mobile responsive web viewer\n\n- Add mobile detection via resize listener (breakpoint: 768px)\n- Stack top bar vertically on mobile with full-width sections\n- Hide floating legend on mobile\n- Hide controls panel on mobile (CalloutLines uses bottom sheet)\n- Mobile styles for topBar, topBarLeft, topBarCenter, topBarRight",
+    "files_changed": 3
+  },
+  {
     "hash": "e9f367197578e658a401a7a509ad8c20ca8bf559",
     "short_hash": "e9f3671",
     "author": "Bobby Nathan",
     "date": "2025-12-17T17:55:06-05:00",
     "message": "feat(viewer): UI improvements - collapsible minimap, scrollable results, node filtering\n\n- Minimap now collapsible and positioned in bottom-left to avoid overlapping results\n- Right-hand search results panel is now scrollable with HTML cards instead of SVG\n- Node type badges are clickable to open modal and snap to node\n- Chain panel at bottom-left defaults to 50% height and is resizable\n- Added node type filtering with checkboxes - hidden types show transitive edges\n- Jump to Chain selector moved to top bar for easier access\n- Added floating mini legend at top center showing node types\n- Modal now snaps to selected node when opening",
+    "files_changed": 5
+  },
+  {
+    "hash": "189f4ff08dda256f1aebe427dbd8ce691eea7c00",
+    "short_hash": "189f4ff",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T17:02:13-05:00",
+    "message": "feat: chain panel search, outcomes-first priority, clearer Chain button",
     "files_changed": 5
   },
   {
@@ -56,6 +128,238 @@
     "files_changed": 6
   },
   {
+    "hash": "1c575a6e58c35100732bb97cc36d6f16d2af2d62",
+    "short_hash": "1c575a6",
+    "author": "Bobby Grayson",
+    "date": "2025-12-17T14:34:24-05:00",
+    "message": "feat(web): add configurable search sort order (newest/oldest) (#161)\n\n* feat(web): add configurable search sort order (newest/oldest)\n\n- Add searchSort to URL state ('newest' | 'oldest', default 'newest')\n- Add sortOrder prop to SearchBar with toggle button in dropdown footer\n- Pass sort config from DagView to SearchBar via URL state\n- Sort persists via ?sort=oldest URL parameter for sharing\n\nUseful for historical museums/archives where oldest-first ordering\nhelps tell the chronological story of a project's evolution.\n\n* feat(web): improve search results UX\n\n- Sort search results by node type: goal > outcome > decision > option > action > observation\n- Add '+' button on callout cards to expand full chain tree modal\n- Chain modal shows all upstream ancestors and downstream descendants\n- Nodes in chain are sorted by type priority\n- Clicking card or modal item pans/zooms to the node\n- Each node in modal is clickable to navigate there\n\n* fix(web): move chain panel to bottom-left, auto-pan on expand\n\n* fix: chain panel stability, fullscreen mode, zoom behavior\n\n- Move chain panel outside SVG to prevent disappearing on re-render\n- Make panel smaller (320px) to fit viewport\n- Always fullscreen mode - remove mini view toggle\n- Prevent browser pinch zoom from interfering with graph zoom\n- Add touch-action: none to SVG container",
+    "files_changed": 10
+  },
+  {
+    "hash": "998e1b347396c7cf7ebfaecfb5d14ce7bef2a269",
+    "short_hash": "998e1b3",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T14:17:01-05:00",
+    "message": "fix(web): move chain panel to bottom-left, auto-pan on expand",
+    "files_changed": 3
+  },
+  {
+    "hash": "034cc8f606d1ee51fedd3d96aa51492f25f117d5",
+    "short_hash": "034cc8f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-17T13:54:30-05:00",
+    "message": "feat(web): improve search results UX\n\n- Sort search results by node type: goal > outcome > decision > option > action > observation\n- Add '+' button on callout cards to expand full chain tree modal\n- Chain modal shows all upstream ancestors and downstream descendants\n- Nodes in chain are sorted by type priority\n- Clicking card or modal item pans/zooms to the node\n- Each node in modal is clickable to navigate there",
+    "files_changed": 5
+  },
+  {
+    "hash": "95ed15b378af53fd412f6cabddf15bedb3573397",
+    "short_hash": "95ed15b",
+    "author": "James Brink",
+    "date": "2025-12-17T08:50:13-07:00",
+    "message": "feat(nix): add test/clippy/fmt-check app targets",
+    "files_changed": 1
+  },
+  {
+    "hash": "f2ff01cad2a14db7462da7f49313bf70b8af4ca5",
+    "short_hash": "f2ff01c",
+    "author": "James Brink",
+    "date": "2025-12-16T22:45:46-07:00",
+    "message": "feat(init): prefix slash commands with deciduous namespace\n\nRename generated slash commands to use deciduous. prefix:\n- Claude: /deciduous.decision, /deciduous.context\n- Codex: /deciduous.decision, /deciduous.context,\n         /deciduous.build-test, /deciduous.serve-ui,\n         /deciduous.sync-graph\n\nThis avoids conflicts with other tools and makes the commands\nclearly identifiable as deciduous-related.",
+    "files_changed": 1
+  },
+  {
+    "hash": "e0a41a92995eadf04ad81549b7e9dd40c3e86847",
+    "short_hash": "e0a41a9",
+    "author": "Bobby Grayson",
+    "date": "2025-12-16T22:36:51-05:00",
+    "message": "feat: add subagent definitions for domain-specific work (#159)\n\n## Summary\n\nAdd configurable subagent system for scoping work to specific codebase domains.\n\n- Add `.claude/agents.toml` with 6 domain agents for deciduous\n- Update CLAUDE.md with Subagents section explaining usage\n- Update `deciduous init --claude` to create agents.toml template\n- Mark subagent roadmap items as completed\n\n## What's New\n\n### `.claude/agents.toml` - Domain Agent Definitions\n\nEach project can now define domain-specific agents with:\n- **file_patterns**: Glob patterns for relevant files\n- **focus_areas**: What this agent specializes in\n- **instructions**: Domain-specific guidance\n\nExample agent definition:\n```toml\n[agents.rust-core]\nname = \"Rust Core\"\ndescription = \"CLI commands, database layer, export/sync logic\"\nfile_patterns = [\"src/main.rs\", \"src/db.rs\", \"src/export.rs\"]\nfocus_areas = [\"Diesel ORM\", \"CLI dispatch\", \"JSON export\"]\ninstructions = \"Run cargo test before changes...\"\n```\n\n### Deciduous Agents (for this repo)\n\n| Agent | Domain | Key Files |\n|-------|--------|-----------|\n| `rust-core` | CLI, database, export/sync | `src/main.rs`, `src/db.rs` |\n| `tui` | Terminal UI with Ratatui | `src/tui/**/*.rs` |\n| `web` | React/TypeScript viewer | `web/src/**/*.{ts,tsx}` |\n| `tooling` | Editor integrations | `.claude/`, `.windsurf/` |\n| `docs` | Documentation, guides | `docs/`, `README.md` |\n| `ci` | Build, Actions, releases | `.github/workflows/` |\n\n### For New Projects\n\nRunning `deciduous init --claude` now creates a template agents.toml with commented examples that users can customize for their project structure.\n\n## Test Plan\n\n- [x] `cargo test` passes (20 tests)\n- [x] `cargo build --release` compiles cleanly\n- [x] Pre-commit hooks pass (fmt, clippy, types)\n- [x] Manual test: `deciduous init --claude` creates `.claude/agents.toml`\n\nAdd configurable subagent system for scoping work to specific codebase domains:\n\n- Add .claude/agents.toml with 6 domain agents for deciduous:\n  - rust-core: CLI, database, export/sync\n  - tui: Terminal UI with Ratatui\n  - web: React/TypeScript viewer\n  - tooling: Editor integrations\n  - docs: Documentation and guides\n  - ci: Build scripts and Actions\n\n- Update CLAUDE.md with Subagents section explaining how to use them\n- Update src/init.rs to create agents.toml template on `deciduous init --claude`\n- Mark subagent roadmap items as completed in ROADMAP.md\n\nThe agents.toml format is project-configurable - each project can define\nits own domain agents with file patterns, focus areas, and instructions.",
+    "files_changed": 4
+  },
+  {
+    "hash": "7357045c90b290b24c1a2811eb2802122417062b",
+    "short_hash": "7357045",
+    "author": "James Brink",
+    "date": "2025-12-16T22:14:45-07:00",
+    "message": "feat(init): improve SKILL.md template for better planning guidance\n\n- Update description to emphasize planning and reflection\n- Add bullet points for clearer intro rules\n- Add \"In plan mode\" and \"TODO / Task Item\" triggers to table\n- Better structure for logging at task granularity",
+    "files_changed": 1
+  },
+  {
+    "hash": "d7fea5827da79d319171aab1c2fb10b758cd4529",
+    "short_hash": "d7fea58",
+    "author": "James Brink",
+    "date": "2025-12-16T21:58:40-07:00",
+    "message": "fix(trace): silence proxy output by default\n\nThe proxy command now only prints trace session info when\nDECIDUOUS_TRACE_DEBUG=1 is set. This prevents output from\ninterfering with Claude's TUI.\n\n- Wrap all println!/eprintln! in proxy with trace_debug check\n- Keep error messages (actual failures) visible\n- Debug info still available via DECIDUOUS_TRACE_DEBUG=1",
+    "files_changed": 1
+  },
+  {
+    "hash": "8b2d85e9808906f310c42e169230815d4202eb2b",
+    "short_hash": "8b2d85e",
+    "author": "James Brink",
+    "date": "2025-12-16T21:47:52-07:00",
+    "message": "fix(trace): write debug output to file only, never stdout/stderr\n\nDebug logging now writes to ~/.deciduous/trace-debug.log only when\nDECIDUOUS_TRACE_DEBUG=1 is set. The log file is truncated on each run.\nThis prevents debug output from interfering with Claude's TUI.",
+    "files_changed": 6
+  },
+  {
+    "hash": "5f0cdcba0d08691b48672118805d892b233ead39",
+    "short_hash": "5f0cdcb",
+    "author": "James Brink",
+    "date": "2025-12-16T21:15:29-07:00",
+    "message": "fix: silence trace interceptor debug output by default\n\n- Replace console.error with debugLog helper\n- Only log when DECIDUOUS_TRACE_DEBUG=1 or =true\n- Prevents [ERROR] spam in Claude Code debug logs",
+    "files_changed": 2
+  },
+  {
+    "hash": "875ba0a45cf0b82d961069863989bcd22b2e1a84",
+    "short_hash": "875ba0a",
+    "author": "James Brink",
+    "date": "2025-12-16T21:08:16-07:00",
+    "message": "feat: simplify skill name + chronological DAG layout\n\n- Rename skill from 'decision-logger' to 'deciduous' (simpler path)\n- Simplify skill content for better Claude discovery\n- Remove skill from deciduous project itself (it creates skills for other projects)\n- Fix DAG view to display chains chronologically left-to-right by root node ID\n- Add .direnv to gitignore",
+    "files_changed": 7
+  },
+  {
+    "hash": "74b484d911ba96861754113fd90434258669d495",
+    "short_hash": "74b484d",
+    "author": "James Brink",
+    "date": "2025-12-16T20:26:36-07:00",
+    "message": "refactor(nix): rename nix-help to menu",
+    "files_changed": 1
+  },
+  {
+    "hash": "2f3edd3b0d8b8dbd64aab2963ff5ab0b9197f5f3",
+    "short_hash": "2f3edd3",
+    "author": "James Brink",
+    "date": "2025-12-16T20:22:48-07:00",
+    "message": "fix(nix): use writeShellScriptBin for direnv/zsh compatibility",
+    "files_changed": 1
+  },
+  {
+    "hash": "7906130dfb949d184f27be95d233784414821ad9",
+    "short_hash": "7906130",
+    "author": "James Brink",
+    "date": "2025-12-16T20:17:13-07:00",
+    "message": "feat(nix): add nix-help command to display devShell menu",
+    "files_changed": 1
+  },
+  {
+    "hash": "e049baeb0c43272c0a49853ffb1f74e0797f505e",
+    "short_hash": "e049bae",
+    "author": "James Brink",
+    "date": "2025-12-16T20:13:24-07:00",
+    "message": "feat: add Nix flake for reproducible builds\n\n- Full build with embedded web viewer as default\n- Minimal build option for faster iterations\n- DevShell with Rust, Node.js 20, sqlite, graphviz, diesel-cli\n- Checks for build, clippy, test, and fmt\n- npm hash computation for trace-interceptor and web packages\n- macOS libiconv support",
+    "files_changed": 2
+  },
+  {
+    "hash": "e9e6d2d418ca1893374f98e54af09747120377d6",
+    "short_hash": "e9e6d2d",
+    "author": "James Brink",
+    "date": "2025-12-16T20:04:46-07:00",
+    "message": "feat: improve decision-logger skill for mandatory granular tracking\n\nRedesigned the decision-logger skill based on official Claude Code\nskill documentation best practices:\n\nDescription changes:\n- Single-line format (was multi-line YAML)\n- \"ALWAYS use\" emphasizes mandatory nature\n- Broader trigger terms: \"starting tasks\", \"implementing\",\n  \"fixing bugs\", \"planning\", \"refactoring\", \"choosing approaches\"\n- Ends with benefit: \"survives context loss\"\n\nBody changes:\n- \"MANDATORY\" emphasized at top\n- \"Goal FIRST\" - before exploring, before planning, before anything\n- Granular tracking guidance - multiple actions per goal\n- Complete numbered workflow (8 steps)\n- Detailed example showing exact node creation sequence\n- Clear linking rules for each node type\n- \"Remember\" checklist at end\n\nThe skill should now trigger on virtually any implementation task\nand guide Claude to log decisions at a granular level throughout.",
+    "files_changed": 4
+  },
+  {
+    "hash": "657c4e8448b36fa6ccdfb8d2a7d804977c22e7c3",
+    "short_hash": "657c4e8",
+    "author": "James Brink",
+    "date": "2025-12-16T19:55:10-07:00",
+    "message": "feat(web): distinguish user prompts from subagent tasks in trace view\n\nAdd heuristic detection to identify subagent/internal requests vs\nactual user prompts in the trace span list:\n\n- 👤 = Real user prompt (human input)\n- 🤖 = Subagent task (Claude sending instructions to subagent)\n\nDetection patterns for subagent/internal requests:\n- \"Warmup\", \"quota\", \"foo\", \"#\" (internal checks)\n- \"Please write a...word title\" (title generation)\n- \"Explore the codebase...\", \"Search for...\", \"Look for...\"\n- \"Command:...\", \"Find...\", \"Analyze...\", \"Read...\", \"Check...\"\n- JSON output (tool results being fed back)\n\nAlso adds distinct styling for subagent task boxes (purple) vs\nuser message boxes (blue) in the expanded span detail view.",
+    "files_changed": 5
+  },
+  {
+    "hash": "055c23591c78c485ced7644ecf3f27bb8aa96cbc",
+    "short_hash": "055c235",
+    "author": "James Brink",
+    "date": "2025-12-16T19:45:35-07:00",
+    "message": "feat: add decision-logger skill for autonomous decision tracking\n\nAdd a Claude Code skill that Claude autonomously discovers and uses\nwhen working on features, bugs, or architectural changes. The skill\ntriggers decision graph logging without explicit user invocation.\n\nThe skill is created during `deciduous init --claude` at:\n  .claude/skills/decision-logger/SKILL.md\n\nSkill triggers when Claude:\n- Receives a new feature request (logs goal)\n- Chooses between approaches (logs decision)\n- Is about to write code (logs action)\n- Completes work (logs outcome)\n- Notices something important (logs observation)\n\nThis provides a more reliable mechanism than CLAUDE.md instructions\nalone, as skills are discovered and applied based on context.",
+    "files_changed": 2
+  },
+  {
+    "hash": "99ff8f57be02825b38f79cd196f029e39f8ae6a0",
+    "short_hash": "99ff8f5",
+    "author": "Bobby Grayson",
+    "date": "2025-12-16T19:36:42-05:00",
+    "message": "feat: add subagents roadmap section and rename /context to /recover (#113)\n\n- Add Subagent System for Codebase Domains section to roadmap\n  - Rust Core, TUI, Web Viewer, Tooling, Documentation, CI/CD agents\n- Rename /context command to /recover to avoid name collision\n  - Updated .claude/commands/, .windsurf/rules/, .opencode/command/\n  - Updated references in CLAUDE.md, README.md, ROADMAP.md\n- Mark URL State feature as completed (PR #105)\n- Add Installation & PATH Handling section to roadmap\n  - Graceful handling of ~/.cargo/bin PATH issues",
+    "files_changed": 18
+  },
+  {
+    "hash": "8d0e082ae43fd2b0b2a7425b103efe7f3784fff5",
+    "short_hash": "8d0e082",
+    "author": "James Brink",
+    "date": "2025-12-16T19:34:03-07:00",
+    "message": "feat(web): add span highlighting and scroll-to-span for trace deep links\n\nSupport GitHub-style span ranges in URL params:\n- ?session=abc&span=17 (single span)\n- ?session=abc&spans=17,18,19 (multiple spans)\n- ?session=abc&spans=17-20 (span range)\n- ?session=abc&spans=17-20,25 (mixed)\n\nWhen navigating to trace view with span params:\n- Expands the session and all specified spans\n- Highlights them with a yellow glow (like GitHub line highlighting)\n- Scrolls to the first highlighted span\n\nThis enables the \"View\" button in node detail to properly navigate\nto and highlight the relevant spans for that node.",
+    "files_changed": 3
+  },
+  {
+    "hash": "5a8d22a433259556fbc0df3e349b257c6ef25486",
+    "short_hash": "5a8d22a",
+    "author": "James Brink",
+    "date": "2025-12-16T19:23:55-07:00",
+    "message": "fix: filter internal Claude Code requests from session display_name\n\nSkip title generation, warmup, and prompt suggestion requests when\nselecting the user_preview to show as session display_name. These\ninternal Claude Code requests were appearing instead of the actual\nuser prompt.\n\nFiltered patterns:\n- \"Please write a 5-10 word title...\"\n- \"Please write a five to ten word title...\"\n- \"Warmup\"\n- \"You are now a prompt suggestion generator...\"",
+    "files_changed": 1
+  },
+  {
+    "hash": "bef1f2f30f221d54c204b2f3673c2150dc81082b",
+    "short_hash": "bef1f2f",
+    "author": "James Brink",
+    "date": "2025-12-16T18:52:03-07:00",
+    "message": "feat: filter internal check requests and show user prompts in span list\n\n- Skip recording haiku quota/capability check requests (quota, foo, #)\n- Add 👤 indicator to spans that have captured user prompts\n- Internal checks were cluttering trace view with unhelpful \"#\" responses\n\nThe haiku check requests are Claude Code internals used for validating\nAPI connectivity and capabilities - not useful for trace analysis.",
+    "files_changed": 5
+  },
+  {
+    "hash": "80c044bc446b76ad8df57d68e1f2a64d48a7e1e2",
+    "short_hash": "80c044b",
+    "author": "James Brink",
+    "date": "2025-12-16T17:23:55-07:00",
+    "message": "feat: improve trace view UX and user prompt capture\n\n- Fix interceptor to skip tool_result blocks when extracting user preview\n- Add fallback to assistant message context when no user text found\n- Allow multiple sessions and spans to be expanded simultaneously\n- Add session display name (linked node title or first user prompt)\n- Add span summaries showing user preview, response, or tool names\n- Update Makefile with LIBRARY_PATH for macOS and release-full target\n- Light mode theme matching rest of app",
+    "files_changed": 10
+  },
+  {
+    "hash": "13983e41c0044ee1dea48b4d4cc88b15a910afc1",
+    "short_hash": "13983e4",
+    "author": "James Brink",
+    "date": "2025-12-16T16:47:05-07:00",
+    "message": "feat: add clickable span links for trace navigation\n\n- Span info in detail panel now has \"↗ View\" button that navigates to Traces\n- Session ID is clickable and links to the trace\n- TraceView accepts URL params (?session=abc&span=45) for deep linking\n- Auto-expands the correct session and span when navigating via link",
+    "files_changed": 4
+  },
+  {
+    "hash": "df68ee77ec21755725d3e8d182d41eca035503e7",
+    "short_hash": "df68ee7",
+    "author": "James Brink",
+    "date": "2025-12-16T16:43:59-07:00",
+    "message": "refactor: redesign TraceView with inline expandable hierarchy\n\n- Remove separate detail panel, use inline expansion instead\n- Sessions expand to show nested spans list\n- Spans expand to show content (user, system, thinking, response, tools)\n- Better visual hierarchy with indentation and color coding\n- System prompts shown in purple, thinking in yellow\n- Tool inputs/outputs grouped with name and type\n- Cleaner single-column layout",
+    "files_changed": 3
+  },
+  {
+    "hash": "f925360cc0612512a6e4ddbbca6e593b4e113e80",
+    "short_hash": "f925360",
+    "author": "James Brink",
+    "date": "2025-12-16T16:39:59-07:00",
+    "message": "feat: add interactive trace linking in node detail panel\n\n- Make span info clickable with expand/collapse for content previews\n- Add link button (↗) to navigate to trace view (requires onNavigateToTrace prop)\n- Display thinking_preview, response_preview, user_preview inline when expanded\n- Show tool names in span info\n- Update API to return span content previews for node traces",
+    "files_changed": 4
+  },
+  {
+    "hash": "5cf371cb8e9d0ad69782b050aab7f1b6964681cf",
+    "short_hash": "5cf371c",
+    "author": "James Brink",
+    "date": "2025-12-16T16:34:15-07:00",
+    "message": "feat: enhance trace integration with auto-linking and comprehensive capture\n\nAuto-linking:\n- Fix span-node auto-linking by keeping DECIDUOUS_TRACE_SPAN env var active\n- Add span_nodes join table to track nodes created during spans\n- Add /api/nodes/:id/traces endpoint to query linked spans\n- Display trace info in DetailPanel when viewing nodes\n\nNew trace fields (inspired by badlogic/claude-trace):\n- Capture system prompts from API requests\n- Capture tool definitions with schemas\n- Track message count per span\n\nInit improvements:\n- Add --force/-f flag to overwrite existing files\n- Make templates language-agnostic (detect Rust/Node/Python/Go)\n\nTUI enhancements:\n- Add 5-second auto-refresh for trace view\n- Show node count badge on spans with linked nodes\n\nRefactoring:\n- Extract shared DetailPanel component for all views\n- Simplify DagView and GraphView by using shared DetailPanel",
+    "files_changed": 21
+  },
+  {
+    "hash": "b0cdd3fca00f7d2fcdd2593537fcc95a30f69b0d",
+    "short_hash": "b0cdd3f",
+    "author": "James Brink",
+    "date": "2025-12-16T11:35:53-07:00",
+    "message": "feat: add TUI and web trace views with embedded interceptor\n\n- Add TUI trace view (src/tui/views/trace.rs)\n  - Sessions list, spans list, detail view\n  - Keyboard navigation (j/k, Enter, Esc, Tab)\n  - Link/unlink sessions to nodes (l/u keys)\n\n- Add web trace panel (web/src/views/TraceView.tsx)\n  - Session cards with token stats\n  - Span navigation and detail view\n  - Traces tab in Layout\n\n- Add /api/traces endpoints to serve.rs\n  - GET /api/traces (list sessions)\n  - GET /api/traces/:session_id (get spans)\n  - GET /api/traces/:session_id/spans/:span_id (get content)\n\n- Embed JS interceptor in Rust binary (src/interceptor.rs)\n  - Auto-extract to ~/.deciduous/trace-interceptor/\n  - Version checking to avoid redundant extraction\n\n- Fix interceptor session handling\n  - Pass DECIDUOUS_BIN env var with full binary path\n  - Use DECIDUOUS_TRACE_SESSION from proxy instead of creating new session\n  - Proxy manages session lifecycle, interceptor just records spans",
+    "files_changed": 19
+  },
+  {
+    "hash": "75031c892bab3af8c52b40c45b9dcfbda134dfad",
+    "short_hash": "75031c8",
+    "author": "James Brink",
+    "date": "2025-12-16T10:39:51-07:00",
+    "message": "feat: add Claude trace integration for API traffic capture\n\nAdd comprehensive trace capture functionality inspired by claude-trace,\nallowing users to record and analyze Claude API traffic alongside their\ndecision graphs.\n\n## New Database Tables\n\n- `trace_sessions`: Groups API calls from a single Claude session\n- `trace_spans`: Individual API request/response pairs with token counts\n- `trace_content`: Large content storage (thinking blocks, responses, tools)\n\n## New CLI Commands\n\n- `deciduous trace start` - Start a new trace session\n- `deciduous trace end <session-id>` - End a session with summary\n- `deciduous trace record --session <id> --stdin` - Record spans (for interceptor)\n- `deciduous trace sessions` - List trace sessions\n- `deciduous trace spans <session-id>` - Show spans in a session\n- `deciduous trace show <span-id>` - Show full content for a span\n- `deciduous trace link --session <id> <node-id>` - Link to decision node\n- `deciduous trace unlink` - Remove link\n- `deciduous trace prune --days N` - Delete old traces\n- `deciduous proxy -- <command>` - Run command with trace capture\n\n## Node.js Interceptor (trace-interceptor/)\n\nTypeScript package that intercepts fetch() calls to api.anthropic.com:\n- Hooks into Claude Code via NODE_OPTIONS --require\n- Parses SSE streams to extract thinking/response/tool calls\n- Shells out to `deciduous trace record` to store data\n- Handles both streaming and non-streaming responses\n\n## Usage\n\n```bash\n# Using proxy command (recommended)\ndeciduous proxy -- claude \"your prompt\"\ndeciduous proxy --auto-link -- claude  # Auto-links to most recent goal\n\n# Manual trace capture\ndeciduous trace start\n# ... run Claude session with interceptor ...\ndeciduous trace end <session-id>\n\n# View and link traces\ndeciduous trace sessions\ndeciduous trace spans <session-id>\ndeciduous trace link --session <id> <node-id>\n```\n\n## Future Enhancements\n\n- TUI trace view (t key to switch to traces)\n- Web viewer trace panel\n- Embed interceptor JS in Rust binary",
+    "files_changed": 23
+  },
+  {
     "hash": "a2733c94fe1e972a60bcb5a140ef84503b1bd62e",
     "short_hash": "a2733c9",
     "author": "Bobby Nathan",
@@ -64,20 +368,20 @@
     "files_changed": 6
   },
   {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
+    "hash": "49e9acfbd9dc1edf8fd899d8c0b29a61fc24d1d7",
+    "short_hash": "49e9acf",
+    "author": "Bobby Grayson",
+    "date": "2025-12-16T01:28:55-05:00",
+    "message": "feat: improve prompt capture with stdin support and update command (#122)\n\n## Summary\n\nEnhances prompt capture to encourage full verbatim prompts instead of summaries. Adds CLI tools to make capturing multi-line prompts easier.\n\n## Changes\n\n### CLI Features\n- **`--prompt-stdin`** flag on `add` command - Read prompt from stdin for multi-line input\n- **`deciduous prompt <id>`** command - Add/update prompts on existing nodes\n- **Validation warning** - Warns when prompt is < 200 chars (likely a summary)\n\n### Documentation Updates\n- Updated CLAUDE.md, AGENTS.md with verbatim prompt guidance\n- Updated all editor command files (.claude, .windsurf, .opencode)\n- Updated README with new prompt commands\n- Added Codex to landing page editor badges (from merged PR #119)\n\n## Why This Matters\n\nShort prompt summaries are useless for context recovery. Full verbatim prompts enable AI assistants to fully recover context when sessions reset.\n\n## Test Plan\n\n- [x] cargo test passes\n- [x] cargo build --release succeeds\n- [x] Web demo builds\n- [x] Pre-commit hooks pass\n\n* feat: add prompt capture improvements\n\n- Add --prompt-stdin flag for multi-line prompt input\n- Add deciduous prompt command to update existing node prompts\n- Add validation warning when prompts are < 200 chars\n- Update docs to emphasize VERBATIM prompts, not summaries\n\n* docs: add Codex support and update prompt documentation\n\n- Add Codex to landing page editor badges\n- Update README with --prompt-stdin and prompt command\n- Update all command files with verbatim prompt guidance\n- Emphasize FULL prompts, not summaries, for context recovery",
+    "files_changed": 12
   },
   {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
+    "hash": "f2ddcb2de4cd3c89205c1006775034c8642f51e4",
+    "short_hash": "f2ddcb2",
+    "author": "Bobby Grayson",
+    "date": "2025-12-16T01:28:07-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel (#123)\n\n## Summary\n\nRedesigned callout cards to be information-dense like the detail panel:\n\n### Callout Card Improvements\n- **Desktop**: Rich cards (420x180px) stacked in a right-side panel\n- Cards now display:\n  - Type badge (colored by node type)\n  - Confidence percentage (color-coded green/yellow/red)\n  - Node ID and date\n  - Title and description\n  - **INCOMING connections** with node type badge + title preview\n  - **OUTGOING connections** with node type badge + title preview\n- Curved bezier lines connect nodes to their cards\n- **Mobile**: Pulsing indicator circles that open a bottom sheet with full details\n\n### Search Fix\n- **Previously**: Search limited to 15 results for BOTH dropdown AND highlighting\n- **Now**: Dropdown shows top 15, but ALL matching nodes are highlighted on graph\n- All matching nodes now appear in callout cards (not just top 15)\n- Dropdown footer shows \"Showing 15 of N · All N highlighted\" when truncated\n\n## Test Plan\n- [ ] Search for a term that matches >15 nodes (e.g., \"roadmap\")\n- [ ] Verify ALL matches are highlighted on the graph\n- [ ] Verify dropdown shows \"Showing 15 of N\" message\n- [ ] Verify all highlighted nodes appear in callout cards\n- [ ] Verify cards show type badge, confidence %, node ID, date\n- [ ] Verify cards show INCOMING and OUTGOING connection previews\n- [ ] On mobile viewport, verify circles appear and bottom sheet opens on tap\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
   },
   {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
@@ -88,12 +392,44 @@
     "files_changed": 5
   },
   {
+    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
+    "short_hash": "9e9953a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 3
+  },
+  {
+    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
+    "short_hash": "e80d20f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 4
+  },
+  {
+    "hash": "3be6e5ce199b274c285e1740b92e3054dc7f00e3",
+    "short_hash": "3be6e5c",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T00:49:29-05:00",
+    "message": "feat(web): enhance prompt display in detail panel\n\n- Add chat bubble icon to prompt section header\n- Use amber/yellow color scheme to make prompts stand out\n- Rename section header to 'User Prompt' for clarity\n- Style matches TUI prompt display prominence",
+    "files_changed": 5
+  },
+  {
     "hash": "8e2aa322cbb1001e8c18a8050d9437018f48d285",
     "short_hash": "8e2aa32",
     "author": "Bobby Nathan",
     "date": "2025-12-15T23:47:34-05:00",
     "message": "release: v0.8.14\n\n### Fixed\n- Chain view now shows all connected nodes (enhanced BFS to traverse both directions)\n- No more 100 node limit when viewing single chains",
     "files_changed": 9
+  },
+  {
+    "hash": "3aaf1ddc2bd6bc82f8c46964835223c9551485a1",
+    "short_hash": "3aaf1dd",
+    "author": "James Brink",
+    "date": "2025-12-15T22:58:31-07:00",
+    "message": "feat: add Codex CLI support for deciduous initialization (#119)\n\n## Summary\n\nAdd OpenAI Codex as the 4th supported AI agent/IDE alongside Claude Code, Windsurf, and OpenCode.\n\n- Add `--codex` flag to `deciduous init` and `deciduous update` commands\n- Create `.codex/prompts/` directory with 5 slash command templates\n- Selective `.gitignore` pattern allows prompts to be committed while ignoring other Codex files\n- Update README.md with Codex in Quick Start and Commands Reference\n\n## Changes\n\n### New Files Created by `deciduous init --codex`\n\n```\n.codex/\n└── prompts/\n    ├── decision.md      # /prompts:decision - Decision graph management\n    ├── context.md       # /prompts:context - Context recovery at session start\n    ├── build-test.md    # /prompts:build-test - Build and test\n    ├── serve-ui.md      # /prompts:serve-ui - Launch graph viewer\n    └── sync-graph.md    # /prompts:sync-graph - Export to GitHub Pages\n```\n\n### Gitignore Pattern\n\nUses selective ignoring so prompts can be committed:\n```gitignore\n# Codex files (prompts/ should be committed)\n.codex/*\n!.codex/prompts/\n!.codex/prompts/**\n```\n\n### Code Changes\n\n| File | Changes |\n|------|---------|\n| `src/init.rs` | Add `Codex` enum variant, 5 template constants, `add_codex_to_gitignore()` helper, init/update cases, 14 new tests |\n| `src/main.rs` | Add `--codex` flag to `Init` and `Update` commands |\n| `README.md` | Add Codex to Quick Start and Commands Reference sections |\n\n## Codex Prompt Format\n\nPrompts use Codex-specific frontmatter:\n```yaml\n---\ndescription: Brief explanation\nargument-hint: [PARAM=\"<value>\"]\n---\n```\n\nCommands are invoked as `/prompts:decision`, `/prompts:context`, etc.\n\n## Usage\n\n```bash\ndeciduous init --codex\nexport CODEX_HOME=.codex  # Use project-local prompts\n```\n\n## Test Plan\n\n- [x] All 208 unit tests pass\n- [x] All 20 integration tests pass\n- [x] TypeScript type check passes\n- [x] Web build succeeds\n- [x] Manual test: `deciduous init --codex` creates correct files\n- [x] Manual test: `.gitignore` has correct selective pattern\n- [x] Manual test: `deciduous init --help` shows `--codex` flag\n\n* feat: add Codex CLI support for deciduous initialization\n\nAdd OpenAI Codex as the 4th supported AI agent/IDE alongside Claude Code,\nWindsurf, and OpenCode.\n\nChanges:\n- Add `Codex` variant to `Editor` enum\n- Add 5 Codex prompt templates (decision, context, build-test, serve-ui, sync-graph)\n- Add `add_codex_to_gitignore()` helper with selective ignore pattern:\n  - `.codex/*` ignores all Codex files\n  - `!.codex/prompts/` and `!.codex/prompts/**` allows prompts to be committed\n- Add `--codex` flag to `deciduous init` and `deciduous update` commands\n- Update init output to show `export CODEX_HOME=.codex` for project-local prompts\n- Add 14 new tests for Codex functionality\n- Update README.md with Codex in Quick Start and Commands Reference\n\nCodex prompts use the standard frontmatter format:\n```yaml\n---\ndescription: Brief explanation\nargument-hint: [PARAM=\"<value>\"]\n---\n```\n\nCommands are invoked as `/prompts:decision`, `/prompts:context`, etc.\n\nTest results: 208 unit tests passed, 20 integration tests passed\n\n* fix: use push() instead of push_str() for single char",
+    "files_changed": 3
   },
   {
     "hash": "2cca5b32ccc6c27b99c3e023f2d5e4c3307b5b63",
@@ -120,12 +456,36 @@
     "files_changed": 8
   },
   {
+    "hash": "017554979ed5e983759ea8232174afc3dc9d1459",
+    "short_hash": "0175549",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T22:34:54-05:00",
+    "message": "feat: add external repository support for commit links (#116)\n\nAdd [github] config section to config.toml with commit_repo field.\nWhen configured, commit hashes will link to the external repository\ninstead of the local one. Useful for documenting external project history.\n\n- Add GithubConfig struct with commit_repo field\n- Include config in DecisionGraph when github.commit_repo is set\n- Update web viewer to read repo from config\n- Export config in graph-data.json via deciduous sync",
+    "files_changed": 11
+  },
+  {
+    "hash": "8d15c851a505a1e90dfbeae0e9ae290a878ac509",
+    "short_hash": "8d15c85",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T20:26:16-05:00",
+    "message": "feat(web): URL state for deep linking and sharing (#105)\n\n* feat(web): add URL state for deep linking and sharing\n\n- Add useUrlState hook for syncing view state with URL parameters\n- Support node, search, view, chains, focus, fullscreen params\n- Update SearchBar to accept controlled query (backwards compatible)\n- Add Copy Link button to top bar for sharing current view\n- Enable browser back/forward navigation support\n\n* docs: add decision graph for URL state feature\n\n## Summary\n\nImplements URL state synchronization for the web DAG viewer, enabling deep linking and sharing of specific views.\n\n- **New `useUrlState` hook** - Syncs React state with URL query parameters\n- **Supported parameters:**\n  - `?node=42` - Select a specific node\n  - `?search=term` or `?q=term` - Pre-fill search query\n  - `?view=recent|all|single` - Set view mode\n  - `?chains=N` - Number of recent chains to show\n  - `?focus=N` - Focus on specific chain index\n  - `?fullscreen=1` - Enable fullscreen mode\n- **Copy Link button** - One-click copy of shareable URL with current state\n- **Browser history support** - Back/forward navigation works correctly\n- **Backwards compatible** - SearchBar accepts controlled or uncontrolled mode\n\n## Decision Graph\n\n![Decision Graph](https://raw.githubusercontent.com/notactuallytreyanastasio/deciduous/feature/web-url-state/docs/decision-graph-url-state.png)\n\n| ID | Type | Title |\n|----|------|-------|\n| 603 | goal | Parameterize web UI state in URL for deep linking and sharing |\n| 604 | action | Integrated URL state into DagView and SearchBar |\n| 605 | outcome | URL state feature committed and pushed |\n\n## Test Plan\n\n- [ ] Load page with `?node=100` - should auto-select node 100\n- [ ] Load page with `?search=goal` - should pre-fill search and highlight matches\n- [ ] Load page with `?view=all` - should show all chains\n- [ ] Load page with `?fullscreen=1` - should open in fullscreen\n- [ ] Click \"Copy Link\" button - should copy URL to clipboard\n- [ ] Change view settings - URL should update without page reload\n- [ ] Use browser back/forward - should restore previous state\n- [ ] Verify SearchBar still works without controlled props (backwards compat)\n\n## Files Changed\n\n- `web/src/hooks/useUrlState.ts` (new) - URL state hook\n- `web/src/views/DagView.tsx` - Integration with URL state\n- `web/src/components/SearchBar.tsx` - Controlled query support",
+    "files_changed": 7
+  },
+  {
     "hash": "9a22b687c78a805772bc7ace691f54e2633762b3",
     "short_hash": "9a22b68",
     "author": "Bobby Nathan",
     "date": "2025-12-15T20:19:03-05:00",
     "message": "feat(web): add URL state for deep linking and sharing\n\n- Add useUrlState hook for syncing view state with URL parameters\n- Support node, search, view, chains, focus, fullscreen params\n- Update SearchBar to accept controlled query (backwards compatible)\n- Add Copy Link button to top bar for sharing current view\n- Enable browser back/forward navigation support",
     "files_changed": 5
+  },
+  {
+    "hash": "7684137f0a315c4fa15f4f0146a1c95d203481a7",
+    "short_hash": "7684137",
+    "author": "James Brink",
+    "date": "2025-12-15T20:13:38-07:00",
+    "message": "feat: add shell completion subcommand (#114)\n\n* feat: add shell completion subcommand\n\nAdd `deciduous completion <shell>` command to generate shell completions\nfor bash, zsh, fish, powershell, and elvish.\n\nUsage:\n  source <(deciduous completion zsh)   # Zsh\n  source <(deciduous completion bash)  # Bash\n  deciduous completion fish | source   # Fish\n\nChanges:\n- Add clap_complete dependency\n- Add Completion command variant with shell type argument\n- Handle completion early in main() (no database required)\n- Add integration tests for bash, zsh, fish completions\n- Document shell completion setup in README\n- Document macOS libiconv build dependency in README\n\nAlso includes cargo fmt formatting fixes across the codebase.\n\n* fix: preserve single-line format for type constants\n\nAdd #[rustfmt::skip] to NODE_TYPES and EDGE_TYPES constants to prevent\ncargo fmt from reformatting them to multi-line. The validate-types.sh\nscript parses these with grep expecting single-line format.",
+    "files_changed": 27
   },
   {
     "hash": "5d705aa2390a341f9e077bd6ccaf5f5f89e33757",
@@ -136,12 +496,28 @@
     "files_changed": 7
   },
   {
+    "hash": "5a0b09e1ad8eee086af52767232049e1f510a255",
+    "short_hash": "5a0b09e",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T19:48:46-05:00",
+    "message": "feat: add OpenCode slash commands for deciduous workflow (#104)\n\n- /build-test: Build and run tests\n- /context: Recover context from decision graph\n- /decision: Manage decision graph nodes and edges\n- /serve-ui: Start web UI server\n- /sync-graph: Export graph data\n\nAlso adds:\n- .deciduous/config.toml for branch configuration\n- GitHub workflow for cleaning up decision graph PNGs after PR merge",
+    "files_changed": 7
+  },
+  {
     "hash": "c86fb2a07f2331495dfa3171ce0431f7f18ad480",
     "short_hash": "c86fb2a",
     "author": "Bobby Nathan",
     "date": "2025-12-15T19:37:34-05:00",
     "message": "feat: add OpenCode slash commands for deciduous workflow\n\n- /build-test: Build and run tests\n- /context: Recover context from decision graph\n- /decision: Manage decision graph nodes and edges\n- /serve-ui: Start web UI server\n- /sync-graph: Export graph data\n\nAlso adds:\n- .deciduous/config.toml for branch configuration\n- GitHub workflow for cleaning up decision graph PNGs after PR merge",
     "files_changed": 7
+  },
+  {
+    "hash": "3c6c129f5f841a2e691f53bd94936669010cf1b4",
+    "short_hash": "3c6c129",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T19:36:07-05:00",
+    "message": "Feature/graph explorer planning (#103)\n\n* docs: add planning document for graph explorer feature\n\nPlanning document outlining the approach for building an enhanced\ngraph explorer with:\n- Floating search results panel for invisible matches\n- Magnifier/callout lines for tiny nodes\n- Focus mode to isolate subgraphs\n- Lazy loading for large graphs\n- Visibility detection system\n\nTwo implementation approaches proposed:\n- Approach A: Side Panel First\n- Approach B: Callouts First\n\n* feat(web): implement Approach B - Callouts First for graph explorer\n\nImplementation of the Callouts First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add CalloutLines component that draws lines from tiny nodes to labels\n- Add MiniMap component showing off-screen match indicators\n- Integrate components into DagView with:\n  - Callout lines for too-small search matches\n  - Mini overview map with viewport indicator\n  - Click-to-navigate from minimap to off-screen nodes\n- Track node positions and graph bounds for visualization\n\nThis approach prioritizes in-graph visual indicators (callout lines)\nover a floating panel, keeping attention on the graph itself.\n\n* build: update demo for GitHub Pages deployment\n\n* fix(web): improve callout positioning and sizing\n\n- Labels now always stack on right side (avoids legend collision)\n- Bigger labels (220x40) with larger fonts for readability\n- Better vertical stacking with overlap prevention\n- Larger node indicator circles (r=8)\n- Cleaner line styling\n\n* feat(callouts): wider labels, fix visibility, add hover previews\n\n- Increased label width from 220px to 280px for more text\n- Increased truncation limit from 22 to 32 chars\n- Fixed viewport calculation (use top-left coords, not center)\n- Bigger node indicator circles (r=12 instead of r=8)\n- Added hover state with expanded preview card\n- Shows type badge, full title, description on hover",
+    "files_changed": 11
   },
   {
     "hash": "ea2e7dc8170e53aadb402054ab4657d67870ac2b",
@@ -174,6 +550,30 @@
     "date": "2025-12-15T18:54:09-05:00",
     "message": "feat(web): implement Approach A - Side Panel First for graph explorer\n\nImplementation of the Side Panel First approach for the enhanced graph\nexplorer feature:\n\n- Add useNodeVisibility hook for tracking node visibility at current zoom\n- Add useFocusMode hook for isolating subgraphs\n- Add SearchResultsPanel component with visibility categorization\n- Integrate components into DagView with:\n  - Search results panel showing visible/hidden matches\n  - Navigate to node functionality\n  - Focus mode to isolate search results\n  - Focus mode indicator with exit button\n- Update SearchBar to export results to parent component\n\nThis approach prioritizes a floating results panel that categorizes\nmatches by visibility, with \"Navigate\" buttons for off-screen nodes.",
     "files_changed": 8
+  },
+  {
+    "hash": "c6623b65afce697382f1a2845456f73e989194ae",
+    "short_hash": "c6623b6",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T18:45:53-05:00",
+    "message": "docs: add planning document for graph explorer feature\n\nPlanning document outlining the approach for building an enhanced\ngraph explorer with:\n- Floating search results panel for invisible matches\n- Magnifier/callout lines for tiny nodes\n- Focus mode to isolate subgraphs\n- Lazy loading for large graphs\n- Visibility detection system\n\nTwo implementation approaches proposed:\n- Approach A: Side Panel First\n- Approach B: Callouts First",
+    "files_changed": 1
+  },
+  {
+    "hash": "c7b628a8ca7404f68f0f2f9fc31a4abb70d92bd2",
+    "short_hash": "c7b628a",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T15:01:30-05:00",
+    "message": "feat(web): Add search functionality to DAG viewer (#98)\n\n* feat(web): add search functionality to DAG viewer\n\nAdd full-text search across nodes, commits, prompts, and files:\n\n- New SearchBar component with dropdown results\n- Debounced search (150ms) for performance\n- Keyboard navigation (up/down arrows, enter, escape)\n- Visual node highlighting with glow effect\n- Match count indicator in stats bar\n- Mobile-responsive design\n\nSearch matches:\n- Node titles and descriptions\n- Git commit messages (via linked commits)\n- User prompts stored in metadata\n- Associated file paths\n\n* docs: add decision graph for search feature",
+    "files_changed": 8
+  },
+  {
+    "hash": "7601d05d67d73681958bfa561b3474674ea192ff",
+    "short_hash": "7601d05",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T14:58:01-05:00",
+    "message": "fix(tui): roadmap 'o' keystroke now opens correct GitHub repo (#99)\n\n## Summary\n\n- Fixed the 'o' keystroke in the roadmap TUI view which was broken due to a hardcoded GitHub repo URL\n- The keystroke now dynamically detects the correct repo from either the database sync state or git remote\n- Added comprehensive keystroke tests to `msg.rs`\n\n## Problem\n\nPressing 'o' on a roadmap item would always try to open issues from `notactuallytreyanastasio/deciduous` regardless of the user's actual repository. This was caused by a hardcoded URL in `selected_issue_url()`:\n\n```rust\n// Before (broken)\nformat!(\"https://github.com/notactuallytreyanastasio/deciduous/issues/{}\", num)\n```\n\n## Solution\n\n1. **Added `github_repo` field to `RoadmapState`** - Stores the repo string (e.g., \"owner/repo\")\n\n2. **Added `detect_github_repo()` method to `App`** - Tries to get the repo from:\n   - First: Database `RoadmapSyncState` (if roadmap sync is configured)\n   - Fallback: Parse git remote URL (`git@github.com:owner/repo.git` or `https://github.com/owner/repo.git`)\n\n3. **Fixed `selected_issue_url()`** - Now uses the dynamic repo:\n   ```rust\n   // After (fixed)\n   format!(\"https://github.com/{}/issues/{}\", repo, num)\n   ```\n\n4. **Improved error handling** - Shows helpful message when no GitHub repo is configured\n\n## Audit Findings\n\nDuring investigation, I audited the TUI keystroke architecture and found that the TEA `key_to_msg()` function in `msg.rs` is not actually used by `events.rs`. The event handlers are implemented directly, creating some discrepancies:\n\n| Key | msg.rs (TEA) | events.rs (Actual) |\n|-----|--------------|-------------------|\n| 't' | CycleTypeFilter | Not used |\n| 'f' | Not defined | cycle_type_filter |\n| 'y' | CopyToClipboard | Not implemented |\n| '1/2/3' | SwitchToView | Not implemented |\n\nThis is design debt that could be addressed in a future refactor to unify the TEA architecture.\n\n## Test plan\n\n- [x] All existing tests pass (`cargo test`)\n- [x] Build succeeds (`cargo build --release`)\n- [x] Added new tests for keystroke mappings in `msg.rs`\n- [x] Added test for `selected_issue_url` with/without repo configured\n- [ ] Manual test: Run `deciduous tui`, go to Roadmap view, press 'o' on an item with a GitHub issue\n\nThe 'o' key in the roadmap view was hardcoded to open issues from\n'notactuallytreyanastasio/deciduous' instead of the user's actual repo.\n\nChanges:\n- Add github_repo field to RoadmapState\n- Detect repo from DB sync state or git remote URL\n- Add comprehensive keystroke tests to msg.rs\n- Improve error message when no repo configured",
+    "files_changed": 4
   },
   {
     "hash": "42c89eb4211cbd1d5b68a62a273d5d6c958f5046",
@@ -230,6 +630,38 @@
     "date": "2025-12-15T10:23:19-05:00",
     "message": "feat: add animated quickstart guide, slow demo scroll 15%\n\n- Add 5-step quickstart guide with animated terminal demos\n- Install, init, add nodes, link nodes, view/share steps\n- Slow top demo scroll from 800ms to 920ms for better readability\n- Sync graph: 553 nodes, 482 edges",
     "files_changed": 3
+  },
+  {
+    "hash": "0eb85c31059d58f72c7fd58a22bee3558441291f",
+    "short_hash": "0eb85c3",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T10:16:14-05:00",
+    "message": "Landing Page Refresh: Animated Session Demo & Updated Content (#97)\n\n* feat: refresh landing page with animated session demo\n\nNew sections:\n- Animated Claude Code session walkthrough showing the feedback loop\n- Stats banner with live node/edge counts\n- 'Built With Itself' proof section\n- 'Works With Your Editor' with Claude/Windsurf/OpenCode badges\n- 'Three Ways to View' cards for Web/TUI/CLI\n- Improved 'The Workflow' with numbered steps\n- Updated 'The Full Story' section\n\nKept:\n- Same OG meta tags and rich previews\n- Same overall structure (nav, header, elevator pitch)\n- Asciinema demo, PR examples, code quickstart\n\n* feat: expand session demo to full realistic dialogue (~40s)\n\n- Shows complete workflow: goal, decision, options, action, outcome\n- Demonstrates linking nodes together as work progresses\n- Shows options considered (httpOnly vs localStorage) with reasoning\n- Includes file modifications and git commit\n- Context recovery shows full decision tree hierarchy\n- New session continues work by linking to previous outcome\n- Added replay button to restart animation\n- Removed redundant button sections\n\n* feat: add scrolling terminal demo with auto-scroll\n\n- Fixed height (400px) with overflow scroll\n- Custom dark scrollbar styling\n- Auto-scrolls to each step as it appears\n- Replay resets scroll position to top\n\n* feat: slower scroll animation (800ms with ease-out)\n\n* style: remove emojis from view cards\n\n* feat: start demo with /context to show context recovery first\n\n- Session begins with /context slash command\n- Shows existing decision tree from previous session\n- Claude summarizes state and asks what's next\n- User continues with new work that links to existing graph\n- Demonstrates the full context recovery workflow",
+    "files_changed": 5
+  },
+  {
+    "hash": "5d73070dc2ac5f531cb86001ee43d6dc5bc76d72",
+    "short_hash": "5d73070",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:14:50-05:00",
+    "message": "feat: start demo with /context to show context recovery first\n\n- Session begins with /context slash command\n- Shows existing decision tree from previous session\n- Claude summarizes state and asks what's next\n- User continues with new work that links to existing graph\n- Demonstrates the full context recovery workflow",
+    "files_changed": 1
+  },
+  {
+    "hash": "dda3a5cd78f1bb4f550ad3b96274465ea80aa8af",
+    "short_hash": "dda3a5c",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:08:29-05:00",
+    "message": "feat: add scrolling terminal demo with auto-scroll\n\n- Fixed height (400px) with overflow scroll\n- Custom dark scrollbar styling\n- Auto-scrolls to each step as it appears\n- Replay resets scroll position to top",
+    "files_changed": 1
+  },
+  {
+    "hash": "b8bf8408b90107b81cc2b0f7345ff221439a48b8",
+    "short_hash": "b8bf840",
+    "author": "Bobby Nathan",
+    "date": "2025-12-15T10:05:43-05:00",
+    "message": "feat: expand session demo to full realistic dialogue (~40s)\n\n- Shows complete workflow: goal, decision, options, action, outcome\n- Demonstrates linking nodes together as work progresses\n- Shows options considered (httpOnly vs localStorage) with reasoning\n- Includes file modifications and git commit\n- Context recovery shows full decision tree hierarchy\n- New session continues work by linking to previous outcome\n- Added replay button to restart animation\n- Removed redundant button sections",
+    "files_changed": 1
   },
   {
     "hash": "f7ce5543f81778db99920b7a779137a7fd212d54",
@@ -312,6 +744,14 @@
     "files_changed": 12
   },
   {
+    "hash": "116a15d2b800db8751e69e687492495f0fae04b9",
+    "short_hash": "116a15d",
+    "author": "Bobby Grayson",
+    "date": "2025-12-15T01:26:20-05:00",
+    "message": "feat(web): Add roadmap view and API integration (#90)\n\n* feat(roadmap): Phase 3-5 - GitHub CLI integration and sync commands (#88)\n\n* feat(roadmap): Phase 3 - GitHub CLI integration\n\nAdd gh CLI wrapper for GitHub issue operations:\n- Create, update, close, reopen issues\n- Get issue details and comments\n- Search issues by title or label\n- Auto-detect repo from git remote\n\nUses gh CLI instead of direct API to avoid token complexity.\n\nDecision Graph: Action #497\n\n* feat: add roadmap CLI commands\n\n- Add RoadmapAction enum with init, sync, list, link, unlink, conflicts, status subcommands\n- Implement deciduous roadmap init - parses ROADMAP.md and adds metadata\n- Implement deciduous roadmap sync - bidirectional sync with GitHub Issues\n- Implement deciduous roadmap list - displays items with filters\n- Implement deciduous roadmap link/unlink - connects items to outcome nodes\n- Implement deciduous roadmap conflicts - shows sync conflicts\n- Implement deciduous roadmap status - shows sync summary\n- Add update_roadmap_item_github_by_title and update_roadmap_item_github_by_change_id methods\n- Add get_roadmap_sync_state method\n\n* feat(roadmap): address PR feedback - safer sync defaults & caching\n\n- Make --dry-run default for `roadmap sync` (use --execute to apply)\n- Auto-create 'roadmap' label if it doesn't exist\n- Add GitHub issue cache table for TUI/Web display\n- Cache issues locally when created during sync\n\nAddresses PR #88 feedback:\n1. Cache GitHub state locally for TUI + serve + web\n2. Make --dry-run default (require --execute flag)\n3. Auto-create roadmap label\n\nNote: `roadmap init` idempotency to be done as separate patch release\n\n# Roadmap Board System - Part 2: GitHub Integration & CLI\n\n## Context\n\nWith the data layer in place (PR #87), we can now connect to GitHub. This PR adds:\n\n1. **GitHub CLI wrapper** - Shell out to `gh` for issue operations\n2. **Sync engine** - Bidirectional sync between ROADMAP.md and GitHub Issues\n3. **CLI commands** - `deciduous roadmap init/sync/list/link`\n\n## Why Shell Out to `gh`?\n\nWe use GitHub's official CLI (`gh`) rather than the REST API because:\n\n| Approach | Pros | Cons |\n|----------|------|------|\n| `gh` CLI | No token management, uses existing auth, handles rate limiting | Requires `gh` installed |\n| REST API | No external dependency | Token management, rate limit handling, more code |\n| GraphQL API | Efficient batching | Complex, token management |\n\n**Decision**: Shell out to `gh`. Users already have it for `gh pr create`. If they don't, they get a clear error message.\n\n## New Files\n\n### `src/github.rs` (~400 lines)\n\nGitHub CLI wrapper with typed responses:\n\n```rust\npub struct GitHubClient {\n    repo: Option<String>,  // \"owner/repo\" format\n}\n\nimpl GitHubClient {\n    pub fn auto_detect() -> Result<Self>;\n    pub fn check_auth() -> Result<bool>;\n    \n    // Issue operations\n    pub fn create_issue(&self, title: &str, body: &str, labels: &[&str]) -> Result<GitHubIssue>;\n    pub fn update_issue_body(&self, number: i32, body: &str) -> Result<()>;\n    pub fn close_issue(&self, number: i32) -> Result<()>;\n    pub fn get_issue(&self, number: i32) -> Result<GitHubIssue>;\n    \n    // Label operations (NEW)\n    pub fn label_exists(&self, name: &str) -> Result<bool>;\n    pub fn create_label(&self, name: &str, description: &str, color: &str) -> Result<()>;\n}\n\n// Auto-create roadmap label if needed\npub fn ensure_roadmap_label(client: &GitHubClient) -> Result<bool>;\n```\n\n### CLI Commands\n\n```bash\n# Initialize roadmap tracking\ndeciduous roadmap init [--path ROADMAP.md]\n\n# Sync with GitHub (dry-run by default!)\ndeciduous roadmap sync [--execute] [--path PATH] [--repo OWNER/REPO]\n\n# List items\ndeciduous roadmap list [--with-issues] [--without-issues] [--section NAME]\n\n# Link to outcome\ndeciduous roadmap link ITEM OUTCOME_ID\n```\n\n## Feedback Discussion Summary\n\n| Question | Answer | Implementation |\n|----------|--------|----------------|\n| Cache GitHub state locally? | **Yes** - for TUI + serve + web | ✅ Added `github_issue_cache` table |\n| Rate limits? | OK as-is, one-time | No changes needed |\n| `roadmap init` idempotent? | Yes, but separate patch | Will be separate PR |\n| `--dry-run` default? | **Yes** | ✅ Requires `--execute` to apply |\n| Auto-create \"roadmap\" label? | **Yes** | ✅ Auto-creates on first sync |\n\n## New: GitHub Issue Cache\n\nFor TUI/Web display without hitting GitHub's API:\n\n```sql\nCREATE TABLE github_issue_cache (\n    id INTEGER PRIMARY KEY,\n    issue_number INTEGER NOT NULL,\n    repo TEXT NOT NULL,\n    title TEXT NOT NULL,\n    body TEXT,\n    state TEXT NOT NULL,\n    html_url TEXT NOT NULL,\n    created_at TEXT NOT NULL,\n    updated_at TEXT NOT NULL,\n    cached_at TEXT NOT NULL,\n    UNIQUE(repo, issue_number)\n);\n```\n\n**Methods:**\n- `db.cache_github_issue(...)` - Cache/update an issue\n- `db.get_cached_issue(repo, number)` - Get cached issue\n- `db.get_cached_issues_for_repo(repo)` - All issues for a repo\n- `db.clear_stale_cache(max_age_hours)` - Cleanup old entries\n\n## Sync Architecture\n\n```\n                    ┌─────────────────┐\n                    │   ROADMAP.md    │\n                    │  (human edits)  │\n                    └────────┬────────┘\n                             │ parse\n                             ▼\n                    ┌─────────────────┐\n                    │     SQLite      │────┐\n                    │ (roadmap_items) │    │\n                    └────────┬────────┘    │\n                             │ sync        │ cache\n                             ▼             ▼\n                    ┌─────────────────┐ ┌───────────────┐\n                    │  GitHub Issues  │ │ Issue Cache   │\n                    │ (team visible)  │ │ (TUI/Web)     │\n                    └─────────────────┘ └───────────────┘\n```\n\n**Default is safe**: `roadmap sync` shows what would happen without making changes. Use `--execute` to actually create issues.\n\n## Decision Graph References\n\n| Node | Type | Description |\n|------|------|-------------|\n| #477 | decision | \"Choose sync architecture\" |\n| #478 | option | \"Bidirectional sync\" ← CHOSEN |\n| #497 | action | \"Implementing Phase 3: GitHub CLI\" |\n| #498 | outcome | \"Phase 3 complete: GitHub CLI integration\" |\n| #499 | action | \"Implementing Phase 4-5: CLI + Sync\" |\n| #500 | outcome | \"Phase 4-5 complete: CLI commands with sync\" |\n\n## Test Plan\n\n- [x] `cargo build` - Compiles\n- [x] `cargo test` - Tests pass\n- [ ] Manual: `gh auth status` shows authenticated\n- [ ] Manual: `roadmap init` parses ROADMAP.md\n- [ ] Manual: `roadmap sync` (dry-run default) shows what would happen\n- [ ] Manual: `roadmap sync --execute` creates issues\n- [ ] Manual: Verify 'roadmap' label auto-created\n- [ ] Manual: `roadmap list --with-issues` shows linked items\n\n## Merge Dependencies\n\n**Requires PR #87** (Data Layer) to be merged first.\n\n## Next PR\n\n**Part 3: TUI View** will add:\n- `src/tui/views/roadmap.rs` - Terminal roadmap browser\n- Display cached issues without network calls\n\n* feat(tui): add roadmap view\n\n- Add View::Roadmap variant to app.rs\n- Create src/tui/views/roadmap.rs with RoadmapState\n- Display roadmap items with sync status indicators\n- Show checkbox state, GitHub issue, and outcome links\n- Add keyboard navigation (j/k) and refresh (r)\n- Wire into events.rs and ui.rs\n- Tab key cycles between Timeline and Roadmap views\n\n* feat(tui): refactor roadmap view with TEA architecture\n\n- Rewrite roadmap.rs with functional core (pure functions for testability)\n- Add Active/Completed view toggle (Shift+Tab)\n- Add detail panel toggle (Enter)\n- Add 'o' key to open GitHub issue in browser\n- Add 'c' key to toggle checkbox state\n- Update help overlay with roadmap keybindings\n- Add tests for all pure functions\n\nCompletion criteria: checkbox_state=checked AND outcome linked AND issue closed\n\n* fix(tui): roadmap view improvements\n\n- Filter out section headers (checkbox_state=none) from item list\n- Fix section assignment: items belong to their ### section, not ## parent\n- Add grouped rendering with section headers (── Section Name ──)\n- Items indented under sections with proper hierarchy\n- Add is_section_header() and is_item_fully_synced() helpers\n- Add clear_roadmap_items() for refresh functionality\n- Add 'roadmap refresh' command to repopulate items\n- Update completion logic: complete if checkbox checked OR in Completed section\n- Add vim navigation (G/gg, Ctrl-D/U, PageUp/Down) to roadmap view\n- Add keyboard hints bar at bottom\n- Add Active/Completed tab bar at top\n\n* feat(web): add roadmap view\n\n- Create RoadmapView.tsx component\n- Display roadmap items with sync status indicators\n- Show checkbox state, GitHub issue badges, outcome links\n- Add filtering by section and status (all, with-issues, without-issues, completed)\n- Integrate with DetailPanel for outcome node viewing\n- Add /roadmap route to App.tsx\n- Add Roadmap tab to Layout navigation\n- Rebuild demo and embedded viewer\n\n* feat(roadmap): add Phase 8/9 - type export and completion detection\n\n- Export RoadmapItem, RoadmapSyncState, RoadmapConflict from lib.rs\n- Add roadmap types to bin/gen_types.rs for TypeScript generation\n- Add 'roadmap check' command for completion audit\n  - Shows checkbox state, outcome link, issue closed status per item\n  - Supports --incomplete and --complete filters\n  - Displays summary with complete/incomplete counts\n- Initialize roadmap items in database after schema migration\n\n* chore(web): add roadmap types to generated schema\n\nType-only change - updates imports in RoadmapView.tsx to use\ngenerated types from schema.ts instead of local interface.\nNo runtime change to the built bundle.\n\n* feat(web): add roadmap API and React integration\n\n- Add GET /api/roadmap endpoint to serve.rs\n- Add POST /api/roadmap/checkbox endpoint for toggle\n- Update useGraphData hook to fetch roadmap items\n- Pass roadmapItems through App.tsx to RoadmapView\n- Rewrite RoadmapView.tsx with:\n  - Active/Completed toggle (Tab key)\n  - Keyboard navigation (j/k, o, c, Enter, Escape)\n  - Click to toggle checkbox\n  - Status message display\n  - API integration for checkbox updates\n\nWorks with both dev server and bundled viewer (deciduous serve)\nBundled viewer rebuilt for GitHub Pages and deciduous serve\n\n* feat(web): align RoadmapView with TUI completion logic\n\nUpdates web roadmap view to match TUI implementation:\n- isItemComplete: checkbox checked OR in \"Completed\" section\n- isItemFullySynced: strict 3-way (checkbox + outcome + issue)\n- Filter out section headers (checkbox_state === 'none')\n- Group items by section with section header rendering\n- Add vim navigation: gg (top), G (bottom)\n- ASCII checkboxes [x]/[ ] instead of emoji\n- Item index numbers like TUI row numbers\n- Detail panel shows both complete and sync status\n\n* style(web): modern UI redesign for RoadmapView\n\nComplete visual overhaul with polished, modern aesthetics:\n- Clean card design with subtle shadows and hover effects\n- Custom checkbox with SVG checkmark animation\n- Section headers with divider lines and item counts\n- Colored status pills (synced, in progress)\n- GitHub badge with icon\n- Refined sidebar with toggle buttons\n- Better keyboard hints with styled kbd elements\n- Improved detail panel with sync status grid\n- Empty states with icons and call-to-action buttons\n- Consistent color palette (blue/green/amber/purple)\n- Smooth transitions throughout\n\n* fix(web): wire up checkbox click to toggle API\n\n* fix: update checkbox state in place without page reload\n\nUse optimistic local state update when toggling checkboxes:\n- Add local items state that syncs from props\n- Update state immediately on checkbox click\n- Fire-and-forget API call in background\n- No page reload, no network fetch, instant UI response\n\n## Summary\n\nThis PR brings the roadmap board to the web interface, enabling browser-based visualization of roadmap items alongside the existing decision graph. This is **Phase 7** of the roadmap board implementation.\n\n**Part 4 of 5 in the roadmap board PR chain** (targets PR #89)\n\n## The Story\n\nWith the data layer (#87), GitHub CLI (#88), and TUI (#89) in place, we now need a way for users to view their roadmap items in the web viewer. The web UI already shows the decision graph - adding roadmap support creates a unified experience where users can see both their project planning (roadmap) and their decision history (graph) in one place.\n\nThe key insight is that roadmap items and decision nodes are related - items can link to outcome nodes via `outcome_change_id`. The web view makes this relationship browsable.\n\n## Decision Graph Context\n\n- **Goal**: #476 (Roadmap board system)\n- **UI Priority Decision**: #483 → #490 (CLI, TUI, and Web in parallel)\n- **Type Unification Decision**: Phase 8 (#502) - shared types across Rust/TypeScript\n\n## What This PR Adds\n\n### 1. RoadmapView Component (`web/src/views/RoadmapView.tsx`)\n\nA React component that renders roadmap items grouped by section:\n\n```typescript\n// Section grouping with visual hierarchy\n{sections.map(section => (\n  <div key={section}>\n    <h3>{section}</h3>\n    {itemsBySection[section].map(item => (\n      <RoadmapItemCard item={item} />\n    ))}\n  </div>\n))}\n```\n\n**Features**:\n- Items grouped by section (In Progress, Backlog, etc.)\n- Checkbox state visualization (☐/☑)\n- GitHub issue links (clickable badges)\n- Outcome node links (navigates to graph view)\n- Completion status indicators\n\n### 2. Type Export System (`src/export.rs`)\n\nAdds roadmap items to the JSON export:\n\n```rust\n#[derive(Serialize)]\nstruct GraphExport {\n    nodes: Vec<DecisionNodeExport>,\n    edges: Vec<DecisionEdgeExport>,\n    roadmap_items: Vec<RoadmapItem>,  // NEW\n}\n```\n\nThis extends `graph-data.json` to include roadmap data, used by both `deciduous serve` and `deciduous sync`.\n\n### 3. TypeScript Type Generation (`web/src/types/generated/schema.ts`)\n\nAutomatic generation via ts-rs ensures type safety:\n\n```typescript\nexport interface RoadmapItem {\n  id: number;\n  change_id: string;\n  title: string;\n  section?: string;\n  checkbox_state: string;\n  github_issue_number?: number;\n  github_issue_state?: string;\n  outcome_node_id?: number;\n  outcome_change_id?: string;\n  // ...\n}\n```\n\n### 4. Completion Detection Logic\n\nPure function matching TUI implementation:\n\n```typescript\nfunction isItemComplete(item: RoadmapItem): boolean {\n  const checkboxChecked = item.checkbox_state === 'checked';\n  const hasOutcome = !!item.outcome_change_id;\n  const issueClosed = item.github_issue_state === 'closed';\n  return checkboxChecked && hasOutcome && issueClosed;\n}\n```\n\nThree-way completion: checkbox + outcome node + closed issue.\n\n### 5. React Integration (`web/src/App.tsx`, `Layout.tsx`)\n\n- New `/roadmap` route\n- Navigation tab in sidebar\n- Hook into existing data fetching\n\n## Architecture Diagram\n\n```\n┌─────────────────────────────────────────────────────────────┐\n│                    Web Viewer                                │\n├─────────────────────────────────────────────────────────────┤\n│                                                              │\n│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │\n│  │  DAG View   │    │ Timeline    │    │  Roadmap    │     │\n│  │  (graph)    │    │   View      │    │   View      │ NEW │\n│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘     │\n│         │                   │                   │            │\n│         └───────────────────┴───────────────────┘            │\n│                             │                                │\n│                    ┌────────┴────────┐                      │\n│                    │  graph-data.json │                      │\n│                    │  - nodes         │                      │\n│                    │  - edges         │                      │\n│                    │  - roadmap_items │ ← NEW               │\n│                    └────────┬────────┘                      │\n└─────────────────────────────┼───────────────────────────────┘\n                              │\n                              │ `deciduous sync` or\n                              │ `deciduous serve`\n                              │\n┌─────────────────────────────┼───────────────────────────────┐\n│                    Rust Backend                              │\n│                    (src/export.rs)                           │\n└─────────────────────────────────────────────────────────────┘\n```\n\n## Questions to Consider\n\n### Before Merging\n\n1. **Data freshness**: Should the web view auto-refresh roadmap data, or is the current 30-second graph refresh sufficient?\n\n2. **Click-through navigation**: When clicking an outcome link, should it:\n   - Navigate to the graph view with that node selected?\n   - Open a modal with node details?\n   - Something else?\n\n3. **Empty state**: What should show when there are no roadmap items? Currently shows \"No items found.\"\n\n### Future Extensions\n\n1. **Drag-and-drop reordering**: Could sections/items be reorderable in the web UI?\n\n2. **Inline editing**: Should users be able to edit items directly in the web view?\n\n3. **Filtering**: Add filters for completion status, section, linked/unlinked?\n\n4. **Real-time sync**: WebSocket integration for live updates when markdown changes?\n\n## Files Changed\n\n| File | Changes |\n|------|---------|\n| `web/src/views/RoadmapView.tsx` | NEW - Main roadmap component |\n| `web/src/App.tsx` | Add /roadmap route |\n| `web/src/components/Layout.tsx` | Add Roadmap navigation tab |\n| `src/export.rs` | Export roadmap_items in JSON |\n| `web/src/types/generated/schema.ts` | Add RoadmapItem type |\n| `web/src/hooks/useGraphData.ts` | Fetch roadmap data |\n\n## What This PR Does NOT Include\n\n- Sync fixes (PR #5)\n- Decision graph data updates (PR #5)\n- Any CLI command changes (covered in PR #88)\n\n## Test Plan\n\n- [ ] `cargo build --release` compiles\n- [ ] `cargo test` passes\n- [ ] `deciduous sync` includes roadmap_items in graph-data.json\n- [ ] `deciduous serve` shows roadmap tab in web UI\n- [ ] Clicking roadmap items with outcomes navigates to graph\n- [ ] GitHub issue badges link correctly\n- [ ] Items display correct completion status\n\n## PR Chain\n\n```\nmain\n └── #87 (Data Layer)\n      └── #88 (GitHub + CLI)\n           └── #89 (TUI View)\n                └── #90 (Web View) ← YOU ARE HERE\n                     └── #91 (Polish) [coming next]\n```",
+    "files_changed": 25
+  },
+  {
     "hash": "85ad24a831528c0ac12db0f20d5e6fc4fa720b18",
     "short_hash": "85ad24a",
     "author": "Bobby Nathan",
@@ -326,6 +766,54 @@
     "date": "2025-12-15T00:13:13-05:00",
     "message": "docs: add GitHub Pages fixes to roadmap",
     "files_changed": 1
+  },
+  {
+    "hash": "e6e988d6a4fe71a7d86e2241224e17ec4158b71b",
+    "short_hash": "e6e988d",
+    "author": "Bobby Nathan",
+    "date": "2025-12-14T23:19:13-05:00",
+    "message": "style(web): modern UI redesign for RoadmapView\n\nComplete visual overhaul with polished, modern aesthetics:\n- Clean card design with subtle shadows and hover effects\n- Custom checkbox with SVG checkmark animation\n- Section headers with divider lines and item counts\n- Colored status pills (synced, in progress)\n- GitHub badge with icon\n- Refined sidebar with toggle buttons\n- Better keyboard hints with styled kbd elements\n- Improved detail panel with sync status grid\n- Empty states with icons and call-to-action buttons\n- Consistent color palette (blue/green/amber/purple)\n- Smooth transitions throughout",
+    "files_changed": 3
+  },
+  {
+    "hash": "ff263a48748fd7902d7285f9ff4cb37c41f0554e",
+    "short_hash": "ff263a4",
+    "author": "Bobby Nathan",
+    "date": "2025-12-14T23:06:36-05:00",
+    "message": "feat(web): align RoadmapView with TUI completion logic\n\nUpdates web roadmap view to match TUI implementation:\n- isItemComplete: checkbox checked OR in \"Completed\" section\n- isItemFullySynced: strict 3-way (checkbox + outcome + issue)\n- Filter out section headers (checkbox_state === 'none')\n- Group items by section with section header rendering\n- Add vim navigation: gg (top), G (bottom)\n- ASCII checkboxes [x]/[ ] instead of emoji\n- Item index numbers like TUI row numbers\n- Detail panel shows both complete and sync status",
+    "files_changed": 4
+  },
+  {
+    "hash": "91ab5c752ca9b7f8682db5434310462526a74965",
+    "short_hash": "91ab5c7",
+    "author": "Bobby Nathan",
+    "date": "2025-12-14T15:48:47-05:00",
+    "message": "feat(writeup): add enhanced mode with better structure\n\n- Add --enhanced flag for richer writeups\n- Add --base flag to specify base branch for git diff\n- Extract user prompts from metadata\n- Include files changed from git diff\n- Show decisions with chosen/rejected options\n- Add Decision Graph Context section\n- Add Questions to Consider section (placeholders)\n- Better structured sections matching high-quality PR format",
+    "files_changed": 2
+  },
+  {
+    "hash": "eae341c662e72b2504161d04d52b3a82148ff5ec",
+    "short_hash": "eae341c",
+    "author": "Bobby Nathan",
+    "date": "2025-12-14T11:36:11-05:00",
+    "message": "feat(web): add roadmap API and React integration\n\n- Add GET /api/roadmap endpoint to serve.rs\n- Add POST /api/roadmap/checkbox endpoint for toggle\n- Update useGraphData hook to fetch roadmap items\n- Pass roadmapItems through App.tsx to RoadmapView\n- Rewrite RoadmapView.tsx with:\n  - Active/Completed toggle (Tab key)\n  - Keyboard navigation (j/k, o, c, Enter, Escape)\n  - Click to toggle checkbox\n  - Status message display\n  - API integration for checkbox updates\n\nWorks with both dev server and bundled viewer (deciduous serve)\nBundled viewer rebuilt for GitHub Pages and deciduous serve",
+    "files_changed": 7
+  },
+  {
+    "hash": "4f30c25365a076d111882fd0bbcd51e54e5ea7fc",
+    "short_hash": "4f30c25",
+    "author": "Bobby Nathan",
+    "date": "2025-12-14T11:35:11-05:00",
+    "message": "feat(tui): refactor roadmap view with TEA architecture\n\n- Rewrite roadmap.rs with functional core (pure functions for testability)\n- Add Active/Completed view toggle (Shift+Tab)\n- Add detail panel toggle (Enter)\n- Add 'o' key to open GitHub issue in browser\n- Add 'c' key to toggle checkbox state\n- Update help overlay with roadmap keybindings\n- Add tests for all pure functions\n\nCompletion criteria: checkbox_state=checked AND outcome linked AND issue closed",
+    "files_changed": 4
+  },
+  {
+    "hash": "fd8fb56d0b6580f41b74c6d93813625658fb29ac",
+    "short_hash": "fd8fb56",
+    "author": "Bobby Nathan",
+    "date": "2025-12-13T18:55:15-05:00",
+    "message": "feat(tui): add roadmap view\n\n- Add View::Roadmap variant to app.rs\n- Create src/tui/views/roadmap.rs with RoadmapState\n- Display roadmap items with sync status indicators\n- Show checkbox state, GitHub issue, and outcome links\n- Add keyboard navigation (j/k) and refresh (r)\n- Wire into events.rs and ui.rs\n- Tab key cycles between Timeline and Roadmap views",
+    "files_changed": 5
   },
   {
     "hash": "a2daa6ac9e3d72c48eec39feb737af1cb1cfe41b",
@@ -360,6 +848,22 @@
     "files_changed": 2
   },
   {
+    "hash": "b84cde4f36658dce0d6b4d4143dc7bebb6c6e918",
+    "short_hash": "b84cde4",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T17:58:37-05:00",
+    "message": "feat: add opencode editor support",
+    "files_changed": 2
+  },
+  {
+    "hash": "6e6f3f82c00a4afd21f0440b05975624a87c3ad2",
+    "short_hash": "6e6f3f8",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T17:55:54-05:00",
+    "message": "feat: type unification via ts-rs auto-generation (#21)\n\n## 📚 Learning Exercise: The Journey to Type Safety\n\nThis PR represents a fundamental architectural shift in how we manage the contract between our Rust backend and TypeScript frontend. It is not just a refactor; it is a correction of a previous architectural decision that proved brittle in practice.\n\n### 🏛️ The Tale of Two Architectures\n\nTo understand why this change matters, we must look at the decision graph history (Nodes 320-333 vs. Nodes 394-462).\n\n#### The \"Schema-First\" Attempt (Nodes 320-333)\n**Strategy:** \"JSON Schema as Source of Truth\" (Node 322)\nWe originally attempted to solve the type drift problem by declaring `schema/decision-graph.schema.json` as the master definition.\n*   **The Workflow:**\n    *   Edit Rust struct (`src/db.rs`)\n    *   Edit TypeScript interface (`graph.ts`)\n    *   Edit JSON Schema (`schema.json`)\n    *   Run `validate-types.sh` (Node 329)\n*   **The Flaw (Node 397):** \"Manual synchronization required via shell scripts.\"\n    *   The validation script was a \"nanny,\" not a builder. It scolded you if field names didn't match via `grep`, but it couldn't write the code for you.\n    *   It treated `src/tui/types.rs` and `web/src/types/graph.ts` as equal citizens that had to be manually kept in step.\n    *   *Result:* High friction. Adding a field meant editing 4 files.\n\n#### The \"Rust-First\" Revolution (Nodes 394-462)\n**Strategy:** \"Automated Derivation\" (Node 400)\nWe identified the weakness: **Duplication of Logic** (Node 398). Why write the same struct three times?\nWe pivoted to making Rust the **Single Source of Truth**.\n\n### 🗺️ The New Journey (Graph Analysis)\n\n#### 1. The Engine: `ts-rs` (Node 400)\nWe chose `ts-rs` over `typeshare` (Node 401).\n*   **Why?** `ts-rs` uses Rust's derive macro system (`#[derive(TS)]`), allowing the *compiler* to enforce that the generated TypeScript matches the Rust memory layout exactly. `typeshare` often relies on comments, which can drift.\n*   **Impact:** `src/db.rs` is now the only file that matters. The rest is an artifact.\n\n#### 2. The Build Process: Binary over Tests (Nodes 405 -> 426)\n*   **Initial Plan:** We considered putting generation in `tests/ts_gen.rs`.\n*   **The Pivot (Node 426):** \"Separate generator binary.\"\n    *   *Insight:* Code generation is a *build task*, not a *test*.\n    *   *Action:* Created `bin/gen_types.rs`. This decoupled generation from the test harness, allowing us to run it in pre-commit hooks without the overhead of compiling the test suite.\n\n#### 3. The Integration: The Adapter Pattern (Node 438)\n*   **The Problem:** Rust has `String` (validated at runtime). TypeScript wants `'goal' | 'decision'` (validated at compile time). `ts-rs` blindly outputs `string`.\n*   **The Solution:** We didn't replace `graph.ts` entirely. We converted it into an **Adapter**.\n    *   `web/src/types/generated/schema.ts` (Raw, ignored artifact)\n    *   `web/src/types/graph.ts` (Public API)\n    *   *Technique:* We import the raw generated types and use TypeScript's `Omit` to replace generic `string` fields with our specific String Unions.\n    *   *Result:* We kept the \"Rich Types\" of the previous approach (Node 325) while gaining the \"Zero Drift\" of automation.\n\n#### 4. The Tooling: Validation as Automation (Node 436)\n*   **The Upgrade:** `scripts/validate-types.sh` was rewritten.\n    *   *Old:* \"Do these files match?\" (Passive check)\n    *   *New:* \"Run the generator. Do we have diffs?\" (Active enforcement)\n    *   *Impact:* The script now *writes code for you*.\n\n#### 5. The Lesson: The Pre-Commit Paradox (Nodes 458-461)\n*   **The Incident:** The final commit was blocked by our own safety hook.\n*   **The Analysis:** We changed TypeScript interfaces (Node 442). The build ran. The resulting JS bundle was *identical* (because TS types are erased). Git refused to stage `index.html`. The hook panicked because it saw \"Web Changes\" but \"No Demo Update.\"\n*   **The Choice:** `git commit --no-verify`.\n*   **The Takeaway:** Safety tooling must account for \"Zero-Runtime-Impact\" changes. Sometimes, the safest systems are too rigid, and human judgment (documented in the graph!) is the final fallback.\n\n### 🏗️ Final Architecture\n\n| Layer | Old World (Nodes 320-333) | New World (Nodes 394-462) |\n|-------|---------------------------|---------------------------|\n| **Truth** | Distributed (Rust + TS + Schema) | Centralized (Rust only) |\n| **Sync** | Manual (4 files) | Automated (1 file -> Derived) |\n| **Validation** | Regex/Grep (Fragile) | Compiler/Generator (Robust) |\n| **Frontend** | Hand-written Interfaces | Adapter over Generated Code |\n\n### 🔍 Key Commits\n*   `d1c1467`: The Foundation - `#[derive(TS)]` added to DB structs.\n*   `6faecb3`: The Pivot - `gen_types` binary and the Adapter pattern.\n\n\n* chore: add ts-rs dependency and initial generation test\n\n* feat: implement ts-rs derivation for core types\n\n* feat: complete types unification with ts-rs generation\n\n* docs: sync decision graph",
+    "files_changed": 11
+  },
+  {
     "hash": "6faecb3f35984ea7efea9d3edd26955324cf4484",
     "short_hash": "6faecb3",
     "author": "Bobby Nathan",
@@ -384,6 +888,14 @@
     "files_changed": 3
   },
   {
+    "hash": "4b75ae32520d809cc2fe93af8ad83355370903eb",
+    "short_hash": "4b75ae3",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T09:59:22-05:00",
+    "message": "feat: add deciduous audit --associate-commits command (#20)\n\n* feat: add deciduous audit --associate-commits command\n\nImplements retroactive commit association for the decision graph:\n- New 'audit' command with --associate-commits flag\n- Matches node titles to commit messages using keyword overlap\n- Configurable min-score threshold (default 50%)\n- Dry-run mode to preview before applying\n- Auto-apply mode with --yes flag\n- Added update_node_commit() method to Database\n\nApplied audit to existing graph:\n- Linked 35 nodes to their commits\n- Nodes with commits: 31 → 66\n\n* test: add 12 unit tests for audit commit association\n\n- 9 tests for keyword_match_score function\n- 3 tests for update_node_commit database method\n\nTotal test count: 179",
+    "files_changed": 6
+  },
+  {
     "hash": "8d2c9f97830c620152195561b65febea60d2ab4b",
     "short_hash": "8d2c9f9",
     "author": "Bobby Nathan",
@@ -398,6 +910,30 @@
     "date": "2025-12-12T09:23:47-05:00",
     "message": "feat: add deciduous audit --associate-commits command\n\nImplements retroactive commit association for the decision graph:\n- New 'audit' command with --associate-commits flag\n- Matches node titles to commit messages using keyword overlap\n- Configurable min-score threshold (default 50%)\n- Dry-run mode to preview before applying\n- Auto-apply mode with --yes flag\n- Added update_node_commit() method to Database\n\nApplied audit to existing graph:\n- Linked 35 nodes to their commits\n- Nodes with commits: 31 → 66",
     "files_changed": 6
+  },
+  {
+    "hash": "de4d4ad5658f65551aa334500ed78d7d1b15465e",
+    "short_hash": "de4d4ad",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T04:26:06-05:00",
+    "message": "style(web): Apply light theme to graph viewer (#19)\n\n* style(web): apply light theme to all graph viewer tabs\n\nConvert web UI from dark theme to light theme matching the landing page.\nUpdates all views (DAG, Chains, Timeline, Graph) and shared components.\n\n- index.css: body background #ffffff, text #24292f\n- Layout: header/nav with #f6f8fa bg, #0969da accent\n- DagView: white container, light modals and controls\n- ChainsView: light sidebar, selected items with blue accent\n- TimelineView: light controls and timeline items\n- GraphView: white canvas, light detail panel\n- NodeBadge: GitHub-style badge colors for commits, edges, status\n- TypeFilters: white buttons with blue active state\n\n* fix(web): keep recency filter buttons visible + preserve commit newlines\n\n- Add −1 Chain button to reduce visible chains\n- Keep buttons visible when all chains are shown (with Reset option)\n- Add whiteSpace: pre-wrap to commit message styles in all views\n\n* fix(web): disable recency filter buttons instead of hiding them\n\n* ci: parallelize Rust and Web builds for faster CI\n\n- Split into separate build-rust and build-web jobs\n- Both jobs run in parallel after type validation\n- npm cache already configured via setup-node action",
+    "files_changed": 12
+  },
+  {
+    "hash": "bf69ebea4ef6c24b05798f78b90f07e75c4a0f18",
+    "short_hash": "bf69ebe",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T03:59:46-05:00",
+    "message": "feat(web): make DAG view the default landing page\n\n- Reorder tabs: DAG is now first and at / path\n- Chains view moved to /chains\n- DAG provides better visual overview as default entry point",
+    "files_changed": 3
+  },
+  {
+    "hash": "294a811deb3c2c184aa85833705a16b5ee1b2ff5",
+    "short_hash": "294a811",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T03:45:05-05:00",
+    "message": "feat: Show commit messages in web UI via git-history.json export (#16)\n\n* feat: export git history to JSON and show commit messages in web UI\n\n- Add git-history.json export to 'deciduous sync' command\n- Extract commit hashes from nodes' metadata_json\n- Lookup commit info (hash, author, date, message, files_changed) via git log\n- Web UI: Display commit messages in ChainsView flow nodes\n- Web UI: Add linked commit section to DetailPanel with message and metadata\n- Pass gitHistory to TimelineView and ChainsView components\n\nCloses the gap between TUI and web UI for commit information display.\n\n* test: add outcome node with linked commit for testing\n\n* docs: add narrative user guide to roadmap as high priority\n\n- jj-tutorial style end-to-end walkthrough\n- Covers full workflow from init to PR\n- Shows both human and AI perspectives\n- Sync decision graph\n\n* fix: show commit messages in DagView modal\n\n* fix: remove truncation from commit messages in TimelineView\n\n* fix: export full commit message body, not just subject line\n\n* docs: add comprehensive tutorial site\n\nAdd a full narrative tutorial for deciduous, inspired by Steve Klabnik's\njujutsu tutorial. The tutorial is built as an HTML site integrated with\nGitHub Pages.\n\nStructure:\n- Introduction: What is deciduous, how to read the tutorial\n- Hello World: Installing, initializing, first nodes, connecting, viewing\n- Real-World Workflows: Claude Code integration, session recovery, PR docs\n- Viewing the Graph: TUI, web viewer, CLI queries\n- Sharing with Others: Multi-user problem, patches, PR workflow\n- Advanced Topics: Branch grouping, commit linking, confidence scores\n- Plumbing Reference: All commands, node types, edge types\n\nFeatures:\n- 23 HTML pages with responsive sidebar navigation\n- Terminal session boxes showing realistic Claude Code examples\n- Screenshot placeholders labeled for future additions\n- AI-generated warning banner on all pages\n- Top navigation bar added to landing page\n- Tutorial link in main CTA buttons\n\nDecision graph nodes 379-388 track this work.",
+    "files_changed": 37
   },
   {
     "hash": "7e3156c9ce9b220c607776cbb6d20f6ea77a0d66",
@@ -432,6 +968,14 @@
     "files_changed": 2
   },
   {
+    "hash": "8035f91368ff541ec6939188e89640294cd7767f",
+    "short_hash": "8035f91",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T02:42:07-05:00",
+    "message": "feat: DAG recency filtering - show recent chains first (#15)\n\n## Summary\n\nImplements **recency-based filtering** for the web DAG view with a completely redesigned UI. Large graphs (300+ nodes) are now immediately usable instead of overwhelming.\n\n## The Problem\n\nThe DAG view loaded all nodes at once:\n- 349 nodes = visual chaos\n- Hard to find recent/relevant work  \n- No way to focus on active areas\n\n## The Solution\n\n**Show recent work first, expand on demand.**\n\n### New Top Bar (Prominent Controls)\n\n```\n┌─────────────────────────────────────────────────────────────────────┐\n│ Recency Filter    Showing 3 of 32 goal chains    [+1] [+N...] [All] │\n├─────────────────────────────────────────────────────────────────────┤\n│           + 29 older goal chains not shown  [Show all]              │\n└─────────────────────────────────────────────────────────────────────┘\n```\n\n- **\"Recency Filter\"** - clear label explaining what's happening\n- **\"Showing 3 of 32 goal chains\"** - always know the scope\n- **+1 Chain** - add one more chain incrementally\n- **+N...** - enter a custom number to add\n- **Show All (32)** - reveal everything\n- **Orange indicator** - \"+ 29 older goal chains not shown\" reminds you there's more\n\n### Modal Detail Panel\n\nClicking a node opens a **centered modal** instead of a cramped side panel:\n- Full width for content (no cutoff!)\n- Click backdrop or × to close\n- **Click connected nodes to navigate** - hop through the graph\n- Footer hint explains interactions\n\n### Recency Algorithm\n\n1. Find all goal chains (goal + all descendants)\n2. Sort by most recent `updated_at` across all nodes in chain\n3. Show top N chains (default: 3)\n4. User expands as needed\n\n## Technical Details\n\n### Web (TypeScript)\n\n```typescript\ntype ViewMode = 'recent' | 'all' | 'single';\nconst DEFAULT_RECENT_CHAINS = 3;\n\nfunction getChainLastUpdated(chain: Chain): number {\n  return Math.max(...chain.nodes.map(n => new Date(n.updated_at).getTime()));\n}\n\nfunction sortChainsByRecency(chains: Chain[]): Chain[] {\n  return [...chains].sort((a, b) => getChainLastUpdated(b) - getChainLastUpdated(a));\n}\n```\n\n### Rust (TUI utilities)\n\n```rust\npub struct Chain {\n    pub root: DecisionNode,\n    pub nodes: Vec<DecisionNode>,\n}\n\nimpl Chain {\n    pub fn last_updated(&self) -> DateTime<Utc> { ... }\n}\n\npub fn build_chains(nodes: &[DecisionNode], edges: &[DecisionEdge]) -> Vec<Chain>\npub fn sort_chains_by_recency(chains: &[Chain]) -> Vec<Chain>\npub fn get_recent_chains(chains: &[Chain], count: usize) -> Vec<Chain>\n```\n\n## Tooling Improvements\n\n### Pre-commit Hook Now Enforces:\n\n1. **Clippy** - catches lint errors before commit\n2. **Type validation** - ensures Rust/TS types stay in sync\n3. **Demo build sync** - if you change `web/src/*`, you MUST also rebuild `docs/demo/`\n\n```bash\n# If you change React code without rebuilding demo:\nERROR: Web source changed but docs/demo/index.html not staged!\n\nYou must rebuild and commit the demo:\n  ./scripts/build-demo.sh\n  git add docs/demo/index.html\n```\n\n### New Scripts\n\n- `./scripts/build-demo.sh` - builds web app and deploys to `docs/demo/`\n\n## Decision Graph\n\nTracked at 366 nodes, 307 edges:\n\n```\n#350 Goal: DAG view lazy loading - show recent clusters first\n  └─ #351 Decision: How to filter DAG to recent chains\n       └─ #354 Decision: Web vs TUI implementation order\n            ├─ #355 Option: Start with web [CHOSEN]\n            │    ├─ #357-360: Web implementation actions\n            │    │    └─ #365: Refactor to +1/... UX\n            │    │         └─ #366: Redesign with top bar + modal\n            │    └─ #361-364: Rust utilities + tests\n            └─ #356 Option: Start with TUI [REJECTED]\n```\n\n## Commits (8)\n\n1. `feat: DAG recency filtering - show recent chains first`\n2. `refactor: default to 1 chain, add +1/... expand UX`\n3. `fix: clippy warnings - redundant closure and sort_by_key`\n4. `feat: add clippy to pre-commit hook`\n5. `build: deploy DAG recency filtering to docs/demo`\n6. `feat: add build-demo.sh script for GitHub Pages deployment`\n7. `feat: enforce demo build sync in pre-commit hook`\n8. `feat: redesign DAG view with prominent top bar and modal detail`\n\n## Files Changed\n\n| File | Changes |\n|------|---------|\n| `web/src/views/DagView.tsx` | Top bar, modal, recency filtering |\n| `src/tui/state.rs` | Chain struct, recency utilities, 6 tests |\n| `scripts/install-hooks.sh` | Clippy + demo sync enforcement |\n| `scripts/build-demo.sh` | New script for GH Pages deploy |\n| `docs/demo/index.html` | Built single-file app |\n| `ROADMAP.md` | Marked feature complete |\n\n## Test Plan\n\n- [x] Open web viewer with large graph (300+ nodes)\n- [x] Verify only 3 chains visible initially\n- [x] Click \"+1 Chain\" - one more chain appears\n- [x] Click \"+N...\" - input appears, enter number\n- [x] Click \"Show All\" - all nodes visible\n- [x] Click \"Show recent only\" - returns to 3 chains\n- [x] Click a node - modal opens with full details\n- [x] Click connected node in modal - navigates to that node\n- [x] Click outside modal - closes\n- [x] Rust tests pass (`cargo test tui::state`)\n- [x] Pre-commit catches missing demo rebuild",
+    "files_changed": 10
+  },
+  {
     "hash": "876ea936deb1b1e201677e9e746b4bdeb1b526ed",
     "short_hash": "876ea93",
     "author": "Bobby Nathan",
@@ -446,6 +990,30 @@
     "date": "2025-12-12T01:53:03-05:00",
     "message": "docs: reorganize landing page sections, add PR integration roadmap item\n\n- Move \"The Problem\" section to below elevator pitch for better flow\n- Move \"Real PRs Built With Deciduous\" to below dev process links\n- Reduce PR examples from 4 to 3 (keep #11, #3, #9)\n- Add roadmap item: Web Viewer - PR Integration (link PRs to branch-filtered graph views)",
     "files_changed": 2
+  },
+  {
+    "hash": "3d1e4645b2c3321cade3b40a4bc0c0f6a87a46a3",
+    "short_hash": "3d1e464",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T01:37:26-05:00",
+    "message": "feat: add OG/Twitter card meta tags with real decision graph preview (#13)\n\n- 1200x630 OG image showing actual lo-fi detection decision flow\n- Real node IDs and content from deciduous graph (nodes 1-8)\n- Shows goal -> decision -> options (chosen/rejected) -> action -> outcome\n- Added note: 'Deciduous is built exclusively using deciduous'\n- Updated decision count to 340+",
+    "files_changed": 3
+  },
+  {
+    "hash": "09995890a38cd0ff3a64683532e74087f546c8b4",
+    "short_hash": "0999589",
+    "author": "Bobby Grayson",
+    "date": "2025-12-12T01:30:54-05:00",
+    "message": "feat: add asciinema demo player to GitHub Pages (#12)\n\n* feat: add asciinema demo player to GitHub Pages\n\n- Add deciduous_demo.cast recording to docs\n- Embed asciinema-player in index.html after intro sections\n- Player configured with preload, 1.5x speed, idle time compression\n\n* ci: add PR preview deploys for GitHub Pages\n\n* fix: use gzipped asciicast v2 format for demo\n\n- Convert v3 to v2 format (player compatibility)\n- Gzip compress: 13MB → 163KB (98.7% reduction)\n- Decompress on-the-fly with pako\n\n* fix: convert relative to absolute timestamps in cast file\n\nv3 uses relative timestamps, v2 uses absolute - now 8min of content\n\n* fix: use original terminal dimensions, normal speed\n\n* fix: disable scaling to prevent TUI rendering glitches\n\n245-column terminal doesn't scale well - use native size with horizontal scroll\n\n* feat: new 122x30 demo recording (9.1 min)\n\n- Re-recorded at proper width for web display\n- 8.9MB → 184KB compressed\n\n* tweak: 1.33x playback speed, 2s idle limit\n\n* style: make demo player wider than container\n\n* style: full viewport width for demo player\n\n* style: remove max-width cap, use small font\n\n* fix: simplify player CSS - native size with scroll\n\n* debug: add logging and pass data string directly\n\n* feat: use asciinema.org embed instead of self-hosted player\n\nEmbeds https://asciinema.org/a/761574 directly - same player, same experience\n\n* fix: use iframe embed with 100vw width, 600px height\n\n* fix: full-bleed demo container, 90vw iframe, 70vh height",
+    "files_changed": 3
+  },
+  {
+    "hash": "e06a13a3c9f1a2f8c715fe8249cda0ae300ee5b5",
+    "short_hash": "e06a13a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-12T00:12:06-05:00",
+    "message": "feat: add type synchronization validation tooling\n\nAdd scripts and CI to ensure Rust and TypeScript types stay in sync:\n\n- scripts/validate-types.sh: Validates type definitions match across\n  src/db.rs, src/tui/types.rs, web/src/types/graph.ts, and\n  schema/decision-graph.schema.json\n\n- scripts/install-hooks.sh: Installs git hooks\n  - pre-commit: Runs type validation on every commit\n  - pre-push: Full validation (types + tests + build) only for main/master\n    (feature branches can push WIP freely)\n\n- scripts/pre-publish.sh: Full validation suite for cargo publish\n  - Type synchronization\n  - Rust tests\n  - Clippy\n  - TypeScript build and type check\n\n- .github/workflows/type-check.yml: CI workflow that runs on PRs\n  touching type-related files\n\nThis prevents publishing, committing, or merging to main when types\nare out of sync between Rust and TypeScript.",
+    "files_changed": 4
   },
   {
     "hash": "07e36cd3c4c4866317328ff6436c514df96047d9",
@@ -520,6 +1088,14 @@
     "files_changed": 2
   },
   {
+    "hash": "cddaaab6c001a8a683771e1f285a283428355df6",
+    "short_hash": "cddaaab",
+    "author": "Bobby Grayson",
+    "date": "2025-12-11T01:58:00-05:00",
+    "message": "feat: TUI enhancements - rich detail panel, syntax highlighting, modals (#5)\n\n* feat: enhance TUI with richer detail panel, commit modal, goal story view\n\n- Detail panel now shows full titles (no truncation), node IDs, edge types\n- Commit info in detail panel shows full git log message\n- 'O' key opens large commit modal with full git show --stat output\n- 's' key opens goal story modal showing hierarchy from goal to outcomes\n- 'b' key cycles through branch filters\n- Tab (DAG view) temporarily disabled until layout is improved\n- All connections shown (no limit)\n\n* feat: TUI enhancements - scrollable modals, branch search, file browser\n\n- Add scrollable modals with j/k/g/G navigation for commit, diff, and file preview\n- Add diff syntax highlighting (+/- line coloring in green/red)\n- Add shift-B for fuzzy branch search with Tab/arrows to navigate matches\n- Add file browser mode (F key) with n/N to navigate, p to preview, d for diff, o to open\n- Add 'o' key in modals to open file in editor (suspends TUI)\n- Fix file index resetting when changing nodes\n- Add syntect + syntect-tui dependencies for future syntax highlighting\n\n* feat: syntect syntax highlighting, reverse timeline order\n\n- Add proper syntect-based syntax highlighting for file preview modal\n- Convert syntect styles to ratatui RGB colors\n- Add shift-R to toggle timeline order (chronological vs reverse-chrono)\n- Initialize reverse_order field in App state\n- Lazy-load syntax highlighting resources with lazy_static\n\n* chore: sync decision graph (234 nodes, 175 edges)\n\n* chore: add outcomes for completed TUI features (241 nodes, 182 edges)\n\n* fix: diff modal reads whole file for proper syntax highlighting context\n\n- Read entire file to build syntax highlighter state\n- Build hashmap of line content -> highlighted spans\n- Look up each diff line in the map for proper context-aware highlighting\n- Apply green/red tinting on top of syntax colors for +/- lines\n\n* feat: split-view commit modal, TUI docs, roadmap update\n\n- Commit modal (O key) now shows split view with commit info on top, diff on bottom\n- Diff section scrolls independently with j/k navigation\n- Updated ROADMAP with completed TUI items and UX polish backlog\n- Added TUI documentation to README with keyboard shortcuts reference\n- Graph sync: 244 nodes, 185 edges\n\n* fix: syntax highlighting for commit modal and file preview\n\n- Commit modal diff section now has proper syntax highlighting with file context\n- File preview now passes raw content (was double-formatting with line numbers)\n- Added/removed lines show syntax colors tinted with green/red\n\n* fix: switch to InspiredGitHub theme for better keyword highlighting\n\n* fix: proper syntax highlighting for removed lines, better empty diff handling\n\n- Removed lines now use old file from git for context-aware highlighting\n- Empty diff shows helpful message instead of 'Line 1/0'\n- Switched to InspiredGitHub theme for better colors\n\n* perf: pre-process diff lines to fix commit modal lag\n\nMove diff line classification from render-time to modal-open time.\nPreviously ran git commands and file I/O on every frame (60fps) which\ncaused severe lag on large diffs (e.g., 1153-line Cargo.lock).\n\n- Add StyledDiffLine and DiffLineType enums for pre-classified lines\n- Process diff in show_commit_modal() once when opening\n- Render uses simple color mapping without I/O\n- Removes syntect highlighting in favor of diff-colored output\n\n* fix: restore syntax highlighting with pre-computed spans\n\nPrevious performance fix removed syntax highlighting entirely. This restores\nit by pre-computing styled spans at modal open time rather than during render.\n\n- StyledDiffLine now stores Vec<(Color, String)> for cached highlighting\n- show_commit_modal() computes syntect highlighting once when opening\n- draw_commit_modal() uses cached spans for fast rendering\n- Diff prefix (+/-) shown in diff color, code content syntax highlighted\n\n* fix: use base16-mocha.dark theme for dark terminal readability\n\nInspiredGitHub was designed for light backgrounds, causing unreadable\ngreys on dark terminals. Switch to base16-mocha.dark which has better\ncontrast for dark terminal use.\n\nAlso adds PR review mode to roadmap.\n\n* chore: add real prompts and final outcomes to decision graph\n\nAdded observations with actual user prompts that drove this work:\n- Initial TUI vision prompt\n- Commit modal requirements\n- Syntax highlighting quality standards\n- Split-view modal design\n- Performance bug report\n- Theme feedback\n\nLinked prompts to goal and outcomes for complete traceability.\nFinal outcome: TUI enhancements complete (256 nodes, 202 edges)",
+    "files_changed": 10
+  },
+  {
     "hash": "e521e4286b814522ae78be73a95c3437d521197d",
     "short_hash": "e521e42",
     "author": "Bobby Nathan",
@@ -568,6 +1144,22 @@
     "files_changed": 2
   },
   {
+    "hash": "dd8cdcf3fd0096664f2764b7ddb715529f46b87e",
+    "short_hash": "dd8cdcf",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T18:43:54-05:00",
+    "message": "feat: add terminal user interface (TUI) for decision graph exploration\n\nImplements a rich, interactive TUI with two primary views:\n\n## Timeline View (Primary)\n- Scrollable list of nodes, newest first\n- Type badges with color coding (goal=green, decision=yellow, etc.)\n- Confidence percentage display\n- Vim-style navigation (j/k, gg, G, Ctrl+d/u)\n- Search filtering with / key\n- Type filtering with f key\n- Detail panel showing:\n  - Full node info\n  - Incoming/outgoing connections with rationale\n  - Associated files and commit\n  - Code jumping with 'o' key\n\n## DAG View\n- Hierarchical layout (goals at top, outcomes at bottom)\n- Node boxes with unicode borders\n- Edge arrows (chosen=bold green, rejected=dashed red)\n- Pan with h/j/k/l\n- Zoom with +/-\n\n## Features\n- Auto-refresh on database changes (file watcher via notify crate)\n- Manual refresh with 'r' key\n- File picker with checkboxes for multi-file selection\n- Help overlay with '?' key\n- Mouse support (click, scroll)\n- Tab switches between views\n\n## Type System\n- New src/tui/types.rs mirrors web/src/types/graph.ts\n- 15 new unit tests for type parsing and helpers\n- Consistent metadata extraction across Rust TUI and React web\n\nDependencies: ratatui 0.29, crossterm 0.28, tui-tree-widget 0.22, notify 6.1",
+    "files_changed": 15
+  },
+  {
+    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
+    "short_hash": "b4c56bc",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T18:03:55-05:00",
+    "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
+    "files_changed": 11
+  },
+  {
     "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
     "short_hash": "32f0047",
     "author": "Bobby Nathan",
@@ -608,12 +1200,36 @@
     "files_changed": 14
   },
   {
+    "hash": "0e20a9139c2917dedce44fcd656d78d7f4b54d71",
+    "short_hash": "0e20a91",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T15:04:27-05:00",
+    "message": "feat: add .windsurf/ rules and memories for Windsurf editor support\n\n- deciduous.md: Always-on rule with full workflow and --prompt/--files docs\n- context.md: Model-triggered rule for session context recovery\n- memories.md: Auto-retrieved memories for Cascade\n\nThis repo now has both .claude/commands/ and .windsurf/rules/ as reference\nimplementations that are version-controlled and can be used as templates.",
+    "files_changed": 3
+  },
+  {
     "hash": "cc1903d92afea3c05c21fcac86364ca435d636f4",
     "short_hash": "cc1903d",
     "author": "Bobby Nathan",
     "date": "2025-12-10T14:49:55-05:00",
     "message": "feat: add --prompt and --files flags for node metadata tracking\n\n- Add --prompt flag to store the user prompt that triggered a decision\n- Add --files flag to associate files with nodes (comma-separated)\n- Prompts and files stored in metadata_json alongside confidence/commit\n- Update all init templates (CLAUDE.md, AGENTS.md, Windsurf rules)\n- Document new flags in slash commands and rules",
     "files_changed": 6
+  },
+  {
+    "hash": "cc1903d92afea3c05c21fcac86364ca435d636f4",
+    "short_hash": "cc1903d",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:49:55-05:00",
+    "message": "feat: add --prompt and --files flags for node metadata tracking\n\n- Add --prompt flag to store the user prompt that triggered a decision\n- Add --files flag to associate files with nodes (comma-separated)\n- Prompts and files stored in metadata_json alongside confidence/commit\n- Update all init templates (CLAUDE.md, AGENTS.md, Windsurf rules)\n- Document new flags in slash commands and rules",
+    "files_changed": 6
+  },
+  {
+    "hash": "0a2e972d4b205717f613b82e0fb6a2274ecde8ac",
+    "short_hash": "0a2e972",
+    "author": "Bobby Nathan",
+    "date": "2025-12-10T14:41:43-05:00",
+    "message": "feat: add 30-second auto-refresh to web viewer when running locally\n\n- Add pollInterval option to useGraphData hook\n- Enable 30-second polling when running from deciduous serve (localhost)\n- No polling on static GitHub Pages (saves bandwidth)\n- Add code tracking and prompt viewing to roadmap",
+    "files_changed": 7
   },
   {
     "hash": "0a2e972d4b205717f613b82e0fb6a2274ecde8ac",
@@ -662,6 +1278,30 @@
     "date": "2025-12-10T13:40:01-05:00",
     "message": "feat: add --claude and --windsurf flags to init command\n\nAdd editor-specific initialization support:\n\n- `deciduous init --claude` (default): Creates .claude/commands/ with\n  decision.md and context.md slash commands, appends workflow section\n  to CLAUDE.md\n\n- `deciduous init --windsurf`: Creates .windsurf/rules/ with\n  decision.md and context.md rules, appends workflow section to\n  AGENTS.md\n\nBoth editors share the same .deciduous/ database and docs/ for GitHub\nPages.\n\nFlags are mutually exclusive via Clap argument groups.\n\nAlso adds ROADMAP.md with backlog items for legacy cleanup.",
     "files_changed": 4
+  },
+  {
+    "hash": "598b3703075539b3d57bfa25f82de813b0cf03b3",
+    "short_hash": "598b370",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T23:38:55-05:00",
+    "message": "feat: add --png flag to writeup for seamless PR graphs\n\n- writeup --png auto-detects GitHub repo and branch\n- Generates raw.githubusercontent.com URLs automatically\n- PNG embedded with collapsible DOT source\n- Updated Makefile and CLAUDE.md documentation\n\nWorkflow: dot --png -> commit/push -> writeup --png -> PR body",
+    "files_changed": 5
+  },
+  {
+    "hash": "d66823bd7ffd517a7a143c8ab2fcb7a21c900fa5",
+    "short_hash": "d66823b",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T23:17:09-05:00",
+    "message": "refactor: remove Mermaid export, keep DOT only\n\nMermaid renders poorly on GitHub (labels truncated/cut off).\nDOT + PNG works well - use that approach instead.",
+    "files_changed": 4
+  },
+  {
+    "hash": "aefc5f465082ddf12e45a277c8406f05183159d6",
+    "short_hash": "aefc5f4",
+    "author": "Bobby Nathan",
+    "date": "2025-12-09T23:14:26-05:00",
+    "message": "feat: add DOT/Mermaid export and PNG cleanup workflow\n\nNew commands:\n- `deciduous dot` - Export graph as DOT format with optional PNG generation\n- `deciduous mermaid` - Export graph as Mermaid format for GitHub\n- `deciduous writeup` - Generate PR writeup from decision graph\n\nFeatures:\n- `--nodes` flag supports ranges (e.g., \"1-11\" or \"1,3,5-10\")\n- `--roots` flag for traversal-based filtering\n- `--png` flag generates PNG via graphviz\n- `--fence` flag wraps Mermaid in code fence\n\nInit changes:\n- `deciduous init` now creates .github/workflows/cleanup-decision-graphs.yml\n- Workflow auto-cleans PNG/DOT files after PR merge\n\nThis enables embedding decision graph visualizations in PRs without\naccumulating image files in the repository.",
+    "files_changed": 5
   },
   {
     "hash": "ab529c440b28a4727fb01432e7101302b1751dac",
