@@ -1,11 +1,35 @@
 [
   {
-    "hash": "4bef2d18224daa8ef3f4b6d19c28559726d29950",
-    "short_hash": "4bef2d1",
+    "hash": "63f9ae26f3413235bab7614f993e364fd485fd2f",
+    "short_hash": "63f9ae2",
     "author": "Bobby Nathan",
-    "date": "2026-01-06T16:58:29-05:00",
-    "message": "fix: restore landing page (was overwritten by graph viewer)",
-    "files_changed": 5
+    "date": "2026-01-06T17:50:50-05:00",
+    "message": "sync: update graph data",
+    "files_changed": 2
+  },
+  {
+    "hash": "c34e3ba7638ecbf2da733ee2a24733432eb287bc",
+    "short_hash": "c34e3ba",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T17:50:17-05:00",
+    "message": "docs: enhance guide with real-world e-commerce cart scenario\n\n- Added 6-phase walkthrough: Initial Request → Context Recovery\n- Shows evolving requirements, scope expansion, bug discovery\n- User/Claude dialogue format shows realistic workflow\n- Includes graph state visualizations at each phase\n- Command reference with practical examples\n- Common patterns section with 6 workflow cards\n- Troubleshooting section for common issues",
+    "files_changed": 1
+  },
+  {
+    "hash": "77a709b577b8f70cb07ef2d53a91057979ee330a",
+    "short_hash": "77a709b",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T17:34:49-05:00",
+    "message": "feat: add enforcement hooks to init and comprehensive guide\n\n- Hook templates added to deciduous init/update:\n  - require-action-node.sh: blocks Edit/Write without recent node\n  - post-commit-reminder.sh: reminds to link commits to graph\n  - work.md skill: transaction model for starting work\n  - settings.json: hooks configuration\n\n- New docs/guide.html with:\n  - Complete CLI commands reference\n  - Node and edge types documentation\n  - Usage patterns (logging, decisions, queries, recovery)\n  - Interactive todo list exercise showing scope expansion\n  - Hooks enforcement documentation",
+    "files_changed": 6
+  },
+  {
+    "hash": "c110fc7d61ed8b24c11f54adab6317c916b4a3e4",
+    "short_hash": "c110fc7",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T17:23:23-05:00",
+    "message": "feat: add enforcement hooks for decision logging\n\n- PreToolUse hook on Edit/Write: blocks if no recent action/goal node\n- PostToolUse hook on git commit: reminds to link commits to deciduous\n- /work skill: transaction model to start work with goal node first\n\nHooks use exit code 2 to block Claude until compliance.",
+    "files_changed": 4
   },
   {
     "hash": "94000913c59d66e655e8e09f794f06443148f92b",
@@ -384,6 +408,14 @@
     "files_changed": 5
   },
   {
+    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
+    "short_hash": "e80d20f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 4
+  },
+  {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
     "short_hash": "157aa70",
     "author": "Bobby Nathan",
@@ -398,14 +430,6 @@
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 3
-  },
-  {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
   },
   {
     "hash": "3be6e5ce199b274c285e1740b92e3054dc7f00e3",
@@ -1152,16 +1176,16 @@
     "files_changed": 15
   },
   {
-    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
-    "short_hash": "b4c56bc",
+    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
+    "short_hash": "32f0047",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
     "files_changed": 11
   },
   {
-    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
-    "short_hash": "32f0047",
+    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
+    "short_hash": "b4c56bc",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",

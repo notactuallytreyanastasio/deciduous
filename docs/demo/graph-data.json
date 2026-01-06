@@ -10372,6 +10372,149 @@
       "created_at": "2026-01-06T12:27:54.024164-05:00",
       "updated_at": "2026-01-06T12:27:54.024164-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"91ab5c7\",\"confidence\":100}"
+    },
+    {
+      "id": 945,
+      "change_id": "a7471cd0-b81e-4859-9995-c811e8ea9fe8",
+      "node_type": "goal",
+      "title": "Add enforcement hooks for decision logging",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:22:25.931615-05:00",
+      "updated_at": "2026-01-06T17:22:25.931615-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"what can I do to ACTUALLY MAKE YOU RELIABLY LOG ALL YOUR ACTIONS in the looping work we do with deciduous?\\n\\nI have it in your CLAUDE.md, I have commands for doing all of it right there, its inside every directive that you get to work with this and do it this way. But I constantly have to remind you to do it.\\n\\nIs the answer a hook that runs after you do _anything_?\\n\\nIs the answer a skill of some sort?\\n\\nIs it somethin else?\\n\\nI need you to use your knowledge of yourself to help me with this, because using the typical strategies to get this done...I'm not getting good results from you\"}"
+    },
+    {
+      "id": 946,
+      "change_id": "1bafd9e3-9f5a-4cad-95b8-9a23e149ca8d",
+      "node_type": "action",
+      "title": "Implemented PreToolUse and PostToolUse hooks with /work skill",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:22:35.067024-05:00",
+      "updated_at": "2026-01-06T17:22:35.067024-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\".claude/hooks/require-action-node.sh\",\".claude/hooks/post-commit-reminder.sh\",\".claude/commands/work.md\",\".claude/settings.local.json\"]}"
+    },
+    {
+      "id": 947,
+      "change_id": "0907c6fe-4cf6-4b93-9c9b-9860746c18b1",
+      "node_type": "goal",
+      "title": "Tutorial overhaul and show command",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:22:57.986840-05:00",
+      "updated_at": "2026-01-06T17:22:57.986840-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"Let's overhaul the tutorial for the latest release that we have\\n\\nGo through and really flesh it out more\\n\\nRemember, we got rid of not-claude-code support so remove the stuff related to that\\n\\nTry to make a bi section on doing \\\"archaelogy\\\" where you assemble a DAG from the commit log, issues, and PRs that is built up retroactively and can find major themes, and evolutions as a project went on, for starting off with deciduous in an existing project\\n\\nMake sure to explore the branching model of work that can split things off, but look at the archaelogy layer where there is ONE root node most the time\\n\\nImplement a deciduous show command as well since you keep trying to use it\\n\\nMaking it longer wouldnt hurt either...make it really tell a story with a real project. That is key.\\n\\nWe wanna really capture what the human workflow is like in both main scenarios of usage and make docs that speak to someone whose leaning in but doesnt know these foreign premises and tools\"}"
+    },
+    {
+      "id": 948,
+      "change_id": "23737aa2-5b5a-4d73-8089-18c9fce668e2",
+      "node_type": "decision",
+      "title": "Show command design",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:23:32.181715-05:00",
+      "updated_at": "2026-01-06T17:23:32.181715-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 949,
+      "change_id": "89c1acf9-c68f-4e57-bae0-6db98fd3517c",
+      "node_type": "outcome",
+      "title": "Enforcement hooks committed and ready",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:23:37.882625-05:00",
+      "updated_at": "2026-01-06T17:23:37.882625-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"c110fc7\",\"confidence\":95}"
+    },
+    {
+      "id": 950,
+      "change_id": "9c81414c-0fca-4559-b233-9954dcd4ca73",
+      "node_type": "outcome",
+      "title": "Show command implemented and tested",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:25:28.970374-05:00",
+      "updated_at": "2026-01-06T17:25:28.970374-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 951,
+      "change_id": "0d443ee1-3814-40fb-aeae-4953cd165675",
+      "node_type": "action",
+      "title": "Overhauling tutorial for latest release",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:25:39.031935-05:00",
+      "updated_at": "2026-01-06T17:25:39.031935-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 952,
+      "change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "node_type": "goal",
+      "title": "Add hook templates to init and create docs index page",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:28:24.121747-05:00",
+      "updated_at": "2026-01-06T17:28:24.121747-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"make examples of the hooks and have them prepared to be put in when someone does deciduous init. we also need to make sure that if they are not detected in a project with deciduous already it creates them. \\n\\nWe also should make a docs \\\"index\\\" page that shows all your commands, all the ways we commonly use you (logging things, asking about the DAG itself to learn, actually working through problems with plans and making real decisions) and have it go through a \\\"real\\\" exercise like a todo list that keeps getting expanded for that part\"}"
+    },
+    {
+      "id": 953,
+      "change_id": "4cc36003-3e60-4e14-a831-8ae750a86862",
+      "node_type": "action",
+      "title": "Adding hook templates to init system",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:29:04.907143-05:00",
+      "updated_at": "2026-01-06T17:29:04.907143-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85,\"files\":[\"src/init/templates.rs\",\"src/init/mod.rs\"]}"
+    },
+    {
+      "id": 954,
+      "change_id": "048a26c6-3b3d-4e5c-b80f-18a66686aa99",
+      "node_type": "action",
+      "title": "Creating docs guide page with commands, patterns, and exercise",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:31:51.227752-05:00",
+      "updated_at": "2026-01-06T17:31:51.227752-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85,\"files\":[\"docs/guide.html\"]}"
+    },
+    {
+      "id": 955,
+      "change_id": "5ccef713-9c51-4ced-8f82-621688dbb88c",
+      "node_type": "outcome",
+      "title": "Hook templates and guide page committed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:35:01.957832-05:00",
+      "updated_at": "2026-01-06T17:35:01.957832-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"77a709b\",\"confidence\":95}"
+    },
+    {
+      "id": 956,
+      "change_id": "5f424b65-87ab-4d64-bcf3-9e9490962d76",
+      "node_type": "action",
+      "title": "Enhancing guide page with real-world examples",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:46:05.595698-05:00",
+      "updated_at": "2026-01-06T17:46:05.595698-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85,\"files\":[\"docs/guide.html\"]}"
+    },
+    {
+      "id": 957,
+      "change_id": "bf194861-6a61-4985-98cd-530a42bee8f1",
+      "node_type": "outcome",
+      "title": "Guide enhanced with real-world e-commerce scenario",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T17:50:25.681732-05:00",
+      "updated_at": "2026-01-06T17:50:25.681732-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"c34e3ba\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -19174,6 +19317,149 @@
       "weight": 1.0,
       "rationale": "Complete",
       "created_at": "2026-01-06T12:27:54.036124-05:00"
+    },
+    {
+      "id": 801,
+      "from_node_id": 945,
+      "to_node_id": 946,
+      "from_change_id": "a7471cd0-b81e-4859-9995-c811e8ea9fe8",
+      "to_change_id": "1bafd9e3-9f5a-4cad-95b8-9a23e149ca8d",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of enforcement hooks",
+      "created_at": "2026-01-06T17:22:38.421371-05:00"
+    },
+    {
+      "id": 802,
+      "from_node_id": 947,
+      "to_node_id": 948,
+      "from_change_id": "0907c6fe-4cf6-4b93-9c9b-9860746c18b1",
+      "to_change_id": "23737aa2-5b5a-4d73-8089-18c9fce668e2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Need to decide show command implementation",
+      "created_at": "2026-01-06T17:23:36.468679-05:00"
+    },
+    {
+      "id": 803,
+      "from_node_id": 946,
+      "to_node_id": 949,
+      "from_change_id": "1bafd9e3-9f5a-4cad-95b8-9a23e149ca8d",
+      "to_change_id": "89c1acf9-c68f-4e57-bae0-6db98fd3517c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation complete",
+      "created_at": "2026-01-06T17:23:42.093660-05:00"
+    },
+    {
+      "id": 804,
+      "from_node_id": 948,
+      "to_node_id": 949,
+      "from_change_id": "23737aa2-5b5a-4d73-8089-18c9fce668e2",
+      "to_change_id": "89c1acf9-c68f-4e57-bae0-6db98fd3517c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Show command completed",
+      "created_at": "2026-01-06T17:25:29.074117-05:00"
+    },
+    {
+      "id": 805,
+      "from_node_id": 948,
+      "to_node_id": 950,
+      "from_change_id": "23737aa2-5b5a-4d73-8089-18c9fce668e2",
+      "to_change_id": "9c81414c-0fca-4559-b233-9954dcd4ca73",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Show command completed",
+      "created_at": "2026-01-06T17:25:33.180172-05:00"
+    },
+    {
+      "id": 806,
+      "from_node_id": 947,
+      "to_node_id": 951,
+      "from_change_id": "0907c6fe-4cf6-4b93-9c9b-9860746c18b1",
+      "to_change_id": "0d443ee1-3814-40fb-aeae-4953cd165675",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Main implementation work",
+      "created_at": "2026-01-06T17:25:39.170430-05:00"
+    },
+    {
+      "id": 807,
+      "from_node_id": 945,
+      "to_node_id": 952,
+      "from_change_id": "a7471cd0-b81e-4859-9995-c811e8ea9fe8",
+      "to_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Continuation - make hooks available via init",
+      "created_at": "2026-01-06T17:28:29.994058-05:00"
+    },
+    {
+      "id": 808,
+      "from_node_id": 952,
+      "to_node_id": 953,
+      "from_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "to_change_id": "4cc36003-3e60-4e14-a831-8ae750a86862",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of init hook templates",
+      "created_at": "2026-01-06T17:29:10.036594-05:00"
+    },
+    {
+      "id": 809,
+      "from_node_id": 952,
+      "to_node_id": 954,
+      "from_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "to_change_id": "048a26c6-3b3d-4e5c-b80f-18a66686aa99",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation component",
+      "created_at": "2026-01-06T17:31:55.317443-05:00"
+    },
+    {
+      "id": 810,
+      "from_node_id": 953,
+      "to_node_id": 955,
+      "from_change_id": "4cc36003-3e60-4e14-a831-8ae750a86862",
+      "to_change_id": "5ccef713-9c51-4ced-8f82-621688dbb88c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Init implementation complete",
+      "created_at": "2026-01-06T17:35:06.235909-05:00"
+    },
+    {
+      "id": 811,
+      "from_node_id": 954,
+      "to_node_id": 955,
+      "from_change_id": "048a26c6-3b3d-4e5c-b80f-18a66686aa99",
+      "to_change_id": "5ccef713-9c51-4ced-8f82-621688dbb88c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Docs implementation complete",
+      "created_at": "2026-01-06T17:35:06.247054-05:00"
+    },
+    {
+      "id": 812,
+      "from_node_id": 952,
+      "to_node_id": 956,
+      "from_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "to_change_id": "5f424b65-87ab-4d64-bcf3-9e9490962d76",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Guide enhancement",
+      "created_at": "2026-01-06T17:46:09.431412-05:00"
+    },
+    {
+      "id": 813,
+      "from_node_id": 956,
+      "to_node_id": 957,
+      "from_change_id": "5f424b65-87ab-4d64-bcf3-9e9490962d76",
+      "to_change_id": "bf194861-6a61-4985-98cd-530a42bee8f1",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Guide enhancement complete",
+      "created_at": "2026-01-06T17:50:32.454803-05:00"
     }
   ]
 }
