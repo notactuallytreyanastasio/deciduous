@@ -216,7 +216,11 @@ fn get_git_history() -> Vec<GitCommit> {
             failed += 1;
         }
     }
-    eprintln!("[git-history] Got {} commits, {} failed lookups", commits.len(), failed);
+    eprintln!(
+        "[git-history] Got {} commits, {} failed lookups",
+        commits.len(),
+        failed
+    );
 
     // Sort by date (newest first)
     commits.sort_by(|a, b| b.date.cmp(&a.date));
@@ -373,7 +377,8 @@ fn handle_ask_question(mut request: Request) -> std::io::Result<()> {
         Ok(child) => child,
         Err(e) => {
             let error = if e.kind() == std::io::ErrorKind::NotFound {
-                "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code".to_string()
+                "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code"
+                    .to_string()
             } else {
                 format!("Failed to spawn claude: {}", e)
             };
@@ -384,7 +389,9 @@ fn handle_ask_question(mut request: Request) -> std::io::Result<()> {
             })?;
             let response = Response::from_string(json)
                 .with_status_code(500)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
             return request.respond(response);
         }
     };
@@ -424,7 +431,8 @@ fn handle_ask_question(mut request: Request) -> std::io::Result<()> {
         }
         Err(e) => {
             let error = if e.kind() == std::io::ErrorKind::NotFound {
-                "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code".to_string()
+                "Claude CLI not found. Install with: npm install -g @anthropic-ai/claude-code"
+                    .to_string()
             } else {
                 format!("Failed to execute claude: {}", e)
             };
@@ -481,8 +489,10 @@ IMPORTANT: If information is missing or incomplete, tell the user explicitly and
         if let Some(node_id) = ctx.selected_node_id {
             if let Ok(db) = Database::open() {
                 if let Ok(Some(node)) = db.get_node(node_id) {
-                    prompt.push_str(&format!("Currently viewing node #{}: \"{}\" ({})\n",
-                        node.id, node.title, node.node_type));
+                    prompt.push_str(&format!(
+                        "Currently viewing node #{}: \"{}\" ({})\n",
+                        node.id, node.title, node.node_type
+                    ));
                     if let Some(desc) = &node.description {
                         prompt.push_str(&format!("Description: {}\n", desc));
                     }
@@ -504,7 +514,10 @@ IMPORTANT: If information is missing or incomplete, tell the user explicitly and
 
         // Add visible nodes count
         if let Some(visible_ids) = &ctx.visible_node_ids {
-            prompt.push_str(&format!("User is viewing {} nodes in the graph.\n\n", visible_ids.len()));
+            prompt.push_str(&format!(
+                "User is viewing {} nodes in the graph.\n\n",
+                visible_ids.len()
+            ));
         }
 
         // Add branch context
