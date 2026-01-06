@@ -17,9 +17,14 @@ import { RoadmapView } from './views/RoadmapView';
 import { StoryView } from './views/StoryView';
 import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
-// Detect if running from deciduous serve (localhost) vs static file (GitHub Pages)
-const isLocalServer = typeof window !== 'undefined' &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+// Detect if running from deciduous serve (local) vs static file (GitHub Pages)
+// Check for localhost, 127.0.0.1, 0.0.0.0, or any non-github.io hostname with a port
+const isLocalServer = typeof window !== 'undefined' && (
+  window.location.hostname === 'localhost' ||
+  window.location.hostname === '127.0.0.1' ||
+  window.location.hostname === '0.0.0.0' ||
+  (window.location.port !== '' && !window.location.hostname.endsWith('.github.io'))
+);
 
 export const App: React.FC = () => {
   // Load graph data with optional SSE for live updates
@@ -34,7 +39,7 @@ export const App: React.FC = () => {
     lastUpdated,
   } = useGraphData({
     graphUrl: isLocalServer ? '/api/graph' : './graph-data.json',
-    gitHistoryUrl: './git-history.json',
+    gitHistoryUrl: isLocalServer ? '/api/git-history' : './git-history.json',
     roadmapUrl: isLocalServer ? '/api/roadmap' : './roadmap-items.json',
     enableSSE: false, // Disable SSE until deciduous serve is implemented
     pollInterval: isLocalServer ? 30000 : 0, // 30-second refresh for local server only

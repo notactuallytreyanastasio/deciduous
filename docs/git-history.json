@@ -1,11 +1,11 @@
 [
   {
-    "hash": "77d3b2365d9b9a061c1c1411401465a68be68c39",
-    "short_hash": "77d3b23",
+    "hash": "bd7aa6f6e433d5a6c6c72f9022a0b03ecf448fd2",
+    "short_hash": "bd7aa6f",
     "author": "Bobby Nathan",
-    "date": "2026-01-05T16:31:39-05:00",
-    "message": "fix(web): show prompt, files, branch in DagView modal\n\nThe DagView modal was missing prompt, files, and branch display that\nDetailPanel had. Now clicking a node in the DAG view shows the full\nmetadata including verbatim prompts.\n\n- Add prompt section with styled blue border\n- Add associated files as monospace tags\n- Add branch display as green tag\n- Import getPrompt, getFiles, getBranch helpers",
-    "files_changed": 9
+    "date": "2026-01-05T19:09:06-05:00",
+    "message": "updates",
+    "files_changed": 19
   },
   {
     "hash": "92c8ceacd3b7b2f0b0cfb06f55df2e08f54c2605",
@@ -64,20 +64,20 @@
     "files_changed": 6
   },
   {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
-  },
-  {
     "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
     "short_hash": "9e9953a",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 3
+  },
+  {
+    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
+    "short_hash": "e80d20f",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 4
   },
   {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",

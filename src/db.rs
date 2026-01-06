@@ -1399,6 +1399,16 @@ impl Database {
         Ok(edges)
     }
 
+    /// Get a single node by ID
+    pub fn get_node(&self, node_id: i32) -> Result<Option<DecisionNode>> {
+        let mut conn = self.get_conn()?;
+        let node = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)
+            .optional()?;
+        Ok(node)
+    }
+
     /// Get children of a node (outgoing edges)
     pub fn get_node_children(&self, node_id: i32) -> Result<Vec<DecisionNode>> {
         let mut conn = self.get_conn()?;

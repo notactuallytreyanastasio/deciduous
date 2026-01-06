@@ -89,17 +89,32 @@ export function useGraphData(options: UseGraphDataOptions = {}): UseGraphDataRes
    * Fetch git history (optional, for timeline view)
    */
   const fetchGitHistory = useCallback(async () => {
-    if (!gitHistoryUrl) return;
+    console.log('[useGraphData] fetchGitHistory called, url:', gitHistoryUrl);
+    if (!gitHistoryUrl) {
+      console.log('[useGraphData] No gitHistoryUrl, skipping');
+      return;
+    }
 
     try {
       const response = await fetch(gitHistoryUrl);
+      console.log('[useGraphData] Git history response:', response.status, response.ok);
       if (response.ok) {
-        const data = await response.json() as GitCommit[];
-        setGitHistory(data);
+        const json = await response.json();
+        console.log('[useGraphData] Git history JSON:', json?.ok, 'data length:', json?.data?.length ?? json?.length);
+        // Handle both API response {ok, data, error} and direct array format
+        const data: GitCommit[] = json.data ?? json;
+        if (Array.isArray(data)) {
+          console.log('[useGraphData] Setting gitHistory with', data.length, 'commits');
+          setGitHistory(data);
+        } else {
+          console.log('[useGraphData] Data is not an array:', typeof data);
+        }
+      } else {
+        console.log('[useGraphData] Response not ok:', response.status);
       }
       // Don't treat missing git history as an error
     } catch (err) {
-      console.warn('Could not load git history:', err);
+      console.warn('[useGraphData] Could not load git history:', err);
     }
   }, [gitHistoryUrl]);
 

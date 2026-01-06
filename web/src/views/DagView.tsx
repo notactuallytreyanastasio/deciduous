@@ -12,11 +12,12 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
-import { getConfidence, getCommit, getPrompt, getFiles, getBranch, truncate, shortCommit, githubCommitUrl, getCommitRepo } from '../types/graph';
+import { getConfidence, getCommit, getPrompt, truncate } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
 import { SearchBar } from '../components/SearchBar';
 import { CalloutLines } from '../components/CalloutLines';
 import { MiniMap } from '../components/MiniMap';
+import { AskResponseModal } from '../components/AskResponseModal';
 import { useNodeVisibility } from '../hooks/useNodeVisibility';
 import { useUrlState } from '../hooks/useUrlState';
 import { NODE_COLORS, getNodeColor, getEdgeColor } from '../utils/colors';
@@ -86,11 +87,88 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Always fullscreen - no mini view
   const isFullscreen = true;
 
-  // Derive selected node from URL state
+  // Visual card stack - shows parent/child relationships spatially
+  // Each card has: nodeId, level (negative=parent, 0=root, positive=child), and source relationship
+  interface StackCard {
+    nodeId: number;
+    level: number;  // -N for parents, 0 for root, +N for children
+    relation: 'root' | 'parent' | 'child';
+    edgeType?: string;
+    isNew?: boolean;  // For slide-in animation
+  }
+  const [cardStack, setCardStack] = useState<StackCard[]>([]);
+
+  // Clear "isNew" flag after animation completes
+  useEffect(() => {
+    if (cardStack.some(c => c.isNew)) {
+      const timer = setTimeout(() => {
+        setCardStack(prev => prev.map(c => ({ ...c, isNew: false })));
+      }, 300); // Match animation duration
+      return () => clearTimeout(timer);
+    }
+  }, [cardStack]);
+
+  // Get node by ID helper
+  const getNodeById = useCallback((id: number) =>
+    graphData.nodes.find(n => n.id === id) ?? null
+  , [graphData.nodes]);
+
+  // Add a parent card (appears above with slide-from-top animation)
+  const addParentCard = useCallback((nodeId: number) => {
+    setCardStack(prev => {
+      // Find the minimum level (most "parent" position)
+      const minLevel = prev.length > 0 ? Math.min(...prev.map(c => c.level)) : 0;
+      // Check if this node is already in the stack
+      if (prev.some(c => c.nodeId === nodeId)) return prev;
+      return [...prev, { nodeId, level: minLevel - 1, relation: 'parent' as const, isNew: true }];
+    });
+  }, []);
+
+  // Add a child card (appears below with slide-from-bottom animation)
+  const addChildCard = useCallback((nodeId: number, edgeType?: string) => {
+    setCardStack(prev => {
+      // Find the maximum level (most "child" position)
+      const maxLevel = prev.length > 0 ? Math.max(...prev.map(c => c.level)) : 0;
+      // Check if this node is already in the stack
+      if (prev.some(c => c.nodeId === nodeId)) return prev;
+      return [...prev, { nodeId, level: maxLevel + 1, relation: 'child' as const, edgeType, isNew: true }];
+    });
+  }, []);
+
+  // Remove a specific card from the stack
+  const removeCard = useCallback((nodeId: number) => {
+    setCardStack(prev => prev.filter(c => c.nodeId !== nodeId));
+  }, []);
+
+  // Close all cards
+  const closeAllCards = useCallback(() => {
+    setCardStack([]);
+    setSelectedNodeId(null);
+  }, [setSelectedNodeId]);
+
+  // Unified callback for adding to card stack (used by CalloutLines)
+  const handleAddToCardStack = useCallback((nodeId: number, relation: 'root' | 'parent' | 'child', edgeType?: string) => {
+    if (relation === 'root') {
+      // Start a new card stack with this node as root
+      setCardStack([{ nodeId, level: 0, relation: 'root', isNew: true }]);
+      setSelectedNodeId(nodeId);
+    } else if (relation === 'parent') {
+      addParentCard(nodeId);
+    } else if (relation === 'child') {
+      addChildCard(nodeId, edgeType);
+    }
+  }, [addParentCard, addChildCard, setSelectedNodeId]);
+
+  // Legacy: derive selectedNode for compatibility with other code
   const selectedNode = useMemo(() => {
+    if (cardStack.length > 0) {
+      // Return the root card's node (level 0) or the first card
+      const rootCard = cardStack.find(c => c.level === 0) || cardStack[0];
+      return getNodeById(rootCard.nodeId);
+    }
     if (urlState.selectedNodeId === null) return null;
     return graphData.nodes.find(n => n.id === urlState.selectedNodeId) ?? null;
-  }, [urlState.selectedNodeId, graphData.nodes]);
+  }, [urlState.selectedNodeId, graphData.nodes, cardStack, getNodeById]);
 
   // Local UI state (not URL-synced)
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
@@ -98,6 +176,27 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
 
   // Search state - highlighted node IDs from search
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<number>>(new Set());
+
+  // Git-Log Modal state
+  const [showGitLogModal, setShowGitLogModal] = useState(false);
+  const [gitLogFilter, setGitLogFilter] = useState<'all' | 'linked'>('all');
+
+  // Commit Correlation View state
+  const [showCorrelationModal, setShowCorrelationModal] = useState(false);
+  const [hoveredLink, setHoveredLink] = useState<{ commit?: string; node?: number } | null>(null);
+
+  // Time Slider / Playback state
+  const [showTimeSlider, setShowTimeSlider] = useState(false);
+  const [timeSliderValue, setTimeSliderValue] = useState(100);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+
+  // Ask Claude state
+  const [askModalOpen, setAskModalOpen] = useState(false);
+  const [askQuestion, setAskQuestion] = useState('');
+  const [askResponse, setAskResponse] = useState<string | null>(null);
+  const [askLoading, setAskLoading] = useState(false);
+  const [askInputVisible, setAskInputVisible] = useState(false);
 
   // Track node positions for visibility detection and callouts
   const [nodePositions, setNodePositions] = useState<Map<number, { x: number; y: number; width: number; height: number }>>(new Map());
@@ -150,13 +249,60 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   // Calculate how many chains are hidden
   const hiddenChainCount = goalChains.length - (urlState.viewMode === 'recent' ? urlState.recentChainCount : 0);
 
+  // Time slider: calculate time bounds from all nodes
+  const timeBounds = useMemo(() => {
+    if (graphData.nodes.length === 0) return { min: Date.now(), max: Date.now() };
+    const timestamps = graphData.nodes.map(n => new Date(n.created_at).getTime());
+    return { min: Math.min(...timestamps), max: Math.max(...timestamps) };
+  }, [graphData.nodes]);
+
+  // Current time based on slider position
+  const currentTime = useMemo(() => {
+    const { min, max } = timeBounds;
+    return min + (timeSliderValue / 100) * (max - min);
+  }, [timeBounds, timeSliderValue]);
+
+  // Nodes visible at current time (null = show all)
+  const timeFilteredNodeIds = useMemo(() => {
+    if (!showTimeSlider) return null;
+    return new Set(
+      graphData.nodes
+        .filter(n => new Date(n.created_at).getTime() <= currentTime)
+        .map(n => n.id)
+    );
+  }, [graphData.nodes, currentTime, showTimeSlider]);
+
+  // Playback effect
+  useEffect(() => {
+    if (!isPlaying) return;
+    const interval = setInterval(() => {
+      setTimeSliderValue(prev => {
+        const next = prev + (0.5 * playbackSpeed);
+        if (next >= 100) {
+          setIsPlaying(false);
+          return 100;
+        }
+        return next;
+      });
+    }, 50);
+    return () => clearInterval(interval);
+  }, [isPlaying, playbackSpeed]);
+
+  // When clicking a node in the graph, start a fresh card stack with just that node
   const handleSelectNode = useCallback((node: DecisionNode) => {
+    setCardStack([{ nodeId: node.id, level: 0, relation: 'root', isNew: true }]);
     setSelectedNodeId(node.id);
   }, [setSelectedNodeId]);
 
-  const handleSelectNodeById = useCallback((id: number) => {
-    setSelectedNodeId(id);
-  }, [setSelectedNodeId]);
+  // When clicking an incoming (parent) node in a card
+  const handleSelectParent = useCallback((nodeId: number) => {
+    addParentCard(nodeId);
+  }, [addParentCard]);
+
+  // When clicking an outgoing (child) node in a card
+  const handleSelectChild = useCallback((nodeId: number, edgeType?: string) => {
+    addChildCard(nodeId, edgeType);
+  }, [addChildCard]);
 
   // State for custom expand input
   const [expandInputVisible, setExpandInputVisible] = useState(false);
@@ -194,6 +340,53 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   const toggleControls = useCallback(() => {
     setIsControlsCollapsed(prev => !prev);
   }, []);
+
+  // Submit question to Claude
+  const submitAskQuestion = useCallback(async () => {
+    if (!askQuestion.trim() || askLoading) return;
+    setAskLoading(true);
+    setAskModalOpen(true);
+    setAskResponse(null);
+
+    try {
+      const res = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: askQuestion,
+          context: {
+            selected_node_id: urlState.selectedNodeId,
+            visible_node_ids: Array.from(visibleNodeIds),
+            current_branch: selectedNode?.metadata_json
+              ? JSON.parse(selectedNode.metadata_json)?.branch
+              : null,
+          },
+        }),
+      });
+      const json = await res.json();
+      if (json.ok) {
+        setAskResponse(json.data.answer);
+      } else {
+        setAskResponse(`Error: ${json.error || 'Unknown error'}`);
+      }
+    } catch (e) {
+      setAskResponse(`Error: ${e instanceof Error ? e.message : 'Failed to connect'}`);
+    } finally {
+      setAskLoading(false);
+      setAskInputVisible(false);
+    }
+  }, [askQuestion, askLoading, urlState.selectedNodeId, visibleNodeIds, selectedNode]);
+
+  // Handle ask input key events
+  const handleAskKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      submitAskQuestion();
+    } else if (e.key === 'Escape') {
+      setAskInputVisible(false);
+      setAskQuestion('');
+    }
+  }, [submitAskQuestion]);
 
   // Escape key closes selected node modal
   useEffect(() => {
@@ -610,6 +803,43 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
               Back to Recent
             </button>
           )}
+
+          {/* Separator */}
+          <span style={styles.topBarStatDivider}>|</span>
+
+          {/* Git History Tools */}
+          <button
+            onClick={() => setShowGitLogModal(true)}
+            style={{
+              ...styles.topBarBtnSecondary,
+              ...(gitHistory.length === 0 ? styles.topBarBtnDisabled : {}),
+            }}
+            disabled={gitHistory.length === 0}
+            title="View git commit history with linked decisions"
+          >
+            Git Log
+          </button>
+          <button
+            onClick={() => setShowCorrelationModal(true)}
+            style={{
+              ...styles.topBarBtnSecondary,
+              ...(gitHistory.length === 0 ? styles.topBarBtnDisabled : {}),
+            }}
+            disabled={gitHistory.length === 0}
+            title="View commit-decision correlation"
+          >
+            Correlation
+          </button>
+          <button
+            onClick={() => setShowTimeSlider(prev => !prev)}
+            style={{
+              ...styles.topBarBtnSecondary,
+              ...(showTimeSlider ? { backgroundColor: '#0969da', color: '#fff', borderColor: '#0969da' } : {}),
+            }}
+            title="Toggle time slider for temporal navigation"
+          >
+            Timeline
+          </button>
         </div>
 
         <div style={styles.topBarRight}>
@@ -622,6 +852,45 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
           <span style={styles.topBarStat}>{visibleNodeIds.size} nodes</span>
           <span style={styles.topBarStatDivider}>·</span>
           <span style={styles.topBarStat}>{visibleChains.length} chains</span>
+
+          {/* Ask Claude Button */}
+          {!askInputVisible ? (
+            <button
+              onClick={() => setAskInputVisible(true)}
+              style={styles.askButton}
+              title="Ask Claude about the codebase"
+            >
+              Ask about the code
+            </button>
+          ) : (
+            <div style={styles.askInputContainer}>
+              <input
+                type="text"
+                value={askQuestion}
+                onChange={e => setAskQuestion(e.target.value)}
+                onKeyDown={handleAskKeyDown}
+                placeholder="Ask a question about the code..."
+                style={styles.askInput}
+                autoFocus
+                disabled={askLoading}
+              />
+              <button
+                onClick={submitAskQuestion}
+                style={styles.askSubmitBtn}
+                disabled={askLoading || !askQuestion.trim()}
+              >
+                {askLoading ? '...' : 'Ask'}
+              </button>
+              <button
+                onClick={() => { setAskInputVisible(false); setAskQuestion(''); }}
+                style={styles.askCancelBtn}
+                title="Cancel"
+              >
+                ×
+              </button>
+            </div>
+          )}
+
           <button
             onClick={async () => {
               await copyLinkToClipboard();
@@ -711,6 +980,7 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
             containerHeight={containerDimensions.height}
             onSelectNode={handleSelectNode}
             onNavigateToNode={handleNavigateToNode}
+            onAddToCardStack={handleAddToCardStack}
           />
         )}
 
@@ -729,167 +999,462 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
         )}
       </div>
 
-      {/* Detail Modal */}
-      {selectedNode && (
-        <div style={styles.modalBackdrop} onClick={() => setSelectedNodeId(null)}>
-          <div style={styles.modal} onClick={e => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <div style={styles.modalHeaderLeft}>
-                <TypeBadge type={selectedNode.node_type} />
-                <ConfidenceBadge confidence={getConfidence(selectedNode)} />
-                <CommitBadge commit={getCommit(selectedNode)} />
-              </div>
-              <button onClick={() => setSelectedNodeId(null)} style={styles.modalCloseBtn}>×</button>
-            </div>
+      {/* Visual Card Stack - shows parent/child relationships spatially */}
+      {cardStack.length > 0 && (
+        <div style={styles.cardStackBackdrop} onClick={closeAllCards}>
+          {/* CSS Keyframes for slide animations */}
+          <style>{`
+            @keyframes slideFromTop {
+              from {
+                opacity: 0;
+                transform: translateY(-30px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+            @keyframes slideFromBottom {
+              from {
+                opacity: 0;
+                transform: translateY(30px);
+              }
+              to {
+                opacity: 1;
+                transform: translateY(0);
+              }
+            }
+            @keyframes slideFromCenter {
+              from {
+                opacity: 0;
+                transform: scale(0.95);
+              }
+              to {
+                opacity: 1;
+                transform: scale(1);
+              }
+            }
+            .stack-card-btn:hover:not(:disabled) {
+              background-color: #f0f6fc !important;
+              border-color: #0969da !important;
+              transform: translateX(4px);
+            }
+            .stack-card-close:hover {
+              background-color: #ffebe9 !important;
+              color: #cf222e !important;
+            }
+          `}</style>
+          <div style={styles.cardStackContainer} onClick={e => e.stopPropagation()}>
+            {/* Sort cards by level: parents (negative) at top, children (positive) at bottom */}
+            {[...cardStack]
+              .sort((a, b) => a.level - b.level)
+              .map((card, cardIndex) => {
+                const node = getNodeById(card.nodeId);
+                if (!node) return null;
 
-            <h2 style={styles.modalTitle}>{selectedNode.title}</h2>
-            <p style={styles.modalMeta}>
-              Node #{selectedNode.id} · Created {new Date(selectedNode.created_at).toLocaleString()}
-            </p>
+                const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
+                const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
 
-            {/* Commit Message Section */}
-            {(() => {
-              const commitHash = getCommit(selectedNode);
-              const commitInfo = getCommitInfo(commitHash, gitHistory);
-              if (!commitHash) return null;
-              const commitRepo = getCommitRepo(graphData);
-              return (
-                <div style={styles.commitSection}>
-                  <a
-                    href={githubCommitUrl(commitHash, commitRepo)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={styles.commitLink}
+                // Calculate visual offset based on position in sorted list
+                const offset = cardIndex * 8;
+
+                // Determine animation based on relation and whether card is new
+                const animationName = card.isNew
+                  ? card.relation === 'parent' ? 'slideFromTop'
+                    : card.relation === 'child' ? 'slideFromBottom'
+                    : 'slideFromCenter'
+                  : 'none';
+
+                return (
+                  <div
+                    key={card.nodeId}
+                    style={{
+                      ...styles.stackCard,
+                      marginLeft: `${offset}px`,
+                      zIndex: 100 + cardIndex,
+                      borderLeft: card.relation === 'parent' ? '4px solid #8250df' :
+                                  card.relation === 'child' ? '4px solid #1a7f37' :
+                                  '4px solid #0969da',
+                      animation: card.isNew ? `${animationName} 0.25s ease-out forwards` : 'none',
+                    }}
                   >
-                    {shortCommit(commitHash)}
-                  </a>
-                  {commitInfo ? (
-                    <>
-                      <div style={styles.commitMessage}>{commitInfo.message}</div>
-                      <div style={styles.commitMeta}>
-                        by {commitInfo.author} · {new Date(commitInfo.date).toLocaleDateString()}
-                        {commitInfo.files_changed && ` · ${commitInfo.files_changed} files changed`}
+                    {/* Card header with relation indicator */}
+                    <div style={styles.stackCardHeader}>
+                      <div style={styles.stackCardHeaderLeft}>
+                        {card.relation === 'parent' && <span style={styles.relationBadgeParent}>↑ PARENT</span>}
+                        {card.relation === 'child' && <span style={styles.relationBadgeChild}>↓ CHILD {card.edgeType && `(${card.edgeType})`}</span>}
+                        {card.relation === 'root' && <span style={styles.relationBadgeRoot}>● ROOT</span>}
+                        <TypeBadge type={node.node_type} />
+                        <ConfidenceBadge confidence={getConfidence(node)} />
                       </div>
-                    </>
-                  ) : (
-                    <div style={styles.commitMeta}>Commit details not available</div>
-                  )}
-                </div>
-              );
-            })()}
+                      <button onClick={() => removeCard(card.nodeId)} style={styles.stackCardClose} className="stack-card-close">×</button>
+                    </div>
 
-            {selectedNode.description && (
-              <div style={styles.modalSection}>
-                <p style={styles.modalDescription}>{selectedNode.description}</p>
-              </div>
-            )}
+                    <h3 style={styles.stackCardTitle}>{node.title}</h3>
+                    <p style={styles.stackCardMeta}>
+                      Node #{node.id} · {new Date(node.created_at).toLocaleDateString()}
+                    </p>
 
-            {/* Prompt Section */}
-            {(() => {
-              const prompt = getPrompt(selectedNode);
-              if (!prompt) return null;
-              return (
-                <div style={styles.promptSection}>
-                  <h4 style={styles.promptTitle}>Prompt</h4>
-                  <div style={styles.promptText}>{prompt}</div>
-                </div>
-              );
-            })()}
+                    {/* Description */}
+                    {node.description && (
+                      <p style={styles.stackCardDescription}>{node.description}</p>
+                    )}
 
-            {/* Associated Files Section */}
-            {(() => {
-              const files = getFiles(selectedNode);
-              if (!files || files.length === 0) return null;
-              return (
-                <div style={styles.filesSection}>
-                  <h4 style={styles.sectionTitle}>Associated Files</h4>
-                  <div style={styles.filesList}>
-                    {files.map((file, i) => (
-                      <span key={i} style={styles.fileTag}>{file}</span>
-                    ))}
+                    {/* Prompt - show full content, no truncation */}
+                    {(() => {
+                      const prompt = getPrompt(node);
+                      if (!prompt) return null;
+                      return (
+                        <div style={styles.stackCardPrompt}>
+                          <strong>Prompt:</strong> {prompt}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Commit */}
+                    {(() => {
+                      const commitHash = getCommit(node);
+                      if (!commitHash) return null;
+                      const commitInfo = getCommitInfo(commitHash, gitHistory);
+                      return (
+                        <div style={styles.stackCardCommit}>
+                          <CommitBadge commit={commitHash} />
+                          {commitInfo && <span style={styles.stackCardCommitMsg}>{truncate(commitInfo.message, 60)}</span>}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Parent connections - click to add parent card above */}
+                    {incoming.length > 0 && (
+                      <div style={styles.stackCardConnections}>
+                        <span style={styles.stackCardConnectionLabel}>↑ Parents ({incoming.length})</span>
+                        <div style={styles.stackCardConnectionList}>
+                          {incoming.map(e => {
+                            const parentNode = getNodeById(e.from_node_id);
+                            const isInStack = cardStack.some(c => c.nodeId === e.from_node_id);
+                            return (
+                              <button
+                                key={e.id}
+                                onClick={() => !isInStack && handleSelectParent(e.from_node_id)}
+                                style={{
+                                  ...styles.stackCardConnectionBtn,
+                                  ...(isInStack ? styles.stackCardConnectionBtnActive : {}),
+                                }}
+                                disabled={isInStack}
+                                className="stack-card-btn"
+                              >
+                                <TypeBadge type={parentNode?.node_type || 'observation'} size="sm" />
+                                {truncate(parentNode?.title || 'Unknown', 40)}
+                                {isInStack && ' ✓'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Child connections - click to add child card below */}
+                    {outgoing.length > 0 && (
+                      <div style={styles.stackCardConnections}>
+                        <span style={styles.stackCardConnectionLabel}>↓ Children ({outgoing.length})</span>
+                        <div style={styles.stackCardConnectionList}>
+                          {outgoing.map(e => {
+                            const childNode = getNodeById(e.to_node_id);
+                            const isInStack = cardStack.some(c => c.nodeId === e.to_node_id);
+                            return (
+                              <button
+                                key={e.id}
+                                onClick={() => !isInStack && handleSelectChild(e.to_node_id, e.edge_type)}
+                                style={{
+                                  ...styles.stackCardConnectionBtn,
+                                  ...(isInStack ? styles.stackCardConnectionBtnActive : {}),
+                                }}
+                                disabled={isInStack}
+                                className="stack-card-btn"
+                              >
+                                <EdgeBadge type={e.edge_type} />
+                                <TypeBadge type={childNode?.node_type || 'observation'} size="sm" />
+                                {truncate(childNode?.title || 'Unknown', 35)}
+                                {isInStack && ' ✓'}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              );
-            })()}
+                );
+              })}
 
-            {/* Branch Section */}
-            {(() => {
-              const branch = getBranch(selectedNode);
-              if (!branch) return null;
-              return (
-                <div style={styles.branchSection}>
-                  <h4 style={styles.sectionTitle}>Branch</h4>
-                  <span style={styles.branchTag}>{branch}</span>
-                </div>
-              );
-            })()}
-
-            {/* Connections - clickable to navigate */}
-            <ConnectionsList
-              node={selectedNode}
-              graphData={graphData}
-              onSelectNode={handleSelectNodeById}
-            />
-
-            <div style={styles.modalFooter}>
-              <span style={styles.modalHint}>Click connected nodes to navigate · Click outside or × to close</span>
+            {/* Stack summary footer */}
+            <div style={styles.stackFooter}>
+              <span>{cardStack.length} card{cardStack.length !== 1 ? 's' : ''} in stack</span>
+              <button onClick={closeAllCards} style={styles.stackClearBtn}>Clear All</button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Git-Log Modal */}
+      {showGitLogModal && (
+        <div style={styles.modalBackdrop} onClick={() => setShowGitLogModal(false)}>
+          <div style={{ ...styles.modal, maxWidth: '700px' }} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Git History</h3>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  onClick={() => setGitLogFilter('all')}
+                  style={{
+                    ...styles.gitLogFilterBtn,
+                    ...(gitLogFilter === 'all' ? styles.gitLogFilterBtnActive : {}),
+                  }}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setGitLogFilter('linked')}
+                  style={{
+                    ...styles.gitLogFilterBtn,
+                    ...(gitLogFilter === 'linked' ? styles.gitLogFilterBtnActive : {}),
+                  }}
+                >
+                  Linked Only
+                </button>
+                <button onClick={() => setShowGitLogModal(false)} style={styles.modalCloseBtn}>×</button>
+              </div>
+            </div>
+            <div style={{ maxHeight: '60vh', overflowY: 'auto', padding: '16px 0' }}>
+              {gitHistory
+                .filter(commit => {
+                  if (gitLogFilter === 'all') return true;
+                  return graphData.nodes.some(n => {
+                    const nodeCommit = getCommit(n);
+                    return nodeCommit === commit.hash || nodeCommit === commit.short_hash || commit.hash.startsWith(nodeCommit || '');
+                  });
+                })
+                .map((commit, index, arr) => {
+                  const linkedNodes = graphData.nodes.filter(n => {
+                    const nodeCommit = getCommit(n);
+                    return nodeCommit === commit.hash || nodeCommit === commit.short_hash || commit.hash.startsWith(nodeCommit || '');
+                  });
+                  const isLast = index === arr.length - 1;
+
+                  return (
+                    <div key={commit.hash} style={styles.gitLogItem}>
+                      {!isLast && <div style={styles.gitLogLine} />}
+                      <div style={styles.gitLogDot} />
+                      <div>
+                        <div style={styles.gitLogCommit}>
+                          <span style={{ fontFamily: 'monospace', color: '#0969da' }}>{commit.short_hash}</span>
+                          {index === 0 && <span style={styles.gitLogHeadBadge}>HEAD</span>}
+                          <span style={{ marginLeft: '8px' }}>{truncate(commit.message.split('\n')[0], 50)}</span>
+                        </div>
+                        <div style={styles.gitLogMeta}>
+                          {commit.author} · {new Date(commit.date).toLocaleDateString()}
+                          {commit.files_changed && ` · ${commit.files_changed} files`}
+                        </div>
+                        {linkedNodes.length > 0 && (
+                          <div style={{ marginTop: '8px' }}>
+                            {linkedNodes.map(node => (
+                              <div
+                                key={node.id}
+                                onClick={() => {
+                                  setShowGitLogModal(false);
+                                  setSelectedNodeId(node.id);
+                                }}
+                                style={styles.gitLogLinkedNode}
+                              >
+                                <TypeBadge type={node.node_type} size="sm" />
+                                <span>#{node.id}: {truncate(node.title, 40)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              {gitHistory.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#57606a', padding: '40px' }}>
+                  No git history available. Run <code>deciduous sync</code> to generate.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Commit Correlation Modal */}
+      {showCorrelationModal && (
+        <div style={styles.modalBackdrop} onClick={() => setShowCorrelationModal(false)}>
+          <div style={{ ...styles.modal, maxWidth: '1000px', width: '95%' }} onClick={e => e.stopPropagation()}>
+            <div style={styles.modalHeader}>
+              <h3 style={{ margin: 0, fontSize: '18px' }}>Commit-Decision Correlation</h3>
+              <button onClick={() => setShowCorrelationModal(false)} style={styles.modalCloseBtn}>×</button>
+            </div>
+            <div style={styles.correlationContainer}>
+              {/* Left column: Commits */}
+              <div style={styles.correlationColumn}>
+                <h4 style={styles.correlationColumnTitle}>Git Commits</h4>
+                {gitHistory.map(commit => {
+                  const isHovered = hoveredLink?.commit === commit.hash;
+                  const hasLinks = graphData.nodes.some(n => {
+                    const nodeCommit = getCommit(n);
+                    return nodeCommit === commit.hash || nodeCommit === commit.short_hash;
+                  });
+                  return (
+                    <div
+                      key={commit.hash}
+                      data-commit={commit.hash}
+                      onMouseEnter={() => hasLinks && setHoveredLink({ commit: commit.hash })}
+                      onMouseLeave={() => setHoveredLink(null)}
+                      style={{
+                        ...styles.correlationItem,
+                        ...(isHovered ? styles.correlationItemHighlight : {}),
+                        ...(hasLinks ? { borderLeft: '3px solid #0969da' } : {}),
+                      }}
+                    >
+                      <div style={{ fontFamily: 'monospace', fontSize: '12px', color: '#0969da' }}>
+                        {commit.short_hash}
+                      </div>
+                      <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                        {truncate(commit.message.split('\n')[0], 35)}
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#57606a' }}>
+                        {commit.author} · {new Date(commit.date).toLocaleDateString()}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Middle: Connection indicator */}
+              <div style={styles.correlationDivider}>
+                <div style={styles.correlationDividerLine} />
+              </div>
+
+              {/* Right column: Nodes with commits */}
+              <div style={styles.correlationColumn}>
+                <h4 style={styles.correlationColumnTitle}>Linked Decisions</h4>
+                {graphData.nodes
+                  .filter(n => getCommit(n))
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .map(node => {
+                    const nodeCommit = getCommit(node);
+                    const isHovered = hoveredLink?.commit && (
+                      nodeCommit === hoveredLink.commit ||
+                      gitHistory.find(c => c.hash === hoveredLink.commit)?.short_hash === nodeCommit
+                    );
+                    return (
+                      <div
+                        key={node.id}
+                        data-node={node.id}
+                        onMouseEnter={() => setHoveredLink({ node: node.id, commit: nodeCommit || undefined })}
+                        onMouseLeave={() => setHoveredLink(null)}
+                        onClick={() => {
+                          setShowCorrelationModal(false);
+                          setSelectedNodeId(node.id);
+                        }}
+                        style={{
+                          ...styles.correlationItem,
+                          ...(isHovered ? styles.correlationItemHighlight : {}),
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <TypeBadge type={node.node_type} size="sm" />
+                          <span style={{ fontFamily: 'monospace', fontSize: '11px', color: '#57606a' }}>
+                            #{node.id}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                          {truncate(node.title, 35)}
+                        </div>
+                        <div style={{ fontSize: '11px', color: '#57606a' }}>
+                          <CommitBadge commit={nodeCommit} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                {graphData.nodes.filter(n => getCommit(n)).length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#57606a', padding: '40px' }}>
+                    No nodes have linked commits. Use <code>--commit HEAD</code> when adding nodes.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Time Slider */}
+      {showTimeSlider && (
+        <div style={styles.timeSliderContainer}>
+          <button
+            onClick={() => {
+              if (isPlaying) {
+                setIsPlaying(false);
+              } else {
+                if (timeSliderValue >= 100) setTimeSliderValue(0);
+                setIsPlaying(true);
+              }
+            }}
+            style={styles.playButton}
+            title={isPlaying ? 'Pause' : 'Play'}
+          >
+            {isPlaying ? '⏸' : '▶'}
+          </button>
+
+          <div style={styles.speedButtons}>
+            {[0.5, 1, 2].map(speed => (
+              <button
+                key={speed}
+                onClick={() => setPlaybackSpeed(speed)}
+                style={{
+                  ...styles.speedButton,
+                  ...(playbackSpeed === speed ? styles.speedButtonActive : {}),
+                }}
+              >
+                {speed}x
+              </button>
+            ))}
+          </div>
+
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={timeSliderValue}
+            onChange={e => setTimeSliderValue(Number(e.target.value))}
+            style={styles.timeSlider}
+          />
+
+          <div style={styles.timeLabel}>
+            {new Date(currentTime).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric',
+            })}
+          </div>
+
+          <div style={styles.timeNodeCount}>
+            {timeFilteredNodeIds?.size ?? graphData.nodes.length} / {graphData.nodes.length} nodes
+          </div>
+        </div>
+      )}
+
+      {/* Ask Claude Modal */}
+      <AskResponseModal
+        isOpen={askModalOpen}
+        content={askResponse || ''}
+        question={askQuestion}
+        onClose={() => {
+          setAskModalOpen(false);
+          setAskQuestion('');
+        }}
+        isLoading={askLoading}
+      />
     </div>
-  );
-};
-
-// =============================================================================
-// Connections List
-// =============================================================================
-
-interface ConnectionsListProps {
-  node: DecisionNode;
-  graphData: GraphData;
-  onSelectNode: (id: number) => void;
-}
-
-const ConnectionsList: React.FC<ConnectionsListProps> = ({ node, graphData, onSelectNode }) => {
-  const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
-  const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
-
-  const getNode = (id: number) => graphData.nodes.find(n => n.id === id);
-
-  return (
-    <>
-      {incoming.length > 0 && (
-        <div style={styles.detailSection}>
-          <h4 style={styles.sectionTitle}>Incoming ({incoming.length})</h4>
-          {incoming.map(e => {
-            const n = getNode(e.from_node_id);
-            return (
-              <div key={e.id} onClick={() => onSelectNode(e.from_node_id)} style={styles.connection}>
-                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
-                <span>{truncate(n?.title || 'Unknown', 25)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {outgoing.length > 0 && (
-        <div style={styles.detailSection}>
-          <h4 style={styles.sectionTitle}>Outgoing ({outgoing.length})</h4>
-          {outgoing.map(e => {
-            const n = getNode(e.to_node_id);
-            return (
-              <div key={e.id} onClick={() => onSelectNode(e.to_node_id)} style={styles.connection}>
-                <EdgeBadge type={e.edge_type} />
-                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
-                <span>{truncate(n?.title || 'Unknown', 20)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </>
   );
 };
 
@@ -1028,6 +1593,56 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     cursor: 'pointer',
     transition: 'background-color 0.15s',
+  },
+  // Ask Claude button styles
+  askButton: {
+    marginLeft: '12px',
+    padding: '8px 16px',
+    backgroundColor: '#0969da',
+    border: 'none',
+    borderRadius: '6px',
+    color: '#ffffff',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+    boxShadow: '0 1px 3px rgba(9, 105, 218, 0.3)',
+  },
+  askInputContainer: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginLeft: '12px',
+  },
+  askInput: {
+    width: '280px',
+    padding: '8px 12px',
+    border: '2px solid #0969da',
+    borderRadius: '6px',
+    fontSize: '13px',
+    color: '#24292f',
+    outline: 'none',
+    backgroundColor: '#ffffff',
+  },
+  askSubmitBtn: {
+    padding: '8px 14px',
+    backgroundColor: '#0969da',
+    border: 'none',
+    borderRadius: '6px',
+    color: '#ffffff',
+    fontSize: '13px',
+    fontWeight: 600,
+    cursor: 'pointer',
+  },
+  askCancelBtn: {
+    padding: '6px 10px',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    color: '#57606a',
+    fontSize: '16px',
+    cursor: 'pointer',
+    lineHeight: 1,
   },
   fullscreenTopBar: {
     padding: '8px 20px',
@@ -1209,6 +1824,37 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     transition: 'background-color 0.15s',
   },
+  modalBackBtn: {
+    padding: '4px 10px',
+    border: 'none',
+    background: '#0969da',
+    color: '#ffffff',
+    borderRadius: '6px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    transition: 'background-color 0.15s',
+    marginRight: '8px',
+  },
+  modalBreadcrumb: {
+    padding: '8px 0 12px 0',
+    fontSize: '12px',
+    color: '#57606a',
+    borderBottom: '1px solid #d0d7de',
+    marginBottom: '12px',
+  },
+  breadcrumbItem: {
+    display: 'inline',
+  },
+  breadcrumbLink: {
+    color: '#0969da',
+    cursor: 'pointer',
+    textDecoration: 'none',
+  },
+  breadcrumbCurrent: {
+    color: '#24292f',
+    fontWeight: 500,
+  },
   modalTitle: {
     fontSize: '20px',
     fontWeight: 600,
@@ -1289,12 +1935,51 @@ const styles: Record<string, React.CSSProperties> = {
     padding: '10px 12px',
     backgroundColor: '#f6f8fa',
     borderRadius: '6px',
-    marginBottom: '6px',
-    cursor: 'pointer',
     fontSize: '13px',
     color: '#24292f',
     transition: 'background-color 0.15s',
     border: '1px solid #d0d7de',
+  },
+  connectionWrapper: {
+    marginBottom: '6px',
+  },
+  expandArrow: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '2px 6px',
+    fontSize: '10px',
+    color: '#57606a',
+    borderRadius: '3px',
+    transition: 'background-color 0.15s',
+    flexShrink: 0,
+  },
+  expandArrowDisabled: {
+    color: '#d0d7de',
+    cursor: 'default',
+  },
+  connectionTitle: {
+    cursor: 'pointer',
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap' as const,
+  },
+  expandedDescription: {
+    padding: '10px 12px 10px 36px',
+    backgroundColor: '#ffffff',
+    borderLeft: '3px solid #d0d7de',
+    marginLeft: '12px',
+    marginTop: '-1px',
+    marginBottom: '0',
+    fontSize: '12px',
+    color: '#57606a',
+    lineHeight: '1.5',
+    whiteSpace: 'pre-wrap' as const,
+    borderBottomLeftRadius: '6px',
+    borderBottomRightRadius: '6px',
+    border: '1px solid #d0d7de',
+    borderTop: 'none',
   },
   // Prompt section styles
   promptSection: {
@@ -1347,5 +2032,407 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     fontSize: '12px',
     fontFamily: 'monospace',
+  },
+  // Git Log Modal styles
+  gitLogFilterBtn: {
+    padding: '4px 12px',
+    fontSize: '12px',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    color: '#24292f',
+  },
+  gitLogFilterBtnActive: {
+    backgroundColor: '#0969da',
+    color: '#fff',
+    borderColor: '#0969da',
+  },
+  gitLogItem: {
+    position: 'relative',
+    paddingLeft: '28px',
+    marginBottom: '16px',
+  },
+  gitLogLine: {
+    position: 'absolute',
+    left: '6px',
+    top: '18px',
+    bottom: '-16px',
+    width: '2px',
+    backgroundColor: '#d0d7de',
+  },
+  gitLogDot: {
+    position: 'absolute',
+    left: '0',
+    top: '4px',
+    width: '14px',
+    height: '14px',
+    borderRadius: '50%',
+    backgroundColor: '#3b82f6',
+    border: '2px solid #fff',
+    boxShadow: '0 0 0 1px #d0d7de',
+  },
+  gitLogCommit: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: '#24292f',
+    display: 'flex',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '4px',
+  },
+  gitLogHeadBadge: {
+    backgroundColor: '#ddf4ff',
+    color: '#0969da',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    fontWeight: 600,
+    marginLeft: '6px',
+  },
+  gitLogMeta: {
+    fontSize: '12px',
+    color: '#57606a',
+    marginTop: '4px',
+  },
+  gitLogLinkedNode: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 12px',
+    marginTop: '6px',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    transition: 'background-color 0.15s, border-color 0.15s',
+  },
+  // Correlation View styles
+  correlationContainer: {
+    display: 'flex',
+    height: '500px',
+    gap: '0',
+  },
+  correlationColumn: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '16px',
+    borderRight: '1px solid #d0d7de',
+  },
+  correlationColumnTitle: {
+    fontSize: '12px',
+    color: '#57606a',
+    textTransform: 'uppercase',
+    fontWeight: 600,
+    marginBottom: '12px',
+    marginTop: 0,
+  },
+  correlationDivider: {
+    width: '60px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  correlationDividerLine: {
+    width: '2px',
+    height: '100%',
+    backgroundColor: '#d0d7de',
+    backgroundImage: 'repeating-linear-gradient(180deg, #0969da 0, #0969da 4px, transparent 4px, transparent 8px)',
+  },
+  correlationItem: {
+    padding: '12px',
+    marginBottom: '8px',
+    backgroundColor: '#f6f8fa',
+    borderRadius: '6px',
+    border: '1px solid #d0d7de',
+    transition: 'background-color 0.15s, border-color 0.15s',
+  },
+  correlationItemHighlight: {
+    backgroundColor: '#ddf4ff',
+    borderColor: '#0969da',
+  },
+  // Time Slider styles
+  timeSliderContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: '12px 20px',
+    backgroundColor: 'rgba(246, 248, 250, 0.95)',
+    borderTop: '1px solid #d0d7de',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    zIndex: 15,
+    backdropFilter: 'blur(8px)',
+  },
+  playButton: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    border: 'none',
+    backgroundColor: '#2da44e',
+    color: '#fff',
+    fontSize: '14px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  speedButtons: {
+    display: 'flex',
+    gap: '4px',
+  },
+  speedButton: {
+    padding: '4px 8px',
+    fontSize: '11px',
+    backgroundColor: '#f6f8fa',
+    border: '1px solid #d0d7de',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    color: '#24292f',
+  },
+  speedButtonActive: {
+    backgroundColor: '#0969da',
+    color: '#fff',
+    borderColor: '#0969da',
+  },
+  timeSlider: {
+    flex: 1,
+    height: '6px',
+    cursor: 'pointer',
+    accentColor: '#0969da',
+  },
+  timeLabel: {
+    fontSize: '12px',
+    color: '#24292f',
+    fontWeight: 500,
+    minWidth: '100px',
+    textAlign: 'right',
+  },
+  timeNodeCount: {
+    fontSize: '11px',
+    color: '#57606a',
+    minWidth: '80px',
+    textAlign: 'right',
+  },
+  // Card Stack styles - visual parent/child navigation
+  cardStackBackdrop: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 200,
+    backdropFilter: 'blur(2px)',
+  },
+  cardStackContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0',
+    maxHeight: '85vh',
+    overflowY: 'auto',
+    padding: '20px',
+    width: '95%',
+    maxWidth: '800px',
+  },
+  stackCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: '12px',
+    padding: '16px 20px',
+    marginBottom: '4px',
+    boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+    border: '1px solid #d0d7de',
+    position: 'relative',
+    // Animation applied via style prop based on relation
+    transition: 'transform 0.25s ease-out, opacity 0.25s ease-out, box-shadow 0.2s ease',
+  },
+  stackCardHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '12px',
+  },
+  stackCardHeaderLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+  },
+  stackCardClose: {
+    width: '28px',
+    height: '28px',
+    border: 'none',
+    background: '#f6f8fa',
+    color: '#57606a',
+    borderRadius: '6px',
+    fontSize: '18px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'background-color 0.15s, color 0.15s',
+    flexShrink: 0,
+  },
+  relationBadgeParent: {
+    backgroundColor: '#f5f0ff',
+    color: '#8250df',
+    padding: '3px 8px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  relationBadgeChild: {
+    backgroundColor: '#dafbe1',
+    color: '#1a7f37',
+    padding: '3px 8px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  relationBadgeRoot: {
+    backgroundColor: '#ddf4ff',
+    color: '#0969da',
+    padding: '3px 8px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    fontWeight: 700,
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  stackCardTitle: {
+    fontSize: '18px',
+    fontWeight: 600,
+    margin: '0 0 6px 0',
+    color: '#24292f',
+    lineHeight: 1.3,
+  },
+  stackCardMeta: {
+    fontSize: '12px',
+    color: '#57606a',
+    margin: '0 0 12px 0',
+  },
+  stackCardDescription: {
+    fontSize: '14px',
+    color: '#24292f',
+    lineHeight: 1.6,
+    margin: '0 0 12px 0',
+    padding: '10px 12px',
+    backgroundColor: '#f6f8fa',
+    borderRadius: '6px',
+    borderLeft: '3px solid #d0d7de',
+  },
+  stackCardPrompt: {
+    fontSize: '13px',
+    color: '#57606a',
+    fontStyle: 'italic',
+    padding: '12px 14px',
+    backgroundColor: '#fffbeb',
+    borderRadius: '6px',
+    borderLeft: '3px solid #f59e0b',
+    marginBottom: '12px',
+    lineHeight: 1.6,
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
+    maxHeight: '400px',
+    overflowY: 'auto',
+  },
+  stackCardCommit: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 12px',
+    backgroundColor: '#f6f8fa',
+    borderRadius: '6px',
+    marginBottom: '12px',
+    flexWrap: 'wrap',
+  },
+  stackCardCommitMsg: {
+    fontSize: '12px',
+    color: '#57606a',
+    fontStyle: 'italic',
+  },
+  stackCardConnections: {
+    marginTop: '12px',
+    padding: '12px',
+    backgroundColor: '#f6f8fa',
+    borderRadius: '8px',
+    border: '1px solid #e1e4e8',
+  },
+  stackCardConnectionLabel: {
+    fontSize: '11px',
+    fontWeight: 600,
+    color: '#57606a',
+    textTransform: 'uppercase',
+    marginBottom: '8px',
+    display: 'block',
+    letterSpacing: '0.5px',
+  },
+  stackCardConnectionList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    maxHeight: '200px',
+    overflowY: 'auto',
+    paddingRight: '4px',
+  },
+  stackCardConnectionBtn: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    padding: '8px 12px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    color: '#24292f',
+    textAlign: 'left',
+    transition: 'background-color 0.15s, border-color 0.15s, transform 0.1s',
+    width: '100%',
+  },
+  stackCardConnectionBtnActive: {
+    backgroundColor: '#ddf4ff',
+    borderColor: '#0969da',
+    color: '#0969da',
+    cursor: 'default',
+  },
+  stackCardMore: {
+    fontSize: '12px',
+    color: '#57606a',
+    fontStyle: 'italic',
+    padding: '4px 0',
+  },
+  stackFooter: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '12px 16px',
+    backgroundColor: '#f6f8fa',
+    borderRadius: '8px',
+    marginTop: '8px',
+    fontSize: '12px',
+    color: '#57606a',
+  },
+  stackClearBtn: {
+    padding: '6px 12px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    color: '#cf222e',
+    fontSize: '12px',
+    cursor: 'pointer',
+    transition: 'background-color 0.15s, border-color 0.15s',
   },
 };

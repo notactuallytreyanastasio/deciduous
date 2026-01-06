@@ -24,6 +24,8 @@ interface CalloutLinesProps {
   onSelectNode: (node: DecisionNode) => void;
   /** Pan/zoom to node location */
   onNavigateToNode?: (node: DecisionNode) => void;
+  /** Add node to card stack (for visual card stack integration) */
+  onAddToCardStack?: (nodeId: number, relation: 'root' | 'parent' | 'child', edgeType?: string) => void;
 }
 
 // Desktop: Rich card dimensions - taller for connection info
@@ -323,6 +325,7 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
   containerHeight,
   onSelectNode,
   onNavigateToNode,
+  onAddToCardStack,
 }) => {
   const [hoveredNodeId, setHoveredNodeId] = useState<number | null>(null);
   const [mobileSelectedNode, setMobileSelectedNode] = useState<DecisionNode | null>(null);
@@ -1046,16 +1049,10 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               {chainSearch && chainData.totalAncestors > 0 ? 'No matches' : 'Root node'}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {chainData.ancestors.slice(0, chainSearch ? 15 : 5).map((node) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+              {chainData.ancestors.map((node) => (
                 <div
                   key={node.id}
-                  onClick={() => {
-                    if (onNavigateToNode) {
-                      onNavigateToNode(node);
-                    }
-                    setExpandedNodeId(node.id);
-                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1063,8 +1060,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                     padding: '6px 8px',
                     backgroundColor: '#f6f8fa',
                     borderRadius: 4,
-                    cursor: 'pointer',
                     fontSize: 12,
+                    flexShrink: 0,
                   }}
                 >
                   <span
@@ -1079,14 +1076,42 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   >
                     {node.node_type.slice(0, 3).toUpperCase()}
                   </span>
-                  <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {truncate(node.title, 30)}
+                  <span
+                    onClick={() => {
+                      if (onNavigateToNode) {
+                        onNavigateToNode(node);
+                      }
+                      setExpandedNodeId(node.id);
+                    }}
+                    style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                  >
+                    {truncate(node.title, 22)}
                   </span>
+                  {/* Add to Card Stack button */}
+                  {onAddToCardStack && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddToCardStack(node.id, 'parent');
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        backgroundColor: '#f5f0ff',
+                        border: '1px solid #8250df',
+                        borderRadius: 4,
+                        color: '#8250df',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Add to card stack"
+                    >
+                      +Stack
+                    </button>
+                  )}
                 </div>
               ))}
-              {chainData.ancestors.length > (chainSearch ? 15 : 5) && (
-                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.ancestors.length - (chainSearch ? 15 : 5)} more</div>
-              )}
             </div>
           )}
         </div>
@@ -1102,7 +1127,27 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
             fontSize: 12,
           }}
         >
-          <div style={{ fontSize: 10, color: '#6e7781', marginBottom: 2 }}>CURRENT</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+            <span style={{ fontSize: 10, color: '#6e7781' }}>CURRENT</span>
+            {onAddToCardStack && (
+              <button
+                onClick={() => onAddToCardStack(expandedNode.id, 'root')}
+                style={{
+                  padding: '2px 8px',
+                  backgroundColor: '#ddf4ff',
+                  border: '1px solid #0969da',
+                  borderRadius: 4,
+                  color: '#0969da',
+                  fontSize: 10,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                title="Start card stack with this node"
+              >
+                Open Stack
+              </button>
+            )}
+          </div>
           <div style={{ fontWeight: 600 }}>{truncate(expandedNode.title, 35)}</div>
         </div>
 
@@ -1116,17 +1161,10 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
               {chainSearch && chainData.totalDescendants > 0 ? 'No matches' : 'Leaf node'}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {chainData.descendants.slice(0, chainSearch ? 15 : 5).map((node) => (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 180, overflowY: 'auto', paddingRight: 4 }}>
+              {chainData.descendants.map((node) => (
                 <div
                   key={node.id}
-                  onClick={() => {
-                    // Zoom to node and update panel to show its info
-                    if (onNavigateToNode) {
-                      onNavigateToNode(node);
-                    }
-                    setExpandedNodeId(node.id);
-                  }}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -1134,8 +1172,8 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                     padding: '6px 8px',
                     backgroundColor: '#f6f8fa',
                     borderRadius: 4,
-                    cursor: 'pointer',
                     fontSize: 12,
+                    flexShrink: 0,
                   }}
                 >
                   <span
@@ -1150,14 +1188,43 @@ export const CalloutLines: React.FC<CalloutLinesProps> = ({
                   >
                     {node.node_type.slice(0, 3).toUpperCase()}
                   </span>
-                  <span style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {truncate(node.title, 30)}
+                  <span
+                    onClick={() => {
+                      // Zoom to node and update panel to show its info
+                      if (onNavigateToNode) {
+                        onNavigateToNode(node);
+                      }
+                      setExpandedNodeId(node.id);
+                    }}
+                    style={{ color: '#24292f', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer' }}
+                  >
+                    {truncate(node.title, 22)}
                   </span>
+                  {/* Add to Card Stack button */}
+                  {onAddToCardStack && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAddToCardStack(node.id, 'child');
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        backgroundColor: '#dafbe1',
+                        border: '1px solid #1a7f37',
+                        borderRadius: 4,
+                        color: '#1a7f37',
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title="Add to card stack"
+                    >
+                      +Stack
+                    </button>
+                  )}
                 </div>
               ))}
-              {chainData.descendants.length > (chainSearch ? 15 : 5) && (
-                <div style={{ fontSize: 11, color: '#6e7781' }}>+{chainData.descendants.length - (chainSearch ? 15 : 5)} more</div>
-              )}
             </div>
           )}
         </div>
