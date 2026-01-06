@@ -893,7 +893,7 @@
                 <span class="stat-label">Connections</span>
             </a>
             <div class="stat-item">
-                <span class="stat-num">12</span>
+                <span class="stat-num" id="days-count">--</span>
                 <span class="stat-label">Days of Development</span>
             </div>
             <div class="stat-item">
@@ -1315,6 +1315,12 @@
     </div>
 
     <script>
+        // Calculate days since project started (Dec 4, 2025)
+        const projectStart = new Date('2025-12-04');
+        const today = new Date();
+        const daysDiff = Math.floor((today - projectStart) / (1000 * 60 * 60 * 24));
+        document.getElementById('days-count').textContent = daysDiff;
+
         // Fetch actual counts from graph data
         fetch('graph-data.json')
             .then(r => r.json())
