@@ -92,7 +92,11 @@ pub fn init_project() -> Result<(), String> {
 
     // Write settings.json with hooks configuration
     let settings_path = claude_base.join("settings.json");
-    write_file_if_missing(&settings_path, CLAUDE_SETTINGS_JSON, ".claude/settings.json")?;
+    write_file_if_missing(
+        &settings_path,
+        CLAUDE_SETTINGS_JSON,
+        ".claude/settings.json",
+    )?;
 
     // Append to or create CLAUDE.md
     let claude_md_path = cwd.join("CLAUDE.md");
@@ -248,7 +252,11 @@ pub fn update_tooling() -> Result<(), String> {
 
     // Overwrite settings.json with hooks configuration
     let settings_path = claude_base.join("settings.json");
-    write_file_overwrite(&settings_path, CLAUDE_SETTINGS_JSON, ".claude/settings.json")?;
+    write_file_overwrite(
+        &settings_path,
+        CLAUDE_SETTINGS_JSON,
+        ".claude/settings.json",
+    )?;
 
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");

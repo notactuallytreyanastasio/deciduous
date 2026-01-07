@@ -15,10 +15,6 @@ pub enum CheckMode {
     Direct(String),
     /// Claude Code: JSON on stdin with tool_input.command
     Claude,
-    /// Windsurf: JSON on stdin with command_line
-    Windsurf,
-    /// OpenCode: JSON on stdin
-    OpenCode,
 }
 
 /// Result of checking a command
@@ -41,8 +37,6 @@ pub fn check_command(mode: CheckMode, config: &GitGuardConfig) -> CheckResult {
     let command = match mode {
         CheckMode::Direct(cmd) => cmd,
         CheckMode::Claude => parse_claude_stdin(),
-        CheckMode::Windsurf => parse_windsurf_stdin(),
-        CheckMode::OpenCode => parse_opencode_stdin(),
     };
 
     // Empty command or not a git command - skip
@@ -130,50 +124,6 @@ fn parse_claude_stdin() -> String {
         .to_string()
 }
 
-/// Parse Windsurf Cascade pre_run_command JSON from stdin
-///
-/// Expected format:
-/// ```json
-/// {
-///   "command_line": "git push --force origin main",
-///   "cwd": "/path/to/project"
-/// }
-/// ```
-fn parse_windsurf_stdin() -> String {
-    let mut input = String::new();
-    if io::stdin().read_to_string(&mut input).is_err() {
-        return String::new();
-    }
-
-    let parsed: Value = match serde_json::from_str(&input) {
-        Ok(v) => v,
-        Err(_) => return String::new(),
-    };
-
-    parsed["command_line"].as_str().unwrap_or("").to_string()
-}
-
-/// Parse OpenCode JSON from stdin
-fn parse_opencode_stdin() -> String {
-    let mut input = String::new();
-    if io::stdin().read_to_string(&mut input).is_err() {
-        return String::new();
-    }
-
-    let parsed: Value = match serde_json::from_str(&input) {
-        Ok(v) => v,
-        Err(_) => return String::new(),
-    };
-
-    // Try common field names
-    parsed["command"]
-        .as_str()
-        .or_else(|| parsed["cmd"].as_str())
-        .or_else(|| parsed["command_line"].as_str())
-        .unwrap_or("")
-        .to_string()
-}
-
 /// Format check result as JSON for Claude Code hooks
 pub fn format_claude_response(result: &CheckResult) -> String {
     match result {
@@ -196,21 +146,6 @@ pub fn format_claude_response(result: &CheckResult) -> String {
                 }
             })
             .to_string()
-        }
-    }
-}
-
-/// Format check result as JSON for Windsurf hooks
-pub fn format_windsurf_response(result: &CheckResult) -> String {
-    match result {
-        CheckResult::Allow | CheckResult::Skip => String::new(),
-        CheckResult::Block { reason, guidance } => {
-            let mut message = format!("Git Guard: {}", reason);
-            if let Some(guide) = guidance {
-                message.push_str("\n\n");
-                message.push_str(guide);
-            }
-            message
         }
     }
 }

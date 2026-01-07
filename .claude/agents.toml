@@ -98,31 +98,23 @@ When working on web viewer:
 
 [agents.tooling]
 name = "Tooling/Templates Agent"
-description = "Editor integrations, slash commands, rules, and init templates"
+description = "Claude Code slash commands, agents.toml, and init templates"
 file_patterns = [
     ".claude/**/*.md",
     ".claude/**/*.toml",
-    ".windsurf/**/*.md",
-    ".opencode/**/*.md",
-    ".codex/**/*.md",
     "CLAUDE.md",
-    "AGENTS.md",
-    "src/init.rs"
+    "src/init/**/*.rs"
 ]
 focus_areas = [
     "Claude Code slash commands and configuration",
-    "Windsurf rules and memories",
-    "OpenCode and Codex prompt templates",
-    "Template sync between actual files and src/init.rs",
-    "Editor-agnostic deciduous workflow instructions"
+    "Template sync between actual files and src/init/ templates",
+    "Subagent configuration in agents.toml"
 ]
 instructions = """
 When working on tooling:
-- CRITICAL: If you modify .claude/commands/*.md, also update src/init.rs templates
-- Templates in init.rs MUST match actual files to avoid drift
-- Test with: deciduous init --claude (in a temp directory)
-- Each editor has different syntax (frontmatter, triggers, etc.)
-- Keep instructions consistent across all editors
+- CRITICAL: If you modify .claude/commands/*.md, also update src/init/templates.rs
+- Templates in init/templates.rs MUST match actual files to avoid drift
+- Test with: deciduous init (in a temp directory)
 """
 
 [agents.docs]

@@ -782,7 +782,12 @@ fn main() {
                         };
 
                         println!();
-                        println!("{} {} {}", "Node".bold(), format!("#{}", id).cyan(), type_colored);
+                        println!(
+                            "{} {} {}",
+                            "Node".bold(),
+                            format!("#{}", id).cyan(),
+                            type_colored
+                        );
                         println!("{}", "─".repeat(60));
                         println!("{}: {}", "Title".bold(), node.title);
 
@@ -800,7 +805,8 @@ fn main() {
                                 println!();
                                 println!("{}", "Metadata".bold().underline());
 
-                                if let Some(conf) = meta.get("confidence").and_then(|v| v.as_i64()) {
+                                if let Some(conf) = meta.get("confidence").and_then(|v| v.as_i64())
+                                {
                                     let conf_colored = if conf >= 80 {
                                         format!("{}%", conf).green()
                                     } else if conf >= 50 {
@@ -820,10 +826,8 @@ fn main() {
                                 }
 
                                 if let Some(files) = meta.get("files").and_then(|v| v.as_array()) {
-                                    let file_list: Vec<&str> = files
-                                        .iter()
-                                        .filter_map(|f| f.as_str())
-                                        .collect();
+                                    let file_list: Vec<&str> =
+                                        files.iter().filter_map(|f| f.as_str()).collect();
                                     if !file_list.is_empty() {
                                         println!("  {}: {}", "Files".bold(), file_list.join(", "));
                                     }
@@ -842,14 +846,10 @@ fn main() {
 
                         // Get edges
                         if let Ok(edges) = db.get_all_edges() {
-                            let incoming: Vec<_> = edges
-                                .iter()
-                                .filter(|e| e.to_node_id == id)
-                                .collect();
-                            let outgoing: Vec<_> = edges
-                                .iter()
-                                .filter(|e| e.from_node_id == id)
-                                .collect();
+                            let incoming: Vec<_> =
+                                edges.iter().filter(|e| e.to_node_id == id).collect();
+                            let outgoing: Vec<_> =
+                                edges.iter().filter(|e| e.from_node_id == id).collect();
 
                             if !incoming.is_empty() || !outgoing.is_empty() {
                                 println!();
@@ -866,9 +866,17 @@ fn main() {
                                         _ => edge.edge_type.white(),
                                     };
                                     if rationale.is_empty() {
-                                        println!("    #{} ─[{}]→ here", edge.from_node_id, edge_type);
+                                        println!(
+                                            "    #{} ─[{}]→ here",
+                                            edge.from_node_id, edge_type
+                                        );
                                     } else {
-                                        println!("    #{} ─[{}]→ here: {}", edge.from_node_id, edge_type, rationale.dimmed());
+                                        println!(
+                                            "    #{} ─[{}]→ here: {}",
+                                            edge.from_node_id,
+                                            edge_type,
+                                            rationale.dimmed()
+                                        );
                                     }
                                 }
                             }
@@ -885,7 +893,12 @@ fn main() {
                                     if rationale.is_empty() {
                                         println!("    here ─[{}]→ #{}", edge_type, edge.to_node_id);
                                     } else {
-                                        println!("    here ─[{}]→ #{}: {}", edge_type, edge.to_node_id, rationale.dimmed());
+                                        println!(
+                                            "    here ─[{}]→ #{}: {}",
+                                            edge_type,
+                                            edge.to_node_id,
+                                            rationale.dimmed()
+                                        );
                                     }
                                 }
                             }

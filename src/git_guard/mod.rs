@@ -1,7 +1,6 @@
 //! Git Guard - Runtime-enforced git safety rules
 //!
-//! Provides command-line git safety enforcement that works across
-//! all AI coding tools (Claude Code, Windsurf, OpenCode, Codex).
+//! Provides command-line git safety enforcement for Claude Code.
 //!
 //! ## Architecture
 //!
@@ -32,7 +31,7 @@ mod hooks;
 mod logging;
 mod rules;
 
-pub use check::{check_command, format_claude_response, format_windsurf_response, CheckMode, CheckResult};
+pub use check::{check_command, format_claude_response, CheckMode, CheckResult};
 pub use config::GitGuardConfig;
 pub use hooks::{check_commit_message, handle_hook, HookType};
 pub use logging::log_command;

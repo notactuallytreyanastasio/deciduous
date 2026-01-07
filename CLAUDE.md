@@ -218,7 +218,7 @@ When working on this project, identify which domain the work belongs to and use 
 | `rust-core` | CLI, database, export/sync | `src/main.rs`, `src/db.rs`, `src/export.rs` |
 | `tui` | Terminal UI with Ratatui | `src/tui/**/*.rs` |
 | `web` | React/TypeScript viewer | `web/src/**/*.{ts,tsx}` |
-| `tooling` | Editor integrations | `.claude/`, `.windsurf/`, `src/init.rs` |
+| `tooling` | Claude Code configuration | `.claude/`, `CLAUDE.md`, `src/init/` |
 | `docs` | Documentation, guides | `docs/`, `README.md`, `ROADMAP.md` |
 | `ci` | Build, Actions, releases | `.github/workflows/`, `scripts/` |
 

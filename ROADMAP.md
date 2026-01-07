@@ -102,11 +102,11 @@
   - React + TypeScript + D3/Dagre
   - Components, hooks, views, styling
   - Focus: `web/src/views/`, `web/src/components/`, `web/src/hooks/`
-- [x] **Tooling/Templates Agent** (`.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md`)
+- [x] **Tooling/Templates Agent** (`.claude/`, `CLAUDE.md`)
   <!-- roadmap:item id="b8c9d0e1-f2a3-4b5c-6d7e-8f9a0b1c2d3e" outcome_change_id="" -->
-  - Editor integrations, slash commands, rules
-  - Template sync with `src/init.rs`
-  - Focus: `.claude/commands/`, `.windsurf/rules/`, tooling docs
+  - Claude Code slash commands and configuration
+  - Template sync with `src/init/`
+  - Focus: `.claude/commands/`, `CLAUDE.md`
 - [x] **Documentation Agent** (`docs/`, `README.md`, `ROADMAP.md`)
   <!-- roadmap:item id="c9d0e1f2-a3b4-5c6d-7e8f-9a0b1c2d3e4f" outcome_change_id="" -->
   - User-facing docs, guides, roadmap management
@@ -120,7 +120,6 @@
 - [x] **Fix `/context` command name collision** (renamed to `/recover`)
   <!-- roadmap:item id="e1f2a3b4-c5d6-7e8f-9a0b-1c2d3e4f5a6b" outcome_change_id="" -->
   - Renamed `.claude/commands/context.md` to `recover.md`
-  - Also renamed in `.windsurf/rules/` and `.opencode/command/`
   - Updated CLAUDE.md, README.md, and tooling docs
 
 ### Narrative User Guide
@@ -216,7 +215,7 @@
   - `post-commit` hook: auto-export current branch's decisions
   - `post-merge` hook: auto-apply any new patches
   - `pre-push` hook: ensure graph is synced and patches are committed
-- [ ] **Claude/Windsurf workflow updates**
+- [ ] **Claude Code workflow updates**
   <!-- roadmap:item id="2f9ee8ee-b6a9-440e-8231-00b10b6dd085" outcome_change_id="" -->
   - Update tooling templates to include auto-sync behavior
   - AI should do this automatically, not wait for user to ask
@@ -394,7 +393,7 @@
   - Click a node → see associated files
   - Show git diff for the commit linked to that node
   - Quick navigation to file locations
-- [ ] Update `.claude/commands/` and `.windsurf/rules/` templates
+- [ ] Update `.claude/commands/` templates
   <!-- roadmap:item id="0757d5ad-4cb9-4016-84dc-4e97d203ccbf" outcome_change_id="" -->
   - Include instructions to log file associations
   - `deciduous add action "..." --files <changed-files>`
@@ -591,18 +590,11 @@
   - Integration guide for `.claude/settings.json`
   - Example hook configurations for different workflow styles
 
-### Editor Memories Integration
+### Claude Code Memories Integration
 <!-- roadmap:section id="6d4a0665-85a3-4cc4-869e-a345dbea1383" -->
-- [ ] **Actually save memories correctly at runtime**
-  <!-- roadmap:item id="f9db3d48-0358-4233-be99-363bc18b63b0" outcome_change_id="" -->
-  - Windsurf creates memories during runtime - need to patch into that flow
-  - Currently memories are static; need dynamic memory creation as decisions happen
-  - Investigate Windsurf's memory creation API/mechanism
-  - Hook into the runtime to persist decision context as memories are created
-  - Ensure memories reflect real-time decision graph state
-- [ ] **Leverage Claude Code and Windsurf memories**
+- [ ] **Leverage Claude Code memories**
   <!-- roadmap:item id="bf93ff06-3f27-43fb-8597-16b8b3311338" outcome_change_id="" -->
-  - Both editors have "memories" features that persist across sessions
+  - Claude Code has "memories" features that persist across sessions
   - Could store decision graph summaries, recent goals, key patterns
   - Auto-populate memories with recent decision context
   - Memories could include: current goals, pending decisions, recent outcomes
@@ -611,15 +603,10 @@
   - Detect and update `.claude/memories/` or equivalent
   - Store project-specific decision patterns
   - "Last session worked on goal #X, consider continuing"
-- [ ] **Windsurf memories**
-  <!-- roadmap:item id="0a19a41f-7aff-453e-b874-83c497c94327" outcome_change_id="" -->
-  - Already have `.windsurf/memories.md` template
-  - Enhance with dynamic decision graph summaries
-  - Auto-retrieve relevant memories when starting sessions
 - [ ] **Memory-graph sync**
   <!-- roadmap:item id="14bb8c81-26c4-483c-96e9-dbbad3a88a2b" outcome_change_id="" -->
   - `deciduous memories export` - export decision summaries to memory format
-  - `deciduous memories update` - update editor memories with recent decisions
+  - `deciduous memories update` - update Claude Code memories with recent decisions
   - Bidirectional: memories inform context recovery
 
 ### Roadmap Skill & TUI Integration
@@ -680,8 +667,8 @@
   - Re-stage auto-fixed files before commit
 - [ ] Hook-aware templates
   <!-- roadmap:item id="c493b38f-61e6-48f0-a870-ef1bdefe2d1b" outcome_change_id="" -->
-  - Update `.claude/commands/` and `.windsurf/rules/` to mention pre-commit awareness
-  - Instruct LLMs to check for hooks before committing
+  - Update `.claude/commands/` to mention pre-commit awareness
+  - Instruct Claude to check for hooks before committing
 
 ### Git.log File Reliability
 <!-- roadmap:section id="66d64caf-4af3-494e-b8c5-c04ca26895d7" -->
@@ -700,44 +687,41 @@
 - [ ] Document git.log purpose and location in tooling files
   <!-- roadmap:item id="d14b1ccd-5fe3-40a3-a0c7-2f897ce25076" outcome_change_id="" -->
 
-### Template Sync (init.rs ↔ actual files)
+### Template Sync (init/ ↔ actual files)
 <!-- roadmap:section id="f53d0d43-4614-45c5-9afb-ec3d7039991b" -->
 - [x] **FIX: `deciduous update` destroys custom content in command files** (v0.8.2)
   <!-- roadmap:item id="3979af69-4ecc-46e4-8fc3-7b3fe6ea075e" outcome_change_id="" -->
-  - ~~Currently `update --claude` overwrites `.claude/commands/*.md` completely~~
+  - ~~Currently `update` overwrites `.claude/commands/*.md` completely~~
   - ~~This destroys all custom instructions users have added~~
-  - Fixed: init.rs templates now match actual files
+  - Fixed: init templates now match actual files
 - [ ] **Auto-detect when tooling files are out of sync**
   <!-- roadmap:item id="8d020391-0ef7-4fa0-8983-335a6c71004f" outcome_change_id="" -->
-  - When `.claude/commands/*.md`, `.windsurf/rules/*.md`, `CLAUDE.md`, or `AGENTS.md` are modified
-  - Remind/enforce updating corresponding templates in `src/init.rs`
-  - The templates in init.rs should match what's in the actual files
+  - When `.claude/commands/*.md` or `CLAUDE.md` are modified
+  - Remind/enforce updating corresponding templates in `src/init/templates.rs`
+  - The templates should match what's in the actual files
 - [ ] **Validation command**
   <!-- roadmap:item id="76d5313d-42e9-4244-8b2b-b4470169f742" outcome_change_id="" -->
   - `deciduous validate-templates` - check if templates match actual files
   - Warn if they've diverged
-  - Optionally auto-update init.rs from actual files
+  - Optionally auto-update templates from actual files
 - [ ] **Memory/hook for sync**
   <!-- roadmap:item id="853c3c2c-5118-4046-8b1a-6e7c42844ce6" outcome_change_id="" -->
-  - Add to Claude Code memories: "If you modify .claude/commands or CLAUDE.md, also update src/init.rs templates"
+  - Add to Claude Code memories: "If you modify .claude/commands or CLAUDE.md, also update src/init/templates.rs"
   - Could be a pre-commit check or a deciduous hook
 - [ ] **FULLY AUTOMATE template sync** (Critical)
   <!-- roadmap:item id="bdd46e3e-9b19-48f1-934b-52d1cc76a016" outcome_change_id="" -->
   - **Goal: Never manually sync templates again**
-  - Build script or CI step that extracts actual file contents into init.rs
-  - Single source of truth: the actual `.claude/`, `.windsurf/`, `CLAUDE.md`, `AGENTS.md` files
-  - `src/init.rs` templates are auto-generated from these files
+  - Build script or CI step that extracts actual file contents into templates.rs
+  - Single source of truth: the actual `.claude/` and `CLAUDE.md` files
+  - `src/init/templates.rs` constants are auto-generated from these files
   - Options:
     - `build.rs` script that reads files and generates template constants
-    - Pre-commit hook that regenerates init.rs template section
+    - Pre-commit hook that regenerates templates section
     - CI check that fails if templates don't match actual files
   - Include ALL tooling files:
     - `.claude/commands/decision.md`
     - `.claude/commands/recover.md`
-    - `.windsurf/rules/decision.md`
-    - `.windsurf/rules/recover.md`
     - `CLAUDE.md`
-    - `AGENTS.md`
   - Never have drift between what `deciduous init` creates and what the repo actually uses
 
 ---
@@ -796,7 +780,7 @@
 - [ ] Consolidate documentation
   <!-- roadmap:item id="0d10551c-88ba-4e74-bffc-6f76ea01f6c6" outcome_change_id="" -->
   - Single source of truth in CLAUDE.md (the canonical reference)
-  - .claude/commands/ and .windsurf/rules/ derive from CLAUDE.md patterns
+  - .claude/commands/ derives from CLAUDE.md patterns
   - README.md stays user-facing (installation, quick start)
 - [ ] Auto-generate tooling docs
   <!-- roadmap:item id="86cfe6af-cd29-4cb1-a6de-86461fc53993" outcome_change_id="" -->
@@ -923,7 +907,7 @@
 - [ ] **Integration with editor workflows**
   <!-- roadmap:item id="cc42fb18-c304-43dc-8cc2-c3d0d1897b96" outcome_change_id="" -->
   - Side panel in IDE showing live graph updates
-  - Works alongside Claude Code, Windsurf, Cursor
+  - Works alongside Claude Code
   - Non-blocking: viewer runs in separate process/terminal
 
 ### Live Graph Editor (Experimental)
@@ -1079,7 +1063,5 @@ This goes beyond simple integrations - documents, release notes, tags, PR bodies
 
 ## Future Enhancements
 <!-- roadmap:section id="00400a97-3edd-4b3d-a9b2-8a2ef30aa110" -->
-- [ ] Support for additional editors (Cursor, Copilot, etc.)
+- [ ] Consider support for additional editors in the future (Cursor, Copilot, etc.)
   <!-- roadmap:item id="e0367f85-b881-4bdb-a7d4-ef09719673d9" outcome_change_id="" -->
-- [ ] `deciduous init --all` to bootstrap for all supported editors at once
-  <!-- roadmap:item id="0442b8cf-1f85-44e9-9a42-89585d36ac91" outcome_change_id="" -->
