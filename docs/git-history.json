@@ -1,11 +1,11 @@
 [
   {
-    "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
-    "short_hash": "85b8b06",
+    "hash": "8ead1589ba572b237bd77c3879f443419ea7fa38",
+    "short_hash": "8ead158",
     "author": "Bobby Nathan",
-    "date": "2026-01-06T22:07:52-05:00",
-    "message": "docs: add OpenGraph image for guide page\n\n- Created guide-og.svg with workflow diagram matching other OG images\n- Converted to guide-og.png for social sharing\n- Added og: and twitter: meta tags to guide.html",
-    "files_changed": 3
+    "date": "2026-01-06T22:17:59-05:00",
+    "message": "release: v0.8.23 - Claude Code only, remove multi-editor support",
+    "files_changed": 2
   },
   {
     "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
@@ -416,6 +416,14 @@
     "files_changed": 5
   },
   {
+    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
+    "short_hash": "157aa70",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
+  },
+  {
     "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
     "short_hash": "9e9953a",
     "author": "Bobby Nathan",
@@ -430,14 +438,6 @@
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 4
-  },
-  {
-    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
-    "short_hash": "157aa70",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
-    "files_changed": 5
   },
   {
     "hash": "3be6e5ce199b274c285e1740b92e3054dc7f00e3",
@@ -1184,16 +1184,16 @@
     "files_changed": 15
   },
   {
-    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
-    "short_hash": "32f0047",
+    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
+    "short_hash": "b4c56bc",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
     "files_changed": 11
   },
   {
-    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
-    "short_hash": "b4c56bc",
+    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
+    "short_hash": "32f0047",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",

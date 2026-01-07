@@ -1,11 +1,11 @@
 [
   {
-    "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
-    "short_hash": "85b8b06",
+    "hash": "8ead1589ba572b237bd77c3879f443419ea7fa38",
+    "short_hash": "8ead158",
     "author": "Bobby Nathan",
-    "date": "2026-01-06T22:07:52-05:00",
-    "message": "docs: add OpenGraph image for guide page\n\n- Created guide-og.svg with workflow diagram matching other OG images\n- Converted to guide-og.png for social sharing\n- Added og: and twitter: meta tags to guide.html",
-    "files_changed": 3
+    "date": "2026-01-06T22:17:59-05:00",
+    "message": "release: v0.8.23 - Claude Code only, remove multi-editor support",
+    "files_changed": 2
   },
   {
     "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
