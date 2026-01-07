@@ -57,6 +57,7 @@
                 <a href="workflows/index.html" class="toc-title">Real-World Workflows</a>
                 <ul>
                     <li><a href="workflows/claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="workflows/archaeology.html">Project Archaeology</a></li>
                     <li><a href="workflows/session-recovery.html">Session Recovery</a></li>
                     <li><a href="workflows/pr-documentation.html">PR Documentation</a></li>
                 </ul>
@@ -108,6 +109,121 @@
                 <p>LLMs generate complex code fast. Reviewing it, understanding it, and maintaining it? That's on you. Deciduous gives you a structured record of every decision&mdash;what was considered, what was chosen, and why.</p>
             </div>
 
+            <h2>See It In Action</h2>
+
+            <p>Watch how deciduous captures a decision in seconds:</p>
+
+            <div class="session-demo">
+                <div class="session-header">
+                    <div class="traffic-lights">
+                        <span class="light red"></span>
+                        <span class="light yellow"></span>
+                        <span class="light green"></span>
+                    </div>
+                    <div class="session-title">Quick Demo: Capturing a Decision</div>
+                    <div class="session-controls">
+                        <button class="pause-btn">Pause</button>
+                        <button class="replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="session-step" style="--delay: 0">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous add goal "Add user authentication" -c 90</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 1.5">
+                        <div class="step-label output">output</div>
+                        <div class="step-content step-output step-success">
+                            <div>Created node #1: goal "Add user authentication"</div>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 3">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous add decision "Choose auth strategy" -c 85</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 4.5">
+                        <div class="step-label output">output</div>
+                        <div class="step-content step-output step-success">
+                            <div>Created node #2: decision "Choose auth strategy"</div>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 6">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous add option "JWT tokens" -c 80</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 7.5">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous add option "Session cookies" -c 75</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 9">
+                        <div class="step-label output">output</div>
+                        <div class="step-content step-output step-success">
+                            <div>Created node #3: option "JWT tokens"</div>
+                            <div>Created node #4: option "Session cookies"</div>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 11">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous link 1 2 -r "Need to decide auth approach"</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 12.5">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous link 2 3 -r "Stateless, good for API"</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 14">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous link 2 4 -r "Simpler but requires server state"</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 16">
+                        <div class="step-label output">output</div>
+                        <div class="step-content step-output">
+                            <div>Created edge: #1 -> #2 (leads_to)</div>
+                            <div>Created edge: #2 -> #3 (leads_to)</div>
+                            <div>Created edge: #2 -> #4 (leads_to)</div>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 18">
+                        <div class="step-label user">user</div>
+                        <div class="step-content">
+                            <code>deciduous nodes</code>
+                        </div>
+                    </div>
+                    <div class="session-step" style="--delay: 20">
+                        <div class="step-label output">output</div>
+                        <div class="step-content step-output">
+                            <div class="step-recovery-output">
+<span class="tree-line dim">ID  TYPE      STATUS  TITLE</span>
+<span class="tree-line goal">#1  goal      active  Add user authentication</span>
+<span class="tree-line decision">#2  decision  active  Choose auth strategy</span>
+<span class="tree-line option">#3  option    active  JWT tokens</span>
+<span class="tree-line option">#4  option    active  Session cookies</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pause-overlay">
+                    <div class="pause-message">
+                        <h3>Animation Paused</h3>
+                        <p>In just a few commands, we've captured a decision with its options and rationale. This graph persists across sessions.</p>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+                </div>
+            </div>
+
             <h2>What You'll Learn</h2>
 
             <p>This tutorial will take you from zero to productive with deciduous. By the end, you'll know how to:</p>
@@ -121,6 +237,43 @@
                 <li>Share decisions across a team with the patch system</li>
                 <li>Use all three viewers: TUI, web, and CLI</li>
             </ul>
+
+            <h2>The Workflow at a Glance</h2>
+
+            <p>This is what working with Claude Code and deciduous looks like:</p>
+
+            <pre class="ascii-diagram">
+                     ┌─────────────────────────────────────────┐
+                     │           SESSION START                 │
+                     │  Run /recover to restore context        │
+                     └──────────────────┬──────────────────────┘
+                                        │
+                     ┌──────────────────▼──────────────────────┐
+                     │           USER REQUEST                  │
+                     │  "Add rate limiting to the API"         │
+                     └──────────────────┬──────────────────────┘
+                                        │
+        ┌───────────────────────────────┼───────────────────────────────┐
+        │                               │                               │
+        ▼                               ▼                               ▼
+┌───────────────┐              ┌───────────────┐              ┌───────────────┐
+│  Log Goal     │              │  Implement    │              │  Log Outcome  │
+│  deciduous    │     ──▶      │  Write code   │     ──▶      │  deciduous    │
+│  add goal     │              │  Run tests    │              │  add outcome  │
+└───────────────┘              └───────────────┘              └───────────────┘
+        │                               │                               │
+        │                               │                               │
+        └───────────────────────────────┼───────────────────────────────┘
+                                        │
+                     ┌──────────────────▼──────────────────────┐
+                     │           SYNC & COMMIT                 │
+                     │  deciduous sync && git commit           │
+                     └──────────────────┬──────────────────────┘
+                                        │
+                     ┌──────────────────▼──────────────────────┐
+                     │           SESSION END                   │
+                     │  Context persists in graph              │
+                     └─────────────────────────────────────────┘</pre>
 
             <h2>Who This Is For</h2>
 
@@ -154,5 +307,7 @@
             </div>
         </article>
     </main>
+
+    <script src="terminal-demo.js"></script>
 </body>
 </html>

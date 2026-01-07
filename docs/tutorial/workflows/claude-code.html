@@ -24,6 +24,7 @@
                 <a href="index.html" class="toc-title active">Real-World Workflows</a>
                 <ul>
                     <li><a href="claude-code.html" class="active">The Claude Code Workflow</a></li>
+                    <li><a href="archaeology.html">Project Archaeology</a></li>
                     <li><a href="session-recovery.html">Session Recovery</a></li>
                     <li><a href="pr-documentation.html">PR Documentation</a></li>
                 </ul>
@@ -44,85 +45,173 @@
         <article>
             <h1>The Claude Code Workflow</h1>
 
-            <p>Let's see what a real Claude Code session looks like with deciduous.</p>
+            <p class="lead">Watch how Claude logs decisions in real-time as it builds a feature. This is what deciduous looks like in practice.</p>
 
-            <h2>A Complete Session</h2>
+            <h2>A Complete Session: Adding Rate Limiting</h2>
 
-            <p>Here's a realistic session where a user asks Claude to add rate limiting:</p>
+            <p>Here's an actual Claude Code session where a user asks for rate limiting. Watch how Claude logs the goal, considers options, makes decisions, and tracks the outcome&mdash;all in real-time.</p>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Claude Code Session</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; Add rate limiting to the API endpoints</span>
+            <!-- Main animated demo -->
+            <div class="session-demo" id="main-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code Session</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <!-- Pause overlay -->
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
 
-I'll implement rate limiting for your API. Let me first log this goal to the
-decision graph.
+                    <!-- User request -->
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Add rate limiting to the API endpoints</div>
+                    </div>
 
-<span class="command">deciduous add goal "Add rate limiting to API" -c 90 \
-    -p "User asked: Add rate limiting to the API endpoints"</span>
-<span class="output">Created node #47: goal "Add rate limiting to API"</span>
+                    <!-- Claude acknowledges and logs goal -->
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">I'll implement rate limiting for your API. Let me first log this goal to the decision graph.</div>
+                    </div>
 
-Now I need to decide on the approach. Let me log this decision point:
+                    <div class="session-step" style="--delay: 3s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add goal "Add rate limiting to API" -c 90 -p "User asked: Add rate limiting to the API endpoints"</div>
+                        <div class="step-success">Created node #47: goal "Add rate limiting to API"</div>
+                    </div>
 
-<span class="command">deciduous add decision "Choose rate limiting strategy" -c 75</span>
-<span class="output">Created node #48: decision "Choose rate limiting strategy"</span>
+                    <!-- Decision point -->
+                    <div class="session-step" style="--delay: 5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Now I need to decide on the approach. Let me log this decision point:</div>
+                    </div>
 
-<span class="command">deciduous link 47 48 -r "Deciding implementation approach"</span>
-<span class="output">Created edge: #47 -> #48 (leads_to)</span>
+                    <div class="session-step" style="--delay: 6.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add decision "Choose rate limiting strategy" -c 75</div>
+                        <div class="step-success">Created node #48: decision "Choose rate limiting strategy"</div>
+                    </div>
 
-I see a few options here:
+                    <div class="session-step" style="--delay: 8s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous link 47 48 -r "Deciding implementation approach"</div>
+                        <div class="step-output">Created edge: #47 -> #48 (leads_to)</div>
+                    </div>
 
-<span class="command">deciduous add option "Redis-based with sliding window" -c 80</span>
-<span class="output">Created node #49: option "Redis-based with sliding window"</span>
+                    <!-- Options -->
+                    <div class="session-step" style="--delay: 9.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">I see a few options here. Let me log them:</div>
+                    </div>
 
-<span class="command">deciduous add option "In-memory with token bucket" -c 70</span>
-<span class="output">Created node #50: option "In-memory with token bucket"</span>
+                    <div class="session-step" style="--delay: 11s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add option "Redis-based with sliding window" -c 80</div>
+                        <div class="step-success">Created node #49: option "Redis-based with sliding window"</div>
+                    </div>
 
-<span class="command">deciduous link 48 49 -r "Scales across instances, persistent"</span>
-<span class="command">deciduous link 48 50 -r "Simpler, but single-instance only"</span>
+                    <div class="session-step" style="--delay: 12.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add option "In-memory with token bucket" -c 70</div>
+                        <div class="step-success">Created node #50: option "In-memory with token bucket"</div>
+                    </div>
 
-Looking at your infrastructure (I see you're using Redis for sessions already),
-I recommend Redis-based rate limiting. This will scale across your multiple
-API instances.
+                    <div class="session-step" style="--delay: 14s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous link 48 49 -r "Scales across instances, persistent"</div>
+                        <div class="step-content code">deciduous link 48 50 -r "Simpler, but single-instance only"</div>
+                    </div>
 
-<span class="command">deciduous add action "Implementing Redis rate limiter" -c 85</span>
-<span class="output">Created node #51: action "Implementing Redis rate limiter"</span>
+                    <!-- Analysis and choice -->
+                    <div class="session-step" style="--delay: 16s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Looking at your infrastructure (I see you're using Redis for sessions already), I recommend Redis-based rate limiting. This will scale across your multiple API instances.</div>
+                    </div>
 
-<span class="command">deciduous link 48 51 --edge-type chosen \
-    -r "Redis already in stack, needs horizontal scaling"</span>
-<span class="output">Created edge: #48 -> #51 (chosen)</span>
+                    <!-- Action -->
+                    <div class="session-step" style="--delay: 18s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add action "Implementing Redis rate limiter" -c 85 -f "src/middleware/ratelimit.ts"</div>
+                        <div class="step-success">Created node #51: action "Implementing Redis rate limiter"</div>
+                    </div>
 
-Now let me implement this...
+                    <div class="session-step" style="--delay: 19.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous link 48 51 --edge-type chosen -r "Redis already in stack, needs horizontal scaling"</div>
+                        <div class="step-success">Created edge: #48 -> #51 (chosen)</div>
+                    </div>
 
-<em>[Claude writes the rate limiter code, creates middleware, adds tests...]</em>
+                    <!-- Implementation -->
+                    <div class="session-step" style="--delay: 21s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Now let me implement this...</div>
+                        <div class="step-files">Writing: src/middleware/ratelimit.ts, src/config/limits.ts, tests/ratelimit.test.ts</div>
+                    </div>
 
-Rate limiting is implemented! Let me record the outcome:
+                    <div class="session-step" style="--delay: 23s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-thinking">[Claude writes the rate limiter code, creates middleware, adds tests...]</div>
+                    </div>
 
-<span class="command">git add -A && git commit -m "feat: add Redis-based rate limiting"</span>
-<span class="output">[feature/rate-limiting abc123] feat: add Redis-based rate limiting
- 4 files changed, 187 insertions(+)</span>
+                    <!-- Commit -->
+                    <div class="session-step" style="--delay: 25s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Rate limiting is implemented! Let me commit and record the outcome:</div>
+                    </div>
 
-<span class="command">deciduous add outcome "Rate limiting working, 429s returned correctly" \
-    -c 95 --commit HEAD</span>
-<span class="output">Created node #52: outcome "Rate limiting working" [commit: abc123]</span>
+                    <div class="session-step" style="--delay: 26.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">git add -A && git commit -m "feat: add Redis-based rate limiting"</div>
+                        <div class="step-output">[feature/rate-limiting abc123] feat: add Redis-based rate limiting<br> 4 files changed, 187 insertions(+)</div>
+                    </div>
 
-<span class="command">deciduous link 51 52 -r "Implementation verified with tests"</span>
-<span class="output">Created edge: #51 -> #52 (leads_to)</span>
+                    <!-- Outcome -->
+                    <div class="session-step" style="--delay: 28.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add outcome "Rate limiting working, 429s returned correctly" -c 95 --commit HEAD</div>
+                        <div class="step-success">Created node #52: outcome "Rate limiting working" [commit: abc123]</div>
+                    </div>
 
-<span class="command">deciduous sync</span>
-<span class="output">Exported graph to docs/graph-data.json</span>
+                    <div class="session-step" style="--delay: 30s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous link 51 52 -r "Implementation verified with tests"</div>
+                        <div class="step-output">Created edge: #51 -> #52 (leads_to)</div>
+                    </div>
 
-Done! I've added Redis-based rate limiting with sliding window to all API endpoints.
-The decision graph has been updated so future sessions will know:
-- Why we chose Redis over in-memory (horizontal scaling)
-- The commit where this was implemented
-- The full decision chain from goal to outcome
+                    <!-- Sync -->
+                    <div class="session-step" style="--delay: 31.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous sync</div>
+                        <div class="step-output">Exported graph to docs/graph-data.json<br>&nbsp;&nbsp;52 nodes, 48 edges</div>
+                    </div>
+
+                    <!-- Summary -->
+                    <div class="session-step" style="--delay: 33s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Done! I've added Redis-based rate limiting to all API endpoints. The decision graph now captures:</div>
+                        <div class="step-recovery-output">
+                            <strong>What we built:</strong> Redis sliding window rate limiter<br>
+                            <strong>Why Redis:</strong> Already in stack, horizontal scaling needed<br>
+                            <strong>What was rejected:</strong> In-memory token bucket (single-instance)<br>
+                            <strong>Commit:</strong> abc123<br>
+                            <strong>Files:</strong> src/middleware/ratelimit.ts, src/config/limits.ts
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <h2>What Just Happened</h2>
 
-            <p>Let's break down the key patterns:</p>
+            <p>Let's break down the five key patterns you saw:</p>
 
             <h3>1. Log the Goal First</h3>
 
@@ -130,7 +219,7 @@ The decision graph has been updated so future sessions will know:
 
             <pre><span class="cmd">deciduous add goal "Add rate limiting" -c 90 -p "User asked: ..."</span></pre>
 
-            <p>The <code>-p</code> flag captures the prompt that triggered this work. This is crucial for future context recovery.</p>
+            <p>The <code>-p</code> flag captures the prompt that triggered this work. This is crucial for future context recovery&mdash;when a new session starts, Claude can see exactly what the user originally asked for.</p>
 
             <h3>2. Decisions Before Code</h3>
 
@@ -140,15 +229,15 @@ The decision graph has been updated so future sessions will know:
 <span class="cmd">deciduous add option "Redis-based with sliding window" -c 80</span>
 <span class="cmd">deciduous add option "In-memory with token bucket" -c 70</span></pre>
 
-            <p>This captures the reasoning <em>before</em> it happens, when the context is fresh.</p>
+            <p>This captures the reasoning <em>before</em> it happens, when the context is fresh. The options exist in the graph even if they're not chosen.</p>
 
-            <h3>3. Mark Chosen Actions</h3>
+            <h3>3. Mark the Chosen Path</h3>
 
             <p>When Claude picks an approach, it uses the <code>chosen</code> edge type:</p>
 
             <pre><span class="cmd">deciduous link 48 51 --edge-type chosen -r "Redis already in stack"</span></pre>
 
-            <p>This makes it clear which option was selected and why.</p>
+            <p>This makes it clear which option was selected and <em>why</em>. The rationale lives in the edge, not just a comment.</p>
 
             <h3>4. Link Commits to Outcomes</h3>
 
@@ -156,7 +245,7 @@ The decision graph has been updated so future sessions will know:
 
             <pre><span class="cmd">deciduous add outcome "Rate limiting working" -c 95 --commit HEAD</span></pre>
 
-            <p>This creates traceability between decisions and code.</p>
+            <p>This creates traceability between decisions and code. You can trace any commit back to the goal that spawned it.</p>
 
             <h3>5. Sync Before Push</h3>
 
@@ -166,16 +255,37 @@ The decision graph has been updated so future sessions will know:
 
             <h2>The Complete Decision Chain</h2>
 
-            <p>After this session, the graph contains:</p>
+            <p>After this session, the graph looks like this:</p>
 
-            <pre><span class="cmd">$ deciduous edges</span>
-<span class="output">From  To   Type       Rationale
-────────────────────────────────────────────────────────────────
-47    48   leads_to   Deciding implementation approach
-48    49   leads_to   Scales across instances, persistent
-48    50   leads_to   Simpler, but single-instance only
-48    51   chosen     Redis already in stack, needs horizontal scaling
-51    52   leads_to   Implementation verified with tests</span></pre>
+            <div class="session-demo" style="max-height: none;">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Decision Graph</span>
+                </div>
+                <div class="session-content" style="max-height: none;">
+                    <pre class="ascii-graph" style="background: transparent; margin: 0; padding: 0;">
+    <span class="tree-line goal">#47 [goal] Add rate limiting to API</span>
+        │
+        │ leads_to: "Deciding implementation approach"
+        ▼
+    <span class="tree-line decision">#48 [decision] Choose rate limiting strategy</span>
+        │
+        ├────────────────────┬────────────────────┐
+        │                    │                    │
+        ▼                    ▼                    ▼
+<span class="tree-line option">#49 [option]</span>       <span class="tree-line option">#50 [option]</span>       <span class="tree-line action">#51 [action]</span>
+<span class="tree-line option">Redis sliding</span>      <span class="tree-line option">In-memory</span>          <span class="tree-line action">Implementing Redis</span>
+<span class="tree-line option">window</span>             <span class="tree-line option">token bucket</span>       <span class="tree-line action">rate limiter</span>
+                                              │
+                                              │ <span style="color: #4ade80;">chosen</span>
+                                              ▼
+                                      <span class="tree-line outcome">#52 [outcome]</span>
+                                      <span class="tree-line outcome">Rate limiting working</span>
+                                      <span class="tree-line outcome">[commit: abc123]</span></pre>
+                </div>
+            </div>
 
             <p>Anyone (human or AI) can now query this to understand:</p>
             <ul>
@@ -184,6 +294,59 @@ The decision graph has been updated so future sessions will know:
                 <li><strong>Why</strong> was Redis chosen over in-memory?</li>
                 <li><strong>Where</strong> is the code? (commit abc123)</li>
             </ul>
+
+            <h2>Mid-Stream Direction Changes</h2>
+
+            <p>Sometimes the user changes direction during implementation. Here's how Claude captures that:</p>
+
+            <div class="session-demo" id="direction-change-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Direction Change</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Actually, use the token bucket algorithm instead of sliding window</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 2s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Got it! Let me capture this direction change and adjust the implementation.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 4s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add action "Switching to token bucket algorithm" -c 85 -p "User said: use token bucket instead of sliding window"</div>
+                        <div class="step-success">Created node #53: action "Switching to token bucket algorithm"</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 6s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous link 51 53 -r "User requested algorithm change"</div>
+                        <div class="step-output">Created edge: #51 -> #53 (leads_to)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 8s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Now I'll update the implementation to use token bucket. The graph now shows the pivot point&mdash;future sessions will see why we switched.</div>
+                    </div>
+                </div>
+            </div>
+
+            <p>The <code>-p</code> flag on the new action captures the exact moment the user redirected. This preserves the context of <em>why</em> the approach changed mid-stream.</p>
 
             <h2>The Workflow Summary</h2>
 
@@ -194,48 +357,30 @@ The decision graph has been updated so future sessions will know:
                     <li>Claude logs a <span class="node-goal">goal</span> with the prompt (<code>-p</code>)</li>
                     <li>Claude logs the <span class="node-decision">decision</span> point</li>
                     <li>Claude logs <span class="node-option">options</span> being considered</li>
-                    <li>Claude implements the chosen approach</li>
-                    <li>Claude logs the <span class="node-action">action</span> with <code>--edge-type chosen</code></li>
+                    <li>Claude implements and logs the <span class="node-action">action</span> with <code>--edge-type chosen</code></li>
                     <li>Claude commits and logs the <span class="node-outcome">outcome</span> with <code>--commit HEAD</code></li>
                     <li>Claude runs <code>deciduous sync</code></li>
                 </ol>
             </div>
 
-            <h2>Mid-Stream Direction Changes</h2>
-
-            <p>Sometimes the user changes direction during implementation. Capture this:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Claude Code Session (Direction Change)</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; Actually, use the token bucket algorithm instead of sliding window</span>
-
-Got it! Let me capture this direction change and adjust.
-
-<span class="command">deciduous add action "Switching to token bucket algorithm" -c 85 \
-    -p "User said: Actually, use the token bucket algorithm instead"</span>
-<span class="output">Created node #53: action "Switching to token bucket algorithm"</span>
-
-<span class="command">deciduous link 51 53 -r "User requested algorithm change"</span>
-<span class="output">Created edge: #51 -> #53 (leads_to)</span>
-
-Now I'll update the implementation to use token bucket...
-                </div>
+            <div class="next-section">
+                <span>Want to build a graph from an existing project?</span>
+                <a href="archaeology.html" class="btn">Project Archaeology &rarr;</a>
             </div>
-
-            <p>The <code>-p</code> flag captures when the user redirects work mid-stream. This preserves the context of <em>why</em> the approach changed.</p>
 
             <div class="page-nav">
                 <a href="index.html" class="prev">
                     <span class="label">Previous</span>
                     <span class="title">Real-World Workflows</span>
                 </a>
-                <a href="session-recovery.html" class="next">
+                <a href="archaeology.html" class="next">
                     <span class="label">Next</span>
-                    <span class="title">Session Recovery</span>
+                    <span class="title">Project Archaeology</span>
                 </a>
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>

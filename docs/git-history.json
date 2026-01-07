@@ -1,11 +1,19 @@
 [
   {
-    "hash": "8ead1589ba572b237bd77c3879f443419ea7fa38",
-    "short_hash": "8ead158",
+    "hash": "47d45fb04d111865993aab40705c33ccab41eca1",
+    "short_hash": "47d45fb",
     "author": "Bobby Nathan",
-    "date": "2026-01-06T22:17:59-05:00",
-    "message": "release: v0.8.23 - Claude Code only, remove multi-editor support",
-    "files_changed": 2
+    "date": "2026-01-06T22:20:36-05:00",
+    "message": "feat(tutorial): add animated terminal demos\n\n- Created terminal-demo.js animation system with pause/resume/replay\n- Added ~300 lines of CSS for terminal styling with step animations\n- Updated introduction page with quick demo and workflow diagram\n- Rewrote claude-code.html with 5 animated workflow demos\n- Rewrote session-recovery.html with 5 animated recovery demos\n- Added archaeology.html with 6 animated archaeology demos\n- Synced decision graph (962 nodes, 820 edges)\n\nFeatures:\n- macOS-style window chrome (red/yellow/green dots)\n- Step-by-step reveals with configurable timing\n- Pause overlay that fills terminal completely\n- Auto-scroll as content appears\n- Intersection Observer for triggering when visible\n- Color-coded labels (user/claude/output)",
+    "files_changed": 10
+  },
+  {
+    "hash": "e0670c0bf878d7850766477a7a91311a28b9f54f",
+    "short_hash": "e0670c0",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T22:20:36-05:00",
+    "message": "feat(tutorial): add animated terminal demos\n\n- Created terminal-demo.js animation system with pause/resume/replay\n- Added ~300 lines of CSS for terminal styling with step animations\n- Updated introduction page with quick demo and workflow diagram\n- Rewrote claude-code.html with 5 animated workflow demos\n- Rewrote session-recovery.html with 5 animated recovery demos\n- Added archaeology.html with 6 animated archaeology demos\n- Synced decision graph (962 nodes, 820 edges)\n\nFeatures:\n- macOS-style window chrome (red/yellow/green dots)\n- Step-by-step reveals with configurable timing\n- Pause overlay that fills terminal completely\n- Auto-scroll as content appears\n- Intersection Observer for triggering when visible\n- Color-coded labels (user/claude/output)",
+    "files_changed": 7
   },
   {
     "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
@@ -424,20 +432,20 @@
     "files_changed": 5
   },
   {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
-  },
-  {
     "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
     "short_hash": "e80d20f",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 4
+  },
+  {
+    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
+    "short_hash": "9e9953a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 3
   },
   {
     "hash": "3be6e5ce199b274c285e1740b92e3054dc7f00e3",

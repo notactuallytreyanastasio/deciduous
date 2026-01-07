@@ -24,6 +24,7 @@
                 <a href="index.html" class="toc-title active">Real-World Workflows</a>
                 <ul>
                     <li><a href="claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="archaeology.html">Project Archaeology</a></li>
                     <li><a href="session-recovery.html" class="active">Session Recovery</a></li>
                     <li><a href="pr-documentation.html">PR Documentation</a></li>
                 </ul>
@@ -44,7 +45,7 @@
         <article>
             <h1>Session Recovery</h1>
 
-            <p>Context compaction is inevitable. Sessions end. But the decision graph survives.</p>
+            <p class="lead">Context compaction is inevitable. Sessions end. But the decision graph survives. Watch how Claude recovers full context from scratch.</p>
 
             <h2>The Problem</h2>
 
@@ -56,59 +57,105 @@
                 <li>No understanding of <em>why</em> things were done a certain way</li>
             </ul>
 
-            <p>With deciduous, Claude can query the graph and recover all of this.</p>
+            <p>With deciduous, Claude can query the graph and recover all of this in seconds.</p>
 
-            <h2>The /recover Command</h2>
+            <h2>The /recover Command in Action</h2>
 
-            <p>At the start of a new session, the user (or Claude) runs <code>/recover</code>:</p>
+            <p>At the start of a new session, the user runs <code>/recover</code>. Watch what happens:</p>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Claude Code Session (New Session)</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; /recover</span>
+            <!-- Recovery demo -->
+            <div class="session-demo" id="recovery-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">New Claude Code Session</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
 
-Let me recover context from the decision graph...
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">/recover</div>
+                    </div>
 
-<span class="command">deciduous nodes --branch feature/rate-limiting</span>
-<span class="output">ID  Type      Title                              Status   Confidence
-─────────────────────────────────────────────────────────────────────
-47  goal      Add rate limiting to API           active   90
-48  decision  Choose rate limiting strategy      active   75
-49  option    Redis-based with sliding window    active   80
-50  option    In-memory with token bucket        active   70
-51  action    Implementing Redis rate limiter    active   85
-52  outcome   Rate limiting working              active   95</span>
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Recovering context from decision graph...</div>
+                    </div>
 
-<span class="command">deciduous edges</span>
-<span class="output">From  To   Type       Rationale
-────────────────────────────────────────────────────────────────
-47    48   leads_to   Deciding implementation approach
-48    49   leads_to   Scales across instances, persistent
-48    50   leads_to   Simpler, but single-instance only
-48    51   chosen     Redis already in stack, needs horizontal scaling
-51    52   leads_to   Implementation verified with tests</span>
+                    <div class="session-step" style="--delay: 3s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous nodes --branch feature/rate-limiting -n 20</div>
+                        <div class="step-output">Querying decisions on current branch...</div>
+                    </div>
 
-<span class="command">git log --oneline -5</span>
-<span class="output">abc123 feat: add Redis-based rate limiting
-def456 fix: user validation edge case
-...</span>
+                    <div class="session-step" style="--delay: 5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-recovery-output">
+                            <span class="tree-line goal">#47 [goal] Add rate limiting to API [90%]</span>
+                            <span class="tree-line decision">&nbsp;&nbsp;↳ #48 [decision] Choose rate limiting strategy [75%]</span>
+                            <span class="tree-line option">&nbsp;&nbsp;&nbsp;&nbsp;↳ #49 [option] Redis-based with sliding window [80%]</span>
+                            <span class="tree-line option">&nbsp;&nbsp;&nbsp;&nbsp;↳ #50 [option] In-memory with token bucket [70%]</span>
+                            <span class="tree-line action">&nbsp;&nbsp;&nbsp;&nbsp;↳ #51 [action] Implementing Redis rate limiter [85%]</span>
+                            <span class="tree-line outcome">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ #52 [outcome] Rate limiting working [95%] [commit: abc123]</span>
+                        </div>
+                    </div>
 
-<strong>Context Recovered:</strong>
+                    <div class="session-step" style="--delay: 7.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous edges | grep -E "(47|48|49|50|51|52)"</div>
+                    </div>
 
-• <strong>Current branch:</strong> feature/rate-limiting
-• <strong>Goal:</strong> Add rate limiting to the API
-• <strong>Decision made:</strong> Redis-based sliding window approach
-• <strong>Rationale:</strong> Redis already in use, needed to scale horizontally
-• <strong>Rejected:</strong> In-memory token bucket (single-instance only)
-• <strong>Status:</strong> Implementation complete (commit abc123)
+                    <div class="session-step" style="--delay: 9s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-recovery-output">
+                            <strong>Edge 47→48:</strong> leads_to "Deciding implementation approach"<br>
+                            <strong>Edge 48→49:</strong> leads_to "Scales across instances, persistent"<br>
+                            <strong>Edge 48→50:</strong> leads_to "Simpler, but single-instance only"<br>
+                            <strong>Edge 48→51:</strong> <span style="color: #4ade80;">chosen</span> "Redis already in stack, needs horizontal scaling"<br>
+                            <strong>Edge 51→52:</strong> leads_to "Implementation verified with tests"
+                        </div>
+                    </div>
 
-The rate limiting feature appears complete. What would you like to work on next?
+                    <div class="session-step" style="--delay: 11.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">git log --oneline -5</div>
+                        <div class="step-output">abc123 feat: add Redis-based rate limiting<br>def456 fix: user validation edge case<br>...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 13.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content"><strong>Context Recovered:</strong></div>
+                        <div class="step-recovery-output">
+                            <strong>Current branch:</strong> feature/rate-limiting<br><br>
+                            <strong>Goal:</strong> Add rate limiting to the API<br><br>
+                            <strong>Decision made:</strong> Redis-based sliding window approach<br>
+                            <strong>Rationale:</strong> Redis already in use, needed to scale horizontally<br><br>
+                            <strong>Rejected:</strong> In-memory token bucket (single-instance only)<br><br>
+                            <strong>Status:</strong> Implementation complete (commit abc123)<br>
+                            The rate limiting feature appears complete.
+                        </div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 16s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">What would you like to work on next?</div>
+                    </div>
                 </div>
             </div>
 
             <h2>What Gets Recovered</h2>
 
-            <p>From the decision graph, Claude can recover:</p>
+            <p>From the decision graph, Claude can recover everything it needs:</p>
 
             <table>
                 <thead>
@@ -149,54 +196,138 @@ The rate limiting feature appears complete. What would you like to work on next?
 
             <p>When working on a feature branch, filter context to that branch:</p>
 
-            <pre><span class="cmd">$ deciduous nodes --branch feature/auth</span></pre>
+            <div class="session-demo" id="branch-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Branch-Scoped Recovery</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous nodes --branch feature/auth</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 2s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-recovery-output">
+                            <span class="tree-line goal">#95 [goal] Add JWT authentication [90%]</span>
+                            <span class="tree-line decision">&nbsp;&nbsp;↳ #96 [decision] Token storage strategy [80%]</span>
+                            <span class="tree-line option">&nbsp;&nbsp;&nbsp;&nbsp;↳ #97 [option] httpOnly cookies [85%]</span>
+                            <span class="tree-line option">&nbsp;&nbsp;&nbsp;&nbsp;↳ #98 [option] localStorage [60%]</span>
+                            <span class="tree-line action">&nbsp;&nbsp;&nbsp;&nbsp;↳ #99 [action] Implement JWT with cookies [85%]</span>
+                            <span class="tree-line outcome">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ #100 [outcome] JWT auth implemented [95%] [commit: c8d3e2f]</span>
+                        </div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 4.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Only showing decisions from feature/auth branch&mdash;no noise from other work.</div>
+                    </div>
+                </div>
+            </div>
 
             <p>This shows only decisions relevant to the current feature, reducing noise from other work.</p>
 
             <h2>The Recovery Loop</h2>
 
-            <p>Here's the full session lifecycle:</p>
+            <p>Here's the full session lifecycle with deciduous:</p>
 
-            <pre style="line-height: 1.8;">SESSION START
+            <div class="session-demo" style="max-height: none;">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Session Lifecycle</span>
+                </div>
+                <div class="session-content" style="max-height: none;">
+                    <pre class="ascii-graph" style="background: transparent; margin: 0; padding: 0;">
+<span style="color: #4ade80;">SESSION START</span>
     │
     ▼
-Run /recover → Query decision graph
+Run <span style="color: #60a5fa;">/recover</span> → Query decision graph
     │
     ▼
 Claude reports: goals, decisions, status
     │
     ▼
-DO WORK → Log as you go (goals, decisions, actions)
+<span style="color: #fbbf24;">DO WORK</span> → Log as you go (goals, decisions, actions)
     │
     ▼
-BEFORE PUSH → deciduous sync
+BEFORE PUSH → <span style="color: #60a5fa;">deciduous sync</span>
     │
     ▼
-SESSION END → Graph survives
+<span style="color: #f87171;">SESSION END</span> → Graph survives
     │
     ▼
 (New session starts, repeat)</pre>
+                </div>
+            </div>
 
             <p>The graph acts as persistent memory that bridges session boundaries.</p>
 
-            <h2>Context Mid-Session</h2>
+            <h2>Mid-Session Recovery</h2>
 
             <p>You can also run <code>/recover</code> mid-session if Claude seems to have lost track:</p>
 
-            <div class="terminal-session">
-                <div class="terminal-header">Mid-Session Context Recovery</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; Wait, what were we doing? Run /recover</span>
+            <div class="session-demo" id="mid-session-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Mid-Session Recovery</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
 
-Let me check the decision graph...
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Wait, what were we doing? Run /recover</div>
+                    </div>
 
-<span class="command">deciduous nodes | head -20</span>
-<span class="command">deciduous commands | tail -10</span>
+                    <div class="session-step" style="--delay: 2s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Let me check the decision graph...</div>
+                    </div>
 
-I see we were working on rate limiting. The last action was "Implementing
-Redis rate limiter" and we completed it with outcome #52. The commit is abc123.
+                    <div class="session-step" style="--delay: 3.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous nodes | head -20</div>
+                    </div>
 
-Would you like to continue with something else, or is there more to do on rate limiting?
+                    <div class="session-step" style="--delay: 5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous commands | tail -10</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 7s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">I see we were working on rate limiting. The last action was "Implementing Redis rate limiter" and we completed it with outcome #52. The commit is abc123.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 9s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Would you like to continue with something else, or is there more to do on rate limiting?</div>
+                    </div>
                 </div>
             </div>
 
@@ -216,22 +347,82 @@ Would you like to continue with something else, or is there more to do on rate l
                 <li>What the rationale was</li>
             </ul>
 
-            <h2>The Audit Step</h2>
+            <h2>Viewing Node Details</h2>
 
-            <p>Part of context recovery includes checking for orphan nodes:</p>
+            <p>For detailed information about any specific node, use <code>deciduous show</code>:</p>
 
-            <pre><span class="comment"># Find nodes without incoming edges (potential orphans)</span>
-<span class="cmd">$ deciduous edges | cut -d'>' -f2 | sort -u > /tmp/has_parent.txt</span>
-<span class="cmd">$ deciduous nodes | awk '{print $1}' | while read id; do
-    grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
-  done</span></pre>
+            <div class="session-demo" id="show-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Node Details</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
 
-            <p>Root <span class="node-goal">goal</span> nodes are valid orphans. But <span class="node-outcome">outcome</span> or <span class="node-action">action</span> nodes without parents indicate missing connections that should be fixed.</p>
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous show 47</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 2s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-recovery-output">
+<strong>Node #47</strong> goal
+────────────────────────────────────────────────────────────
+<strong>Title:</strong> Add rate limiting to API
+<strong>Status:</strong> active
+<strong>Created:</strong> 2025-01-06T14:23:17
+
+<strong>Metadata</strong>
+  Confidence: 90%
+  Branch: feature/rate-limiting
+
+<strong>Prompt</strong>
+  User asked: Add rate limiting to the API endpoints
+
+<strong>Connections</strong>
+  Outgoing (1):
+    here ─[leads_to]→ #48: Choose rate limiting strategy
+                        </div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">This shows the original user prompt that triggered the work&mdash;critical for understanding intent.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <strong>The /recover Checklist</strong>
+                <ol style="margin-top: 10px; margin-bottom: 0;">
+                    <li>Query nodes: <code>deciduous nodes --branch BRANCH</code></li>
+                    <li>Check edges: <code>deciduous edges</code></li>
+                    <li>View git state: <code>git status && git log --oneline -5</code></li>
+                    <li>Summarize what was found</li>
+                    <li>Ask what the user wants to work on</li>
+                </ol>
+            </div>
+
+            <div class="next-section">
+                <span>Ready to generate PR documentation?</span>
+                <a href="pr-documentation.html" class="btn">PR Documentation &rarr;</a>
+            </div>
 
             <div class="page-nav">
-                <a href="claude-code.html" class="prev">
+                <a href="archaeology.html" class="prev">
                     <span class="label">Previous</span>
-                    <span class="title">The Claude Code Workflow</span>
+                    <span class="title">Project Archaeology</span>
                 </a>
                 <a href="pr-documentation.html" class="next">
                     <span class="label">Next</span>
@@ -240,5 +431,7 @@ Would you like to continue with something else, or is there more to do on rate l
             </div>
         </article>
     </main>
+
+    <script src="../terminal-demo.js"></script>
 </body>
 </html>

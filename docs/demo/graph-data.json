@@ -10581,6 +10581,17 @@
       "created_at": "2026-01-06T22:08:06.044335-05:00",
       "updated_at": "2026-01-06T22:08:06.044335-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"85b8b06\",\"confidence\":95}"
+    },
+    {
+      "id": 964,
+      "change_id": "a1f0c2b9-0590-4883-b173-210331e7c266",
+      "node_type": "outcome",
+      "title": "Animated tutorial demos committed and ready for deploy",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:20:43.868961-05:00",
+      "updated_at": "2026-01-06T22:20:43.868961-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"e0670c0\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -19603,6 +19614,28 @@
       "weight": 1.0,
       "rationale": "Guide page visual assets",
       "created_at": "2026-01-06T22:08:09.912572-05:00"
+    },
+    {
+      "id": 821,
+      "from_node_id": 962,
+      "to_node_id": 963,
+      "from_change_id": "de547fee-b3a9-4c7a-ab3e-63503d4ac94c",
+      "to_change_id": "165a54f5-e60d-432b-8fb9-e7882453b0ef",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Commit e0670c0 pushed to main",
+      "created_at": "2026-01-06T22:20:43.996705-05:00"
+    },
+    {
+      "id": 822,
+      "from_node_id": 962,
+      "to_node_id": 964,
+      "from_change_id": "de547fee-b3a9-4c7a-ab3e-63503d4ac94c",
+      "to_change_id": "a1f0c2b9-0590-4883-b173-210331e7c266",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Commit e0670c0 ready for GitHub Pages",
+      "created_at": "2026-01-06T22:20:49.387348-05:00"
     }
   ]
 }

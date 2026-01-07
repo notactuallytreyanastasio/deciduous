@@ -488,6 +488,310 @@ kbd {
 .node-outcome { color: #1f6feb; }
 .node-observation { color: #bf3989; }
 
+/* ========================================
+   ANIMATED TERMINAL DEMOS
+   ======================================== */
+
+.session-demo {
+    background: #1e1e1e;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 30px 0;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    position: relative;
+}
+
+.session-header {
+    background: #2d2d2d;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.session-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+.session-dot.red { background: #ff5f56; }
+.session-dot.yellow { background: #ffbd2e; }
+.session-dot.green { background: #27c93f; }
+
+.session-title {
+    color: #888;
+    font-size: 0.85rem;
+    margin-left: 8px;
+}
+
+.session-controls {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+}
+
+.session-btn {
+    background: #374151;
+    color: #9ca3af;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+.session-btn:hover {
+    background: #4b5563;
+    color: #e5e7eb;
+}
+.session-btn.active {
+    background: #ef4444;
+    color: white;
+}
+
+.session-content {
+    padding: 20px;
+    font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    max-height: 450px;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+    position: relative;
+}
+
+.session-content::-webkit-scrollbar {
+    width: 8px;
+}
+.session-content::-webkit-scrollbar-track {
+    background: #2d2d2d;
+}
+.session-content::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 4px;
+}
+.session-content::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+/* Pause Overlay */
+.pause-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s, visibility 0.2s;
+}
+.pause-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+.pause-overlay .pause-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+}
+.pause-overlay .pause-text {
+    color: #9ca3af;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+}
+.pause-overlay .resume-btn {
+    background: #2da44e;
+    color: white;
+    border: none;
+    padding: 12px 32px;
+    border-radius: 6px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.pause-overlay .resume-btn:hover {
+    background: #238636;
+}
+
+/* Animation Steps */
+.session-step {
+    opacity: 0;
+    transform: translateY(10px);
+    margin-bottom: 16px;
+}
+.session-step:last-child { margin-bottom: 0; }
+
+.session-step.animate {
+    animation: fadeInStep 0.5s ease forwards;
+    animation-delay: var(--delay);
+}
+
+.session-demo.paused .session-step {
+    animation-play-state: paused;
+}
+
+@keyframes fadeInStep {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Step Labels */
+.step-label {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+.step-label.user {
+    background: #3b82f6;
+    color: #fff;
+}
+.step-label.claude {
+    background: #d97706;
+    color: #fff;
+}
+.step-label.system {
+    background: #6b7280;
+    color: #fff;
+}
+
+/* Step Content Styles */
+.step-content {
+    color: #e5e5e5;
+    padding-left: 4px;
+}
+.step-content.code {
+    color: #7ee787;
+}
+.step-output {
+    color: #8b949e;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    padding-left: 4px;
+}
+.step-success {
+    color: #7ee787;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    padding-left: 4px;
+}
+.step-files {
+    color: #f97583;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    padding-left: 4px;
+}
+.step-thinking {
+    color: #a78bfa;
+    font-style: italic;
+    font-size: 0.85rem;
+    margin-top: 4px;
+    padding-left: 4px;
+}
+
+/* Recovery Output Box */
+.step-recovery-output {
+    background: #1a3a1a;
+    border: 1px solid #22543d;
+    border-radius: 6px;
+    padding: 12px;
+    margin-top: 8px;
+    color: #86efac;
+    font-size: 0.85rem;
+}
+.step-recovery-output strong {
+    color: #4ade80;
+}
+
+/* Session Divider */
+.session-divider {
+    text-align: center;
+    padding: 20px 0;
+    opacity: 0;
+}
+.session-divider.animate {
+    animation: fadeInStep 0.5s ease forwards;
+    animation-delay: var(--delay);
+}
+.session-divider span {
+    background: #374151;
+    color: #9ca3af;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+}
+
+/* Tree Display in Recovery */
+.tree-line {
+    color: #a5d6ff;
+    display: block;
+    line-height: 1.5;
+}
+.tree-line.goal { color: #fbbf24; }
+.tree-line.decision { color: #60a5fa; }
+.tree-line.option { color: #c084fc; }
+.tree-line.action { color: #34d399; }
+.tree-line.outcome { color: #38bdf8; }
+.tree-line.observation { color: #f472b6; }
+
+/* Command inline in session */
+.cmd-inline {
+    color: #7ee787;
+    font-size: 0.85rem;
+    padding: 4px 0;
+}
+
+/* Graph visualization in terminal */
+.ascii-graph {
+    color: #a5d6ff;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    padding: 12px;
+    background: #1a1a2e;
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+/* Cycling Demo Container */
+.demo-carousel {
+    position: relative;
+}
+
+.demo-carousel .demo-indicator {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    background: #2d2d2d;
+    border-top: 1px solid #404040;
+}
+
+.demo-carousel .indicator-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #555;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.demo-carousel .indicator-dot.active {
+    background: #2da44e;
+}
+.demo-carousel .indicator-dot:hover {
+    background: #777;
+}
+
 /* Responsive */
 @media (max-width: 900px) {
     .sidebar {
