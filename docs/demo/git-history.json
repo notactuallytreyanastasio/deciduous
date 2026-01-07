@@ -1,11 +1,27 @@
 [
   {
-    "hash": "5dfe0c2db80f19b46a509ce187be90aa759ea8bd",
-    "short_hash": "5dfe0c2",
+    "hash": "88033d1f4c9c95342d8d1aabe8082b256ef5de53",
+    "short_hash": "88033d1",
     "author": "Bobby Nathan",
-    "date": "2026-01-06T22:22:03-05:00",
-    "message": "style: update guide page to match light theme\n\n- Changed from dark theme to light theme matching tutorial/landing pages\n- White background with light gray secondary backgrounds\n- Updated node type colors for light mode\n- Updated info/warning/success boxes for light mode\n- Code blocks remain dark for contrast",
-    "files_changed": 1
+    "date": "2026-01-07T02:02:58-05:00",
+    "message": "fix: remove double animation-delay in terminal demos\n\nThe JS was waiting --delay seconds before adding .animate class,\nbut the CSS was ALSO waiting --delay seconds before running the animation.\nThis caused scrollToStep to scroll to invisible content.",
+    "files_changed": 4
+  },
+  {
+    "hash": "87c01e1aef9774da17375c1e558e0d540f85d7cc",
+    "short_hash": "87c01e1",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T23:54:09-05:00",
+    "message": "release: v0.8.24 - tutorial improvements\n\n- Fix inaccurate multi-editor claims (Claude Code only)\n- Replace screenshot placeholders with ASCII mockups\n- Improved tutorial accuracy and cohesion",
+    "files_changed": 4
+  },
+  {
+    "hash": "73484092558ae9a1af0603f4e91952822aba288d",
+    "short_hash": "7348409",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T23:52:56-05:00",
+    "message": "docs(tutorial): fix accuracy issues and replace screenshot placeholders\n\n- Remove multi-editor implication from initializing.html (Claude Code only)\n- Fix \"another AI assistant\" reference in how-to-read.html\n- Replace all screenshot placeholders with ASCII art mockups\n- Add TUI mockups showing timeline, search, and detail panel\n- Add ASCII decision graph for PR documentation page\n- Streamline web viewer descriptions",
+    "files_changed": 10
   },
   {
     "hash": "e0670c0bf878d7850766477a7a91311a28b9f54f",
@@ -424,20 +440,20 @@
     "files_changed": 5
   },
   {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
-  },
-  {
     "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
     "short_hash": "e80d20f",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 4
+  },
+  {
+    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
+    "short_hash": "9e9953a",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 3
   },
   {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
@@ -1192,16 +1208,16 @@
     "files_changed": 15
   },
   {
-    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
-    "short_hash": "b4c56bc",
+    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
+    "short_hash": "32f0047",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
     "files_changed": 11
   },
   {
-    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
-    "short_hash": "32f0047",
+    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
+    "short_hash": "b4c56bc",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",

@@ -630,7 +630,8 @@ kbd {
 
 .session-step.animate {
     animation: fadeInStep 0.5s ease forwards;
-    animation-delay: var(--delay);
+    /* Note: --delay is used by JS to schedule when .animate is added.
+       Don't add animation-delay here or it will double-delay. */
 }
 
 .session-demo.paused .session-step {
