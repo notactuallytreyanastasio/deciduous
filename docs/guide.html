@@ -32,6 +32,7 @@
             --accent-red: #cf222e;
             --accent-purple: #8250df;
             --border: #d0d7de;
+            --sidebar-width: 260px;
         }
 
         * {
@@ -45,18 +46,102 @@
             background: var(--bg);
             color: var(--text);
             line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
         }
 
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            padding: 2rem;
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-header .logo:hover {
+            color: var(--accent);
+        }
+
+        .sidebar-header .subtitle {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .sidebar nav {
+            background: none;
+            border: none;
+            padding: 0;
+            position: static;
+        }
+
+        .sidebar nav h2 {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sidebar nav a {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+
+        .sidebar nav a:hover {
+            background: var(--bg);
+            color: var(--accent);
+        }
+
+        .sidebar nav a.active {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            padding: 40px;
+            max-width: calc(900px + var(--sidebar-width));
+        }
+
+        .content-wrapper {
+            max-width: 800px;
         }
 
         header {
-            text-align: center;
-            padding: 3rem 0;
-            border-bottom: 1px solid var(--border);
             margin-bottom: 3rem;
         }
 
@@ -69,41 +154,6 @@
         .subtitle {
             color: var(--text-muted);
             font-size: 1.2rem;
-        }
-
-        nav {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 1.5rem;
-            margin-bottom: 3rem;
-            position: sticky;
-            top: 1rem;
-            z-index: 100;
-        }
-
-        nav h2 {
-            font-size: 1rem;
-            color: var(--text-muted);
-            margin-bottom: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        nav ul {
-            list-style: none;
-            display: flex;
-            flex-wrap: wrap;
-            gap: 1rem 2rem;
-        }
-
-        nav a {
-            color: var(--accent);
-            text-decoration: none;
-        }
-
-        nav a:hover {
-            text-decoration: underline;
         }
 
         section {
@@ -372,6 +422,7 @@
             padding: 2rem;
             border-top: 1px solid var(--border);
             color: var(--text-muted);
+            margin-top: 2rem;
         }
 
         footer a {
@@ -411,16 +462,6 @@
             margin: 1rem 0;
         }
 
-        @media (max-width: 768px) {
-            .two-column {
-                grid-template-columns: 1fr;
-            }
-            nav ul {
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-        }
-
         .command-example {
             margin: 1.5rem 0;
         }
@@ -430,28 +471,59 @@
             font-size: 0.9rem;
             margin-bottom: 0.5rem;
         }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sidebar {
+                position: static;
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            body {
+                flex-direction: column;
+            }
+
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>Deciduous Guide</h1>
-            <p class="subtitle">Real-world patterns for decision graph tooling in AI-assisted development</p>
-        </header>
-
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <a href="./" class="logo">DECIDUOUS</a>
+            <span class="subtitle">The Guide</span>
+        </div>
         <nav>
-            <h2>Jump to Section</h2>
+            <h2>Contents</h2>
             <ul>
                 <li><a href="#why">Why Decision Graphs?</a></li>
                 <li><a href="#quickstart">Quick Start</a></li>
-                <li><a href="#real-scenario">Real Scenario Walkthrough</a></li>
+                <li><a href="#real-scenario">Real Scenario</a></li>
                 <li><a href="#patterns">Common Patterns</a></li>
                 <li><a href="#commands">Command Reference</a></li>
                 <li><a href="#troubleshooting">Troubleshooting</a></li>
             </ul>
         </nav>
+    </div>
 
-        <section id="why">
+    <main class="main-content">
+        <div class="content-wrapper">
+            <header>
+                <h1>Deciduous Guide</h1>
+                <p class="subtitle">Real-world patterns for decision graph tooling in AI-assisted development</p>
+            </header>
+
+            <section id="why">
             <h2>Why Decision Graphs?</h2>
 
             <p>If you've worked with AI coding assistants, you've experienced this:</p>
@@ -1098,16 +1170,17 @@ git push</code></pre>
             </div>
         </section>
 
-        <footer>
-            <p>
-                <a href="./">Home</a> |
-                <a href="demo/">Live Graph</a> |
-                <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
-                <a href="https://crates.io/crates/deciduous">crates.io</a>
-            </p>
-            <p>Built with deciduous - decision graph tooling for AI development</p>
-        </footer>
-    </div>
+            <footer>
+                <p>
+                    <a href="./">Home</a> |
+                    <a href="demo/">Live Graph</a> |
+                    <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
+                    <a href="https://crates.io/crates/deciduous">crates.io</a>
+                </p>
+                <p>Built with deciduous - decision graph tooling for AI development</p>
+            </footer>
+        </div>
+    </main>
 
     <script>
         function togglePhase(header) {
