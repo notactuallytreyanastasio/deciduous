@@ -64,6 +64,7 @@ deciduous link FROM TO --edge-type chosen -r "Why chosen"
 deciduous nodes                    <span class="comment"># List nodes</span>
 deciduous nodes -b feature/auth    <span class="comment"># Filter by branch</span>
 deciduous edges                    <span class="comment"># List edges</span>
+deciduous show 42                  <span class="comment"># Show node details</span>
 deciduous tui                      <span class="comment"># Terminal UI</span>
 deciduous serve                    <span class="comment"># Web viewer</span>
 
@@ -129,6 +130,16 @@ Options:
 
             <h3><code>deciduous edges</code></h3>
             <p>List all edges with their types and rationales.</p>
+
+            <h3><code>deciduous show</code></h3>
+            <pre>deciduous show &lt;ID&gt; [OPTIONS]
+
+Arguments:
+  ID   Node ID to display
+
+Options:
+  --json    Output as JSON instead of formatted</pre>
+            <p>Shows detailed information about a single node including metadata, prompt, and all connected edges.</p>
 
             <h3><code>deciduous graph</code></h3>
             <p>Export full graph as JSON to stdout.</p>

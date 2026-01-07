@@ -7,7 +7,6 @@
     <link rel="stylesheet" href="../style.css">
 </head>
 <body>
-    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="../../" class="logo">DECIDUOUS</a>
@@ -50,11 +49,11 @@
         <article>
             <h1>AI Integration Files</h1>
 
-            <p class="lead">When you run <code>deciduous init</code>, it generates files that teach your AI assistant how to use the decision graph. These files are the secret sauce that makes the workflow loop automatic.</p>
+            <p class="lead">When you run <code>deciduous init</code>, it generates files that teach Claude Code how to use the decision graph. These files are the secret sauce that makes the workflow loop automatic.</p>
 
             <h2>The Problem They Solve</h2>
 
-            <p>AI assistants don't have persistent memory across sessions. When a session ends or context compacts, they forget:</p>
+            <p>AI assistants don't have persistent memory across sessions. When a session ends or context compacts, Claude forgets:</p>
 
             <ul>
                 <li>What decisions were made and why</li>
@@ -66,14 +65,14 @@
             <p>The generated files solve this by:</p>
 
             <ol>
-                <li><strong>Teaching</strong> the AI about deciduous commands</li>
+                <li><strong>Teaching</strong> Claude about deciduous commands</li>
                 <li><strong>Enforcing</strong> real-time logging as work happens</li>
                 <li><strong>Enabling</strong> context recovery at session start</li>
             </ol>
 
-            <h2>For Claude Code Users</h2>
+            <h2>What Gets Created</h2>
 
-            <p>Run <code>deciduous init</code> (or <code>deciduous init --claude</code>) to generate:</p>
+            <p>Run <code>deciduous init</code> to generate:</p>
 
             <table>
                 <thead>
@@ -98,7 +97,7 @@
                 </tbody>
             </table>
 
-            <h3>CLAUDE.md &mdash; The Behavioral Contract</h3>
+            <h2>CLAUDE.md &mdash; The Behavioral Contract</h2>
 
             <p><code>CLAUDE.md</code> is read by Claude Code at session start. It contains the <strong>Decision Graph Workflow</strong> section that defines when and how to log:</p>
 
@@ -129,7 +128,7 @@ AUDIT regularly -> Check for missing connections
                 <p>You can edit <code>CLAUDE.md</code> to add project-specific rules. The Decision Graph Workflow section will be preserved when you run <code>deciduous update</code>.</p>
             </div>
 
-            <h3>/decision &mdash; The Graph Manager</h3>
+            <h2>/decision &mdash; The Graph Manager</h2>
 
             <p>The <code>/decision</code> slash command provides a quick interface for graph operations:</p>
 
@@ -179,10 +178,14 @@ AUDIT regularly -> Check for missing connections
                         <td><code>/decision sync</code></td>
                         <td><code>deciduous sync</code></td>
                     </tr>
+                    <tr>
+                        <td><code>/decision show 42</code></td>
+                        <td><code>deciduous show 42</code></td>
+                    </tr>
                 </tbody>
             </table>
 
-            <h3>/recover &mdash; The Memory Restorer</h3>
+            <h2>/recover &mdash; The Memory Restorer</h2>
 
             <p>The <code>/recover</code> slash command recovers context at session start:</p>
 
@@ -225,109 +228,6 @@ Changes not staged for commit:
 2. Log the chosen approach with --edge-type chosen
 3. Continue implementation
                 </div>
-            </div>
-
-            <h2>For Windsurf Users</h2>
-
-            <p>Run <code>deciduous init --windsurf</code> to generate:</p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>File</th>
-                        <th>Purpose</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>.windsurf/rules/deciduous.md</code></td>
-                        <td>Always On rule for decision logging</td>
-                    </tr>
-                    <tr>
-                        <td><code>.windsurf/rules/recover.md</code></td>
-                        <td>Model-triggered rule for context recovery</td>
-                    </tr>
-                    <tr>
-                        <td><code>.windsurf/memories.md</code></td>
-                        <td>Auto-retrieved project memories</td>
-                    </tr>
-                    <tr>
-                        <td><code>AGENTS.md</code></td>
-                        <td>Project instructions with workflow rules</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <h3>Rules vs Memories</h3>
-
-            <p>Windsurf uses two types of AI guidance:</p>
-
-            <ul>
-                <li><strong>Rules</strong> (<code>.windsurf/rules/</code>) &mdash; Instructions that Cascade follows. Can be "Always On" or "Model-triggered".</li>
-                <li><strong>Memories</strong> (<code>.windsurf/memories.md</code>) &mdash; Facts about the project that Cascade auto-retrieves when relevant.</li>
-            </ul>
-
-            <p>The <code>deciduous.md</code> rule is marked "Always On" so Cascade will always follow the decision logging workflow.</p>
-
-            <div class="info-box warning">
-                <strong>Important: Verify Rule Activation</strong>
-                <p>After running <code>deciduous init --windsurf</code>, open Windsurf's Customizations panel and verify that <code>deciduous.md</code> is set to "Always On".</p>
-            </div>
-
-            <h3>AGENTS.md</h3>
-
-            <p><code>AGENTS.md</code> is the Windsurf equivalent of <code>CLAUDE.md</code>. It contains the same Decision Graph Workflow section, formatted for Cascade.</p>
-
-            <h2>For OpenCode Users</h2>
-
-            <p>Run <code>deciduous init --opencode</code> to generate:</p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>File</th>
-                        <th>Purpose</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>.opencode/config.json</code></td>
-                        <td>OpenCode configuration with deciduous integration</td>
-                    </tr>
-                    <tr>
-                        <td><code>.opencode/instructions.md</code></td>
-                        <td>Project instructions with workflow rules</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <h3>OpenCode Configuration</h3>
-
-            <p>OpenCode uses a <code>.opencode/</code> directory for project configuration. The generated <code>config.json</code> includes settings for the deciduous workflow:</p>
-
-            <pre>{
-  "agent": {
-    "model": "anthropic:claude-sonnet-4-20250514"
-  },
-  "instructions": ".opencode/instructions.md"
-}</pre>
-
-            <h3>instructions.md</h3>
-
-            <p><code>.opencode/instructions.md</code> is OpenCode's equivalent of <code>CLAUDE.md</code>. It contains the Decision Graph Workflow section that OpenCode's agent will follow.</p>
-
-            <p>The instructions file teaches the agent to:</p>
-
-            <ul>
-                <li>Log decisions in real-time using <code>deciduous add</code></li>
-                <li>Connect nodes immediately with <code>deciduous link</code></li>
-                <li>Run <code>/recover</code> at session start for recovery</li>
-                <li>Sync the graph before pushing with <code>deciduous sync</code></li>
-            </ul>
-
-            <div class="info-box tip">
-                <strong>OpenCode + Deciduous</strong>
-                <p>OpenCode is a terminal-native AI coding assistant. Combined with deciduous (also terminal-native), you get a fully command-line workflow for AI-assisted development with persistent decision tracking.</p>
             </div>
 
             <h2>The Workflow Loop</h2>
@@ -391,15 +291,31 @@ SESSION END → Final audit
 
             <p>The <code>--commit HEAD</code> flag automatically captures the current commit hash and links it to the node.</p>
 
-            <h3>Exporting Git History</h3>
+            <h3>Viewing Node Details</h3>
 
-            <p>When you run <code>deciduous sync</code>, it also exports git history for commits linked to nodes:</p>
+            <p>Use the <code>show</code> command to see full details for any node:</p>
 
-            <pre><span class="cmd">$ deciduous sync</span>
-<span class="output">Exported graph to docs/graph-data.json
-Exported git history to docs/git-history.json</span></pre>
+            <div class="terminal-session">
+                <div class="terminal-header">Viewing Node Details</div>
+                <div class="terminal-body">
+<span class="command">deciduous show 51</span>
 
-            <p>The web viewer reads this file to show commit messages, authors, dates, and file counts alongside your decision nodes.</p>
+<span class="output">Node #51 action
+────────────────────────────────────────────────────────────
+Title: Implemented Redis caching
+Status: active
+Created: 2024-01-15T10:30:00
+
+Metadata
+  Confidence: 90%
+  Branch: feature/caching
+  Commit: abc1234
+
+Connections
+  Incoming (1):
+    #48 ─[chosen]→ here: Redis chosen for horizontal scaling</span>
+                </div>
+            </div>
 
             <h3>Deploying to GitHub Pages</h3>
 
@@ -424,27 +340,23 @@ Exported git history to docs/git-history.json</span></pre>
 
             <p>As deciduous evolves, the generated files may get new features. Update them with:</p>
 
-            <pre><span class="comment"># For Claude Code</span>
-<span class="cmd">$ deciduous update</span>
+            <pre><span class="cmd">$ deciduous update</span></pre>
 
-<span class="comment"># For Windsurf</span>
-<span class="cmd">$ deciduous update --windsurf</span></pre>
-
-            <p>This overwrites the slash commands/rules with the latest versions while preserving your custom additions to <code>CLAUDE.md</code> or <code>AGENTS.md</code>.</p>
+            <p>This overwrites the slash commands with the latest versions while preserving your custom additions to <code>CLAUDE.md</code>.</p>
 
             <h2>What Makes This Work</h2>
 
             <div class="info-box">
                 <strong>The Key Insight</strong>
-                <p>AI assistants are excellent at following explicit instructions. By embedding the decision logging workflow directly into the files they read at session start, we make the workflow <em>automatic</em>.</p>
-                <p>You don't have to remember to log decisions&mdash;your AI assistant does it for you.</p>
+                <p>Claude Code is excellent at following explicit instructions. By embedding the decision logging workflow directly into the files it reads at session start, we make the workflow <em>automatic</em>.</p>
+                <p>You don't have to remember to log decisions&mdash;Claude does it for you.</p>
             </div>
 
             <p>The combination of:</p>
 
             <ul>
-                <li><strong>CLAUDE.md / AGENTS.md</strong> &mdash; behavioral rules</li>
-                <li><strong>Slash commands / Rules</strong> &mdash; quick access to operations</li>
+                <li><strong>CLAUDE.md</strong> &mdash; behavioral rules</li>
+                <li><strong>Slash commands</strong> &mdash; quick access to operations</li>
                 <li><strong>/recover</strong> &mdash; memory restoration at session start</li>
             </ul>
 

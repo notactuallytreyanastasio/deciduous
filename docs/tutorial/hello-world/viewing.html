@@ -66,12 +66,7 @@
 Auto-refresh enabled (30 second interval)
 Press Ctrl+C to stop</span></pre>
 
-            <p>Open <a href="http://localhost:3000">http://localhost:3000</a> in your browser.</p>
-
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: web-viewer-chains.png]</span>
-                <div class="caption">The web viewer showing the Chains view with our authentication decision chain</div>
-            </div>
+            <p>Open <a href="http://localhost:3000">http://localhost:3000</a> in your browser. You'll see your decision graph visualized with nodes organized into chains.</p>
 
             <p>The web viewer has four views:</p>
 
@@ -110,10 +105,23 @@ Press Ctrl+C to stop</span></pre>
 
             <pre><span class="cmd">$ deciduous tui</span></pre>
 
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: tui-main.png]</span>
-                <div class="caption">The TUI with timeline on the left and detail panel on the right</div>
-            </div>
+            <p>The TUI shows a timeline of nodes on the left and a detail panel on the right:</p>
+
+            <pre class="tui-example">
+┌─ Timeline ─────────────────────────┬─ Details ───────────────────────────┐
+│                                    │                                     │
+│  <span class="tree-line goal">#1  goal      Implement auth</span>      │  <span class="tree-line goal">goal</span> #1                            │
+│  <span class="tree-line decision">#2  decision  Choose auth method</span>  │  ─────────────────────────          │
+│  <span class="tree-line option">#3  option    JWT tokens</span>          │  Implement user authentication      │
+│  <span class="tree-line option">#4  option    Session cookies</span>     │                                     │
+│  <span class="tree-line action">#5  action    Implementing JWT</span>    │  Confidence: 90%                    │
+│                                    │  Branch: feature/auth               │
+│                                    │                                     │
+│                                    │  Outgoing:                          │
+│                                    │    → #2 (leads_to)                  │
+│                                    │                                     │
+└────────────────────────────────────┴─────────────────────────────────────┘
+  j/k: navigate  Enter: toggle detail  f: filter  /: search  q: quit</pre>
 
             <p>Quick navigation:</p>
 

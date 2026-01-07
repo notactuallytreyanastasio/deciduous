@@ -24,6 +24,7 @@
                 <a href="index.html" class="toc-title active">Real-World Workflows</a>
                 <ul>
                     <li><a href="claude-code.html">The Claude Code Workflow</a></li>
+                    <li><a href="archaeology.html">Project Archaeology</a></li>
                     <li><a href="session-recovery.html">Session Recovery</a></li>
                     <li><a href="pr-documentation.html" class="active">PR Documentation</a></li>
                 </ul>
@@ -105,10 +106,35 @@
 <span class="output">Generated docs/decision-graph-feature-rate-limiting.dot
 Generated docs/decision-graph-feature-rate-limiting.png (via graphviz)</span></pre>
 
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: dot-graph-example.png]</span>
-                <div class="caption">A DOT-generated PNG showing the rate limiting decision flow</div>
-            </div>
+            <p>The generated graph shows the decision flow visually:</p>
+
+            <pre class="ascii-graph" style="line-height: 1.6;">
+    ┌─────────────────────────┐
+    │  <span class="tree-line goal">#47 goal</span>               │
+    │  Add rate limiting      │
+    └───────────┬─────────────┘
+                │
+                ▼
+    ┌─────────────────────────┐
+    │  <span class="tree-line decision">#48 decision</span>           │
+    │  Choose strategy        │
+    └───────────┬─────────────┘
+                │
+    ┌───────────┼───────────┐
+    │           │           │
+    ▼           ▼           ▼
+┌────────┐ ┌────────┐ ┌─────────────────┐
+│<span class="tree-line option">#49</span>     │ │<span class="tree-line option">#50</span>     │ │<span class="tree-line action">#51 action</span>       │
+│Redis   │ │In-mem  │ │Implementing     │
+│sliding │ │token   │ │Redis rate limit │
+└────────┘ └────────┘ └────────┬────────┘
+                               │ <span style="color: #4ade80;">chosen</span>
+                               ▼
+                    ┌─────────────────────┐
+                    │  <span class="tree-line outcome">#52 outcome</span>       │
+                    │  Rate limiting      │
+                    │  working [abc123]   │
+                    └─────────────────────┘</pre>
 
             <p>The <code>--auto</code> flag creates branch-specific filenames, preventing merge conflicts when multiple PRs have graphs.</p>
 

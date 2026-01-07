@@ -48,10 +48,26 @@
 
             <pre><span class="cmd">$ deciduous tui</span></pre>
 
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: tui-overview.png]</span>
-                <div class="caption">The TUI main screen with timeline list and detail panel</div>
-            </div>
+            <pre class="tui-example">
+┌─ Timeline ─────────────────────────┬─ Details ───────────────────────────┐
+│                                    │                                     │
+│  <span class="tree-line goal">#47 goal      Add rate limiting</span>   │  <span class="tree-line goal">goal</span> #47                           │
+│  <span class="tree-line decision">#48 decision  Choose strategy</span>     │  ─────────────────────────          │
+│  <span class="tree-line option">#49 option    Redis sliding window</span>│  Add rate limiting to API           │
+│  <span class="tree-line option">#50 option    In-memory token</span>     │                                     │
+│▸ <span class="tree-line action">#51 action    Implementing Redis</span>  │  Confidence: 90%                    │
+│  <span class="tree-line outcome">#52 outcome   Rate limiting working</span>│  Branch: feature/rate-limiting      │
+│                                    │  Commit: abc1234                    │
+│                                    │                                     │
+│                                    │  Prompt:                            │
+│                                    │  "Add rate limiting to the API"     │
+│                                    │                                     │
+│                                    │  Incoming:                          │
+│                                    │    #48 → here (chosen)              │
+│                                    │  Outgoing:                          │
+│                                    │    → #52 (leads_to)                 │
+└────────────────────────────────────┴─────────────────────────────────────┘
+  j/k: navigate  Enter: detail  Tab: DAG view  f: filter  /: search  q: quit</pre>
 
             <h2>Layout</h2>
 
@@ -153,10 +169,17 @@
                 </tbody>
             </table>
 
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: tui-search.png]</span>
-                <div class="caption">The TUI with search active, filtering nodes containing "auth"</div>
-            </div>
+            <p>Example: press <kbd>/</kbd> then type "auth" to filter nodes:</p>
+
+            <pre class="tui-example">
+┌─ Timeline (filtered: "auth") ──────┬─ Details ───────────────────────────┐
+│                                    │                                     │
+│  <span class="tree-line goal">#1  goal      Implement auth</span>      │                                     │
+│  <span class="tree-line decision">#2  decision  Choose auth method</span>  │                                     │
+│  <span class="tree-line action">#12 action    Auth middleware</span>     │                                     │
+│                                    │                                     │
+└────────────────────────────────────┴─────────────────────────────────────┘
+  Search: auth█  (Esc to clear)</pre>
 
             <h2>File Operations</h2>
 
@@ -197,10 +220,7 @@
                 </tbody>
             </table>
 
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: tui-file-preview.png]</span>
-                <div class="caption">The TUI showing syntax-highlighted file preview</div>
-            </div>
+            <p>Press <kbd>o</kbd> on a node with associated files to open them in your <code>$EDITOR</code>.</p>
 
             <h2>The Detail Panel</h2>
 
@@ -215,10 +235,26 @@
                 <li>Incoming and outgoing edges with rationales</li>
             </ul>
 
-            <div class="screenshot-placeholder">
-                <span class="label">[SCREENSHOT: tui-detail-panel.png]</span>
-                <div class="caption">The detail panel showing a decision node with connections and prompt</div>
-            </div>
+            <pre class="tui-example">
+┌─ Details ──────────────────────────────────────────┐
+│                                                    │
+│  <span class="tree-line decision">decision</span> #48                                    │
+│  ────────────────────────────────                  │
+│  Choose rate limiting strategy                     │
+│                                                    │
+│  Confidence: 75%                                   │
+│  Branch: feature/rate-limiting                     │
+│                                                    │
+│  Incoming:                                         │
+│    #47 → here (leads_to)                           │
+│      "Deciding implementation approach"            │
+│                                                    │
+│  Outgoing:                                         │
+│    → #49 (leads_to) "Scales across instances"      │
+│    → #50 (leads_to) "Simpler, single-instance"     │
+│    → #51 (chosen) "Redis already in stack"         │
+│                                                    │
+└────────────────────────────────────────────────────┘</pre>
 
             <h2>Other Commands</h2>
 
