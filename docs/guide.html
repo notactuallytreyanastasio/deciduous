@@ -20,17 +20,18 @@
 
     <style>
         :root {
-            --bg: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-tertiary: #21262d;
-            --text: #c9d1d9;
-            --text-muted: #8b949e;
-            --accent: #58a6ff;
-            --accent-green: #3fb950;
-            --accent-yellow: #d29922;
-            --accent-red: #f85149;
-            --accent-purple: #a371f7;
-            --border: #30363d;
+            --bg: #ffffff;
+            --bg-secondary: #f6f8fa;
+            --bg-tertiary: #eaeef2;
+            --bg-code: #24292f;
+            --text: #24292f;
+            --text-muted: #57606a;
+            --accent: #0969da;
+            --accent-green: #2da44e;
+            --accent-yellow: #9a6700;
+            --accent-red: #cf222e;
+            --accent-purple: #8250df;
+            --border: #d0d7de;
         }
 
         * {
@@ -62,10 +63,7 @@
         h1 {
             font-size: 2.5rem;
             margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, var(--accent-green), var(--accent));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
+            color: var(--text);
         }
 
         .subtitle {
@@ -116,13 +114,14 @@
             font-size: 1.8rem;
             margin-bottom: 1.5rem;
             padding-bottom: 0.5rem;
-            border-bottom: 2px solid var(--accent);
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
         }
 
         h3 {
             font-size: 1.3rem;
             margin: 2rem 0 1rem;
-            color: var(--accent);
+            color: var(--text);
         }
 
         h4 {
@@ -136,25 +135,27 @@
         }
 
         code {
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
             padding: 0.2em 0.4em;
             border-radius: 4px;
             font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
             font-size: 0.9em;
+            color: var(--text);
         }
 
         pre {
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
+            background: var(--bg-code);
             border-radius: 8px;
             padding: 1rem;
             overflow-x: auto;
             margin: 1rem 0;
+            color: #f6f8fa;
         }
 
         pre code {
             background: none;
             padding: 0;
+            color: #f6f8fa;
         }
 
         table {
@@ -171,7 +172,7 @@
 
         th {
             background: var(--bg-secondary);
-            color: var(--accent);
+            color: var(--text);
             font-weight: 600;
         }
 
@@ -189,7 +190,7 @@
 
         .card-title {
             font-weight: 600;
-            color: var(--accent);
+            color: var(--text);
             margin-bottom: 0.5rem;
             display: flex;
             align-items: center;
@@ -197,15 +198,15 @@
         }
 
         .warning {
-            background: rgba(210, 153, 34, 0.1);
-            border-left: 4px solid var(--accent-yellow);
+            background: #fff8c5;
+            border-left: 4px solid #d4a72c;
             padding: 1rem;
             margin: 1rem 0;
             border-radius: 0 8px 8px 0;
         }
 
         .success {
-            background: rgba(63, 185, 80, 0.1);
+            background: #d1f7d6;
             border-left: 4px solid var(--accent-green);
             padding: 1rem;
             margin: 1rem 0;
@@ -213,8 +214,8 @@
         }
 
         .info {
-            background: rgba(88, 166, 255, 0.1);
-            border-left: 4px solid var(--accent);
+            background: #ddf4ff;
+            border-left: 4px solid #54aeff;
             padding: 1rem;
             margin: 1rem 0;
             border-radius: 0 8px 8px 0;
@@ -239,7 +240,7 @@
         }
 
         .user-message {
-            background: var(--bg-tertiary);
+            background: #d1f7d6;
             border-left: 3px solid var(--accent-green);
             padding: 1rem;
             margin: 1rem 0;
@@ -255,7 +256,7 @@
         }
 
         .claude-action {
-            background: var(--bg-tertiary);
+            background: #fbefff;
             border-left: 3px solid var(--accent-purple);
             padding: 1rem;
             margin: 1rem 0;
@@ -269,7 +270,7 @@
         }
 
         .step {
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
             border-radius: 8px;
             padding: 1rem;
             margin: 1rem 0;
@@ -330,14 +331,15 @@
         }
 
         .todo-list {
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
             border-radius: 8px;
             padding: 1rem;
             margin: 1rem 0;
         }
 
         .todo-list h5 {
-            color: var(--accent);
+            color: var(--text);
             margin-bottom: 0.5rem;
             font-size: 0.9rem;
         }
@@ -361,7 +363,8 @@
         }
 
         .todo-list .new {
-            color: var(--accent-yellow);
+            color: #9a6700;
+            font-weight: 500;
         }
 
         footer {
@@ -382,22 +385,23 @@
             font-size: 0.85em;
             font-weight: 500;
         }
-        .node-goal { background: rgba(63, 185, 80, 0.2); color: var(--accent-green); }
-        .node-decision { background: rgba(88, 166, 255, 0.2); color: var(--accent); }
-        .node-action { background: rgba(163, 113, 247, 0.2); color: var(--accent-purple); }
-        .node-outcome { background: rgba(210, 153, 34, 0.2); color: var(--accent-yellow); }
-        .node-observation { background: rgba(139, 148, 158, 0.2); color: var(--text-muted); }
-        .node-option { background: rgba(248, 81, 73, 0.2); color: var(--accent-red); }
+        .node-goal { background: #d1f7d6; color: #1a7f37; }
+        .node-decision { background: #ddf4ff; color: #0969da; }
+        .node-action { background: #fbefff; color: #8250df; }
+        .node-outcome { background: #fff8c5; color: #9a6700; }
+        .node-observation { background: var(--bg-tertiary); color: var(--text-muted); }
+        .node-option { background: #ffebe9; color: #cf222e; }
 
         .graph-visual {
-            background: var(--bg-tertiary);
+            background: var(--bg-code);
             border-radius: 8px;
             padding: 1.5rem;
             margin: 1rem 0;
-            font-family: monospace;
+            font-family: 'SFMono-Regular', Consolas, monospace;
             font-size: 0.85rem;
             line-height: 1.4;
             overflow-x: auto;
+            color: #f6f8fa;
         }
 
         .two-column {
