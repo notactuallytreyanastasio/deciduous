@@ -1,11 +1,19 @@
 [
   {
-    "hash": "63f9ae26f3413235bab7614f993e364fd485fd2f",
-    "short_hash": "63f9ae2",
+    "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
+    "short_hash": "85b8b06",
     "author": "Bobby Nathan",
-    "date": "2026-01-06T17:50:50-05:00",
-    "message": "sync: update graph data",
-    "files_changed": 2
+    "date": "2026-01-06T22:07:52-05:00",
+    "message": "docs: add OpenGraph image for guide page\n\n- Created guide-og.svg with workflow diagram matching other OG images\n- Converted to guide-og.png for social sharing\n- Added og: and twitter: meta tags to guide.html",
+    "files_changed": 3
+  },
+  {
+    "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
+    "short_hash": "85b8b06",
+    "author": "Bobby Nathan",
+    "date": "2026-01-06T22:07:52-05:00",
+    "message": "docs: add OpenGraph image for guide page\n\n- Created guide-og.svg with workflow diagram matching other OG images\n- Converted to guide-og.png for social sharing\n- Added og: and twitter: meta tags to guide.html",
+    "files_changed": 3
   },
   {
     "hash": "c34e3ba7638ecbf2da733ee2a24733432eb287bc",

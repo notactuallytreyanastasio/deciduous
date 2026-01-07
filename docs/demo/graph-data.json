@@ -10515,6 +10515,72 @@
       "created_at": "2026-01-06T17:50:25.681732-05:00",
       "updated_at": "2026-01-06T17:50:25.681732-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"c34e3ba\",\"confidence\":95}"
+    },
+    {
+      "id": 958,
+      "change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+      "node_type": "goal",
+      "title": "Add animated terminal demos to tutorial",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:07:08.513686-05:00",
+      "updated_at": "2026-01-06T22:07:08.513686-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"User requested: \\\"go through and really demonstrate, with full terminal examples like we have on the landing page, the process of working with you throughout the tutorial. The deciduous serve main landing page from GH pages at the root of the site. Those terminal examples animating in there are awesome and we should use them in the tutorial (and they should have a pause button that fills them completely and stops cycling for easy reference too) This wants to be a visually rich experience that really shows the look and feel of the workflow and the terminals themselves being in there are stylistically nice but also very professional looking\\\"\"}"
+    },
+    {
+      "id": 959,
+      "change_id": "f9cbb117-5438-4ec3-a514-9348ea403349",
+      "node_type": "action",
+      "title": "Created terminal-demo.js animation system",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:07:15.889872-05:00",
+      "updated_at": "2026-01-06T22:07:15.889872-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"docs/tutorial/terminal-demo.js\"]}"
+    },
+    {
+      "id": 960,
+      "change_id": "d67a7714-c514-417f-8232-0a3583da04ff",
+      "node_type": "action",
+      "title": "Added animated terminal CSS styles",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:07:20.767685-05:00",
+      "updated_at": "2026-01-06T22:07:20.767685-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"docs/tutorial/style.css\"]}"
+    },
+    {
+      "id": 961,
+      "change_id": "b959ca4d-105c-4af1-bb94-d156f9361377",
+      "node_type": "action",
+      "title": "Updated tutorial pages with animated demos",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:07:20.907021-05:00",
+      "updated_at": "2026-01-06T22:07:20.907021-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"docs/tutorial/index.html\",\"docs/tutorial/workflows/claude-code.html\",\"docs/tutorial/workflows/session-recovery.html\",\"docs/tutorial/workflows/archaeology.html\"]}"
+    },
+    {
+      "id": 962,
+      "change_id": "de547fee-b3a9-4c7a-ab3e-63503d4ac94c",
+      "node_type": "outcome",
+      "title": "Tutorial has professional animated terminal demos",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:07:26.212469-05:00",
+      "updated_at": "2026-01-06T22:07:26.212469-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 963,
+      "change_id": "165a54f5-e60d-432b-8fb9-e7882453b0ef",
+      "node_type": "action",
+      "title": "Created guide-og OpenGraph image",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-06T22:08:06.044335-05:00",
+      "updated_at": "2026-01-06T22:08:06.044335-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"85b8b06\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -19460,6 +19526,83 @@
       "weight": 1.0,
       "rationale": "Guide enhancement complete",
       "created_at": "2026-01-06T17:50:32.454803-05:00"
+    },
+    {
+      "id": 814,
+      "from_node_id": 947,
+      "to_node_id": 958,
+      "from_change_id": "0907c6fe-4cf6-4b93-9c9b-9860746c18b1",
+      "to_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Animated demos enhance tutorial visual experience",
+      "created_at": "2026-01-06T22:07:15.748966-05:00"
+    },
+    {
+      "id": 815,
+      "from_node_id": 958,
+      "to_node_id": 959,
+      "from_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+      "to_change_id": "f9cbb117-5438-4ec3-a514-9348ea403349",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "JavaScript animation controller with pause/resume/replay",
+      "created_at": "2026-01-06T22:07:26.030653-05:00"
+    },
+    {
+      "id": 816,
+      "from_node_id": 958,
+      "to_node_id": 960,
+      "from_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+      "to_change_id": "d67a7714-c514-417f-8232-0a3583da04ff",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "CSS for terminal styling, steps, overlays",
+      "created_at": "2026-01-06T22:07:26.038585-05:00"
+    },
+    {
+      "id": 817,
+      "from_node_id": 958,
+      "to_node_id": 961,
+      "from_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+      "to_change_id": "b959ca4d-105c-4af1-bb94-d156f9361377",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "4 pages updated with step-by-step animated demos",
+      "created_at": "2026-01-06T22:07:26.045645-05:00"
+    },
+    {
+      "id": 818,
+      "from_node_id": 961,
+      "to_node_id": 962,
+      "from_change_id": "b959ca4d-105c-4af1-bb94-d156f9361377",
+      "to_change_id": "de547fee-b3a9-4c7a-ab3e-63503d4ac94c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "All pages updated, build passes, demos functional",
+      "created_at": "2026-01-06T22:07:30.836641-05:00"
+    },
+    {
+      "id": 819,
+      "from_node_id": 952,
+      "to_node_id": 958,
+      "from_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "to_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Guide page visual assets",
+      "created_at": "2026-01-06T22:08:06.053551-05:00"
+    },
+    {
+      "id": 820,
+      "from_node_id": 952,
+      "to_node_id": 963,
+      "from_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+      "to_change_id": "165a54f5-e60d-432b-8fb9-e7882453b0ef",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Guide page visual assets",
+      "created_at": "2026-01-06T22:08:09.912572-05:00"
     }
   ]
 }
