@@ -228,6 +228,13 @@ pub struct DecisionNode {
     pub metadata_json: Option<String>,
 }
 
+/// Summary of what was deleted by delete_node
+#[derive(Debug)]
+pub struct DeleteSummary {
+    pub node_title: String,
+    pub edges_deleted: usize,
+}
+
 /// Insertable decision edge
 #[derive(Insertable)]
 #[diesel(table_name = decision_edges)]
@@ -1294,6 +1301,132 @@ impl Database {
         rationale: Option<&str>,
     ) -> Result<i32> {
         self.create_edge(from_id, to_id, edge_type, rationale)
+    }
+
+    /// Delete an edge between two nodes
+    pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+
+        // Check if the edge exists
+        let edge_exists = decision_edges::table
+            .filter(decision_edges::from_node_id.eq(from_id))
+            .filter(decision_edges::to_node_id.eq(to_id))
+            .first::<DecisionEdge>(&mut conn)
+            .optional()?;
+
+        if edge_exists.is_none() {
+            // Get outgoing edges from source node to provide helpful error
+            let outgoing: Vec<DecisionEdge> = decision_edges::table
+                .filter(decision_edges::from_node_id.eq(from_id))
+                .load(&mut conn)?;
+
+            if outgoing.is_empty() {
+                return Err(DbError::Validation(format!(
+                    "No edge from node {} to node {}. Node {} has no outgoing edges.",
+                    from_id, to_id, from_id
+                )));
+            } else {
+                let targets: Vec<String> =
+                    outgoing.iter().map(|e| e.to_node_id.to_string()).collect();
+                return Err(DbError::Validation(format!(
+                    "No edge from node {} to node {}. Node {} has edges to: {}",
+                    from_id,
+                    to_id,
+                    from_id,
+                    targets.join(", ")
+                )));
+            }
+        }
+
+        diesel::delete(
+            decision_edges::table
+                .filter(decision_edges::from_node_id.eq(from_id))
+                .filter(decision_edges::to_node_id.eq(to_id)),
+        )
+        .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Delete a node and all its connected edges
+    pub fn delete_node(&self, node_id: i32, dry_run: bool) -> Result<DeleteSummary> {
+        let mut conn = self.get_conn()?;
+
+        // Check if node exists
+        let node = decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(&mut conn)
+            .optional()?;
+
+        let node = match node {
+            Some(n) => n,
+            None => {
+                return Err(DbError::Validation(format!(
+                    "Node {} does not exist. Run 'deciduous nodes' to see existing nodes.",
+                    node_id
+                )));
+            }
+        };
+
+        // Count edges that will be deleted
+        let edges_count: i64 = decision_edges::table
+            .filter(
+                decision_edges::from_node_id
+                    .eq(node_id)
+                    .or(decision_edges::to_node_id.eq(node_id)),
+            )
+            .count()
+            .get_result(&mut conn)?;
+
+        let summary = DeleteSummary {
+            node_title: node.title.clone(),
+            edges_deleted: edges_count as usize,
+        };
+
+        if dry_run {
+            return Ok(summary);
+        }
+
+        // Delete in order to respect foreign key constraints:
+
+        // 1. Delete edges connected to this node
+        diesel::delete(
+            decision_edges::table.filter(
+                decision_edges::from_node_id
+                    .eq(node_id)
+                    .or(decision_edges::to_node_id.eq(node_id)),
+            ),
+        )
+        .execute(&mut conn)?;
+
+        // 2. Delete context entries for this node
+        diesel::delete(decision_context::table.filter(decision_context::node_id.eq(node_id)))
+            .execute(&mut conn)?;
+
+        // 3. Delete session_nodes entries for this node
+        diesel::delete(session_nodes::table.filter(session_nodes::node_id.eq(node_id)))
+            .execute(&mut conn)?;
+
+        // 4. Set nullable foreign keys to NULL
+        diesel::update(
+            decision_sessions::table.filter(decision_sessions::root_node_id.eq(node_id)),
+        )
+        .set(decision_sessions::root_node_id.eq::<Option<i32>>(None))
+        .execute(&mut conn)?;
+
+        diesel::update(command_log::table.filter(command_log::decision_node_id.eq(node_id)))
+            .set(command_log::decision_node_id.eq::<Option<i32>>(None))
+            .execute(&mut conn)?;
+
+        diesel::update(roadmap_items::table.filter(roadmap_items::outcome_node_id.eq(node_id)))
+            .set(roadmap_items::outcome_node_id.eq::<Option<i32>>(None))
+            .execute(&mut conn)?;
+
+        // 5. Finally delete the node itself
+        diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+            .execute(&mut conn)?;
+
+        Ok(summary)
     }
 
     /// Update node status

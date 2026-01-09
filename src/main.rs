@@ -90,6 +90,25 @@ enum Command {
         edge_type: String,
     },
 
+    /// Remove an edge between two nodes
+    Unlink {
+        /// Source node ID
+        from: i32,
+
+        /// Target node ID
+        to: i32,
+    },
+
+    /// Delete a node and all its connected edges
+    Delete {
+        /// Node ID to delete
+        id: i32,
+
+        /// Show what would be deleted without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
+
     /// Update node status
     Status {
         /// Node ID
@@ -599,6 +618,40 @@ fn main() {
                     to,
                     edge_type
                 );
+            }
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
+
+        Command::Unlink { from, to } => match db.delete_edge(from, to) {
+            Ok(()) => println!("{} edge ({} -> {})", "Removed".red(), from, to),
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
+
+        Command::Delete { id, dry_run } => match db.delete_node(id, dry_run) {
+            Ok(summary) => {
+                if dry_run {
+                    println!(
+                        "{} Would delete node {} ({}) with {} edge(s)",
+                        "Dry run:".yellow(),
+                        id,
+                        summary.node_title,
+                        summary.edges_deleted
+                    );
+                } else {
+                    println!(
+                        "{} node {} ({}) and {} edge(s)",
+                        "Deleted".red(),
+                        id,
+                        summary.node_title,
+                        summary.edges_deleted
+                    );
+                }
             }
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
