@@ -1,7 +1,15 @@
 [
   {
-    "hash": "88033d1f4c9c95342d8d1aabe8082b256ef5de53",
-    "short_hash": "88033d1",
+    "hash": "d6e6ca5c945945318f18b2fcf4fd821d49823e44",
+    "short_hash": "d6e6ca5",
+    "author": "Bobby Nathan",
+    "date": "2026-01-09T17:47:09-05:00",
+    "message": "release: v0.8.25 - add delete and unlink commands\n\nNew commands to fix mistakes in decision graphs:\n- `deciduous delete <id>` - Delete node with cascade\n- `deciduous unlink <from> <to>` - Remove edge between nodes",
+    "files_changed": 6
+  },
+  {
+    "hash": "c8e018d4aa63784fde475de4cae0b42ead7aae22",
+    "short_hash": "c8e018d",
     "author": "Bobby Nathan",
     "date": "2026-01-07T02:02:58-05:00",
     "message": "fix: remove double animation-delay in terminal demos\n\nThe JS was waiting --delay seconds before adding .animate class,\nbut the CSS was ALSO waiting --delay seconds before running the animation.\nThis caused scrollToStep to scroll to invisible content.",
@@ -1208,16 +1216,16 @@
     "files_changed": 15
   },
   {
-    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
-    "short_hash": "32f0047",
+    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
+    "short_hash": "b4c56bc",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
     "files_changed": 11
   },
   {
-    "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
-    "short_hash": "b4c56bc",
+    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
+    "short_hash": "32f0047",
     "author": "Bobby Nathan",
     "date": "2025-12-10T18:03:55-05:00",
     "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
