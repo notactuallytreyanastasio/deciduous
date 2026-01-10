@@ -2,161 +2,125 @@
 
 **Decision graph tooling for AI-assisted development.** Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
 
+[![Crates.io](https://img.shields.io/crates/v/deciduous.svg)](https://crates.io/crates/deciduous)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 ---
 
 ## See It In Action
 
-**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 340+ decisions from building deciduous itself
+**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 970+ decisions from building deciduous itself
 
-**[Watch the Demo](https://asciinema.org/a/761574)** — Full session: initialization, decision logging, graph visualization, context recovery
+**[Interactive Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** — Learn the workflow in 15 minutes
 
----
-
-## Why Deciduous?
-
-LLMs generate complex code fast. Reviewing it, understanding it, and maintaining it? That's on you.
-
-**The problem:** Sessions end. Memory compacts. Decisions evaporate. Six months later, no one—human or AI—remembers *why* you chose approach A over approach B.
-
-**The solution:** Deciduous creates a persistent, queryable graph of every decision made during development. Both you and your AI assistant can query past reasoning, see what was tried, understand what was rejected and why.
-
-This isn't documentation written after the fact. It's a real-time record of *how* software gets built, captured as decisions happen—by whoever is making them.
+**[Watch the Demo](https://asciinema.org/a/761574)** — Full session walkthrough
 
 ---
 
-## The Premises
+## The Problem
 
-1. **Decisions are the unit of institutional knowledge.** Code tells you *what*, but decisions tell you *why*. Six months from now, you won't remember why you chose Redis over Postgres for that cache. The graph will.
+You're building software with AI assistance. The LLM generates complex code fast. But then:
 
-2. **Structured thinking produces better outcomes.** The act of logging a decision—naming it, assigning confidence, connecting it to goals—forces you to think it through. It's rubber duck debugging for architecture.
+- **Sessions end.** Context compacts. The LLM loses memory of what was tried.
+- **Decisions evaporate.** Six months later, no one remembers *why* you chose approach A over B.
+- **PRs become incomprehensible.** A 50-file diff tells you *what* changed, not *why*.
+- **Onboarding is archaeology.** New teammates reverse-engineer decisions from code.
 
-3. **Real-time logging beats retroactive documentation.** Capture reasoning in the moment, not reconstructed from memory. By the time you write the post-hoc docs, you've already forgotten the options you rejected.
+The code tells you *what*. But decisions tell you *why*.
 
-4. **Graphs beat documents.** Decisions connect—goals spawn decisions, decisions spawn actions, actions produce outcomes. A graph captures these relationships. You can trace any outcome back to the goal that spawned it.
+## The Solution
 
-5. **Complex PRs tell a story.** A 50-file PR is incomprehensible as a diff. But as a decision graph? You can see the goal, the key decisions, the rejected approaches, and how each file change connects to the larger purpose. Reviewers can understand *why*, not just *what*.
+Deciduous creates a persistent, queryable graph of every decision made during development. Log decisions in real-time—as they happen—and they survive session boundaries, context compaction, and human memory.
 
-6. **Context loss is inevitable.** Sessions end. Memory compacts. The graph survives. When you come back to a project after months away, the graph is your memory.
+```
+979 nodes • 838 edges • Real development history from building this tool
+```
 
-7. **Humans and AI assistants both benefit.** You can query the graph to remember your own reasoning. The LLM can query it to understand decisions made before its context window. Either of you can log decisions. The graph doesn't care who's typing—it just preserves the reasoning.
+Both you and your AI assistant can:
+- **Query past reasoning** before making new decisions
+- **See what was tried** and what was rejected
+- **Trace any outcome** back to the goal that spawned it
+- **Recover context** after sessions end or memory compacts
 
-8. **The graph is a shared workspace.** When the LLM makes a choice, you can see it. When you make a choice, the LLM can query it. Decisions flow between sessions, between humans and AI, between teammates.
-
----
-
-## Who Uses It
-
-**You, the developer:**
-- Think through decisions more carefully by structuring them
-- Remember why you made choices months later
-- Review complex PRs by understanding the decision flow, not just the diff
-- Onboard to unfamiliar codebases by reading the decision history
-
-**Your AI assistant:**
-- Recover context after session boundaries or compaction
-- Understand decisions made before its context window
-- Build on previous reasoning instead of starting fresh
-- Leave a queryable trail for future sessions
-
-**Your team:**
-- Share decision context across PRs via patch files
-- Review PRs with full visibility into the reasoning
-- Build institutional knowledge that survives employee turnover
+This isn't documentation written after the fact. It's a real-time record of *how* software gets built.
 
 ---
 
 ## Quick Start
 
-### 1. Install
-
 ```bash
+# Install
 cargo install deciduous
-```
 
-### 2. Initialize in your project
-
-```bash
+# Initialize in your project
 cd your-project
 deciduous init
-```
 
-This creates:
-- `.deciduous/deciduous.db` — SQLite database for the graph
-- `.claude/commands/` — Slash commands for Claude Code (`/decision`, `/recover`)
-- `docs/` — Static web viewer (deployable to GitHub Pages)
-- `CLAUDE.md` — Project instructions with the logging workflow
-
-### 3. Start using
-
-```bash
-# Log a decision
+# Start logging decisions
 deciduous add goal "Add user authentication" -c 90
-
-# Connect decisions
 deciduous add decision "Choose auth method" -c 75
 deciduous link 1 2 -r "Deciding implementation approach"
 
 # View the graph
-deciduous serve          # Local web viewer
-deciduous tui            # Terminal UI
-deciduous sync           # Export for GitHub Pages
+deciduous serve    # Web viewer at localhost:3000
+deciduous tui      # Terminal UI
 ```
 
-### 4. Deploy to GitHub Pages
-
-```bash
-git add docs/
-git push
-```
-
-Enable Pages: **Settings > Pages > Source > Deploy from branch > `gh-pages`**
-
-Your graph will be live at `https://<user>.github.io/<repo>/`
+That's it. Your first decision graph is live.
 
 ---
 
 ## The Workflow
 
 ```
-SESSION START
-    |
-Run /recover → Query past decisions
-    |
-DO WORK → Log BEFORE each action
-    |
-AFTER CHANGES → Log outcomes, link nodes
-    |
-BEFORE PUSH → deciduous sync
-    |
-SESSION END → Graph survives
+BEFORE you do something → Log what you're ABOUT to do
+AFTER it succeeds/fails → Log the outcome
+CONNECT immediately → Link every node to its parent
 ```
 
-### During a session
+### Example Session
 
 ```bash
 # Starting a new feature
-deciduous add goal "Add rate limiting" -c 90 -p "User asked: add rate limiting"
+deciduous add goal "Add rate limiting" -c 90 -p "User asked: add rate limiting to the API"
 
 # Making a choice
 deciduous add decision "Choose rate limiter approach" -c 75
 deciduous link 1 2 -r "Deciding implementation"
-deciduous add option "Redis-based" -c 80
+
+# Considering options
+deciduous add option "Redis-based distributed" -c 80
 deciduous add option "In-memory sliding window" -c 70
+deciduous link 2 3 -r "Option A"
+deciduous link 2 4 -r "Option B"
 
-# Implementing
+# Implementing the chosen approach
 deciduous add action "Implementing Redis rate limiter" -c 85
-deciduous link 2 5 --edge-type chosen -r "Scales across instances"
+deciduous link 3 5 --edge-type chosen -r "Scales across instances"
 
-# Recording outcome
+# Recording the outcome
 deciduous add outcome "Rate limiting working in prod" -c 95
 deciduous link 5 6 -r "Implementation complete"
+
+# Sync for GitHub Pages
+deciduous sync
 ```
+
+### Session Recovery
+
+When context compacts or you start a new session:
+
+```bash
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected?
+deciduous commands        # What happened recently?
+```
+
+The graph remembers what you don't.
 
 ---
 
 ## Viewing the Graph
-
-Two full-featured interfaces for browsing the graph—use whichever fits your workflow.
 
 ### Web Viewer
 
@@ -164,16 +128,16 @@ Two full-featured interfaces for browsing the graph—use whichever fits your wo
 deciduous serve --port 3000
 ```
 
-A browser-based interface with four visualization modes, branch filtering, and auto-refresh. Deploy to GitHub Pages for shareable, always-up-to-date graphs.
+Four visualization modes:
 
 | View | Purpose |
 |------|---------|
-| **Chains** | Decision chains organized by session—see the story of a feature |
-| **Timeline** | Chronological view merged with git commits—trace decisions to code |
-| **Graph** | Force-directed interactive visualization—explore connections, zoom, pan |
-| **DAG** | Hierarchical goal→decision→outcome flow—understand structure at a glance |
+| **Chains** | Decision chains by session—see the story of a feature |
+| **Timeline** | Chronological view merged with git commits |
+| **Graph** | Force-directed interactive visualization |
+| **DAG** | Hierarchical goal→decision→outcome flow |
 
-Features: branch dropdown filter, node search, stats bar with counts, click-to-expand details, recency sorting, responsive layout.
+Features: branch filtering, node search, click-to-expand details, auto-refresh.
 
 ### Terminal UI
 
@@ -181,22 +145,18 @@ Features: branch dropdown filter, node search, stats bar with counts, click-to-e
 deciduous tui
 ```
 
-A rich terminal interface for when you're already in the shell. Vim-style navigation, syntax-highlighted file previews, and integrated git diffs.
+Vim-style navigation with syntax-highlighted file previews:
 
 | Key | Action |
 |-----|--------|
-| `j`/`k`, `gg`/`G` | Navigate timeline |
-| `Enter` | Toggle detail panel with connections, metadata, prompts |
-| `/` | Search by title or description |
-| `f` | Filter by node type (goal, decision, action, etc.) |
-| `b`/`B` | Filter by branch / fuzzy branch search |
-| `o` | Open associated files in your editor |
-| `O` | View linked commit with full diff |
-| `p`/`d` | Preview file content / show file diff (syntax highlighted) |
-| `s` | Show goal story—hierarchical view from goal to outcomes |
-| `?` | Help |
-
-Features: auto-refresh on database changes, file browser panel, commit detail modal, syntax highlighting via the same engine as `bat`.
+| `j`/`k`, `gg`/`G` | Navigate |
+| `Enter` | Toggle detail panel |
+| `/` | Search |
+| `f` | Filter by type |
+| `b` | Filter by branch |
+| `o` | Open file in editor |
+| `O` | View linked commit diff |
+| `s` | Show goal story tree |
 
 ---
 
@@ -217,24 +177,39 @@ Features: auto-refresh on database changes, file browser panel, commit detail mo
 |------|---------|
 | `leads_to` | Natural progression |
 | `chosen` | Selected this option |
-| `rejected` | Did not select (include reason) |
+| `rejected` | Did not select (with reason) |
 | `requires` | Dependency |
 | `blocks` | Preventing progress |
-| `enables` | Makes something possible |
+| `enables` | Makes possible |
+
+---
+
+## Graph Maintenance
+
+Made a mistake? Fix it:
+
+```bash
+# Remove an edge
+deciduous unlink 5 12
+
+# Delete a node (cascades to connected edges)
+deciduous delete 42
+
+# Preview before deleting
+deciduous delete 42 --dry-run
+```
 
 ---
 
 ## Multi-User Sync
 
-Share decisions across teammates working on the same codebase.
-
-Each node has both a local ID and a globally unique `change_id` (UUID). Export patches to share:
+Share decisions across teammates. Each node has a globally unique `change_id` (UUID):
 
 ```bash
 # Export your branch's decisions
 deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
 
-# Apply patches from teammates (idempotent—safe to re-apply)
+# Apply patches from teammates (idempotent)
 deciduous diff apply .deciduous/patches/*.json
 
 # Preview before applying
@@ -244,10 +219,43 @@ deciduous diff apply --dry-run .deciduous/patches/teammate.json
 ### PR Workflow
 
 1. Create nodes while working
-2. Export: `deciduous diff export --branch my-feature -o .deciduous/patches/my-feature.json`
+2. Export: `deciduous diff export -o .deciduous/patches/my-feature.json`
 3. Commit the patch file (not the database)
-4. Open PR with patch file included
-5. Teammates apply after pulling
+4. PR includes the patch; teammates apply after merge
+
+---
+
+## GitHub Pages Deployment
+
+`deciduous init` creates workflows that deploy your graph viewer automatically:
+
+```bash
+deciduous sync    # Export to docs/graph-data.json
+git add docs/
+git push
+```
+
+Enable Pages: **Settings > Pages > Source > `gh-pages` branch**
+
+Your graph is live at `https://<user>.github.io/<repo>/`
+
+---
+
+## The Premises
+
+1. **Decisions are the unit of institutional knowledge.** Code tells you *what*, but decisions tell you *why*. Six months from now, you won't remember why you chose Redis over Postgres for that cache. The graph will.
+
+2. **Structured thinking produces better outcomes.** The act of logging a decision—naming it, assigning confidence, connecting it to goals—forces you to think it through.
+
+3. **Real-time logging beats retroactive documentation.** Capture reasoning in the moment. By the time you write post-hoc docs, you've forgotten the options you rejected.
+
+4. **Graphs beat documents.** Goals spawn decisions, decisions spawn actions, actions produce outcomes. A graph captures these relationships. You can trace any outcome to its origin.
+
+5. **Complex PRs tell a story.** A 50-file diff is incomprehensible. A decision graph shows the goal, the key decisions, the rejected approaches, and how each change connects to purpose.
+
+6. **Context loss is inevitable.** Sessions end. Memory compacts. The graph survives.
+
+7. **The graph is a shared workspace.** Decisions flow between sessions, between humans and AI, between teammates. The graph doesn't care who's typing—it preserves the reasoning.
 
 ---
 
@@ -261,111 +269,49 @@ deciduous update             # Update tooling to latest version
 # Add nodes
 deciduous add goal "Title" -c 90
 deciduous add decision "Title" -c 75
-deciduous add option "Title" -c 80
-deciduous add action "Title" -c 85
-deciduous add outcome "Title" -c 95
-deciduous add observation "Title" -c 70
+deciduous add action "Title" -c 85 --commit HEAD  # Link to git commit
 
-# Node metadata
+# Node options
 -c, --confidence <0-100>     # Confidence level
--p, --prompt "..."           # User prompt (short, single-line)
---prompt-stdin               # Read prompt from stdin (multi-line, preferred)
+-p, --prompt "..."           # User prompt that triggered this
+--prompt-stdin               # Read prompt from stdin (multi-line)
 -f, --files "a.rs,b.rs"      # Associated files
--b, --branch <name>          # Git branch (auto-detected)
 --commit <hash|HEAD>         # Link to git commit
 
-# Update prompts on existing nodes
-deciduous prompt <id> "text" # Set prompt text
-deciduous prompt <id>        # Read prompt from stdin
-
-# Connect nodes
+# Connect and disconnect
 deciduous link <from> <to> -r "reason"
-deciduous link 1 2 --edge-type chosen -r "Selected this approach"
+deciduous unlink <from> <to>
+
+# Delete nodes
+deciduous delete <id>
+deciduous delete <id> --dry-run
 
 # Query
 deciduous nodes              # List all nodes
 deciduous nodes -b main      # Filter by branch
 deciduous edges              # List connections
 deciduous graph              # Full graph as JSON
-deciduous commands           # Recent command history
 
 # Visualize
 deciduous serve              # Web viewer
 deciduous tui                # Terminal UI
 deciduous dot --png          # Generate PNG (requires graphviz)
-deciduous dot --auto         # Branch-specific filename
 
 # Export
-deciduous sync               # Export to docs/graph-data.json
+deciduous sync               # Export to docs/
 deciduous writeup -t "Title" # Generate PR writeup
 deciduous backup             # Create database backup
 
 # Multi-user sync
 deciduous diff export -o patch.json
 deciduous diff apply patches/*.json
-deciduous diff status
-deciduous migrate            # Add change_id columns
+deciduous migrate            # Add change_id columns for sync
 
 # Shell completion
-deciduous completion bash    # Generate bash completions
-deciduous completion zsh     # Generate zsh completions
-deciduous completion fish    # Generate fish completions
+deciduous completion zsh     # Add: source <(deciduous completion zsh)
+deciduous completion bash
+deciduous completion fish
 ```
-
----
-
-## Shell Completion
-
-Enable tab completion for commands, options, and arguments.
-
-**Zsh** (add to `~/.zshrc`):
-```bash
-source <(deciduous completion zsh)
-```
-
-**Bash** (add to `~/.bashrc`):
-```bash
-source <(deciduous completion bash)
-```
-
-**Fish** (add to `~/.config/fish/config.fish`):
-```fish
-deciduous completion fish | source
-```
-
-**PowerShell** (add to profile):
-```powershell
-deciduous completion powershell | Out-String | Invoke-Expression
-```
-
----
-
-## Branch-Based Grouping
-
-Nodes are automatically tagged with the current git branch.
-
-**Configuration** (`.deciduous/config.toml`):
-```toml
-[branch]
-main_branches = ["main", "master"]
-auto_detect = true
-```
-
-```bash
-deciduous nodes --branch main        # Filter by branch
-deciduous add goal "Work" -b other   # Override auto-detection
-deciduous add goal "Note" --no-branch # No branch tag
-```
-
----
-
-## GitHub Pages Deployment
-
-`deciduous init` creates GitHub workflows that:
-1. Deploy your graph viewer to GitHub Pages on push to main
-2. Clean up branch-specific PNGs after PR merge
-
-Enable Pages: **Settings > Pages > Source > Deploy from branch > `gh-pages`**
 
 ---
 
@@ -375,12 +321,11 @@ Enable Pages: **Settings > Pages > Source > Deploy from branch > `gh-pages`**
 git clone https://github.com/notactuallytreyanastasio/deciduous.git
 cd deciduous
 cargo build --release
-./target/release/deciduous --help
 ```
 
-### macOS Dependencies
+### macOS Note
 
-The `syntect` crate (used for syntax highlighting in the TUI) requires `libiconv`:
+The `syntect` crate requires `libiconv`:
 
 ```bash
 brew install libiconv
@@ -388,16 +333,32 @@ export LIBRARY_PATH="/opt/homebrew/opt/libiconv/lib:$LIBRARY_PATH"
 cargo build --release
 ```
 
-Add the `LIBRARY_PATH` export to your shell profile (`.zshrc` or `.bashrc`) to make it permanent.
+---
 
-### Optional Dependencies
+## Who Uses Deciduous
 
-| Dependency | Required For | Install |
-|------------|--------------|---------|
-| graphviz | `deciduous dot --png` | `brew install graphviz` (macOS) / `apt install graphviz` (Ubuntu) |
+**You, the developer:**
+- Think through decisions by structuring them
+- Remember why you made choices months later
+- Review PRs by understanding the decision flow
+- Onboard to codebases by reading decision history
+
+**Your AI assistant:**
+- Recover context after compaction or session boundaries
+- Build on previous reasoning instead of starting fresh
+- Leave a queryable trail for future sessions
+
+**Your team:**
+- Share decision context via patch files
+- Review PRs with full visibility into reasoning
+- Build institutional knowledge that survives turnover
 
 ---
 
 ## Why "deciduous"?
 
 It almost has the word "decision" in it, and they're trees.
+
+---
+
+**[Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** · **[Live Demo](https://notactuallytreyanastasio.github.io/deciduous/demo/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**
