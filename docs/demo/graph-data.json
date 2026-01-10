@@ -10768,6 +10768,149 @@
       "created_at": "2026-01-09T18:00:19.074465-05:00",
       "updated_at": "2026-01-09T18:00:19.074465-05:00",
       "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 981,
+      "change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "node_type": "goal",
+      "title": "Build archaeology skill for bootstrapping deciduous in existing projects",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:55:42.791356-05:00",
+      "updated_at": "2026-01-10T03:55:42.791356-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90,\"prompt\":\"I want to think of something big for deciduous: \\n\\nA methodology to have a skill/command/whatever that will be used for you to do archaeology in a repo that _didnt_ have deciduous already set up\\n\\nI've done this twice now and have some examples of DAGs I've made you make and they include prompts etc\\n\\nwith that do you think we could build an archaelogy tool?\\n\\n---\\n\\nand also use the entire commit history, commit by commit, assuming the project has been good with git hygeine \\n\\nfor structuring the graph, for each logical premise that comes as a series of pieces of work through issues, commits, PRs, etc, we want to build those up as if we were making a \\\"branch\\\" for each one, each of the branches is linked to the root beginning node but they spread out in parallel. Sometimes a new branch might logically be the child of another. that should be marked too. it needs to be VERY deep for all fronts that it works from.\"}"
+    },
+    {
+      "id": 982,
+      "change_id": "3f722d67-26bb-41e1-a6b6-3cacde6b9395",
+      "node_type": "decision",
+      "title": "Skill execution architecture - how does the archaeology process run?",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:55:51.118321-05:00",
+      "updated_at": "2026-01-10T03:55:51.118321-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":75}"
+    },
+    {
+      "id": 983,
+      "change_id": "601cf99b-8193-4b4d-be7c-50a69da44b23",
+      "node_type": "observation",
+      "title": "React archaeology: 218 nodes, 330 edges - deep but manual, cherry-picked PRs/issues",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:55:51.201570-05:00",
+      "updated_at": "2026-01-10T03:55:51.201570-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 984,
+      "change_id": "115b476d-8815-408c-8289-a1264b47d7a9",
+      "node_type": "observation",
+      "title": "Phoenix archaeology: 53 nodes - lighter touch, release-focused, community patterns captured",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:55:51.282735-05:00",
+      "updated_at": "2026-01-10T03:55:51.282735-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 985,
+      "change_id": "df17f59e-c94d-46f0-a6da-35c478fa077f",
+      "node_type": "option",
+      "title": "Phased approach: gather phase (git/gh data) → analysis phase (AI comprehension) → logging phase (deciduous nodes)",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:04.759650-05:00",
+      "updated_at": "2026-01-10T03:56:04.759650-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":80}"
+    },
+    {
+      "id": 986,
+      "change_id": "4bea62d7-8793-4499-89c9-6afb0905f5ed",
+      "node_type": "option",
+      "title": "Streaming approach: process commit-by-commit, log nodes as understanding develops",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:04.838401-05:00",
+      "updated_at": "2026-01-10T03:56:04.838401-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":70}"
+    },
+    {
+      "id": 987,
+      "change_id": "6c9404cf-468d-4a4f-aa90-1e7375917f57",
+      "node_type": "option",
+      "title": "Branch-parallel: identify logical premises first, then deep-dive each branch in parallel",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:04.920924-05:00",
+      "updated_at": "2026-01-10T03:56:04.920924-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":85}"
+    },
+    {
+      "id": 988,
+      "change_id": "16f8114a-3380-45bd-853d-3f484e7300c9",
+      "node_type": "observation",
+      "title": "Data sources: git log (commits), gh pr list, gh issue list, gh release list, code reading",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:15.270756-05:00",
+      "updated_at": "2026-01-10T03:56:15.270756-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 989,
+      "change_id": "39de92b4-5b67-49fe-bb01-98d9e31ba627",
+      "node_type": "observation",
+      "title": "Graph structure: root goal → parallel premise branches → each branch has its own goal/decision/action/outcome chain",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:15.346917-05:00",
+      "updated_at": "2026-01-10T03:56:15.346917-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 990,
+      "change_id": "d0338e4e-4311-4b84-87a9-cdb92733a28c",
+      "node_type": "observation",
+      "title": "Cross-branch links: when one premise depends on another, link them explicitly with rationale",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:15.420848-05:00",
+      "updated_at": "2026-01-10T03:56:15.420848-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 991,
+      "change_id": "ab62d4b6-9aa4-4ad5-9a35-6772d5f124ff",
+      "node_type": "observation",
+      "title": "Key improvement over manual: systematic commit-by-commit traversal ensures nothing missed",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:23.206395-05:00",
+      "updated_at": "2026-01-10T03:56:23.206395-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 992,
+      "change_id": "b5ab5cd5-4f93-4398-86a9-65afc201eebb",
+      "node_type": "observation",
+      "title": "Key improvement over manual: enforced depth - every commit analyzed, every PR context fetched",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T03:56:23.278480-05:00",
+      "updated_at": "2026-01-10T03:56:23.278480-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":90}"
+    },
+    {
+      "id": 993,
+      "change_id": "df837e6d-e4e4-401b-b27b-bf07ab9b5c4b",
+      "node_type": "outcome",
+      "title": "Updated story.html with new features, archaeology, session recovery, and current stats",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-10T11:59:49.710303-05:00",
+      "updated_at": "2026-01-10T11:59:49.710303-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"6da0d5c\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -19999,6 +20142,127 @@
       "weight": 1.0,
       "rationale": "README update part of v0.8.25 release improvements",
       "created_at": "2026-01-09T18:00:25.325442-05:00"
+    },
+    {
+      "id": 840,
+      "from_node_id": 981,
+      "to_node_id": 982,
+      "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "to_change_id": "3f722d67-26bb-41e1-a6b6-3cacde6b9395",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Need to decide how the skill executes",
+      "created_at": "2026-01-10T03:55:57.590361-05:00"
+    },
+    {
+      "id": 841,
+      "from_node_id": 981,
+      "to_node_id": 983,
+      "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "to_change_id": "601cf99b-8193-4b4d-be7c-50a69da44b23",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Prior art: React example",
+      "created_at": "2026-01-10T03:55:57.669234-05:00"
+    },
+    {
+      "id": 842,
+      "from_node_id": 981,
+      "to_node_id": 984,
+      "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "to_change_id": "115b476d-8815-408c-8289-a1264b47d7a9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Prior art: Phoenix example",
+      "created_at": "2026-01-10T03:55:57.737299-05:00"
+    },
+    {
+      "id": 843,
+      "from_node_id": 982,
+      "to_node_id": 985,
+      "from_change_id": "3f722d67-26bb-41e1-a6b6-3cacde6b9395",
+      "to_change_id": "df17f59e-c94d-46f0-a6da-35c478fa077f",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option A",
+      "created_at": "2026-01-10T03:56:15.180020-05:00"
+    },
+    {
+      "id": 844,
+      "from_node_id": 982,
+      "to_node_id": 986,
+      "from_change_id": "3f722d67-26bb-41e1-a6b6-3cacde6b9395",
+      "to_change_id": "4bea62d7-8793-4499-89c9-6afb0905f5ed",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option B",
+      "created_at": "2026-01-10T03:56:15.188445-05:00"
+    },
+    {
+      "id": 845,
+      "from_node_id": 982,
+      "to_node_id": 987,
+      "from_change_id": "3f722d67-26bb-41e1-a6b6-3cacde6b9395",
+      "to_change_id": "6c9404cf-468d-4a4f-aa90-1e7375917f57",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Option C",
+      "created_at": "2026-01-10T03:56:15.195688-05:00"
+    },
+    {
+      "id": 846,
+      "from_node_id": 981,
+      "to_node_id": 988,
+      "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "to_change_id": "16f8114a-3380-45bd-853d-3f484e7300c9",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Required data sources",
+      "created_at": "2026-01-10T03:56:23.084968-05:00"
+    },
+    {
+      "id": 847,
+      "from_node_id": 981,
+      "to_node_id": 989,
+      "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "to_change_id": "39de92b4-5b67-49fe-bb01-98d9e31ba627",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Target graph structure",
+      "created_at": "2026-01-10T03:56:23.095385-05:00"
+    },
+    {
+      "id": 848,
+      "from_node_id": 981,
+      "to_node_id": 990,
+      "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+      "to_change_id": "d0338e4e-4311-4b84-87a9-cdb92733a28c",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Connection pattern",
+      "created_at": "2026-01-10T03:56:23.103206-05:00"
+    },
+    {
+      "id": 849,
+      "from_node_id": 983,
+      "to_node_id": 991,
+      "from_change_id": "601cf99b-8193-4b4d-be7c-50a69da44b23",
+      "to_change_id": "ab62d4b6-9aa4-4ad5-9a35-6772d5f124ff",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Addresses limitation",
+      "created_at": "2026-01-10T03:56:28.608716-05:00"
+    },
+    {
+      "id": 850,
+      "from_node_id": 983,
+      "to_node_id": 992,
+      "from_change_id": "601cf99b-8193-4b4d-be7c-50a69da44b23",
+      "to_change_id": "b5ab5cd5-4f93-4398-86a9-65afc201eebb",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Addresses limitation",
+      "created_at": "2026-01-10T03:56:28.620774-05:00"
     }
   ]
 }
