@@ -32,9 +32,15 @@ enum Command {
     /// Update Claude integration files to latest version
     ///
     /// Overwrites: .claude/commands/, .claude/skills/, .claude/hooks/,
-    /// .claude/agents.toml, .claude/settings.json, CLAUDE.md section,
-    /// .deciduous/config.toml, and docs/index.html (if docs/ exists)
+    /// .claude/agents.toml, and CLAUDE.md workflow section.
+    /// Does NOT touch: .claude/settings.json, .deciduous/config.toml, docs/
     Update {},
+
+    /// Check if deciduous integration files need updating
+    ///
+    /// Compares .deciduous/.version with current binary version.
+    /// Exits with code 0 if up to date, 1 if update needed.
+    CheckUpdate {},
 
     /// Add a new node to the decision graph
     Add {
@@ -474,6 +480,48 @@ fn main() {
         return;
     }
 
+    // Handle check-update separately - just compares versions
+    if let Command::CheckUpdate {} = args.command {
+        let current_version = env!("CARGO_PKG_VERSION");
+        let version_file = std::path::Path::new(".deciduous/.version");
+
+        if !version_file.exists() {
+            println!(
+                "{} No version file found. Run 'deciduous update' to sync integration files.",
+                "Update needed:".yellow()
+            );
+            std::process::exit(1);
+        }
+
+        let installed_version = match std::fs::read_to_string(version_file) {
+            Ok(v) => v.trim().to_string(),
+            Err(_) => {
+                println!(
+                    "{} Could not read version file. Run 'deciduous update'.",
+                    "Update needed:".yellow()
+                );
+                std::process::exit(1);
+            }
+        };
+
+        if installed_version != current_version {
+            println!(
+                "{} Integration files are v{}, binary is v{}. Run 'deciduous update'.",
+                "Update available:".yellow(),
+                installed_version,
+                current_version
+            );
+            std::process::exit(1);
+        }
+
+        println!(
+            "{} Integration files are up to date (v{}).",
+            "OK:".green(),
+            current_version
+        );
+        return;
+    }
+
     // Handle TUI separately - it has its own event loop
     if let Command::Tui { db } = args.command {
         if let Err(e) = deciduous::tui::run(db) {
@@ -505,6 +553,7 @@ fn main() {
     match args.command {
         Command::Init { .. } => unreachable!(),   // Handled above
         Command::Update { .. } => unreachable!(), // Handled above
+        Command::CheckUpdate { .. } => unreachable!(), // Handled above
         Command::Add {
             node_type,
             title,

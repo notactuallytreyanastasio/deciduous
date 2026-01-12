@@ -147,8 +147,7 @@ deciduous add goal "Add auth" -p "User asked: add login to the app"
 deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
 I need to add user authentication to the app. Users should be able to sign up
 with email/password, and we need OAuth support for Google and GitHub. The auth
-should use JWT tokens with refresh token rotation. Make sure to add rate limiting
-on the login endpoint to prevent brute force attacks.
+should use JWT tokens with refresh token rotation.
 EOF
 
 # Or use the prompt command to update existing nodes
@@ -164,16 +163,13 @@ EOF
 
 **Updating prompts on existing nodes:**
 ```bash
-# Add or update a prompt retroactively
 deciduous prompt <node_id> "full verbatim prompt here"
-
-# Read from stdin for multi-line
-cat prompt.txt | deciduous prompt <node_id>
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
 ```
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer detail panel.
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
 
-### ⚠️ CRITICAL: Maintain Connections
+### CRITICAL: Maintain Connections
 
 **The graph's value is in its CONNECTIONS, not just nodes.**
 
@@ -183,6 +179,7 @@ Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer de
 | `action` | The goal/decision that spawned it |
 | `option` | Its parent decision |
 | `observation` | Related goal/action |
+| `revisit` | The decision/outcome being reconsidered |
 
 **Root `goal` nodes are the ONLY valid orphans.**
 
@@ -196,40 +193,47 @@ deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
 
 # Metadata flags
-# -c, --confidence 0-100     Confidence level
-# -p, --prompt "..."         Store user prompt (short, single-line)
-# --prompt-stdin             Read prompt from stdin (multi-line, preferred)
-# -f, --files "a.rs,b.rs"    Associate files
-# -b, --branch <name>        Git branch (auto-detected)
-# --commit <hash|HEAD>       Link to git commit (use HEAD for current commit)
-# --date "YYYY-MM-DD"        Backdate node (RFC3339 or YYYY-MM-DD HH:MM:SS)
-
-# Update prompts on existing nodes
-deciduous prompt <node_id> "prompt text"   # Short prompt
-deciduous prompt <node_id> << 'EOF'        # Multi-line from stdin
-Full verbatim prompt here...
-EOF
+# -c, --confidence 0-100   Confidence level
+# -p, --prompt "..."       Store the user prompt (use when semantically meaningful)
+# -f, --files "a.rs,b.rs"  Associate files
+# -b, --branch <name>      Git branch (auto-detected)
+# --commit <hash|HEAD>     Link to git commit (use HEAD for current commit)
+# --date "YYYY-MM-DD"      Backdate node (for archaeology)
 
 # Branch filtering
 deciduous nodes --branch main
 deciduous nodes -b feature-auth
 ```
 
-### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+### CRITICAL: Link Commits to Actions/Outcomes
 
 **After every git commit, link it to the decision graph!**
 
 ```bash
-# AFTER committing code, log an action/outcome with --commit HEAD
 git commit -m "feat: add auth"
-deciduous add action "Implemented auth feature" -c 90 --commit HEAD
+deciduous add action "Implemented auth" -c 90 --commit HEAD
 deciduous link <goal_id> <action_id> -r "Implementation"
-
-# Or log the outcome of a completed feature
-deciduous add outcome "Auth feature merged" -c 95 --commit HEAD
 ```
 
-This creates traceability between commits and decisions. The TUI and web viewer show commits linked to nodes.
+The `--commit HEAD` flag captures the commit hash and links it to the node. The web viewer will show commit messages, authors, and dates.
+
+### Git History & Deployment
+
+```bash
+# Export graph AND git history for web viewer
+deciduous sync
+
+# This creates:
+# - docs/graph-data.json (decision graph)
+# - docs/git-history.json (commit info for linked nodes)
+```
+
+To deploy to GitHub Pages:
+1. `deciduous sync` to export
+2. Push to GitHub
+3. Settings > Pages > Deploy from branch > /docs folder
+
+Your graph will be live at `https://<user>.github.io/<repo>/`
 
 ### Branch-Based Grouping
 
@@ -269,12 +273,13 @@ deciduous diff apply .deciduous/patches/*.json
 deciduous diff apply --dry-run .deciduous/patches/teammate.json
 ```
 
-PR workflow: Export patch → commit patch file → PR → teammates apply.
+PR workflow: Export patch -> commit patch file -> PR -> teammates apply.
 ## Session Start Checklist
 
 Every new session or after context recovery, run `/recover` or:
 
 ```bash
+deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
 deciduous commands        # What happened recently?
@@ -421,6 +426,7 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 |---------|-------------|
 | `deciduous init` | Initialize deciduous in current directory |
 | `deciduous update` | Update Claude integration files to latest version |
+| `deciduous check-update` | Check if integration files need updating |
 | `deciduous add <type> "title"` | Add a node (goal/decision/option/action/outcome/observation/revisit) |
 | `deciduous link <from> <to>` | Create edge between nodes |
 | `deciduous status <id> <status>` | Update node status |

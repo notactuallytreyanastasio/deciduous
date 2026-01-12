@@ -87,8 +87,12 @@ deciduous diff status</pre>
             <h3><code>deciduous update</code></h3>
             <p>Update Claude integration files to latest version.</p>
             <p>Overwrites: <code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>.claude/hooks/</code>,
-               <code>.claude/agents.toml</code>, <code>.claude/settings.json</code>, <code>CLAUDE.md</code> section,
-               <code>.deciduous/config.toml</code>, and <code>docs/index.html</code> (if docs/ exists).</p>
+               <code>.claude/agents.toml</code>, and <code>CLAUDE.md</code> workflow section.</p>
+            <p><strong>Not touched:</strong> <code>.claude/settings.json</code>, <code>.deciduous/config.toml</code>, <code>docs/</code></p>
+
+            <h3><code>deciduous check-update</code></h3>
+            <p>Check if integration files need updating.</p>
+            <p>Compares <code>.deciduous/.version</code> with current binary version. Exits with code 0 if up to date, 1 if update needed.</p>
 
             <h3><code>deciduous add</code></h3>
             <pre>deciduous add &lt;NODE_TYPE&gt; &lt;TITLE&gt; [OPTIONS]

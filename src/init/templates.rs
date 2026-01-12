@@ -753,9 +753,10 @@ auto_detect = true
 ### Session Start Checklist
 
 ```bash
-deciduous nodes    # What decisions exist?
-deciduous edges    # How are they connected? Any gaps?
-git status         # Current state
+deciduous check-update    # Update needed? Run 'deciduous update' if yes
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected? Any gaps?
+git status                # Current state
 ```
 
 ### Multi-User Sync

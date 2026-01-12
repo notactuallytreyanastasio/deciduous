@@ -320,29 +320,35 @@ Your graph is live at `https://<user>.github.io/<repo>/`
 When deciduous releases new features, your existing projects can get the latest integration files:
 
 ```bash
+# Check if an update is needed
+deciduous check-update
+
+# Update integration files
 deciduous update
 ```
 
-This command updates (overwrites) the following files to the latest versions:
+The `update` command overwrites the following files:
 
 | Files | What's Updated |
 |-------|----------------|
 | `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`) |
-| `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
-| `.claude/hooks/*.sh` | Enforcement hooks (block edits without action nodes) |
+| `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, /archaeology`) |
+| `.claude/hooks/*.sh` | Enforcement hooks |
 | `.claude/agents.toml` | Subagent configurations |
-| `.claude/settings.json` | Claude Code settings |
 | `CLAUDE.md` | Decision Graph Workflow section (preserves custom content) |
-| `.deciduous/config.toml` | Branch configuration |
-| `docs/index.html` | Web viewer (if docs/ exists) |
 
-**Note:** This command overwrites files. If you've customized hooks or commands, back them up first.
+**Not touched:** `.claude/settings.json`, `.deciduous/config.toml`, `docs/` - your configs stay intact.
 
-### When to Run Update
+### Automatic Version Checking
 
-- After upgrading deciduous (`cargo install deciduous`)
-- When release notes mention new skills or commands
-- To get the latest web viewer improvements
+The `check-update` command compares `.deciduous/.version` with the binary version:
+
+```bash
+$ deciduous check-update
+Update available: Integration files are v0.9.4, binary is v0.9.5. Run 'deciduous update'.
+```
+
+Add this to your session start routine to catch updates automatically.
 
 ---
 
@@ -370,6 +376,7 @@ This command updates (overwrites) the following files to the latest versions:
 # Initialize
 deciduous init               # Initialize with Claude Code integration
 deciduous update             # Update tooling to latest version
+deciduous check-update       # Check if update is needed
 
 # Add nodes
 deciduous add goal "Title" -c 90

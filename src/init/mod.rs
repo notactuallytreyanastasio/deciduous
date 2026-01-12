@@ -34,6 +34,17 @@ pub fn init_project() -> Result<(), String> {
     let config_path = deciduous_dir.join("config.toml");
     write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
 
+    // 1c. Write version file for auto-update detection
+    let version_path = deciduous_dir.join(".version");
+    let version = env!("CARGO_PKG_VERSION");
+    fs::write(&version_path, version)
+        .map_err(|e| format!("Could not write version file: {}", e))?;
+    println!(
+        "   {} .deciduous/.version ({})",
+        "Creating".green(),
+        version
+    );
+
     // 2. Initialize database by opening it (creates tables)
     let db_path = deciduous_dir.join("deciduous.db");
     if db_path.exists() {
@@ -222,12 +233,9 @@ pub fn update_tooling() -> Result<(), String> {
     );
     println!("   Directory: {}\n", cwd.display());
 
-    // Update config.toml (only if .deciduous exists)
+    // Verify .deciduous exists
     let deciduous_dir = cwd.join(".deciduous");
-    if deciduous_dir.exists() {
-        let config_path = deciduous_dir.join("config.toml");
-        write_file_overwrite(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
-    } else {
+    if !deciduous_dir.exists() {
         println!(
             "   {} .deciduous/ not found - run 'deciduous init' first",
             "Warning:".yellow()
@@ -271,14 +279,6 @@ pub fn update_tooling() -> Result<(), String> {
         ".claude/hooks/post-commit-reminder.sh",
     )?;
 
-    // Overwrite settings.json with hooks configuration
-    let settings_path = claude_base.join("settings.json");
-    write_file_overwrite(
-        &settings_path,
-        CLAUDE_SETTINGS_JSON,
-        ".claude/settings.json",
-    )?;
-
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");
     write_file_overwrite(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
@@ -308,11 +308,13 @@ pub fn update_tooling() -> Result<(), String> {
     let claude_md_path = cwd.join("CLAUDE.md");
     replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
 
-    // Update docs/index.html viewer if docs/ exists
-    let docs_dir = cwd.join("docs");
-    if docs_dir.exists() {
-        let viewer_path = docs_dir.join("index.html");
-        write_file_overwrite(&viewer_path, PAGES_VIEWER_HTML, "docs/index.html")?;
+    // Write version file for auto-update detection
+    if deciduous_dir.exists() {
+        let version_path = deciduous_dir.join(".version");
+        let version = env!("CARGO_PKG_VERSION");
+        fs::write(&version_path, version)
+            .map_err(|e| format!("Could not write version file: {}", e))?;
+        println!("   {} .deciduous/.version ({})", "Updated".green(), version);
     }
 
     println!("\n{}", "Tooling updated for Claude Code!".green().bold());
@@ -322,8 +324,6 @@ pub fn update_tooling() -> Result<(), String> {
     println!("  - Enforcement hooks (block edits without action nodes)");
     println!("  - Post-commit reminders (link commits to graph)");
     println!("  - Agent configurations (agents.toml)");
-    println!("  - Web viewer (docs/index.html)");
-    println!("  - Branch-based grouping with config.toml");
     println!();
 
     Ok(())
