@@ -1088,3 +1088,736 @@ pub const CLAUDE_AGENTS_TOML: &str = r#"# Project Subagents Configuration
 # - Document any manual steps
 # """
 "#;
+
+/// Pulse skill - Map the current model as decisions
+pub const SKILL_PULSE: &str = r#"# Pulse
+
+**Map the current model as decisions. No history, just now.**
+
+---
+
+## What This Is
+
+Pulse captures the current heartbeat of a system - what decisions define how it works TODAY.
+
+Not how it evolved. Not what was tried before. Just: *"What are the design decisions that make this system work the way it does?"*
+
+---
+
+## When to Use
+
+- Understanding an unfamiliar codebase
+- Documenting the current architecture
+- Before making changes (know what decisions you might affect)
+- Explaining a system to someone new
+- When you don't care about history, just current state
+
+---
+
+## Process
+
+### 1. Pick a scope
+
+What part of the system are you taking the pulse of?
+
+- A feature ("Suspense fallback behavior")
+- A subsystem ("Authentication")
+- A boundary ("API request lifecycle")
+
+### 2. Ask: "What decisions define this?"
+
+Read the code. For the thing you're scoping, ask:
+
+> "What design questions had to be answered for this to work?"
+
+Not implementation questions ("which library?") - model questions ("what's the behavior?")
+
+**Examples:**
+- "When should the fallback show?"
+- "How should nested components interact?"
+- "What happens on timeout?"
+- "How are errors handled?"
+
+### 3. Create the goal node
+
+```bash
+deciduous add goal "<Scope>: <Core question>" -c 90
+```
+
+Example:
+```bash
+deciduous add goal "Determine when and whether to show Suspense fallback" -c 90
+```
+
+### 4. Map the decisions
+
+For each design question you identified:
+
+```bash
+deciduous add decision "<Design question>" -c <confidence>
+deciduous link <parent> <decision> -r "leads_to"
+```
+
+Decisions can spawn other decisions:
+```bash
+# Root goal
+deciduous add goal "Suspense fallback behavior" -c 90
+# → 1
+
+# Top-level decisions
+deciduous add decision "How should timeout thresholds work?" -c 85
+deciduous link 1 2 -r "leads_to"
+
+deciduous add decision "What happens when fetch fails?" -c 85
+deciduous link 1 3 -r "leads_to"
+
+deciduous add decision "How should nested Suspense interact?" -c 85
+deciduous link 1 4 -r "leads_to"
+
+# Sub-decisions (questions that arise from parent decisions)
+deciduous add decision "Should timeout be configurable per-component?" -c 80
+deciduous link 2 5 -r "leads_to"
+
+deciduous add decision "What's the default timeout value?" -c 80
+deciduous link 2 6 -r "leads_to"
+```
+
+### 5. Add answers where known
+
+If a decision has a clear answer in the current system:
+
+```bash
+deciduous add option "<The answer/choice>" -c 90
+deciduous link <decision> <option> -r "resolved_by"
+deciduous status <option> chosen
+```
+
+If a decision is still open or unclear, leave it as just the decision node.
+
+---
+
+## The Output
+
+A decision tree showing the current model:
+
+```
+[GOAL: Suspense fallback behavior]
+    │
+    ├── [DECISION: How should timeout work?]
+    │       ├── [DECISION: Configurable per-component?]
+    │       └── [DECISION: Default timeout value?]
+    │               └── [OPTION: 1000ms] (chosen)
+    │
+    ├── [DECISION: What happens on fetch failure?]
+    │       └── [OPTION: Propagate to error boundary] (chosen)
+    │
+    └── [DECISION: How do nested Suspense interact?]
+            ├── [DECISION: Should parent wait for children?]
+            └── [DECISION: Independent or coordinated?]
+```
+
+---
+
+## Decision Criteria
+
+**Is this a decision worth capturing?**
+- Does it define BEHAVIOR (not implementation)? → Yes
+- Would changing it change how users experience the system? → Yes
+- Is it a choice that could have gone differently? → Yes
+- Is it just "how the code is organized"? → No
+
+**How deep to go?**
+- Stop when decisions become implementation details
+- Stop when the answer is obvious/forced (no real choice)
+- Stop when you've captured what someone needs to understand the model
+
+**Decision vs Option?**
+- Decision = the question ("How should timeout work?")
+- Option = an answer ("Use 1000ms default")
+
+---
+
+## Example: API Rate Limiting Pulse
+
+```bash
+# Goal
+deciduous add goal "API rate limiting behavior" -c 90
+# → 1
+
+# Core decisions
+deciduous add decision "What identifies a user for rate limiting?" -c 85
+deciduous link 1 2 -r "leads_to"
+
+deciduous add decision "What are the rate limit thresholds?" -c 85
+deciduous link 1 3 -r "leads_to"
+
+deciduous add decision "What happens when limit is exceeded?" -c 85
+deciduous link 1 4 -r "leads_to"
+
+# Answers for decision 2
+deciduous add option "User ID when authenticated, IP when not" -c 90
+deciduous link 2 5 -r "resolved_by"
+deciduous status 5 chosen
+
+# Sub-decisions for decision 3
+deciduous add decision "Different limits for different endpoints?" -c 80
+deciduous link 3 6 -r "leads_to"
+
+deciduous add decision "Different limits for different user tiers?" -c 80
+deciduous link 3 7 -r "leads_to"
+
+# Answer for decision 4
+deciduous add option "Return 429 with Retry-After header" -c 90
+deciduous link 4 8 -r "resolved_by"
+deciduous status 8 chosen
+```
+
+---
+
+## Connecting to History Later
+
+Pulse gives you the "Now". If you later want to add "How we got here":
+
+1. Run `/narratives` to understand the evolution
+2. Create `revisit` nodes that connect old decisions to current ones
+3. Mark superseded approaches
+
+The pulse becomes the destination that history leads to.
+
+```
+[Old decision] → [Observation] → [Revisit] → [Current decision from pulse]
+     (history)      (history)     (pivot)         (now)
+```
+
+---
+
+## Quick Reference
+
+```bash
+# Start with a goal
+deciduous add goal "<What aspect of the system?>" -c 90
+
+# Add decisions (the questions)
+deciduous add decision "<Design question?>" -c 85
+deciduous link <parent> <decision> -r "leads_to"
+
+# Add answers where known
+deciduous add option "<The answer>" -c 90
+deciduous link <decision> <option> -r "resolved_by"
+deciduous status <option> chosen
+
+# View the pulse
+deciduous serve
+```
+
+---
+
+## The Mindset
+
+You're a doctor taking the pulse of a system.
+
+- What's the heartbeat? (core behavior)
+- What decisions keep it alive? (design choices)
+- What would happen if you changed X? (dependencies)
+
+Don't worry about how it got this way. Just understand what it IS.
+"#;
+
+/// Narratives skill - Track evolution stories
+pub const SKILL_NARRATIVES: &str = r#"# Narrative Tracking
+
+**Narratives are the source of truth. Commits are just evidence.**
+
+---
+
+## The Core Insight
+
+Don't start with commits. Start with understanding.
+
+A narrative is: *"The story of how one piece of the system's design evolved."*
+
+Commits might support a narrative. Or they might not exist. The narrative is the thing - it lives at the conceptual level, not the git level.
+
+---
+
+## When to Use
+
+When you need to understand how a system got to where it is. Before building any decision graph.
+
+---
+
+## Process
+
+### 1. Understand the system first
+
+Before looking at git:
+
+```bash
+# Read the code
+cat README.md
+ls src/
+
+# Understand what exists TODAY
+```
+
+Ask: **What are the major pieces of this system?**
+
+Each major piece probably has a narrative behind it.
+
+### 2. Identify narratives from the design
+
+Look at the current system and ask:
+
+- "How did the auth system get this way?"
+- "Why is caching done like this?"
+- "What's the story behind this API design?"
+
+**Write down the narratives you can INFER from the code.** You don't need commits yet.
+
+```markdown
+# Narratives
+
+## Authentication
+> There's JWT + sessions. Probably started with one, switched to the other?
+
+## Caching
+> Redis everywhere. Was it always Redis? Probably not.
+
+## API Design
+> REST with some GraphQL. Hybrid approach suggests evolution.
+```
+
+### 3. Find evidence (optional)
+
+Now, IF you want supporting evidence, look at git:
+
+```bash
+git log --oneline --all -- src/auth/
+git log --oneline --grep="auth"
+```
+
+But the commits are just evidence for narratives you already identified. They're not the starting point.
+
+### 4. Look for pivots
+
+The most valuable thing in a narrative is: **when did the model change?**
+
+Not "when did code change" - when did the CONCEPT change?
+
+Signs of a pivot:
+- Two approaches coexisting (migration in progress)
+- Comments explaining "we used to do X"
+- Config for old + new system
+- Deprecation warnings
+
+```markdown
+## Authentication
+> JWT for API clients, sessions for web. Evidence of a pivot.
+
+**PIVOT:** Probably moved from pure JWT to hybrid approach.
+**Evidence:** Session middleware exists alongside JWT validation.
+**Why?:** (unknown - need to find out)
+```
+
+### 5. Find the "why" for pivots
+
+This is the gold. For each pivot, figure out WHY.
+
+Sources:
+- PR descriptions
+- Commit messages around the change
+- Issue discussions
+- Architecture decision records
+- Ask someone who was there
+
+```markdown
+## Authentication
+**PIVOT:** JWT → JWT + Sessions
+**Why:** Mobile clients couldn't handle large JWT payloads (4KB cookie limit)
+**Evidence:** PR #234 "Add session-based auth for mobile"
+```
+
+---
+
+## Output Format
+
+`.deciduous/narratives.md`:
+
+```markdown
+# Narratives
+
+## <Name>
+> <One sentence: what this piece of the system does>
+
+**Current state:** <How it works today>
+
+**Evolution:**
+1. <First approach> - <why>
+2. **PIVOT:** <what changed> - <why it changed>
+3. <Current approach> - <why this is better>
+
+**Evidence:** <Optional: PRs, commits, docs that support this>
+**Connects to:** <Other narratives this influenced/was influenced by>
+**Status:** active | superseded | abandoned
+
+---
+```
+
+---
+
+## Decision Criteria
+
+**What makes something a narrative?**
+- It's a coherent story about ONE design aspect
+- It explains HOW something works and WHY it evolved
+- It would help a new team member understand the system
+
+**What's NOT a narrative?**
+- A list of commits
+- A feature changelog
+- Implementation details that don't affect the model
+
+**When is a commit worth noting?**
+- Only if it supports understanding the narrative
+- Only if it marks a model change (not implementation)
+- Most commits are noise - skip them
+
+**How do I know I've found a pivot?**
+- The conceptual model changed, not just the code
+- There's a "before" and "after" that work differently
+- Someone had to make a decision to change direction
+
+---
+
+## Example
+
+```markdown
+# Narratives
+
+## Authentication
+> How users prove their identity to the system.
+
+**Current state:** Hybrid - JWT for API clients, sessions for web app.
+
+**Evolution:**
+1. Started with JWT everywhere - stateless, simple, standard
+2. **PIVOT:** Mobile web hit 4KB cookie limits with JWT payloads
+3. Added session-based auth for web, kept JWT for API
+
+**Why the pivot:** JWT tokens contained user permissions, growing to 3KB+.
+Mobile Safari's 4KB cookie limit caused silent auth failures. Sessions
+store permissions server-side, only send session ID.
+
+**Evidence:**
+- PR #234 "Add session auth for mobile web"
+- Slack thread 2024-03-15 "mobile auth broken"
+
+**Connects to:** "API Rate Limiting" (auth method affects rate limit keys)
+**Status:** active
+
+---
+
+## API Rate Limiting
+> Protecting the API from abuse and ensuring fair usage.
+
+**Current state:** Redis-based, per-user limits with auth-aware tiers.
+
+**Evolution:**
+1. No rate limiting initially
+2. **PIVOT:** Bot abuse caused outages
+3. Added basic IP-based throttling
+4. **PIVOT:** Legitimate users sharing IPs got blocked
+5. Moved to per-user limits (requires auth)
+6. **PIVOT:** Auth failures created different abuse vector
+7. Added auth-aware tiers (unauth'd gets stricter limits)
+
+**Connects to:** "Authentication" (rate limit strategy depends on auth state)
+**Status:** active
+
+---
+```
+
+---
+
+## What This Enables
+
+After collecting narratives, you can:
+
+1. **Build the decision graph** (`/archaeology`) - narratives become goal nodes, pivots become revisit nodes
+
+2. **Answer questions** like:
+   - "Why does auth work this way?" → Read the Authentication narrative
+   - "Can we remove sessions?" → Narrative explains why they exist
+   - "What happens if we change rate limiting?" → Connections show dependencies
+
+3. **Avoid repeating mistakes** - Pivots document what DIDN'T work and why
+
+---
+
+## The Mindset
+
+Think like an anthropologist, not a git archaeologist.
+
+You're trying to understand a culture (the system's design) by studying artifacts (code, commits, docs). The artifacts are evidence, but the culture is what matters.
+
+**Bad:** "Let me read through 500 commits and categorize them"
+**Good:** "Let me understand how auth works, then find evidence for how it evolved"
+"#;
+
+/// Archaeology skill - Transform narratives into decision graph
+pub const SKILL_ARCHAEOLOGY: &str = r#"# Archaeology
+
+**Transform narratives into a queryable decision graph.**
+
+Run `/narratives` first. This skill takes conceptual narratives and structures them for querying.
+
+---
+
+## The Relationship
+
+```
+Narratives (conceptual)     →    Decision Graph (structural)
+"How auth evolved"          →    Nodes + edges you can query
+Human-readable stories      →    Machine-traversable graph
+```
+
+The narrative is the truth. The graph is a queryable representation of it.
+
+---
+
+## When to Use
+
+When `.deciduous/narratives.md` exists and you want to:
+- Query the evolution ("what led to this?")
+- Visualize connections between design decisions
+- Build the "person in the room" that can answer questions
+
+---
+
+## Process
+
+### 1. Read the narratives
+
+```bash
+cat .deciduous/narratives.md
+```
+
+For each narrative, you'll create a subgraph.
+
+### 2. Map narrative → graph
+
+Each narrative becomes a connected subgraph:
+
+| Narrative Element | Graph Element |
+|-------------------|---------------|
+| Narrative title | `goal` node (the root) |
+| Evolution step | `action` or `decision` node |
+| **PIVOT** | `revisit` node |
+| Pivot "why" | `observation` node (links INTO revisit) |
+| Pre-pivot state | Nodes marked `superseded` |
+| **Connects to** | Cross-narrative edge |
+
+### 3. Build the subgraph
+
+For a narrative like:
+
+```markdown
+## Authentication
+**Evolution:**
+1. Started with JWT everywhere
+2. **PIVOT:** Mobile hit cookie limits
+3. Added sessions for web, kept JWT for API
+```
+
+Build:
+
+```bash
+# Root (backdate to when project started)
+deciduous add goal "Authentication" -c 90 --date "2023-01-15"
+# → id: 1
+
+# First approach (backdate to when it was made)
+deciduous add decision "JWT for all auth" -c 85 --date "2023-01-20"
+deciduous link 1 2 -r "Initial design"
+
+# What was learned (leads to pivot)
+deciduous add observation "Mobile Safari 4KB cookie limit breaking JWT auth"
+deciduous link 2 3 -r "Discovered in production"
+
+# The pivot
+deciduous add revisit "Reconsidering auth token strategy"
+deciduous link 3 4 -r "Cookie limits forced rethink"
+
+# Mark pre-pivot as superseded
+deciduous status 2 superseded
+
+# New approach
+deciduous add decision "Hybrid: JWT for API, sessions for web"
+deciduous link 4 5 -r "New approach"
+```
+
+### 4. Connect narratives
+
+For `**Connects to:** "Rate Limiting"`:
+
+Find a meaningful connection point (usually an observation or decision that influenced the other narrative):
+
+```bash
+deciduous link <auth_observation> <ratelimit_decision> \
+  -r "Auth failures drove rate limit redesign"
+```
+
+---
+
+## The Revisit Pattern
+
+Every **PIVOT** in a narrative becomes this structure:
+
+```
+[Previous approach]
+        │
+        ▼
+[Observation: what was learned]
+        │
+        ▼
+[Revisit: reconsidering X]
+        │
+        ▼
+[New approach]
+```
+
+The observation captures WHY. The revisit is the decision point. The new approach is what came after.
+
+```bash
+# Pattern
+deciduous add observation "<what was learned>"
+deciduous link <previous_node> <observation> -r "Discovery"
+
+deciduous add revisit "<what's being reconsidered>"
+deciduous link <observation> <revisit> -r "Forced rethinking"
+
+deciduous add decision "<new approach>"
+deciduous link <revisit> <decision> -r "New direction"
+
+# Mark old path as superseded
+deciduous status <previous_node> superseded
+```
+
+---
+
+## What NOT to Do
+
+**Don't create nodes for every commit.**
+Commits are evidence. If a narrative mentions a commit as evidence, you might reference it (`--commit <hash>`), but don't enumerate commits.
+
+**Don't create implementation nodes.**
+The graph is about the MODEL, not the code. "Implemented JWT" is not interesting. "Chose JWT over sessions" is.
+
+**Don't over-structure.**
+If a narrative has a simple evolution with no pivots, it might just be: `goal → decision → current state`. That's fine.
+
+---
+
+## Example: Full Transformation
+
+**Narrative:**
+```markdown
+## API Rate Limiting
+> Protecting the API from abuse.
+
+**Current state:** Redis-based, per-user, auth-aware tiers.
+
+**Evolution:**
+1. No rate limiting initially
+2. **PIVOT:** Bot abuse caused outages → Added IP-based throttling
+3. **PIVOT:** Legitimate users on shared IPs blocked → Per-user limits
+4. **PIVOT:** Auth failures as abuse vector → Auth-aware tiers
+
+**Connects to:** "Authentication"
+```
+
+**Graph:**
+```bash
+# Use --date to place nodes at their historical point
+deciduous add goal "API Rate Limiting" -c 90 --date "2023-02-01"
+# → 1
+
+deciduous add decision "No rate limiting" -c 70 --date "2023-02-01"
+deciduous link 1 2 -r "Initial state"
+
+# Pivot 1
+deciduous add observation "Bot abuse causing service outages"
+deciduous link 2 3 -r "Problem discovered"
+
+deciduous add revisit "Need rate limiting"
+deciduous link 3 4 -r "Abuse forced action"
+
+deciduous add decision "IP-based throttling"
+deciduous link 4 5 -r "First solution"
+
+deciduous status 2 superseded
+
+# Pivot 2
+deciduous add observation "Legitimate users on shared IPs getting blocked"
+deciduous link 5 6 -r "Collateral damage"
+
+deciduous add revisit "IP-based approach too broad"
+deciduous link 6 7 -r "Rethinking granularity"
+
+deciduous add decision "Per-user rate limits"
+deciduous link 7 8 -r "More precise"
+
+deciduous status 5 superseded
+
+# Pivot 3
+deciduous add observation "Auth failures used to bypass rate limits"
+deciduous link 8 9 -r "New abuse pattern"
+
+deciduous add revisit "Rate limiting needs auth awareness"
+deciduous link 9 10 -r "Security gap"
+
+deciduous add decision "Auth-aware tier system"
+deciduous link 10 11 -r "Current approach"
+
+deciduous status 8 superseded
+
+# Connect to Auth narrative
+# deciduous link <auth_node> 9 -r "Auth design affected rate limiting"
+```
+
+---
+
+## Querying the Graph
+
+After building, you can ask:
+
+```bash
+# What's the current state?
+deciduous nodes --status active
+
+# What was tried and abandoned?
+deciduous nodes --status superseded
+
+# What led to a specific decision?
+deciduous edges --to <node_id>
+
+# What are the pivot points?
+deciduous nodes --type revisit
+
+# Visual exploration
+deciduous serve
+```
+
+---
+
+## The "Person in the Room"
+
+The goal is to build a graph that can answer:
+
+- **"Why does it work this way?"** → Trace from current state back through revisits
+- **"What did we try before?"** → Look at superseded nodes
+- **"Can we change X?"** → Check what depends on X via edges
+- **"We should do Y"** → "We tried that, here's why it failed" (superseded + observation)
+
+The graph is the institutional memory. The narratives are the source. The commits are just footnotes.
+"#;

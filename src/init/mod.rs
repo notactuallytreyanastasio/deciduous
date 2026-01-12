@@ -12,7 +12,7 @@ use std::path::Path;
 use templates::{
     CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW, DECISION_MD,
     DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE,
-    PAGES_VIEWER_HTML, RECOVER_MD, WORK_MD,
+    PAGES_VIEWER_HTML, RECOVER_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, WORK_MD,
 };
 
 /// Initialize a new deciduous project with Claude Code integration
@@ -96,6 +96,27 @@ pub fn init_project() -> Result<(), String> {
         &settings_path,
         CLAUDE_SETTINGS_JSON,
         ".claude/settings.json",
+    )?;
+
+    // Create .claude/skills directory and write skill files
+    let skills_dir = claude_base.join("skills");
+    create_dir_if_missing(&skills_dir)?;
+
+    let pulse_path = skills_dir.join("pulse.md");
+    write_file_if_missing(&pulse_path, SKILL_PULSE, ".claude/skills/pulse.md")?;
+
+    let narratives_path = skills_dir.join("narratives.md");
+    write_file_if_missing(
+        &narratives_path,
+        SKILL_NARRATIVES,
+        ".claude/skills/narratives.md",
+    )?;
+
+    let archaeology_path = skills_dir.join("archaeology.md");
+    write_file_if_missing(
+        &archaeology_path,
+        SKILL_ARCHAEOLOGY,
+        ".claude/skills/archaeology.md",
     )?;
 
     // Append to or create CLAUDE.md
@@ -258,17 +279,51 @@ pub fn update_tooling() -> Result<(), String> {
         ".claude/settings.json",
     )?;
 
+    // Overwrite agents.toml
+    let agents_path = claude_base.join("agents.toml");
+    write_file_overwrite(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
+
+    // Create/update skills directory and files
+    let skills_dir = claude_base.join("skills");
+    create_dir_if_missing(&skills_dir)?;
+
+    let pulse_path = skills_dir.join("pulse.md");
+    write_file_overwrite(&pulse_path, SKILL_PULSE, ".claude/skills/pulse.md")?;
+
+    let narratives_path = skills_dir.join("narratives.md");
+    write_file_overwrite(
+        &narratives_path,
+        SKILL_NARRATIVES,
+        ".claude/skills/narratives.md",
+    )?;
+
+    let archaeology_path = skills_dir.join("archaeology.md");
+    write_file_overwrite(
+        &archaeology_path,
+        SKILL_ARCHAEOLOGY,
+        ".claude/skills/archaeology.md",
+    )?;
+
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");
     replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
 
+    // Update docs/index.html viewer if docs/ exists
+    let docs_dir = cwd.join("docs");
+    if docs_dir.exists() {
+        let viewer_path = docs_dir.join("index.html");
+        write_file_overwrite(&viewer_path, PAGES_VIEWER_HTML, "docs/index.html")?;
+    }
+
     println!("\n{}", "Tooling updated for Claude Code!".green().bold());
     println!("\nUpdated files contain the latest:");
+    println!("  - Slash commands (/decision, /recover, /work)");
+    println!("  - Skills (/pulse, /narratives, /archaeology)");
     println!("  - Enforcement hooks (block edits without action nodes)");
     println!("  - Post-commit reminders (link commits to graph)");
-    println!("  - /work skill (transaction model for starting work)");
+    println!("  - Agent configurations (agents.toml)");
+    println!("  - Web viewer (docs/index.html)");
     println!("  - Branch-based grouping with config.toml");
-    println!("  - Graph integrity auditing workflows");
     println!();
 
     Ok(())
