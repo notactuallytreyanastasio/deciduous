@@ -315,6 +315,37 @@ Your graph is live at `https://<user>.github.io/<repo>/`
 
 ---
 
+## Keeping Claude Integration Updated
+
+When deciduous releases new features, your existing projects can get the latest integration files:
+
+```bash
+deciduous update
+```
+
+This command updates (overwrites) the following files to the latest versions:
+
+| Files | What's Updated |
+|-------|----------------|
+| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`) |
+| `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
+| `.claude/hooks/*.sh` | Enforcement hooks (block edits without action nodes) |
+| `.claude/agents.toml` | Subagent configurations |
+| `.claude/settings.json` | Claude Code settings |
+| `CLAUDE.md` | Decision Graph Workflow section (preserves custom content) |
+| `.deciduous/config.toml` | Branch configuration |
+| `docs/index.html` | Web viewer (if docs/ exists) |
+
+**Note:** This command overwrites files. If you've customized hooks or commands, back them up first.
+
+### When to Run Update
+
+- After upgrading deciduous (`cargo install deciduous`)
+- When release notes mention new skills or commands
+- To get the latest web viewer improvements
+
+---
+
 ## The Premises
 
 1. **Decisions are the unit of institutional knowledge.** Code tells you *what*, but decisions tell you *why*. Six months from now, you won't remember why you chose Redis over Postgres for that cache. The graph will.

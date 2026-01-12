@@ -85,7 +85,10 @@ deciduous diff status</pre>
             <p>Creates <code>.deciduous/</code>, <code>.claude/commands/</code>, <code>docs/</code>, and <code>CLAUDE.md</code>.</p>
 
             <h3><code>deciduous update</code></h3>
-            <p>Update tooling files to latest version (overwrites slash commands, web viewer).</p>
+            <p>Update Claude integration files to latest version.</p>
+            <p>Overwrites: <code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>.claude/hooks/</code>,
+               <code>.claude/agents.toml</code>, <code>.claude/settings.json</code>, <code>CLAUDE.md</code> section,
+               <code>.deciduous/config.toml</code>, and <code>docs/index.html</code> (if docs/ exists).</p>
 
             <h3><code>deciduous add</code></h3>
             <pre>deciduous add &lt;NODE_TYPE&gt; &lt;TITLE&gt; [OPTIONS]

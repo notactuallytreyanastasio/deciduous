@@ -29,7 +29,11 @@ enum Command {
     /// Initialize deciduous in current directory (creates .claude/commands/ and CLAUDE.md)
     Init {},
 
-    /// Update tooling files to latest version (overwrites existing .claude/ files)
+    /// Update Claude integration files to latest version
+    ///
+    /// Overwrites: .claude/commands/, .claude/skills/, .claude/hooks/,
+    /// .claude/agents.toml, .claude/settings.json, CLAUDE.md section,
+    /// .deciduous/config.toml, and docs/index.html (if docs/ exists)
     Update {},
 
     /// Add a new node to the decision graph
