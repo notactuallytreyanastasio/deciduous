@@ -38,6 +38,7 @@
 //! println!("Nodes: {}, Edges: {}", graph.nodes.len(), graph.edges.len());
 //! ```
 
+pub mod changelog;
 pub mod config;
 pub mod db;
 pub mod diff;

@@ -505,12 +505,47 @@ fn main() {
         };
 
         if installed_version != current_version {
+            println!();
             println!(
-                "{} Integration files are v{}, binary is v{}. Run 'deciduous update'.",
-                "Update available:".yellow(),
-                installed_version,
-                current_version
+                "{}",
+                "╔════════════════════════════════════════════════════════════════╗"
+                    .yellow()
+                    .bold()
             );
+            println!(
+                "{}",
+                "║  DECIDUOUS UPDATE AVAILABLE                                    ║"
+                    .yellow()
+                    .bold()
+            );
+            println!(
+                "{}",
+                "╚════════════════════════════════════════════════════════════════╝"
+                    .yellow()
+                    .bold()
+            );
+            println!();
+            println!(
+                "  Integration files: {}  →  Binary: {}",
+                installed_version.red(),
+                current_version.green()
+            );
+
+            // Show what's new
+            let releases =
+                deciduous::changelog::get_releases_between(&installed_version, current_version);
+            if !releases.is_empty() {
+                println!();
+                println!("{}", "  What's new:".cyan().bold());
+                print!("{}", deciduous::changelog::format_releases(&releases));
+            }
+
+            println!();
+            println!(
+                "  Run {} to update integration files.",
+                "deciduous update".cyan().bold()
+            );
+            println!();
             std::process::exit(1);
         }
 
@@ -2782,6 +2817,13 @@ fn main() {
                 }
             }
         }
+    }
+
+    // Show update reminder if integration files are outdated
+    if let Some(reminder) = deciduous::changelog::check_version_reminder(env!("CARGO_PKG_VERSION"))
+    {
+        eprintln!();
+        eprintln!("{}", reminder.yellow());
     }
 }
 
