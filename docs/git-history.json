@@ -1,11 +1,11 @@
 [
   {
-    "hash": "a375ba998a23ab71635dae665cc5d996ae24ec02",
-    "short_hash": "a375ba9",
+    "hash": "1400207171e1e0f3c75e68af93b01f94b913c10a",
+    "short_hash": "1400207",
     "author": "Bobby Nathan",
-    "date": "2026-01-10T11:59:38-05:00",
-    "message": "docs: update story.html with new features and current stats\n\n- Update stats: 970+ nodes, 850+ edges, 50+ releases, 37 days\n- Add timeline sections for Tutorial System (archaeology, session recovery)\n- Add timeline for Enforcement Hooks and Claude Code focus\n- Add timeline for January 2026 maturity (delete/unlink commands)\n- Add \"Now Available\" vision section with implemented features\n- Update CTA with tutorial and workflow links\n- Sync graph data (991 nodes, 850 edges)",
-    "files_changed": 5
+    "date": "2026-01-12T00:07:09-05:00",
+    "message": "release: v0.9.0 - add --date flag for node backdating\n\nFeatures:\n- Add --date flag to `deciduous add` command for backdating nodes\n- Supports YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, and RFC3339 formats\n- Essential for archaeology workflow when reconstructing historical decisions\n\nFixes:\n- Add white-space: pre-wrap to stackCardDescription for proper text formatting\n\nDocumentation:\n- Add pulse/narratives/archaeology skills (.claude/skills/)\n- Update tutorial reference with --date option\n- Update archaeology workflow with --date examples\n- Update init templates with --date documentation",
+    "files_changed": 23
   },
   {
     "hash": "6da0d5cd8c98c77ee0a5d6177cd0b1d59649c21d",
@@ -464,12 +464,12 @@
     "files_changed": 5
   },
   {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
+    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
+    "short_hash": "157aa70",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
   },
   {
     "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
@@ -480,12 +480,12 @@
     "files_changed": 3
   },
   {
-    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
-    "short_hash": "157aa70",
+    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
+    "short_hash": "e80d20f",
     "author": "Bobby Nathan",
     "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
-    "files_changed": 5
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
+    "files_changed": 4
   },
   {
     "hash": "3be6e5ce199b274c285e1740b92e3054dc7f00e3",
