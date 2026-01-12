@@ -15,6 +15,8 @@ import { GraphView } from './views/GraphView';
 import { DagView } from './views/DagView';
 import { RoadmapView } from './views/RoadmapView';
 import { StoryView } from './views/StoryView';
+import { LogView } from './views/LogView';
+import { AskView } from './views/AskView';
 import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
 // Detect if running from deciduous serve (local) vs static file (GitHub Pages)
@@ -109,66 +111,94 @@ export const App: React.FC = () => {
 
   return (
     <HashRouter>
-      <Layout
-        stats={stats}
-        lastUpdated={lastUpdated}
-        branches={branches}
-        selectedBranch={selectedBranch}
-        onBranchChange={setSelectedBranch}
-      >
-        <Routes>
-          <Route
-            path="/"
-            element={
-              <DagView
-                graphData={filteredGraphData!}
-                chains={chains}
-                gitHistory={gitHistory}
-              />
-            }
-          />
-          <Route
-            path="/chains"
-            element={
-              <ChainsView
-                graphData={filteredGraphData!}
-                chains={chains}
-                sessions={sessions}
-                gitHistory={gitHistory}
-              />
-            }
-          />
-          <Route
-            path="/timeline"
-            element={
-              <TimelineView
-                graphData={filteredGraphData!}
-                gitHistory={gitHistory}
-              />
-            }
-          />
-          <Route
-            path="/graph"
-            element={
-              <GraphView graphData={filteredGraphData!} />
-            }
-          />
-          <Route
-            path="/roadmap"
-            element={
-              <RoadmapView graphData={filteredGraphData!} roadmapItems={roadmapItems} />
-            }
-          />
-          <Route
-            path="/story"
-            element={
-              <StoryView graphData={filteredGraphData!} gitHistory={gitHistory} />
-            }
-          />
-          {/* Fallback redirect */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Layout>
+      <Routes>
+        {/* Ask view - standalone, no Layout */}
+        <Route
+          path="/ask"
+          element={
+            <AskView
+              graphData={filteredGraphData!}
+              gitHistory={gitHistory}
+            />
+          }
+        />
+
+        {/* All other views use Layout */}
+        <Route
+          path="/*"
+          element={
+            <Layout
+              stats={stats}
+              lastUpdated={lastUpdated}
+              branches={branches}
+              selectedBranch={selectedBranch}
+              onBranchChange={setSelectedBranch}
+            >
+              <Routes>
+                <Route
+                  path="/"
+                  element={
+                    <DagView
+                      graphData={filteredGraphData!}
+                      chains={chains}
+                      gitHistory={gitHistory}
+                    />
+                  }
+                />
+                <Route
+                  path="/chains"
+                  element={
+                    <ChainsView
+                      graphData={filteredGraphData!}
+                      chains={chains}
+                      sessions={sessions}
+                      gitHistory={gitHistory}
+                    />
+                  }
+                />
+                <Route
+                  path="/timeline"
+                  element={
+                    <TimelineView
+                      graphData={filteredGraphData!}
+                      gitHistory={gitHistory}
+                    />
+                  }
+                />
+                <Route
+                  path="/graph"
+                  element={
+                    <GraphView graphData={filteredGraphData!} />
+                  }
+                />
+                <Route
+                  path="/roadmap"
+                  element={
+                    <RoadmapView graphData={filteredGraphData!} roadmapItems={roadmapItems} />
+                  }
+                />
+                <Route
+                  path="/story"
+                  element={
+                    <StoryView graphData={filteredGraphData!} gitHistory={gitHistory} />
+                  }
+                />
+                <Route
+                  path="/log"
+                  element={
+                    <LogView
+                      graphData={filteredGraphData!}
+                      gitHistory={gitHistory}
+                    />
+                  }
+                />
+                {/* Fallback redirect */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+          }
+        />
+      </Routes>
     </HashRouter>
   );
 };

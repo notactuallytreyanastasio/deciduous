@@ -176,6 +176,7 @@ Based on $ARGUMENTS:
 - `-b, --branch <name>` - Git branch (auto-detected by default)
 - `--no-branch` - Skip branch auto-detection
 - `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
+- `--date "YYYY-MM-DD"` - Backdate node (for archaeology/retroactive logging)
 
 ### CRITICAL: Link Commits to Actions/Outcomes
 
@@ -692,6 +693,7 @@ deciduous sync    # Export for static hosting
 # -f, --files "a.rs,b.rs"  Associate files
 # -b, --branch <name>      Git branch (auto-detected)
 # --commit <hash|HEAD>     Link to git commit (use HEAD for current commit)
+# --date "YYYY-MM-DD"      Backdate node (for archaeology)
 
 # Branch filtering
 deciduous nodes --branch main

@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{Local, TimeZone};
 use clap::{CommandFactory, Parser, Subcommand};
 use colored::Colorize;
 use deciduous::github::{ensure_roadmap_label, GitHubClient};
@@ -71,6 +71,11 @@ enum Command {
         /// Skip auto-detection of git branch
         #[arg(long)]
         no_branch: bool,
+
+        /// Created date (RFC3339 format or "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS")
+        /// Use this to backdate nodes to past commits
+        #[arg(long)]
+        date: Option<String>,
     },
 
     /// Add an edge between nodes
@@ -507,6 +512,7 @@ fn main() {
             files,
             branch,
             no_branch,
+            date,
         } => {
             // Handle prompt from stdin if requested
             let effective_prompt = if prompt_stdin {
@@ -553,6 +559,33 @@ fn main() {
                 }
             });
 
+            // Parse date parameter into RFC3339 format
+            let effective_date = date.as_ref().map(|d| {
+                // Try parsing as RFC3339 first
+                if chrono::DateTime::parse_from_rfc3339(d).is_ok() {
+                    d.clone()
+                }
+                // Try "YYYY-MM-DD HH:MM:SS" format
+                else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M:%S")
+                {
+                    chrono::Local.from_local_datetime(&dt).unwrap().to_rfc3339()
+                }
+                // Try "YYYY-MM-DD" format (set to start of day)
+                else if let Ok(date) = chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d") {
+                    let dt = date.and_hms_opt(0, 0, 0).unwrap();
+                    chrono::Local.from_local_datetime(&dt).unwrap().to_rfc3339()
+                }
+                // Fallback: use as-is and hope for the best
+                else {
+                    eprintln!(
+                        "{} Could not parse date '{}'. Use RFC3339 or YYYY-MM-DD format.",
+                        "Warning:".yellow(),
+                        d
+                    );
+                    d.clone()
+                }
+            });
+
             match db.create_node_full(
                 &node_type,
                 &title,
@@ -562,6 +595,7 @@ fn main() {
                 effective_prompt.as_deref(),
                 files.as_deref(),
                 effective_branch.as_deref(),
+                effective_date.as_deref(),
             ) {
                 Ok(id) => {
                     let conf_str = confidence
@@ -583,8 +617,12 @@ fn main() {
                         .as_ref()
                         .map(|b| format!(" [branch: {}]", b))
                         .unwrap_or_default();
+                    let date_str = effective_date
+                        .as_ref()
+                        .map(|d| format!(" [date: {}]", d))
+                        .unwrap_or_default();
                     println!(
-                        "{} node {} (type: {}, title: {}){}{}{}{}{}",
+                        "{} node {} (type: {}, title: {}){}{}{}{}{}{}",
                         "Created".green(),
                         id,
                         node_type,
@@ -593,7 +631,8 @@ fn main() {
                         commit_str,
                         prompt_str,
                         files_str,
-                        branch_str
+                        branch_str,
+                        date_str
                     );
                 }
                 Err(e) => {

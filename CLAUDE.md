@@ -4,6 +4,110 @@ Decision graph tooling for AI-assisted development. Track every goal, decision, 
 
 ---
 
+## The Two Modes
+
+Every system has two stories:
+
+| Mode | Question | Skill |
+|------|----------|-------|
+| **Now** | "How does this work?" | `/pulse` |
+| **History** | "How did we get here?" | `/narratives` → `/archaeology` |
+
+**Now mode** maps current design as decisions. **History mode** captures evolution and pivots.
+
+---
+
+## Skills Overview
+
+### /pulse - Map Current Design
+
+Take the pulse of a system - what decisions define how it works TODAY.
+
+```bash
+# Start with a goal
+deciduous add goal "API rate limiting behavior" -c 90
+
+# Map the decisions
+deciduous add decision "How to identify users?" -c 85
+deciduous link 1 2 -r "leads_to"
+
+deciduous add decision "What are the thresholds?" -c 85
+deciduous link 1 3 -r "leads_to"
+```
+
+**Output:** Decision tree of the current model (like Dan's Suspense diagram).
+
+### /narratives - Understand Evolution
+
+Understand how the system evolved. Narratives are conceptual, not tied to commits.
+
+1. Look at the current system
+2. Ask "how did this get this way?"
+3. Infer narratives from the design
+4. Find evidence (commits, PRs, docs)
+5. Identify pivots - where the model changed
+
+**Output:** `.deciduous/narratives.md` with evolution stories.
+
+### /archaeology - Structure for Query
+
+Transform narratives into a queryable graph.
+
+| Narrative Element | Graph Node |
+|-------------------|------------|
+| Title | `goal` |
+| Design question | `decision` |
+| Answer | `option` |
+| What was learned | `observation` |
+| **PIVOT** | `revisit` |
+
+**Output:** Connected graph with Now ← revisit ← History.
+
+---
+
+## The Revisit Node
+
+When a design approach is abandoned and replaced:
+
+```
+[Old Decision] ──► [Observation: why it failed] ──► [REVISIT] ──► [New Decision]
+```
+
+The revisit captures:
+- WHAT is being reconsidered
+- WHY (linked observations)
+- Connects old approach to new
+
+```bash
+deciduous add observation "JWT too large for mobile"
+deciduous add revisit "Reconsidering token strategy"
+deciduous link <observation> <revisit> -r "forced rethinking"
+deciduous status <old_decision> superseded
+```
+
+---
+
+## Node Status
+
+| Status | Meaning |
+|--------|---------|
+| `active` | Current truth |
+| `superseded` | Replaced by newer approach |
+| `abandoned` | Tried and rejected |
+
+```bash
+# Now mode - only active
+deciduous nodes --status active
+
+# History mode - everything
+deciduous nodes
+
+# Pivot points
+deciduous nodes --type revisit
+```
+
+---
+
 ## Decision Graph Workflow
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
@@ -98,6 +202,7 @@ deciduous sync    # Export for static hosting
 # -f, --files "a.rs,b.rs"    Associate files
 # -b, --branch <name>        Git branch (auto-detected)
 # --commit <hash|HEAD>       Link to git commit (use HEAD for current commit)
+# --date "YYYY-MM-DD"        Backdate node (RFC3339 or YYYY-MM-DD HH:MM:SS)
 
 # Update prompts on existing nodes
 deciduous prompt <node_id> "prompt text"   # Short prompt

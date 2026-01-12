@@ -1,15 +1,15 @@
 [
   {
-    "hash": "6da0d5cd8c98c77ee0a5d6177cd0b1d59649c21d",
-    "short_hash": "6da0d5c",
+    "hash": "a375ba998a23ab71635dae665cc5d996ae24ec02",
+    "short_hash": "a375ba9",
     "author": "Bobby Nathan",
     "date": "2026-01-10T11:59:38-05:00",
     "message": "docs: update story.html with new features and current stats\n\n- Update stats: 970+ nodes, 850+ edges, 50+ releases, 37 days\n- Add timeline sections for Tutorial System (archaeology, session recovery)\n- Add timeline for Enforcement Hooks and Claude Code focus\n- Add timeline for January 2026 maturity (delete/unlink commands)\n- Add \"Now Available\" vision section with implemented features\n- Update CTA with tutorial and workflow links\n- Sync graph data (991 nodes, 850 edges)",
     "files_changed": 5
   },
   {
-    "hash": "8b8a0bc396c9971242bff71a00553d02985ef5bd",
-    "short_hash": "8b8a0bc",
+    "hash": "6da0d5cd8c98c77ee0a5d6177cd0b1d59649c21d",
+    "short_hash": "6da0d5c",
     "author": "Bobby Nathan",
     "date": "2026-01-10T11:59:38-05:00",
     "message": "docs: update story.html with new features and current stats\n\n- Update stats: 970+ nodes, 850+ edges, 50+ releases, 37 days\n- Add timeline sections for Tutorial System (archaeology, session recovery)\n- Add timeline for Enforcement Hooks and Claude Code focus\n- Add timeline for January 2026 maturity (delete/unlink commands)\n- Add \"Now Available\" vision section with implemented features\n- Update CTA with tutorial and workflow links\n- Sync graph data (991 nodes, 850 edges)",

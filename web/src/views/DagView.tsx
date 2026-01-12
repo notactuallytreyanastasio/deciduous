@@ -2332,6 +2332,8 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#f6f8fa',
     borderRadius: '6px',
     borderLeft: '3px solid #d0d7de',
+    whiteSpace: 'pre-wrap',
+    wordBreak: 'break-word',
   },
   stackCardPrompt: {
     fontSize: '13px',

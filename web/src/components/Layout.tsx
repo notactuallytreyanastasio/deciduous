@@ -17,11 +17,12 @@ interface LayoutProps {
   onBranchChange?: (branch: string | null) => void;
 }
 
-type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story';
+type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story' | 'log';
 
 const TABS: { id: ViewTab; label: string; path: string }[] = [
   { id: 'story', label: 'Story', path: '/story' },
   { id: 'dag', label: 'DAG', path: '/' },
+  { id: 'log', label: 'Log', path: '/log' },
   { id: 'chains', label: 'Chains', path: '/chains' },
   { id: 'timeline', label: 'Timeline', path: '/timeline' },
   { id: 'graph', label: 'Graph', path: '/graph' },
@@ -34,6 +35,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
   const getCurrentTab = (): ViewTab => {
     const path = location.pathname;
     if (path === '/story') return 'story';
+    if (path === '/log') return 'log';
     if (path === '/chains') return 'chains';
     if (path === '/timeline') return 'timeline';
     if (path === '/graph') return 'graph';

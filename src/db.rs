@@ -1128,6 +1128,7 @@ impl Database {
             None,
             None,
             None,
+            None,
         )
     }
 
@@ -1142,9 +1143,12 @@ impl Database {
         prompt: Option<&str>,
         files: Option<&str>,
         branch: Option<&str>,
+        created_at: Option<&str>,
     ) -> Result<i32> {
         let mut conn = self.get_conn()?;
-        let now = chrono::Local::now().to_rfc3339();
+        let now = created_at
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| chrono::Local::now().to_rfc3339());
         let change_id = Uuid::new_v4().to_string();
 
         // Build metadata JSON with all optional fields
@@ -2438,6 +2442,7 @@ mod tests {
                 None,
                 None,
                 Some("feature-x"),
+                None,
             )
             .unwrap();
 
@@ -2469,6 +2474,7 @@ mod tests {
                 None,
                 None,
                 Some("old_commit_hash"),
+                None,
                 None,
                 None,
                 None,

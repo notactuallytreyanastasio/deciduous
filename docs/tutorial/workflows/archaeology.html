@@ -357,7 +357,7 @@ EOF</code>
                         <div class="step-label user">user</div>
                         <div class="step-content">
                             <code>deciduous add action "Migrated from MongoDB to PostgreSQL" -c 90 \
-    --commit bcd7890</code>
+    --commit bcd7890 --date "2023-06-15"</code>
                         </div>
                     </div>
                     <div class="session-step" style="--delay: 19">
@@ -365,6 +365,7 @@ EOF</code>
                         <div class="step-content step-output step-success">
                             <div>Created node #5: action "Migrated from MongoDB to PostgreSQL"</div>
                             <div>  commit: bcd7890</div>
+                            <div>  date: 2023-06-15</div>
                         </div>
                     </div>
                     <div class="session-step" style="--delay: 21">
@@ -848,6 +849,7 @@ EOF</code>
             <ol>
                 <li><strong>Start with major themes, not details.</strong> Don't try to capture every commit. Focus on the big decisions first.</li>
                 <li><strong>Use commit hashes liberally.</strong> Link nodes to commits with <code>--commit</code> for traceability.</li>
+                <li><strong>Backdate nodes to when decisions were made.</strong> Use <code>--date "2023-06-15"</code> to place nodes at their historical point in time. Supports YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, and RFC3339 formats.</li>
                 <li><strong>Capture uncertainty.</strong> If you're not sure why something was done, say so: <code>-c 50</code> for low confidence.</li>
                 <li><strong>Interview people.</strong> If the original developers are available, ask them. Capture their answers as prompts.</li>
                 <li><strong>Don't over-connect.</strong> Some decisions are independent. Not everything needs to link to everything.</li>

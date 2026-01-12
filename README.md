@@ -120,6 +120,64 @@ The graph remembers what you don't.
 
 ---
 
+## Two Modes: Now & History
+
+Every system has two stories:
+
+| Mode | Question | Skill |
+|------|----------|-------|
+| **Now** | "How does this work?" | `/pulse` |
+| **History** | "How did we get here?" | `/narratives` |
+
+### /pulse - Map Current Design
+
+Take the pulse of a system - what decisions define how it works TODAY.
+
+```bash
+deciduous add goal "Suspense fallback behavior" -c 90
+deciduous add decision "How should timeout work?" -c 85
+deciduous link 1 2 -r "leads_to"
+deciduous add decision "What happens on failure?" -c 85
+deciduous link 1 3 -r "leads_to"
+```
+
+Output: Decision tree of the current model. No history, just the design.
+
+### /narratives - Understand Evolution
+
+Understand how the system evolved. Narratives are conceptual, not tied to commits.
+
+```markdown
+## Authentication
+> How users prove identity.
+
+**Current state:** JWT for API, sessions for web.
+
+**Evolution:**
+1. Started with JWT everywhere
+2. **PIVOT:** Mobile hit 4KB cookie limits
+3. Added sessions for web, kept JWT for API
+
+**Connects to:** "Rate Limiting"
+```
+
+Output: `.deciduous/narratives.md` with evolution stories and pivots.
+
+### The Revisit Node
+
+When a design approach is abandoned and replaced:
+
+```bash
+deciduous add observation "JWT too large for mobile"
+deciduous add revisit "Reconsidering token strategy"
+deciduous link <observation> <revisit> -r "forced rethinking"
+deciduous status <old_decision> superseded
+```
+
+Revisit nodes connect old approaches to new ones, capturing WHY things changed.
+
+---
+
 ## Viewing the Graph
 
 ### Web Viewer
@@ -169,7 +227,22 @@ Vim-style navigation with syntax-highlighted file previews:
 | `option` | Approach considered | "Use JWT tokens" |
 | `action` | Implementation step | "Added JWT middleware" |
 | `outcome` | Result | "Auth working in prod" |
-| `observation` | Discovery or insight | "Existing code uses sessions" |
+| `observation` | Discovery or insight | "JWT tokens too large for mobile" |
+| `revisit` | Pivot point—connects old approach to new | "Reconsidering token strategy" |
+
+## Node Status
+
+| Status | Meaning |
+|--------|---------|
+| `active` | Current truth—how things work today |
+| `superseded` | Replaced by a newer approach |
+| `abandoned` | Tried and rejected—dead end |
+
+```bash
+deciduous status <node_id> superseded
+deciduous nodes --status active    # Now mode
+deciduous nodes --status superseded # What was tried
+```
 
 ## Edge Types
 
@@ -181,6 +254,7 @@ Vim-style navigation with syntax-highlighted file previews:
 | `requires` | Dependency |
 | `blocks` | Preventing progress |
 | `enables` | Makes possible |
+| `supersedes` | New approach replaces old (via revisit) |
 
 ---
 
@@ -277,6 +351,7 @@ deciduous add action "Title" -c 85 --commit HEAD  # Link to git commit
 --prompt-stdin               # Read prompt from stdin (multi-line)
 -f, --files "a.rs,b.rs"      # Associated files
 --commit <hash|HEAD>         # Link to git commit
+--date "YYYY-MM-DD"          # Backdate node (for archaeology)
 
 # Connect and disconnect
 deciduous link <from> <to> -r "reason"
