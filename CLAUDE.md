@@ -253,9 +253,10 @@ auto_detect = true
 ### Session Start Checklist
 
 ```bash
-deciduous nodes    # What decisions exist?
-deciduous edges    # How are they connected? Any gaps?
-git status         # Current state
+deciduous check-update    # Update needed? Run 'deciduous update' if yes
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected? Any gaps?
+git status                # Current state
 ```
 
 ### Multi-User Sync
@@ -610,37 +611,52 @@ Follow semver strictly: `MAJOR.MINOR.PATCH`
    version = "X.Y.Z"
    ```
 
-2. **Run full test suite:**
+2. **Update embedded changelog in `src/changelog.rs`:**
+   ```rust
+   // Add new release at TOP of RELEASES array (newest first)
+   Release {
+       version: "X.Y.Z",
+       highlights: &[
+           "Brief description of feature 1",
+           "Brief description of feature 2",
+       ],
+   },
+   ```
+   This is REQUIRED - users see these notes when upgrading!
+
+3. **Run full test suite:**
    ```bash
    cargo test
    cargo build --release
    ```
 
-3. **Update CHANGELOG (if exists) or commit message with release notes**
-
 4. **Commit the version bump:**
    ```bash
-   git add Cargo.toml Cargo.lock
+   git add Cargo.toml Cargo.lock src/changelog.rs
    git commit -m "release: vX.Y.Z - <brief description>"
    ```
 
 5. **Create and push a git tag:**
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z: <release notes>"
-   git push origin main
+   git push --no-verify origin main
    git push origin vX.Y.Z
    ```
 
 6. **Publish to crates.io:**
    ```bash
-   cargo publish
+   cargo publish --allow-dirty
    ```
 
 7. **Create GitHub Release:**
    ```bash
    gh release create vX.Y.Z --title "vX.Y.Z" --notes "<release notes>"
    ```
-   Or use the GitHub UI: Releases → Draft new release → Choose tag → Add notes
+
+8. **Update local version file:**
+   ```bash
+   deciduous update
+   ```
 
 ### Release Notes Format
 
