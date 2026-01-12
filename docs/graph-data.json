@@ -10911,6 +10911,72 @@
       "created_at": "2026-01-10T11:59:49.710303-05:00",
       "updated_at": "2026-01-10T11:59:49.710303-05:00",
       "metadata_json": "{\"branch\":\"main\",\"commit\":\"6da0d5c\",\"confidence\":95}"
+    },
+    {
+      "id": 994,
+      "change_id": "68919059-1a07-4e8e-a7d0-fe3de3e22c73",
+      "node_type": "goal",
+      "title": "Implement revisit node type",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-12T10:08:20.765382-05:00",
+      "updated_at": "2026-01-12T10:08:20.765382-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"prompt\":\"didnt we implement this? [shows screenshots of REVISIT node diagrams]\\n\\nyes implement it now\"}"
+    },
+    {
+      "id": 995,
+      "change_id": "2b34ca1e-3609-42dc-8f84-b7ba1e1e0d62",
+      "node_type": "action",
+      "title": "Implemented revisit node type across codebase",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-12T10:08:25.965485-05:00",
+      "updated_at": "2026-01-12T10:08:25.965485-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95,\"files\":[\"web/src/types/graph.ts\",\"web/src/utils/colors.ts\",\"src/main.rs\",\"src/export.rs\",\"src/tui/ui.rs\",\"src/init/templates.rs\",\".claude/commands/decision.md\"]}"
+    },
+    {
+      "id": 996,
+      "change_id": "877c05b8-6a74-4e44-82d5-91ad33961072",
+      "node_type": "outcome",
+      "title": "Revisit node type fully implemented - 204 tests passing",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-12T10:08:36.219896-05:00",
+      "updated_at": "2026-01-12T10:08:36.219896-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 997,
+      "change_id": "08e6aaf3-2ec0-4094-be5b-d57e8e433ce1",
+      "node_type": "revisit",
+      "title": "Test revisit node",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-12T10:08:53.961297-05:00",
+      "updated_at": "2026-01-12T10:08:53.961297-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":80}"
+    },
+    {
+      "id": 998,
+      "change_id": "ccfb3f35-8209-4d49-9145-af524b2dbeb2",
+      "node_type": "outcome",
+      "title": "Revisit node type fully documented",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-12T10:23:22.382691-05:00",
+      "updated_at": "2026-01-12T10:23:22.382691-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"confidence\":95}"
+    },
+    {
+      "id": 999,
+      "change_id": "1395fb7d-31ff-43db-8e1d-d014a2fcb0be",
+      "node_type": "outcome",
+      "title": "Released v0.9.2 with revisit node type",
+      "description": null,
+      "status": "pending",
+      "created_at": "2026-01-12T11:59:24.647929-05:00",
+      "updated_at": "2026-01-12T11:59:24.647929-05:00",
+      "metadata_json": "{\"branch\":\"main\",\"commit\":\"2bf92d7\",\"confidence\":95}"
     }
   ],
   "edges": [
@@ -20263,6 +20329,50 @@
       "weight": 1.0,
       "rationale": "Addresses limitation",
       "created_at": "2026-01-10T03:56:28.620774-05:00"
+    },
+    {
+      "id": 851,
+      "from_node_id": 994,
+      "to_node_id": 995,
+      "from_change_id": "68919059-1a07-4e8e-a7d0-fe3de3e22c73",
+      "to_change_id": "2b34ca1e-3609-42dc-8f84-b7ba1e1e0d62",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Implementation of revisit node type",
+      "created_at": "2026-01-12T10:08:31.140727-05:00"
+    },
+    {
+      "id": 852,
+      "from_node_id": 995,
+      "to_node_id": 996,
+      "from_change_id": "2b34ca1e-3609-42dc-8f84-b7ba1e1e0d62",
+      "to_change_id": "877c05b8-6a74-4e44-82d5-91ad33961072",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "All tests pass",
+      "created_at": "2026-01-12T10:08:41.124134-05:00"
+    },
+    {
+      "id": 853,
+      "from_node_id": 996,
+      "to_node_id": 998,
+      "from_change_id": "877c05b8-6a74-4e44-82d5-91ad33961072",
+      "to_change_id": "ccfb3f35-8209-4d49-9145-af524b2dbeb2",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Documentation follows implementation",
+      "created_at": "2026-01-12T10:23:27.347757-05:00"
+    },
+    {
+      "id": 854,
+      "from_node_id": 998,
+      "to_node_id": 999,
+      "from_change_id": "ccfb3f35-8209-4d49-9145-af524b2dbeb2",
+      "to_change_id": "1395fb7d-31ff-43db-8e1d-d014a2fcb0be",
+      "edge_type": "leads_to",
+      "weight": 1.0,
+      "rationale": "Release follows documentation",
+      "created_at": "2026-01-12T11:59:24.717966-05:00"
     }
   ]
 }

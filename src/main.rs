@@ -805,6 +805,7 @@ fn main() {
                                 "action" => n.node_type.green(),
                                 "outcome" => n.node_type.blue(),
                                 "observation" => n.node_type.magenta(),
+                                "revisit" => n.node_type.truecolor(249, 115, 22), // Orange
                                 _ => n.node_type.white(),
                             };
                             println!(
@@ -870,6 +871,7 @@ fn main() {
                             "outcome" => node.node_type.blue().bold(),
                             "observation" => node.node_type.magenta().bold(),
                             "option" => node.node_type.white().bold(),
+                            "revisit" => node.node_type.truecolor(249, 115, 22).bold(), // Orange
                             _ => node.node_type.white().bold(),
                         };
 

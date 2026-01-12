@@ -60,6 +60,7 @@ fn node_shape(node_type: &str) -> &'static str {
         "action" => "box",
         "outcome" => "ellipse",
         "observation" => "note",
+        "revisit" => "doubleoctagon", // Distinctive shape for pivot points
         _ => "box",
     }
 }
@@ -73,6 +74,7 @@ fn node_color(node_type: &str) -> &'static str {
         "action" => "#90EE90",      // Light green
         "outcome" => "#87CEEB",     // Sky blue
         "observation" => "#DDA0DD", // Plum
+        "revisit" => "#FFDAB9",     // Peach puff (orange-ish) - pivot point
         _ => "#F5F5F5",             // White smoke
     }
 }

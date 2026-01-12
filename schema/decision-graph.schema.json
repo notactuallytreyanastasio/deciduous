@@ -8,7 +8,7 @@
   "definitions": {
     "NodeType": {
       "type": "string",
-      "enum": ["goal", "decision", "option", "action", "outcome", "observation"],
+      "enum": ["goal", "decision", "option", "action", "outcome", "observation", "revisit"],
       "description": "Valid node types in the decision graph"
     },
 

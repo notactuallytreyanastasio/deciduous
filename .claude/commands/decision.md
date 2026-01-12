@@ -18,6 +18,7 @@ argument-hint: <action> [args...]
 | About to write code | `action` | `/decision add action "Implementing JWT"` |
 | Noticing something | `observation` | `/decision add obs "Found existing auth code"` |
 | Finished something | `outcome` | `/decision add outcome "JWT working"` |
+| Reconsidering a past decision | `revisit` | `/decision add revisit "Reconsidering auth"` |
 
 ## Quick Commands
 
@@ -36,6 +37,7 @@ Based on $ARGUMENTS:
 - `add action <title>` -> `deciduous add action "<title>" -c 85`
 - `add obs <title>` -> `deciduous add observation "<title>" -c 80`
 - `add outcome <title>` -> `deciduous add outcome "<title>" -c 90`
+- `add revisit <title>` -> `deciduous add revisit "<title>" -c 75`
 
 ### Optional Flags for Nodes
 - `-c, --confidence <0-100>` - Confidence level
@@ -155,6 +157,7 @@ The graph viewer shows a branch dropdown in the stats bar:
 | `action` | Something implemented | "Added JWT middleware" |
 | `outcome` | Result of action | "JWT auth working" |
 | `observation` | Finding or data point | "Existing code uses sessions" |
+| `revisit` | Pivot point / reconsideration | "Reconsidering auth approach" |
 
 ## Edge Types
 

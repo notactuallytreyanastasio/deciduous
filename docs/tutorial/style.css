@@ -487,6 +487,7 @@ kbd {
 .node-action { color: #2da44e; }
 .node-outcome { color: #1f6feb; }
 .node-observation { color: #bf3989; }
+.node-revisit { color: #f97316; }
 
 /* ========================================
    ANIMATED TERMINAL DEMOS

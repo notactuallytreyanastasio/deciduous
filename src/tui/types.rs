@@ -19,7 +19,7 @@ use serde_json::Value;
 
 /// Valid node types in the decision graph
 #[rustfmt::skip]
-pub const NODE_TYPES: &[&str] = &["goal", "decision", "option", "action", "outcome", "observation"];
+pub const NODE_TYPES: &[&str] = &["goal", "decision", "option", "action", "outcome", "observation", "revisit"];
 
 /// Valid node statuses
 pub const NODE_STATUSES: &[&str] = &["pending", "active", "completed", "rejected"];
@@ -228,6 +228,7 @@ mod tests {
         assert!(is_node_type("action"));
         assert!(is_node_type("outcome"));
         assert!(is_node_type("observation"));
+        assert!(is_node_type("revisit"));
         assert!(!is_node_type("invalid"));
         assert!(!is_node_type(""));
     }

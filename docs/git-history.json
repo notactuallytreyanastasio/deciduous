@@ -1,11 +1,19 @@
 [
   {
-    "hash": "1400207171e1e0f3c75e68af93b01f94b913c10a",
-    "short_hash": "1400207",
+    "hash": "2bf92d7b54eaca5c5a558a92b9cb2e4209a8fea4",
+    "short_hash": "2bf92d7",
     "author": "Bobby Nathan",
-    "date": "2026-01-12T00:07:09-05:00",
-    "message": "release: v0.9.0 - add --date flag for node backdating\n\nFeatures:\n- Add --date flag to `deciduous add` command for backdating nodes\n- Supports YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, and RFC3339 formats\n- Essential for archaeology workflow when reconstructing historical decisions\n\nFixes:\n- Add white-space: pre-wrap to stackCardDescription for proper text formatting\n\nDocumentation:\n- Add pulse/narratives/archaeology skills (.claude/skills/)\n- Update tutorial reference with --date option\n- Update archaeology workflow with --date examples\n- Update init templates with --date documentation",
-    "files_changed": 23
+    "date": "2026-01-12T11:59:13-05:00",
+    "message": "release: v0.9.2 - add revisit node type\n\nAdd the 'revisit' node type for marking pivot points when reconsidering\nprevious decisions. Implemented across all layers:\n\n- CLI: orange color output, new node type accepted\n- TUI: orange color, 🔄 emoji prefix\n- DOT export: doubleoctagon shape, peach color\n- Web viewer: orange (#f97316) in graph and UI\n- Schema: added to NodeType enum\n- Templates: updated decision.md and CLAUDE.md docs\n- Tutorial: updated all reference pages",
+    "files_changed": 27
+  },
+  {
+    "hash": "2bf92d7b54eaca5c5a558a92b9cb2e4209a8fea4",
+    "short_hash": "2bf92d7",
+    "author": "Bobby Nathan",
+    "date": "2026-01-12T11:59:13-05:00",
+    "message": "release: v0.9.2 - add revisit node type\n\nAdd the 'revisit' node type for marking pivot points when reconsidering\nprevious decisions. Implemented across all layers:\n\n- CLI: orange color output, new node type accepted\n- TUI: orange color, 🔄 emoji prefix\n- DOT export: doubleoctagon shape, peach color\n- Web viewer: orange (#f97316) in graph and UI\n- Schema: added to NodeType enum\n- Templates: updated decision.md and CLAUDE.md docs\n- Tutorial: updated all reference pages",
+    "files_changed": 27
   },
   {
     "hash": "6da0d5cd8c98c77ee0a5d6177cd0b1d59649c21d",
@@ -464,14 +472,6 @@
     "files_changed": 5
   },
   {
-    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
-    "short_hash": "157aa70",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
-    "files_changed": 5
-  },
-  {
     "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
     "short_hash": "9e9953a",
     "author": "Bobby Nathan",
@@ -486,6 +486,14 @@
     "date": "2025-12-16T01:12:08-05:00",
     "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
     "files_changed": 4
+  },
+  {
+    "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
+    "short_hash": "157aa70",
+    "author": "Bobby Nathan",
+    "date": "2025-12-16T01:12:08-05:00",
+    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)\n\nfix(search): highlight ALL matching nodes, not just top 15\n- Previously search limited to 15 results for both dropdown AND highlighting\n- Now: dropdown shows top 15, but ALL matches are highlighted on graph\n- All matching nodes now appear in callout cards\n- Dropdown footer shows 'Showing 15 of N · All N highlighted' when truncated",
+    "files_changed": 5
   },
   {
     "hash": "3be6e5ce199b274c285e1740b92e3054dc7f00e3",

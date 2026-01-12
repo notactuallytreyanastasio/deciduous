@@ -300,6 +300,7 @@ pub fn node_type_color(node_type: &str) -> Color {
         "action" => Color::Red,
         "outcome" => Color::Cyan,
         "observation" => Color::Blue,
+        "revisit" => Color::Rgb(249, 115, 22), // Orange - pivot point
         _ => Color::White,
     }
 }
@@ -937,6 +938,7 @@ fn draw_goal_story_modal(frame: &mut Frame, app: &App, goal_id: i32, area: Rect)
                 "action" => "│  └─ ⚡ ",
                 "outcome" => "└─ ✅ ",
                 "observation" => "│  📝 ",
+                "revisit" => "├─ 🔄 ", // Pivot point / reconsideration
                 _ => "├─ ",
             }
         };

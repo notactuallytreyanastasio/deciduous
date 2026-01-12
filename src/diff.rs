@@ -32,7 +32,7 @@ pub struct GraphPatch {
 pub struct PatchNode {
     /// Globally unique change ID
     pub change_id: String,
-    /// Node type: goal, decision, option, action, outcome, observation
+    /// Node type: goal, decision, option, action, outcome, observation, revisit
     pub node_type: String,
     /// Node title
     pub title: String,

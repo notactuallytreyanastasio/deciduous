@@ -18,6 +18,7 @@ export const NODE_COLORS: Record<NodeType, string> = {
   action: '#ef4444',     // Red
   outcome: '#a855f7',    // Purple
   observation: '#6b7280', // Gray
+  revisit: '#f97316',    // Orange - pivot point / reconsideration
 };
 
 /**

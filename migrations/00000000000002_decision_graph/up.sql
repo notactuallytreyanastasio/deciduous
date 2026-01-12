@@ -2,7 +2,7 @@
 -- Models decisions, alternatives, and the paths taken during development
 
 -- Node types in the decision graph
--- Types: 'goal', 'decision', 'option', 'action', 'outcome', 'observation'
+-- Types: 'goal', 'decision', 'option', 'action', 'outcome', 'observation', 'revisit'
 CREATE TABLE decision_nodes (
     id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
     node_type TEXT NOT NULL,

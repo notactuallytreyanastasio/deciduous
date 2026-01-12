@@ -417,7 +417,7 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | Command | Description |
 |---------|-------------|
 | `deciduous init` | Initialize deciduous in current directory |
-| `deciduous add <type> "title"` | Add a node (goal/decision/option/action/outcome/observation) |
+| `deciduous add <type> "title"` | Add a node (goal/decision/option/action/outcome/observation/revisit) |
 | `deciduous link <from> <to>` | Create edge between nodes |
 | `deciduous status <id> <status>` | Update node status |
 | `deciduous nodes` | List all nodes |
