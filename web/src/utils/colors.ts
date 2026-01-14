@@ -23,9 +23,10 @@ export const NODE_COLORS: Record<NodeType, string> = {
 
 /**
  * Get color for a node type
+ * Accepts string for flexibility with dynamic node types
  */
-export function getNodeColor(type: NodeType): string {
-  return NODE_COLORS[type] || '#6b7280';
+export function getNodeColor(type: NodeType | string): string {
+  return NODE_COLORS[type as NodeType] || '#6b7280';
 }
 
 // =============================================================================

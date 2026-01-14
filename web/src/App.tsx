@@ -17,6 +17,10 @@ import { RoadmapView } from './views/RoadmapView';
 import { StoryView } from './views/StoryView';
 import { LogView } from './views/LogView';
 import { AskView } from './views/AskView';
+import { ArchaeologyView } from './views/ArchaeologyView';
+import { ArchaeologyV1 } from './views/ArchaeologyV1';
+import { ArchaeologyV2 } from './views/ArchaeologyV2';
+import { ArchaeologyV3 } from './views/ArchaeologyV3';
 import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
 // Detect if running from deciduous serve (local) vs static file (GitHub Pages)
@@ -190,6 +194,31 @@ export const App: React.FC = () => {
                       graphData={filteredGraphData!}
                       gitHistory={gitHistory}
                     />
+                  }
+                />
+                <Route
+                  path="/archaeology"
+                  element={
+                    <ArchaeologyView graphData={filteredGraphData!} />
+                  }
+                />
+                {/* New Archaeology Approaches - Prototypes */}
+                <Route
+                  path="/v1"
+                  element={
+                    <ArchaeologyV1 graphData={filteredGraphData!} />
+                  }
+                />
+                <Route
+                  path="/v2"
+                  element={
+                    <ArchaeologyV2 graphData={filteredGraphData!} gitHistory={gitHistory} />
+                  }
+                />
+                <Route
+                  path="/v3"
+                  element={
+                    <ArchaeologyV3 graphData={filteredGraphData!} />
                   }
                 />
                 {/* Fallback redirect */}

@@ -36,6 +36,9 @@ export interface NodeMetadata {
   prompt?: string;      // User prompt that triggered this decision
   files?: string[];     // Associated files
   branch?: string;      // Git branch this node was created on
+  github_pr?: number | string;    // GitHub PR number
+  github_issue?: number | string; // GitHub issue number
+  github_repo?: string;           // GitHub repo in "owner/repo" format
   [key: string]: unknown;  // Allow extension
 }
 

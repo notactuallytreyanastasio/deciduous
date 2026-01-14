@@ -55,13 +55,7 @@ fn handle_request(request: Request) -> std::io::Result<()> {
     let method = request.method().clone();
 
     match (&method, path) {
-        // Serve graph viewer UI
-        (&Method::Get, "/") | (&Method::Get, "/graph") => {
-            let response = Response::from_string(GRAPH_VIEWER_HTML)
-                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap());
-            request.respond(response)
-        }
-
+        // API endpoints first (before SPA fallback)
         // API: Get decision graph
         (&Method::Get, "/api/graph") => {
             let graph = get_decision_graph();
@@ -112,7 +106,14 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         // API: Ask Claude about the code (POST /api/ask)
         (&Method::Post, "/api/ask") => handle_ask_question(request),
 
-        // 404
+        // Serve SPA for all other GET requests (client-side routing)
+        (&Method::Get, _) => {
+            let response = Response::from_string(GRAPH_VIEWER_HTML)
+                .with_header(Header::from_bytes(&b"Content-Type"[..], &b"text/html"[..]).unwrap());
+            request.respond(response)
+        }
+
+        // 404 for non-GET requests to unknown paths
         _ => {
             let response = Response::from_string("Not found").with_status_code(404);
             request.respond(response)
@@ -318,6 +319,35 @@ struct AskContext {
     selected_node_id: Option<i32>,
     visible_node_ids: Option<Vec<i32>>,
     current_branch: Option<String>,
+    narrative: Option<NarrativeContext>,
+}
+
+/// Narrative context from archaeology view
+#[derive(serde::Deserialize)]
+struct NarrativeContext {
+    name: String,
+    root_id: i32,
+    node_ids: Vec<i32>,
+    pivots: Vec<PivotContext>,
+    github_links: Vec<GithubLinkContext>,
+}
+
+/// Pivot context - where an approach changed
+#[derive(serde::Deserialize)]
+struct PivotContext {
+    revisit_id: i32,
+    observation_ids: Vec<i32>,
+    superseded_ids: Vec<i32>,
+    new_approach_ids: Vec<i32>,
+}
+
+/// GitHub link context
+#[derive(serde::Deserialize)]
+struct GithubLinkContext {
+    #[serde(rename = "type")]
+    link_type: String,
+    identifier: String,
+    repo: String,
 }
 
 #[derive(serde::Serialize)]
@@ -456,8 +486,39 @@ fn handle_ask_question(mut request: Request) -> std::io::Result<()> {
 fn build_claude_prompt(req: &AskRequest) -> String {
     let mut prompt = String::new();
 
-    // System prompt with instructions
-    prompt.push_str(r#"You are to use deciduous to answer questions about the codebase and decision graph.
+    // Check if this is an archaeology query (has narrative context)
+    let is_archaeology = req
+        .context
+        .as_ref()
+        .is_some_and(|ctx| ctx.narrative.is_some());
+
+    if is_archaeology {
+        // Archaeology-focused system prompt
+        prompt.push_str(r#"You are an expert in this codebase. You have meticulously crafted a narrative graph that lets someone understand and explore the entire decision history you have built up in order to understand the *why* of certain pieces of code. This was built using your archaeology tool.
+
+The narrative graph captures:
+- **Goals**: What we set out to accomplish
+- **Decisions**: Choices made along the way
+- **Actions**: Implementation steps taken
+- **Observations**: What we learned during the process
+- **Pivots**: Where we changed approach based on new information
+- **Outcomes**: Results of our decisions
+
+When answering questions:
+1. Ground your answers in the specific nodes and decisions from the narrative
+2. Explain the *why* behind decisions, not just the *what*
+3. Highlight pivots and course corrections - these often contain the most valuable insights
+4. Reference GitHub artifacts (commits, PRs, issues) when relevant
+5. If the narrative doesn't contain enough information, say so explicitly
+
+Format your response in Markdown.
+
+---
+
+"#);
+    } else {
+        // Generic decision graph system prompt
+        prompt.push_str(r#"You are to use deciduous to answer questions about the codebase and decision graph.
 
 You can use your skills/tools/commands to query the graph with the various deciduous helpers.
 
@@ -480,6 +541,7 @@ IMPORTANT: If information is missing or incomplete, tell the user explicitly and
 ---
 
 "#);
+    }
 
     // Add context if provided
     if let Some(ctx) = &req.context {
@@ -523,6 +585,107 @@ IMPORTANT: If information is missing or incomplete, tell the user explicitly and
         // Add branch context
         if let Some(branch) = &ctx.current_branch {
             prompt.push_str(&format!("Current git branch: {}\n\n", branch));
+        }
+
+        // Add narrative context from archaeology view
+        if let Some(narrative) = &ctx.narrative {
+            prompt.push_str("## Narrative Context (Archaeology View)\n\n");
+            prompt.push_str(&format!("**Narrative:** {}\n", narrative.name));
+            prompt.push_str(&format!(
+                "**Scope:** {} nodes, starting from node #{}\n\n",
+                narrative.node_ids.len(),
+                narrative.root_id
+            ));
+
+            // Load and display nodes in the narrative
+            if let Ok(db) = Database::open() {
+                prompt.push_str("### Nodes in this narrative:\n\n");
+                for node_id in &narrative.node_ids {
+                    if let Ok(Some(node)) = db.get_node(*node_id) {
+                        let status_marker = match node.status.as_str() {
+                            "superseded" => " [SUPERSEDED]",
+                            "abandoned" => " [ABANDONED]",
+                            _ => "",
+                        };
+                        prompt.push_str(&format!(
+                            "- **#{}** ({}{}) {}\n",
+                            node.id, node.node_type, status_marker, node.title
+                        ));
+                        if let Some(desc) = &node.description {
+                            if !desc.is_empty() {
+                                prompt.push_str(&format!("  - {}\n", desc));
+                            }
+                        }
+                    }
+                }
+                prompt.push('\n');
+            }
+
+            // Add pivots - where the approach changed
+            if !narrative.pivots.is_empty() {
+                prompt.push_str("### Pivots (approach changes):\n\n");
+                for (i, pivot) in narrative.pivots.iter().enumerate() {
+                    prompt.push_str(&format!(
+                        "**Pivot {}:** Revisit node #{}\n",
+                        i + 1,
+                        pivot.revisit_id
+                    ));
+                    if !pivot.observation_ids.is_empty() {
+                        prompt.push_str(&format!(
+                            "- Triggered by observations: {}\n",
+                            pivot
+                                .observation_ids
+                                .iter()
+                                .map(|id| format!("#{}", id))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
+                    if !pivot.superseded_ids.is_empty() {
+                        prompt.push_str(&format!(
+                            "- Superseded nodes: {}\n",
+                            pivot
+                                .superseded_ids
+                                .iter()
+                                .map(|id| format!("#{}", id))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
+                    if !pivot.new_approach_ids.is_empty() {
+                        prompt.push_str(&format!(
+                            "- New approach nodes: {}\n",
+                            pivot
+                                .new_approach_ids
+                                .iter()
+                                .map(|id| format!("#{}", id))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ));
+                    }
+                    prompt.push('\n');
+                }
+            }
+
+            // Add GitHub links
+            if !narrative.github_links.is_empty() {
+                prompt.push_str("### GitHub Artifacts:\n\n");
+                for link in &narrative.github_links {
+                    let link_desc = match link.link_type.as_str() {
+                        "commit" => format!(
+                            "Commit {}",
+                            &link.identifier[..7.min(link.identifier.len())]
+                        ),
+                        "pr" => format!("PR #{}", link.identifier),
+                        "issue" => format!("Issue #{}", link.identifier),
+                        _ => format!("{} {}", link.link_type, link.identifier),
+                    };
+                    prompt.push_str(&format!("- {} ({})\n", link_desc, link.repo));
+                }
+                prompt.push('\n');
+            }
+
+            prompt.push_str("---\n\n");
         }
     }
 

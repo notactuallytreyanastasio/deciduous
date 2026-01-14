@@ -17,7 +17,7 @@ interface LayoutProps {
   onBranchChange?: (branch: string | null) => void;
 }
 
-type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story' | 'log';
+type ViewTab = 'chains' | 'timeline' | 'graph' | 'dag' | 'roadmap' | 'story' | 'log' | 'archaeology' | 'v1' | 'v2' | 'v3';
 
 const TABS: { id: ViewTab; label: string; path: string }[] = [
   { id: 'story', label: 'Story', path: '/story' },
@@ -27,6 +27,14 @@ const TABS: { id: ViewTab; label: string; path: string }[] = [
   { id: 'timeline', label: 'Timeline', path: '/timeline' },
   { id: 'graph', label: 'Graph', path: '/graph' },
   { id: 'roadmap', label: 'Roadmap', path: '/roadmap' },
+  { id: 'archaeology', label: 'Archaeology', path: '/archaeology' },
+];
+
+// New prototype approaches for testing
+const PROTOTYPE_TABS: { id: ViewTab; label: string; path: string; description: string }[] = [
+  { id: 'v1', label: 'V1: Ask-First', path: '/v1', description: 'Question-centered design' },
+  { id: 'v2', label: 'V2: Timeline', path: '/v2', description: 'Time-centered exploration' },
+  { id: 'v3', label: 'V3: Search', path: '/v3', description: 'Search-first experience' },
 ];
 
 export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, branches, selectedBranch, onBranchChange }) => {
@@ -40,8 +48,16 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
     if (path === '/timeline') return 'timeline';
     if (path === '/graph') return 'graph';
     if (path === '/roadmap') return 'roadmap';
+    if (path === '/archaeology') return 'archaeology';
+    if (path === '/v1') return 'v1';
+    if (path === '/v2') return 'v2';
+    if (path === '/v3') return 'v3';
     return 'dag'; // Default to DAG
   };
+
+  // Note: isPrototypeView could be used for conditional rendering
+  const _isPrototypeView = ['v1', 'v2', 'v3'].includes(getCurrentTab());
+  void _isPrototypeView; // Suppress unused warning
 
   const currentTab = getCurrentTab();
 
@@ -63,6 +79,21 @@ export const Layout: React.FC<LayoutProps> = ({ children, stats, lastUpdated, br
                   ...styles.tab,
                   ...(currentTab === tab.id ? styles.tabActive : {}),
                 }}
+              >
+                {tab.label}
+              </Link>
+            ))}
+            <span style={styles.navDivider}>|</span>
+            {PROTOTYPE_TABS.map(tab => (
+              <Link
+                key={tab.id}
+                to={tab.path}
+                style={{
+                  ...styles.tab,
+                  ...styles.prototypeTab,
+                  ...(currentTab === tab.id ? styles.prototypeTabActive : {}),
+                }}
+                title={tab.description}
               >
                 {tab.label}
               </Link>
@@ -182,6 +213,23 @@ const styles: Record<string, React.CSSProperties> = {
   tabActive: {
     backgroundColor: '#ffffff',
     color: '#0969da',
+    fontWeight: 600,
+  },
+  navDivider: {
+    color: '#d0d7de',
+    alignSelf: 'center',
+    margin: '0 8px',
+  },
+  prototypeTab: {
+    backgroundColor: '#f3f0ff',
+    color: '#6741d9',
+    border: '1px solid #d4c8f5',
+    fontSize: '12px',
+    padding: '8px 14px',
+  },
+  prototypeTabActive: {
+    backgroundColor: '#6741d9',
+    color: '#ffffff',
     fontWeight: 600,
   },
   navLinks: {
