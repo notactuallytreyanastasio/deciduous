@@ -9,7 +9,7 @@
 import React, { useEffect, useCallback, useRef, useState } from 'react';
 import type { DecisionNode } from '../types/graph';
 import { getNodeColor } from '../utils/colors';
-import { getConfidence, getCommit, getPrompt } from '../types/graph';
+import { getConfidence, getCommit, getPrompt, getFiles, getBranch } from '../types/graph';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
 interface CardStackProps {
@@ -240,6 +240,26 @@ export const CardStack: React.FC<CardStackProps> = ({
 
               <h4 style={styles.cardTitle}>{node.title}</h4>
 
+              {/* Description - always show if present */}
+              {node.description && (
+                <p style={styles.cardDescription}>{node.description}</p>
+              )}
+
+              {/* Files and branch - always show if present */}
+              {(getFiles(node)?.length || getBranch(node)) && (
+                <div style={styles.metaRow}>
+                  {getBranch(node) && (
+                    <span style={styles.branchTag}>{getBranch(node)}</span>
+                  )}
+                  {getFiles(node)?.slice(0, 2).map((file, i) => (
+                    <span key={i} style={styles.fileTag}>{file}</span>
+                  ))}
+                  {(getFiles(node)?.length ?? 0) > 2 && (
+                    <span style={styles.moreFiles}>+{(getFiles(node)?.length ?? 0) - 2}</span>
+                  )}
+                </div>
+              )}
+
               {/* Expanded view - full details */}
               {isExpanded && (
                 <div style={styles.expandedContent}>
@@ -251,11 +271,15 @@ export const CardStack: React.FC<CardStackProps> = ({
                     </div>
                   )}
 
-                  {/* Description if present */}
-                  {node.description && (
-                    <div style={styles.descSection}>
-                      <div style={styles.sectionLabel}>Description:</div>
-                      <div style={styles.descText}>{node.description}</div>
+                  {/* All files if present */}
+                  {getFiles(node) && getFiles(node)!.length > 2 && (
+                    <div style={styles.filesSection}>
+                      <div style={styles.sectionLabel}>All Files:</div>
+                      <div style={styles.filesList}>
+                        {getFiles(node)!.map((file, i) => (
+                          <span key={i} style={styles.fileTag}>{file}</span>
+                        ))}
+                      </div>
                     </div>
                   )}
 
@@ -381,6 +405,39 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#24292f',
     lineHeight: 1.4,
   },
+  cardDescription: {
+    margin: '6px 0 0 0',
+    fontSize: '13px',
+    color: '#57606a',
+    lineHeight: 1.5,
+  },
+  metaRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
+    marginTop: '8px',
+  },
+  branchTag: {
+    fontSize: '11px',
+    fontWeight: 500,
+    backgroundColor: '#dafbe1',
+    color: '#1a7f37',
+    padding: '2px 8px',
+    borderRadius: '10px',
+  },
+  fileTag: {
+    fontSize: '10px',
+    fontFamily: 'monospace',
+    backgroundColor: '#f6f8fa',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    color: '#0969da',
+  },
+  moreFiles: {
+    fontSize: '10px',
+    color: '#8c959f',
+    padding: '2px 4px',
+  },
   expandedContent: {
     marginTop: '12px',
     paddingTop: '12px',
@@ -406,6 +463,14 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     fontStyle: 'italic',
     whiteSpace: 'pre-wrap',
+  },
+  filesSection: {
+    marginBottom: '12px',
+  },
+  filesList: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '6px',
   },
   descSection: {
     marginBottom: '12px',

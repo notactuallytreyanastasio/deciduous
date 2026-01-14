@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.10.1",
+        highlights: &[
+            "Fix card stack not appearing when clicking nodes in archaeology view",
+            "Card stack now shows description, branch, and files by default",
+        ],
+    },
+    Release {
         version: "0.10.0",
         highlights: &[
             "Archaeology view is now the default at `deciduous serve`",

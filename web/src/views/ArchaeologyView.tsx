@@ -172,10 +172,11 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
   // Handle node selection in graph
   const handleNodeSelect = useCallback((nodeId: number) => {
     setSelectedNodeId(nodeId);
+    // Always show card stack when a node is clicked
+    setShowCardStack(true);
     if (selectedNarrative) {
       const nodeIndex = selectedNarrative.nodes.findIndex(n => n.id === nodeId);
       if (nodeIndex >= 0) {
-        setShowCardStack(true);
         setCardStackSelectedIndex(nodeIndex);
         setCardStackExpandedIndex(nodeIndex);
       }
