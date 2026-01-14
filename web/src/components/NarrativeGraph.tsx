@@ -3,9 +3,14 @@
  *
  * DAG visualization for a single narrative using D3.js + Dagre.
  * Shows nodes color-coded by type with edges showing relationships.
+ *
+ * Performance optimizations:
+ * - Debounced resize handler
+ * - Memoized layout calculation
+ * - Node limit with warning for very large graphs
  */
 
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState, useMemo } from 'react';
 import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge } from '../types/graph';
@@ -24,6 +29,19 @@ interface NarrativeGraphProps {
 const NODE_WIDTH = 180;
 const NODE_HEIGHT = 60;
 const NODE_MARGIN = 40;
+
+// Performance limits
+const SOFT_NODE_LIMIT = 100; // Show warning
+const HARD_NODE_LIMIT = 500; // Force truncation
+
+// Debounce helper
+function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return ((...args: Parameters<T>) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
 
 interface DagreNodeData {
   width: number;
@@ -48,28 +66,54 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
+  const [showAllNodes, setShowAllNodes] = useState(false);
 
-  // Build and render the graph
-  const renderGraph = useCallback(() => {
-    const svg = d3.select(svgRef.current);
-    const container = containerRef.current;
-    if (!svg || !container) return;
+  // Handle large node counts
+  const { displayNodes, displayEdges, isTruncated, totalCount } = useMemo(() => {
+    const total = nodes.length;
 
-    // Clear previous render
-    svg.selectAll('*').remove();
-
-    if (nodes.length === 0) {
-      // Show empty state
-      svg.append('text')
-        .attr('x', container.clientWidth / 2)
-        .attr('y', container.clientHeight / 2)
-        .attr('text-anchor', 'middle')
-        .attr('fill', '#8c959f')
-        .text('Select a narrative to view its graph');
-      return;
+    // If under soft limit or user chose to show all, use all nodes
+    if (total <= SOFT_NODE_LIMIT || showAllNodes) {
+      // Hard limit still applies
+      if (total > HARD_NODE_LIMIT) {
+        const truncatedNodes = nodes.slice(0, HARD_NODE_LIMIT);
+        const nodeIds = new Set(truncatedNodes.map(n => n.id));
+        const truncatedEdges = edges.filter(
+          e => nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
+        );
+        return {
+          displayNodes: truncatedNodes,
+          displayEdges: truncatedEdges,
+          isTruncated: true,
+          totalCount: total,
+        };
+      }
+      return {
+        displayNodes: nodes,
+        displayEdges: edges,
+        isTruncated: false,
+        totalCount: total,
+      };
     }
 
-    // Create dagre graph
+    // Truncate to soft limit
+    const truncatedNodes = nodes.slice(0, SOFT_NODE_LIMIT);
+    const nodeIds = new Set(truncatedNodes.map(n => n.id));
+    const truncatedEdges = edges.filter(
+      e => nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
+    );
+    return {
+      displayNodes: truncatedNodes,
+      displayEdges: truncatedEdges,
+      isTruncated: true,
+      totalCount: total,
+    };
+  }, [nodes, edges, showAllNodes]);
+
+  // Calculate dagre layout - memoized for performance
+  const layout = useMemo(() => {
+    if (displayNodes.length === 0) return null;
+
     const g = new dagre.graphlib.Graph();
     g.setGraph({
       rankdir: 'TB',
@@ -81,8 +125,8 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
     g.setDefaultEdgeLabel(() => ({}));
 
     // Add nodes
-    const nodeMap = new Map(nodes.map(n => [n.id, n]));
-    for (const node of nodes) {
+    const nodeMap = new Map(displayNodes.map(n => [n.id, n]));
+    for (const node of displayNodes) {
       g.setNode(String(node.id), {
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
@@ -91,7 +135,7 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
     }
 
     // Add edges
-    for (const edge of edges) {
+    for (const edge of displayEdges) {
       if (nodeMap.has(edge.from_node_id) && nodeMap.has(edge.to_node_id)) {
         g.setEdge(String(edge.from_node_id), String(edge.to_node_id), { edge });
       }
@@ -100,9 +144,35 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
     // Calculate layout
     dagre.layout(g);
 
-    // Get graph dimensions
-    const graphWidth = (g.graph().width ?? 400) + 80;
-    const graphHeight = (g.graph().height ?? 300) + 80;
+    return {
+      graph: g,
+      width: (g.graph().width ?? 400) + 80,
+      height: (g.graph().height ?? 300) + 80,
+    };
+  }, [displayNodes, displayEdges]);
+
+  // Build and render the graph
+  const renderGraph = useCallback(() => {
+    const svg = d3.select(svgRef.current);
+    const container = containerRef.current;
+    if (!svg || !container) return;
+
+    // Clear previous render
+    svg.selectAll('*').remove();
+
+    if (!layout || displayNodes.length === 0) {
+      // Show empty state
+      svg.append('text')
+        .attr('x', container.clientWidth / 2)
+        .attr('y', container.clientHeight / 2)
+        .attr('text-anchor', 'middle')
+        .attr('fill', '#8c959f')
+        .text('Select a narrative to view its graph');
+      return;
+    }
+
+    // Use memoized layout
+    const { graph: g, width: graphWidth, height: graphHeight } = layout;
 
     // Set SVG size
     svg.attr('width', container.clientWidth)
@@ -246,23 +316,46 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
       }
     });
 
-  }, [nodes, edges, selectedNodeId, onNodeSelect, onNodeHover]);
+  }, [layout, displayNodes, selectedNodeId, onNodeSelect, onNodeHover]);
 
   // Re-render on data changes
   useEffect(() => {
     renderGraph();
   }, [renderGraph]);
 
-  // Handle resize
+  // Handle resize with debouncing
   useEffect(() => {
-    const handleResize = () => renderGraph();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    const debouncedResize = debounce(() => renderGraph(), 150);
+    window.addEventListener('resize', debouncedResize);
+    return () => window.removeEventListener('resize', debouncedResize);
   }, [renderGraph]);
 
   return (
     <div ref={containerRef} style={styles.container}>
       <svg ref={svgRef} style={styles.svg} />
+
+      {/* Truncation warning */}
+      {isTruncated && (
+        <div style={styles.truncationWarning}>
+          <span>
+            Showing {displayNodes.length} of {totalCount} nodes
+          </span>
+          {totalCount <= HARD_NODE_LIMIT && !showAllNodes && (
+            <button
+              style={styles.showAllButton}
+              onClick={() => setShowAllNodes(true)}
+            >
+              Show all
+            </button>
+          )}
+          {totalCount > HARD_NODE_LIMIT && (
+            <span style={styles.hardLimitNote}>
+              (max {HARD_NODE_LIMIT})
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Zoom indicator */}
       <div style={styles.zoomIndicator}>
         {Math.round(zoom * 100)}%
@@ -294,5 +387,35 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     color: '#57606a',
     border: '1px solid #e1e4e8',
+  },
+  truncationWarning: {
+    position: 'absolute',
+    top: '12px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    backgroundColor: '#fff8c5',
+    border: '1px solid #d4a72c',
+    borderRadius: '6px',
+    padding: '8px 16px',
+    fontSize: '12px',
+    color: '#6f5e02',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    zIndex: 10,
+  },
+  showAllButton: {
+    padding: '4px 10px',
+    fontSize: '11px',
+    fontWeight: 500,
+    backgroundColor: '#ffffff',
+    color: '#6f5e02',
+    border: '1px solid #d4a72c',
+    borderRadius: '4px',
+    cursor: 'pointer',
+  },
+  hardLimitNote: {
+    fontSize: '11px',
+    color: '#8a7e3b',
   },
 };

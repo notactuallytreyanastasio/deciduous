@@ -15,6 +15,8 @@ interface ExplanationModalProps {
   isLoading: boolean;
   error: string | null;
   onClose: () => void;
+  onCancel?: () => void;
+  onRetry?: () => void;
   timestamp?: Date;
 }
 
@@ -25,6 +27,8 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
   isLoading,
   error,
   onClose,
+  onCancel,
+  onRetry,
   timestamp,
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -73,15 +77,29 @@ export const ExplanationModal: React.FC<ExplanationModalProps> = ({
         {/* Content */}
         <div ref={contentRef} style={styles.content}>
           {isLoading && (
-            <div style={styles.loading}>
-              <div style={styles.spinner} />
-              <span>Generating explanation...</span>
+            <div style={styles.loadingContainer}>
+              <div style={styles.loading}>
+                <div style={styles.spinner} />
+                <span>Generating explanation...</span>
+              </div>
+              {onCancel && (
+                <button style={styles.cancelButton} onClick={onCancel}>
+                  Cancel
+                </button>
+              )}
             </div>
           )}
 
           {error && (
             <div style={styles.error}>
-              <strong>Error:</strong> {error}
+              <div style={styles.errorContent}>
+                <strong>Error:</strong> {error}
+              </div>
+              {onRetry && (
+                <button style={styles.retryButton} onClick={onRetry}>
+                  Retry
+                </button>
+              )}
             </div>
           )}
 
@@ -196,11 +214,17 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'auto',
     padding: '0 24px 24px',
   },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '16px',
+    padding: '40px 0',
+  },
   loading: {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    padding: '40px 0',
     justifyContent: 'center',
     color: '#57606a',
   },
@@ -212,11 +236,40 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '50%',
     animation: 'spin 1s linear infinite',
   },
+  cancelButton: {
+    padding: '8px 20px',
+    fontSize: '13px',
+    fontWeight: 500,
+    backgroundColor: '#ffffff',
+    color: '#57606a',
+    border: '1px solid #d0d7de',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
   error: {
     padding: '16px',
     backgroundColor: '#ffebe9',
     borderRadius: '8px',
     color: '#cf222e',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  errorContent: {
+    lineHeight: 1.4,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    padding: '8px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
+    backgroundColor: '#ffffff',
+    color: '#cf222e',
+    border: '1px solid #cf222e',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
   },
   empty: {
     padding: '40px 0',

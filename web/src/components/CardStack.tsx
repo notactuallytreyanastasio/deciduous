@@ -6,10 +6,11 @@
  * Navigate with j/k or up/down arrows.
  */
 
-import React, { useEffect, useCallback, useRef } from 'react';
+import React, { useEffect, useCallback, useRef, useState } from 'react';
 import type { DecisionNode } from '../types/graph';
 import { getNodeColor } from '../utils/colors';
 import { getConfidence, getCommit, getPrompt } from '../types/graph';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 interface CardStackProps {
   nodes: DecisionNode[];
@@ -29,6 +30,58 @@ export const CardStack: React.FC<CardStackProps> = ({
   onClose,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+
+  // Touch swipe state
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
+
+  // Minimum swipe distance to trigger navigation
+  const minSwipeDistance = 50;
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY,
+    });
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    setTouchEnd({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY,
+    });
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!touchStart || !touchEnd) return;
+
+    const distanceX = touchStart.x - touchEnd.x;
+    const distanceY = touchStart.y - touchEnd.y;
+    const isHorizontalSwipe = Math.abs(distanceX) > Math.abs(distanceY);
+
+    if (isHorizontalSwipe && Math.abs(distanceX) > minSwipeDistance) {
+      if (distanceX > 0) {
+        // Swiped left - next card
+        onSelectIndex(Math.min(selectedIndex + 1, nodes.length - 1));
+      } else {
+        // Swiped right - previous card
+        onSelectIndex(Math.max(selectedIndex - 1, 0));
+      }
+    } else if (!isHorizontalSwipe && Math.abs(distanceY) > minSwipeDistance) {
+      if (distanceY < 0) {
+        // Swiped down - close
+        onClose();
+      } else {
+        // Swiped up - expand
+        onExpandIndex(expandedIndex === selectedIndex ? null : selectedIndex);
+      }
+    }
+
+    setTouchStart(null);
+    setTouchEnd(null);
+  }, [touchStart, touchEnd, selectedIndex, expandedIndex, nodes.length, onSelectIndex, onExpandIndex, onClose]);
 
   // Keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -52,12 +105,47 @@ export const CardStack: React.FC<CardStackProps> = ({
         onExpandIndex(expandedIndex === selectedIndex ? null : selectedIndex);
         break;
       case 'Escape':
+      case 'q':
         e.preventDefault();
         if (expandedIndex !== null) {
           onExpandIndex(null);
         } else {
           onClose();
         }
+        break;
+      // Jump to first/last
+      case 'Home':
+      case 'g':
+        e.preventDefault();
+        onSelectIndex(0);
+        break;
+      case 'End':
+      case 'G':
+        e.preventDefault();
+        onSelectIndex(nodes.length - 1);
+        break;
+      // Jump by page (10 items)
+      case 'PageDown':
+        e.preventDefault();
+        onSelectIndex(Math.min(selectedIndex + 10, nodes.length - 1));
+        break;
+      case 'PageUp':
+        e.preventDefault();
+        onSelectIndex(Math.max(selectedIndex - 10, 0));
+        break;
+      // Number keys 1-9 for quick jump
+      case '1': case '2': case '3': case '4': case '5':
+      case '6': case '7': case '8': case '9':
+        e.preventDefault();
+        const jumpIndex = parseInt(e.key, 10) - 1;
+        if (jumpIndex < nodes.length) {
+          onSelectIndex(jumpIndex);
+        }
+        break;
+      // Spacebar to expand/collapse
+      case ' ':
+        e.preventDefault();
+        onExpandIndex(expandedIndex === selectedIndex ? null : selectedIndex);
         break;
     }
   }, [nodes.length, selectedIndex, expandedIndex, onSelectIndex, onExpandIndex, onClose]);
@@ -81,14 +169,23 @@ export const CardStack: React.FC<CardStackProps> = ({
   if (nodes.length === 0) return null;
 
   return (
-    <div ref={containerRef} style={styles.container}>
+    <div
+      ref={containerRef}
+      style={{
+        ...styles.container,
+        ...(isMobile ? styles.containerMobile : {}),
+      }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Header */}
       <div style={styles.header}>
         <span style={styles.headerTitle}>
           {nodes.length} node{nodes.length > 1 ? 's' : ''} in narrative
         </span>
         <span style={styles.headerHint}>
-          j/k navigate &bull; Enter expand &bull; Esc close
+          {isMobile ? 'Swipe to navigate' : 'j/k nav \u2022 Space expand \u2022 q close'}
         </span>
         <button style={styles.closeBtn} onClick={onClose}>
           &times;
@@ -334,5 +431,17 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '16px',
     fontSize: '11px',
     color: '#8c959f',
+  },
+
+  // Mobile responsive styles
+  containerMobile: {
+    position: 'fixed',
+    left: '10px',
+    right: '10px',
+    top: '70px',
+    bottom: '10px',
+    width: 'auto',
+    borderRadius: '16px',
+    zIndex: 1100,
   },
 };

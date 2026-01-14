@@ -8,7 +8,7 @@
  * - Modal: Single comprehensive AI explanation (not chat)
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import type { GraphData } from '../types/graph';
 import type { ArchaeologyFilters } from '../types/archaeology';
 import { DEFAULT_ARCHAEOLOGY_FILTERS } from '../types/archaeology';
@@ -22,15 +22,32 @@ import { NarrativeGraph } from '../components/NarrativeGraph';
 import { CardStack } from '../components/CardStack';
 import { ExplanationModal } from '../components/ExplanationModal';
 import { getNodeColor } from '../utils/colors';
+import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useIsMobile } from '../hooks/useMediaQuery';
+
+// Request timeout in milliseconds
+const REQUEST_TIMEOUT_MS = 60000;
 
 interface ArchaeologyViewProps {
   graphData: GraphData;
 }
 
 export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) => {
-  // State
-  const [selectedNarrativeIndex, setSelectedNarrativeIndex] = useState<number>(0);
-  const [filters, setFilters] = useState<ArchaeologyFilters>(DEFAULT_ARCHAEOLOGY_FILTERS);
+  // Persisted state
+  const [selectedNarrativeId, setSelectedNarrativeId] = useLocalStorage<string | null>(
+    'selected_narrative_id',
+    null
+  );
+  const [filters, setFilters] = useLocalStorage<ArchaeologyFilters>(
+    'filters',
+    DEFAULT_ARCHAEOLOGY_FILTERS
+  );
+
+  // Responsive state
+  const isMobile = useIsMobile();
+  const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
+
+  // Transient state
   const [showCardStack, setShowCardStack] = useState(false);
   const [cardStackSelectedIndex, setCardStackSelectedIndex] = useState(0);
   const [cardStackExpandedIndex, setCardStackExpandedIndex] = useState<number | null>(null);
@@ -45,6 +62,7 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
 
   // Question input state
   const [question, setQuestion] = useState('');
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Build narratives from graph data
   const narratives = useMemo(() => buildNarratives(graphData), [graphData]);
@@ -54,6 +72,22 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
     () => filterNarratives(narratives, filters),
     [narratives, filters]
   );
+
+  // Compute selected index from persisted ID
+  const selectedNarrativeIndex = useMemo(() => {
+    if (!selectedNarrativeId) return 0;
+    const idx = filteredNarratives.findIndex(n => n.id === selectedNarrativeId);
+    return idx >= 0 ? idx : 0;
+  }, [filteredNarratives, selectedNarrativeId]);
+
+  // Helper to update selection
+  const setSelectedNarrativeIndex = useCallback((indexOrFn: number | ((prev: number) => number)) => {
+    const newIndex = typeof indexOrFn === 'function' ? indexOrFn(selectedNarrativeIndex) : indexOrFn;
+    const narrative = filteredNarratives[newIndex];
+    if (narrative) {
+      setSelectedNarrativeId(narrative.id);
+    }
+  }, [filteredNarratives, selectedNarrativeIndex, setSelectedNarrativeId]);
 
   // Currently selected narrative
   const selectedNarrative = useMemo(
@@ -72,6 +106,8 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't handle if card stack is showing (it has its own handlers)
       if (showCardStack) return;
+      // Don't handle if modal is open
+      if (modalOpen) return;
       // Don't handle if typing in input or textarea
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
 
@@ -96,12 +132,42 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
             setCardStackExpandedIndex(null);
           }
           break;
+        // Jump to first/last narrative
+        case 'Home':
+        case 'g':
+          e.preventDefault();
+          setSelectedNarrativeIndex(0);
+          break;
+        case 'End':
+        case 'G':
+          e.preventDefault();
+          setSelectedNarrativeIndex(filteredNarratives.length - 1);
+          break;
+        // Page through narratives
+        case 'PageDown':
+          e.preventDefault();
+          setSelectedNarrativeIndex(prev =>
+            Math.min(prev + 10, filteredNarratives.length - 1)
+          );
+          break;
+        case 'PageUp':
+          e.preventDefault();
+          setSelectedNarrativeIndex(prev => Math.max(prev - 10, 0));
+          break;
+        // Focus search with /
+        case '/':
+          e.preventDefault();
+          const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
+          if (searchInput) {
+            searchInput.focus();
+          }
+          break;
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showCardStack, filteredNarratives.length, selectedNarrative]);
+  }, [showCardStack, modalOpen, filteredNarratives.length, selectedNarrative]);
 
   // Handle node selection in graph
   const handleNodeSelect = useCallback((nodeId: number) => {
@@ -116,9 +182,25 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
     }
   }, [selectedNarrative]);
 
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   // Handle asking a question
   const handleAskQuestion = useCallback(async () => {
     if (!question.trim() || !selectedNarrative) return;
+
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
 
     setModalTitle(question);
     setModalOpen(true);
@@ -134,14 +216,24 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
         visible_node_ids: selectedNarrative.nodes.map(n => n.id),
       };
 
-      const response = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: question,
-          context,
-        }),
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), REQUEST_TIMEOUT_MS);
       });
+
+      // Race fetch against timeout
+      const response = await Promise.race([
+        fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: question,
+            context,
+          }),
+          signal,
+        }),
+        timeoutPromise,
+      ]);
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
@@ -152,11 +244,27 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
       const answer = data.data?.answer || data.response || data.answer || 'No response received.';
       setModalContent(answer);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Request was cancelled - close modal
+        setModalOpen(false);
+        return;
+      }
       setModalError(err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setModalLoading(false);
+      abortControllerRef.current = null;
     }
   }, [question, selectedNarrative]);
+
+  // Cancel the current request
+  const handleCancelRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setModalOpen(false);
+    setModalLoading(false);
+  }, []);
 
   // Handle search
   const handleFilterChange = (key: keyof ArchaeologyFilters, value: unknown) => {
@@ -166,8 +274,28 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
 
   return (
     <div style={styles.container}>
+      {/* Mobile sidebar toggle */}
+      {isMobile && (
+        <button
+          style={{
+            ...styles.sidebarToggle,
+            ...(sidebarOpen ? styles.sidebarToggleOpen : {}),
+          }}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          aria-label={sidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+        >
+          {sidebarOpen ? '\u2715' : '\u2630'}
+        </button>
+      )}
+
       {/* Left Sidebar - Narrative List */}
-      <div style={styles.sidebar}>
+      <div
+        style={{
+          ...styles.sidebar,
+          ...(isMobile ? styles.sidebarMobile : {}),
+          ...(isMobile && !sidebarOpen ? styles.sidebarHidden : {}),
+        }}
+      >
         {/* Search */}
         <div style={styles.searchBox}>
           <input
@@ -200,7 +328,10 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
                   ...(index === selectedNarrativeIndex ? styles.narrativeItemSelected : {}),
                   borderLeftColor: getNodeColor(narrative.root.node_type),
                 }}
-                onClick={() => setSelectedNarrativeIndex(index)}
+                onClick={() => {
+                  setSelectedNarrativeIndex(index);
+                  if (isMobile) setSidebarOpen(false);
+                }}
               >
                 <div style={styles.narrativeHeader}>
                   <span
@@ -227,8 +358,9 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
 
         {/* Keyboard hints */}
         <div style={styles.keyboardHints}>
-          <span>j/k navigate</span>
-          <span>Enter view cards</span>
+          <span>j/k nav</span>
+          <span>/ search</span>
+          <span>Enter cards</span>
         </div>
       </div>
 
@@ -297,6 +429,8 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
         isLoading={modalLoading}
         error={modalError}
         onClose={() => setModalOpen(false)}
+        onCancel={modalLoading ? handleCancelRequest : undefined}
+        onRetry={modalError ? handleAskQuestion : undefined}
         timestamp={new Date()}
       />
     </div>
@@ -457,5 +591,43 @@ const styles: Record<string, React.CSSProperties> = {
   askButtonDisabled: {
     backgroundColor: '#d0d7de',
     cursor: 'not-allowed',
+  },
+
+  // Mobile responsive styles
+  sidebarToggle: {
+    position: 'fixed',
+    top: '70px',
+    left: '12px',
+    zIndex: 1100,
+    width: '44px',
+    height: '44px',
+    borderRadius: '8px',
+    backgroundColor: '#ffffff',
+    border: '1px solid #d0d7de',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+    cursor: 'pointer',
+    fontSize: '20px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#57606a',
+    transition: 'all 0.2s ease',
+  },
+  sidebarToggleOpen: {
+    left: '280px',
+    backgroundColor: '#f6f8fa',
+  },
+  sidebarMobile: {
+    position: 'fixed',
+    top: '60px',
+    left: 0,
+    bottom: 0,
+    width: '280px',
+    zIndex: 1000,
+    transition: 'transform 0.3s ease',
+    boxShadow: '4px 0 16px rgba(0,0,0,0.15)',
+  },
+  sidebarHidden: {
+    transform: 'translateX(-100%)',
   },
 };

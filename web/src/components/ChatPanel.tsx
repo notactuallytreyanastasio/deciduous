@@ -5,11 +5,12 @@
  * Connects to /api/ask to shell out to Claude.
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Narrative, ChatMessage, NarrativeContext, ArchaeologyAskContext } from '../types/archaeology';
 import { formatNarrativeContext } from '../utils/archaeologyProcessing';
 import { getNodeColor } from '../utils/colors';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 
 interface ChatPanelProps {
   narrative: Narrative | null;
@@ -19,41 +20,107 @@ interface ChatPanelProps {
 // Generate unique ID for messages
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
+// Request timeout in milliseconds
+const REQUEST_TIMEOUT_MS = 60000;
+
+// Serializable version of ChatMessage for localStorage
+interface StoredMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string; // ISO string
+}
+
+function toStoredMessages(messages: ChatMessage[]): StoredMessage[] {
+  return messages.map(m => ({
+    ...m,
+    timestamp: m.timestamp.toISOString(),
+  }));
+}
+
+function fromStoredMessages(stored: StoredMessage[]): ChatMessage[] {
+  return stored.map(m => ({
+    ...m,
+    timestamp: new Date(m.timestamp),
+  }));
+}
+
 export const ChatPanel: React.FC<ChatPanelProps> = ({
   narrative,
 }) => {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  // Persist chat history per narrative
+  const [chatHistoryMap, setChatHistoryMap] = useLocalStorage<Record<string, StoredMessage[]>>(
+    'chat_history',
+    {}
+  );
+
+  // Get/set messages for current narrative
+  const narrativeKey = narrative?.id ?? '';
+  const messages = narrativeKey && chatHistoryMap[narrativeKey]
+    ? fromStoredMessages(chatHistoryMap[narrativeKey])
+    : [];
+
+  const setMessages = useCallback((updater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
+    if (!narrativeKey) return;
+    setChatHistoryMap(prev => {
+      const currentMessages = prev[narrativeKey]
+        ? fromStoredMessages(prev[narrativeKey])
+        : [];
+      const newMessages = typeof updater === 'function' ? updater(currentMessages) : updater;
+      return {
+        ...prev,
+        [narrativeKey]: toStoredMessages(newMessages),
+      };
+    });
+  }, [narrativeKey, setChatHistoryMap]);
+
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFailedMessage, setLastFailedMessage] = useState<ChatMessage | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   // Scroll to bottom when messages change
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Clear messages when narrative changes
+  // Clear error state when narrative changes (messages are persisted)
   useEffect(() => {
-    setMessages([]);
     setError(null);
+    setLastFailedMessage(null);
+    // Cancel any pending request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
   }, [narrative?.id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || !narrative || isLoading) return;
-
-    const userMessage: ChatMessage = {
-      id: generateId(),
-      role: 'user',
-      content: input.trim(),
-      timestamp: new Date(),
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
     };
+  }, []);
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
+  // Core send function - can be called with a message directly (for retry)
+  const sendMessage = useCallback(async (userMessage: ChatMessage) => {
+    if (!narrative) return;
+
+    // Cancel any existing request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+
+    abortControllerRef.current = new AbortController();
+    const { signal } = abortControllerRef.current;
+
     setIsLoading(true);
     setError(null);
+    setLastFailedMessage(null);
 
     try {
       // Build context for the API
@@ -63,14 +130,24 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
         visible_node_ids: narrative.nodes.map(n => n.id),
       };
 
-      const response = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          question: userMessage.content,
-          context: askContext,
-        }),
+      // Create timeout promise
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), REQUEST_TIMEOUT_MS);
       });
+
+      // Race fetch against timeout
+      const response = await Promise.race([
+        fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            question: userMessage.content,
+            context: askContext,
+          }),
+          signal,
+        }),
+        timeoutPromise,
+      ]);
 
       const result = await response.json();
 
@@ -87,12 +164,57 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
       setMessages(prev => [...prev, assistantMessage]);
     } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Request was cancelled - don't show error
+        return;
+      }
       const errorMsg = err instanceof Error ? err.message : 'Unknown error';
       setError(errorMsg);
+      setLastFailedMessage(userMessage);
     } finally {
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
+  }, [narrative]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || !narrative || isLoading) return;
+
+    const userMessage: ChatMessage = {
+      id: generateId(),
+      role: 'user',
+      content: input.trim(),
+      timestamp: new Date(),
+    };
+
+    setMessages(prev => [...prev, userMessage]);
+    setInput('');
+    await sendMessage(userMessage);
   };
+
+  const handleRetry = useCallback(() => {
+    if (lastFailedMessage) {
+      sendMessage(lastFailedMessage);
+    }
+  }, [lastFailedMessage, sendMessage]);
+
+  const handleCancel = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  }, []);
+
+  const handleClearHistory = useCallback(() => {
+    if (!narrativeKey) return;
+    setChatHistoryMap(prev => {
+      const next = { ...prev };
+      delete next[narrativeKey];
+      return next;
+    });
+  }, [narrativeKey, setChatHistoryMap]);
 
   // Render empty state when no narrative selected
   if (!narrative) {
@@ -124,6 +246,15 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
             {narrative.root.node_type}
           </span>
           <span style={styles.nodeCount}>{narrative.nodes.length} nodes</span>
+          {messages.length > 0 && (
+            <button
+              style={styles.clearHistoryButton}
+              onClick={handleClearHistory}
+              title="Clear chat history"
+            >
+              Clear
+            </button>
+          )}
         </div>
         <h2 style={styles.title}>{narrative.name}</h2>
         {narrative.pivots.length > 0 && (
@@ -222,16 +353,48 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
           <div style={{ ...styles.message, ...styles.assistantMessage }}>
             <div style={styles.messageHeader}>
               <span style={styles.messageRole}>Claude</span>
+              <button
+                style={styles.cancelButton}
+                onClick={handleCancel}
+                title="Cancel request"
+              >
+                Cancel
+              </button>
             </div>
             <div style={styles.loadingDots}>
-              <span>.</span><span>.</span><span>.</span>
+              <span className="loading-dot">.</span>
+              <span className="loading-dot">.</span>
+              <span className="loading-dot">.</span>
             </div>
+            <style>{`
+              .loading-dot {
+                animation: loadingDotPulse 1.4s ease-in-out infinite;
+                display: inline-block;
+              }
+              .loading-dot:nth-child(1) { animation-delay: 0s; }
+              .loading-dot:nth-child(2) { animation-delay: 0.2s; }
+              .loading-dot:nth-child(3) { animation-delay: 0.4s; }
+              @keyframes loadingDotPulse {
+                0%, 80%, 100% { opacity: 0.3; transform: scale(1); }
+                40% { opacity: 1; transform: scale(1.2); }
+              }
+            `}</style>
           </div>
         )}
 
         {error && (
           <div style={styles.errorMessage}>
-            <strong>Error:</strong> {error}
+            <div style={styles.errorContent}>
+              <strong>Error:</strong> {error}
+            </div>
+            {lastFailedMessage && (
+              <button
+                style={styles.retryButton}
+                onClick={handleRetry}
+              >
+                Retry
+              </button>
+            )}
           </div>
         )}
 
@@ -443,6 +606,44 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '6px',
     color: '#cf222e',
     fontSize: '13px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  errorContent: {
+    lineHeight: 1.4,
+  },
+  retryButton: {
+    alignSelf: 'flex-start',
+    padding: '6px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    backgroundColor: '#ffffff',
+    color: '#cf222e',
+    border: '1px solid #cf222e',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    transition: 'all 0.15s',
+  },
+  cancelButton: {
+    padding: '2px 8px',
+    fontSize: '11px',
+    backgroundColor: 'transparent',
+    color: '#57606a',
+    border: '1px solid #d0d7de',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    marginLeft: 'auto',
+  },
+  clearHistoryButton: {
+    marginLeft: 'auto',
+    padding: '2px 8px',
+    fontSize: '10px',
+    backgroundColor: 'transparent',
+    color: '#8c959f',
+    border: '1px solid #e1e4e8',
+    borderRadius: '4px',
+    cursor: 'pointer',
   },
   inputForm: {
     display: 'flex',
