@@ -12,6 +12,17 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.10.0",
+        highlights: &[
+            "Archaeology view is now the default at `deciduous serve`",
+            "Narrative-focused exploration with AI-powered explanations",
+            "Session-based card stack UI with keyboard navigation (j/k/g/G/Space)",
+            "Mobile-responsive with touch swipe gestures",
+            "Persistent chat history and filters via localStorage",
+            "Graph performance optimizations for large node counts",
+        ],
+    },
+    Release {
         version: "0.9.6",
         highlights: &[
             "Embedded changelog shows what's new when upgrading",

@@ -139,6 +139,12 @@ export const App: React.FC = () => {
                 <Route
                   path="/"
                   element={
+                    <ArchaeologyView graphData={filteredGraphData!} />
+                  }
+                />
+                <Route
+                  path="/dag"
+                  element={
                     <DagView
                       graphData={filteredGraphData!}
                       chains={chains}
@@ -191,12 +197,6 @@ export const App: React.FC = () => {
                       graphData={filteredGraphData!}
                       gitHistory={gitHistory}
                     />
-                  }
-                />
-                <Route
-                  path="/archaeology"
-                  element={
-                    <ArchaeologyView graphData={filteredGraphData!} />
                   }
                 />
                 {/* Fallback redirect */}
