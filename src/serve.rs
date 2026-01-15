@@ -314,7 +314,7 @@ struct AskRequest {
     context: Option<AskContext>,
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct AskContext {
     selected_node_id: Option<i32>,
     visible_node_ids: Option<Vec<i32>>,
@@ -323,17 +323,20 @@ struct AskContext {
 }
 
 /// Narrative context from archaeology view
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct NarrativeContext {
     name: String,
     root_id: i32,
+    #[serde(default)]
     node_ids: Vec<i32>,
+    #[serde(default)]
     pivots: Vec<PivotContext>,
+    #[serde(default)]
     github_links: Vec<GithubLinkContext>,
 }
 
 /// Pivot context - where an approach changed
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct PivotContext {
     revisit_id: i32,
     observation_ids: Vec<i32>,
@@ -342,7 +345,7 @@ struct PivotContext {
 }
 
 /// GitHub link context
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 struct GithubLinkContext {
     #[serde(rename = "type")]
     link_type: String,
@@ -438,8 +441,27 @@ fn handle_ask_question(mut request: Request) -> std::io::Result<()> {
         Ok(output) => {
             if output.status.success() {
                 let answer = String::from_utf8_lossy(&output.stdout).to_string();
+
+                // Save Q&A interaction to database (best effort - don't fail if DB unavailable)
+                if let Ok(db) = Database::open() {
+                    let context_json = req
+                        .context
+                        .as_ref()
+                        .and_then(|ctx| serde_json::to_string(ctx).ok());
+                    if let Err(e) = db.save_qa_interaction(
+                        &req.question,
+                        &prompt,
+                        &answer,
+                        context_json.as_deref(),
+                    ) {
+                        eprintln!("Warning: Failed to save Q&A interaction: {}", e);
+                    }
+                }
+
                 (
-                    serde_json::to_string(&ApiResponse::success(AskResponse { answer }))?,
+                    serde_json::to_string(&ApiResponse::success(AskResponse {
+                        answer: answer.clone(),
+                    }))?,
                     200,
                 )
             } else {

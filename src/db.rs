@@ -2214,6 +2214,97 @@ impl Database {
 
         Ok(deleted)
     }
+
+    // ========================================================================
+    // Q&A Interactions
+    // ========================================================================
+
+    /// Save a Q&A interaction (user question and Claude response)
+    pub fn save_qa_interaction(
+        &self,
+        user_prompt: &str,
+        total_prompt: &str,
+        response: &str,
+        context_json: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_interaction = NewQaInteraction {
+            user_prompt,
+            total_prompt,
+            response,
+            context_json,
+            inserted_at: &now,
+            deleted_at: None,
+        };
+
+        diesel::insert_into(qa_interactions::table)
+            .values(&new_interaction)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Get all Q&A interactions (excluding soft-deleted)
+    pub fn get_qa_interactions(&self) -> Result<Vec<QaInteraction>> {
+        let mut conn = self.get_conn()?;
+
+        let interactions = qa_interactions::table
+            .filter(qa_interactions::deleted_at.is_null())
+            .order(qa_interactions::inserted_at.desc())
+            .load::<QaInteraction>(&mut conn)?;
+
+        Ok(interactions)
+    }
+
+    /// Soft delete a Q&A interaction
+    pub fn soft_delete_qa_interaction(&self, id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(qa_interactions::table.filter(qa_interactions::id.eq(id)))
+            .set(qa_interactions::deleted_at.eq(Some(&now)))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+}
+
+// ============================================================================
+// Q&A Interactions Models
+// ============================================================================
+
+/// Insertable Q&A interaction
+#[derive(Insertable)]
+#[diesel(table_name = qa_interactions)]
+pub struct NewQaInteraction<'a> {
+    pub user_prompt: &'a str,
+    pub total_prompt: &'a str,
+    pub response: &'a str,
+    pub context_json: Option<&'a str>,
+    pub inserted_at: &'a str,
+    pub deleted_at: Option<&'a str>,
+}
+
+/// Queryable Q&A interaction
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = qa_interactions)]
+pub struct QaInteraction {
+    pub id: i32,
+    pub user_prompt: String,
+    pub total_prompt: String,
+    pub response: String,
+    pub context_json: Option<String>,
+    pub inserted_at: String,
+    pub deleted_at: Option<String>,
 }
 
 // ============================================================================

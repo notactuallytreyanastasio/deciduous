@@ -152,3 +152,19 @@ diesel::table! {
         cached_at -> Text,
     }
 }
+
+// ============================================================================
+// Q&A Interactions - User questions and Claude responses
+// ============================================================================
+
+diesel::table! {
+    qa_interactions (id) {
+        id -> Integer,
+        user_prompt -> Text,
+        total_prompt -> Text,
+        response -> Text,
+        context_json -> Nullable<Text>,
+        inserted_at -> Text,
+        deleted_at -> Nullable<Text>,
+    }
+}
