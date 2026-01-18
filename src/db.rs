@@ -603,6 +603,31 @@ struct TableInfo {
     name: String,
 }
 
+/// Helper for FTS5 search results
+#[derive(QueryableByName, Debug)]
+struct FtsSearchRow {
+    #[diesel(sql_type = diesel::sql_types::Integer)]
+    id: i32,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    user_prompt: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    total_prompt: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    response: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    context_json: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    inserted_at: String,
+    #[diesel(sql_type = diesel::sql_types::Nullable<diesel::sql_types::Text>)]
+    deleted_at: Option<String>,
+    #[diesel(sql_type = diesel::sql_types::Double)]
+    rank: f64,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    snippet_prompt: String,
+    #[diesel(sql_type = diesel::sql_types::Text)]
+    snippet_response: String,
+}
+
 // ============================================================================
 // Database Connection
 // ============================================================================
@@ -966,6 +991,68 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // Q&A interactions for chat history
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS qa_interactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                user_prompt TEXT NOT NULL,
+                total_prompt TEXT NOT NULL,
+                response TEXT NOT NULL,
+                context_json TEXT,
+                inserted_at TEXT NOT NULL,
+                deleted_at TEXT
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        // FTS5 virtual table for full-text search on Q&A interactions
+        diesel::sql_query(
+            r#"
+            CREATE VIRTUAL TABLE IF NOT EXISTS qa_interactions_fts USING fts5(
+                user_prompt,
+                response,
+                content='qa_interactions',
+                content_rowid='id'
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        // Triggers to keep FTS index in sync
+        diesel::sql_query(
+            r#"
+            CREATE TRIGGER IF NOT EXISTS qa_interactions_ai AFTER INSERT ON qa_interactions BEGIN
+                INSERT INTO qa_interactions_fts(rowid, user_prompt, response)
+                VALUES (new.id, new.user_prompt, new.response);
+            END
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        diesel::sql_query(
+            r#"
+            CREATE TRIGGER IF NOT EXISTS qa_interactions_ad AFTER DELETE ON qa_interactions BEGIN
+                INSERT INTO qa_interactions_fts(qa_interactions_fts, rowid, user_prompt, response)
+                VALUES ('delete', old.id, old.user_prompt, old.response);
+            END
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        diesel::sql_query(
+            r#"
+            CREATE TRIGGER IF NOT EXISTS qa_interactions_au AFTER UPDATE ON qa_interactions BEGIN
+                INSERT INTO qa_interactions_fts(qa_interactions_fts, rowid, user_prompt, response)
+                VALUES ('delete', old.id, old.user_prompt, old.response);
+                INSERT INTO qa_interactions_fts(rowid, user_prompt, response)
+                VALUES (new.id, new.user_prompt, new.response);
+            END
+        "#,
+        )
+        .execute(&mut conn)?;
+
         // Create indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_nodes_type ON decision_nodes(node_type)")
             .execute(&mut conn)?;
@@ -1007,6 +1094,9 @@ impl Database {
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_items_outcome ON roadmap_items(outcome_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_roadmap_conflicts_item ON roadmap_conflicts(item_change_id)").execute(&mut conn)?;
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_github_issue_cache_repo ON github_issue_cache(repo, issue_number)").execute(&mut conn)?;
+
+        // Q&A indexes
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_qa_interactions_inserted_at ON qa_interactions(inserted_at)").execute(&mut conn)?;
 
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
@@ -2274,6 +2364,104 @@ impl Database {
 
         Ok(())
     }
+
+    /// Search Q&A interactions using FTS5 full-text search
+    /// Returns results ranked by relevance (BM25 algorithm)
+    pub fn search_qa_interactions(&self, query: &str, limit: i32) -> Result<Vec<QaSearchResult>> {
+        let mut conn = self.get_conn()?;
+
+        // Escape single quotes in query for SQL safety
+        let safe_query = query.replace('\'', "''");
+
+        // FTS5 query with BM25 ranking and highlighted snippets
+        // bm25() returns negative scores (closer to 0 = more relevant)
+        // highlight() wraps matches in <mark> tags
+        let sql = format!(
+            r#"
+            SELECT
+                qa.id,
+                qa.user_prompt,
+                qa.total_prompt,
+                qa.response,
+                qa.context_json,
+                qa.inserted_at,
+                qa.deleted_at,
+                bm25(qa_interactions_fts) as rank,
+                highlight(qa_interactions_fts, 0, '<mark>', '</mark>') as snippet_prompt,
+                highlight(qa_interactions_fts, 1, '<mark>', '</mark>') as snippet_response
+            FROM qa_interactions_fts
+            JOIN qa_interactions qa ON qa.id = qa_interactions_fts.rowid
+            WHERE qa_interactions_fts MATCH '{}'
+            AND qa.deleted_at IS NULL
+            ORDER BY rank
+            LIMIT {}
+            "#,
+            safe_query, limit
+        );
+
+        let rows: Vec<FtsSearchRow> = diesel::sql_query(sql).load(&mut conn).unwrap_or_default();
+
+        Ok(rows
+            .into_iter()
+            .map(|row| QaSearchResult {
+                interaction: QaInteraction {
+                    id: row.id,
+                    user_prompt: row.user_prompt,
+                    total_prompt: row.total_prompt,
+                    response: row.response,
+                    context_json: row.context_json,
+                    inserted_at: row.inserted_at,
+                    deleted_at: row.deleted_at,
+                },
+                rank: row.rank,
+                snippet_prompt: row.snippet_prompt,
+                snippet_response: row.snippet_response,
+            })
+            .collect())
+    }
+
+    /// Get a single Q&A interaction by ID
+    pub fn get_qa_interaction(&self, id: i32) -> Result<Option<QaInteraction>> {
+        let mut conn = self.get_conn()?;
+
+        let result = qa_interactions::table
+            .filter(qa_interactions::id.eq(id))
+            .filter(qa_interactions::deleted_at.is_null())
+            .first::<QaInteraction>(&mut conn)
+            .optional()?;
+
+        Ok(result)
+    }
+
+    /// Get paginated Q&A interactions (for browsing without search)
+    pub fn get_qa_interactions_paginated(
+        &self,
+        offset: i64,
+        limit: i64,
+    ) -> Result<Vec<QaInteraction>> {
+        let mut conn = self.get_conn()?;
+
+        let interactions = qa_interactions::table
+            .filter(qa_interactions::deleted_at.is_null())
+            .order(qa_interactions::inserted_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .load::<QaInteraction>(&mut conn)?;
+
+        Ok(interactions)
+    }
+
+    /// Get total count of Q&A interactions (for pagination UI)
+    pub fn count_qa_interactions(&self) -> Result<i64> {
+        let mut conn = self.get_conn()?;
+
+        let count: i64 = qa_interactions::table
+            .filter(qa_interactions::deleted_at.is_null())
+            .count()
+            .get_result(&mut conn)?;
+
+        Ok(count)
+    }
 }
 
 // ============================================================================
@@ -2305,6 +2493,17 @@ pub struct QaInteraction {
     pub context_json: Option<String>,
     pub inserted_at: String,
     pub deleted_at: Option<String>,
+}
+
+/// Q&A search result with FTS5 ranking and highlighted snippets
+#[derive(Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+pub struct QaSearchResult {
+    pub interaction: QaInteraction,
+    pub rank: f64,
+    pub snippet_prompt: String,
+    pub snippet_response: String,
 }
 
 // ============================================================================

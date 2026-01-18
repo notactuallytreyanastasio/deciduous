@@ -2,8 +2,9 @@
 //!
 //! `deciduous serve` → starts server, opens browser, shows graph
 
-use crate::db::{Database, DecisionGraph, RoadmapItem};
+use crate::db::{Database, DecisionGraph, QaInteraction, QaSearchResult, RoadmapItem};
 use serde::Serialize;
+use std::collections::HashMap;
 use tiny_http::{Header, Method, Request, Response, Server};
 
 #[derive(Serialize)]
@@ -105,6 +106,16 @@ fn handle_request(request: Request) -> std::io::Result<()> {
 
         // API: Ask Claude about the code (POST /api/ask)
         (&Method::Post, "/api/ask") => handle_ask_question(request),
+
+        // API: Search Q&A interactions (GET /api/qa/search?q=...&limit=20)
+        (&Method::Get, "/api/qa/search") => handle_qa_search(request, &url),
+
+        // API: Get paginated Q&A interactions (GET /api/qa?offset=0&limit=20)
+        (&Method::Get, "/api/qa") => handle_qa_list(request, &url),
+
+        // API: Get or delete single Q&A interaction (GET/DELETE /api/qa/:id)
+        (&Method::Get, p) if p.starts_with("/api/qa/") => handle_qa_get(request, p),
+        (&Method::Delete, p) if p.starts_with("/api/qa/") => handle_qa_delete(request, p),
 
         // Serve SPA for all other GET requests (client-side routing)
         (&Method::Get, _) => {
@@ -758,6 +769,197 @@ fn handle_toggle_checkbox(mut request: Request) -> std::io::Result<()> {
     // Update database
     let result = match Database::open() {
         Ok(db) => db.update_roadmap_item_checkbox(req.item_id, &req.checkbox_state),
+        Err(e) => Err(e),
+    };
+
+    let (json, status) = match result {
+        Ok(()) => (serde_json::to_string(&ApiResponse::success(true))?, 200),
+        Err(e) => (
+            serde_json::to_string(&ApiResponse::<bool> {
+                ok: false,
+                data: None,
+                error: Some(format!("Database error: {}", e)),
+            })?,
+            500,
+        ),
+    };
+
+    let response = Response::from_string(json)
+        .with_status_code(status)
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+    request.respond(response)
+}
+
+// === Q&A API Handlers ===
+
+/// Parse query parameters from URL (e.g., "?q=test&limit=20")
+fn parse_query_params(url: &str) -> HashMap<String, String> {
+    let mut params = HashMap::new();
+    if let Some(query_start) = url.find('?') {
+        let query = &url[query_start + 1..];
+        for pair in query.split('&') {
+            if let Some(eq_pos) = pair.find('=') {
+                let key = &pair[..eq_pos];
+                let value = &pair[eq_pos + 1..];
+                // URL decode the value (basic: just handle %20 for spaces)
+                let decoded = value.replace("%20", " ").replace("+", " ");
+                params.insert(key.to_string(), decoded);
+            }
+        }
+    }
+    params
+}
+
+/// Response wrapper for paginated Q&A list
+#[derive(Serialize)]
+struct QaListResponse {
+    items: Vec<QaInteraction>,
+    total: i64,
+}
+
+fn handle_qa_search(request: Request, url: &str) -> std::io::Result<()> {
+    let params = parse_query_params(url);
+    let query = params.get("q").map(|s| s.as_str()).unwrap_or("");
+    let limit: i32 = params
+        .get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(20);
+
+    if query.is_empty() {
+        let json = serde_json::to_string(&ApiResponse::<Vec<QaSearchResult>> {
+            ok: false,
+            data: None,
+            error: Some("Missing search query parameter 'q'".to_string()),
+        })?;
+        let response = Response::from_string(json)
+            .with_status_code(400)
+            .with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+        return request.respond(response);
+    }
+
+    let results = match Database::open() {
+        Ok(db) => db.search_qa_interactions(query, limit).unwrap_or_default(),
+        Err(_) => vec![],
+    };
+
+    let json = serde_json::to_string(&ApiResponse::success(results))?;
+    let response = Response::from_string(json)
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+    request.respond(response)
+}
+
+fn handle_qa_list(request: Request, url: &str) -> std::io::Result<()> {
+    let params = parse_query_params(url);
+    let offset: i64 = params
+        .get("offset")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let limit: i64 = params
+        .get("limit")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(20);
+
+    let (items, total) = match Database::open() {
+        Ok(db) => {
+            let items = db
+                .get_qa_interactions_paginated(offset, limit)
+                .unwrap_or_default();
+            let total = db.count_qa_interactions().unwrap_or(0);
+            (items, total)
+        }
+        Err(_) => (vec![], 0),
+    };
+
+    let json = serde_json::to_string(&ApiResponse::success(QaListResponse { items, total }))?;
+    let response = Response::from_string(json)
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+    request.respond(response)
+}
+
+fn handle_qa_get(request: Request, path: &str) -> std::io::Result<()> {
+    // Extract ID from path: /api/qa/123 -> 123
+    let id: i32 = match path.strip_prefix("/api/qa/").and_then(|s| s.parse().ok()) {
+        Some(id) => id,
+        None => {
+            let json = serde_json::to_string(&ApiResponse::<QaInteraction> {
+                ok: false,
+                data: None,
+                error: Some("Invalid Q&A ID".to_string()),
+            })?;
+            let response = Response::from_string(json)
+                .with_status_code(400)
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+            return request.respond(response);
+        }
+    };
+
+    let result = match Database::open() {
+        Ok(db) => db.get_qa_interaction(id),
+        Err(e) => Err(e),
+    };
+
+    match result {
+        Ok(Some(interaction)) => {
+            let json = serde_json::to_string(&ApiResponse::success(interaction))?;
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            request.respond(response)
+        }
+        Ok(None) => {
+            let json = serde_json::to_string(&ApiResponse::<QaInteraction> {
+                ok: false,
+                data: None,
+                error: Some("Q&A interaction not found".to_string()),
+            })?;
+            let response = Response::from_string(json)
+                .with_status_code(404)
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+            request.respond(response)
+        }
+        Err(e) => {
+            let json = serde_json::to_string(&ApiResponse::<QaInteraction> {
+                ok: false,
+                data: None,
+                error: Some(format!("Database error: {}", e)),
+            })?;
+            let response = Response::from_string(json)
+                .with_status_code(500)
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+            request.respond(response)
+        }
+    }
+}
+
+fn handle_qa_delete(request: Request, path: &str) -> std::io::Result<()> {
+    // Extract ID from path: /api/qa/123 -> 123
+    let id: i32 = match path.strip_prefix("/api/qa/").and_then(|s| s.parse().ok()) {
+        Some(id) => id,
+        None => {
+            let json = serde_json::to_string(&ApiResponse::<bool> {
+                ok: false,
+                data: None,
+                error: Some("Invalid Q&A ID".to_string()),
+            })?;
+            let response = Response::from_string(json)
+                .with_status_code(400)
+                .with_header(
+                    Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+                );
+            return request.respond(response);
+        }
+    };
+
+    let result = match Database::open() {
+        Ok(db) => db.soft_delete_qa_interaction(id),
         Err(e) => Err(e),
     };
 

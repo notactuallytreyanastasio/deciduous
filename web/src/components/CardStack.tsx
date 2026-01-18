@@ -6,31 +6,54 @@
  * Navigate with j/k or up/down arrows.
  */
 
-import React, { useEffect, useCallback, useRef, useState } from 'react';
-import type { DecisionNode } from '../types/graph';
+import React, { useEffect, useCallback, useRef, useState, useMemo } from 'react';
+import type { DecisionNode, DecisionEdge } from '../types/graph';
 import { getNodeColor } from '../utils/colors';
 import { getConfidence, getCommit, getPrompt, getFiles, getBranch } from '../types/graph';
 import { useIsMobile } from '../hooks/useMediaQuery';
 
 interface CardStackProps {
   nodes: DecisionNode[];
+  edges: DecisionEdge[];
   selectedIndex: number;
   expandedIndex: number | null;
   onSelectIndex: (index: number) => void;
   onExpandIndex: (index: number | null) => void;
+  onNodeClick: (nodeId: number) => void;
   onClose: () => void;
 }
 
 export const CardStack: React.FC<CardStackProps> = ({
   nodes,
+  edges,
   selectedIndex,
   expandedIndex,
   onSelectIndex,
   onExpandIndex,
+  onNodeClick,
   onClose,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
+
+  // Build node map for quick lookups
+  const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
+
+  // Get parent nodes (nodes that link TO this node)
+  const getParentNodes = useCallback((nodeId: number) => {
+    return edges
+      .filter(e => e.to_node_id === nodeId)
+      .map(e => ({ node: nodeMap.get(e.from_node_id), edge: e }))
+      .filter((item): item is { node: DecisionNode; edge: DecisionEdge } => item.node !== undefined);
+  }, [edges, nodeMap]);
+
+  // Get child nodes (nodes this node links TO)
+  const getChildNodes = useCallback((nodeId: number) => {
+    return edges
+      .filter(e => e.from_node_id === nodeId)
+      .map(e => ({ node: nodeMap.get(e.to_node_id), edge: e }))
+      .filter((item): item is { node: DecisionNode; edge: DecisionEdge } => item.node !== undefined);
+  }, [edges, nodeMap]);
 
   // Touch swipe state
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
@@ -83,78 +106,6 @@ export const CardStack: React.FC<CardStackProps> = ({
     setTouchEnd(null);
   }, [touchStart, touchEnd, selectedIndex, expandedIndex, nodes.length, onSelectIndex, onExpandIndex, onClose]);
 
-  // Keyboard navigation
-  const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (nodes.length === 0) return;
-
-    switch (e.key) {
-      case 'j':
-      case 'ArrowDown':
-        e.preventDefault();
-        onSelectIndex(Math.min(selectedIndex + 1, nodes.length - 1));
-        break;
-      case 'k':
-      case 'ArrowUp':
-        e.preventDefault();
-        onSelectIndex(Math.max(selectedIndex - 1, 0));
-        break;
-      case 'Enter':
-      case 'Tab':
-        e.preventDefault();
-        // Toggle expansion
-        onExpandIndex(expandedIndex === selectedIndex ? null : selectedIndex);
-        break;
-      case 'Escape':
-      case 'q':
-        e.preventDefault();
-        if (expandedIndex !== null) {
-          onExpandIndex(null);
-        } else {
-          onClose();
-        }
-        break;
-      // Jump to first/last
-      case 'Home':
-      case 'g':
-        e.preventDefault();
-        onSelectIndex(0);
-        break;
-      case 'End':
-      case 'G':
-        e.preventDefault();
-        onSelectIndex(nodes.length - 1);
-        break;
-      // Jump by page (10 items)
-      case 'PageDown':
-        e.preventDefault();
-        onSelectIndex(Math.min(selectedIndex + 10, nodes.length - 1));
-        break;
-      case 'PageUp':
-        e.preventDefault();
-        onSelectIndex(Math.max(selectedIndex - 10, 0));
-        break;
-      // Number keys 1-9 for quick jump
-      case '1': case '2': case '3': case '4': case '5':
-      case '6': case '7': case '8': case '9':
-        e.preventDefault();
-        const jumpIndex = parseInt(e.key, 10) - 1;
-        if (jumpIndex < nodes.length) {
-          onSelectIndex(jumpIndex);
-        }
-        break;
-      // Spacebar to expand/collapse
-      case ' ':
-        e.preventDefault();
-        onExpandIndex(expandedIndex === selectedIndex ? null : selectedIndex);
-        break;
-    }
-  }, [nodes.length, selectedIndex, expandedIndex, onSelectIndex, onExpandIndex, onClose]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
-
   // Scroll selected card into view
   useEffect(() => {
     const container = containerRef.current;
@@ -185,7 +136,7 @@ export const CardStack: React.FC<CardStackProps> = ({
           {nodes.length} node{nodes.length > 1 ? 's' : ''} in narrative
         </span>
         <span style={styles.headerHint}>
-          {isMobile ? 'Swipe to navigate' : 'j/k nav \u2022 Space expand \u2022 q close'}
+          {isMobile ? 'Swipe to navigate' : 'j/k nav · Space expand · q close'}
         </span>
         <button style={styles.closeBtn} onClick={onClose}>
           &times;
@@ -200,28 +151,54 @@ export const CardStack: React.FC<CardStackProps> = ({
           const isPeeking = !isExpanded && Math.abs(index - selectedIndex) <= 2;
           const offset = index - selectedIndex;
 
+          // Selected cards automatically show full details
+          const showFullDetails = isSelected || isExpanded;
+
+          // Parse metadata once for efficiency
+          const confidence = getConfidence(node);
+          const commit = getCommit(node);
+          const prompt = getPrompt(node);
+          const files = getFiles(node);
+          const branch = getBranch(node);
+
+          // Extract additional metadata
+          let githubPr: string | number | undefined;
+          let githubIssue: string | number | undefined;
+          let githubRepo: string | undefined;
+          try {
+            if (node.metadata_json) {
+              const meta = JSON.parse(node.metadata_json);
+              githubPr = meta.github_pr;
+              githubIssue = meta.github_issue;
+              githubRepo = meta.github_repo;
+            }
+          } catch {
+            // Ignore parse errors
+          }
+
           return (
             <div
               key={node.id}
               style={{
                 ...styles.card,
                 ...(isSelected ? styles.cardSelected : {}),
-                ...(isExpanded ? styles.cardExpanded : {}),
+                ...(showFullDetails ? styles.cardExpanded : {}),
                 borderLeftColor: getNodeColor(node.node_type),
-                transform: isExpanded
+                transform: showFullDetails
                   ? 'translateY(0)'
                   : `translateY(${offset * 8}px) scale(${1 - Math.abs(offset) * 0.02})`,
-                zIndex: isExpanded ? 100 : (100 - Math.abs(offset)),
-                opacity: isPeeking || isExpanded ? 1 : 0.6,
+                zIndex: showFullDetails ? 100 : (100 - Math.abs(offset)),
+                opacity: isPeeking || showFullDetails ? 1 : 0.6,
               }}
               onClick={() => {
                 onSelectIndex(index);
+                // Toggle expand if clicking on already-selected card
                 if (isSelected) {
                   onExpandIndex(isExpanded ? null : index);
                 }
               }}
             >
-              {/* Collapsed view - just header */}
+              {/* Header - always visible */}
               <div style={styles.cardHeader}>
                 <span
                   style={{
@@ -230,73 +207,225 @@ export const CardStack: React.FC<CardStackProps> = ({
                     color: getNodeColor(node.node_type),
                   }}
                 >
-                  {node.node_type}
+                  {node.node_type.toUpperCase()}
                 </span>
                 <span style={styles.nodeId}>#{node.id}</span>
-                {getConfidence(node) && (
-                  <span style={styles.confidence}>{getConfidence(node)}%</span>
+                {/* Status badge */}
+                <span style={{
+                  ...styles.statusBadge,
+                  backgroundColor: node.status === 'active' ? '#dafbe1' :
+                                   node.status === 'completed' ? '#ddf4ff' :
+                                   node.status === 'rejected' ? '#ffebe9' : '#f6f8fa',
+                  color: node.status === 'active' ? '#1a7f37' :
+                         node.status === 'completed' ? '#0969da' :
+                         node.status === 'rejected' ? '#cf222e' : '#57606a',
+                }}>
+                  {node.status}
+                </span>
+                {confidence !== null && (
+                  <span style={styles.confidence}>{confidence}%</span>
                 )}
               </div>
 
               <h4 style={styles.cardTitle}>{node.title}</h4>
 
-              {/* Description - always show if present */}
+              {/* Description - always show full text, no truncation */}
               {node.description && (
                 <p style={styles.cardDescription}>{node.description}</p>
               )}
 
-              {/* Files and branch - always show if present */}
-              {(getFiles(node)?.length || getBranch(node)) && (
-                <div style={styles.metaRow}>
-                  {getBranch(node) && (
-                    <span style={styles.branchTag}>{getBranch(node)}</span>
+              {/* Collapsed view - minimal metadata */}
+              {!showFullDetails && (
+                <>
+                  {/* Files and branch - show first 2 */}
+                  {(files?.length || branch) && (
+                    <div style={styles.metaRow}>
+                      {branch && (
+                        <span style={styles.branchTag}>{branch}</span>
+                      )}
+                      {files?.slice(0, 2).map((file, i) => (
+                        <span key={i} style={styles.fileTag}>{file}</span>
+                      ))}
+                      {(files?.length ?? 0) > 2 && (
+                        <span style={styles.moreFiles}>+{(files?.length ?? 0) - 2}</span>
+                      )}
+                    </div>
                   )}
-                  {getFiles(node)?.slice(0, 2).map((file, i) => (
-                    <span key={i} style={styles.fileTag}>{file}</span>
-                  ))}
-                  {(getFiles(node)?.length ?? 0) > 2 && (
-                    <span style={styles.moreFiles}>+{(getFiles(node)?.length ?? 0) - 2}</span>
-                  )}
-                </div>
+                </>
               )}
 
-              {/* Expanded view - full details */}
-              {isExpanded && (
+              {/* Full details view - shown when selected */}
+              {showFullDetails && (
                 <div style={styles.expandedContent}>
-                  {/* Prompt if present */}
-                  {getPrompt(node) && (
-                    <div style={styles.promptSection}>
-                      <div style={styles.sectionLabel}>Prompt:</div>
-                      <div style={styles.promptText}>{getPrompt(node)}</div>
+                  {/* Branch - show prominently at top */}
+                  {branch && (
+                    <div style={styles.branchSection}>
+                      <div style={styles.sectionLabel}>Branch:</div>
+                      <span style={styles.branchTagLarge}>{branch}</span>
                     </div>
                   )}
 
-                  {/* All files if present */}
-                  {getFiles(node) && getFiles(node)!.length > 2 && (
+                  {/* Prompt if present - full text, no truncation */}
+                  {prompt && (
+                    <div style={styles.promptSection}>
+                      <div style={styles.sectionLabel}>Prompt:</div>
+                      <div style={styles.promptText}>{prompt}</div>
+                    </div>
+                  )}
+
+                  {/* All files - always show full list */}
+                  {files && files.length > 0 && (
                     <div style={styles.filesSection}>
-                      <div style={styles.sectionLabel}>All Files:</div>
+                      <div style={styles.sectionLabel}>Files ({files.length}):</div>
                       <div style={styles.filesList}>
-                        {getFiles(node)!.map((file, i) => (
+                        {files.map((file, i) => (
                           <span key={i} style={styles.fileTag}>{file}</span>
                         ))}
                       </div>
                     </div>
                   )}
 
-                  {/* Commit if present */}
-                  {getCommit(node) && (
+                  {/* Commit if present - show full hash */}
+                  {commit && (
                     <div style={styles.commitSection}>
-                      <span style={styles.commitBadge}>
-                        Commit: {getCommit(node)}
-                      </span>
+                      <div style={styles.sectionLabel}>Commit:</div>
+                      <span style={styles.commitBadge}>{commit}</span>
                     </div>
                   )}
 
-                  {/* Timestamps */}
-                  <div style={styles.timestamps}>
-                    <span>Created: {new Date(node.created_at).toLocaleDateString()}</span>
-                    <span>Updated: {new Date(node.updated_at).toLocaleDateString()}</span>
+                  {/* GitHub Links */}
+                  {(githubPr || githubIssue) && (
+                    <div style={styles.githubSection}>
+                      <div style={styles.sectionLabel}>GitHub:</div>
+                      <div style={styles.githubLinks}>
+                        {githubPr && (
+                          <a
+                            href={`https://github.com/${githubRepo || 'owner/repo'}/pull/${githubPr}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={styles.githubLink}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            PR #{githubPr}
+                          </a>
+                        )}
+                        {githubIssue && (
+                          <a
+                            href={`https://github.com/${githubRepo || 'owner/repo'}/issues/${githubIssue}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={styles.githubLink}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            Issue #{githubIssue}
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Change ID (UUID) */}
+                  {node.change_id && (
+                    <div style={styles.changeIdSection}>
+                      <div style={styles.sectionLabel}>Change ID:</div>
+                      <span style={styles.changeIdBadge}>{node.change_id}</span>
+                    </div>
+                  )}
+
+                  {/* Timestamps - show full datetime */}
+                  <div style={styles.timestampsSection}>
+                    <div style={styles.sectionLabel}>Timestamps:</div>
+                    <div style={styles.timestamps}>
+                      <span>Created: {new Date(node.created_at).toLocaleString()}</span>
+                      <span>Updated: {new Date(node.updated_at).toLocaleString()}</span>
+                    </div>
                   </div>
+
+                  {/* Parent nodes (incoming links) */}
+                  {(() => {
+                    const parents = getParentNodes(node.id);
+                    return (
+                      <div style={styles.linksSection}>
+                        <div style={styles.sectionLabel}>
+                          Parent Nodes ({parents.length}):
+                        </div>
+                        {parents.length === 0 ? (
+                          <div style={styles.noLinks}>No parent nodes</div>
+                        ) : (
+                          <div style={styles.linksList}>
+                            {parents.map(({ node: parentNode, edge }) => (
+                              <button
+                                key={parentNode.id}
+                                style={{
+                                  ...styles.linkedNode,
+                                  borderLeftColor: getNodeColor(parentNode.node_type),
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNodeClick(parentNode.id);
+                                }}
+                              >
+                                <span style={{
+                                  ...styles.linkedTypeBadge,
+                                  backgroundColor: getNodeColor(parentNode.node_type) + '22',
+                                  color: getNodeColor(parentNode.node_type),
+                                }}>
+                                  {parentNode.node_type}
+                                </span>
+                                <span style={styles.linkedTitle}>#{parentNode.id}: {parentNode.title}</span>
+                                {edge.rationale && (
+                                  <span style={styles.linkRationale}>{edge.rationale}</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Child nodes (outgoing links) */}
+                  {(() => {
+                    const children = getChildNodes(node.id);
+                    return (
+                      <div style={styles.linksSection}>
+                        <div style={styles.sectionLabel}>
+                          Child Nodes ({children.length}):
+                        </div>
+                        {children.length === 0 ? (
+                          <div style={styles.noLinks}>No child nodes</div>
+                        ) : (
+                          <div style={styles.linksList}>
+                            {children.map(({ node: childNode, edge }) => (
+                              <button
+                                key={childNode.id}
+                                style={{
+                                  ...styles.linkedNode,
+                                  borderLeftColor: getNodeColor(childNode.node_type),
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onNodeClick(childNode.id);
+                                }}
+                              >
+                                <span style={{
+                                  ...styles.linkedTypeBadge,
+                                  backgroundColor: getNodeColor(childNode.node_type) + '22',
+                                  color: getNodeColor(childNode.node_type),
+                                }}>
+                                  {childNode.node_type}
+                                </span>
+                                <span style={styles.linkedTitle}>#{childNode.id}: {childNode.title}</span>
+                                {edge.rationale && (
+                                  <span style={styles.linkRationale}>{edge.rationale}</span>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </div>
@@ -311,9 +440,9 @@ const styles: Record<string, React.CSSProperties> = {
   container: {
     position: 'absolute',
     right: '20px',
-    top: '20px',
-    bottom: '20px',
-    width: '380px',
+    top: '10px',
+    bottom: '10px',
+    width: '420px',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
@@ -367,8 +496,10 @@ const styles: Record<string, React.CSSProperties> = {
     flexShrink: 0,
   },
   cardSelected: {
-    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+    boxShadow: '0 6px 20px rgba(9, 105, 218, 0.25), 0 2px 8px rgba(0,0,0,0.1)',
     borderColor: '#0969da',
+    borderWidth: '2px',
+    backgroundColor: '#fafcff',
   },
   cardExpanded: {
     padding: '16px',
@@ -463,6 +594,8 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.5,
     fontStyle: 'italic',
     whiteSpace: 'pre-wrap',
+    maxHeight: '150px',
+    overflowY: 'auto',
   },
   filesSection: {
     marginBottom: '12px',
@@ -471,6 +604,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '6px',
+    maxHeight: '100px',
+    overflowY: 'auto',
   },
   descSection: {
     marginBottom: '12px',
@@ -493,9 +628,118 @@ const styles: Record<string, React.CSSProperties> = {
   },
   timestamps: {
     display: 'flex',
-    gap: '16px',
+    flexDirection: 'column',
+    gap: '4px',
     fontSize: '11px',
     color: '#8c959f',
+  },
+  linksSection: {
+    marginTop: '12px',
+    paddingTop: '12px',
+    borderTop: '1px solid #e1e4e8',
+  },
+  linksList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    maxHeight: '200px',
+    overflowY: 'auto',
+  },
+  linkedNode: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: '4px',
+    padding: '8px 10px',
+    backgroundColor: '#f6f8fa',
+    border: 'none',
+    borderLeft: '3px solid',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    textAlign: 'left',
+    width: '100%',
+    transition: 'background-color 0.15s ease',
+  },
+  linkedTypeBadge: {
+    fontSize: '9px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    padding: '1px 5px',
+    borderRadius: '3px',
+  },
+  linkedTitle: {
+    fontSize: '12px',
+    fontWeight: 500,
+    color: '#24292f',
+    lineHeight: 1.3,
+  },
+  linkRationale: {
+    fontSize: '11px',
+    color: '#57606a',
+    fontStyle: 'italic',
+  },
+  noLinks: {
+    fontSize: '12px',
+    color: '#8c959f',
+    fontStyle: 'italic',
+    padding: '4px 0',
+  },
+  // Status badge
+  statusBadge: {
+    fontSize: '10px',
+    fontWeight: 600,
+    textTransform: 'uppercase',
+    padding: '2px 6px',
+    borderRadius: '4px',
+  },
+  // Branch section for expanded view
+  branchSection: {
+    marginBottom: '12px',
+  },
+  branchTagLarge: {
+    fontSize: '12px',
+    fontWeight: 600,
+    backgroundColor: '#dafbe1',
+    color: '#1a7f37',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    fontFamily: 'monospace',
+  },
+  // GitHub links section
+  githubSection: {
+    marginBottom: '12px',
+  },
+  githubLinks: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  githubLink: {
+    fontSize: '12px',
+    color: '#0969da',
+    backgroundColor: '#ddf4ff',
+    padding: '4px 10px',
+    borderRadius: '6px',
+    textDecoration: 'none',
+    fontWeight: 500,
+  },
+  // Change ID section
+  changeIdSection: {
+    marginBottom: '12px',
+  },
+  changeIdBadge: {
+    fontSize: '11px',
+    fontFamily: 'monospace',
+    backgroundColor: '#f6f8fa',
+    padding: '4px 8px',
+    borderRadius: '4px',
+    color: '#57606a',
+    wordBreak: 'break-all',
+    display: 'inline-block',
+  },
+  // Timestamps section
+  timestampsSection: {
+    marginBottom: '12px',
   },
 
   // Mobile responsive styles

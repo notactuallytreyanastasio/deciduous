@@ -8,7 +8,8 @@
  * - Modal: Single comprehensive AI explanation (not chat)
  */
 
-import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { GraphData } from '../types/graph';
 import type { ArchaeologyFilters } from '../types/archaeology';
 import { DEFAULT_ARCHAEOLOGY_FILTERS } from '../types/archaeology';
@@ -16,32 +17,40 @@ import {
   buildNarratives,
   filterNarratives,
   calculateArchaeologyStats,
+  generateClaudePrompt,
   formatNarrativeContext,
 } from '../utils/archaeologyProcessing';
 import { NarrativeGraph } from '../components/NarrativeGraph';
 import { CardStack } from '../components/CardStack';
-import { ExplanationModal } from '../components/ExplanationModal';
+import { PromptModal } from '../components/PromptModal';
 import { getNodeColor } from '../utils/colors';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { useIsMobile } from '../hooks/useMediaQuery';
-
-// Request timeout in milliseconds
-const REQUEST_TIMEOUT_MS = 60000;
 
 interface ArchaeologyViewProps {
   graphData: GraphData;
 }
 
 export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) => {
-  // Persisted state
-  const [selectedNarrativeId, setSelectedNarrativeId] = useLocalStorage<string | null>(
-    'selected_narrative_id',
-    null
-  );
+  // URL-based state for selected narrative
+  const { narrativeId: urlNarrativeId } = useParams<{ narrativeId?: string }>();
+  const navigate = useNavigate();
+
+  // Persisted filter state (keep in localStorage)
   const [filters, setFilters] = useLocalStorage<ArchaeologyFilters>(
     'filters',
     DEFAULT_ARCHAEOLOGY_FILTERS
   );
+
+  // Derived selected narrative ID from URL
+  const selectedNarrativeId = urlNarrativeId ?? null;
+  const setSelectedNarrativeId = useCallback((id: string | null) => {
+    if (id) {
+      navigate(`/archaeology/${id}`, { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
+  }, [navigate]);
 
   // Responsive state
   const isMobile = useIsMobile();
@@ -53,15 +62,12 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
   const [cardStackExpandedIndex, setCardStackExpandedIndex] = useState<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
 
-  // Modal state
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
+  // Prompt modal state
+  const [promptModalOpen, setPromptModalOpen] = useState(false);
   const [modalContent, setModalContent] = useState<string | null>(null);
   const [modalLoading, setModalLoading] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
-
-  // Question input state
-  const [question, setQuestion] = useState('');
+  const questionInputRef = useRef<HTMLTextAreaElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
 
   // Build narratives from graph data
@@ -101,74 +107,6 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
     [filteredNarratives]
   );
 
-  // Keyboard navigation for narrative list
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't handle if card stack is showing (it has its own handlers)
-      if (showCardStack) return;
-      // Don't handle if modal is open
-      if (modalOpen) return;
-      // Don't handle if typing in input or textarea
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
-
-      switch (e.key) {
-        case 'j':
-        case 'ArrowDown':
-          e.preventDefault();
-          setSelectedNarrativeIndex(prev =>
-            Math.min(prev + 1, filteredNarratives.length - 1)
-          );
-          break;
-        case 'k':
-        case 'ArrowUp':
-          e.preventDefault();
-          setSelectedNarrativeIndex(prev => Math.max(prev - 1, 0));
-          break;
-        case 'Enter':
-          e.preventDefault();
-          if (selectedNarrative) {
-            setShowCardStack(true);
-            setCardStackSelectedIndex(0);
-            setCardStackExpandedIndex(null);
-          }
-          break;
-        // Jump to first/last narrative
-        case 'Home':
-        case 'g':
-          e.preventDefault();
-          setSelectedNarrativeIndex(0);
-          break;
-        case 'End':
-        case 'G':
-          e.preventDefault();
-          setSelectedNarrativeIndex(filteredNarratives.length - 1);
-          break;
-        // Page through narratives
-        case 'PageDown':
-          e.preventDefault();
-          setSelectedNarrativeIndex(prev =>
-            Math.min(prev + 10, filteredNarratives.length - 1)
-          );
-          break;
-        case 'PageUp':
-          e.preventDefault();
-          setSelectedNarrativeIndex(prev => Math.max(prev - 10, 0));
-          break;
-        // Focus search with /
-        case '/':
-          e.preventDefault();
-          const searchInput = document.querySelector('input[placeholder*="Search"]') as HTMLInputElement;
-          if (searchInput) {
-            searchInput.focus();
-          }
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showCardStack, modalOpen, filteredNarratives.length, selectedNarrative]);
-
   // Handle node selection in graph
   const handleNodeSelect = useCallback((nodeId: number) => {
     setSelectedNodeId(nodeId);
@@ -183,18 +121,22 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
     }
   }, [selectedNarrative]);
 
-  // Cleanup abort controller on unmount
-  useEffect(() => {
-    return () => {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-    };
-  }, []);
+  // Handle opening the prompt modal
+  const handleAskAboutCode = useCallback(() => {
+    if (!selectedNarrative) return;
+    setPromptModalOpen(true);
+    setModalContent(null);
+    setModalError(null);
+    setModalLoading(false);
+    // Focus the question input after modal opens
+    setTimeout(() => {
+      questionInputRef.current?.focus();
+    }, 100);
+  }, [selectedNarrative]);
 
-  // Handle asking a question
-  const handleAskQuestion = useCallback(async () => {
-    if (!question.trim() || !selectedNarrative) return;
+  // Handle sending the question to Claude via API
+  const handleAskClaude = useCallback(async (question: string) => {
+    if (!selectedNarrative || !question.trim()) return;
 
     // Cancel any existing request
     if (abortControllerRef.current) {
@@ -203,51 +145,37 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
     abortControllerRef.current = new AbortController();
     const { signal } = abortControllerRef.current;
 
-    setModalTitle(question);
-    setModalOpen(true);
     setModalLoading(true);
     setModalError(null);
     setModalContent(null);
 
     try {
-      // Build context from narrative (matching backend AskContext format)
-      const narrativeContext = formatNarrativeContext(selectedNarrative);
-      const context = {
-        narrative: narrativeContext,
-        visible_node_ids: selectedNarrative.nodes.map(n => n.id),
-      };
+      // Generate the comprehensive prompt with all node details
+      const fullPrompt = generateClaudePrompt(selectedNarrative, question);
 
-      // Create timeout promise
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Request timed out')), REQUEST_TIMEOUT_MS);
-      });
-
-      // Race fetch against timeout
-      const response = await Promise.race([
-        fetch('/api/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            question: question,
-            context,
-          }),
-          signal,
+      const response = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: fullPrompt,
+          context: {
+            // Use formatNarrativeContext to include pivots and github links
+            narrative: formatNarrativeContext(selectedNarrative),
+            visible_node_ids: selectedNarrative.nodes.map(n => n.id),
+          },
         }),
-        timeoutPromise,
-      ]);
+        signal,
+      });
 
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
       const data = await response.json();
-      // Response format: {"ok":true,"data":{"answer":"..."}}
       const answer = data.data?.answer || data.response || data.answer || 'No response received.';
       setModalContent(answer);
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        // Request was cancelled - close modal
-        setModalOpen(false);
         return;
       }
       setModalError(err instanceof Error ? err.message : 'Unknown error');
@@ -255,7 +183,7 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
       setModalLoading(false);
       abortControllerRef.current = null;
     }
-  }, [question, selectedNarrative]);
+  }, [selectedNarrative]);
 
   // Cancel the current request
   const handleCancelRequest = useCallback(() => {
@@ -263,7 +191,6 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-    setModalOpen(false);
     setModalLoading(false);
   }, []);
 
@@ -379,10 +306,12 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
         {showCardStack && selectedNarrative && (
           <CardStack
             nodes={selectedNarrative.nodes}
+            edges={selectedNarrative.edges}
             selectedIndex={cardStackSelectedIndex}
             expandedIndex={cardStackExpandedIndex}
             onSelectIndex={setCardStackSelectedIndex}
             onExpandIndex={setCardStackExpandedIndex}
+            onNodeClick={handleNodeSelect}
             onClose={() => {
               setShowCardStack(false);
               setSelectedNodeId(null);
@@ -390,49 +319,39 @@ export const ArchaeologyView: React.FC<ArchaeologyViewProps> = ({ graphData }) =
           />
         )}
 
-        {/* Question Input Bar */}
-        <div style={styles.questionBar}>
-          <textarea
-            placeholder={selectedNarrative
-              ? `Ask about "${selectedNarrative.name}"...\n(Shift+Enter for new line, Enter to send)`
-              : 'Select a narrative first...'
-            }
-            value={question}
-            onChange={e => setQuestion(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleAskQuestion();
-              }
-            }}
-            style={styles.questionInput}
-            disabled={!selectedNarrative}
-            rows={3}
-          />
+        {/* Ask About This Code Button */}
+        <div style={styles.askButtonContainer}>
           <button
             style={{
-              ...styles.askButton,
-              ...((!selectedNarrative || !question.trim()) ? styles.askButtonDisabled : {}),
+              ...styles.bigPinkButton,
+              ...(!selectedNarrative ? styles.bigPinkButtonDisabled : {}),
             }}
-            onClick={handleAskQuestion}
-            disabled={!selectedNarrative || !question.trim()}
+            onClick={handleAskAboutCode}
+            disabled={!selectedNarrative}
           >
-            Ask Claude
+            ASK ABOUT THIS CODE
           </button>
         </div>
       </div>
 
-      {/* Explanation Modal */}
-      <ExplanationModal
-        isOpen={modalOpen}
-        title={modalTitle}
+      {/* Prompt Modal */}
+      <PromptModal
+        isOpen={promptModalOpen}
+        narrativeName={selectedNarrative?.name ?? ''}
         content={modalContent}
         isLoading={modalLoading}
         error={modalError}
-        onClose={() => setModalOpen(false)}
-        onCancel={modalLoading ? handleCancelRequest : undefined}
-        onRetry={modalError ? handleAskQuestion : undefined}
-        timestamp={new Date()}
+        onAskClaude={handleAskClaude}
+        onCancel={handleCancelRequest}
+        onClose={() => {
+          setPromptModalOpen(false);
+          setModalContent(null);
+          setModalError(null);
+          if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+          }
+        }}
+        questionInputRef={questionInputRef}
       />
     </div>
   );
@@ -554,44 +473,31 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: 'hidden',
     minHeight: 0, // Critical for flex child to shrink properly
   },
-  questionBar: {
-    display: 'flex',
-    gap: '12px',
-    padding: '16px',
-    borderTop: '1px solid #d0d7de',
-    backgroundColor: '#ffffff',
-    flexShrink: 0,
-    alignItems: 'flex-end',
+  askButtonContainer: {
+    position: 'absolute',
+    bottom: '20px',
+    left: '50%',
+    transform: 'translateX(-50%)',
+    zIndex: 500,
   },
-  questionInput: {
-    flex: 1,
-    padding: '12px 14px',
-    fontSize: '14px',
-    border: '1px solid #d0d7de',
-    borderRadius: '8px',
-    outline: 'none',
-    backgroundColor: '#ffffff',
-    resize: 'none',
-    fontFamily: 'inherit',
-    lineHeight: 1.5,
-    minHeight: '80px',
-  },
-  askButton: {
-    padding: '14px 24px',
-    fontSize: '14px',
-    fontWeight: 500,
-    backgroundColor: '#6741d9',
+  bigPinkButton: {
+    padding: '20px 48px',
+    fontSize: '18px',
+    fontWeight: 700,
+    backgroundColor: '#e91e8c',
     color: '#ffffff',
     border: 'none',
-    borderRadius: '8px',
+    borderRadius: '12px',
     cursor: 'pointer',
-    transition: 'background-color 0.15s ease',
-    alignSelf: 'flex-end',
-    height: 'fit-content',
+    transition: 'all 0.2s ease',
+    textTransform: 'uppercase',
+    letterSpacing: '1px',
+    boxShadow: '0 4px 14px rgba(233, 30, 140, 0.4)',
   },
-  askButtonDisabled: {
+  bigPinkButtonDisabled: {
     backgroundColor: '#d0d7de',
     cursor: 'not-allowed',
+    boxShadow: 'none',
   },
 
   // Mobile responsive styles

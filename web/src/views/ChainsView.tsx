@@ -5,7 +5,8 @@
  * Preserves the exact logic from the vanilla JS implementation.
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import type { DecisionNode, GraphData, Chain, Session, GitCommit } from '../types/graph';
 import { getConfidence, getCommit, truncate, getDuration } from '../types/graph';
 import { TypeBadge, ConfidenceBadge, CommitBadge } from '../components/NodeBadge';
@@ -34,9 +35,35 @@ export const ChainsView: React.FC<ChainsViewProps> = ({
   sessions,
   gitHistory = [],
 }) => {
+  // URL-based chain selection
+  const { chainId: urlChainId } = useParams<{ chainId?: string }>();
+  const navigate = useNavigate();
+
   const [sidebarView, setSidebarView] = useState<SidebarView>('chains');
-  const [selectedChainIndex, setSelectedChainIndex] = useState<number | null>(null);
+  const [selectedChainIndexState, setSelectedChainIndexState] = useState<number | null>(null);
   const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
+
+  // Sync URL param with state
+  useEffect(() => {
+    if (urlChainId && chains.length > 0) {
+      const idx = parseInt(urlChainId, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < chains.length) {
+        setSelectedChainIndexState(idx);
+      }
+    }
+  }, [urlChainId, chains.length]);
+
+  // Wrapper to update URL when chain is selected
+  const setSelectedChainIndex = useCallback((index: number | null) => {
+    if (index !== null) {
+      navigate(`/chains/${index}`, { replace: true });
+    } else {
+      navigate('/chains', { replace: true });
+    }
+    setSelectedChainIndexState(index);
+  }, [navigate]);
+
+  const selectedChainIndex = selectedChainIndexState;
 
   // Get the selected chain
   const selectedChain = selectedChainIndex !== null ? chains[selectedChainIndex] : null;

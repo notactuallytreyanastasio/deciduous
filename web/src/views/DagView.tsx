@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import * as d3 from 'd3';
 import dagre from 'dagre';
 import type { DecisionNode, DecisionEdge, GraphData, Chain, GitCommit } from '../types/graph';
@@ -72,10 +73,14 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
 
+  // Path param support for /dag/:nodeId
+  const { nodeId: urlNodeId } = useParams<{ nodeId?: string }>();
+  const navigate = useNavigate();
+
   // URL-synced state for deep linking and sharing
   const {
     state: urlState,
-    setSelectedNodeId,
+    setSelectedNodeId: setUrlSelectedNodeId,
     setSearchQuery,
     setSearchSort,
     setViewMode,
@@ -83,6 +88,26 @@ export const DagView: React.FC<DagViewProps> = ({ graphData, chains, gitHistory 
     setFocusChainIndex,
     copyLinkToClipboard,
   } = useUrlState();
+
+  // Sync path param with URL state on mount
+  useEffect(() => {
+    if (urlNodeId) {
+      const nodeId = parseInt(urlNodeId, 10);
+      if (!isNaN(nodeId) && nodeId !== urlState.selectedNodeId) {
+        setUrlSelectedNodeId(nodeId);
+      }
+    }
+  }, [urlNodeId, urlState.selectedNodeId, setUrlSelectedNodeId]);
+
+  // Wrapper that updates both path and query params
+  const setSelectedNodeId = useCallback((nodeId: number | null) => {
+    if (nodeId !== null) {
+      navigate(`/dag/${nodeId}`, { replace: true });
+    } else {
+      navigate('/dag', { replace: true });
+    }
+    setUrlSelectedNodeId(nodeId);
+  }, [navigate, setUrlSelectedNodeId]);
 
   // Always fullscreen - no mini view
   const isFullscreen = true;

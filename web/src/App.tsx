@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useGraphData } from './hooks/useGraphData';
 import { useChains } from './hooks/useChains';
 import { Layout } from './components/Layout';
@@ -18,6 +18,7 @@ import { StoryView } from './views/StoryView';
 import { LogView } from './views/LogView';
 import { AskView } from './views/AskView';
 import { ArchaeologyView } from './views/ArchaeologyView';
+import { QAHistoryView } from './views/QAHistoryView';
 import { getUniqueBranches, getBranch, type GraphData } from './types/graph';
 
 // Detect if running from deciduous serve (local) vs static file (GitHub Pages)
@@ -111,7 +112,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <HashRouter>
+    <BrowserRouter>
       <Routes>
         {/* Ask view - standalone, no Layout */}
         <Route
@@ -136,12 +137,20 @@ export const App: React.FC = () => {
               onBranchChange={setSelectedBranch}
             >
               <Routes>
+                {/* Archaeology - default view with optional narrative param */}
                 <Route
                   path="/"
                   element={
                     <ArchaeologyView graphData={filteredGraphData!} />
                   }
                 />
+                <Route
+                  path="/archaeology/:narrativeId"
+                  element={
+                    <ArchaeologyView graphData={filteredGraphData!} />
+                  }
+                />
+                {/* DAG view with optional node param */}
                 <Route
                   path="/dag"
                   element={
@@ -153,7 +162,29 @@ export const App: React.FC = () => {
                   }
                 />
                 <Route
+                  path="/dag/:nodeId"
+                  element={
+                    <DagView
+                      graphData={filteredGraphData!}
+                      chains={chains}
+                      gitHistory={gitHistory}
+                    />
+                  }
+                />
+                {/* Chains view with optional chain param */}
+                <Route
                   path="/chains"
+                  element={
+                    <ChainsView
+                      graphData={filteredGraphData!}
+                      chains={chains}
+                      sessions={sessions}
+                      gitHistory={gitHistory}
+                    />
+                  }
+                />
+                <Route
+                  path="/chains/:chainId"
                   element={
                     <ChainsView
                       graphData={filteredGraphData!}
@@ -172,8 +203,15 @@ export const App: React.FC = () => {
                     />
                   }
                 />
+                {/* Graph view with optional node param */}
                 <Route
                   path="/graph"
+                  element={
+                    <GraphView graphData={filteredGraphData!} />
+                  }
+                />
+                <Route
+                  path="/graph/:nodeId"
                   element={
                     <GraphView graphData={filteredGraphData!} />
                   }
@@ -199,6 +237,15 @@ export const App: React.FC = () => {
                     />
                   }
                 />
+                {/* Q&A History with optional item param */}
+                <Route
+                  path="/qa-history"
+                  element={<QAHistoryView />}
+                />
+                <Route
+                  path="/qa-history/:id"
+                  element={<QAHistoryView />}
+                />
                 {/* Fallback redirect */}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
@@ -206,7 +253,7 @@ export const App: React.FC = () => {
           }
         />
       </Routes>
-    </HashRouter>
+    </BrowserRouter>
   );
 };
 

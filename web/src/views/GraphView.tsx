@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import * as d3 from 'd3';
 import type { DecisionNode, GraphData } from '../types/graph';
 import { getConfidence, getCommit, truncate } from '../types/graph';
@@ -35,26 +36,53 @@ interface SimLink {
 }
 
 export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
+  // URL-based node selection
+  const { nodeId: urlNodeId } = useParams<{ nodeId?: string }>();
+  const navigate = useNavigate();
+
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedNode, setSelectedNode] = useState<DecisionNode | null>(null);
+  const [selectedNodeState, setSelectedNodeState] = useState<DecisionNode | null>(null);
   const [filter, setFilter] = useState<FilterValue>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
 
+  // Sync URL param with state
+  useEffect(() => {
+    if (urlNodeId && graphData.nodes.length > 0) {
+      const nodeId = parseInt(urlNodeId, 10);
+      const node = graphData.nodes.find(n => n.id === nodeId);
+      if (node) {
+        setSelectedNodeState(node);
+      }
+    }
+  }, [urlNodeId, graphData.nodes]);
+
+  // Wrapper to update URL when node is selected
+  const setSelectedNode = useCallback((node: DecisionNode | null) => {
+    if (node) {
+      navigate(`/graph/${node.id}`, { replace: true });
+    } else {
+      navigate('/graph', { replace: true });
+    }
+    setSelectedNodeState(node);
+  }, [navigate]);
+
+  const selectedNode = selectedNodeState;
+
   // Handle node selection
   const handleSelectNode = useCallback((node: DecisionNode) => {
     setSelectedNode(node);
-  }, []);
+  }, [setSelectedNode]);
 
   const handleSelectNodeById = useCallback((id: number) => {
     const node = graphData.nodes.find(n => n.id === id);
     if (node) setSelectedNode(node);
-  }, [graphData.nodes]);
+  }, [graphData.nodes, setSelectedNode]);
 
   const handleCloseDetail = useCallback(() => {
     setSelectedNode(null);
-  }, []);
+  }, [setSelectedNode]);
 
   // Initialize D3 graph
   useEffect(() => {

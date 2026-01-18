@@ -499,6 +499,134 @@ export function calculateArchaeologyStats(narratives: Narrative[]): ArchaeologyS
 }
 
 // =============================================================================
+// Claude Prompt Generation
+// =============================================================================
+
+/**
+ * Generate a comprehensive Claude prompt from a narrative
+ *
+ * Includes all node details formatted for Claude to understand the
+ * decision graph context.
+ */
+export function generateClaudePrompt(
+  narrative: Narrative,
+  userQuestion: string
+): string {
+  const lines: string[] = [];
+
+  lines.push('Considering the following graph of decisions:\n');
+  lines.push('---\n');
+
+  // Narrative header
+  lines.push(`## Narrative: ${narrative.name}`);
+  lines.push(`Root: ${narrative.root.node_type} #${narrative.root.id}`);
+  lines.push(`Time Range: ${narrative.timeRange.start.toLocaleDateString()} - ${narrative.timeRange.end.toLocaleDateString()}`);
+  lines.push(`Total Nodes: ${narrative.nodes.length}`);
+  if (narrative.pivots.length > 0) {
+    lines.push(`Pivots: ${narrative.pivots.length}`);
+  }
+  lines.push('');
+
+  // Node details table
+  lines.push('### Nodes\n');
+  lines.push('| ID | Type | Title | Description | Confidence | Branch | Commit |');
+  lines.push('|----|------|-------|-------------|------------|--------|--------|');
+
+  for (const node of narrative.nodes) {
+    const meta = node.metadata_json ? JSON.parse(node.metadata_json) : {};
+    const confidence = meta.confidence ? `${meta.confidence}%` : '-';
+    const branch = meta.branch || '-';
+    const commit = meta.commit ? meta.commit.slice(0, 7) : '-';
+    const desc = node.description ? node.description.replace(/\|/g, '\\|').replace(/\n/g, ' ').slice(0, 50) : '-';
+    const title = node.title.replace(/\|/g, '\\|').replace(/\n/g, ' ');
+
+    lines.push(`| ${node.id} | ${node.node_type} | ${title} | ${desc} | ${confidence} | ${branch} | ${commit} |`);
+  }
+  lines.push('');
+
+  // Detailed node information
+  lines.push('### Node Details\n');
+  for (const node of narrative.nodes) {
+    const meta = node.metadata_json ? JSON.parse(node.metadata_json) : {};
+
+    lines.push(`#### [${node.node_type.toUpperCase()}] #${node.id}: ${node.title}`);
+    if (node.description) {
+      lines.push(`**Description:** ${node.description}`);
+    }
+    if (meta.confidence) {
+      lines.push(`**Confidence:** ${meta.confidence}%`);
+    }
+    if (meta.branch) {
+      lines.push(`**Branch:** ${meta.branch}`);
+    }
+    if (meta.commit) {
+      lines.push(`**Commit:** ${meta.commit}`);
+    }
+    if (meta.files && meta.files.length > 0) {
+      lines.push(`**Files:** ${meta.files.join(', ')}`);
+    }
+    if (meta.prompt) {
+      lines.push(`**Original Prompt:** ${meta.prompt}`);
+    }
+    lines.push(`**Created:** ${new Date(node.created_at).toLocaleString()}`);
+    lines.push('');
+  }
+
+  // Edge relationships
+  if (narrative.edges.length > 0) {
+    lines.push('### Relationships\n');
+    lines.push('| From | To | Type | Rationale |');
+    lines.push('|------|----|----- |-----------|');
+
+    for (const edge of narrative.edges) {
+      const rationale = edge.rationale ? edge.rationale.replace(/\|/g, '\\|').replace(/\n/g, ' ') : '-';
+      lines.push(`| #${edge.from_node_id} | #${edge.to_node_id} | ${edge.edge_type} | ${rationale} |`);
+    }
+    lines.push('');
+  }
+
+  // Pivots (if any)
+  if (narrative.pivots.length > 0) {
+    lines.push('### Pivots (Direction Changes)\n');
+    for (const pivot of narrative.pivots) {
+      lines.push(`**Revisit #${pivot.revisitNode.id}:** ${pivot.revisitNode.title}`);
+      if (pivot.triggeringObservations.length > 0) {
+        lines.push(`- Triggered by: ${pivot.triggeringObservations.map(n => `#${n.id} (${n.title})`).join(', ')}`);
+      }
+      if (pivot.supersededNodes.length > 0) {
+        lines.push(`- Superseded: ${pivot.supersededNodes.map(n => `#${n.id} (${n.title})`).join(', ')}`);
+      }
+      if (pivot.newApproachNodes.length > 0) {
+        lines.push(`- New approach: ${pivot.newApproachNodes.map(n => `#${n.id} (${n.title})`).join(', ')}`);
+      }
+      lines.push('');
+    }
+  }
+
+  // GitHub links
+  if (narrative.githubLinks.length > 0) {
+    lines.push('### GitHub Links\n');
+    for (const link of narrative.githubLinks) {
+      lines.push(`- ${link.type}: ${link.identifier} (${link.repo}) - ${link.url}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('---\n');
+
+  // Instructions for Claude
+  lines.push('Consider this user\'s question and try to answer it as if you were "in the room" during this development process.\n');
+  lines.push('Remember, you can look at more commits and PRs etc to do this, but use this graph as a base for understanding the decision-making process.\n');
+
+  // User question
+  lines.push('---\n');
+  lines.push('**User Question:**\n');
+  lines.push(userQuestion || '(Ask your question about this code...)');
+
+  return lines.join('\n');
+}
+
+// =============================================================================
 // Trace "Why" Chain
 // =============================================================================
 

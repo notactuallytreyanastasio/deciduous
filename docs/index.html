@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deciduous - Decision Graph Tooling</title>
+    <title>Deciduous - Archaeology & Pulse for Your Codebase</title>
 
     <!-- Primary Meta Tags -->
-    <meta name="title" content="Deciduous - Decision Graph Tooling">
-    <meta name="description" content="Track every goal, decision, and outcome in AI-assisted development. Survive context loss. Query your reasoning. Never forget why you chose approach A over B.">
+    <meta name="title" content="Deciduous - Archaeology & Pulse for Your Codebase">
+    <meta name="description" content="Drop into any codebase and understand its evolution. Keep a pulse on ongoing decisions. Decision graph tooling for AI-assisted development.">
 
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://notactuallytreyanastasio.github.io/deciduous/">
-    <meta property="og:title" content="Deciduous - Decision Graph Tooling">
-    <meta property="og:description" content="Track every goal, decision, and outcome in AI-assisted development. Survive context loss. Query your reasoning. Never forget why you chose approach A over B.">
+    <meta property="og:title" content="Deciduous - Archaeology & Pulse for Your Codebase">
+    <meta property="og:description" content="Drop into any codebase and understand its evolution. Keep a pulse on ongoing decisions. Decision graph tooling for AI-assisted development.">
     <meta property="og:image" content="https://notactuallytreyanastasio.github.io/deciduous/og-image.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -21,8 +21,8 @@
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image">
     <meta property="twitter:url" content="https://notactuallytreyanastasio.github.io/deciduous/">
-    <meta property="twitter:title" content="Deciduous - Decision Graph Tooling">
-    <meta property="twitter:description" content="Track every goal, decision, and outcome in AI-assisted development. Survive context loss. Query your reasoning.">
+    <meta property="twitter:title" content="Deciduous - Archaeology & Pulse for Your Codebase">
+    <meta property="twitter:description" content="Drop into any codebase and understand its evolution. Keep a pulse on ongoing decisions.">
     <meta property="twitter:image" content="https://notactuallytreyanastasio.github.io/deciduous/og-image.png">
 
     <style>
@@ -89,7 +89,7 @@
             font-family: 'SF Mono', Monaco, 'Courier New', monospace;
             font-size: 0.9rem;
             line-height: 1.6;
-            max-height: 400px;
+            max-height: 420px;
             overflow-y: auto;
             scroll-behavior: smooth;
         }
@@ -149,29 +149,6 @@
             margin-top: 4px;
             padding-left: 4px;
         }
-        .step-files {
-            color: #f97583;
-            font-size: 0.85rem;
-            margin-top: 4px;
-            padding-left: 4px;
-        }
-        .session-divider {
-            text-align: center;
-            padding: 20px 0;
-            opacity: 0;
-            animation: fadeInStep 0.5s ease forwards;
-            animation-delay: var(--delay);
-        }
-        .session-divider span {
-            background: #374151;
-            color: #9ca3af;
-            padding: 8px 16px;
-            border-radius: 20px;
-            font-size: 0.8rem;
-        }
-        .session-step.recovery .step-label.user {
-            background: #10b981;
-        }
         .step-recovery-output {
             background: #1a3a1a;
             border: 1px solid #22543d;
@@ -183,6 +160,21 @@
         }
         .step-recovery-output strong {
             color: #4ade80;
+        }
+        .step-archaeology-output {
+            background: #1a2a3a;
+            border: 1px solid #224d6d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 8px;
+            color: #93c5fd;
+            font-size: 0.85rem;
+        }
+        .step-archaeology-output strong {
+            color: #60a5fa;
+        }
+        .step-archaeology-output .pivot {
+            color: #fb923c;
         }
         .replay-btn {
             margin-left: auto;
@@ -221,50 +213,44 @@
             color: #6e7781;
         }
 
-        .stats-banner {
-            display: flex;
-            justify-content: center;
-            gap: 40px;
-            padding: 24px 0;
-            margin: 20px 0 30px 0;
-            background: linear-gradient(135deg, #f0fdf4 0%, #ecfeff 100%);
+        .two-modes {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 30px 0;
+        }
+        @media (max-width: 600px) {
+            .two-modes { grid-template-columns: 1fr; }
+        }
+        .mode-card {
+            padding: 24px;
             border-radius: 12px;
-            border: 1px solid #d1fae5;
-            flex-wrap: wrap;
+            border: 2px solid;
         }
-        .stat-item { text-align: center; }
-        .stat-num {
-            display: block;
-            font-size: 32px;
-            font-weight: 700;
-            color: #059669;
-            line-height: 1;
+        .mode-card.archaeology {
+            background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+            border-color: #3b82f6;
         }
-        .stat-label {
-            font-size: 12px;
-            color: #6b7280;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 6px;
+        .mode-card.pulse {
+            background: linear-gradient(135deg, #d1fae5 0%, #ecfccb 100%);
+            border-color: #22c55e;
         }
-        .stat-link {
-            text-decoration: none;
-            padding: 12px 16px;
-            border-radius: 8px;
-            transition: all 0.15s;
+        .mode-card h3 {
+            font-size: 1.3rem;
+            margin-bottom: 8px;
         }
-        .stat-link:hover {
-            background: rgba(5, 150, 105, 0.1);
-            transform: translateY(-2px);
+        .mode-card.archaeology h3 { color: #1d4ed8; }
+        .mode-card.pulse h3 { color: #15803d; }
+        .mode-card p {
+            font-size: 0.95rem;
+            color: #374151;
+            margin-bottom: 12px;
         }
-        .stat-link:hover .stat-num { color: #047857; }
-        .stat-link:hover .stat-label { color: #059669; }
-        .stat-cta {
-            background: rgba(5, 150, 105, 0.08);
-            border: 1px dashed #059669;
-        }
-        .stat-cta .stat-num {
-            font-size: 24px;
+        .mode-card code {
+            background: rgba(0,0,0,0.08);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.85em;
         }
 
         .elevator-pitch {
@@ -288,19 +274,6 @@
             border-radius: 4px;
             font-size: 0.9em;
         }
-
-        .code-block {
-            background: #24292f;
-            color: #f6f8fa;
-            padding: 25px 30px;
-            border-radius: 10px;
-            margin: 40px 0;
-            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-            font-size: 0.95rem;
-            overflow-x: auto;
-        }
-        .code-block .comment { color: #8b949e; }
-        .code-block .cmd { color: #7ee787; }
 
         .buttons {
             display: flex;
@@ -361,36 +334,74 @@
         }
         section a:hover { text-decoration: underline; }
 
-        .proof-grid {
+        .feature-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 20px;
             margin-top: 25px;
         }
         @media (max-width: 600px) {
-            .proof-grid { grid-template-columns: 1fr; }
+            .feature-grid { grid-template-columns: 1fr; }
         }
-        .proof-card {
+        .feature-card {
             background: #f6f8fa;
             border: 1px solid #d0d7de;
             border-radius: 8px;
             padding: 20px;
         }
-        .proof-card h3 {
+        .feature-card h3 {
             color: #24292f;
             font-size: 1rem;
             margin-bottom: 8px;
         }
-        .proof-card p {
+        .feature-card p {
             font-size: 0.9rem;
             margin: 0;
             color: #57606a;
         }
-        .proof-card.highlight {
+        .feature-card.highlight {
             background: linear-gradient(135deg, #dbeafe 0%, #ede9fe 100%);
             border-color: #c7d2fe;
         }
-        .proof-card.highlight h3 { color: #3730a3; }
+        .feature-card.highlight h3 { color: #3730a3; }
+
+        .tool-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-top: 25px;
+        }
+        @media (max-width: 700px) {
+            .tool-grid { grid-template-columns: repeat(2, 1fr); }
+        }
+        @media (max-width: 450px) {
+            .tool-grid { grid-template-columns: 1fr; }
+        }
+        .tool-card {
+            background: #f6f8fa;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #d0d7de;
+        }
+        .tool-card h3 {
+            color: #24292f;
+            font-size: 0.95rem;
+            margin-bottom: 5px;
+        }
+        .tool-card p {
+            font-size: 0.85rem;
+            margin: 0;
+            color: #57606a;
+        }
+        .tool-card code {
+            background: #e6e6e6;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.85em;
+        }
+        .tool-card.skill h3 { color: #8b5cf6; }
+        .tool-card.hook h3 { color: #f97316; }
+        .tool-card.cmd h3 { color: #0ea5e9; }
 
         .editor-badges {
             display: flex;
@@ -447,15 +458,11 @@
             margin: 0;
             color: #57606a;
         }
-        .view-card .icon {
-            font-size: 1.5rem;
-            margin-bottom: 10px;
-        }
 
         .node-types {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 15px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
             margin-top: 25px;
         }
         @media (max-width: 700px) {
@@ -466,136 +473,127 @@
         }
         .node-type {
             background: #f6f8fa;
-            padding: 15px;
+            padding: 12px;
             border-radius: 8px;
             border: 1px solid #d0d7de;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .node-type:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
         }
         .node-type h3 {
-            color: #24292f;
-            font-size: 0.95rem;
-            margin-bottom: 5px;
+            font-size: 0.9rem;
+            margin-bottom: 3px;
         }
         .node-type p {
-            font-size: 0.85rem;
+            font-size: 0.8rem;
             margin: 0;
             color: #57606a;
         }
         .node-type.goal h3 { color: #d29922; }
+        .node-type.goal:hover { border-color: #d29922; }
         .node-type.decision h3 { color: #0969da; }
-        .node-type.option h3 { color: #8250df; }
+        .node-type.decision:hover { border-color: #0969da; }
         .node-type.action h3 { color: #2da44e; }
+        .node-type.action:hover { border-color: #2da44e; }
         .node-type.outcome h3 { color: #1f6feb; }
+        .node-type.outcome:hover { border-color: #1f6feb; }
         .node-type.observation h3 { color: #bf3989; }
+        .node-type.observation:hover { border-color: #bf3989; }
+        .node-type.revisit h3 { color: #f97316; }
+        .node-type.revisit:hover { border-color: #f97316; }
+        .node-type.option h3 { color: #8250df; }
+        .node-type.option:hover { border-color: #8250df; }
 
-        .workflow {
-            background: #f6f8fa;
-            padding: 25px;
-            border-radius: 8px;
-            border: 1px solid #d0d7de;
-            margin-top: 20px;
-        }
-        .workflow-step {
-            display: flex;
-            align-items: flex-start;
-            gap: 15px;
-            margin-bottom: 15px;
-        }
-        .workflow-step:last-child { margin-bottom: 0; }
-        .workflow-num {
-            flex-shrink: 0;
-            width: 28px;
-            height: 28px;
-            background: #2da44e;
-            color: #fff;
-            border-radius: 50%;
-            display: flex;
+        /* Node Modal */
+        .node-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 1000;
             align-items: center;
             justify-content: center;
-            font-weight: 600;
-            font-size: 0.85rem;
         }
-        .workflow-content h4 {
-            color: #24292f;
-            font-size: 0.95rem;
-            margin-bottom: 4px;
+        .node-modal.active {
+            display: flex;
         }
-        .workflow-content p {
-            font-size: 0.9rem;
-            margin: 0;
+        .node-modal-content {
+            background: #ffffff;
+            border-radius: 12px;
+            padding: 30px;
+            max-width: 500px;
+            width: 90%;
+            position: relative;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        .node-modal-close {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
             color: #57606a;
         }
-        .workflow-content code {
-            background: #e6ffec;
-            color: #1a7f37;
-            padding: 1px 5px;
-            border-radius: 3px;
-            font-size: 0.85em;
+        .node-modal-close:hover { color: #24292f; }
+        .node-modal-content h3 {
+            font-size: 1.5rem;
+            margin-bottom: 12px;
         }
-
-        .demo-section h2 {
-            border: none;
-            padding-bottom: 0;
+        .node-modal-content > p {
+            color: #57606a;
             margin-bottom: 20px;
+            line-height: 1.6;
         }
-        .demo-player-container {
+        .modal-demo {
             background: #1e1e1e;
             border-radius: 8px;
-            padding: 20px;
-            margin: 25px 0;
+            overflow: hidden;
         }
-        .demo-player-container iframe {
-            display: block;
-            width: 100%;
-            height: 500px;
-            border: 0;
+        .modal-demo-header {
+            background: #2d2d2d;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            color: #888;
         }
-
-        .pr-card {
-            display: block;
-            padding: 16px 20px;
-            margin-bottom: 12px;
-            background: #f6f8fa;
-            border: 1px solid #d0d7de;
-            border-radius: 8px;
-            text-decoration: none;
-            transition: all 0.15s;
-        }
-        .pr-card:hover {
-            border-color: #0969da;
-            background: #ffffff;
-        }
-        .pr-number {
-            display: inline-block;
-            background: #ddf4ff;
-            color: #0969da;
-            font-weight: 600;
+        .modal-animation {
+            padding: 16px;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
             font-size: 0.85rem;
-            padding: 2px 8px;
+            min-height: 120px;
+        }
+        .modal-animation .anim-step {
+            opacity: 0;
+            transform: translateY(8px);
+            animation: fadeInStep 0.4s ease forwards;
+            margin-bottom: 8px;
+        }
+        .modal-animation .anim-cmd {
+            color: #7ee787;
+        }
+        .modal-animation .anim-output {
+            color: #8b949e;
+            padding-left: 12px;
+        }
+        .modal-animation .anim-node {
+            display: inline-block;
+            padding: 4px 10px;
             border-radius: 4px;
-            margin-right: 10px;
+            margin: 4px 0;
         }
-        .pr-title {
-            color: #24292f;
-            font-weight: 600;
-        }
-        .pr-desc {
-            display: block;
-            color: #57606a;
-            font-size: 0.9rem;
-            margin-top: 8px;
+        .modal-animation .anim-edge {
+            color: #a5d6ff;
+            padding-left: 20px;
         }
 
-        footer {
-            text-align: center;
-            padding: 40px 0;
-            margin-top: 40px;
-            color: #6e7781;
-            font-size: 0.9rem;
-        }
-        footer a { color: #0969da; text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
-
-        /* Quickstart section */
         .quickstart-section {
             margin-top: 50px;
             padding-top: 30px;
@@ -673,57 +671,54 @@
             color: #7ee787;
             padding-left: 20px;
         }
-        .qs-comment {
-            color: #6e7681;
-            font-style: italic;
-        }
-        .qs-tree {
-            color: #a5d6ff;
-            padding-left: 20px;
-            font-size: 0.8rem;
-        }
         .quickstart-cta {
             display: flex;
             gap: 15px;
             margin-top: 40px;
             justify-content: center;
         }
-        /* Claude session styling for quickstart */
-        .qs-claude-session .quickstart-content {
-            padding: 16px 20px;
+
+        .flexibility-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-top: 25px;
         }
-        .qs-user-msg {
-            color: #e5e5e5;
-            padding-left: 4px;
-            margin-top: 4px;
+        @media (max-width: 600px) {
+            .flexibility-grid { grid-template-columns: 1fr; }
         }
-        .qs-claude-msg {
-            color: #e5e5e5;
-            padding-left: 4px;
-            margin-top: 4px;
+        .flex-card {
+            background: #f6f8fa;
+            border: 1px solid #d0d7de;
+            border-radius: 8px;
+            padding: 20px;
         }
-        .qs-cmd-inline {
-            color: #7ee787;
-            font-size: 0.85rem;
-            padding: 4px 0;
+        .flex-card h3 {
+            color: #24292f;
+            font-size: 1rem;
+            margin-bottom: 8px;
         }
-        .qs-recovery-box {
-            background: #1a3a1a;
-            border: 1px solid #22543d;
-            border-radius: 6px;
-            padding: 12px;
-            margin-top: 8px;
-            color: #86efac;
-            font-size: 0.85rem;
+        .flex-card p {
+            font-size: 0.9rem;
+            margin: 0;
+            color: #57606a;
         }
-        .qs-recovery-box strong {
-            color: #4ade80;
+        .flex-card code {
+            background: #e6e6e6;
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-size: 0.85em;
         }
-        .qs-tree-line {
-            color: #a5d6ff;
-            display: block;
-            line-height: 1.5;
+
+        footer {
+            text-align: center;
+            padding: 40px 0;
+            margin-top: 40px;
+            color: #6e7781;
+            font-size: 0.9rem;
         }
+        footer a { color: #0969da; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -739,317 +734,305 @@
 
         <header>
             <h1>DECIDUOUS</h1>
-            <p class="tagline">Decision graph tooling for AI-assisted development.</p>
-            <p class="tagline-secondary">Track every goal, decision, and outcome. Survive context loss. Query your reasoning.</p>
+            <p class="tagline">Build history of your codebase. Inquire.</p>
+            <p class="tagline-secondary">Track decisions as you go further with an expert that feels like it was in the room when the decisions were made.</p>
         </header>
 
+        <div class="buttons">
+            <a href="demo/" class="btn btn-primary">See Live Graph</a>
+            <a href="tutorial/" class="btn btn-secondary">Get Started</a>
+        </div>
+
+        <!-- Two Modes Banner -->
+        <div class="two-modes">
+            <div class="mode-card archaeology">
+                <h3>Archaeology</h3>
+                <p>Understand how existing code evolved. Map the decisions, pivots, and reasoning behind any codebase.</p>
+                <code>/decision-graph path/to/code</code>
+            </div>
+            <div class="mode-card pulse">
+                <h3>Pulse</h3>
+                <p>Keep track of ongoing decisions. Log goals, actions, and outcomes in real-time as you work.</p>
+                <code>/recover</code>
+            </div>
+        </div>
+
+        <!-- Terminal Demo: Archaeology on Existing Project -->
         <div class="session-demo">
             <div class="session-header">
                 <span class="session-dot red"></span>
                 <span class="session-dot yellow"></span>
                 <span class="session-dot green"></span>
-                <span class="session-title">Claude Code Session</span>
+                <span class="session-title">Archaeology: Dropping Into an Existing Codebase</span>
                 <button class="replay-btn" onclick="replayDemo()">Replay</button>
             </div>
             <div class="session-content" id="session-content">
-                <!-- Session starts with /recover -->
+                <!-- Starting archaeology on existing project -->
                 <div class="session-step" style="--delay: 0s">
                     <div class="step-label user">You</div>
-                    <div class="step-content">/recover</div>
+                    <div class="step-content">I just joined this project. Help me understand how the auth system evolved.</div>
                 </div>
-                <div class="session-step" style="--delay: 1s">
+                <div class="session-step" style="--delay: 1.5s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content">Recovering context from decision graph...</div>
+                    <div class="step-content">I'll use archaeology mode to trace the auth system's evolution. Let me examine the commit history and map the decision points.</div>
                 </div>
-                <div class="session-step" style="--delay: 2s">
+                <div class="session-step" style="--delay: 3s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous nodes --branch feature/api -n 10</div>
-                    <div class="step-output">Querying recent decisions...</div>
+                    <div class="step-content code">deciduous add goal "Understand auth system evolution" -c 90 --date "2024-01-15"</div>
+                    <div class="step-output">Created node 1 (type: goal) [backdated: 2024-01-15]</div>
                 </div>
-                <div class="session-step" style="--delay: 3.5s">
+                <div class="session-step" style="--delay: 4.5s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-recovery-output">
-                        <strong>Branch:</strong> feature/api<br><br>
-                        <strong>Goal #89:</strong> Build REST API for user management [95%]<br>
-                        &nbsp;&nbsp;↳ <strong>Decision #90:</strong> Choose API framework [85%]<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Option #91:</strong> Axum (chosen) [90%]<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Option #92:</strong> Actix-web (rejected) [70%]<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Action #93:</strong> Implement CRUD endpoints [85%]<br>
-                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ <strong>Outcome #94:</strong> Basic CRUD working [90%] [commit: f4e2a1b]<br><br>
-                        <strong>Pending:</strong> Authentication not yet implemented<br>
-                        <strong>Last commit:</strong> f4e2a1b "feat: add user CRUD endpoints"
-                    </div>
+                    <div class="step-content">Found the initial auth implementation in commit history. Session-based auth was the first approach.</div>
                 </div>
-
-                <!-- Claude summarizes -->
-                <div class="session-step" style="--delay: 6s">
+                <div class="session-step" style="--delay: 5.5s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content">You're building a REST API with Axum. CRUD endpoints are done (commit f4e2a1b). Authentication is the next step. What would you like to work on?</div>
+                    <div class="step-content code">deciduous add decision "Initial auth approach" -c 85 --date "2024-01-20"</div>
+                    <div class="step-output">Created node 2 (type: decision)</div>
                 </div>
-
-                <!-- User continues -->
+                <div class="session-step" style="--delay: 6.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add action "Implemented session-based auth" --commit abc123 --date "2024-02-01"</div>
+                    <div class="step-output">Created node 3 (type: action) [commit: abc123]</div>
+                </div>
                 <div class="session-step" style="--delay: 8s">
-                    <div class="step-label user">You</div>
-                    <div class="step-content">Add JWT authentication to protect the endpoints</div>
-                </div>
-
-                <!-- Claude logs goal -->
-                <div class="session-step" style="--delay: 9.5s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content">I'll add JWT auth. Let me log this goal and connect it to the API work.</div>
+                    <div class="step-content">I found a pivot point. Three months later, they switched to JWT. Let me capture why.</div>
                 </div>
-                <div class="session-step" style="--delay: 10.5s">
+                <div class="session-step" style="--delay: 9s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous add goal "Add JWT authentication" -c 90 -p "User wants JWT auth for API endpoints"</div>
-                    <div class="step-output">Created node 95 (type: goal) [confidence: 90%] [branch: feature/api]</div>
+                    <div class="step-content code">deciduous add observation "Sessions didn't scale across services" -c 90 --date "2024-04-15"</div>
+                    <div class="step-output">Created node 4 (type: observation)</div>
                 </div>
-                <div class="session-step" style="--delay: 11.5s">
+                <div class="session-step" style="--delay: 10s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous link 94 95 -r "Building on completed CRUD work"</div>
-                    <div class="step-output">Created edge 112 (94 → 95 via leads_to)</div>
+                    <div class="step-content code">deciduous add revisit "Reconsidering auth strategy for microservices" --date "2024-04-20"</div>
+                    <div class="step-output">Created node 5 (type: revisit)</div>
                 </div>
-
-                <!-- Decision point -->
-                <div class="session-step" style="--delay: 13s">
+                <div class="session-step" style="--delay: 11s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content">I need to decide on token storage. Let me log the decision and options.</div>
+                    <div class="step-content code">deciduous link 4 5 -r "Session scaling issues forced rethink"</div>
+                    <div class="step-output">Created edge (4 -> 5 via leads_to)</div>
+                </div>
+                <div class="session-step" style="--delay: 12.5s">
+                    <div class="step-label claude">Claude</div>
+                    <div class="step-content code">deciduous add action "Migrated to JWT with refresh tokens" --commit def456 --date "2024-05-01"</div>
+                    <div class="step-output">Created node 6 (type: action) [commit: def456]</div>
                 </div>
                 <div class="session-step" style="--delay: 14s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous add decision "Token storage strategy" -c 80</div>
-                    <div class="step-output">Created node 96 (type: decision) [confidence: 80%]</div>
+                    <div class="step-content code">deciduous serve</div>
+                    <div class="step-output">Starting web viewer at http://localhost:3000</div>
                 </div>
-                <div class="session-step" style="--delay: 15s">
+                <div class="session-step" style="--delay: 15.5s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous link 95 96 -r "Must decide before implementing"</div>
-                    <div class="step-output">Created edge 113 (95 → 96 via leads_to)</div>
+                    <div class="step-archaeology-output">
+                        <strong>Auth System Evolution:</strong><br><br>
+                        1 [goal] Understand auth system evolution<br>
+                        &nbsp;&nbsp;-> 2 [decision] Initial auth approach<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;-> 3 [action] Implemented session-based auth [commit: abc123]<br><br>
+                        <span class="pivot">PIVOT DETECTED:</span><br>
+                        &nbsp;&nbsp;-> 4 [observation] Sessions didn't scale across services<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;-> 5 [revisit] Reconsidering auth strategy for microservices<br>
+                        &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-> 6 [action] Migrated to JWT with refresh tokens [commit: def456]<br><br>
+                        <strong>Key insight:</strong> The microservices migration in Q2 2024 forced the auth pivot.
+                    </div>
                 </div>
-
-                <!-- Options -->
-                <div class="session-step" style="--delay: 16.5s">
+                <div class="session-step" style="--delay: 18s">
                     <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous add option "httpOnly cookies" -c 85 && deciduous add option "localStorage" -c 60</div>
-                    <div class="step-output">Created node 97 (type: option) [confidence: 85%]<br>Created node 98 (type: option) [confidence: 60%]</div>
-                </div>
-                <div class="session-step" style="--delay: 17.5s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content">httpOnly cookies are more secure (XSS resistant). I'll go with that approach.</div>
-                </div>
-
-                <!-- Action -->
-                <div class="session-step" style="--delay: 19s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous add action "Implement JWT with httpOnly cookies" -c 85 -f "src/auth.rs,src/middleware.rs"</div>
-                    <div class="step-output">Created node 99 (type: action) [files: src/auth.rs, src/middleware.rs]</div>
-                </div>
-
-                <!-- Implementation -->
-                <div class="session-step" style="--delay: 20.5s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content">Implementing auth middleware...</div>
-                    <div class="step-files">Writing: src/auth.rs, src/middleware.rs, src/routes/login.rs</div>
-                </div>
-
-                <!-- Commit -->
-                <div class="session-step" style="--delay: 22s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content code">git add -A && git commit -m "feat: add JWT auth with httpOnly cookies"</div>
-                    <div class="step-output">[feature/api c8d3e2f] feat: add JWT auth with httpOnly cookies<br>3 files changed, 189 insertions(+)</div>
-                </div>
-
-                <!-- Outcome -->
-                <div class="session-step" style="--delay: 23.5s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous add outcome "JWT auth implemented" -c 95 --commit HEAD</div>
-                    <div class="step-output">Created node 100 (type: outcome) [confidence: 95%] [commit: c8d3e2f]</div>
-                </div>
-                <div class="session-step" style="--delay: 24.5s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous link 99 100 -r "Implementation successful"</div>
-                    <div class="step-output">Created edge 118 (99 → 100 via leads_to)</div>
-                </div>
-
-                <!-- Sync -->
-                <div class="session-step" style="--delay: 26s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content code">deciduous sync</div>
-                    <div class="step-output">Exported graph to docs/graph-data.json<br>&nbsp;&nbsp;100 nodes, 118 edges</div>
-                </div>
-
-                <!-- Done -->
-                <div class="session-step" style="--delay: 27.5s">
-                    <div class="step-label claude">Claude</div>
-                    <div class="step-content">JWT authentication is implemented and linked to commit c8d3e2f. The decision graph now shows the full chain from API goal through auth implementation. What's next?</div>
+                    <div class="step-content">The auth system started with sessions, but pivoted to JWT when the team moved to microservices. The decision graph shows the exact reasoning and commits. You can explore it visually at localhost:3000 or ask about any specific decision.</div>
                 </div>
             </div>
-        </div>
-
-        <div class="stats-banner">
-            <a href="demo/" class="stat-item stat-link">
-                <span class="stat-num" id="node-count">540+</span>
-                <span class="stat-label">Decisions Tracked</span>
-            </a>
-            <a href="demo/" class="stat-item stat-link">
-                <span class="stat-num" id="edge-count">470+</span>
-                <span class="stat-label">Connections</span>
-            </a>
-            <div class="stat-item">
-                <span class="stat-num" id="days-count">--</span>
-                <span class="stat-label">Days of Development</span>
-            </div>
-            <div class="stat-item">
-                <span class="stat-num">100%</span>
-                <span class="stat-label">Self-Documented</span>
-            </div>
-            <a href="demo/" class="stat-item stat-link stat-cta">
-                <span class="stat-num">&rarr;</span>
-                <span class="stat-label">See the Graph</span>
-            </a>
         </div>
 
         <div class="elevator-pitch">
-            <p><strong>LLMs forget. Your decisions shouldn't.</strong> When AI sessions end and context windows reset, critical reasoning evaporates. Deciduous captures every goal, every approach considered, every choice made&mdash;creating a queryable record that survives session boundaries.</p>
-            <p><strong>Beyond context recovery.</strong> The graph improves how you work: logging decisions <em>before</em> you act forces clearer thinking. Generate PR writeups directly from your decision trail. Query past reasoning with <code>/recover</code> to recover state instantly. Share decisions across teammates with idempotent patches. Link commits to the goals that spawned them.</p>
-            <p><strong>Institutional memory that compounds.</strong> Every decision becomes searchable history. New developers can ask "why is this like this?" and get real answers. The graph outlives any single session, any single developer, any single AI assistant.</p>
+            <p><strong>Archaeology mode</strong> is for understanding existing codebases. When you join a project or need to understand "why is this like this?", archaeology helps you reconstruct the decision trail from commit history, PRs, and code patterns.</p>
+            <p><strong>Pulse mode</strong> is for ongoing work. As you build, log decisions in real-time. When sessions end or teammates need context, the graph survives.</p>
+            <p><strong>Both modes produce the same graph.</strong> Archaeology reconstructs history; pulse captures it live. Either way, you end up with queryable institutional memory.</p>
         </div>
 
         <section>
-            <h2>Built With Itself</h2>
-            <p>Deciduous isn't theoretical. Every feature was built using deciduous to track its own development. The graph you see is real&mdash;the actual decision trail from building this tool.</p>
+            <h2>Archaeology: Understand Any Codebase</h2>
+            <p>Drop into an existing project and build a decision graph from its history. Perfect for onboarding, code review, or understanding legacy systems.</p>
 
-            <div class="proof-grid">
-                <div class="proof-card highlight">
-                    <h3>Self-Bootstrapped</h3>
-                    <p>From day one, every goal, decision, and outcome was logged. The tool proved itself by building itself.</p>
+            <div class="feature-grid">
+                <div class="feature-card highlight">
+                    <h3>Reconstruct Evolution</h3>
+                    <p>Trace how code got to its current state. Map pivots where the approach changed. Link decisions to commits.</p>
                 </div>
-                <div class="proof-card">
-                    <h3>Context Recovery Works</h3>
-                    <p>Multiple sessions lost context. Each time, <code>/recover</code> brought developers back up to speed in seconds.</p>
+                <div class="feature-card">
+                    <h3>Find the Pivots</h3>
+                    <p>The <code>revisit</code> node type captures moments when the team changed direction. Understand why approach A was abandoned for B.</p>
                 </div>
-                <div class="proof-card">
-                    <h3>Real PR Writeups</h3>
-                    <p>PR descriptions generated directly from the decision graph. No reconstruction from memory.</p>
+                <div class="feature-card">
+                    <h3>Backdate Nodes</h3>
+                    <p>Use <code>--date "YYYY-MM-DD"</code> to place decisions at their historical timestamps. Build accurate timelines.</p>
                 </div>
-                <div class="proof-card">
-                    <h3>Commit Traceability</h3>
-                    <p>Every commit links to the goals that spawned it. Browse the graph to see why any code exists.</p>
+                <div class="feature-card">
+                    <h3>Ask Claude</h3>
+                    <p>The web viewer's "Ask About This Code" feature lets you query narrative chains. Get explanations of complex evolution patterns.</p>
                 </div>
             </div>
         </section>
 
         <section>
-            <h2>Works With Your Editor</h2>
-            <p>Deciduous integrates with AI-assisted development tools through slash commands and project instructions. Set up once, use automatically.</p>
+            <h2>Pulse: Track Ongoing Decisions</h2>
+            <p>Log decisions in real-time as you work. When sessions end, context survives. When PRs need writeups, generate them from the graph.</p>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Log Before You Act</h3>
+                    <p>Create goal and decision nodes before writing code. Forces clearer thinking and captures the reasoning.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Link Commits</h3>
+                    <p>Use <code>--commit HEAD</code> to link outcomes to git commits. Every commit becomes traceable to its goals.</p>
+                </div>
+                <div class="feature-card highlight">
+                    <h3>Recover Context</h3>
+                    <p>New session? Use <code>/recover</code> to pick up where you left off. The graph remembers what you were working on.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Make Informed Decisions</h3>
+                    <p>Inquire about the code and your plans as if Claude was in the room when those plans were made and executed.</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2>Claude Code Integration</h2>
+            <p>Deciduous integrates deeply with Claude Code through skills, hooks, and commands. Run <code>deciduous init</code> to set up everything.</p>
+
+            <div class="tool-grid">
+                <div class="tool-card skill">
+                    <h3>/recover</h3>
+                    <p>Skill that recovers context from the decision graph at session start.</p>
+                </div>
+                <div class="tool-card skill">
+                    <h3>/decision</h3>
+                    <p>Skill for logging decisions with proper node types and links.</p>
+                </div>
+                <div class="tool-card skill">
+                    <h3>/work</h3>
+                    <p>Skill that creates a goal node before starting implementation.</p>
+                </div>
+                <div class="tool-card hook">
+                    <h3>post-commit</h3>
+                    <p>Hook that reminds Claude to link commits to the decision graph.</p>
+                </div>
+                <div class="tool-card hook">
+                    <h3>require-action</h3>
+                    <p>Hook that checks for action nodes before allowing commits.</p>
+                </div>
+                <div class="tool-card cmd">
+                    <h3>deciduous sync</h3>
+                    <p>Export graph for GitHub Pages deployment.</p>
+                </div>
+            </div>
 
             <div class="editor-badges">
                 <div class="editor-badge">
                     Claude Code <code>deciduous init</code>
                 </div>
-                <div class="editor-badge">
-                    Windsurf <code>deciduous init --windsurf</code>
-                </div>
-                <div class="editor-badge">
-                    OpenCode <code>deciduous init --opencode</code>
-                </div>
-                <div class="editor-badge">
-                    Codex <code>deciduous init --codex</code>
-                </div>
             </div>
-
-            <p style="margin-top: 20px; font-size: 0.95rem;">Running <code>init</code> creates slash commands (<code>/recover</code>, <code>/decision</code>) and project instructions that teach your AI assistant the decision-logging workflow.</p>
         </section>
 
         <section>
-            <h2>Three Ways to View</h2>
-            <p>Explore your decision graph however you prefer.</p>
+            <h2>Terminal Utilities</h2>
+            <p>A full CLI for querying and managing your decision graph.</p>
 
             <div class="view-cards">
+                <div class="view-card">
+                    <h3>deciduous nodes</h3>
+                    <p>List all nodes. Filter by type, branch, status. Output as JSON for scripting.</p>
+                </div>
                 <a href="demo/" class="view-card">
-                    <h3>Web Viewer</h3>
-                    <p>Interactive DAG, timeline, and graph views. Deploy to GitHub Pages for sharing.</p>
+                    <h3>deciduous serve</h3>
+                    <p>Web viewer with DAG visualization, narrative chains, and Claude Q&A.</p>
                 </a>
                 <div class="view-card">
-                    <h3>Terminal UI</h3>
-                    <p>Vim-style navigation. Search, filter, preview files, view diffs. <code>deciduous tui</code></p>
-                </div>
-                <div class="view-card">
-                    <h3>CLI Queries</h3>
-                    <p>Script and pipe. <code>deciduous nodes</code>, <code>deciduous edges</code>, JSON export.</p>
+                    <h3>deciduous sync</h3>
+                    <p>Export graph to JSON for GitHub Pages deployment or sharing.</p>
                 </div>
             </div>
         </section>
 
         <section>
-            <h2>The Six Node Types</h2>
-            <p>A simple vocabulary for capturing how software actually gets built.</p>
+            <h2>Node Types</h2>
+            <p>A simple vocabulary for capturing how software evolves. Click any type to see an example.</p>
 
             <div class="node-types">
-                <div class="node-type goal">
+                <div class="node-type goal" onclick="showNodeModal('goal')">
                     <h3>Goal</h3>
-                    <p>What you're trying to achieve</p>
+                    <p>What you're achieving</p>
                 </div>
-                <div class="node-type decision">
+                <div class="node-type decision" onclick="showNodeModal('decision')">
                     <h3>Decision</h3>
-                    <p>Choice points that need resolving</p>
+                    <p>Choice points</p>
                 </div>
-                <div class="node-type option">
+                <div class="node-type option" onclick="showNodeModal('option')">
                     <h3>Option</h3>
-                    <p>Approaches you considered</p>
+                    <p>Approaches considered</p>
                 </div>
-                <div class="node-type action">
+                <div class="node-type action" onclick="showNodeModal('action')">
                     <h3>Action</h3>
-                    <p>What you actually implemented</p>
+                    <p>What you implemented</p>
                 </div>
-                <div class="node-type outcome">
+                <div class="node-type outcome" onclick="showNodeModal('outcome')">
                     <h3>Outcome</h3>
-                    <p>Results&mdash;success, failure, or pivot</p>
+                    <p>Results of actions</p>
                 </div>
-                <div class="node-type observation">
+                <div class="node-type observation" onclick="showNodeModal('observation')">
                     <h3>Observation</h3>
-                    <p>Technical insights along the way</p>
+                    <p>Insights discovered</p>
+                </div>
+                <div class="node-type revisit" onclick="showNodeModal('revisit')">
+                    <h3>Revisit</h3>
+                    <p>Pivot points</p>
                 </div>
             </div>
         </section>
 
-        <section>
-            <h2>The Workflow</h2>
-            <p>Deciduous works best when decisions are logged in real-time, not reconstructed later.</p>
+        <!-- Node Type Modal -->
+        <div id="node-modal" class="node-modal" onclick="closeNodeModal(event)">
+            <div class="node-modal-content" onclick="event.stopPropagation()">
+                <button class="node-modal-close" onclick="closeNodeModal()">&times;</button>
+                <h3 id="modal-title"></h3>
+                <p id="modal-description"></p>
+                <div class="modal-demo">
+                    <div class="modal-demo-header">Example</div>
+                    <div id="modal-animation" class="modal-animation"></div>
+                </div>
+            </div>
+        </div>
 
-            <div class="workflow">
-                <div class="workflow-step">
-                    <div class="workflow-num">1</div>
-                    <div class="workflow-content">
-                        <h4>Start with <code>/recover</code></h4>
-                        <p>Recover state from the decision graph. See recent goals, pending decisions, what was in progress.</p>
-                    </div>
+        <section>
+            <h2>Works With Any Claude Workflow</h2>
+            <p>Deciduous is flexible. Use it however fits your style.</p>
+
+            <div class="flexibility-grid">
+                <div class="flex-card">
+                    <h3>Full Integration</h3>
+                    <p>Use all the skills and hooks. Let Claude log decisions automatically as it works. Maximum context recovery.</p>
                 </div>
-                <div class="workflow-step">
-                    <div class="workflow-num">2</div>
-                    <div class="workflow-content">
-                        <h4>Log before you act</h4>
-                        <p>Create goal and decision nodes before writing code. This forces clearer thinking.</p>
-                    </div>
+                <div class="flex-card">
+                    <h3>Manual Logging</h3>
+                    <p>Run <code>deciduous add</code> yourself. Keep the graph updated without automated hooks.</p>
                 </div>
-                <div class="workflow-step">
-                    <div class="workflow-num">3</div>
-                    <div class="workflow-content">
-                        <h4>Link as you go</h4>
-                        <p>Connect actions to goals, outcomes to actions. The graph's value is in its connections.</p>
-                    </div>
+                <div class="flex-card">
+                    <h3>Archaeology Only</h3>
+                    <p>Skip pulse mode entirely. Use deciduous just to understand existing codebases and document history.</p>
                 </div>
-                <div class="workflow-step">
-                    <div class="workflow-num">4</div>
-                    <div class="workflow-content">
-                        <h4>Sync before push</h4>
-                        <p>Run <code>deciduous sync</code> to export the graph. Commit it alongside your code.</p>
-                    </div>
+                <div class="flex-card">
+                    <h3>PR Documentation</h3>
+                    <p>Use <code>deciduous writeup</code> to generate PR descriptions. Great even without the full workflow.</p>
                 </div>
             </div>
         </section>
 
         <section class="quickstart-section">
-            <h2>Quickstart Guide</h2>
-            <p>Get deciduous running with Claude Code in under 2 minutes.</p>
+            <h2>Quickstart</h2>
+            <p>Get deciduous running in under a minute.</p>
 
             <!-- Step 1: Install -->
             <div class="quickstart-step">
@@ -1072,12 +1055,9 @@
                             <span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span>
                         </div>
                         <div class="qs-step" style="--delay: 0.8s">
-                            <span class="qs-output">Downloading deciduous v0.9.x</span>
+                            <span class="qs-output">Downloading deciduous v0.10.x</span>
                         </div>
-                        <div class="qs-step" style="--delay: 1.4s">
-                            <span class="qs-output">Compiling deciduous v0.9.x</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 2.2s">
+                        <div class="qs-step" style="--delay: 1.6s">
                             <span class="qs-success">Installed deciduous to ~/.cargo/bin/deciduous</span>
                         </div>
                     </div>
@@ -1090,7 +1070,7 @@
                     <span class="quickstart-num">2</span>
                     <div class="quickstart-info">
                         <h3>Initialize in your project</h3>
-                        <p>Creates slash commands that teach Claude the workflow.</p>
+                        <p>Creates skills, hooks, and commands for Claude.</p>
                     </div>
                 </div>
                 <div class="quickstart-terminal" id="qs-init">
@@ -1104,35 +1084,32 @@
                         <div class="qs-step" style="--delay: 0s">
                             <span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project && deciduous init</span>
                         </div>
-                        <div class="qs-step" style="--delay: 0.8s">
+                        <div class="qs-step" style="--delay: 0.6s">
                             <span class="qs-output">Created .deciduous/deciduous.db</span>
                         </div>
-                        <div class="qs-step" style="--delay: 1.2s">
+                        <div class="qs-step" style="--delay: 1s">
                             <span class="qs-output">Created .claude/commands/recover.md</span>
                         </div>
-                        <div class="qs-step" style="--delay: 1.6s">
-                            <span class="qs-output">Created .claude/commands/decision.md</span>
+                        <div class="qs-step" style="--delay: 1.4s">
+                            <span class="qs-output">Created .claude/commands/work.md</span>
                         </div>
-                        <div class="qs-step" style="--delay: 2s">
-                            <span class="qs-output">Created CLAUDE.md (project instructions)</span>
-                        </div>
-                        <div class="qs-step" style="--delay: 2.6s">
-                            <span class="qs-success">Ready! Claude will now log decisions automatically.</span>
+                        <div class="qs-step" style="--delay: 1.8s">
+                            <span class="qs-success">Ready! Use /recover to start a session.</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Step 3: Ask Claude for a feature -->
+            <!-- Step 3: Start working -->
             <div class="quickstart-step">
                 <div class="quickstart-step-header">
                     <span class="quickstart-num">3</span>
                     <div class="quickstart-info">
-                        <h3>Ask Claude for a feature</h3>
-                        <p>Claude automatically logs goals and decisions as it works.</p>
+                        <h3>Start working</h3>
+                        <p>Use /recover at session start, or archaeology mode for existing code.</p>
                     </div>
                 </div>
-                <div class="quickstart-terminal qs-claude-session" id="qs-nodes">
+                <div class="quickstart-terminal" id="qs-work">
                     <div class="session-header">
                         <span class="session-dot red"></span>
                         <span class="session-dot yellow"></span>
@@ -1142,117 +1119,15 @@
                     <div class="quickstart-content">
                         <div class="qs-step" style="--delay: 0s">
                             <div class="step-label user">You</div>
-                            <div class="qs-user-msg">Add a dark mode toggle to the settings page</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 1.2s">
-                            <div class="step-label claude">Claude</div>
-                            <div class="qs-claude-msg">I'll add dark mode. Let me log this goal first.</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 2.2s">
-                            <div class="qs-cmd-inline">deciduous add goal "Add dark mode toggle" -c 90 -p "User requested dark mode"</div>
-                            <div class="qs-success">Created node 1 (type: goal) [confidence: 90%]</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 3.4s">
-                            <div class="step-label claude">Claude</div>
-                            <div class="qs-claude-msg">I need to decide on the theme storage approach.</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 4.2s">
-                            <div class="qs-cmd-inline">deciduous add decision "Theme storage strategy" -c 80</div>
-                            <div class="qs-success">Created node 2 (type: decision)</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 5s">
-                            <div class="qs-cmd-inline">deciduous link 1 2 -r "Must decide before implementing"</div>
-                            <div class="qs-success">Created edge 1 (1 → 2 via leads_to)</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 4: Claude implements and tracks -->
-            <div class="quickstart-step">
-                <div class="quickstart-step-header">
-                    <span class="quickstart-num">4</span>
-                    <div class="quickstart-info">
-                        <h3>Claude implements and tracks</h3>
-                        <p>Actions, outcomes, and commits are all linked together.</p>
-                    </div>
-                </div>
-                <div class="quickstart-terminal qs-claude-session" id="qs-link">
-                    <div class="session-header">
-                        <span class="session-dot red"></span>
-                        <span class="session-dot yellow"></span>
-                        <span class="session-dot green"></span>
-                        <span class="session-title">Claude Code</span>
-                    </div>
-                    <div class="quickstart-content">
-                        <div class="qs-step" style="--delay: 0s">
-                            <div class="step-label claude">Claude</div>
-                            <div class="qs-claude-msg">I'll use CSS variables with localStorage. Implementing now...</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 1s">
-                            <div class="qs-cmd-inline">deciduous add action "Implement CSS variable theming" -c 85 -f "src/theme.ts,src/styles.css"</div>
-                            <div class="qs-success">Created node 3 (type: action) [files: src/theme.ts, src/styles.css]</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 2.2s">
-                            <div class="step-label claude">Claude</div>
-                            <div class="qs-claude-msg">Dark mode is working. Committing and logging the outcome.</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 3s">
-                            <div class="qs-cmd-inline">git commit -m "feat: add dark mode toggle"</div>
-                            <div class="qs-output">[main a1b2c3d] feat: add dark mode toggle</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 4s">
-                            <div class="qs-cmd-inline">deciduous add outcome "Dark mode implemented" -c 95 --commit HEAD</div>
-                            <div class="qs-success">Created node 4 (type: outcome) [commit: a1b2c3d]</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 5s">
-                            <div class="qs-cmd-inline">deciduous link 3 4 -r "Implementation successful"</div>
-                            <div class="qs-success">Created edge 3 (3 → 4 via leads_to)</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Step 5: Recover context later -->
-            <div class="quickstart-step">
-                <div class="quickstart-step-header">
-                    <span class="quickstart-num">5</span>
-                    <div class="quickstart-info">
-                        <h3>Recover context anytime</h3>
-                        <p>New session? Use /recover to pick up where you left off.</p>
-                    </div>
-                </div>
-                <div class="quickstart-terminal qs-claude-session" id="qs-view">
-                    <div class="session-header">
-                        <span class="session-dot red"></span>
-                        <span class="session-dot yellow"></span>
-                        <span class="session-dot green"></span>
-                        <span class="session-title">Claude Code (new session)</span>
-                    </div>
-                    <div class="quickstart-content">
-                        <div class="qs-step" style="--delay: 0s">
-                            <div class="step-label user">You</div>
-                            <div class="qs-user-msg">/recover</div>
+                            <div class="step-content">/recover</div>
                         </div>
                         <div class="qs-step" style="--delay: 1s">
                             <div class="step-label claude">Claude</div>
-                            <div class="qs-claude-msg">Recovering context from decision graph...</div>
+                            <div class="step-content">Recovering context from decision graph...</div>
                         </div>
-                        <div class="qs-step" style="--delay: 1.8s">
-                            <div class="qs-cmd-inline">deciduous nodes -n 10</div>
-                        </div>
-                        <div class="qs-step" style="--delay: 2.6s">
-                            <div class="qs-recovery-box">
-                                <strong>Recent work on main:</strong><br><br>
-                                <span class="qs-tree-line">1 [goal] Add dark mode toggle [90%]</span><br>
-                                <span class="qs-tree-line">&nbsp;&nbsp;↳ 2 [decision] Theme storage strategy</span><br>
-                                <span class="qs-tree-line">&nbsp;&nbsp;&nbsp;&nbsp;↳ 3 [action] Implement CSS variable theming</span><br>
-                                <span class="qs-tree-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;↳ 4 [outcome] Dark mode implemented [commit: a1b2c3d]</span>
-                            </div>
-                        </div>
-                        <div class="qs-step" style="--delay: 4s">
-                            <div class="step-label claude">Claude</div>
-                            <div class="qs-claude-msg">You completed dark mode (commit a1b2c3d). The toggle uses CSS variables with localStorage. What would you like to work on next?</div>
+                        <div class="qs-step" style="--delay: 2s">
+                            <div class="step-content code">deciduous nodes -n 5</div>
+                            <div class="qs-success">No nodes yet. Fresh project. Ready to start!</div>
                         </div>
                     </div>
                 </div>
@@ -1264,48 +1139,20 @@
             </div>
         </section>
 
-        <section class="demo-section">
-            <h2>See It In Action</h2>
-            <p>Watch a full session: initialization, decision logging, graph visualization, and context recovery.</p>
-            <div class="demo-player-container">
-                <iframe src="https://asciinema.org/a/761574/iframe?speed=1.4&idleTimeLimit=2&theme=asciinema&preload=1&fit=width"
-                    id="asciicast-iframe-761574"
-                    name="asciicast-iframe-761574"
-                    scrolling="no"
-                    allowfullscreen="true">
-                </iframe>
+        <section>
+            <h2>Built With Itself</h2>
+            <p>Deciduous was built using deciduous to track its own development. The graph you see at <a href="demo/">demo/</a> is the real decision trail from building this tool.</p>
+
+            <div class="feature-grid">
+                <div class="feature-card">
+                    <h3>Self-Bootstrapped</h3>
+                    <p>From day one, every goal, decision, and outcome was logged. The tool proved itself by building itself.</p>
+                </div>
+                <div class="feature-card">
+                    <h3>Context Recovery Works</h3>
+                    <p>Multiple sessions lost context. Each time, <code>/recover</code> brought developers back up to speed.</p>
+                </div>
             </div>
-        </section>
-
-        <section>
-            <h2>Real PRs Built With Deciduous</h2>
-            <p>Every PR in this repo includes its decision graph. Here are some examples:</p>
-
-            <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/11" class="pr-card">
-                <span class="pr-number">#11</span>
-                <span class="pr-title">Type Unification: TUI + Web with Enforcement Tooling</span>
-                <span class="pr-desc">14 tracked decisions. JSON Schema as canonical source, validation scripts, git hooks, CI enforcement.</span>
-            </a>
-
-            <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/3" class="pr-card">
-                <span class="pr-number">#3</span>
-                <span class="pr-title">Multi-User Graph Sync</span>
-                <span class="pr-desc">jj-inspired diff/patch model for sharing decisions. UUID-based change_ids survive across databases.</span>
-            </a>
-
-            <a href="https://github.com/notactuallytreyanastasio/deciduous/pull/9" class="pr-card">
-                <span class="pr-number">#9</span>
-                <span class="pr-title">TEA Architecture Refactor</span>
-                <span class="pr-desc">Functional core refactor using The Elm Architecture. Full architectural decision trail.</span>
-            </a>
-        </section>
-
-        <section>
-            <h2>The Full Story</h2>
-            <p>Deciduous was extracted from an audio forensics tool called losselot (a portmanteau of "loss" and "Ocelot", the Phish song). What started as an experiment in AI-assisted development became a tool for surviving the fundamental problem with LLM sessions: they forget.</p>
-            <p>The insight was simple. AI sessions end. Context windows reset. Decisions evaporate. But if you capture decisions as they happen&mdash;not reconstructed later&mdash;the reasoning survives.</p>
-            <p><strong>Deciduous is the proof.</strong> Every feature you see was built with Claude Code using deciduous to track the work. When sessions ended, <code>/recover</code> brought the next one up to speed. When PRs needed writeups, the graph generated them. When someone asked "why is this like this?", the answer was one query away.</p>
-            <p><a href="story.html">Read the complete chronicle &rarr;</a></p>
         </section>
 
         <footer>
@@ -1316,36 +1163,14 @@
     </div>
 
     <script>
-        // Calculate days since project started (Dec 4, 2025)
-        const projectStart = new Date('2025-12-04');
-        const today = new Date();
-        const daysDiff = Math.floor((today - projectStart) / (1000 * 60 * 60 * 24));
-        document.getElementById('days-count').textContent = daysDiff;
-
-        // Fetch actual counts from graph data
-        fetch('graph-data.json')
-            .then(r => r.json())
-            .then(data => {
-                if (data.nodes) {
-                    document.getElementById('node-count').textContent = data.nodes.length + '+';
-                }
-                if (data.edges) {
-                    document.getElementById('edge-count').textContent = data.edges.length + '+';
-                }
-            })
-            .catch(() => {
-                // Keep defaults
-            });
-
         // Auto-scroll as steps appear
         function setupAutoScroll() {
             const content = document.getElementById('session-content');
-            const steps = content.querySelectorAll('.session-step, .session-divider');
+            const steps = content.querySelectorAll('.session-step');
 
             steps.forEach(step => {
                 const delay = parseFloat(getComputedStyle(step).getPropertyValue('--delay')) * 1000;
                 setTimeout(() => {
-                    // Slow scroll to show the new step
                     const targetScroll = step.offsetTop - content.offsetTop - 20;
                     smoothScrollTo(content, targetScroll, 920);
                 }, delay + 400);
@@ -1378,7 +1203,7 @@
         // Replay the session demo animation
         function replayDemo() {
             const content = document.getElementById('session-content');
-            const steps = content.querySelectorAll('.session-step, .session-divider');
+            const steps = content.querySelectorAll('.session-step');
 
             // Scroll to top first
             content.scrollTop = 0;
@@ -1396,6 +1221,126 @@
 
         // Start auto-scroll on page load
         setupAutoScroll();
+
+        // Node type modal data
+        const nodeTypeData = {
+            goal: {
+                title: 'Goal',
+                color: '#d29922',
+                description: 'A goal is what you\'re trying to achieve. It\'s the starting point of any decision chain. Goals capture user requests, feature requirements, or objectives you\'re working toward.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add goal "Add user authentication" -c 90', delay: 0 },
+                    { type: 'output', text: 'Created node 1 (type: goal) [confidence: 90%]', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous link 1 2 -r "This goal spawns a decision"', delay: 1.4 },
+                    { type: 'edge', text: '1 [goal] Add user authentication', delay: 2 },
+                    { type: 'edge', text: '  └─> 2 [decision] Choose auth method', delay: 2.4 }
+                ]
+            },
+            decision: {
+                title: 'Decision',
+                color: '#0969da',
+                description: 'A decision represents a choice point that needs resolving. It\'s a question that has multiple possible answers. Decisions branch into options.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add decision "How to store sessions?" -c 80', delay: 0 },
+                    { type: 'output', text: 'Created node 5 (type: decision) [confidence: 80%]', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous link 4 5 -r "Implementation requires this choice"', delay: 1.4 },
+                    { type: 'edge', text: '4 [goal] Add session management', delay: 2 },
+                    { type: 'edge', text: '  └─> 5 [decision] How to store sessions?', delay: 2.4 }
+                ]
+            },
+            option: {
+                title: 'Option',
+                color: '#8250df',
+                description: 'An option is one possible answer to a decision. Multiple options can exist for a single decision. Some get chosen, others rejected.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add option "Use Redis for sessions" -c 75', delay: 0 },
+                    { type: 'output', text: 'Created node 6 (type: option) [confidence: 75%]', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous add option "Use database sessions" -c 60', delay: 1.2 },
+                    { type: 'output', text: 'Created node 7 (type: option) [confidence: 60%]', delay: 1.8 },
+                    { type: 'edge', text: '5 [decision] How to store sessions?', delay: 2.4 },
+                    { type: 'edge', text: '  ├─> 6 [option] Use Redis (chosen)', delay: 2.8 },
+                    { type: 'edge', text: '  └─> 7 [option] Use database (rejected)', delay: 3.2 }
+                ]
+            },
+            action: {
+                title: 'Action',
+                color: '#2da44e',
+                description: 'An action is what you actually implemented. It\'s tied to code changes and often linked to git commits. Actions flow from goals or chosen options.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add action "Implement Redis session store" -c 85 -f "src/session.rs"', delay: 0 },
+                    { type: 'output', text: 'Created node 8 (type: action) [files: src/session.rs]', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous link 6 8 -r "Implementing chosen option"', delay: 1.4 },
+                    { type: 'edge', text: '6 [option] Use Redis for sessions', delay: 2 },
+                    { type: 'edge', text: '  └─> 8 [action] Implement Redis session store', delay: 2.4 }
+                ]
+            },
+            outcome: {
+                title: 'Outcome',
+                color: '#1f6feb',
+                description: 'An outcome is the result of an action. It can be success, failure, or partial. Outcomes are often linked to git commits to trace what code produced them.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add outcome "Redis sessions working" -c 95 --commit HEAD', delay: 0 },
+                    { type: 'output', text: 'Created node 9 (type: outcome) [commit: a1b2c3d]', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous link 8 9 -r "Implementation successful"', delay: 1.4 },
+                    { type: 'edge', text: '8 [action] Implement Redis session store', delay: 2 },
+                    { type: 'edge', text: '  └─> 9 [outcome] Redis sessions working [a1b2c3d]', delay: 2.4 }
+                ]
+            },
+            observation: {
+                title: 'Observation',
+                color: '#bf3989',
+                description: 'An observation is an insight discovered during work. It captures learnings, discoveries, or problems noticed. Observations often lead to revisits when they reveal issues.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add observation "Redis connection pooling needed" -c 85', delay: 0 },
+                    { type: 'output', text: 'Created node 10 (type: observation)', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous link 9 10 -r "Discovered during testing"', delay: 1.4 },
+                    { type: 'edge', text: '9 [outcome] Redis sessions working', delay: 2 },
+                    { type: 'edge', text: '  └─> 10 [observation] Redis connection pooling needed', delay: 2.4 }
+                ]
+            },
+            revisit: {
+                title: 'Revisit',
+                color: '#f97316',
+                description: 'A revisit is a pivot point where you reconsider a previous decision. It captures moments when the approach changed direction. Revisits connect observations to new decisions.',
+                animation: [
+                    { type: 'cmd', text: 'deciduous add revisit "Reconsidering session storage" -c 80', delay: 0 },
+                    { type: 'output', text: 'Created node 11 (type: revisit)', delay: 0.6 },
+                    { type: 'cmd', text: 'deciduous link 10 11 -r "Observation triggered rethink"', delay: 1.4 },
+                    { type: 'edge', text: '10 [observation] Redis too complex for MVP', delay: 2 },
+                    { type: 'edge', text: '  └─> 11 [revisit] Reconsidering session storage', delay: 2.4 },
+                    { type: 'edge', text: '      └─> 12 [decision] Simpler session approach?', delay: 2.8 }
+                ]
+            }
+        };
+
+        function showNodeModal(type) {
+            const data = nodeTypeData[type];
+            if (!data) return;
+
+            document.getElementById('modal-title').textContent = data.title;
+            document.getElementById('modal-title').style.color = data.color;
+            document.getElementById('modal-description').textContent = data.description;
+
+            // Build animation HTML
+            const animContainer = document.getElementById('modal-animation');
+            animContainer.innerHTML = data.animation.map((step, i) => {
+                const className = step.type === 'cmd' ? 'anim-cmd' :
+                                  step.type === 'output' ? 'anim-output' : 'anim-edge';
+                return `<div class="anim-step ${className}" style="--delay: ${step.delay}s">${step.text}</div>`;
+            }).join('');
+
+            document.getElementById('node-modal').classList.add('active');
+        }
+
+        function closeNodeModal(event) {
+            if (event && event.target !== document.getElementById('node-modal')) return;
+            document.getElementById('node-modal').classList.remove('active');
+        }
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeNodeModal();
+        });
     </script>
 </body>
 </html>

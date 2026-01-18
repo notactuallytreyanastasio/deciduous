@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.10.2",
+        highlights: &[
+            "Deep linking with parameterized routes (/archaeology/:id, /dag/:nodeId, etc.)",
+            "Q&A history view with full-text search across all sessions",
+            "Prompt modal for viewing verbatim user prompts on nodes",
+            "Improved CardStack navigation and keyboard shortcuts",
+            "BrowserRouter for cleaner URLs (no more hash fragments)",
+        ],
+    },
+    Release {
         version: "0.10.1",
         highlights: &[
             "Fix card stack not appearing when clicking nodes in archaeology view",
