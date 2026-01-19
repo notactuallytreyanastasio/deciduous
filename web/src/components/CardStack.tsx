@@ -186,7 +186,7 @@ export const CardStack: React.FC<CardStackProps> = ({
                 borderLeftColor: getNodeColor(node.node_type),
                 transform: showFullDetails
                   ? 'translateY(0)'
-                  : `translateY(${offset * 8}px) scale(${1 - Math.abs(offset) * 0.02})`,
+                  : `translateY(${offset * 8}px)`,
                 zIndex: showFullDetails ? 100 : (100 - Math.abs(offset)),
                 opacity: isPeeking || showFullDetails ? 1 : 0.6,
               }}

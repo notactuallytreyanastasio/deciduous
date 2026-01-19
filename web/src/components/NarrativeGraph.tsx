@@ -30,9 +30,7 @@ const NODE_WIDTH = 180;
 const NODE_HEIGHT = 60;
 const NODE_MARGIN = 40;
 
-// Performance limits
-const SOFT_NODE_LIMIT = 100; // Show warning
-const HARD_NODE_LIMIT = 500; // Force truncation
+// No artificial node limits - show everything
 
 // Debounce helper
 function debounce<T extends (...args: unknown[]) => void>(fn: T, delay: number): T {
@@ -66,49 +64,10 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
-  const [showAllNodes, setShowAllNodes] = useState(false);
 
-  // Handle large node counts
-  const { displayNodes, displayEdges, isTruncated, totalCount } = useMemo(() => {
-    const total = nodes.length;
-
-    // If under soft limit or user chose to show all, use all nodes
-    if (total <= SOFT_NODE_LIMIT || showAllNodes) {
-      // Hard limit still applies
-      if (total > HARD_NODE_LIMIT) {
-        const truncatedNodes = nodes.slice(0, HARD_NODE_LIMIT);
-        const nodeIds = new Set(truncatedNodes.map(n => n.id));
-        const truncatedEdges = edges.filter(
-          e => nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
-        );
-        return {
-          displayNodes: truncatedNodes,
-          displayEdges: truncatedEdges,
-          isTruncated: true,
-          totalCount: total,
-        };
-      }
-      return {
-        displayNodes: nodes,
-        displayEdges: edges,
-        isTruncated: false,
-        totalCount: total,
-      };
-    }
-
-    // Truncate to soft limit
-    const truncatedNodes = nodes.slice(0, SOFT_NODE_LIMIT);
-    const nodeIds = new Set(truncatedNodes.map(n => n.id));
-    const truncatedEdges = edges.filter(
-      e => nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
-    );
-    return {
-      displayNodes: truncatedNodes,
-      displayEdges: truncatedEdges,
-      isTruncated: true,
-      totalCount: total,
-    };
-  }, [nodes, edges, showAllNodes]);
+  // Show all nodes - no truncation
+  const displayNodes = nodes;
+  const displayEdges = edges;
 
   // Calculate dagre layout - memoized for performance
   const layout = useMemo(() => {
@@ -334,28 +293,6 @@ export const NarrativeGraph: React.FC<NarrativeGraphProps> = ({
     <div ref={containerRef} style={styles.container}>
       <svg ref={svgRef} style={styles.svg} />
 
-      {/* Truncation warning */}
-      {isTruncated && (
-        <div style={styles.truncationWarning}>
-          <span>
-            Showing {displayNodes.length} of {totalCount} nodes
-          </span>
-          {totalCount <= HARD_NODE_LIMIT && !showAllNodes && (
-            <button
-              style={styles.showAllButton}
-              onClick={() => setShowAllNodes(true)}
-            >
-              Show all
-            </button>
-          )}
-          {totalCount > HARD_NODE_LIMIT && (
-            <span style={styles.hardLimitNote}>
-              (max {HARD_NODE_LIMIT})
-            </span>
-          )}
-        </div>
-      )}
-
       {/* Zoom indicator */}
       <div style={styles.zoomIndicator}>
         {Math.round(zoom * 100)}%
@@ -387,35 +324,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '11px',
     color: '#57606a',
     border: '1px solid #e1e4e8',
-  },
-  truncationWarning: {
-    position: 'absolute',
-    top: '12px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    backgroundColor: '#fff8c5',
-    border: '1px solid #d4a72c',
-    borderRadius: '6px',
-    padding: '8px 16px',
-    fontSize: '12px',
-    color: '#6f5e02',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    zIndex: 10,
-  },
-  showAllButton: {
-    padding: '4px 10px',
-    fontSize: '11px',
-    fontWeight: 500,
-    backgroundColor: '#ffffff',
-    color: '#6f5e02',
-    border: '1px solid #d4a72c',
-    borderRadius: '4px',
-    cursor: 'pointer',
-  },
-  hardLimitNote: {
-    fontSize: '11px',
-    color: '#8a7e3b',
   },
 };

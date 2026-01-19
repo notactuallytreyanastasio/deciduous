@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.10.3",
+        highlights: &[
+            "Fix card stack shrinking - cards now render at consistent size",
+            "Remove node count limits - graphs show all nodes without truncation",
+        ],
+    },
+    Release {
         version: "0.10.2",
         highlights: &[
             "Deep linking with parameterized routes (/archaeology/:id, /dag/:nodeId, etc.)",
