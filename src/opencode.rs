@@ -813,7 +813,7 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         println!("   {} opencode.json (already exists)", "Skipped".yellow());
     }
 
-    // Generate AGENTS.md if it doesn't exist
+    // Generate or update AGENTS.md
     let agents_md_path = project_root.join("AGENTS.md");
     if !agents_md_path.exists() {
         // Check if CLAUDE.md exists to convert from
@@ -838,7 +838,26 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
             println!("   {} AGENTS.md", "Created".green());
         }
     } else {
-        println!("   {} AGENTS.md (already exists)", "Skipped".yellow());
+        // AGENTS.md exists - append workflow section if not present
+        let existing_content = fs::read_to_string(&agents_md_path)
+            .map_err(|e| format!("Could not read AGENTS.md: {}", e))?;
+
+        if existing_content.contains("## Decision Graph Workflow") {
+            println!(
+                "   {} AGENTS.md (workflow section already present)",
+                "Skipped".yellow()
+            );
+        } else {
+            // Append the workflow section
+            let workflow_section = get_agents_workflow_section();
+            let new_content = format!("{}\n{}", existing_content.trim_end(), workflow_section);
+            fs::write(&agents_md_path, new_content)
+                .map_err(|e| format!("Could not update AGENTS.md: {}", e))?;
+            println!(
+                "   {} AGENTS.md (appended workflow section)",
+                "Updated".green()
+            );
+        }
     }
 
     println!("\n{}", "OpenCode integration installed!".green().bold());
@@ -846,6 +865,81 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
     println!("Plugins installed in .opencode/plugin/");
     println!("Commands installed in .opencode/command/");
     println!();
+
+    Ok(())
+}
+
+/// Update OpenCode integration files to latest version (overwrites existing)
+pub fn update_opencode(project_root: &Path) -> Result<(), String> {
+    let opencode_dir = project_root.join(".opencode");
+    let plugin_dir = opencode_dir.join("plugin");
+    let command_dir = opencode_dir.join("command");
+
+    // Create directories if needed
+    for dir in [&opencode_dir, &plugin_dir, &command_dir] {
+        if !dir.exists() {
+            fs::create_dir_all(dir).map_err(|e| format!("Could not create {:?}: {}", dir, e))?;
+            println!("   {} {:?}", "Creating".green(), dir);
+        }
+    }
+
+    // Update plugins (overwrite)
+    let plugin_path = plugin_dir.join("require-action-node.ts");
+    fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
+        .map_err(|e| format!("Could not write plugin: {}", e))?;
+    println!(
+        "   {} .opencode/plugin/require-action-node.ts",
+        "Updated".green()
+    );
+
+    let plugin_path = plugin_dir.join("post-commit-reminder.ts");
+    fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
+        .map_err(|e| format!("Could not write plugin: {}", e))?;
+    println!(
+        "   {} .opencode/plugin/post-commit-reminder.ts",
+        "Updated".green()
+    );
+
+    // Update commands (overwrite)
+    let commands = [
+        ("work.md", COMMAND_WORK),
+        ("recover.md", COMMAND_RECOVER),
+        ("decision.md", COMMAND_DECISION),
+        ("build-test.md", COMMAND_BUILD_TEST),
+        ("serve-ui.md", COMMAND_SERVE_UI),
+        ("sync-graph.md", COMMAND_SYNC_GRAPH),
+    ];
+
+    for (name, content) in commands {
+        let cmd_path = command_dir.join(name);
+        fs::write(&cmd_path, content)
+            .map_err(|e| format!("Could not write command {}: {}", name, e))?;
+        println!("   {} .opencode/command/{}", "Updated".green(), name);
+    }
+
+    // Update skills (overwrite)
+    let skills = [
+        ("pulse.md", SKILL_PULSE),
+        ("narratives.md", SKILL_NARRATIVES),
+        ("archaeology.md", SKILL_ARCHAEOLOGY),
+    ];
+
+    for (name, content) in skills {
+        let skill_path = command_dir.join(name);
+        fs::write(&skill_path, content)
+            .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
+        println!(
+            "   {} .opencode/command/{} (skill)",
+            "Updated".green(),
+            name
+        );
+    }
+
+    // Note: We don't overwrite opencode.json or AGENTS.md as they may have user customizations
+    println!(
+        "   {} opencode.json and AGENTS.md (preserved)",
+        "Skipping".yellow()
+    );
 
     Ok(())
 }
@@ -871,6 +965,55 @@ fn convert_claude_to_agents_md(claude_content: &str) -> String {
 "#;
 
     format!("{}{}", header, content)
+}
+
+/// Get just the Decision Graph Workflow section for appending to existing AGENTS.md
+fn get_agents_workflow_section() -> String {
+    r#"
+
+## Decision Graph Workflow
+
+**THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
+
+### The Core Rule
+
+```
+BEFORE you do something -> Log what you're ABOUT to do
+AFTER it succeeds/fails -> Log the outcome
+CONNECT immediately -> Link every node to its parent
+```
+
+### Quick Commands
+
+```bash
+deciduous add goal "Title" -c 90 -p "User's original request"
+deciduous add action "Title" -c 85
+deciduous link FROM TO -r "reason"
+deciduous serve   # View live graph
+deciduous sync    # Export for static hosting
+```
+
+### Node Types
+
+| Type | Purpose |
+|------|---------|
+| `goal` | High-level objectives |
+| `decision` | Choice points |
+| `option` | Approaches considered |
+| `action` | What was implemented |
+| `outcome` | What happened |
+| `observation` | Technical insights |
+| `revisit` | Reconsidering a decision |
+
+### Session Start Checklist
+
+```bash
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected?
+git status                # Current state
+```
+"#
+    .to_string()
 }
 
 /// Generate basic AGENTS.md content
