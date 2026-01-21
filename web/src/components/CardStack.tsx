@@ -21,6 +21,8 @@ interface CardStackProps {
   onExpandIndex: (index: number | null) => void;
   onNodeClick: (nodeId: number) => void;
   onClose: () => void;
+  /** Optional: all nodes for parent/child lookups. If not provided, uses nodes prop. */
+  allNodes?: DecisionNode[];
 }
 
 export const CardStack: React.FC<CardStackProps> = ({
@@ -32,12 +34,14 @@ export const CardStack: React.FC<CardStackProps> = ({
   onExpandIndex,
   onNodeClick,
   onClose,
+  allNodes,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
 
-  // Build node map for quick lookups
-  const nodeMap = useMemo(() => new Map(nodes.map(n => [n.id, n])), [nodes]);
+  // Build node map for quick lookups - use allNodes if provided, otherwise nodes
+  const lookupNodes = allNodes || nodes;
+  const nodeMap = useMemo(() => new Map(lookupNodes.map(n => [n.id, n])), [lookupNodes]);
 
   // Get parent nodes (nodes that link TO this node)
   const getParentNodes = useCallback((nodeId: number) => {

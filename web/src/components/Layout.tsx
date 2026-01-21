@@ -155,8 +155,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '30px',
-    maxWidth: '1800px',
-    margin: '0 auto',
     padding: '15px 0',
   },
   title: {
@@ -206,9 +204,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: '1px solid #d0d7de',
     margin: '15px',
     borderRadius: '8px',
-    maxWidth: '1800px',
-    marginLeft: 'auto',
-    marginRight: 'auto',
   },
   stat: {
     textAlign: 'center',
@@ -236,8 +231,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   main: {
     height: 'calc(100vh - 140px)',
-    maxWidth: '1800px',
-    margin: '0 auto',
     padding: '0 15px',
   },
 };

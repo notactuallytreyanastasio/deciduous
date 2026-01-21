@@ -5,15 +5,14 @@
  * Preserves the exact logic from the vanilla JS implementation.
  */
 
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import * as d3 from 'd3';
 import type { DecisionNode, GraphData } from '../types/graph';
-import { getConfidence, getCommit, truncate } from '../types/graph';
-import { tracePath } from '../utils/graphProcessing';
-import { TypeBadge, ConfidenceBadge, CommitBadge, EdgeBadge } from '../components/NodeBadge';
+import { getConfidence, truncate } from '../types/graph';
 import { TypeFilters, FilterValue } from '../components/TypeFilters';
 import { NODE_COLORS, getNodeColor } from '../utils/colors';
+import { CardStack } from '../components/CardStack';
 
 interface GraphViewProps {
   graphData: GraphData;
@@ -42,47 +41,113 @@ export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
 
   const svgRef = useRef<SVGSVGElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedNodeState, setSelectedNodeState] = useState<DecisionNode | null>(null);
   const [filter, setFilter] = useState<FilterValue>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const simulationRef = useRef<d3.Simulation<SimNode, SimLink> | null>(null);
 
-  // Sync URL param with state
+  // Stack-based node selection (like archaeology view)
+  const [nodeStack, setNodeStack] = useState<DecisionNode[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [showCardStack, setShowCardStack] = useState(false);
+
+  // Node map for quick lookups
+  const nodeMap = useMemo(() => new Map(graphData.nodes.map(n => [n.id, n])), [graphData.nodes]);
+
+  // Current selected node (first in stack)
+  const selectedNode = nodeStack.length > 0 ? nodeStack[selectedIndex] : null;
+
+  // Sync URL param with state - initialize stack with the URL node
   useEffect(() => {
     if (urlNodeId && graphData.nodes.length > 0) {
       const nodeId = parseInt(urlNodeId, 10);
       const node = graphData.nodes.find(n => n.id === nodeId);
-      if (node) {
-        setSelectedNodeState(node);
+      if (node && (nodeStack.length === 0 || nodeStack[0].id !== nodeId)) {
+        setNodeStack([node]);
+        setSelectedIndex(0);
+        setExpandedIndex(0);
+        setShowCardStack(true);
       }
     }
   }, [urlNodeId, graphData.nodes]);
 
-  // Wrapper to update URL when node is selected
-  const setSelectedNode = useCallback((node: DecisionNode | null) => {
-    if (node) {
-      navigate(`/graph/${node.id}`, { replace: true });
-    } else {
+  // Update URL when selection changes
+  useEffect(() => {
+    if (selectedNode) {
+      navigate(`/graph/${selectedNode.id}`, { replace: true });
+    } else if (nodeStack.length === 0 && urlNodeId) {
       navigate('/graph', { replace: true });
     }
-    setSelectedNodeState(node);
+  }, [selectedNode, nodeStack.length, urlNodeId, navigate]);
+
+  // Handle node selection from graph - starts a new stack
+  const handleSelectNode = useCallback((node: DecisionNode) => {
+    setNodeStack([node]);
+    setSelectedIndex(0);
+    setExpandedIndex(0);
+    setShowCardStack(true);
+  }, []);
+
+  // Handle clicking on parent/child in CardStack - adds to stack
+  const handleNodeClick = useCallback((nodeId: number) => {
+    const node = nodeMap.get(nodeId);
+    if (!node) return;
+
+    // Check if node is already in stack
+    const existingIndex = nodeStack.findIndex(n => n.id === nodeId);
+    if (existingIndex >= 0) {
+      // Just select it
+      setSelectedIndex(existingIndex);
+      setExpandedIndex(existingIndex);
+    } else {
+      // Add to stack after current selection
+      const newStack = [...nodeStack.slice(0, selectedIndex + 1), node];
+      setNodeStack(newStack);
+      setSelectedIndex(newStack.length - 1);
+      setExpandedIndex(newStack.length - 1);
+    }
+  }, [nodeMap, nodeStack, selectedIndex]);
+
+  const handleCloseCardStack = useCallback(() => {
+    setShowCardStack(false);
+    setNodeStack([]);
+    setSelectedIndex(0);
+    setExpandedIndex(null);
+    navigate('/graph', { replace: true });
   }, [navigate]);
 
-  const selectedNode = selectedNodeState;
+  // Keyboard navigation for card stack
+  useEffect(() => {
+    if (!showCardStack || nodeStack.length === 0) return;
 
-  // Handle node selection
-  const handleSelectNode = useCallback((node: DecisionNode) => {
-    setSelectedNode(node);
-  }, [setSelectedNode]);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'j':
+        case 'ArrowDown':
+          e.preventDefault();
+          setSelectedIndex(prev => Math.min(prev + 1, nodeStack.length - 1));
+          break;
+        case 'k':
+        case 'ArrowUp':
+          e.preventDefault();
+          setSelectedIndex(prev => Math.max(prev - 1, 0));
+          break;
+        case ' ':
+        case 'Enter':
+          e.preventDefault();
+          setExpandedIndex(prev => prev === selectedIndex ? null : selectedIndex);
+          break;
+        case 'q':
+        case 'Escape':
+          e.preventDefault();
+          handleCloseCardStack();
+          break;
+      }
+    };
 
-  const handleSelectNodeById = useCallback((id: number) => {
-    const node = graphData.nodes.find(n => n.id === id);
-    if (node) setSelectedNode(node);
-  }, [graphData.nodes, setSelectedNode]);
-
-  const handleCloseDetail = useCallback(() => {
-    setSelectedNode(null);
-  }, [setSelectedNode]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showCardStack, nodeStack.length, selectedIndex, handleCloseCardStack]);
 
   // Initialize D3 graph
   useEffect(() => {
@@ -254,13 +319,10 @@ export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
       );
   }, [selectedNode]);
 
-  // Get path to root for selected node
-  const pathToRoot = selectedNode ? tracePath(selectedNode.id, graphData) : [];
-
   return (
     <div style={styles.container}>
-      {/* Controls */}
-      <div style={styles.controls}>
+      {/* Controls - far left */}
+      <div style={styles.controlsSidebar}>
         <h2 style={styles.title}>Graph Explorer</h2>
         <TypeFilters value={filter} onChange={setFilter} />
         <input
@@ -280,112 +342,26 @@ export const GraphView: React.FC<GraphViewProps> = ({ graphData }) => {
         </div>
       </div>
 
-      {/* SVG Container */}
+      {/* SVG Container - fills remaining space */}
       <div ref={containerRef} style={styles.svgContainer}>
         <svg ref={svgRef} style={styles.svg} />
       </div>
 
-      {/* Detail Panel */}
-      {selectedNode && (
-        <div style={styles.detailPanel}>
-          <button onClick={handleCloseDetail} style={styles.closeBtn}>×</button>
-
-          <div style={styles.detailHeader}>
-            <TypeBadge type={selectedNode.node_type} />
-            <ConfidenceBadge confidence={getConfidence(selectedNode)} />
-            <CommitBadge commit={getCommit(selectedNode)} />
-          </div>
-
-          <h3 style={styles.detailTitle}>{selectedNode.title}</h3>
-          <p style={styles.detailMeta}>
-            Node #{selectedNode.id} · {new Date(selectedNode.created_at).toLocaleString()}
-          </p>
-
-          {selectedNode.description && (
-            <div style={styles.detailSection}>
-              <h4 style={styles.sectionTitle}>Description</h4>
-              <p style={styles.description}>{selectedNode.description}</p>
-            </div>
-          )}
-
-          {pathToRoot.length > 1 && (
-            <div style={styles.detailSection}>
-              <h4 style={styles.sectionTitle}>Path to Root</h4>
-              {pathToRoot.map(n => (
-                <div
-                  key={n.id}
-                  onClick={() => handleSelectNodeById(n.id)}
-                  style={styles.pathNode}
-                >
-                  <TypeBadge type={n.node_type} size="sm" />
-                  <span>{truncate(n.title, 35)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Connections */}
-          <ConnectionsList
-            node={selectedNode}
-            graphData={graphData}
-            onSelectNode={handleSelectNodeById}
-          />
-        </div>
+      {/* CardStack - far right, shown when node selected */}
+      {showCardStack && nodeStack.length > 0 && (
+        <CardStack
+          nodes={nodeStack}
+          edges={graphData.edges}
+          selectedIndex={selectedIndex}
+          expandedIndex={expandedIndex}
+          onSelectIndex={setSelectedIndex}
+          onExpandIndex={setExpandedIndex}
+          onNodeClick={handleNodeClick}
+          onClose={handleCloseCardStack}
+          allNodes={graphData.nodes}
+        />
       )}
     </div>
-  );
-};
-
-// =============================================================================
-// Connections List
-// =============================================================================
-
-interface ConnectionsListProps {
-  node: DecisionNode;
-  graphData: GraphData;
-  onSelectNode: (id: number) => void;
-}
-
-const ConnectionsList: React.FC<ConnectionsListProps> = ({ node, graphData, onSelectNode }) => {
-  const incoming = graphData.edges.filter(e => e.to_node_id === node.id);
-  const outgoing = graphData.edges.filter(e => e.from_node_id === node.id);
-
-  const getNode = (id: number) => graphData.nodes.find(n => n.id === id);
-
-  return (
-    <>
-      {incoming.length > 0 && (
-        <div style={styles.detailSection}>
-          <h4 style={styles.sectionTitle}>Incoming ({incoming.length})</h4>
-          {incoming.map(e => {
-            const n = getNode(e.from_node_id);
-            return (
-              <div key={e.id} onClick={() => onSelectNode(e.from_node_id)} style={styles.connection}>
-                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
-                <span>{truncate(n?.title || 'Unknown', 30)}</span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {outgoing.length > 0 && (
-        <div style={styles.detailSection}>
-          <h4 style={styles.sectionTitle}>Outgoing ({outgoing.length})</h4>
-          {outgoing.map(e => {
-            const n = getNode(e.to_node_id);
-            return (
-              <div key={e.id} onClick={() => onSelectNode(e.to_node_id)} style={styles.connection}>
-                <EdgeBadge type={e.edge_type} />
-                <TypeBadge type={n?.node_type || 'observation'} size="sm" />
-                <span>{truncate(n?.title || 'Unknown', 25)}</span>
-                {e.rationale && <span style={styles.rationale}>{e.rationale}</span>}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </>
   );
 };
 
@@ -400,16 +376,13 @@ const styles: Record<string, React.CSSProperties> = {
     position: 'relative',
     backgroundColor: '#ffffff',
   },
-  controls: {
-    position: 'absolute',
-    top: '20px',
-    left: '20px',
+  controlsSidebar: {
+    width: '220px',
+    flexShrink: 0,
     backgroundColor: '#f6f8fa',
-    border: '1px solid #d0d7de',
+    borderRight: '1px solid #d0d7de',
     padding: '15px',
-    borderRadius: '8px',
-    zIndex: 10,
-    maxWidth: '250px',
+    overflowY: 'auto',
   },
   title: {
     fontSize: '16px',
@@ -425,6 +398,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: '4px',
     color: '#24292f',
     fontSize: '13px',
+    boxSizing: 'border-box',
   },
   legend: {
     marginTop: '15px',
@@ -447,97 +421,10 @@ const styles: Record<string, React.CSSProperties> = {
   svgContainer: {
     flex: 1,
     height: '100%',
+    position: 'relative',
   },
   svg: {
     width: '100%',
     height: '100%',
-  },
-  detailPanel: {
-    position: 'absolute',
-    top: '20px',
-    right: '20px',
-    bottom: '20px',
-    width: '350px',
-    backgroundColor: '#ffffff',
-    border: '1px solid #d0d7de',
-    borderRadius: '8px',
-    padding: '20px',
-    overflowY: 'auto',
-    zIndex: 10,
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: '10px',
-    right: '10px',
-    width: '28px',
-    height: '28px',
-    border: 'none',
-    background: '#f6f8fa',
-    color: '#57606a',
-    borderRadius: '4px',
-    fontSize: '18px',
-    cursor: 'pointer',
-  },
-  detailHeader: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '10px',
-    flexWrap: 'wrap',
-  },
-  detailTitle: {
-    fontSize: '16px',
-    margin: '0 0 8px 0',
-    color: '#24292f',
-  },
-  detailMeta: {
-    fontSize: '12px',
-    color: '#6e7781',
-    margin: 0,
-  },
-  detailSection: {
-    marginTop: '20px',
-  },
-  sectionTitle: {
-    fontSize: '12px',
-    color: '#57606a',
-    margin: '0 0 10px 0',
-    textTransform: 'uppercase',
-  },
-  description: {
-    fontSize: '13px',
-    color: '#57606a',
-    lineHeight: 1.5,
-    margin: 0,
-  },
-  pathNode: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px',
-    backgroundColor: '#f6f8fa',
-    border: '1px solid #d0d7de',
-    borderRadius: '4px',
-    marginBottom: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    color: '#24292f',
-  },
-  connection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px',
-    backgroundColor: '#f6f8fa',
-    border: '1px solid #d0d7de',
-    borderRadius: '4px',
-    marginBottom: '6px',
-    cursor: 'pointer',
-    fontSize: '12px',
-    color: '#24292f',
-  },
-  rationale: {
-    color: '#6e7781',
-    fontSize: '11px',
-    marginLeft: 'auto',
   },
 };
