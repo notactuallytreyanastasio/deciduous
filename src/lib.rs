@@ -46,6 +46,7 @@ pub mod export;
 pub mod github;
 pub mod hooks;
 pub mod init;
+pub mod opencode;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
@@ -64,6 +65,7 @@ pub use export::{
     parse_node_range, DotConfig, WriteupConfig,
 };
 pub use hooks::{hooks_status, install_hooks, integration_status, uninstall_hooks};
+pub use opencode::{install_opencode, opencode_status, uninstall_opencode};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]
