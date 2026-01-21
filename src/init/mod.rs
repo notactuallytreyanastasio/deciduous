@@ -1,10 +1,11 @@
 //! Project initialization for deciduous
 //!
 //! `deciduous init` creates all the files needed for decision graph tracking
-//! with Claude Code integration.
+//! with AI assistant integration (Claude Code and/or OpenCode).
 
 pub mod templates;
 
+use crate::opencode;
 use colored::Colorize;
 use std::fs;
 use std::path::Path;
@@ -15,14 +16,27 @@ use templates::{
     PAGES_VIEWER_HTML, RECOVER_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, WORK_MD,
 };
 
-/// Initialize a new deciduous project with Claude Code integration
-pub fn init_project() -> Result<(), String> {
+/// Initialize a new deciduous project with AI assistant integration
+///
+/// # Arguments
+/// * `setup_claude` - Whether to set up Claude Code integration
+/// * `setup_opencode` - Whether to set up OpenCode integration
+pub fn init_project(setup_claude: bool, setup_opencode: bool) -> Result<(), String> {
     let cwd =
         std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
+    let assistant_name = match (setup_claude, setup_opencode) {
+        (true, true) => "Claude Code + OpenCode",
+        (true, false) => "Claude Code",
+        (false, true) => "OpenCode",
+        (false, false) => return Err("At least one assistant must be selected".to_string()),
+    };
+
     println!(
         "\n{}",
-        "Initializing Deciduous for Claude Code...".cyan().bold()
+        format!("Initializing Deciduous for {}...", assistant_name)
+            .cyan()
+            .bold()
     );
     println!("   Directory: {}\n", cwd.display());
 
@@ -59,80 +73,87 @@ pub fn init_project() -> Result<(), String> {
     // Set the env var so Database::open() uses this path
     std::env::set_var("DECIDUOUS_DB_PATH", &db_path);
 
-    // 3. Create Claude Code configuration
-    // Create .claude/commands directory
-    let claude_dir = cwd.join(".claude").join("commands");
-    create_dir_if_missing(&claude_dir)?;
+    // 3. Create Claude Code configuration (if enabled)
+    if setup_claude {
+        // Create .claude/commands directory
+        let claude_dir = cwd.join(".claude").join("commands");
+        create_dir_if_missing(&claude_dir)?;
 
-    // Write decision.md slash command
-    let decision_path = claude_dir.join("decision.md");
-    write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
+        // Write decision.md slash command
+        let decision_path = claude_dir.join("decision.md");
+        write_file_if_missing(&decision_path, DECISION_MD, ".claude/commands/decision.md")?;
 
-    // Write recover.md slash command
-    let recover_path = claude_dir.join("recover.md");
-    write_file_if_missing(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
+        // Write recover.md slash command
+        let recover_path = claude_dir.join("recover.md");
+        write_file_if_missing(&recover_path, RECOVER_MD, ".claude/commands/recover.md")?;
 
-    // Write work.md slash command (transaction model)
-    let work_path = claude_dir.join("work.md");
-    write_file_if_missing(&work_path, WORK_MD, ".claude/commands/work.md")?;
+        // Write work.md slash command (transaction model)
+        let work_path = claude_dir.join("work.md");
+        write_file_if_missing(&work_path, WORK_MD, ".claude/commands/work.md")?;
 
-    // Write agents.toml for subagent configuration
-    let claude_base = cwd.join(".claude");
-    let agents_path = claude_base.join("agents.toml");
-    write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
+        // Write agents.toml for subagent configuration
+        let claude_base = cwd.join(".claude");
+        let agents_path = claude_base.join("agents.toml");
+        write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
 
-    // Create .claude/hooks directory and write enforcement hooks
-    let hooks_dir = claude_base.join("hooks");
-    create_dir_if_missing(&hooks_dir)?;
+        // Create .claude/hooks directory and write enforcement hooks
+        let hooks_dir = claude_base.join("hooks");
+        create_dir_if_missing(&hooks_dir)?;
 
-    // Write require-action-node.sh hook
-    let require_action_path = hooks_dir.join("require-action-node.sh");
-    write_executable_if_missing(
-        &require_action_path,
-        HOOK_REQUIRE_ACTION_NODE,
-        ".claude/hooks/require-action-node.sh",
-    )?;
+        // Write require-action-node.sh hook
+        let require_action_path = hooks_dir.join("require-action-node.sh");
+        write_executable_if_missing(
+            &require_action_path,
+            HOOK_REQUIRE_ACTION_NODE,
+            ".claude/hooks/require-action-node.sh",
+        )?;
 
-    // Write post-commit-reminder.sh hook
-    let post_commit_path = hooks_dir.join("post-commit-reminder.sh");
-    write_executable_if_missing(
-        &post_commit_path,
-        HOOK_POST_COMMIT_REMINDER,
-        ".claude/hooks/post-commit-reminder.sh",
-    )?;
+        // Write post-commit-reminder.sh hook
+        let post_commit_path = hooks_dir.join("post-commit-reminder.sh");
+        write_executable_if_missing(
+            &post_commit_path,
+            HOOK_POST_COMMIT_REMINDER,
+            ".claude/hooks/post-commit-reminder.sh",
+        )?;
 
-    // Write settings.json with hooks configuration
-    let settings_path = claude_base.join("settings.json");
-    write_file_if_missing(
-        &settings_path,
-        CLAUDE_SETTINGS_JSON,
-        ".claude/settings.json",
-    )?;
+        // Write settings.json with hooks configuration
+        let settings_path = claude_base.join("settings.json");
+        write_file_if_missing(
+            &settings_path,
+            CLAUDE_SETTINGS_JSON,
+            ".claude/settings.json",
+        )?;
 
-    // Create .claude/skills directory and write skill files
-    let skills_dir = claude_base.join("skills");
-    create_dir_if_missing(&skills_dir)?;
+        // Create .claude/skills directory and write skill files
+        let skills_dir = claude_base.join("skills");
+        create_dir_if_missing(&skills_dir)?;
 
-    let pulse_path = skills_dir.join("pulse.md");
-    write_file_if_missing(&pulse_path, SKILL_PULSE, ".claude/skills/pulse.md")?;
+        let pulse_path = skills_dir.join("pulse.md");
+        write_file_if_missing(&pulse_path, SKILL_PULSE, ".claude/skills/pulse.md")?;
 
-    let narratives_path = skills_dir.join("narratives.md");
-    write_file_if_missing(
-        &narratives_path,
-        SKILL_NARRATIVES,
-        ".claude/skills/narratives.md",
-    )?;
+        let narratives_path = skills_dir.join("narratives.md");
+        write_file_if_missing(
+            &narratives_path,
+            SKILL_NARRATIVES,
+            ".claude/skills/narratives.md",
+        )?;
 
-    let archaeology_path = skills_dir.join("archaeology.md");
-    write_file_if_missing(
-        &archaeology_path,
-        SKILL_ARCHAEOLOGY,
-        ".claude/skills/archaeology.md",
-    )?;
+        let archaeology_path = skills_dir.join("archaeology.md");
+        write_file_if_missing(
+            &archaeology_path,
+            SKILL_ARCHAEOLOGY,
+            ".claude/skills/archaeology.md",
+        )?;
 
-    // Append to or create CLAUDE.md
-    let claude_md_path = cwd.join("CLAUDE.md");
-    append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+        // Append to or create CLAUDE.md
+        let claude_md_path = cwd.join("CLAUDE.md");
+        append_config_md(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+    }
+
+    // 3b. Create OpenCode configuration (if enabled)
+    if setup_opencode {
+        opencode::install_opencode(&cwd)?;
+    }
 
     // 4. Add .deciduous to .gitignore
     add_to_gitignore(&cwd)?;
@@ -186,7 +207,9 @@ pub fn init_project() -> Result<(), String> {
 
     println!(
         "\n{}",
-        "Deciduous initialized for Claude Code!".green().bold()
+        format!("Deciduous initialized for {}!", assistant_name)
+            .green()
+            .bold()
     );
     println!("\nNext steps:");
     println!(
@@ -221,17 +244,10 @@ pub fn init_project() -> Result<(), String> {
 }
 
 /// Update tooling files to the latest version (overwrites existing)
+/// Auto-detects which assistants are installed (.claude/ and/or .opencode/)
 pub fn update_tooling() -> Result<(), String> {
     let cwd =
         std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
-
-    println!(
-        "\n{}",
-        "Updating Deciduous tooling for Claude Code..."
-            .cyan()
-            .bold()
-    );
-    println!("   Directory: {}\n", cwd.display());
 
     // Verify .deciduous exists
     let deciduous_dir = cwd.join(".deciduous");
@@ -242,6 +258,79 @@ pub fn update_tooling() -> Result<(), String> {
         );
     }
 
+    // Auto-detect which assistants are installed
+    let claude_dir = cwd.join(".claude");
+    let opencode_dir = cwd.join(".opencode");
+
+    let has_claude = claude_dir.exists();
+    let has_opencode = opencode_dir.exists();
+
+    if !has_claude && !has_opencode {
+        return Err(
+            "No assistant integration found. Run 'deciduous init' first, or use 'deciduous init --opencode' / 'deciduous init --claude'."
+                .to_string(),
+        );
+    }
+
+    let assistant_name = match (has_claude, has_opencode) {
+        (true, true) => "Claude Code + OpenCode",
+        (true, false) => "Claude Code",
+        (false, true) => "OpenCode",
+        (false, false) => unreachable!(),
+    };
+
+    println!(
+        "\n{}",
+        format!("Updating Deciduous tooling for {}...", assistant_name)
+            .cyan()
+            .bold()
+    );
+    println!("   Directory: {}\n", cwd.display());
+
+    // Update Claude Code if installed
+    if has_claude {
+        update_claude_code(&cwd)?;
+    }
+
+    // Update OpenCode if installed
+    if has_opencode {
+        opencode::update_opencode(&cwd)?;
+    }
+
+    // Write version file for auto-update detection
+    if deciduous_dir.exists() {
+        let version_path = deciduous_dir.join(".version");
+        let version = env!("CARGO_PKG_VERSION");
+        fs::write(&version_path, version)
+            .map_err(|e| format!("Could not write version file: {}", e))?;
+        println!("   {} .deciduous/.version ({})", "Updated".green(), version);
+    }
+
+    println!(
+        "\n{}",
+        format!("Tooling updated for {}!", assistant_name)
+            .green()
+            .bold()
+    );
+    println!("\nUpdated files contain the latest:");
+    println!("  - Slash commands (/decision, /recover, /work)");
+    println!("  - Skills (/pulse, /narratives, /archaeology)");
+    if has_claude {
+        println!("  - Enforcement hooks (block edits without action nodes)");
+        println!("  - Post-commit reminders (link commits to graph)");
+        println!("  - Agent configurations (agents.toml)");
+    }
+    if has_opencode {
+        println!("  - OpenCode plugins (TypeScript hooks)");
+        println!("  - OpenCode configuration (opencode.json)");
+    }
+    println!();
+
+    Ok(())
+}
+
+/// Update Claude Code tooling files
+fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     // Create .claude/commands directory if needed
     let claude_dir = cwd.join(".claude").join("commands");
     create_dir_if_missing(&claude_dir)?;
@@ -307,24 +396,6 @@ pub fn update_tooling() -> Result<(), String> {
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");
     replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
-
-    // Write version file for auto-update detection
-    if deciduous_dir.exists() {
-        let version_path = deciduous_dir.join(".version");
-        let version = env!("CARGO_PKG_VERSION");
-        fs::write(&version_path, version)
-            .map_err(|e| format!("Could not write version file: {}", e))?;
-        println!("   {} .deciduous/.version ({})", "Updated".green(), version);
-    }
-
-    println!("\n{}", "Tooling updated for Claude Code!".green().bold());
-    println!("\nUpdated files contain the latest:");
-    println!("  - Slash commands (/decision, /recover, /work)");
-    println!("  - Skills (/pulse, /narratives, /archaeology)");
-    println!("  - Enforcement hooks (block edits without action nodes)");
-    println!("  - Post-commit reminders (link commits to graph)");
-    println!("  - Agent configurations (agents.toml)");
-    println!();
 
     Ok(())
 }

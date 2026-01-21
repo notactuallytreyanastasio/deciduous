@@ -26,14 +26,29 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    /// Initialize deciduous in current directory (creates .claude/commands/ and CLAUDE.md)
-    Init {},
-
-    /// Update Claude integration files to latest version
+    /// Initialize deciduous in current directory
     ///
-    /// Overwrites: .claude/commands/, .claude/skills/, .claude/hooks/,
-    /// .claude/agents.toml, and CLAUDE.md workflow section.
-    /// Does NOT touch: .claude/settings.json, .deciduous/config.toml, docs/
+    /// Sets up the decision graph database and AI assistant integration.
+    /// By default, sets up Claude Code. Use flags to choose assistants.
+    Init {
+        /// Set up Claude Code integration (.claude/, CLAUDE.md)
+        #[arg(long)]
+        claude: bool,
+
+        /// Set up OpenCode integration (.opencode/, AGENTS.md)
+        #[arg(long)]
+        opencode: bool,
+
+        /// Set up both Claude Code and OpenCode
+        #[arg(long)]
+        both: bool,
+    },
+
+    /// Update AI assistant integration files to latest version
+    ///
+    /// Auto-detects which assistants are installed (.claude/, .opencode/)
+    /// and updates their integration files.
+    /// Does NOT touch: settings files, .deciduous/config.toml, docs/
     Update {},
 
     /// Check if deciduous integration files need updating
@@ -509,8 +524,28 @@ fn main() {
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
-    if let Command::Init {} = args.command {
-        if let Err(e) = deciduous::init::init_project() {
+    if let Command::Init {
+        claude,
+        opencode,
+        both,
+    } = args.command
+    {
+        // Determine which assistants to set up
+        let (setup_claude, setup_opencode) = if both {
+            (true, true)
+        } else if opencode && !claude {
+            (false, true)
+        } else if claude && !opencode {
+            (true, false)
+        } else if !claude && !opencode {
+            // Default: Claude Code only (backward compatible)
+            (true, false)
+        } else {
+            // Both flags specified
+            (true, true)
+        };
+
+        if let Err(e) = deciduous::init::init_project(setup_claude, setup_opencode) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -518,6 +553,7 @@ fn main() {
     }
 
     // Handle update separately - it doesn't need an existing database
+    // Auto-detects which assistants are installed
     if let Command::Update {} = args.command {
         if let Err(e) = deciduous::init::update_tooling() {
             eprintln!("{} {}", "Error:".red(), e);
