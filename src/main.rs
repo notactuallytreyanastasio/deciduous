@@ -304,6 +304,12 @@ enum Command {
         action: RoadmapAction,
     },
 
+    /// Manage Claude Code hooks (pre-edit blocks, post-commit reminders)
+    Hooks {
+        #[command(subcommand)]
+        action: HooksAction,
+    },
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
@@ -457,6 +463,21 @@ enum RoadmapAction {
         #[arg(long)]
         complete: bool,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum HooksAction {
+    /// Install Claude Code hooks from config
+    ///
+    /// Generates shell scripts in .claude/hooks/ and settings.json
+    /// based on hooks defined in .deciduous/config.toml
+    Install {},
+
+    /// Show status of configured and installed hooks
+    Status {},
+
+    /// Uninstall hooks (remove .claude/hooks/ and clear settings.json)
+    Uninstall {},
 }
 
 fn main() {
@@ -2814,6 +2835,54 @@ fn main() {
                             "Note:".dimmed()
                         );
                     }
+                }
+            }
+        }
+
+        Command::Hooks { action } => {
+            // Hooks commands don't need the database
+            match action {
+                HooksAction::Install {} => {
+                    let project_root = Config::find_project_root().unwrap_or_else(|| {
+                        std::env::current_dir().expect("Could not get current directory")
+                    });
+
+                    println!("\n{}", "Installing Claude Code hooks...".cyan().bold());
+                    if let Err(e) = deciduous::hooks::install_hooks(&project_root) {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                    println!("\n{}", "Hooks installed successfully!".green().bold());
+                    println!();
+                    println!("The following hooks are now active:");
+                    println!(
+                        "  • {} - blocks Edit/Write without recent action node",
+                        "require-action-node".cyan()
+                    );
+                    println!(
+                        "  • {} - reminds to link commits to graph",
+                        "post-commit-reminder".cyan()
+                    );
+                    println!();
+                }
+                HooksAction::Status {} => {
+                    if let Err(e) = deciduous::hooks::hooks_status() {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+                HooksAction::Uninstall {} => {
+                    let project_root = Config::find_project_root().unwrap_or_else(|| {
+                        std::env::current_dir().expect("Could not get current directory")
+                    });
+
+                    println!("\n{}", "Uninstalling Claude Code hooks...".cyan().bold());
+                    if let Err(e) = deciduous::hooks::uninstall_hooks(&project_root) {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                    println!("\n{}", "Hooks uninstalled.".green().bold());
+                    println!();
                 }
             }
         }
