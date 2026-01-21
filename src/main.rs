@@ -313,6 +313,12 @@ enum Command {
     /// Show Claude Code integration status (hooks, commands, skills)
     Integration {},
 
+    /// Manage OpenCode integration (plugins, commands, AGENTS.md)
+    Opencode {
+        #[command(subcommand)]
+        action: OpencodeAction,
+    },
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
@@ -480,6 +486,22 @@ enum HooksAction {
     Status {},
 
     /// Uninstall hooks (remove .claude/hooks/ and clear settings.json)
+    Uninstall {},
+}
+
+#[derive(Subcommand, Debug)]
+enum OpencodeAction {
+    /// Install OpenCode integration (plugins, commands, AGENTS.md)
+    ///
+    /// Creates .opencode/plugin/ with TypeScript plugins,
+    /// .opencode/command/ with custom commands,
+    /// opencode.json config, and AGENTS.md instructions.
+    Install {},
+
+    /// Show status of OpenCode integration
+    Status {},
+
+    /// Uninstall OpenCode integration (remove .opencode/)
     Uninstall {},
 }
 
@@ -2896,6 +2918,38 @@ fn main() {
                 std::process::exit(1);
             }
         }
+
+        Command::Opencode { action } => match action {
+            OpencodeAction::Install {} => {
+                let project_root = Config::find_project_root().unwrap_or_else(|| {
+                    std::env::current_dir().expect("Could not get current directory")
+                });
+
+                if let Err(e) = deciduous::opencode::install_opencode(&project_root) {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+            OpencodeAction::Status {} => {
+                if let Err(e) = deciduous::opencode::opencode_status() {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+            OpencodeAction::Uninstall {} => {
+                let project_root = Config::find_project_root().unwrap_or_else(|| {
+                    std::env::current_dir().expect("Could not get current directory")
+                });
+
+                println!("\n{}", "Uninstalling OpenCode integration...".cyan().bold());
+                if let Err(e) = deciduous::opencode::uninstall_opencode(&project_root) {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+                println!("\n{}", "OpenCode integration uninstalled.".green().bold());
+                println!();
+            }
+        },
     }
 
     // Show update reminder if integration files are outdated
