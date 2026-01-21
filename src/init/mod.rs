@@ -3,7 +3,7 @@
 //! `deciduous init` creates all the files needed for decision graph tracking
 //! with Claude Code integration.
 
-mod templates;
+pub mod templates;
 
 use colored::Colorize;
 use std::fs;

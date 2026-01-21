@@ -44,6 +44,7 @@ pub mod db;
 pub mod diff;
 pub mod export;
 pub mod github;
+pub mod hooks;
 pub mod init;
 pub mod roadmap;
 pub mod schema;
@@ -62,6 +63,7 @@ pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
     parse_node_range, DotConfig, WriteupConfig,
 };
+pub use hooks::{hooks_status, install_hooks, uninstall_hooks};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]
