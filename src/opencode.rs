@@ -789,16 +789,11 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
     }
 
     // Generate opencode.json config
+    // Note: Plugins are auto-loaded from .opencode/plugin/, not configured in JSON
+    // Instructions/rules go in AGENTS.md, referenced via the 'instructions' key
     let opencode_config = json!({
-        "plugins": {
-            "require-action-node": true,
-            "post-commit-reminder": true
-        },
-        "rules": [
-            "Follow the decision graph workflow: log BEFORE you code",
-            "Link every commit to the decision graph",
-            "Capture verbatim user prompts on goal nodes"
-        ]
+        "$schema": "https://opencode.ai/config.json",
+        "instructions": ["AGENTS.md"]
     });
 
     let config_path = project_root.join("opencode.json");
