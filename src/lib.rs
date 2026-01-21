@@ -63,7 +63,7 @@ pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
     parse_node_range, DotConfig, WriteupConfig,
 };
-pub use hooks::{hooks_status, install_hooks, uninstall_hooks};
+pub use hooks::{hooks_status, install_hooks, integration_status, uninstall_hooks};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]

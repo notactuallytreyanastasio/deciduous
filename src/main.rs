@@ -310,6 +310,9 @@ enum Command {
         action: HooksAction,
     },
 
+    /// Show Claude Code integration status (hooks, commands, skills)
+    Integration {},
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
@@ -2884,6 +2887,13 @@ fn main() {
                     println!("\n{}", "Hooks uninstalled.".green().bold());
                     println!();
                 }
+            }
+        }
+
+        Command::Integration {} => {
+            if let Err(e) = deciduous::hooks::integration_status() {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
             }
         }
     }
