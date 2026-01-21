@@ -278,6 +278,165 @@ pub fn uninstall_hooks(project_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// Show full Claude Code integration status (hooks, commands, skills, agents)
+pub fn integration_status() -> Result<(), String> {
+    let project_root = Config::find_project_root();
+
+    println!("\n{}", "Claude Code Integration Status".cyan().bold());
+    println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+
+    let Some(project_root) = project_root else {
+        println!(
+            "\n   {} Could not find project root (.deciduous directory)",
+            "Error:".red()
+        );
+        println!("   Run 'deciduous init' to initialize the project.");
+        return Ok(());
+    };
+
+    let claude_dir = project_root.join(".claude");
+    if !claude_dir.exists() {
+        println!("\n   {} .claude directory not found", "Warning:".yellow());
+        println!("   Run 'deciduous init' or 'deciduous update' to create it.");
+        return Ok(());
+    }
+
+    // === Hooks ===
+    println!("\n{}", "Hooks:".cyan());
+    let hooks_dir = claude_dir.join("hooks");
+    if hooks_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&hooks_dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "sh"))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if entries.is_empty() {
+            println!("   {} (no hooks installed)", "○".yellow());
+        } else {
+            for entry in entries {
+                let name = entry.file_name().to_string_lossy().to_string();
+                println!("   {} {}", "✓".green(), name);
+            }
+        }
+    } else {
+        println!("   {} (not installed)", "○".yellow());
+        println!("   Run 'deciduous hooks install' to install hooks");
+    }
+
+    // === Commands (slash commands) ===
+    println!("\n{}", "Slash Commands:".cyan());
+    let commands_dir = claude_dir.join("commands");
+    if commands_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&commands_dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if entries.is_empty() {
+            println!("   {} (no commands installed)", "○".yellow());
+        } else {
+            for entry in entries {
+                let name = entry
+                    .path()
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                println!("   {} /{}", "✓".green(), name);
+            }
+        }
+    } else {
+        println!("   {} (not installed)", "○".yellow());
+    }
+
+    // === Skills ===
+    println!("\n{}", "Skills:".cyan());
+    let skills_dir = claude_dir.join("skills");
+    if skills_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&skills_dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if entries.is_empty() {
+            println!("   {} (no skills installed)", "○".yellow());
+        } else {
+            for entry in entries {
+                let name = entry
+                    .path()
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                println!("   {} /{}", "✓".green(), name);
+            }
+        }
+    } else {
+        println!("   {} (not installed)", "○".yellow());
+    }
+
+    // === Agents ===
+    println!("\n{}", "Agents:".cyan());
+    let agents_path = claude_dir.join("agents.toml");
+    if agents_path.exists() {
+        // Try to parse agents.toml to count agents
+        if let Ok(contents) = fs::read_to_string(&agents_path) {
+            let agent_count = contents.matches("[agents.").count();
+            if agent_count > 0 {
+                println!("   {} {} agent(s) configured", "✓".green(), agent_count);
+
+                // Extract agent names
+                for line in contents.lines() {
+                    if line.starts_with("[agents.") && line.ends_with(']') {
+                        let name = line.trim_start_matches("[agents.").trim_end_matches(']');
+                        println!("      • {}", name);
+                    }
+                }
+            } else {
+                println!(
+                    "   {} agents.toml exists but no agents defined",
+                    "○".yellow()
+                );
+            }
+        } else {
+            println!("   {} agents.toml exists", "✓".green());
+        }
+    } else {
+        println!("   {} (not configured)", "○".yellow());
+    }
+
+    // === Settings ===
+    println!("\n{}", "Settings:".cyan());
+    let settings_path = claude_dir.join("settings.json");
+    let settings_local_path = claude_dir.join("settings.local.json");
+
+    if settings_path.exists() {
+        println!("   {} settings.json", "✓".green());
+    } else {
+        println!("   {} settings.json (not found)", "○".yellow());
+    }
+
+    if settings_local_path.exists() {
+        println!("   {} settings.local.json", "✓".green());
+    }
+
+    println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    println!(
+        "\nRun {} to install/update Claude Code integration files.",
+        "'deciduous update'".cyan()
+    );
+    println!();
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
