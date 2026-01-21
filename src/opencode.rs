@@ -17,94 +17,52 @@ use std::path::Path;
 
 /// OpenCode plugin for requiring action nodes before edits
 pub const PLUGIN_REQUIRE_ACTION_NODE: &str = r#"// OpenCode Plugin: Require Action Node
-// Blocks file edits if no recent action/goal node exists in the decision graph
+// Checks for recent action/goal nodes before file edits
 // This enforces the decision graph workflow: log BEFORE you code
 
-import { definePlugin } from "opencode/plugin";
-import { exec } from "child_process";
-import { promisify } from "util";
+import type { Plugin } from "@opencode-ai/plugin"
 
-const execAsync = promisify(exec);
+export const RequireActionNode: Plugin = async ({ $ }) => {
+  return {
+    "tool.execute.before": async (input, output) => {
+      // Only check on edit and write tools
+      if (input.tool !== "edit" && input.tool !== "write") {
+        return
+      }
 
-// How many minutes before an action node is considered "stale"
-const STALE_MINUTES = 15;
-
-export default definePlugin({
-  name: "require-action-node",
-  description: "Blocks edits without recent action/goal node in decision graph",
-
-  hooks: {
-    // Before any file edit operation
-    beforeEdit: async (context) => {
       try {
         // Get recent nodes from deciduous
-        const { stdout } = await execAsync("deciduous nodes --branch $(git branch --show-current 2>/dev/null || echo main) 2>/dev/null | head -20");
+        const result = await $`deciduous nodes 2>/dev/null | head -20`.quiet()
+        const stdout = result.stdout.toString()
 
-        const lines = stdout.trim().split("\n").filter(l => l.trim());
-        if (lines.length === 0) {
-          return {
-            allow: false,
-            message: `
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: Create a goal/action node before editing!             ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  No nodes found. Run:                                             ║
-║    deciduous add goal "What you're trying to achieve" -c 90       ║
-║  Then:                                                            ║
-║    deciduous add action "What you're about to do" -c 85           ║
-╚═══════════════════════════════════════════════════════════════════╝
-`
-          };
-        }
+        const lines = stdout.trim().split("\n").filter((l: string) => l.trim())
 
-        // Check for recent goal or action node (within STALE_MINUTES)
-        const now = Date.now();
-        const staleThreshold = now - (STALE_MINUTES * 60 * 1000);
-
-        let hasRecentNode = false;
+        // Check for any goal or action node
+        let hasRecentNode = false
         for (const line of lines) {
-          // Parse node line: ID | Type | Status | Title | Created
-          const match = line.match(/^\s*(\d+)\s*\|\s*(goal|action)\s*\|/i);
-          if (match) {
-            // Found a goal or action node - check if it's recent enough
-            // For simplicity, we'll trust that the most recent nodes are shown first
-            hasRecentNode = true;
-            break;
+          if (line.match(/goal|action/i)) {
+            hasRecentNode = true
+            break
           }
         }
 
-        if (!hasRecentNode) {
-          return {
-            allow: false,
-            message: `
+        if (!hasRecentNode && lines.length > 2) {
+          // Show a toast reminder but don't block
+          console.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: No recent goal/action node found!                     ║
+║  DECIDUOUS: Consider adding a goal/action node!                   ║
 ╠═══════════════════════════════════════════════════════════════════╣
 ║  Before editing files, log what you're about to do:               ║
 ║    deciduous add action "Your action description" -c 85           ║
-║                                                                   ║
-║  Or start with a goal:                                            ║
-║    deciduous add goal "What you're trying to achieve" -c 90       ║
 ╚═══════════════════════════════════════════════════════════════════╝
-`
-          };
+`)
         }
-
-        return { allow: true };
       } catch (error) {
-        // If deciduous isn't available, allow the edit but warn
-        console.warn("[require-action-node] Warning: Could not check decision graph:", error);
-        return { allow: true };
+        // If deciduous isn't available, continue silently
       }
-    },
-
-    // Before file write operations
-    beforeWrite: async (context) => {
-      // Same logic as beforeEdit
-      return this.hooks.beforeEdit(context);
     }
   }
-});
+}
 "#;
 
 /// OpenCode plugin for post-commit reminders
@@ -112,59 +70,48 @@ pub const PLUGIN_POST_COMMIT_REMINDER: &str = r#"// OpenCode Plugin: Post-Commit
 // Reminds to link commits to the decision graph after git commit
 // This ensures commits are connected to the reasoning that led to them
 
-import { definePlugin } from "opencode/plugin";
+import type { Plugin } from "@opencode-ai/plugin"
 
-export default definePlugin({
-  name: "post-commit-reminder",
-  description: "Reminds to link git commits to decision graph",
-
-  hooks: {
-    // After bash command execution
-    afterBash: async (context) => {
-      const { command, result } = context;
+export const PostCommitReminder: Plugin = async ({ $ }) => {
+  return {
+    "tool.execute.after": async (input) => {
+      // Only check bash tool
+      if (input.tool !== "bash") {
+        return
+      }
 
       // Check if this was a git commit command
-      if (!command.includes("git commit") && !command.includes("git commit")) {
-        return;
+      const command = input.args?.command || ""
+      if (!command.includes("git commit")) {
+        return
       }
 
-      // Check if commit was successful
-      if (result.exitCode !== 0) {
-        return;
-      }
+      try {
+        // Get the latest commit info
+        const hashResult = await $`git rev-parse --short HEAD 2>/dev/null`.quiet()
+        const msgResult = await $`git log -1 --format=%s 2>/dev/null`.quiet()
 
-      // Extract commit info from the output
-      let commitHash = "HEAD";
-      let commitMsg = "";
+        const commitHash = hashResult.stdout.toString().trim()
+        const commitMsg = msgResult.stdout.toString().trim().slice(0, 50)
 
-      const hashMatch = result.stdout.match(/\[[\w-]+\s+([a-f0-9]+)\]/);
-      if (hashMatch) {
-        commitHash = hashMatch[1];
-      }
-
-      const msgMatch = result.stdout.match(/\[[\w-]+\s+[a-f0-9]+\]\s+(.+)/);
-      if (msgMatch) {
-        commitMsg = msgMatch[1];
-      }
-
-      // Show reminder
-      console.log(`
+        // Show reminder
+        console.log(`
 ╔═══════════════════════════════════════════════════════════════════╗
 ║  DECIDUOUS: Link this commit to the decision graph!               ║
 ╠═══════════════════════════════════════════════════════════════════╣
-║  Commit: ${commitHash.slice(0, 7)} "${commitMsg.slice(0, 50)}"
+║  Commit: ${commitHash} "${commitMsg}"
 ║                                                                   ║
 ║  Run NOW:                                                         ║
 ║    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-║    deciduous link <action_id> <outcome_id> -r "Implementation complete"
-║                                                                   ║
-║  Or if this was an action (not outcome):                          ║
-║    deciduous add action "What was done" -c 90 --commit HEAD       ║
+║    deciduous link <action_id> <outcome_id> -r "Implementation"    ║
 ╚═══════════════════════════════════════════════════════════════════╝
-`);
+`)
+      } catch (error) {
+        // If git commands fail, skip the reminder
+      }
     }
   }
-});
+}
 "#;
 
 /// OpenCode command template: /work
