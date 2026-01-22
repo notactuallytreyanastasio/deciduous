@@ -1167,7 +1167,8 @@ mod tests {
 
         let result = install_opencode(project_root);
 
-        std::env::set_current_dir(original_dir).unwrap();
+        // Restore original dir - ignore errors since parallel tests may have changed it
+        let _ = std::env::set_current_dir(original_dir);
 
         assert!(result.is_ok());
 

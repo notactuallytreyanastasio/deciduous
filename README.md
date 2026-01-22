@@ -46,12 +46,47 @@ This isn't documentation written after the fact. It's a real-time record of *how
 
 ---
 
+## Installation
+
+### Pre-built Binaries (Recommended)
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/notactuallytreyanastasio/deciduous/releases):
+
+| Platform | Binary |
+|----------|--------|
+| Linux (x86_64) | `deciduous-linux-amd64` |
+| Linux (ARM64) | `deciduous-linux-arm64` |
+| macOS (Intel) | `deciduous-darwin-amd64` |
+| macOS (Apple Silicon) | `deciduous-darwin-arm64` |
+| Windows | `deciduous-windows-amd64.exe` |
+
+```bash
+# Example: Linux/macOS
+curl -LO https://github.com/notactuallytreyanastasio/deciduous/releases/latest/download/deciduous-darwin-arm64
+chmod +x deciduous-darwin-arm64
+sudo mv deciduous-darwin-arm64 /usr/local/bin/deciduous
+```
+
+### Via Cargo
+
+```bash
+cargo install deciduous
+```
+
+### From Source
+
+```bash
+git clone https://github.com/notactuallytreyanastasio/deciduous.git
+cd deciduous
+cargo build --release
+# Binary at target/release/deciduous
+```
+
+---
+
 ## Quick Start
 
 ```bash
-# Install
-cargo install deciduous
-
 # Initialize in your project
 cd your-project
 deciduous init
@@ -424,26 +459,6 @@ deciduous migrate            # Add change_id columns for sync
 deciduous completion zsh     # Add: source <(deciduous completion zsh)
 deciduous completion bash
 deciduous completion fish
-```
-
----
-
-## Building from Source
-
-```bash
-git clone https://github.com/notactuallytreyanastasio/deciduous.git
-cd deciduous
-cargo build --release
-```
-
-### macOS Note
-
-The `syntect` crate requires `libiconv`:
-
-```bash
-brew install libiconv
-export LIBRARY_PATH="/opt/homebrew/opt/libiconv/lib:$LIBRARY_PATH"
-cargo build --release
 ```
 
 ---

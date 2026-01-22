@@ -16,6 +16,9 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-musl
             name: linux-amd64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            name: linux-arm64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             name: windows-amd64
@@ -37,90 +40,47 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install musl-tools (Linux)
-        if: matrix.os == 'ubuntu-latest'
+      - name: Install musl-tools (Linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
         run: sudo apt-get update && sudo apt-get install -y musl-tools
 
-      - name: Build
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.target == 'aarch64-unknown-linux-musl'
         run: |
-          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
-            # Linux: build without GUI (avoids wayland/GTK dependencies for static binary)
-            cargo build --release --target ${{ matrix.target }} --no-default-features
-          else
-            # macOS/Windows: build with GUI
-            cargo build --release --target ${{ matrix.target }}
-          fi
-        shell: bash
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+          # Install cross for ARM64 cross-compilation
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Build (Linux x86_64)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Build (Linux ARM64 with cross)
+        if: matrix.target == 'aarch64-unknown-linux-musl'
+        run: cross build --release --target ${{ matrix.target }}
+
+      - name: Build (macOS/Windows)
+        if: matrix.os != 'ubuntu-latest'
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Rename binary
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp target/${{ matrix.target }}/release/losselot.exe losselot-${{ matrix.name }}.exe
+            cp target/${{ matrix.target }}/release/deciduous.exe deciduous-${{ matrix.name }}.exe
           else
-            cp target/${{ matrix.target }}/release/losselot losselot-${{ matrix.name }}
+            cp target/${{ matrix.target }}/release/deciduous deciduous-${{ matrix.name }}
           fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: losselot-${{ matrix.name }}
-          path: losselot-${{ matrix.name }}${{ matrix.ext }}
-
-  build-appimage:
-    runs-on: ubuntu-22.04
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libgtk-3-dev \
-            libxdo-dev \
-            libfuse2 \
-            librsvg2-bin
-
-      - name: Build with GUI
-        run: cargo build --release
-
-      - name: Download linuxdeploy
-        run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod +x linuxdeploy-x86_64.AppImage
-
-      - name: Create AppDir
-        run: |
-          mkdir -p AppDir/usr/bin
-          mkdir -p AppDir/usr/share/applications
-          mkdir -p AppDir/usr/share/icons/hicolor/scalable/apps
-          cp target/release/losselot AppDir/usr/bin/
-          cp appimage/losselot.desktop AppDir/usr/share/applications/
-          cp appimage/losselot.svg AppDir/usr/share/icons/hicolor/scalable/apps/
-          # Create PNG icon for compatibility
-          rsvg-convert -w 256 -h 256 appimage/losselot.svg -o AppDir/usr/share/icons/hicolor/256x256/apps/losselot.png || true
-          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps || true
-
-      - name: Build AppImage
-        run: |
-          export VERSION=${{ github.ref_name }}
-          ./linuxdeploy-x86_64.AppImage --appdir AppDir --output appimage \
-            --desktop-file appimage/losselot.desktop \
-            --icon-file appimage/losselot.svg
-          mv Losselot-*.AppImage losselot-linux-amd64.AppImage || mv *.AppImage losselot-linux-amd64.AppImage
-
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: losselot-linux-appimage
-          path: losselot-linux-amd64.AppImage
+          name: deciduous-${{ matrix.name }}
+          path: deciduous-${{ matrix.name }}${{ matrix.ext }}
 
   release:
-    needs: [build, build-appimage]
+    needs: [build]
     runs-on: ubuntu-latest
 
     steps:
@@ -131,15 +91,32 @@ jobs:
         with:
           path: artifacts
 
+      - name: Display structure of downloaded files
+        run: ls -la artifacts/*/
+
+      - name: Create checksums
+        run: |
+          cd artifacts
+          for dir in */; do
+            for file in "$dir"*; do
+              if [ -f "$file" ]; then
+                sha256sum "$file" >> ../checksums.txt
+              fi
+            done
+          done
+          cd ..
+          cat checksums.txt
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           files: |
-            artifacts/losselot-linux-amd64/losselot-linux-amd64
-            artifacts/losselot-linux-appimage/losselot-linux-amd64.AppImage
-            artifacts/losselot-darwin-amd64/losselot-darwin-amd64
-            artifacts/losselot-darwin-arm64/losselot-darwin-arm64
-            artifacts/losselot-windows-amd64/losselot-windows-amd64.exe
+            artifacts/deciduous-linux-amd64/deciduous-linux-amd64
+            artifacts/deciduous-linux-arm64/deciduous-linux-arm64
+            artifacts/deciduous-darwin-amd64/deciduous-darwin-amd64
+            artifacts/deciduous-darwin-arm64/deciduous-darwin-arm64
+            artifacts/deciduous-windows-amd64/deciduous-windows-amd64.exe
+            checksums.txt
           generate_release_notes: true
 
   publish-crate:
