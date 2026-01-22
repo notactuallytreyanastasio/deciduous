@@ -655,11 +655,120 @@ Build a graph that can answer:
 - **"We should do Y"** → "We tried that, here's why it failed"
 "#;
 
+/// Default configuration file content (duplicated from init/templates.rs to avoid circular deps)
+const DEFAULT_CONFIG: &str = r#"# Deciduous Configuration
+# This file controls branch detection and grouping behavior
+
+[branch]
+# Branches considered "main" - nodes on these branches won't trigger feature-branch grouping
+main_branches = ["main", "master"]
+
+# Automatically detect and store git branch when creating nodes
+auto_detect = true
+"#;
+
+/// Ensure core deciduous infrastructure exists (.deciduous/, config, database, docs/)
+/// This allows `deciduous opencode install` to work standalone in a fresh project
+fn ensure_core_infrastructure(project_root: &Path) -> Result<(), String> {
+    let deciduous_dir = project_root.join(".deciduous");
+
+    // Create .deciduous directory if missing
+    if !deciduous_dir.exists() {
+        fs::create_dir_all(&deciduous_dir)
+            .map_err(|e| format!("Could not create .deciduous: {}", e))?;
+        println!("   {} .deciduous/", "Creating".green());
+    }
+
+    // Create config.toml if missing
+    let config_path = deciduous_dir.join("config.toml");
+    if !config_path.exists() {
+        fs::write(&config_path, DEFAULT_CONFIG)
+            .map_err(|e| format!("Could not write config.toml: {}", e))?;
+        println!("   {} .deciduous/config.toml", "Creating".green());
+    }
+
+    // Write version file
+    let version_path = deciduous_dir.join(".version");
+    let version = env!("CARGO_PKG_VERSION");
+    fs::write(&version_path, version)
+        .map_err(|e| format!("Could not write version file: {}", e))?;
+    println!(
+        "   {} .deciduous/.version ({})",
+        "Creating".green(),
+        version
+    );
+
+    // Set up database path (database is created lazily on first use)
+    let db_path = deciduous_dir.join("deciduous.db");
+    if !db_path.exists() {
+        println!(
+            "   {} .deciduous/deciduous.db (will be created on first use)",
+            "Preparing".green()
+        );
+    }
+    std::env::set_var("DECIDUOUS_DB_PATH", &db_path);
+
+    // Add .deciduous to .gitignore
+    let gitignore_path = project_root.join(".gitignore");
+    let entry = ".deciduous/";
+    if gitignore_path.exists() {
+        let existing = fs::read_to_string(&gitignore_path)
+            .map_err(|e| format!("Could not read .gitignore: {}", e))?;
+        if !existing
+            .lines()
+            .any(|line| line.trim() == entry || line.trim() == ".deciduous")
+        {
+            let new_content = format!(
+                "{}\n\n# Deciduous database (local)\n{}\n",
+                existing.trim_end(),
+                entry
+            );
+            fs::write(&gitignore_path, new_content)
+                .map_err(|e| format!("Could not update .gitignore: {}", e))?;
+            println!("   {} .gitignore (added {})", "Updated".green(), entry);
+        }
+    } else {
+        let content = format!("# Deciduous database (local)\n{}\n", entry);
+        fs::write(&gitignore_path, content)
+            .map_err(|e| format!("Could not create .gitignore: {}", e))?;
+        println!("   {} .gitignore", "Creating".green());
+    }
+
+    // Create docs/ directory for GitHub Pages viewer
+    let docs_dir = project_root.join("docs");
+    if !docs_dir.exists() {
+        fs::create_dir_all(&docs_dir).map_err(|e| format!("Could not create docs/: {}", e))?;
+        println!("   {} docs/", "Creating".green());
+    }
+
+    // Create empty graph-data.json
+    let graph_data_path = docs_dir.join("graph-data.json");
+    if !graph_data_path.exists() {
+        let empty_graph = r#"{"nodes":[],"edges":[]}"#;
+        fs::write(&graph_data_path, empty_graph)
+            .map_err(|e| format!("Could not write graph-data.json: {}", e))?;
+        println!("   {} docs/graph-data.json", "Creating".green());
+    }
+
+    // Create .nojekyll for GitHub Pages
+    let nojekyll_path = docs_dir.join(".nojekyll");
+    if !nojekyll_path.exists() {
+        fs::write(&nojekyll_path, "").map_err(|e| format!("Could not write .nojekyll: {}", e))?;
+        println!("   {} docs/.nojekyll", "Creating".green());
+    }
+
+    Ok(())
+}
+
 /// Install OpenCode configuration and plugins
 pub fn install_opencode(project_root: &Path) -> Result<(), String> {
-    let config = Config::load();
-
     println!("\n{}", "Installing OpenCode integration...".cyan().bold());
+    println!("   Directory: {}\n", project_root.display());
+
+    // First, ensure core deciduous infrastructure exists
+    ensure_core_infrastructure(project_root)?;
+
+    let config = Config::load();
 
     let opencode_dir = project_root.join(".opencode");
     let plugin_dir = opencode_dir.join("plugin");
