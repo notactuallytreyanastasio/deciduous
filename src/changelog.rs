@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.11.2",
+        highlights: &[
+            "Fix: `deciduous opencode install` now works standalone without `deciduous init`",
+            "Creates core infrastructure (.deciduous/, config, database path, docs/) automatically",
+        ],
+    },
+    Release {
         version: "0.11.1",
         highlights: &[
             "Pre-built binaries for Linux, macOS, and Windows on GitHub Releases",
