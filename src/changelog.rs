@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.11.1",
+        highlights: &[
+            "Pre-built binaries for Linux, macOS, and Windows on GitHub Releases",
+            "Added Linux ARM64 support",
+            "SHA256 checksums included with releases",
+        ],
+    },
+    Release {
         version: "0.11.0",
         highlights: &[
             "OpenCode integration support via `deciduous init` and `deciduous update`",
