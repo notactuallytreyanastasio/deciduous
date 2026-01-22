@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.11.0",
+        highlights: &[
+            "OpenCode integration support - `deciduous init` and `update` now generate opencode.json",
+            "New `deciduous status` command to check integration status for Claude Code, Cursor, and OpenCode",
+        ],
+    },
+    Release {
         version: "0.10.3",
         highlights: &[
             "Fix card stack shrinking - cards now render at consistent size",

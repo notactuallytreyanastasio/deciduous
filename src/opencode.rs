@@ -1162,12 +1162,17 @@ mod tests {
         fs::write(deciduous_dir.join("config.toml"), "[hooks]\nenabled = true").unwrap();
 
         // Set current dir for Config::load
-        let original_dir = std::env::current_dir().unwrap();
+        // Use canonicalize to get absolute path - avoids issues with parallel tests
+        let original_dir = std::env::current_dir()
+            .unwrap()
+            .canonicalize()
+            .unwrap_or_else(|_| std::env::current_dir().unwrap());
         std::env::set_current_dir(project_root).unwrap();
 
         let result = install_opencode(project_root);
 
-        std::env::set_current_dir(original_dir).unwrap();
+        // Restore original dir (ignore errors if dir was deleted by parallel test cleanup)
+        let _ = std::env::set_current_dir(&original_dir);
 
         assert!(result.is_ok());
 
