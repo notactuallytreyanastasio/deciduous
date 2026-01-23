@@ -103,6 +103,34 @@ deciduous tui      # Terminal UI
 
 That's it. Your first decision graph is live.
 
+### Multi-Assistant Support
+
+Deciduous integrates with multiple AI coding assistants:
+
+```bash
+# Claude Code (default)
+deciduous init
+
+# OpenCode
+deciduous init --opencode
+
+# Windsurf (Codeium)
+deciduous init --windsurf
+
+# Multiple assistants
+deciduous init --both              # Claude Code + OpenCode
+deciduous init --windsurf          # + Windsurf (auto-creates .windsurf/)
+deciduous init --both --windsurf   # All three
+```
+
+| Assistant | Flag | Integration Files |
+|-----------|------|-------------------|
+| **Claude Code** | `--claude` (default) | `.claude/`, `CLAUDE.md` |
+| **OpenCode** | `--opencode` | `.opencode/`, `AGENTS.md` |
+| **Windsurf** | `--windsurf` | `.windsurf/hooks/`, `.windsurf/rules/` |
+
+**Auto-detection:** `deciduous update` auto-detects which assistants are installed (`.claude/`, `.opencode/`, `.windsurf/`) and updates them all. Windsurf is also auto-detected during `init` if `.windsurf/` already exists.
+
 ---
 
 ## The Workflow
@@ -350,7 +378,7 @@ Your graph is live at `https://<user>.github.io/<repo>/`
 
 ---
 
-## Keeping Claude Integration Updated
+## Keeping AI Integration Updated
 
 When deciduous releases new features, your existing projects can get the latest integration files:
 
@@ -358,21 +386,39 @@ When deciduous releases new features, your existing projects can get the latest 
 # Check if an update is needed
 deciduous check-update
 
-# Update integration files
+# Update integration files (auto-detects installed assistants)
 deciduous update
 ```
 
-The `update` command overwrites the following files:
+The `update` command auto-detects which assistants are installed and updates them:
+
+### Claude Code (`.claude/`)
 
 | Files | What's Updated |
 |-------|----------------|
 | `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`) |
-| `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, /archaeology`) |
+| `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
 | `.claude/hooks/*.sh` | Enforcement hooks |
 | `.claude/agents.toml` | Subagent configurations |
 | `CLAUDE.md` | Decision Graph Workflow section (preserves custom content) |
 
-**Not touched:** `.claude/settings.json`, `.deciduous/config.toml`, `docs/` - your configs stay intact.
+### OpenCode (`.opencode/`)
+
+| Files | What's Updated |
+|-------|----------------|
+| `.opencode/plugins/*.ts` | TypeScript hooks (pre-edit, post-commit) |
+| `.opencode/opencode.json` | Plugin configuration |
+| `AGENTS.md` | Decision Graph Workflow section |
+
+### Windsurf (`.windsurf/`)
+
+| Files | What's Updated |
+|-------|----------------|
+| `.windsurf/hooks.json` | Cascade hooks configuration |
+| `.windsurf/hooks/*.sh` | Hook scripts (pre-write, post-command) |
+| `.windsurf/rules/deciduous.md` | Always-on rules for Cascade |
+
+**Not touched:** Settings files, `.deciduous/config.toml`, `docs/` - your configs stay intact.
 
 ### Automatic Version Checking
 
@@ -384,6 +430,38 @@ Update available: Integration files are v0.9.4, binary is v0.9.5. Run 'deciduous
 ```
 
 Add this to your session start routine to catch updates automatically.
+
+---
+
+## How the Hooks Work
+
+Each AI assistant integration includes hooks that enforce the decision graph workflow:
+
+### Pre-Edit Hook (Blocks edits without context)
+
+Before the AI can edit files, it must have logged a recent goal or action node (within 15 minutes). This ensures decisions are captured *before* code is written.
+
+```
+AI tries to edit → Hook checks for recent node → Blocks if missing → AI logs decision → Edit proceeds
+```
+
+### Post-Commit Hook (Reminds to link commits)
+
+After any `git commit`, the AI is reminded to:
+1. Create an outcome or action node with `--commit HEAD`
+2. Link it to the parent goal/action
+
+This connects your git history to the decision graph.
+
+### Assistant-Specific Implementation
+
+| Assistant | Pre-Edit Hook | Post-Commit Hook |
+|-----------|---------------|------------------|
+| **Claude Code** | `PreToolUse` on `Edit\|Write` | `PostToolUse` on `Bash` (git commit) |
+| **OpenCode** | TypeScript plugin `pre-edit` | TypeScript plugin `post-commit` |
+| **Windsurf** | Cascade `pre_write_code` | Cascade `post_run_command` |
+
+All hooks use **exit code 2** to block actions and provide guidance to the AI.
 
 ---
 
@@ -409,8 +487,12 @@ Add this to your session start routine to catch updates automatically.
 
 ```bash
 # Initialize
-deciduous init               # Initialize with Claude Code integration
-deciduous update             # Update tooling to latest version
+deciduous init               # Initialize with Claude Code (default)
+deciduous init --opencode    # Initialize with OpenCode
+deciduous init --windsurf    # Initialize with Windsurf
+deciduous init --both        # Initialize with Claude Code + OpenCode
+deciduous init --both --windsurf  # All three assistants
+deciduous update             # Update tooling (auto-detects installed assistants)
 deciduous check-update       # Check if update is needed
 
 # Add nodes

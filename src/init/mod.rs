@@ -14,6 +14,8 @@ use templates::{
     CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW, DECISION_MD,
     DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE,
     PAGES_VIEWER_HTML, RECOVER_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, WORK_MD,
+    WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER, WINDSURF_HOOK_REQUIRE_ACTION_NODE,
+    WINDSURF_RULES_DECIDUOUS,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -21,7 +23,8 @@ use templates::{
 /// # Arguments
 /// * `setup_claude` - Whether to set up Claude Code integration
 /// * `setup_opencode` - Whether to set up OpenCode integration
-pub fn init_project(setup_claude: bool, setup_opencode: bool) -> Result<(), String> {
+/// * `setup_windsurf` - Whether to set up Windsurf integration (also auto-detects .windsurf/)
+pub fn init_project(setup_claude: bool, setup_opencode: bool, setup_windsurf: bool) -> Result<(), String> {
     let cwd =
         std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
@@ -155,6 +158,29 @@ pub fn init_project(setup_claude: bool, setup_opencode: bool) -> Result<(), Stri
         opencode::install_opencode(&cwd)?;
     }
 
+    // 3c. Set up Windsurf if requested OR if .windsurf directory exists
+    let windsurf_dir = cwd.join(".windsurf");
+    let should_setup_windsurf = setup_windsurf || windsurf_dir.exists();
+    if should_setup_windsurf {
+        // Create .windsurf directory if it doesn't exist (when --windsurf flag used)
+        if !windsurf_dir.exists() {
+            create_dir_if_missing(&windsurf_dir)?;
+        }
+        if setup_windsurf {
+            println!(
+                "\n{}",
+                "Setting up Windsurf integration...".cyan()
+            );
+        } else {
+            println!(
+                "\n{}",
+                "Detected .windsurf directory - setting up Windsurf integration..."
+                    .cyan()
+            );
+        }
+        setup_windsurf_integration(&cwd)?;
+    }
+
     // 4. Add .deciduous to .gitignore
     add_to_gitignore(&cwd)?;
 
@@ -205,9 +231,18 @@ pub fn init_project(setup_claude: bool, setup_opencode: bool) -> Result<(), Stri
         println!("   {} docs/.nojekyll", "Creating".green());
     }
 
+    // Check if Windsurf was set up (use the flag we already computed)
+    let windsurf_configured = should_setup_windsurf;
+
+    let final_name = if windsurf_configured {
+        format!("{} + Windsurf", assistant_name)
+    } else {
+        assistant_name.to_string()
+    };
+
     println!(
         "\n{}",
-        format!("Deciduous initialized for {}!", assistant_name)
+        format!("Deciduous initialized for {}!", final_name)
             .green()
             .bold()
     );
@@ -238,6 +273,19 @@ pub fn init_project(setup_claude: bool, setup_opencode: bool) -> Result<(), Stri
         "Your graph will be live at: {}",
         "https://<user>.github.io/<repo>/".cyan()
     );
+
+    if windsurf_configured {
+        println!();
+        println!(
+            "{}",
+            "Windsurf integration:".cyan().bold()
+        );
+        println!("  - Hooks configured in .windsurf/hooks.json");
+        println!("  - Always-on rules in .windsurf/rules/deciduous.md");
+        println!("  - Pre-write hook blocks edits without action nodes");
+        println!("  - Post-command hook reminds to link commits");
+    }
+
     println!();
 
     Ok(())
@@ -297,6 +345,18 @@ pub fn update_tooling() -> Result<(), String> {
         opencode::update_opencode(&cwd)?;
     }
 
+    // Update Windsurf if .windsurf directory exists
+    let windsurf_dir = cwd.join(".windsurf");
+    let has_windsurf = windsurf_dir.exists();
+    if has_windsurf {
+        println!(
+            "\n{}",
+            "Detected .windsurf directory - updating Windsurf integration..."
+                .cyan()
+        );
+        update_windsurf(&cwd)?;
+    }
+
     // Write version file for auto-update detection
     if deciduous_dir.exists() {
         let version_path = deciduous_dir.join(".version");
@@ -306,9 +366,15 @@ pub fn update_tooling() -> Result<(), String> {
         println!("   {} .deciduous/.version ({})", "Updated".green(), version);
     }
 
+    let final_name = if has_windsurf {
+        format!("{} + Windsurf", assistant_name)
+    } else {
+        assistant_name.to_string()
+    };
+
     println!(
         "\n{}",
-        format!("Tooling updated for {}!", assistant_name)
+        format!("Tooling updated for {}!", final_name)
             .green()
             .bold()
     );
@@ -323,6 +389,9 @@ pub fn update_tooling() -> Result<(), String> {
     if has_opencode {
         println!("  - OpenCode plugins (TypeScript hooks)");
         println!("  - OpenCode configuration (opencode.json)");
+    }
+    if has_windsurf {
+        println!("  - Windsurf hooks and rules");
     }
     println!();
 
@@ -396,6 +465,90 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");
     replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
+
+    // Update Windsurf if .windsurf directory exists
+    let windsurf_dir = cwd.join(".windsurf");
+    if windsurf_dir.exists() {
+        update_windsurf(cwd)?;
+    }
+
+    Ok(())
+}
+
+/// Set up Windsurf integration (called during init if --windsurf or .windsurf exists)
+fn setup_windsurf_integration(cwd: &Path) -> Result<(), String> {
+    // Create .windsurf/hooks directory
+    let windsurf_hooks_dir = cwd.join(".windsurf").join("hooks");
+    create_dir_if_missing(&windsurf_hooks_dir)?;
+
+    // Create .windsurf/rules directory
+    let windsurf_rules_dir = cwd.join(".windsurf").join("rules");
+    create_dir_if_missing(&windsurf_rules_dir)?;
+
+    // Write hooks.json
+    let hooks_json_path = cwd.join(".windsurf").join("hooks.json");
+    write_file_if_missing(&hooks_json_path, WINDSURF_HOOKS_JSON, ".windsurf/hooks.json")?;
+
+    // Write require-action-node.sh hook
+    let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
+    write_executable_if_missing(
+        &require_action_path,
+        WINDSURF_HOOK_REQUIRE_ACTION_NODE,
+        ".windsurf/hooks/require-action-node.sh",
+    )?;
+
+    // Write post-commit-reminder.sh hook
+    let post_commit_path = windsurf_hooks_dir.join("post-commit-reminder.sh");
+    write_executable_if_missing(
+        &post_commit_path,
+        WINDSURF_HOOK_POST_COMMIT_REMINDER,
+        ".windsurf/hooks/post-commit-reminder.sh",
+    )?;
+
+    // Write deciduous.md rules file
+    let rules_path = windsurf_rules_dir.join("deciduous.md");
+    write_file_if_missing(&rules_path, WINDSURF_RULES_DECIDUOUS, ".windsurf/rules/deciduous.md")?;
+
+    println!(
+        "   {} Windsurf integration",
+        "Configured".green()
+    );
+
+    Ok(())
+}
+
+/// Update Windsurf integration (called during update if .windsurf exists)
+fn update_windsurf(cwd: &Path) -> Result<(), String> {
+    // Create directories if needed
+    let windsurf_hooks_dir = cwd.join(".windsurf").join("hooks");
+    create_dir_if_missing(&windsurf_hooks_dir)?;
+
+    let windsurf_rules_dir = cwd.join(".windsurf").join("rules");
+    create_dir_if_missing(&windsurf_rules_dir)?;
+
+    // Overwrite hooks.json
+    let hooks_json_path = cwd.join(".windsurf").join("hooks.json");
+    write_file_overwrite(&hooks_json_path, WINDSURF_HOOKS_JSON, ".windsurf/hooks.json")?;
+
+    // Overwrite require-action-node.sh hook
+    let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
+    write_executable_overwrite(
+        &require_action_path,
+        WINDSURF_HOOK_REQUIRE_ACTION_NODE,
+        ".windsurf/hooks/require-action-node.sh",
+    )?;
+
+    // Overwrite post-commit-reminder.sh hook
+    let post_commit_path = windsurf_hooks_dir.join("post-commit-reminder.sh");
+    write_executable_overwrite(
+        &post_commit_path,
+        WINDSURF_HOOK_POST_COMMIT_REMINDER,
+        ".windsurf/hooks/post-commit-reminder.sh",
+    )?;
+
+    // Overwrite deciduous.md rules file
+    let rules_path = windsurf_rules_dir.join("deciduous.md");
+    write_file_overwrite(&rules_path, WINDSURF_RULES_DECIDUOUS, ".windsurf/rules/deciduous.md")?;
 
     Ok(())
 }
