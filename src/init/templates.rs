@@ -1565,6 +1565,228 @@ You're trying to understand a culture (the system's design) by studying artifact
 **Good:** "Let me understand how auth works, then find evidence for how it evolved"
 "#;
 
+// =============================================================================
+// WINDSURF TEMPLATES
+// =============================================================================
+
+/// Windsurf hooks.json configuration
+pub const WINDSURF_HOOKS_JSON: &str = r#"{
+  "hooks": {
+    "pre_write_code": [
+      {
+        "command": "./.windsurf/hooks/require-action-node.sh",
+        "show_output": true
+      }
+    ],
+    "post_run_command": [
+      {
+        "command": "./.windsurf/hooks/post-commit-reminder.sh",
+        "show_output": true
+      }
+    ]
+  }
+}
+"#;
+
+/// Windsurf pre_write_code hook - blocks writes without recent action node
+pub const WINDSURF_HOOK_REQUIRE_ACTION_NODE: &str = r#"#!/bin/bash
+# require-action-node.sh
+# Blocks write operations if no recent action/goal node exists in deciduous
+# Works with: Windsurf (Cascade)
+# Exit code 2 = block the tool and show error
+
+# Check if deciduous is initialized
+if [ ! -d ".deciduous" ]; then
+    exit 0
+fi
+
+# Check for any action or goal node
+recent_node=$(deciduous nodes 2>/dev/null | grep -E '\[(goal|action)\]' | tail -5)
+
+if [ -z "$recent_node" ]; then
+    # No nodes at all - fresh project, allow edits
+    exit 0
+fi
+
+# Check if any node was created recently (within last 15 min)
+now=$(date +%s)
+fifteen_min_ago=$((now - 900))
+
+# Get the most recent node's timestamp
+latest_timestamp=$(deciduous nodes 2>/dev/null | tail -1 | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}' | tail -1)
+
+if [ -n "$latest_timestamp" ]; then
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        node_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$latest_timestamp" +%s 2>/dev/null || echo "0")
+    else
+        node_epoch=$(date -d "$latest_timestamp" +%s 2>/dev/null || echo "0")
+    fi
+
+    if [ "$node_epoch" -gt "$fifteen_min_ago" ]; then
+        exit 0
+    fi
+fi
+
+# No recent node - block and provide guidance
+cat >&2 << 'EOF'
++===================================================================+
+|  DECIDUOUS: No recent action/goal node found                      |
++===================================================================+
+|  Before editing files, log what you're about to do:               |
+|                                                                   |
+|  For new work:                                                    |
+|    deciduous add goal "What you're trying to achieve" -c 90       |
+|                                                                   |
+|  For implementation:                                              |
+|    deciduous add action "What you're about to implement" -c 85    |
+|                                                                   |
+|  Then link to parent:                                             |
+|    deciduous link <parent_id> <new_id> -r "reason"                |
++===================================================================+
+EOF
+
+exit 2
+"#;
+
+/// Windsurf post_run_command hook - reminds to link commits
+pub const WINDSURF_HOOK_POST_COMMIT_REMINDER: &str = r#"#!/bin/bash
+# post-commit-reminder.sh
+# Runs after git commit to remind Cascade to link the commit to deciduous
+# Works with: Windsurf (Cascade)
+# Uses exit code 2 to ensure Cascade sees the message and acts on it
+
+# Check if deciduous is initialized
+if [ ! -d ".deciduous" ]; then
+    exit 0
+fi
+
+# Read the input JSON from Windsurf
+input=$(cat)
+
+# Windsurf format: {"tool_info": {"command_line": "...", "cwd": "..."}}
+command=$(echo "$input" | grep -o '"command_line"[[:space:]]*:[[:space:]]*"[^"]*"' | head -1 | sed 's/"command_line"[[:space:]]*:[[:space:]]*"//;s/"$//')
+
+# Fallback: try jq if available
+if [ -z "$command" ] && command -v jq &>/dev/null; then
+    command=$(echo "$input" | jq -r '.tool_info.command_line // empty' 2>/dev/null)
+fi
+
+# Only trigger on git commit commands
+if ! echo "$command" | grep -qE '^git commit'; then
+    exit 0
+fi
+
+# Get the commit info
+commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
+commit_msg=$(git log -1 --format=%s 2>/dev/null)
+
+# Output reminder (exit 2 ensures Cascade processes this)
+cat >&2 << EOF
++===================================================================+
+|  DECIDUOUS: Link this commit to the decision graph!               |
++===================================================================+
+|  Commit: $commit_hash "$commit_msg"
+|                                                                   |
+|  Run NOW:                                                         |
+|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
+|                                                                   |
+|  Or if this was an action (not outcome):                          |
+|    deciduous add action "What was done" -c 90 --commit HEAD       |
++===================================================================+
+EOF
+
+exit 2
+"#;
+
+/// Windsurf rules file - always-on deciduous workflow
+pub const WINDSURF_RULES_DECIDUOUS: &str = r#"---
+trigger: always_on
+description: Decision Graph Workflow - Log decisions in real-time using deciduous
+---
+
+# Decision Graph Workflow
+
+**THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
+
+## The Core Rule
+
+```
+BEFORE you do something -> Log what you're ABOUT to do
+AFTER it succeeds/fails -> Log the outcome
+CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
+```
+
+## Behavioral Triggers - MUST LOG WHEN:
+
+| Trigger | Log Type | Example |
+|---------|----------|---------|
+| User asks for a new feature | `goal` **with -p** | "Add dark mode" |
+| Choosing between approaches | `decision` | "Choose state management" |
+| About to write/edit code | `action` | "Implementing Redux store" |
+| Something worked or failed | `outcome` | "Redux integration successful" |
+| Notice something interesting | `observation` | "Existing code uses hooks" |
+
+## CRITICAL: Capture VERBATIM User Prompts
+
+**Prompts must be the EXACT user message, not a summary.**
+
+```bash
+# GOOD - verbatim prompts enable full context recovery:
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub.
+EOF
+```
+
+## CRITICAL: Maintain Connections
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action/goal it resolves |
+| `action` | The goal/decision that spawned it |
+| `option` | Its parent decision |
+| `observation` | Related goal/action |
+
+**Root `goal` nodes are the ONLY valid orphans.**
+
+## Quick Commands
+
+```bash
+deciduous add goal "Title" -c 90 -p "User's original request"
+deciduous add action "Title" -c 85
+deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
+deciduous serve   # View live
+deciduous sync    # Export for static hosting
+
+# Metadata flags
+# -c, --confidence 0-100   Confidence level
+# -p, --prompt "..."       Store the user prompt
+# --commit <hash|HEAD>     Link to git commit
+```
+
+## CRITICAL: Link Commits to Actions/Outcomes
+
+```bash
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
+```
+
+## Session Start Checklist
+
+```bash
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected?
+git status                # Current state
+```
+"#;
+
+// =============================================================================
+// SKILLS
+// =============================================================================
+
 /// Archaeology skill - Transform narratives into decision graph
 pub const SKILL_ARCHAEOLOGY: &str = r#"# Archaeology
 

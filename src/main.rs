@@ -39,6 +39,10 @@ enum Command {
         #[arg(long)]
         opencode: bool,
 
+        /// Set up Windsurf integration (.windsurf/)
+        #[arg(long)]
+        windsurf: bool,
+
         /// Set up both Claude Code and OpenCode
         #[arg(long)]
         both: bool,
@@ -527,6 +531,7 @@ fn main() {
     if let Command::Init {
         claude,
         opencode,
+        windsurf,
         both,
     } = args.command
     {
@@ -545,7 +550,7 @@ fn main() {
             (true, true)
         };
 
-        if let Err(e) = deciduous::init::init_project(setup_claude, setup_opencode) {
+        if let Err(e) = deciduous::init::init_project(setup_claude, setup_opencode, windsurf) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
