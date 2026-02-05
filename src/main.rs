@@ -310,13 +310,6 @@ enum Command {
         yes: bool,
     },
 
-    /// Launch the terminal user interface
-    Tui {
-        /// Optional database path (default: auto-discover)
-        #[arg(short, long)]
-        db: Option<PathBuf>,
-    },
-
     /// Manage ROADMAP.md sync with GitHub Issues
     Roadmap {
         #[command(subcommand)]
@@ -641,15 +634,6 @@ fn main() {
             "OK:".green(),
             current_version
         );
-        return;
-    }
-
-    // Handle TUI separately - it has its own event loop
-    if let Command::Tui { db } = args.command {
-        if let Err(e) = deciduous::tui::run(db) {
-            eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
-        }
         return;
     }
 
@@ -1861,7 +1845,6 @@ fn main() {
             }
         }
 
-        Command::Tui { .. } => unreachable!(), // Handled above
         Command::Completion { .. } => unreachable!(), // Handled above
 
         Command::Audit {
@@ -2405,7 +2388,7 @@ fn main() {
                                             );
                                         }
 
-                                        // Cache issue for TUI/Web display
+                                        // Cache issue for web display
                                         if let Some(repo_name) = gh_client.repo_name() {
                                             if let Err(e) = db.cache_github_issue(
                                                 issue.number,

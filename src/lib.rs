@@ -50,7 +50,6 @@ pub mod opencode;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
-pub mod tui;
 
 pub use config::Config;
 pub use db::{

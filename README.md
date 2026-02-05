@@ -98,7 +98,6 @@ deciduous link 1 2 -r "Deciding implementation approach"
 
 # View the graph
 deciduous serve    # Web viewer at localhost:3000
-deciduous tui      # Terminal UI
 ```
 
 That's it. Your first decision graph is live.
@@ -259,25 +258,6 @@ Four visualization modes:
 | **DAG** | Hierarchical goal→decision→outcome flow |
 
 Features: branch filtering, node search, click-to-expand details, auto-refresh.
-
-### Terminal UI
-
-```bash
-deciduous tui
-```
-
-Vim-style navigation with syntax-highlighted file previews:
-
-| Key | Action |
-|-----|--------|
-| `j`/`k`, `gg`/`G` | Navigate |
-| `Enter` | Toggle detail panel |
-| `/` | Search |
-| `f` | Filter by type |
-| `b` | Filter by branch |
-| `o` | Open file in editor |
-| `O` | View linked commit diff |
-| `s` | Show goal story tree |
 
 ---
 
@@ -524,7 +504,6 @@ deciduous graph              # Full graph as JSON
 
 # Visualize
 deciduous serve              # Web viewer
-deciduous tui                # Terminal UI
 deciduous dot --png          # Generate PNG (requires graphviz)
 
 # Export

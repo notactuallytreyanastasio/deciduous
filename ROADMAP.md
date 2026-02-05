@@ -7,37 +7,12 @@
 <!-- roadmap:section id="75e906b8-d00a-4d6a-8c9c-a3745cd272e8" -->
 - [x] `--prompt` flag for capturing user prompts on nodes
   <!-- roadmap:item id="49a306e7-3ff1-4247-963a-a8b31990ae23" outcome_change_id="" -->
-- [x] Prompt display in TUI detail panel with word-wrap
+- [x] Prompt display in web viewer with word-wrap
   <!-- roadmap:item id="95b65b2c-6d2e-43f5-a54b-e736c62d8c80" outcome_change_id="" -->
 - [x] Template sync fix - init.rs templates match actual command files
   <!-- roadmap:item id="bd84fad1-0558-4d1a-a4cc-248e0fbeda9f" outcome_change_id="" -->
 - [x] `deciduous update` no longer destroys custom content
   <!-- roadmap:item id="989c5423-f24d-4c0b-a2b8-958047b7a956" outcome_change_id="" -->
-
-### v0.7.x - TUI Graph Viewer (December 2024)
-<!-- roadmap:section id="8f3cbcbb-9718-47c5-8fe3-15df64909782" -->
-- [x] `deciduous tui` command for terminal-based graph visualization
-  <!-- roadmap:item id="9dcc20df-7192-4d9e-9633-eee2a477e1d1" outcome_change_id="" -->
-- [x] Timeline view with vim-style navigation (j/k/gg/G)
-  <!-- roadmap:item id="fcf17d38-eac8-4678-a976-f5e893c8bc28" outcome_change_id="" -->
-- [x] Detail panel with node info, connections, files
-  <!-- roadmap:item id="af512893-4564-49d0-bb36-b0900a598c32" outcome_change_id="" -->
-- [x] File browser mode (F to toggle, n/N to navigate)
-  <!-- roadmap:item id="36a7f8aa-379e-4d25-b573-920fc8cbb1c5" outcome_change_id="" -->
-- [x] File preview with syntax highlighting (p key)
-  <!-- roadmap:item id="5f6ecb8b-2c44-455c-84ef-32360584535a" outcome_change_id="" -->
-- [x] File diff viewer with syntax + diff coloring (d key)
-  <!-- roadmap:item id="d3981cc9-6835-4800-a29d-42252e9f8ae5" outcome_change_id="" -->
-- [x] Commit modal with split view (O key)
-  <!-- roadmap:item id="9c7b4b60-70cb-4486-9c4a-98594e0339aa" outcome_change_id="" -->
-- [x] Branch filtering (b to cycle, B for fuzzy search)
-  <!-- roadmap:item id="87e638f6-d9da-4fb0-bee0-58a800b104c5" outcome_change_id="" -->
-- [x] Timeline order toggle (R for reverse chronological)
-  <!-- roadmap:item id="1491241c-ea4d-4f87-ab29-dedcaa09df9b" outcome_change_id="" -->
-- [x] Search (/ to filter by title/description)
-  <!-- roadmap:item id="947350b1-c333-4185-a0e4-61dc8a25c1ef" outcome_change_id="" -->
-- [x] Goal story view (s to show goal hierarchy)
-  <!-- roadmap:item id="eef35aee-317f-45db-933b-518687db2e3d" outcome_change_id="" -->
 
 ### v0.6.0 - Multi-User Graph Sync (December 2024)
 <!-- roadmap:section id="6513a80e-81f6-4ef2-9397-ea31a55fce2c" -->
@@ -69,8 +44,6 @@
 <!-- roadmap:section id="1373ac9c-2a3a-4592-af6d-e037f8a57140" -->
 - [x] `--files` flag for associating files with nodes
   <!-- roadmap:item id="293ad4e5-6b7b-4ae5-8fa5-db013ee16279" outcome_change_id="" -->
-- [x] File browser in TUI detail panel
-  <!-- roadmap:item id="20ce3884-d2c7-43f0-a1db-54ab1b826efb" outcome_change_id="" -->
 
 ---
 
@@ -87,16 +60,11 @@
   - Reduces context overhead by scoping to relevant files/patterns
   - **Implemented**: `.claude/agents.toml` with 6 domain agents
   - **Integrated**: CLAUDE.md references agents, `deciduous init --claude` creates template
-- [x] **Rust Core Agent** (`src/` excluding `src/tui/`)
+- [x] **Rust Core Agent** (`src/`)
   <!-- roadmap:item id="e5f6a7b8-c9d0-1e2f-3a4b-5c6d7e8f9a0b" outcome_change_id="" -->
   - CLI commands, database layer, export/sync logic
   - Diesel ORM, SQLite, command dispatch
   - Focus: `src/main.rs`, `src/db.rs`, `src/lib.rs`, `src/serve.rs`
-- [x] **TUI Agent** (`src/tui/`)
-  <!-- roadmap:item id="f6a7b8c9-d0e1-2f3a-4b5c-6d7e8f9a0b1c" outcome_change_id="" -->
-  - Terminal UI with Ratatui
-  - Views, modals, navigation, keybindings
-  - Focus: `src/tui/app.rs`, `src/tui/views/`, `src/tui/widgets/`
 - [x] **Web Viewer Agent** (`web/`)
   <!-- roadmap:item id="a7b8c9d0-e1f2-3a4b-5c6d-7e8f9a0b1c2d" outcome_change_id="" -->
   - React + TypeScript + D3/Dagre
@@ -140,7 +108,7 @@
   - Deploy to GitHub Pages
 - [ ] **Dual perspective: human and AI**
   <!-- roadmap:item id="836bbffe-fabf-4165-8579-6696279e61ec" outcome_change_id="" -->
-  - Show the human developer using the TUI to review decisions
+  - Show the human developer using the web viewer to review decisions
   - Show the AI querying the graph to recover context
   - Demonstrate handoff between sessions
 - [ ] **Publish as a dedicated guide**
@@ -188,7 +156,7 @@
   <!-- roadmap:item id="m8n9o0p1-q2r3-4s5t-6u7v-8w9x0y1z2a3b" outcome_change_id="" -->
   - Write up the experience of adding deciduous to an existing project
   - Show before/after: navigating codebase without vs with decision graph
-  - Include screenshots of TUI and web viewer exploring imported history
+  - Include screenshots of web viewer exploring imported history
   - Highlight insights discovered from visualizing historical decisions
 
 ### Automated Graph Sync Workflow
@@ -243,7 +211,7 @@
 - [ ] **Sort nodes by recency** - most recently updated nodes first
   <!-- roadmap:item id="9b330bb7-2322-4c4d-9090-61b78690e7de" outcome_change_id="" -->
   - Use `updated_at` timestamp for sorting
-  - Show N most recent chains (like DAG view recency filtering)
+  - Show N most recent chains (like web viewer DAG view recency filtering)
   - Recent activity is most relevant for context recovery
 - [ ] Show what was being worked on, what's complete, what's pending
   <!-- roadmap:item id="7e303824-1933-4b67-90f4-b346f1854d89" outcome_change_id="" -->
@@ -348,43 +316,7 @@
   - Default view shows only 4 most recently active goal chains
   - Chains sorted by most recent node update time within the chain
   - "Show more" and "Show all" controls to expand view
-  - Rust utility functions for TUI (`build_chains`, `sort_chains_by_recency`, `get_recent_chains`)
-
-### TUI Enhancements
-<!-- roadmap:section id="cea0dada-171d-4616-88f4-4ab5e3c89da5" -->
-- [ ] **Phase 2: Multi-goal chains**
-  <!-- roadmap:item id="d33d22f2-2fe8-4d31-a838-05a3e8bfbe2a" outcome_change_id="" -->
-  - Navigate between related goals
-  - Show how goals connect and depend on each other
-- [ ] **DAG view improvements** (currently disabled)
-  <!-- roadmap:item id="44c18057-632d-416f-baed-0dc238c7a64e" outcome_change_id="" -->
-  - Better hierarchical layout algorithm
-  - Zoom and pan controls
-- [ ] **Settings system** (partially done)
-  <!-- roadmap:item id="cf1eedb1-405c-46f5-a733-be8509bc0714" outcome_change_id="" -->
-  - [x] `.deciduous/config.toml` exists with branch settings
-  - [ ] Timeline order default (newest-first vs oldest-first)
-  - [ ] Editor preference (`$EDITOR` fallback chain)
-  - [ ] Color theme selection
-  - [ ] Key binding customization
-  - [ ] Database path configuration
-- [ ] **Keyboard shortcut audit and redesign**
-  <!-- roadmap:item id="a74c31c3-2e58-4f56-8e5c-0c0c36d184a9" outcome_change_id="" -->
-  - Analyze all current shortcuts for intuitiveness
-  - Ensure shortcuts are discoverable and memorable
-  - Consider user expectations from similar tools (vim, lazygit, ranger)
-  - Group related actions with similar key patterns
-- [ ] **Visual discoverability**
-  <!-- roadmap:item id="703721a8-28ae-48a9-a075-d5aaf2b76fe6" outcome_change_id="" -->
-  - Add context-sensitive help hints in footer
-  - Show available actions for current context
-  - Highlight keyboard shortcuts in help overlay
-  - Consider modal indicator showing current mode prominently
-- [ ] **Onboarding experience**
-  <!-- roadmap:item id="d19154c1-78b4-474b-82a9-fae7b689c7b2" outcome_change_id="" -->
-  - First-run tutorial or guided tour
-  - Progressive disclosure of advanced features
-  - Cheat sheet generation (`deciduous tui --help-keys`)
+  - Rust utility functions (`build_chains`, `sort_chains_by_recency`, `get_recent_chains`)
 
 ### Code Tracking & File Associations (Extended)
 <!-- roadmap:section id="d14cb3b4-26cd-4299-9732-9f995d850c39" -->
@@ -476,7 +408,7 @@
   <!-- roadmap:item id="fd513dd0-bbda-4ada-9ef6-3e86920fab00" outcome_change_id="" -->
   - `deciduous release-notes --from v0.7.0 --to v0.8.0`
   - Query graph for all goals/outcomes between versions
-  - Group by feature area (TUI, sync, export, etc.)
+  - Group by feature area (web viewer, sync, export, etc.)
   - Generate markdown summary of what changed and why
 - [ ] **PR tagging for releases**
   <!-- roadmap:item id="5a80c569-db6b-4270-ab55-fdfe399d7c95" outcome_change_id="" -->
@@ -609,19 +541,13 @@
   - `deciduous memories update` - update Claude Code memories with recent decisions
   - Bidirectional: memories inform context recovery
 
-### Roadmap Skill & TUI Integration
+### Roadmap Skill Integration
 <!-- roadmap:section id="e63eb8ba-c47c-4dd3-b761-7288288d64ee" -->
 - [ ] **Claude Code skill for roadmap management**
   <!-- roadmap:item id="6ed19ee8-ddf9-4f3e-aea5-c3773b57b1bc" outcome_change_id="" -->
   - `/roadmap` skill to interact with ROADMAP.md and decision graph
   - Show current roadmap items, their status, linked nodes
   - Add/update roadmap items with decision graph links
-- [ ] **TUI roadmap view**
-  <!-- roadmap:item id="1c394a1b-4dff-4884-b7d3-09d6e7643187" outcome_change_id="" -->
-  - New view in `deciduous tui` for browsing roadmap items
-  - Show roadmap items linked to decision graph nodes
-  - Filter by status (completed, in progress, backlog)
-  - Navigate from roadmap item → linked goal/decision nodes
 - [ ] **Roadmap-graph bidirectional links**
   <!-- roadmap:item id="6601e0f4-9a5d-42b9-9f3b-aa3667b06ef2" outcome_change_id="" -->
   - Roadmap items can reference graph nodes by ID
@@ -729,46 +655,6 @@
 ## Backlog - Architecture & Quality
 <!-- roadmap:section id="998babf3-7e02-451b-b027-f08457bfc047" -->
 
-### TUI Architecture Refactor
-<!-- roadmap:section id="d12ee466-92fb-4e1f-bb0a-b6b3f5aef0eb" -->
-- [ ] **Functional core, imperative shell**
-  <!-- roadmap:item id="bda1dd2f-3e17-4d91-bf01-46961590c2f8" outcome_change_id="" -->
-  - Extract pure functions from app.rs for all state transformations
-  - Move all I/O to thin imperative shell at edges
-  - State transitions should be pure: `fn update(state: App, event: Event) -> App`
-- [ ] **Comprehensive test coverage**
-  <!-- roadmap:item id="7ffc5b1e-e962-469b-afdf-56a7af080a40" outcome_change_id="" -->
-  - Unit tests for all pure state transformation functions
-  - Test navigation logic without terminal
-  - Test modal state machines
-  - Test filtering and search logic
-  - Property-based tests for state invariants
-- [ ] **TEA pattern enforcement**
-  <!-- roadmap:item id="65fa51df-d96a-446a-9146-e32505ef0be8" outcome_change_id="" -->
-  - Strict Model/Update/View separation
-  - No side effects in view functions (already done, verify)
-  - Event handlers return new state, don't mutate
-  - Extract reusable update functions
-
-### Type Unification (TUI + Web)
-<!-- roadmap:section id="866afa76-a663-4f36-ac57-21e69f2474de" -->
-- [ ] **Shared type definitions**
-  <!-- roadmap:item id="7c51596a-385f-4d83-a4ae-ef8a2667cc12" outcome_change_id="" -->
-  - Unify TUI types (src/tui/types.rs) with web types (web/src/types/graph.ts)
-  - Single source of truth for node/edge structures
-  - Consider code generation or shared schema
-- [ ] **Port TUI features to web viewer**
-  <!-- roadmap:item id="8f8a7b3a-4d9d-44bb-ae96-055533604c2a" outcome_change_id="" -->
-  - Timeline view with vim-style navigation
-  - Commit modal with split-view diff
-  - Branch filtering and fuzzy search
-  - Goal story view
-- [ ] **Parallel development workflow**
-  <!-- roadmap:item id="fbb41ce4-f252-44f4-aa8c-30f01e84127d" outcome_change_id="" -->
-  - Changes to one should auto-update the other
-  - Shared test fixtures for both platforms
-  - Document the type mapping
-
 ### Documentation Restructure
 <!-- roadmap:section id="74b5be43-4c7c-4e8c-95e7-6b80d97451f0" -->
 - [ ] Rethink the `docs/` folder organization
@@ -792,21 +678,6 @@
 
 ## Backlog - Future Vision
 <!-- roadmap:section id="b98b3892-5851-463d-9d2a-e87503d47cd8" -->
-
-### TUI PR Review Mode
-<!-- roadmap:section id="fadbdfed-ffbb-48dc-bd7e-668e645ece6a" -->
-- [ ] **GitHub PR integration in TUI**
-  <!-- roadmap:item id="6707d5b3-0bdd-41c0-bebf-673d4aaf8e20" outcome_change_id="" -->
-  - Pull in PR comments from GitHub API
-  - Show file-level and line-level comments alongside code
-  - Browse commits in PR context with associated comments
-  - Mark comments as resolved/addressed from TUI
-  - Reply to comments directly from TUI
-- [ ] **Code review workflow**
-  <!-- roadmap:item id="d77c14ce-2346-40c1-b38e-eaa4fe4ead40" outcome_change_id="" -->
-  - Navigate between commented locations
-  - Jump from decision node to related PR/commit comments
-  - See review status and approval state
 
 ### LLM Critique & Analysis
 <!-- roadmap:section id="30289abe-f336-4cff-af9f-5696a78d0bf6" -->
@@ -883,7 +754,7 @@
 - [ ] Visualization integration:
   <!-- roadmap:item id="ecec3c70-2710-4f0d-9180-0090ebd95df2" outcome_change_id="" -->
   - Export to formats compatible with BI tools (Metabase, Superset, etc.)
-  - Built-in charts in TUI or web viewer
+  - Built-in charts in web viewer
   - `deciduous report` to generate analytical summaries
 
 ---
@@ -896,7 +767,6 @@
   - User sees live updates as AI creates/modifies nodes
   - Stream-style view of graph changes in real-time
   - Could use websocket or file watching to detect changes
-  - TUI mode: live refresh every N seconds or on file change
   - Web mode: push updates via SSE or websocket
 - [ ] **Visualization of graph deltas**
   <!-- roadmap:item id="dea7bc7f-fb4c-4012-9455-42cba819238e" outcome_change_id="" -->
@@ -967,7 +837,7 @@
   - General knowledge work, not just software engineering
 - [ ] **Cross-platform graph access**
   <!-- roadmap:item id="e08b4028-69e6-43ff-9a0c-7d175b40f979" outcome_change_id="" -->
-  - Same `.deciduous/` database works from CLI, TUI, web, and Desktop
+  - Same `.deciduous/` database works from CLI, web, and Desktop
   - Claude Desktop can read graphs created by Claude Code and vice versa
   - Unified decision history across all interaction modes
 - [ ] **Resource exposure**

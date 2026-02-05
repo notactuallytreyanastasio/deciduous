@@ -72,18 +72,6 @@ libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 # Colored terminal output
 colored = "2.0"
 
-# TUI
-ratatui = "0.29"
-crossterm = { version = "0.28", features = ["event-stream"] }
-tui-tree-widget = "0.22"
-
-# File watching for TUI auto-refresh
-notify = "6.1"
-
-# Syntax highlighting for TUI file preview
-syntect = { version = "5.2", default-features = false, features = ["default-fancy"] }
-syntect-tui = "3.0"
-lazy_static = "1.4"
 ts-rs = { version = "10.1.0", optional = true }
 
 [profile.release]
