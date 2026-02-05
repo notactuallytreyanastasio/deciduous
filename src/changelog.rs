@@ -103,7 +103,7 @@ pub const RELEASES: &[Release] = &[
         version: "0.9.2",
         highlights: &[
             "New `revisit` node type for pivots and direction changes",
-            "Orange color coding in TUI and web viewer",
+            "Orange color coding in web viewer",
         ],
     },
     Release {

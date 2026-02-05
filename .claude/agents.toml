@@ -24,7 +24,6 @@ file_patterns = [
     "Cargo.toml",
     "Cargo.lock"
 ]
-exclude_patterns = ["src/tui/**"]
 focus_areas = [
     "Diesel ORM and SQLite database operations",
     "CLI command dispatch and argument parsing",
@@ -39,30 +38,6 @@ When working on Rust core:
 - Follow existing patterns in db.rs for database operations
 - Use the macro patterns in export.rs (w!, wln!) for output
 - Maintain backwards compatibility with existing CLI commands
-"""
-
-[agents.tui]
-name = "TUI Agent"
-description = "Terminal UI with Ratatui - views, modals, navigation, keybindings"
-file_patterns = [
-    "src/tui/**/*.rs",
-    "src/tui/app.rs",
-    "src/tui/mod.rs"
-]
-focus_areas = [
-    "Ratatui widgets and rendering",
-    "TEA (The Elm Architecture) pattern - Model/Update/View",
-    "Vim-style navigation (j/k/g/G)",
-    "Modal dialogs and state management",
-    "Syntax highlighting with syntect"
-]
-instructions = """
-When working on TUI:
-- Follow TEA pattern: pure state transformations in state.rs, messages in msg.rs
-- Views should be pure rendering functions with no side effects
-- Test state transformations independently from rendering
-- Use crossterm for terminal events, ratatui for rendering
-- Check src/tui/views/ for existing view implementations
 """
 
 [agents.web]

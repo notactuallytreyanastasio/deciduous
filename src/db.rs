@@ -971,7 +971,7 @@ impl Database {
         )
         .execute(&mut conn)?;
 
-        // GitHub issue cache for TUI/Web display
+        // GitHub issue cache for Web display
         diesel::sql_query(
             r#"
             CREATE TABLE IF NOT EXISTS github_issue_cache (
@@ -2209,7 +2209,7 @@ impl Database {
     // GitHub Issue Cache Methods
     // ========================================================================
 
-    /// Cache a GitHub issue for local display in TUI/Web
+    /// Cache a GitHub issue for local display in web viewer
     pub fn cache_github_issue(
         &self,
         issue_number: i32,
