@@ -167,7 +167,7 @@ deciduous prompt <node_id> "full verbatim prompt here"
 cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
 ```
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
+Prompts are viewable in the web viewer.
 
 ### CRITICAL: Maintain Connections
 
@@ -330,7 +330,6 @@ When working on this project, identify which domain the work belongs to and use 
 | Agent | Domain | Key Files |
 |-------|--------|-----------|
 | `rust-core` | CLI, database, export/sync | `src/main.rs`, `src/db.rs`, `src/export.rs` |
-| `tui` | Terminal UI with Ratatui | `src/tui/**/*.rs` |
 | `web` | React/TypeScript viewer | `web/src/**/*.{ts,tsx}` |
 | `tooling` | Claude Code configuration | `.claude/`, `CLAUDE.md`, `src/init/` |
 | `docs` | Documentation, guides | `docs/`, `README.md`, `ROADMAP.md` |
@@ -344,9 +343,9 @@ When spawning a Task for exploration or implementation:
 2. **Include the subagent context** in your Task prompt
 3. **Scope file searches** to the relevant patterns
 
-Example: For TUI work, spawn an Explore agent with:
+Example: For web viewer work, spawn an Explore agent with:
 ```
-"Focus on src/tui/. This is the TUI agent domain - Ratatui widgets, TEA pattern, vim navigation. See .claude/agents.toml for full context."
+"Focus on web/src/. This is the web agent domain - React components, D3/Dagre graphs. See .claude/agents.toml for full context."
 ```
 
 ### Why Subagents Matter
@@ -579,6 +578,25 @@ deciduous diff status
    ```bash
    cargo clippy
    ```
+
+### Git Staging Rules - CRITICAL
+
+**NEVER use broad git add commands that stage everything:**
+- ❌ `git add -A` - stages ALL changes including untracked files
+- ❌ `git add .` - stages everything in current directory
+- ❌ `git add -a` or `git commit -am` - auto-stages all tracked changes
+- ❌ `git add *` - glob patterns can catch unintended files
+
+**ALWAYS stage files explicitly by name:**
+- ✅ `git add src/main.rs src/lib.rs`
+- ✅ `git add Cargo.toml Cargo.lock`
+- ✅ `git add .claude/commands/decision.md`
+
+**Why this matters:**
+- Prevents accidentally committing sensitive files (.env, credentials)
+- Prevents committing large binaries or build artifacts
+- Forces you to review exactly what you're committing
+- Catches unintended changes before they enter git history
 
 ### Pre-Commit Checklist
 

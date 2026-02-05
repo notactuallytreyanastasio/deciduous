@@ -226,7 +226,7 @@ deciduous prompt <node_id> "full verbatim prompt here"
 cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
 ```
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
+Prompts are viewable in the web viewer.
 
 ## Branch-Based Grouping
 
@@ -352,6 +352,25 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 - After creating multiple nodes quickly
 - At session end
 - When the web UI graph looks disconnected
+
+## Git Staging Rules - CRITICAL
+
+**NEVER use broad git add commands that stage everything:**
+- ❌ `git add -A` - stages ALL changes including untracked files
+- ❌ `git add .` - stages everything in current directory
+- ❌ `git add -a` or `git commit -am` - auto-stages all tracked changes
+- ❌ `git add *` - glob patterns can catch unintended files
+
+**ALWAYS stage files explicitly by name:**
+- ✅ `git add src/main.rs src/lib.rs`
+- ✅ `git add Cargo.toml Cargo.lock`
+- ✅ `git add .claude/commands/decision.md`
+
+**Why this matters:**
+- Prevents accidentally committing sensitive files (.env, credentials)
+- Prevents committing large binaries or build artifacts
+- Forces you to review exactly what you're committing
+- Catches unintended changes before they enter git history
 
 ## Multi-User Sync
 
@@ -667,7 +686,7 @@ deciduous prompt <node_id> "full verbatim prompt here"
 cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
 ```
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
+Prompts are viewable in the web viewer.
 
 ### CRITICAL: Maintain Connections
 
@@ -749,6 +768,25 @@ auto_detect = true
 1. Does every **outcome** link back to what caused it?
 2. Does every **action** link to why you did it?
 3. Any **dangling outcomes** without parents?
+
+### Git Staging Rules - CRITICAL
+
+**NEVER use broad git add commands that stage everything:**
+- ❌ `git add -A` - stages ALL changes including untracked files
+- ❌ `git add .` - stages everything in current directory
+- ❌ `git add -a` or `git commit -am` - auto-stages all tracked changes
+- ❌ `git add *` - glob patterns can catch unintended files
+
+**ALWAYS stage files explicitly by name:**
+- ✅ `git add src/main.rs src/lib.rs`
+- ✅ `git add Cargo.toml Cargo.lock`
+- ✅ `git add .claude/commands/decision.md`
+
+**Why this matters:**
+- Prevents accidentally committing sensitive files (.env, credentials)
+- Prevents committing large binaries or build artifacts
+- Forces you to review exactly what you're committing
+- Catches unintended changes before they enter git history
 
 ### Session Start Checklist
 

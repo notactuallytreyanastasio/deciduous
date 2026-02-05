@@ -135,7 +135,7 @@ diesel::table! {
 }
 
 // ============================================================================
-// GitHub Issue Cache - Local cache for TUI/Web display
+// GitHub Issue Cache - Local cache for web display
 // ============================================================================
 
 diesel::table! {
