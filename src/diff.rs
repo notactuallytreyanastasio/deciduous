@@ -269,16 +269,12 @@ impl Database {
                     .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
                     .and_then(|j| {
                         j.get("files").and_then(|f| {
-                            if let Some(arr) = f.as_array() {
-                                Some(
-                                    arr.iter()
-                                        .filter_map(|v| v.as_str())
-                                        .collect::<Vec<_>>()
-                                        .join(","),
-                                )
-                            } else {
-                                None
-                            }
+                            f.as_array().map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str())
+                                    .collect::<Vec<_>>()
+                                    .join(",")
+                            })
                         })
                     });
 
