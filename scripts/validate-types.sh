@@ -4,7 +4,6 @@
 #
 # This script validates that type definitions match across:
 # - src/db.rs (Rust backend)
-# - src/tui/types.rs (Rust TUI)
 # - web/src/types/graph.ts (TypeScript web)
 # - schema/decision-graph.schema.json (canonical schema)
 #
@@ -51,7 +50,6 @@ warn() {
 
 # File paths
 RUST_DB="$PROJECT_ROOT/src/db.rs"
-RUST_TUI_TYPES="$PROJECT_ROOT/src/tui/types.rs"
 TS_GRAPH_TYPES="$PROJECT_ROOT/web/src/types/graph.ts"
 TS_GENERATED_SCHEMA="$PROJECT_ROOT/web/src/types/generated/schema.ts"
 JSON_SCHEMA="$PROJECT_ROOT/schema/decision-graph.schema.json"
@@ -59,7 +57,7 @@ JSON_SCHEMA="$PROJECT_ROOT/schema/decision-graph.schema.json"
 # Check all required files exist
 check_files() {
     local missing=0
-    for file in "$RUST_DB" "$RUST_TUI_TYPES" "$TS_GRAPH_TYPES" "$TS_GENERATED_SCHEMA" "$JSON_SCHEMA"; do
+    for file in "$RUST_DB" "$TS_GRAPH_TYPES" "$TS_GENERATED_SCHEMA" "$JSON_SCHEMA"; do
         if [[ ! -f "$file" ]]; then
             error "Missing file: $file"
             missing=1
@@ -69,18 +67,6 @@ check_files() {
         exit 2
     fi
     log_verbose "All required files found"
-}
-
-# Extract node types from Rust TUI
-extract_rust_node_types() {
-    # Handle both single-line and multi-line array definitions
-    # Use awk to print from pattern start until first line containing ];
-    awk '/pub const NODE_TYPES/{found=1} found{print; if(/\];/) exit}' "$RUST_TUI_TYPES" | \
-        tr '\n' ' ' | \
-        sed 's/.*\[//' | sed 's/\].*//' | \
-        tr ',' '\n' | \
-        sed 's/.*"\([^"]*\)".*/\1/' | \
-        grep -v '^$' | sort | tr '\n' ' ' | xargs
 }
 
 # Extract node types from TypeScript
@@ -97,18 +83,6 @@ extract_schema_node_types() {
     jq -r '.definitions.NodeType.enum[]' "$JSON_SCHEMA" 2>/dev/null | sort | tr '\n' ' ' | xargs
 }
 
-# Extract edge types from Rust TUI
-extract_rust_edge_types() {
-    # Handle both single-line and multi-line array definitions
-    # Use awk to print from pattern start until first line containing ];
-    awk '/pub const EDGE_TYPES/{found=1} found{print; if(/\];/) exit}' "$RUST_TUI_TYPES" | \
-        tr '\n' ' ' | \
-        sed 's/.*\[//' | sed 's/\].*//' | \
-        tr ',' '\n' | \
-        sed 's/.*"\([^"]*\)".*/\1/' | \
-        grep -v '^$' | sort | tr '\n' ' ' | xargs
-}
-
 # Extract edge types from TypeScript
 extract_ts_edge_types() {
     grep 'EDGE_TYPES' "$TS_GRAPH_TYPES" | head -1 | \
@@ -121,18 +95,6 @@ extract_ts_edge_types() {
 # Extract edge types from JSON Schema
 extract_schema_edge_types() {
     jq -r '.definitions.EdgeType.enum[]' "$JSON_SCHEMA" 2>/dev/null | sort | tr '\n' ' ' | xargs
-}
-
-# Extract node statuses from Rust TUI
-extract_rust_node_statuses() {
-    # Handle both single-line and multi-line array definitions
-    # Use awk to print from pattern start until first line containing ];
-    awk '/pub const NODE_STATUSES/{found=1} found{print; if(/\];/) exit}' "$RUST_TUI_TYPES" | \
-        tr '\n' ' ' | \
-        sed 's/.*\[//' | sed 's/\].*//' | \
-        tr ',' '\n' | \
-        sed 's/.*"\([^"]*\)".*/\1/' | \
-        grep -v '^$' | sort | tr '\n' ' ' | xargs
 }
 
 # Extract node statuses from TypeScript
@@ -235,30 +197,26 @@ main() {
 
     # === NODE TYPES ===
     log "Checking NODE_TYPES..."
-    rust_node_types=$(extract_rust_node_types)
     ts_node_types=$(extract_ts_node_types)
     schema_node_types=$(extract_schema_node_types)
 
-    compare_types "NODE_TYPES" "Rust TUI" "TypeScript" "$rust_node_types" "$ts_node_types" || ((errors++))
     compare_types "NODE_TYPES" "TypeScript" "Schema" "$ts_node_types" "$schema_node_types" || ((errors++))
 
     if [[ $errors -eq 0 ]]; then
-        success "NODE_TYPES in sync: $rust_node_types"
+        success "NODE_TYPES in sync: $ts_node_types"
     fi
 
     # === EDGE TYPES ===
     log ""
     log "Checking EDGE_TYPES..."
-    rust_edge_types=$(extract_rust_edge_types)
     ts_edge_types=$(extract_ts_edge_types)
     schema_edge_types=$(extract_schema_edge_types)
 
     local edge_errors=0
-    compare_types "EDGE_TYPES" "Rust TUI" "TypeScript" "$rust_edge_types" "$ts_edge_types" || ((edge_errors++))
     compare_types "EDGE_TYPES" "TypeScript" "Schema" "$ts_edge_types" "$schema_edge_types" || ((edge_errors++))
 
     if [[ $edge_errors -eq 0 ]]; then
-        success "EDGE_TYPES in sync: $rust_edge_types"
+        success "EDGE_TYPES in sync: $ts_edge_types"
     else
         ((errors += edge_errors))
     fi
@@ -266,16 +224,14 @@ main() {
     # === NODE STATUSES ===
     log ""
     log "Checking NODE_STATUSES..."
-    rust_statuses=$(extract_rust_node_statuses)
     ts_statuses=$(extract_ts_node_statuses)
     schema_statuses=$(extract_schema_node_statuses)
 
     local status_errors=0
-    compare_types "NODE_STATUSES" "Rust TUI" "TypeScript" "$rust_statuses" "$ts_statuses" || ((status_errors++))
     compare_types "NODE_STATUSES" "TypeScript" "Schema" "$ts_statuses" "$schema_statuses" || ((status_errors++))
 
     if [[ $status_errors -eq 0 ]]; then
-        success "NODE_STATUSES in sync: $rust_statuses"
+        success "NODE_STATUSES in sync: $ts_statuses"
     else
         ((errors += status_errors))
     fi
