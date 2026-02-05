@@ -12,6 +12,19 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.12.0",
+        highlights: &[
+            "Redesigned web viewer with hierarchical narrative view",
+            "Smart narrative detection - filters to significant 10+ node trees",
+            "D3 DAG flowchart visualization with left-to-right hierarchical layout",
+            "Full-text search with type filter buttons",
+            "Resizable panels - drag to resize all sections",
+            "Gold shimmer effect for selected node highlighting",
+            "Automatic graph loading when clicking search results",
+            "Removed 20k+ lines of old scattered components for unified App.tsx",
+        ],
+    },
+    Release {
         version: "0.11.2",
         highlights: &[
             "Fix: `deciduous opencode install` now works standalone without `deciduous init`",
