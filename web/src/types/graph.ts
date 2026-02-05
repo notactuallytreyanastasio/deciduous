@@ -436,3 +436,118 @@ export function getIncomingEdges(nodeId: number, edges: DecisionEdge[]): Decisio
 export function getOutgoingEdges(nodeId: number, edges: DecisionEdge[]): DecisionEdge[] {
   return edges.filter(e => e.from_node_id === nodeId);
 }
+
+// =============================================================================
+// Structural Grouping Types - For browsing by goal tree / connected subgraph
+// =============================================================================
+
+/**
+ * A structural group represents a connected subgraph, typically rooted at a goal
+ */
+export interface StructuralGroup {
+  id: string;                       // Unique identifier for this group
+  rootNode: DecisionNode;           // The root node (usually a goal)
+  nodes: DecisionNode[];            // All nodes in this subgraph
+  edges: DecisionEdge[];            // All edges within this subgraph
+  isAutoDetected: boolean;          // true for goal-rooted, false for manual selection
+  label?: string;                   // Optional display label
+}
+
+/**
+ * Tree node for hierarchical rendering
+ * Used by HierarchicalTree component
+ */
+export interface TreeNode {
+  node: DecisionNode;
+  children: TreeNode[];
+  edgeFromParent?: DecisionEdge;    // The edge connecting to parent
+  depth: number;
+  isExpanded: boolean;
+  isRevisit: boolean;               // Special styling for REVISIT nodes
+  duplicateIndex?: number;          // When node appears multiple times (multi-parent)
+}
+
+// =============================================================================
+// Branch Grouping Types - For browsing by git branch
+// =============================================================================
+
+/**
+ * A branch group contains all nodes created on a specific git branch
+ */
+export interface BranchGroup {
+  branch: string;                   // Branch name
+  nodes: DecisionNode[];            // Nodes on this branch
+  edges: DecisionEdge[];            // Edges between nodes in this branch
+  crossBranchEdges: DecisionEdge[]; // Edges to/from nodes on other branches
+  commits: GitCommit[];             // Git commits linked to nodes on this branch
+  dateRange: {
+    start: Date;
+    end: Date;
+  };
+  nodeCount: number;
+}
+
+// =============================================================================
+// Narrative/Pivot Types - For browsing evolution over time
+// =============================================================================
+
+/**
+ * A pivot event captures a REVISIT node and its context:
+ * what was superseded, why, and what replaced it
+ */
+export interface PivotEvent {
+  revisitNode: DecisionNode;        // The REVISIT node itself
+  supersededNodes: DecisionNode[];  // Nodes that were abandoned/changed
+  reasonNodes: DecisionNode[];      // Observations that triggered the revisit
+  replacementNodes: DecisionNode[]; // New approach that followed
+  timestamp: Date;
+}
+
+/**
+ * Narrative timeline item - can be a regular node event or a pivot
+ */
+export interface NarrativeItem {
+  type: 'goal' | 'decision' | 'action' | 'outcome' | 'observation' | 'pivot';
+  timestamp: Date;
+  node: DecisionNode;
+  pivotEvent?: PivotEvent;          // Present when type === 'pivot'
+  relatedNodes?: DecisionNode[];    // Options for decisions, linked nodes for outcomes
+  linkedCommit?: GitCommit;         // Git commit if present
+}
+
+/**
+ * A chapter/phase in the narrative - groups related items
+ */
+export interface NarrativeChapter {
+  id: string;                       // Unique chapter ID
+  title: string;                    // Chapter title (e.g., "Auth Design", "Auth Pivot")
+  summary: string;                  // Brief summary of what happened in this chapter
+  items: NarrativeItem[];           // Items in this chapter
+  startTime: Date;
+  endTime: Date;
+  pivot?: PivotEvent;               // If this chapter ends with/contains a pivot
+  outcome?: DecisionNode;           // Key outcome of this chapter if any
+  decisions: DecisionNode[];        // Decisions made in this chapter
+}
+
+/**
+ * Generated narrative summary
+ */
+export interface NarrativeSummary {
+  headline: string;                 // One-line summary
+  goalsAchieved: string[];          // What was accomplished
+  keyPivots: string[];              // Major direction changes
+  openQuestions: string[];          // Unresolved decisions/observations
+}
+
+/**
+ * Complete narrative for a structural group
+ */
+export interface Narrative {
+  group: StructuralGroup;
+  items: NarrativeItem[];           // Chronological timeline
+  chapters: NarrativeChapter[];     // Grouped into chapters
+  pivots: PivotEvent[];             // All pivot points
+  summary: NarrativeSummary;        // Generated summary
+  totalDuration: string;            // Human-readable duration
+}

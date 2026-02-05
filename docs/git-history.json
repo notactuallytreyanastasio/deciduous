@@ -1,27 +1,19 @@
 [
   {
-    "hash": "3764160efcb4c7c6bb33ffa904e41802e3b95239",
-    "short_hash": "3764160",
-    "author": "Bobby Nathan",
-    "date": "2026-01-12T15:09:47-05:00",
-    "message": "docs: update release checklist with changelog maintenance step\n\n- Add changelog.rs update as required step 2 in release process\n- Add check-update to session start checklist\n- Update git push/cargo publish flags for known issues\n- Add deciduous update as final step to update local version",
-    "files_changed": 1
+    "hash": "62c155133eedf36cc73d5445a3f1258ad635f9b0",
+    "short_hash": "62c1551",
+    "author": "=",
+    "date": "2026-01-23T12:53:39-05:00",
+    "message": "feat: add Windsurf and OpenCode multi-assistant support\n\n- Add --windsurf flag to `deciduous init` for Windsurf/Cascade integration\n- Auto-detect .windsurf/ directory and set up hooks/rules automatically\n- Add Windsurf templates: hooks.json, pre-write hook, post-commit hook, rules\n- Update `deciduous update` to auto-detect and update all installed assistants\n- Document multi-assistant support in README.md\n- Update tutorial workflows to be assistant-agnostic\n\nSupported assistants:\n- Claude Code (default): .claude/, CLAUDE.md\n- OpenCode: .opencode/, AGENTS.md\n- Windsurf: .windsurf/hooks/, .windsurf/rules/\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 6
   },
   {
-    "hash": "2bf92d7b54eaca5c5a558a92b9cb2e4209a8fea4",
-    "short_hash": "2bf92d7",
-    "author": "Bobby Nathan",
-    "date": "2026-01-12T11:59:13-05:00",
-    "message": "release: v0.9.2 - add revisit node type\n\nAdd the 'revisit' node type for marking pivot points when reconsidering\nprevious decisions. Implemented across all layers:\n\n- CLI: orange color output, new node type accepted\n- TUI: orange color, 🔄 emoji prefix\n- DOT export: doubleoctagon shape, peach color\n- Web viewer: orange (#f97316) in graph and UI\n- Schema: added to NodeType enum\n- Templates: updated decision.md and CLAUDE.md docs\n- Tutorial: updated all reference pages",
-    "files_changed": 27
-  },
-  {
-    "hash": "6da0d5cd8c98c77ee0a5d6177cd0b1d59649c21d",
-    "short_hash": "6da0d5c",
-    "author": "Bobby Nathan",
-    "date": "2026-01-10T11:59:38-05:00",
-    "message": "docs: update story.html with new features and current stats\n\n- Update stats: 970+ nodes, 850+ edges, 50+ releases, 37 days\n- Add timeline sections for Tutorial System (archaeology, session recovery)\n- Add timeline for Enforcement Hooks and Claude Code focus\n- Add timeline for January 2026 maturity (delete/unlink commands)\n- Add \"Now Available\" vision section with implemented features\n- Update CTA with tutorial and workflow links\n- Sync graph data (991 nodes, 850 edges)",
-    "files_changed": 5
+    "hash": "62c155133eedf36cc73d5445a3f1258ad635f9b0",
+    "short_hash": "62c1551",
+    "author": "=",
+    "date": "2026-01-23T12:53:39-05:00",
+    "message": "feat: add Windsurf and OpenCode multi-assistant support\n\n- Add --windsurf flag to `deciduous init` for Windsurf/Cascade integration\n- Auto-detect .windsurf/ directory and set up hooks/rules automatically\n- Add Windsurf templates: hooks.json, pre-write hook, post-commit hook, rules\n- Update `deciduous update` to auto-detect and update all installed assistants\n- Document multi-assistant support in README.md\n- Update tutorial workflows to be assistant-agnostic\n\nSupported assistants:\n- Claude Code (default): .claude/, CLAUDE.md\n- OpenCode: .opencode/, AGENTS.md\n- Windsurf: .windsurf/hooks/, .windsurf/rules/\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 6
   },
   {
     "hash": "2a5aa0d17cec9e8eda0d31a8cd98df514b41097f",
@@ -54,14 +46,6 @@
     "date": "2026-01-06T23:52:56-05:00",
     "message": "docs(tutorial): fix accuracy issues and replace screenshot placeholders\n\n- Remove multi-editor implication from initializing.html (Claude Code only)\n- Fix \"another AI assistant\" reference in how-to-read.html\n- Replace all screenshot placeholders with ASCII art mockups\n- Add TUI mockups showing timeline, search, and detail panel\n- Add ASCII decision graph for PR documentation page\n- Streamline web viewer descriptions",
     "files_changed": 10
-  },
-  {
-    "hash": "e0670c0bf878d7850766477a7a91311a28b9f54f",
-    "short_hash": "e0670c0",
-    "author": "Bobby Nathan",
-    "date": "2026-01-06T22:20:36-05:00",
-    "message": "feat(tutorial): add animated terminal demos\n\n- Created terminal-demo.js animation system with pause/resume/replay\n- Added ~300 lines of CSS for terminal styling with step animations\n- Updated introduction page with quick demo and workflow diagram\n- Rewrote claude-code.html with 5 animated workflow demos\n- Rewrote session-recovery.html with 5 animated recovery demos\n- Added archaeology.html with 6 animated archaeology demos\n- Synced decision graph (962 nodes, 820 edges)\n\nFeatures:\n- macOS-style window chrome (red/yellow/green dots)\n- Step-by-step reveals with configurable timing\n- Pause overlay that fills terminal completely\n- Auto-scroll as content appears\n- Intersection Observer for triggering when visible\n- Color-coded labels (user/claude/output)",
-    "files_changed": 7
   },
   {
     "hash": "85b8b06881eafcc655ef3f4fb21fc9872ed73e36",
@@ -222,22 +206,6 @@
     "date": "2025-12-17T14:34:24-05:00",
     "message": "feat(web): add configurable search sort order (newest/oldest) (#161)\n\n* feat(web): add configurable search sort order (newest/oldest)\n\n- Add searchSort to URL state ('newest' | 'oldest', default 'newest')\n- Add sortOrder prop to SearchBar with toggle button in dropdown footer\n- Pass sort config from DagView to SearchBar via URL state\n- Sort persists via ?sort=oldest URL parameter for sharing\n\nUseful for historical museums/archives where oldest-first ordering\nhelps tell the chronological story of a project's evolution.\n\n* feat(web): improve search results UX\n\n- Sort search results by node type: goal > outcome > decision > option > action > observation\n- Add '+' button on callout cards to expand full chain tree modal\n- Chain modal shows all upstream ancestors and downstream descendants\n- Nodes in chain are sorted by type priority\n- Clicking card or modal item pans/zooms to the node\n- Each node in modal is clickable to navigate there\n\n* fix(web): move chain panel to bottom-left, auto-pan on expand\n\n* fix: chain panel stability, fullscreen mode, zoom behavior\n\n- Move chain panel outside SVG to prevent disappearing on re-render\n- Make panel smaller (320px) to fit viewport\n- Always fullscreen mode - remove mini view toggle\n- Prevent browser pinch zoom from interfering with graph zoom\n- Add touch-action: none to SVG container",
     "files_changed": 10
-  },
-  {
-    "hash": "998e1b347396c7cf7ebfaecfb5d14ce7bef2a269",
-    "short_hash": "998e1b3",
-    "author": "Bobby Nathan",
-    "date": "2025-12-17T14:17:01-05:00",
-    "message": "fix(web): move chain panel to bottom-left, auto-pan on expand",
-    "files_changed": 3
-  },
-  {
-    "hash": "034cc8f606d1ee51fedd3d96aa51492f25f117d5",
-    "short_hash": "034cc8f",
-    "author": "Bobby Nathan",
-    "date": "2025-12-17T13:54:30-05:00",
-    "message": "feat(web): improve search results UX\n\n- Sort search results by node type: goal > outcome > decision > option > action > observation\n- Add '+' button on callout cards to expand full chain tree modal\n- Chain modal shows all upstream ancestors and downstream descendants\n- Nodes in chain are sorted by type priority\n- Clicking card or modal item pans/zooms to the node\n- Each node in modal is clickable to navigate there",
-    "files_changed": 5
   },
   {
     "hash": "95ed15b378af53fd412f6cabddf15bedb3573397",
@@ -472,22 +440,6 @@
     "files_changed": 5
   },
   {
-    "hash": "e80d20f50f2bca9c9a49c8b0efd497548bb7dc74",
-    "short_hash": "e80d20f",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (420x180px) to show more content\n- Display type badge, confidence, node ID, date, title, and description\n- Show INCOMING/OUTGOING connections with previews\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 4
-  },
-  {
-    "hash": "9e9953a839af2c766797d56c270fc15fa4c3c5ef",
-    "short_hash": "9e9953a",
-    "author": "Bobby Nathan",
-    "date": "2025-12-16T01:12:08-05:00",
-    "message": "feat(web): redesign callout cards with right-side panel\n\n- Move callout cards to right side panel with semi-transparent background\n- Increase card size (400x140px) to show more content\n- Display full title, description (2 lines), date, and node type badge\n- Desktop: rich card layout with curved bezier connection lines\n- Mobile: pulsing indicator circles with bottom sheet for details\n- Cards stack vertically with proper spacing (no overlapping)",
-    "files_changed": 3
-  },
-  {
     "hash": "157aa70d3e03929ad162cb785826814bfb3d2933",
     "short_hash": "157aa70",
     "author": "Bobby Nathan",
@@ -608,22 +560,6 @@
     "files_changed": 11
   },
   {
-    "hash": "ea2e7dc8170e53aadb402054ab4657d67870ac2b",
-    "short_hash": "ea2e7dc",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T19:22:21-05:00",
-    "message": "fix(callouts): fix visibility detection and add hover previews\n\n- Fix viewport calculation (use top-left coords, not center)\n- Bigger node indicator circles (r=12 instead of r=8)\n- Add hover state with expanded preview card\n- Show type badge, full title, description on hover\n- Interactive circles that respond to mouse",
-    "files_changed": 8
-  },
-  {
-    "hash": "7a358fb86b5906fe7a42ec7f5694005a86d1ca67",
-    "short_hash": "7a358fb",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T19:14:54-05:00",
-    "message": "feat(callouts): wider labels to show more title text\n\n- Increased label width from 220px to 280px\n- Increased truncation limit from 22 to 32 chars\n- Reduced margin to better fit on screen",
-    "files_changed": 18
-  },
-  {
     "hash": "cb4d2c25375e9234da3edda7798e9d13f8a0b0b0",
     "short_hash": "cb4d2c2",
     "author": "Bobby Nathan",
@@ -670,22 +606,6 @@
     "date": "2025-12-15T14:48:45-05:00",
     "message": "fix(tui): roadmap 'o' keystroke now opens correct GitHub repo\n\nThe 'o' key in the roadmap view was hardcoded to open issues from\n'notactuallytreyanastasio/deciduous' instead of the user's actual repo.\n\nChanges:\n- Add github_repo field to RoadmapState\n- Detect repo from DB sync state or git remote URL\n- Add comprehensive keystroke tests to msg.rs\n- Improve error message when no repo configured",
     "files_changed": 4
-  },
-  {
-    "hash": "049ff12335b57647a77b58157d66636c2b959328",
-    "short_hash": "049ff12",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T12:17:04-05:00",
-    "message": "docs: add decision graph for search feature",
-    "files_changed": 2
-  },
-  {
-    "hash": "d29cfc5833c055aca8a5b2cb535f75d462e2cab1",
-    "short_hash": "d29cfc5",
-    "author": "Bobby Nathan",
-    "date": "2025-12-15T12:16:23-05:00",
-    "message": "feat(web): add search functionality to DAG viewer\n\nAdd full-text search across nodes, commits, prompts, and files:\n\n- New SearchBar component with dropdown results\n- Debounced search (150ms) for performance\n- Keyboard navigation (up/down arrows, enter, escape)\n- Visual node highlighting with glow effect\n- Match count indicator in stats bar\n- Mobile-responsive design\n\nSearch matches:\n- Node titles and descriptions\n- Git commit messages (via linked commits)\n- User prompts stored in metadata\n- Associated file paths",
-    "files_changed": 6
   },
   {
     "hash": "cdf0d378aa4579843ad3d8461aeea507ab017aae",
@@ -920,14 +840,6 @@
     "files_changed": 6
   },
   {
-    "hash": "9ea0ded71056d0f51c144c8870cc1dd30d409e2e",
-    "short_hash": "9ea0ded",
-    "author": "Bobby Nathan",
-    "date": "2025-12-12T20:29:34-05:00",
-    "message": "feat: add roadmap web page with GitHub issue integration\n\n- Add roadmap_items table to database schema for tracking roadmap items\n- Create roadmap module (src/roadmap.rs) with:\n  - ROADMAP.md parser extracting checklist items, sections, status\n  - Scope extraction (Critical, Extended, etc.)\n  - Auto-tagging based on keywords\n  - GitHub issue sync via gh CLI\n  - JSON export for web viewer\n- Add CLI commands: deciduous roadmap {parse,list,sync,export,summary}\n- Add /api/roadmap endpoint to serve.rs for local development\n- Create docs/roadmap/index.html web page:\n  - Styled consistently with main page (clean, white, no colors)\n  - Summary stats with progress bar\n  - Filterable by section, status, GitHub issues\n  - Searchable\n  - Works with both API and static JSON\n- Update deciduous sync to export roadmap-data.json\n- Add Roadmap link to main page navigation\n- Update tutorial styling: remove colorful banner, use subtle gray notice",
-    "files_changed": 15
-  },
-  {
     "hash": "7dd695e53f00bc32254d3f4d873f31af831e74ca",
     "short_hash": "7dd695e",
     "author": "Bobby Nathan",
@@ -990,14 +902,6 @@
     "date": "2025-12-12T09:37:16-05:00",
     "message": "test: add 12 unit tests for audit commit association\n\n- 9 tests for keyword_match_score function\n- 3 tests for update_node_commit database method\n\nTotal test count: 179",
     "files_changed": 2
-  },
-  {
-    "hash": "17e904594856b68064946024c0ad30dc60df3b83",
-    "short_hash": "17e9045",
-    "author": "Bobby Nathan",
-    "date": "2025-12-12T09:23:47-05:00",
-    "message": "feat: add deciduous audit --associate-commits command\n\nImplements retroactive commit association for the decision graph:\n- New 'audit' command with --associate-commits flag\n- Matches node titles to commit messages using keyword overlap\n- Configurable min-score threshold (default 50%)\n- Dry-run mode to preview before applying\n- Auto-apply mode with --yes flag\n- Added update_node_commit() method to Database\n\nApplied audit to existing graph:\n- Linked 35 nodes to their commits\n- Nodes with commits: 31 → 66",
-    "files_changed": 6
   },
   {
     "hash": "de4d4ad5658f65551aa334500ed78d7d1b15465e",
@@ -1184,30 +1088,6 @@
     "files_changed": 10
   },
   {
-    "hash": "e521e4286b814522ae78be73a95c3437d521197d",
-    "short_hash": "e521e42",
-    "author": "Bobby Nathan",
-    "date": "2025-12-11T01:18:52-05:00",
-    "message": "feat: split-view commit modal, TUI docs, roadmap update\n\n- Commit modal (O key) now shows split view with commit info on top, diff on bottom\n- Diff section scrolls independently with j/k navigation\n- Updated ROADMAP with completed TUI items and UX polish backlog\n- Added TUI documentation to README with keyboard shortcuts reference\n- Graph sync: 244 nodes, 185 edges",
-    "files_changed": 6
-  },
-  {
-    "hash": "101755be56839c519e2db12159a2de609d7e8cac",
-    "short_hash": "101755b",
-    "author": "Bobby Nathan",
-    "date": "2025-12-11T01:04:23-05:00",
-    "message": "feat: syntect syntax highlighting, reverse timeline order\n\n- Add proper syntect-based syntax highlighting for file preview modal\n- Convert syntect styles to ratatui RGB colors\n- Add shift-R to toggle timeline order (chronological vs reverse-chrono)\n- Initialize reverse_order field in App state\n- Lazy-load syntax highlighting resources with lazy_static",
-    "files_changed": 5
-  },
-  {
-    "hash": "40894d9d55eefef6d4a87375de59b4ce3447752e",
-    "short_hash": "40894d9",
-    "author": "Bobby Nathan",
-    "date": "2025-12-11T00:57:40-05:00",
-    "message": "feat: TUI enhancements - scrollable modals, branch search, file browser\n\n- Add scrollable modals with j/k/g/G navigation for commit, diff, and file preview\n- Add diff syntax highlighting (+/- line coloring in green/red)\n- Add shift-B for fuzzy branch search with Tab/arrows to navigate matches\n- Add file browser mode (F key) with n/N to navigate, p to preview, d for diff, o to open\n- Add 'o' key in modals to open file in editor (suspends TUI)\n- Fix file index resetting when changing nodes\n- Add syntect + syntect-tui dependencies for future syntax highlighting",
-    "files_changed": 7
-  },
-  {
     "hash": "5380e3fbae74af93bf6b57dca2698661b3b0bac0",
     "short_hash": "5380e3f",
     "author": "Bobby Nathan",
@@ -1238,14 +1118,6 @@
     "date": "2025-12-10T18:43:54-05:00",
     "message": "feat: add terminal user interface (TUI) for decision graph exploration\n\nImplements a rich, interactive TUI with two primary views:\n\n## Timeline View (Primary)\n- Scrollable list of nodes, newest first\n- Type badges with color coding (goal=green, decision=yellow, etc.)\n- Confidence percentage display\n- Vim-style navigation (j/k, gg, G, Ctrl+d/u)\n- Search filtering with / key\n- Type filtering with f key\n- Detail panel showing:\n  - Full node info\n  - Incoming/outgoing connections with rationale\n  - Associated files and commit\n  - Code jumping with 'o' key\n\n## DAG View\n- Hierarchical layout (goals at top, outcomes at bottom)\n- Node boxes with unicode borders\n- Edge arrows (chosen=bold green, rejected=dashed red)\n- Pan with h/j/k/l\n- Zoom with +/-\n\n## Features\n- Auto-refresh on database changes (file watcher via notify crate)\n- Manual refresh with 'r' key\n- File picker with checkboxes for multi-file selection\n- Help overlay with '?' key\n- Mouse support (click, scroll)\n- Tab switches between views\n\n## Type System\n- New src/tui/types.rs mirrors web/src/types/graph.ts\n- 15 new unit tests for type parsing and helpers\n- Consistent metadata extraction across Rust TUI and React web\n\nDependencies: ratatui 0.29, crossterm 0.28, tui-tree-widget 0.22, notify 6.1",
     "files_changed": 15
-  },
-  {
-    "hash": "32f00470aee07ec5dd0662087355c720b49eceb6",
-    "short_hash": "32f0047",
-    "author": "Bobby Nathan",
-    "date": "2025-12-10T18:03:55-05:00",
-    "message": "feat: add multi-user graph sync with diff/patch model\n\njj-inspired design for syncing decision graphs across multiple users:\n\nSchema changes:\n- Add change_id (UUID) column to decision_nodes for stable cross-db references\n- Add from_change_id/to_change_id columns to decision_edges\n- Auto-migration on database open for existing databases\n\nNew commands:\n- deciduous diff export: Export nodes as JSON patch files\n- deciduous diff apply: Apply patches to local database (idempotent)\n- deciduous diff status: List patches in directory\n- deciduous migrate: Manually run database migration\n\nPatch format (JSON):\n- version, author, branch, created_at, base_commit metadata\n- nodes array with change_id, type, title, metadata\n- edges array with from/to change_ids, edge_type, rationale\n\nWorkflow:\n1. User creates nodes locally\n2. Export: deciduous diff export --nodes 1-10 -o patches/feature.json\n3. Commit patch file to git\n4. Others pull and apply: deciduous diff apply patches/feature.json\n5. Idempotent - same patch can be applied multiple times safely\n\nSee docs/MULTI_USER_SYNC.md for full design documentation.",
-    "files_changed": 11
   },
   {
     "hash": "b4c56bc8b86e04a12055bfb05d02309a803df824",
