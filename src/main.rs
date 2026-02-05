@@ -2319,9 +2319,8 @@ fn main() {
 
                     for section in &syncable_sections {
                         // Check if section already has an issue
-                        if section.github_issue_number.is_some() {
+                        if let Some(issue_num) = section.github_issue_number {
                             // Update existing issue
-                            let issue_num = section.github_issue_number.unwrap();
                             let body = generate_issue_body(section);
 
                             if dry_run {
