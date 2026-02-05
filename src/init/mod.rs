@@ -13,9 +13,9 @@ use std::path::Path;
 use templates::{
     CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW, DECISION_MD,
     DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE,
-    PAGES_VIEWER_HTML, RECOVER_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, WORK_MD,
+    PAGES_VIEWER_HTML, RECOVER_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE,
     WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER, WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-    WINDSURF_RULES_DECIDUOUS,
+    WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -24,7 +24,11 @@ use templates::{
 /// * `setup_claude` - Whether to set up Claude Code integration
 /// * `setup_opencode` - Whether to set up OpenCode integration
 /// * `setup_windsurf` - Whether to set up Windsurf integration (also auto-detects .windsurf/)
-pub fn init_project(setup_claude: bool, setup_opencode: bool, setup_windsurf: bool) -> Result<(), String> {
+pub fn init_project(
+    setup_claude: bool,
+    setup_opencode: bool,
+    setup_windsurf: bool,
+) -> Result<(), String> {
     let cwd =
         std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
 
@@ -167,15 +171,11 @@ pub fn init_project(setup_claude: bool, setup_opencode: bool, setup_windsurf: bo
             create_dir_if_missing(&windsurf_dir)?;
         }
         if setup_windsurf {
-            println!(
-                "\n{}",
-                "Setting up Windsurf integration...".cyan()
-            );
+            println!("\n{}", "Setting up Windsurf integration...".cyan());
         } else {
             println!(
                 "\n{}",
-                "Detected .windsurf directory - setting up Windsurf integration..."
-                    .cyan()
+                "Detected .windsurf directory - setting up Windsurf integration...".cyan()
             );
         }
         setup_windsurf_integration(&cwd)?;
@@ -276,10 +276,7 @@ pub fn init_project(setup_claude: bool, setup_opencode: bool, setup_windsurf: bo
 
     if windsurf_configured {
         println!();
-        println!(
-            "{}",
-            "Windsurf integration:".cyan().bold()
-        );
+        println!("{}", "Windsurf integration:".cyan().bold());
         println!("  - Hooks configured in .windsurf/hooks.json");
         println!("  - Always-on rules in .windsurf/rules/deciduous.md");
         println!("  - Pre-write hook blocks edits without action nodes");
@@ -351,8 +348,7 @@ pub fn update_tooling() -> Result<(), String> {
     if has_windsurf {
         println!(
             "\n{}",
-            "Detected .windsurf directory - updating Windsurf integration..."
-                .cyan()
+            "Detected .windsurf directory - updating Windsurf integration...".cyan()
         );
         update_windsurf(&cwd)?;
     }
@@ -487,7 +483,11 @@ fn setup_windsurf_integration(cwd: &Path) -> Result<(), String> {
 
     // Write hooks.json
     let hooks_json_path = cwd.join(".windsurf").join("hooks.json");
-    write_file_if_missing(&hooks_json_path, WINDSURF_HOOKS_JSON, ".windsurf/hooks.json")?;
+    write_file_if_missing(
+        &hooks_json_path,
+        WINDSURF_HOOKS_JSON,
+        ".windsurf/hooks.json",
+    )?;
 
     // Write require-action-node.sh hook
     let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
@@ -507,12 +507,13 @@ fn setup_windsurf_integration(cwd: &Path) -> Result<(), String> {
 
     // Write deciduous.md rules file
     let rules_path = windsurf_rules_dir.join("deciduous.md");
-    write_file_if_missing(&rules_path, WINDSURF_RULES_DECIDUOUS, ".windsurf/rules/deciduous.md")?;
+    write_file_if_missing(
+        &rules_path,
+        WINDSURF_RULES_DECIDUOUS,
+        ".windsurf/rules/deciduous.md",
+    )?;
 
-    println!(
-        "   {} Windsurf integration",
-        "Configured".green()
-    );
+    println!("   {} Windsurf integration", "Configured".green());
 
     Ok(())
 }
@@ -528,7 +529,11 @@ fn update_windsurf(cwd: &Path) -> Result<(), String> {
 
     // Overwrite hooks.json
     let hooks_json_path = cwd.join(".windsurf").join("hooks.json");
-    write_file_overwrite(&hooks_json_path, WINDSURF_HOOKS_JSON, ".windsurf/hooks.json")?;
+    write_file_overwrite(
+        &hooks_json_path,
+        WINDSURF_HOOKS_JSON,
+        ".windsurf/hooks.json",
+    )?;
 
     // Overwrite require-action-node.sh hook
     let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
@@ -548,7 +553,11 @@ fn update_windsurf(cwd: &Path) -> Result<(), String> {
 
     // Overwrite deciduous.md rules file
     let rules_path = windsurf_rules_dir.join("deciduous.md");
-    write_file_overwrite(&rules_path, WINDSURF_RULES_DECIDUOUS, ".windsurf/rules/deciduous.md")?;
+    write_file_overwrite(
+        &rules_path,
+        WINDSURF_RULES_DECIDUOUS,
+        ".windsurf/rules/deciduous.md",
+    )?;
 
     Ok(())
 }
