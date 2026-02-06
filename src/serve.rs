@@ -117,6 +117,17 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         (&Method::Get, p) if p.starts_with("/api/qa/") => handle_qa_get(request, p),
         (&Method::Delete, p) if p.starts_with("/api/qa/") => handle_qa_delete(request, p),
 
+        // API: Get sync status (event-based sync)
+        (&Method::Get, "/api/sync-status") => {
+            let status = get_sync_status();
+            let json = serde_json::to_string(&ApiResponse::success(status))?;
+
+            let response = Response::from_string(json).with_header(
+                Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap(),
+            );
+            request.respond(response)
+        }
+
         // Serve SPA for all other GET requests (client-side routing)
         (&Method::Get, _) => {
             let response = Response::from_string(GRAPH_VIEWER_HTML)
@@ -241,6 +252,78 @@ fn get_git_history() -> Vec<GitCommit> {
 
 /// Find git repository root by looking for .deciduous folder (same as db.rs)
 /// The .deciduous folder is in the project root, which also has .git
+/// Sync status for the web viewer
+#[derive(Serialize)]
+struct SyncStatus {
+    initialized: bool,
+    pending_events: usize,
+    events_by_author: HashMap<String, usize>,
+    checkpoint_time: Option<String>,
+    checkpoint_nodes: Option<usize>,
+    checkpoint_edges: Option<usize>,
+}
+
+fn get_sync_status() -> SyncStatus {
+    let deciduous_dir = std::path::PathBuf::from(".deciduous");
+    let sync_dir = deciduous_dir.join("sync");
+
+    if !sync_dir.exists() {
+        return SyncStatus {
+            initialized: false,
+            pending_events: 0,
+            events_by_author: HashMap::new(),
+            checkpoint_time: None,
+            checkpoint_nodes: None,
+            checkpoint_edges: None,
+        };
+    }
+
+    let author = crate::events::get_current_author();
+    let event_log = match crate::events::EventLog::new(&deciduous_dir, author) {
+        Ok(log) => log,
+        Err(_) => {
+            return SyncStatus {
+                initialized: true,
+                pending_events: 0,
+                events_by_author: HashMap::new(),
+                checkpoint_time: None,
+                checkpoint_nodes: None,
+                checkpoint_edges: None,
+            };
+        }
+    };
+
+    // Get events after checkpoint
+    let events = event_log.get_events_after_checkpoint().unwrap_or_default();
+    let pending_events = events.len();
+
+    // Count by author
+    let mut events_by_author: HashMap<String, usize> = HashMap::new();
+    for event in &events {
+        *events_by_author.entry(event.author().to_string()).or_default() += 1;
+    }
+
+    // Get checkpoint info
+    let (checkpoint_time, checkpoint_nodes, checkpoint_edges) =
+        match event_log.load_checkpoint() {
+            Ok(Some(cp)) => (
+                Some(cp.created_at.to_rfc3339()),
+                Some(cp.nodes.len()),
+                Some(cp.edges.len()),
+            ),
+            _ => (None, None, None),
+        };
+
+    SyncStatus {
+        initialized: true,
+        pending_events,
+        events_by_author,
+        checkpoint_time,
+        checkpoint_nodes,
+        checkpoint_edges,
+    }
+}
+
 fn find_git_repo_root() -> Option<std::path::PathBuf> {
     let current_dir = std::env::current_dir().ok()?;
     let mut dir = current_dir.as_path();

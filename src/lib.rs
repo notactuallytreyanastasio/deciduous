@@ -42,6 +42,7 @@ pub mod changelog;
 pub mod config;
 pub mod db;
 pub mod diff;
+pub mod events;
 pub mod export;
 pub mod github;
 pub mod hooks;
@@ -59,6 +60,10 @@ pub use db::{
     RoadmapSyncState, CURRENT_SCHEMA,
 };
 pub use diff::{ApplyResult, GraphPatch, PatchEdge, PatchNode};
+pub use events::{
+    Checkpoint, CheckpointEdge, CheckpointNode, Event, EventLog, EventLogError,
+    MaterializedState, RebuildResult, generate_edge_id, get_current_author,
+};
 pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
     parse_node_range, DotConfig, WriteupConfig,
