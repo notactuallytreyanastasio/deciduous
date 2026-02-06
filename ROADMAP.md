@@ -746,7 +746,7 @@
   - Optional: federated queries across multiple project databases
 - [ ] Potential analytical views:
   <!-- roadmap:item id="fa90c90c-694d-43bb-91b6-7ce199a329ad" outcome_change_id="" -->
-  - Decision funnel analysis (goal → decision → action → outcome conversion)
+  - Decision funnel analysis (goal → option → decision → action → outcome conversion)
   - Confidence vs outcome correlation matrix
   - Branch/feature complexity metrics
   - Session productivity heatmaps

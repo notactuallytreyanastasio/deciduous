@@ -27,15 +27,15 @@ Take the pulse of a system - what decisions define how it works TODAY.
 # Start with a goal
 deciduous add goal "API rate limiting behavior" -c 90
 
-# Map the decisions
-deciduous add decision "How to identify users?" -c 85
-deciduous link 1 2 -r "leads_to"
+# Map options (possible approaches from the goal)
+deciduous add option "Identify users by auth token" -c 85
+deciduous link 1 2 -r "possible_approach"
 
-deciduous add decision "What are the thresholds?" -c 85
-deciduous link 1 3 -r "leads_to"
+deciduous add option "Use IP-based rate limiting" -c 85
+deciduous link 1 3 -r "possible_approach"
 ```
 
-**Output:** Decision tree of the current model (like Dan's Suspense diagram).
+**Output:** Decision tree of the current model (goal -> options -> decisions).
 
 ### /narratives - Understand Evolution
 
@@ -56,8 +56,8 @@ Transform narratives into a queryable graph.
 | Narrative Element | Graph Node |
 |-------------------|------------|
 | Title | `goal` |
-| Design question | `decision` |
-| Answer | `option` |
+| Possible approach | `option` |
+| Choosing an approach | `decision` |
 | What was learned | `observation` |
 | **PIVOT** | `revisit` |
 
@@ -112,6 +112,23 @@ deciduous nodes --type revisit
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
 
+### The Node Flow Rule - CRITICAL
+
+The canonical flow through the decision graph is:
+
+```
+goal -> options -> decision -> actions -> outcomes
+```
+
+- **Goals** lead to **options** (possible approaches to explore)
+- **Options** lead to a **decision** (choosing which option to pursue)
+- **Decisions** lead to **actions** (implementing the chosen approach)
+- **Actions** lead to **outcomes** (results of the implementation)
+- **Observations** attach anywhere relevant
+- Goals do NOT lead directly to decisions -- there must be options first
+- Options do NOT come after decisions -- options come BEFORE decisions
+- Decision nodes should only be created when an option is actually chosen, not prematurely
+
 ### The Core Rule
 
 ```
@@ -126,6 +143,7 @@ AUDIT regularly -> Check for missing connections
 | Trigger | Log Type | Example |
 |---------|----------|---------|
 | User asks for a new feature | `goal` **with -p** | "Add dark mode" |
+| Exploring possible approaches | `option` | "Use Redux for state" |
 | Choosing between approaches | `decision` | "Choose state management" |
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
@@ -167,7 +185,7 @@ deciduous prompt <node_id> "full verbatim prompt here"
 cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
 ```
 
-Prompts are viewable in the web viewer.
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
 
 ### CRITICAL: Maintain Connections
 
@@ -175,9 +193,10 @@ Prompts are viewable in the web viewer.
 
 | When you create... | IMMEDIATELY link to... |
 |-------------------|------------------------|
-| `outcome` | The action/goal it resolves |
-| `action` | The goal/decision that spawned it |
-| `option` | Its parent decision |
+| `outcome` | The action that produced it |
+| `action` | The decision that spawned it |
+| `decision` | The option(s) it chose between |
+| `option` | Its parent goal |
 | `observation` | Related goal/action |
 | `revisit` | The decision/outcome being reconsidered |
 

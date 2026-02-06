@@ -23,18 +23,18 @@ commit_msg=$(git log -1 --format=%s 2>/dev/null)
 
 # Output reminder to stderr (exit 2 ensures Claude sees and processes this)
 cat >&2 << EOF
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: Link this commit to the decision graph!               ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  Commit: $commit_hash "$commit_msg"
-║                                                                   ║
-║  Run NOW:                                                         ║
-║    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-║    deciduous link <action_id> <outcome_id> -r "Implementation complete"
-║                                                                   ║
-║  Or if this was an action (not outcome):                          ║
-║    deciduous add action "What was done" -c 90 --commit HEAD       ║
-╚═══════════════════════════════════════════════════════════════════╝
++===================================================================+
+|  DECIDUOUS: Link this commit to the decision graph!               |
++===================================================================+
+|  Commit: $commit_hash "$commit_msg"
+|                                                                   |
+|  Run NOW:                                                         |
+|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
+|                                                                   |
+|  Or if this was an action (not outcome):                          |
+|    deciduous add action "What was done" -c 90 --commit HEAD       |
++===================================================================+
 EOF
 
 # Exit 2 to ensure Claude processes this as important feedback

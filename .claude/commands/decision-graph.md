@@ -290,16 +290,16 @@ For post-hoc abandonment (tried something, it failed later):
 - Create an observation explaining why it failed
 - Link observation to the new decision it triggered
 
-## Link Patterns
+## Link Patterns (goal -> options -> decision -> actions -> outcomes)
 
-- `goal → decision` - Goal leads to choice point
-- `decision → option` - Decision has options (use chosen/rejected edge types)
-- `option → action` - Chosen option leads to implementation
+- `goal → option` - Goal leads to possible approaches
+- `option → decision` - Options lead to choosing (use chosen/rejected edge types)
+- `decision → action` - Chosen option leads to implementation
 - `action → outcome` - Action produces result
 - `outcome → observation` - Result reveals new insight
-- `observation → decision` - Insight triggers new choice (can have multiple observations converging)
+- `observation → option` - Insight suggests new approach (feeds back to options)
 - `observation → revisit` - Insight forces reconsideration of previous approach
-- `revisit → decision` - Pivot leads to new choice point
+- `revisit → option` - Pivot leads to exploring new options
 
 When a design approach is abandoned and replaced:
 

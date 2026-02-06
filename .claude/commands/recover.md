@@ -38,11 +38,12 @@ deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
 done
 ```
 
-**Review each flagged node:**
+**Review each flagged node (flow: goal -> options -> decision -> actions -> outcomes):**
 - Root `goal` nodes are VALID without parents
-- `outcome` nodes MUST link back to their action/goal
-- `action` nodes MUST link to their parent goal/decision
-- `option` nodes MUST link to their parent decision
+- `option` nodes MUST link to their parent goal
+- `decision` nodes MUST link from the option(s) being chosen
+- `action` nodes MUST link to their parent decision
+- `outcome` nodes MUST link back to their action
 
 **Fix missing connections:**
 ```bash
@@ -88,10 +89,10 @@ auto_detect = true                    # Auto-detect branch on node creation
 After recovering context, you MUST follow the logging workflow:
 
 ```
-EVERY USER REQUEST → Log goal/decision first
-BEFORE CODE CHANGES → Log action
-AFTER CHANGES → Log outcome, link nodes
-BEFORE GIT PUSH → deciduous sync
+EVERY USER REQUEST -> Log goal/decision first
+BEFORE CODE CHANGES -> Log action
+AFTER CHANGES -> Log outcome, link nodes
+BEFORE GIT PUSH -> deciduous sync
 ```
 
 **The user is watching the graph live.** Log as you go, not after.
@@ -131,25 +132,25 @@ If $ARGUMENTS specifies a focus, prioritize context for:
 
 ```
 SESSION START
-    ↓
-Run /recover → See past decisions
-    ↓
-AUDIT → Fix any orphan nodes first!
-    ↓
-DO WORK → Log BEFORE each action
-    ↓
-CONNECT → Link new nodes immediately
-    ↓
-AFTER CHANGES → Log outcomes, observations
-    ↓
-AUDIT AGAIN → Any new orphans?
-    ↓
-BEFORE PUSH → deciduous sync
-    ↓
-PUSH → Live graph updates
-    ↓
-SESSION END → Final audit
-    ↓
+    |
+Run /recover -> See past decisions
+    |
+AUDIT -> Fix any orphan nodes first!
+    |
+DO WORK -> Log BEFORE each action
+    |
+CONNECT -> Link new nodes immediately
+    |
+AFTER CHANGES -> Log outcomes, observations
+    |
+AUDIT AGAIN -> Any new orphans?
+    |
+BEFORE PUSH -> deciduous sync
+    |
+PUSH -> Live graph updates
+    |
+SESSION END -> Final audit
+    |
 (repeat)
 ```
 
@@ -157,9 +158,24 @@ SESSION END → Final audit
 
 ---
 
-## Multi-User Sync
+## Multi-User Sync (Event-Based)
 
-If working in a team, check for and apply patches from teammates:
+**FIRST: Check for and apply teammate events:**
+
+```bash
+# Check sync status - are there pending events from teammates?
+deciduous events status
+
+# If pending events exist, rebuild to apply them
+deciduous events rebuild
+```
+
+This is automatic - events are emitted when you use `add`, `link`, `status`, etc.
+Git handles merging everyone's event files. Just pull and rebuild.
+
+### Legacy Patch-Based Sync
+
+If using the older patch workflow:
 
 ```bash
 # Check for unapplied patches
@@ -167,20 +183,6 @@ deciduous diff status
 
 # Apply all patches (idempotent - safe to run multiple times)
 deciduous diff apply .deciduous/patches/*.json
-
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/teammate-feature.json
-```
-
-Before pushing your branch, export your decisions for teammates:
-
-```bash
-# Export your branch's decisions as a patch
-deciduous diff export --branch $(git rev-parse --abbrev-ref HEAD) \
-  -o .deciduous/patches/$(whoami)-$(git rev-parse --abbrev-ref HEAD).json
-
-# Commit the patch file
-git add .deciduous/patches/
 ```
 
 ## Why This Matters

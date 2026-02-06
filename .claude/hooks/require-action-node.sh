@@ -43,20 +43,20 @@ fi
 
 # No recent node - block and provide guidance
 cat >&2 << 'EOF'
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: No recent action/goal node found                      ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  Before editing files, log what you're about to do:               ║
-║                                                                   ║
-║  For new work:                                                    ║
-║    deciduous add goal "What you're trying to achieve" -c 90       ║
-║                                                                   ║
-║  For implementation:                                              ║
-║    deciduous add action "What you're about to implement" -c 85    ║
-║                                                                   ║
-║  Then link to parent:                                             ║
-║    deciduous link <parent_id> <new_id> -r "reason"                ║
-╚═══════════════════════════════════════════════════════════════════╝
++===================================================================+
+|  DECIDUOUS: No recent action/goal node found                      |
++===================================================================+
+|  Before editing files, log what you're about to do:               |
+|                                                                   |
+|  For new work:                                                    |
+|    deciduous add goal "What you're trying to achieve" -c 90       |
+|                                                                   |
+|  For implementation:                                              |
+|    deciduous add action "What you're about to implement" -c 85    |
+|                                                                   |
+|  Then link to parent:                                             |
+|    deciduous link <parent_id> <new_id> -r "reason"                |
++===================================================================+
 EOF
 
 exit 2

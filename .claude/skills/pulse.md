@@ -57,71 +57,67 @@ Example:
 deciduous add goal "Determine when and whether to show Suspense fallback" -c 90
 ```
 
-### 4. Map the decisions
+### 4. Map the options
 
-For each design question you identified:
+For each design question you identified, create options (possible approaches):
 
 ```bash
-deciduous add decision "<Design question>" -c <confidence>
-deciduous link <parent> <decision> -r "leads_to"
+deciduous add option "<Possible approach>" -c <confidence>
+deciduous link <goal> <option> -r "possible_approach"
 ```
 
-Decisions can spawn other decisions:
+Options come from goals, and decisions come from choosing options:
 ```bash
 # Root goal
 deciduous add goal "Suspense fallback behavior" -c 90
 # → 1
 
-# Top-level decisions
-deciduous add decision "How should timeout thresholds work?" -c 85
-deciduous link 1 2 -r "leads_to"
+# Top-level options (possible approaches)
+deciduous add option "Timeout-based thresholds" -c 85
+deciduous link 1 2 -r "possible_approach"
 
-deciduous add decision "What happens when fetch fails?" -c 85
-deciduous link 1 3 -r "leads_to"
+deciduous add option "Error boundary propagation" -c 85
+deciduous link 1 3 -r "possible_approach"
 
-deciduous add decision "How should nested Suspense interact?" -c 85
-deciduous link 1 4 -r "leads_to"
+deciduous add option "Nested Suspense coordination" -c 85
+deciduous link 1 4 -r "possible_approach"
 
-# Sub-decisions (questions that arise from parent decisions)
-deciduous add decision "Should timeout be configurable per-component?" -c 80
-deciduous link 2 5 -r "leads_to"
-
-deciduous add decision "What's the default timeout value?" -c 80
-deciduous link 2 6 -r "leads_to"
+# When an option is chosen, create a decision node
+deciduous add decision "Chose timeout-based approach" -c 90
+deciduous link 2 5 -r "chosen"
 ```
 
-### 5. Add answers where known
+### 5. Add chosen decisions
 
-If a decision has a clear answer in the current system:
+When an option is chosen in the current system, create a decision to record it:
 
 ```bash
-deciduous add option "<The answer/choice>" -c 90
-deciduous link <decision> <option> -r "resolved_by"
-deciduous status <option> chosen
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
 ```
 
-If a decision is still open or unclear, leave it as just the decision node.
+If a question is still open or unclear, leave it as option nodes without a decision.
 
 ---
 
 ## The Output
 
-A decision tree showing the current model:
+A decision tree showing the current model (goal -> options -> decisions):
 
 ```
 [GOAL: Suspense fallback behavior]
     │
-    ├── [DECISION: How should timeout work?]
-    │       ├── [DECISION: Configurable per-component?]
-    │       └── [DECISION: Default timeout value?]
-    │               └── [OPTION: 1000ms] (chosen)
+    ├── [OPTION: Timeout-based thresholds]
+    │       └── [DECISION: Chose timeout approach] (chosen)
+    │               └── [ACTION: Implement timeouts]
+    │                       └── [OUTCOME: Timeouts working]
     │
-    ├── [DECISION: What happens on fetch failure?]
-    │       └── [OPTION: Propagate to error boundary] (chosen)
+    ├── [OPTION: Error boundary propagation]
+    │       └── [DECISION: Chose error boundary] (chosen)
     │
-    └── [DECISION: How do nested Suspense interact?]
-            ├── [DECISION: Should parent wait for children?]
-            └── [DECISION: Independent or coordinated?]
+    └── [OPTION: Nested Suspense coordination]
+            ├── (not yet decided)
+            └── ...
 ```
 
 ---
@@ -139,9 +135,9 @@ A decision tree showing the current model:
 - Stop when the answer is obvious/forced (no real choice)
 - Stop when you've captured what someone needs to understand the model
 
-**Decision vs Option?**
-- Decision = the question ("How should timeout work?")
-- Option = an answer ("Use 1000ms default")
+**Option vs Decision?**
+- Option = a possible approach explored from a goal ("Timeout-based thresholds")
+- Decision = choosing which option to pursue ("Chose timeout approach")
 
 ---
 
@@ -152,32 +148,30 @@ A decision tree showing the current model:
 deciduous add goal "API rate limiting behavior" -c 90
 # → 1
 
-# Core decisions
-deciduous add decision "What identifies a user for rate limiting?" -c 85
-deciduous link 1 2 -r "leads_to"
+# Options (possible approaches to explore)
+deciduous add option "Identify users by auth token" -c 85
+deciduous link 1 2 -r "possible_approach"
 
-deciduous add decision "What are the rate limit thresholds?" -c 85
-deciduous link 1 3 -r "leads_to"
+deciduous add option "Use IP-based rate limiting" -c 85
+deciduous link 1 3 -r "possible_approach"
 
-deciduous add decision "What happens when limit is exceeded?" -c 85
-deciduous link 1 4 -r "leads_to"
+deciduous add option "Return 429 with Retry-After header on exceed" -c 85
+deciduous link 1 4 -r "possible_approach"
 
-# Answers for decision 2
-deciduous add option "User ID when authenticated, IP when not" -c 90
-deciduous link 2 5 -r "resolved_by"
-deciduous status 5 chosen
+# Decision: chose auth-based identification
+deciduous add decision "Chose user ID when authenticated, IP when not" -c 90
+deciduous link 2 5 -r "chosen"
 
-# Sub-decisions for decision 3
-deciduous add decision "Different limits for different endpoints?" -c 80
-deciduous link 3 6 -r "leads_to"
+# Decision: chose 429 response
+deciduous add decision "Chose 429 with Retry-After" -c 90
+deciduous link 4 6 -r "chosen"
 
-deciduous add decision "Different limits for different user tiers?" -c 80
-deciduous link 3 7 -r "leads_to"
+# Sub-options for rate limit thresholds
+deciduous add option "Different limits per endpoint" -c 80
+deciduous link 1 7 -r "possible_approach"
 
-# Answer for decision 4
-deciduous add option "Return 429 with Retry-After header" -c 90
-deciduous link 4 8 -r "resolved_by"
-deciduous status 8 chosen
+deciduous add option "Different limits per user tier" -c 80
+deciduous link 1 8 -r "possible_approach"
 ```
 
 ---
@@ -205,14 +199,13 @@ The pulse becomes the destination that history leads to.
 # Start with a goal
 deciduous add goal "<What aspect of the system?>" -c 90
 
-# Add decisions (the questions)
-deciduous add decision "<Design question?>" -c 85
-deciduous link <parent> <decision> -r "leads_to"
+# Add options (possible approaches) -- options come from goals
+deciduous add option "<Possible approach>" -c 85
+deciduous link <goal> <option> -r "possible_approach"
 
-# Add answers where known
-deciduous add option "<The answer>" -c 90
-deciduous link <decision> <option> -r "resolved_by"
-deciduous status <option> chosen
+# When an option is chosen, create a decision
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
 
 # View the pulse
 deciduous serve

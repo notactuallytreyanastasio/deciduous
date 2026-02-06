@@ -271,7 +271,14 @@ The graph viewer shows a branch dropdown in the stats bar:
 ### Sync Graph
 - `sync` -> `deciduous sync`
 
-### Multi-User Sync (Diff/Patch)
+### Multi-User Sync (Event-Based) - RECOMMENDED
+- `events init` -> `deciduous events init` (initialize event-based sync)
+- `events status` -> `deciduous events status` (show pending events)
+- `events rebuild` -> `deciduous events rebuild` (apply teammate events)
+- `events checkpoint` -> `deciduous events checkpoint` (create snapshot)
+- `events checkpoint --clear-events` -> snapshot and clear old events
+
+### Multi-User Sync (Legacy Diff/Patch)
 - `diff export -o <file>` -> `deciduous diff export -o <file>` (export nodes as patch)
 - `diff export --nodes 1-10 -o <file>` -> export specific nodes
 - `diff export --branch feature-x -o <file>` -> export nodes from branch
@@ -314,23 +321,24 @@ The graph viewer shows a branch dropdown in the stats bar:
 
 **Every node MUST be logically connected.** Floating nodes break the graph's value.
 
-### Connection Rules
+### Connection Rules (goal -> options -> decision -> actions -> outcomes)
 | Node Type | MUST connect to | Example |
 |-----------|----------------|---------|
-| `outcome` | The action/goal it resolves | "JWT working" -> links FROM "Implementing JWT" |
-| `action` | The decision/goal that spawned it | "Implementing JWT" -> links FROM "Add auth" |
-| `option` | Its parent decision | "Use JWT" -> links FROM "Choose auth method" |
-| `observation` | Related goal/action/decision | "Found existing code" -> links TO relevant node |
-| `decision` | Parent goal (if any) | "Choose auth" -> links FROM "Add auth feature" |
-| `revisit` | The decision/outcome being reconsidered | "Reconsidering auth" -> links FROM original decision |
 | `goal` | Can be a root (no parent needed) | Root goals are valid orphans |
+| `option` | Its parent goal | "Use JWT" -> links FROM "Add auth" |
+| `decision` | The option(s) it chose between | "Choose JWT" -> links FROM "Use JWT" option |
+| `action` | The decision that spawned it | "Implementing JWT" -> links FROM "Choose JWT" |
+| `outcome` | The action that produced it | "JWT working" -> links FROM "Implementing JWT" |
+| `observation` | Related goal/action/decision | "Found existing code" -> links TO relevant node |
+| `revisit` | The decision/outcome being reconsidered | "Reconsidering auth" -> links FROM original decision |
 
 ### Audit Checklist
 Ask yourself after creating nodes:
-1. Does every **outcome** link back to what caused it?
-2. Does every **action** link to why you did it?
-3. Does every **option** link to its decision?
-4. Are there **dangling outcomes** with no parent action/goal?
+1. Does every **outcome** link back to the action that produced it?
+2. Does every **action** link to the decision that spawned it?
+3. Does every **option** link to its parent goal?
+4. Does every **decision** link from the option(s) being chosen?
+5. Are there **dangling outcomes** with no parent action?
 
 ### Find Disconnected Nodes
 ```bash
@@ -376,45 +384,41 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 
 **Problem**: Multiple users work on the same codebase, each with a local `.deciduous/deciduous.db` (gitignored). How to share decisions?
 
-**Solution**: jj-inspired dual-ID model. Each node has:
-- `id` (integer): Local database primary key, different per machine
-- `change_id` (UUID): Globally unique, stable across all databases
+**Solution**: Event-based sync with append-only logs. Each user has their own event file that git merges automatically.
 
-### Export Workflow
+### Event-Based Sync (Recommended)
+
+**Setup (once per repo):**
 ```bash
-# Export nodes from your branch as a patch file
-deciduous diff export --branch feature-x -o .deciduous/patches/alice-feature.json
-
-# Or export specific node IDs
-deciduous diff export --nodes 172-188 -o .deciduous/patches/alice-feature.json --author alice
+deciduous events init
+git add .deciduous/sync/
+git commit -m "feat: enable event-based sync"
 ```
 
-### Apply Workflow
+**Daily workflow:**
 ```bash
-# Apply patches from teammates (idempotent - safe to re-apply)
+git pull                    # Get teammate events
+deciduous events rebuild    # Apply to local DB
+# Work normally - events auto-emit on add/link/etc.
+git add .deciduous/sync/ && git commit -m "sync" && git push
+```
+
+**Periodic maintenance:**
+```bash
+deciduous events checkpoint --clear-events  # Compact old events
+git add .deciduous/sync/ && git commit -m "checkpoint"
+```
+
+### Legacy Patch Workflow
+
+For manual control, use the older patch system:
+
+```bash
+# Export nodes as a patch file
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates
 deciduous diff apply .deciduous/patches/*.json
-
-# Preview what would change
-deciduous diff apply --dry-run .deciduous/patches/bob-refactor.json
-```
-
-### PR Workflow
-1. Create nodes locally while working
-2. Export: `deciduous diff export --branch my-feature -o .deciduous/patches/my-feature.json`
-3. Commit the patch file (NOT the database)
-4. Open PR with patch file included
-5. Teammates pull and apply: `deciduous diff apply .deciduous/patches/my-feature.json`
-6. **Idempotent**: Same patch applied twice = no duplicates
-
-### Patch Format (JSON)
-```json
-{
-  "version": "1.0",
-  "author": "alice",
-  "branch": "feature/auth",
-  "nodes": [{ "change_id": "uuid...", "title": "...", ... }],
-  "edges": [{ "from_change_id": "uuid1", "to_change_id": "uuid2", ... }]
-}
 ```
 
 ## The Rule
@@ -471,11 +475,12 @@ deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
 done
 ```
 
-**Review each flagged node:**
+**Review each flagged node (flow: goal -> options -> decision -> actions -> outcomes):**
 - Root `goal` nodes are VALID without parents
-- `outcome` nodes MUST link back to their action/goal
-- `action` nodes MUST link to their parent goal/decision
-- `option` nodes MUST link to their parent decision
+- `option` nodes MUST link to their parent goal
+- `decision` nodes MUST link from the option(s) being chosen
+- `action` nodes MUST link to their parent decision
+- `outcome` nodes MUST link back to their action
 
 **Fix missing connections:**
 ```bash
@@ -592,29 +597,21 @@ SESSION END -> Final audit
 
 ## Multi-User Sync
 
-If working in a team, check for and apply patches from teammates:
+If working in a team, sync decision graphs automatically via events:
 
 ```bash
-# Check for unapplied patches
-deciduous diff status
+# Check sync status
+deciduous events status
 
-# Apply all patches (idempotent - safe to run multiple times)
-deciduous diff apply .deciduous/patches/*.json
+# Apply teammate events (after git pull)
+deciduous events rebuild
 
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/teammate-feature.json
+# Periodic maintenance (compact old events)
+deciduous events checkpoint --clear-events
 ```
 
-Before pushing your branch, export your decisions for teammates:
-
-```bash
-# Export your branch's decisions as a patch
-deciduous diff export --branch $(git rev-parse --abbrev-ref HEAD) \
-  -o .deciduous/patches/$(whoami)-$(git rev-parse --abbrev-ref HEAD).json
-
-# Commit the patch file
-git add .deciduous/patches/
-```
+Events are auto-emitted when you use `add`, `link`, `status`, etc.
+Git handles merging everyone's event files automatically.
 
 ## Why This Matters
 
@@ -631,6 +628,23 @@ pub const CLAUDE_MD_SECTION: &str = r#"
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
 
+### The Node Flow Rule - CRITICAL
+
+The canonical flow through the decision graph is:
+
+```
+goal -> options -> decision -> actions -> outcomes
+```
+
+- **Goals** lead to **options** (possible approaches to explore)
+- **Options** lead to a **decision** (choosing which option to pursue)
+- **Decisions** lead to **actions** (implementing the chosen approach)
+- **Actions** lead to **outcomes** (results of the implementation)
+- **Observations** attach anywhere relevant
+- Goals do NOT lead directly to decisions -- there must be options first
+- Options do NOT come after decisions -- options come BEFORE decisions
+- Decision nodes should only be created when an option is actually chosen, not prematurely
+
 ### The Core Rule
 
 ```
@@ -645,6 +659,7 @@ AUDIT regularly -> Check for missing connections
 | Trigger | Log Type | Example |
 |---------|----------|---------|
 | User asks for a new feature | `goal` **with -p** | "Add dark mode" |
+| Exploring possible approaches | `option` | "Use Redux for state" |
 | Choosing between approaches | `decision` | "Choose state management" |
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
@@ -694,9 +709,10 @@ Prompts are viewable in the web viewer.
 
 | When you create... | IMMEDIATELY link to... |
 |-------------------|------------------------|
-| `outcome` | The action/goal it resolves |
-| `action` | The goal/decision that spawned it |
-| `option` | Its parent decision |
+| `outcome` | The action that produced it |
+| `action` | The decision that spawned it |
+| `decision` | The option(s) it chose between |
+| `option` | Its parent goal |
 | `observation` | Related goal/action |
 | `revisit` | The decision/outcome being reconsidered |
 
@@ -799,20 +815,20 @@ git status                # Current state
 
 ### Multi-User Sync
 
-Share decisions across teammates:
+Sync decisions with teammates via event logs:
 
 ```bash
-# Export your branch's decisions
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+# Check sync status
+deciduous events status
 
-# Apply patches from teammates (idempotent)
-deciduous diff apply .deciduous/patches/*.json
+# Apply teammate events (after git pull)
+deciduous events rebuild
 
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/teammate.json
+# Compact old events periodically
+deciduous events checkpoint --clear-events
 ```
 
-PR workflow: Export patch -> commit patch file -> PR -> teammates apply.
+Events auto-emit on add/link/status commands. Git merges event files automatically.
 "#;
 
 /// Claude Code work.md slash command template (transaction model)
@@ -1188,71 +1204,67 @@ Example:
 deciduous add goal "Determine when and whether to show Suspense fallback" -c 90
 ```
 
-### 4. Map the decisions
+### 4. Map the options
 
-For each design question you identified:
+For each design question you identified, create options (possible approaches):
 
 ```bash
-deciduous add decision "<Design question>" -c <confidence>
-deciduous link <parent> <decision> -r "leads_to"
+deciduous add option "<Possible approach>" -c <confidence>
+deciduous link <goal> <option> -r "possible_approach"
 ```
 
-Decisions can spawn other decisions:
+Options come from goals, and decisions come from choosing options:
 ```bash
 # Root goal
 deciduous add goal "Suspense fallback behavior" -c 90
 # → 1
 
-# Top-level decisions
-deciduous add decision "How should timeout thresholds work?" -c 85
-deciduous link 1 2 -r "leads_to"
+# Top-level options (possible approaches)
+deciduous add option "Timeout-based thresholds" -c 85
+deciduous link 1 2 -r "possible_approach"
 
-deciduous add decision "What happens when fetch fails?" -c 85
-deciduous link 1 3 -r "leads_to"
+deciduous add option "Error boundary propagation" -c 85
+deciduous link 1 3 -r "possible_approach"
 
-deciduous add decision "How should nested Suspense interact?" -c 85
-deciduous link 1 4 -r "leads_to"
+deciduous add option "Nested Suspense coordination" -c 85
+deciduous link 1 4 -r "possible_approach"
 
-# Sub-decisions (questions that arise from parent decisions)
-deciduous add decision "Should timeout be configurable per-component?" -c 80
-deciduous link 2 5 -r "leads_to"
-
-deciduous add decision "What's the default timeout value?" -c 80
-deciduous link 2 6 -r "leads_to"
+# When an option is chosen, create a decision node
+deciduous add decision "Chose timeout-based approach" -c 90
+deciduous link 2 5 -r "chosen"
 ```
 
-### 5. Add answers where known
+### 5. Add chosen decisions
 
-If a decision has a clear answer in the current system:
+When an option is chosen in the current system, create a decision to record it:
 
 ```bash
-deciduous add option "<The answer/choice>" -c 90
-deciduous link <decision> <option> -r "resolved_by"
-deciduous status <option> chosen
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
 ```
 
-If a decision is still open or unclear, leave it as just the decision node.
+If a question is still open or unclear, leave it as option nodes without a decision.
 
 ---
 
 ## The Output
 
-A decision tree showing the current model:
+A decision tree showing the current model (goal -> options -> decisions):
 
 ```
 [GOAL: Suspense fallback behavior]
     │
-    ├── [DECISION: How should timeout work?]
-    │       ├── [DECISION: Configurable per-component?]
-    │       └── [DECISION: Default timeout value?]
-    │               └── [OPTION: 1000ms] (chosen)
+    ├── [OPTION: Timeout-based thresholds]
+    │       └── [DECISION: Chose timeout approach] (chosen)
+    │               └── [ACTION: Implement timeouts]
+    │                       └── [OUTCOME: Timeouts working]
     │
-    ├── [DECISION: What happens on fetch failure?]
-    │       └── [OPTION: Propagate to error boundary] (chosen)
+    ├── [OPTION: Error boundary propagation]
+    │       └── [DECISION: Chose error boundary] (chosen)
     │
-    └── [DECISION: How do nested Suspense interact?]
-            ├── [DECISION: Should parent wait for children?]
-            └── [DECISION: Independent or coordinated?]
+    └── [OPTION: Nested Suspense coordination]
+            ├── (not yet decided)
+            └── ...
 ```
 
 ---
@@ -1270,9 +1282,9 @@ A decision tree showing the current model:
 - Stop when the answer is obvious/forced (no real choice)
 - Stop when you've captured what someone needs to understand the model
 
-**Decision vs Option?**
-- Decision = the question ("How should timeout work?")
-- Option = an answer ("Use 1000ms default")
+**Option vs Decision?**
+- Option = a possible approach explored from a goal ("Timeout-based thresholds")
+- Decision = choosing which option to pursue ("Chose timeout approach")
 
 ---
 
@@ -1283,32 +1295,30 @@ A decision tree showing the current model:
 deciduous add goal "API rate limiting behavior" -c 90
 # → 1
 
-# Core decisions
-deciduous add decision "What identifies a user for rate limiting?" -c 85
-deciduous link 1 2 -r "leads_to"
+# Options (possible approaches to explore)
+deciduous add option "Identify users by auth token" -c 85
+deciduous link 1 2 -r "possible_approach"
 
-deciduous add decision "What are the rate limit thresholds?" -c 85
-deciduous link 1 3 -r "leads_to"
+deciduous add option "Use IP-based rate limiting" -c 85
+deciduous link 1 3 -r "possible_approach"
 
-deciduous add decision "What happens when limit is exceeded?" -c 85
-deciduous link 1 4 -r "leads_to"
+deciduous add option "Return 429 with Retry-After header on exceed" -c 85
+deciduous link 1 4 -r "possible_approach"
 
-# Answers for decision 2
-deciduous add option "User ID when authenticated, IP when not" -c 90
-deciduous link 2 5 -r "resolved_by"
-deciduous status 5 chosen
+# Decision: chose auth-based identification
+deciduous add decision "Chose user ID when authenticated, IP when not" -c 90
+deciduous link 2 5 -r "chosen"
 
-# Sub-decisions for decision 3
-deciduous add decision "Different limits for different endpoints?" -c 80
-deciduous link 3 6 -r "leads_to"
+# Decision: chose 429 response
+deciduous add decision "Chose 429 with Retry-After" -c 90
+deciduous link 4 6 -r "chosen"
 
-deciduous add decision "Different limits for different user tiers?" -c 80
-deciduous link 3 7 -r "leads_to"
+# Sub-options for rate limit thresholds
+deciduous add option "Different limits per endpoint" -c 80
+deciduous link 1 7 -r "possible_approach"
 
-# Answer for decision 4
-deciduous add option "Return 429 with Retry-After header" -c 90
-deciduous link 4 8 -r "resolved_by"
-deciduous status 8 chosen
+deciduous add option "Different limits per user tier" -c 80
+deciduous link 1 8 -r "possible_approach"
 ```
 
 ---
@@ -1336,14 +1346,13 @@ The pulse becomes the destination that history leads to.
 # Start with a goal
 deciduous add goal "<What aspect of the system?>" -c 90
 
-# Add decisions (the questions)
-deciduous add decision "<Design question?>" -c 85
-deciduous link <parent> <decision> -r "leads_to"
+# Add options (possible approaches) -- options come from goals
+deciduous add option "<Possible approach>" -c 85
+deciduous link <goal> <option> -r "possible_approach"
 
-# Add answers where known
-deciduous add option "<The answer>" -c 90
-deciduous link <decision> <option> -r "resolved_by"
-deciduous status <option> chosen
+# When an option is chosen, create a decision
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
 
 # View the pulse
 deciduous serve
@@ -1778,13 +1787,22 @@ with email/password, and we need OAuth support for Google and GitHub.
 EOF
 ```
 
+## Node Flow Rule: goal -> options -> decision -> actions -> outcomes
+
+- **Goals** lead to **options** (possible approaches)
+- **Options** lead to a **decision** (choosing which option)
+- **Decisions** lead to **actions** (implementing the choice)
+- **Actions** lead to **outcomes** (results)
+- Goals do NOT lead directly to decisions -- there must be options first
+
 ## CRITICAL: Maintain Connections
 
 | When you create... | IMMEDIATELY link to... |
 |-------------------|------------------------|
-| `outcome` | The action/goal it resolves |
-| `action` | The goal/decision that spawned it |
-| `option` | Its parent decision |
+| `outcome` | The action that produced it |
+| `action` | The decision that spawned it |
+| `decision` | The option(s) it chose between |
+| `option` | Its parent goal |
 | `observation` | Related goal/action |
 
 **Root `goal` nodes are the ONLY valid orphans.**
@@ -1975,7 +1993,7 @@ Commits are evidence. If a narrative mentions a commit as evidence, you might re
 The graph is about the MODEL, not the code. "Implemented JWT" is not interesting. "Chose JWT over sessions" is.
 
 **Don't over-structure.**
-If a narrative has a simple evolution with no pivots, it might just be: `goal → decision → current state`. That's fine.
+If a narrative has a simple evolution with no pivots, it might just be: `goal → option → decision → action → outcome`. That's fine.
 
 ---
 

@@ -222,13 +222,14 @@ deciduous add $TYPE "$TITLE" -c <confidence 0-100>
 
 ## After creating the node
 
-**IMMEDIATELY** link it to related nodes:
+**IMMEDIATELY** link it to related nodes (flow: goal -> options -> decision -> actions -> outcomes):
 
 | Node Type | Link To |
 |-----------|---------|
-| outcome | The action/goal it resolves |
-| action | The goal/decision that spawned it |
-| option | Its parent decision |
+| option | Its parent goal |
+| decision | The option(s) it chose between |
+| action | The decision that spawned it |
+| outcome | The action that produced it |
 | observation | Related goal/action |
 | revisit | The decision being reconsidered |
 
@@ -1049,12 +1050,16 @@ deciduous sync    # Export for static hosting
 | Type | Purpose |
 |------|---------|
 | `goal` | High-level objectives |
-| `decision` | Choice points |
-| `option` | Approaches considered |
-| `action` | What was implemented |
-| `outcome` | What happened |
-| `observation` | Technical insights |
+| `option` | Approaches considered (come from goals) |
+| `decision` | Choosing an option (come from options) |
+| `action` | What was implemented (come from decisions) |
+| `outcome` | What happened (come from actions) |
+| `observation` | Technical insights (attach anywhere) |
 | `revisit` | Reconsidering a decision |
+
+### Node Flow: goal -> options -> decision -> actions -> outcomes
+
+Goals do NOT lead directly to decisions. Options come first.
 
 ### Session Start Checklist
 
@@ -1075,6 +1080,14 @@ fn generate_basic_agents_md() -> String {
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
 
+### Node Flow Rule: goal -> options -> decision -> actions -> outcomes
+
+- **Goals** lead to **options** (possible approaches)
+- **Options** lead to a **decision** (choosing which option)
+- **Decisions** lead to **actions** (implementing the choice)
+- **Actions** lead to **outcomes** (results)
+- Goals do NOT lead directly to decisions -- there must be options first
+
 ### The Core Rule
 
 ```
@@ -1087,6 +1100,8 @@ CONNECT immediately -> Link every node to its parent
 
 ```bash
 deciduous add goal "Title" -c 90 -p "User's original request"
+deciduous add option "Possible approach" -c 70
+deciduous link <goal_id> <option_id> -r "Possible approach"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"
 deciduous serve   # View live graph
@@ -1098,11 +1113,11 @@ deciduous sync    # Export for static hosting
 | Type | Purpose |
 |------|---------|
 | `goal` | High-level objectives |
-| `decision` | Choice points |
-| `option` | Approaches considered |
-| `action` | What was implemented |
-| `outcome` | What happened |
-| `observation` | Technical insights |
+| `option` | Approaches considered (come from goals) |
+| `decision` | Choosing an option (come from options) |
+| `action` | What was implemented (come from decisions) |
+| `outcome` | What happened (come from actions) |
+| `observation` | Technical insights (attach anywhere) |
 | `revisit` | Reconsidering a decision |
 
 ### Session Start Checklist

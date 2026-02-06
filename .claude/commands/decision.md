@@ -48,7 +48,7 @@ Based on $ARGUMENTS:
 - `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
 - `--date "YYYY-MM-DD"` - Backdate node (for archaeology/retroactive logging)
 
-### ⚠️ CRITICAL: Link Commits to Actions/Outcomes
+### CRITICAL: Link Commits to Actions/Outcomes
 
 **After every git commit, link it to the decision graph!**
 
@@ -60,11 +60,12 @@ deciduous link <goal_id> <action_id> -r "Implementation"
 
 ## CRITICAL: Capture VERBATIM User Prompts
 
-**Prompts must be the EXACT user message, not a summary.** Capture full messages word-for-word.
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
 **BAD - summaries are useless for context recovery:**
 ```bash
-deciduous add goal "Add auth" -p "User asked: add login to the app"  # DON'T DO THIS
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add auth" -p "User asked: add login to the app"
 ```
 
 **GOOD - verbatim prompts enable full context recovery:**
@@ -72,11 +73,12 @@ deciduous add goal "Add auth" -p "User asked: add login to the app"  # DON'T DO 
 # Use --prompt-stdin for multi-line prompts
 deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
 I need to add user authentication to the app. Users should be able to sign up
-with email/password, and we need OAuth support for Google and GitHub.
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation.
 EOF
 
-# Update prompts on existing nodes
-deciduous prompt <node_id> << 'EOF'
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
 The full verbatim user message goes here...
 EOF
 ```
@@ -86,7 +88,13 @@ EOF
 - Major direction changes: YES - when user redirects the work
 - Routine downstream nodes: NO - they inherit context via edges
 
-Prompts are viewable in the web viewer.
+**Updating prompts on existing nodes:**
+```bash
+deciduous prompt <node_id> "full verbatim prompt here"
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
+```
+
+Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
 
 ## Branch-Based Grouping
 
@@ -174,22 +182,24 @@ The graph viewer shows a branch dropdown in the stats bar:
 
 **Every node MUST be logically connected.** Floating nodes break the graph's value.
 
-### Connection Rules
+### Connection Rules (goal -> options -> decision -> actions -> outcomes)
 | Node Type | MUST connect to | Example |
 |-----------|----------------|---------|
-| `outcome` | The action/goal it resolves | "JWT working" → links FROM "Implementing JWT" |
-| `action` | The decision/goal that spawned it | "Implementing JWT" → links FROM "Add auth" |
-| `option` | Its parent decision | "Use JWT" → links FROM "Choose auth method" |
-| `observation` | Related goal/action/decision | "Found existing code" → links TO relevant node |
-| `decision` | Parent goal (if any) | "Choose auth" → links FROM "Add auth feature" |
 | `goal` | Can be a root (no parent needed) | Root goals are valid orphans |
+| `option` | Its parent goal | "Use JWT" -> links FROM "Add auth" |
+| `decision` | The option(s) it chose between | "Choose JWT" -> links FROM "Use JWT" option |
+| `action` | The decision that spawned it | "Implementing JWT" -> links FROM "Choose JWT" |
+| `outcome` | The action that produced it | "JWT working" -> links FROM "Implementing JWT" |
+| `observation` | Related goal/action/decision | "Found existing code" -> links TO relevant node |
+| `revisit` | The decision/outcome being reconsidered | "Reconsidering auth" -> links FROM original decision |
 
 ### Audit Checklist
 Ask yourself after creating nodes:
-1. Does every **outcome** link back to what caused it?
-2. Does every **action** link to why you did it?
-3. Does every **option** link to its decision?
-4. Are there **dangling outcomes** with no parent action/goal?
+1. Does every **outcome** link back to the action that produced it?
+2. Does every **action** link to the decision that spawned it?
+3. Does every **option** link to its parent goal?
+4. Does every **decision** link from the option(s) being chosen?
+5. Are there **dangling outcomes** with no parent action?
 
 ### Find Disconnected Nodes
 ```bash
@@ -211,25 +221,6 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 - After creating multiple nodes quickly
 - At session end
 - When the web UI graph looks disconnected
-
-## Git Staging Rules - CRITICAL
-
-**NEVER use broad git add commands that stage everything:**
-- ❌ `git add -A` - stages ALL changes including untracked files
-- ❌ `git add .` - stages everything in current directory
-- ❌ `git add -a` or `git commit -am` - auto-stages all tracked changes
-- ❌ `git add *` - glob patterns can catch unintended files
-
-**ALWAYS stage files explicitly by name:**
-- ✅ `git add src/main.rs src/lib.rs`
-- ✅ `git add Cargo.toml Cargo.lock`
-- ✅ `git add .claude/commands/decision.md`
-
-**Why this matters:**
-- Prevents accidentally committing sensitive files (.env, credentials)
-- Prevents committing large binaries or build artifacts
-- Forces you to review exactly what you're committing
-- Catches unintended changes before they enter git history
 
 ## Multi-User Sync
 

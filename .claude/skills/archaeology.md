@@ -147,7 +147,7 @@ Commits are evidence. If a narrative mentions a commit as evidence, you might re
 The graph is about the MODEL, not the code. "Implemented JWT" is not interesting. "Chose JWT over sessions" is.
 
 **Don't over-structure.**
-If a narrative has a simple evolution with no pivots, it might just be: `goal → decision → current state`. That's fine.
+If a narrative has a simple evolution with no pivots, it might just be: `goal → option → decision → action → outcome`. That's fine.
 
 ---
 

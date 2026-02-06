@@ -56,17 +56,17 @@ deciduous sync
 
 ```
 /work "Add feature X"
-    ↓
+    |
 Goal node created (ID: N)
-    ↓
+    |
 Action node before each edit (links to goal)
-    ↓
+    |
 Implementation happens (Edit/Write now allowed)
-    ↓
+    |
 git commit
-    ↓
+    |
 Outcome node with --commit HEAD (links to action)
-    ↓
+    |
 deciduous sync
 ```
 
