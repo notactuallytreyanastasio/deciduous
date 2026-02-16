@@ -9,7 +9,7 @@
 
 ## See It In Action
 
-**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 970+ decisions from building deciduous itself
+**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 1,100+ decisions from building deciduous itself
 
 **[Interactive Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** — Learn the workflow in 15 minutes
 
@@ -33,7 +33,7 @@ The code tells you *what*. But decisions tell you *why*.
 Deciduous creates a persistent, queryable graph of every decision made during development. Log decisions in real-time—as they happen—and they survive session boundaries, context compaction, and human memory.
 
 ```
-979 nodes • 838 edges • Real development history from building this tool
+1,174 nodes • 1,024 edges • Real development history from building this tool
 ```
 
 Both you and your AI assistant can:
@@ -178,36 +178,58 @@ deciduous edges           # How are they connected?
 deciduous commands        # What happened recently?
 ```
 
-The graph remembers what you don't.
+Or open the web viewer and ask a question in plain English:
+
+> *"What was I working on before the session ended?"*
+> *"What approach did we take for rate limiting and why?"*
+
+The graph remembers what you don't. The Q&A interface lets you ask it.
 
 ---
 
-## Two Modes: Now & History
+## Three Skills: Pulse, Archaeology, and Narratives
 
-Every system has two stories:
+Deciduous ships with three skills that give your AI assistant structured ways to understand a codebase. These aren't just CLI commands—they're workflows the agent follows to build and query the graph.
 
-| Mode | Question | Skill |
-|------|----------|-------|
-| **Now** | "How does this work?" | `/pulse` |
-| **History** | "How did we get here?" | `/narratives` |
+### /pulse — What decisions define this system right now?
 
-### /pulse - Map Current Design
+Pulse maps the current architecture as a decision tree. No history, no evolution—just the design choices that make the system work today.
 
-Take the pulse of a system - what decisions define how it works TODAY.
+Your agent reads the code, identifies the design questions that had to be answered, and logs them:
 
 ```bash
-deciduous add goal "Suspense fallback behavior" -c 90
-deciduous add decision "How should timeout work?" -c 85
+deciduous add goal "API rate limiting behavior" -c 90
+deciduous add decision "What identifies a user for rate limiting?" -c 85
 deciduous link 1 2 -r "leads_to"
-deciduous add decision "What happens on failure?" -c 85
+deciduous add decision "What happens when limit is exceeded?" -c 85
 deciduous link 1 3 -r "leads_to"
+deciduous add option "Return 429 with Retry-After header" -c 90
+deciduous link 3 4 -r "resolved_by"
 ```
 
-Output: Decision tree of the current model. No history, just the design.
+Output: A decision tree of the current model. Use this before making changes to understand what decisions you might affect.
 
-### /narratives - Understand Evolution
+### /archaeology — Turn narratives into a queryable graph
 
-Understand how the system evolved. Narratives are conceptual, not tied to commits.
+Archaeology takes the conceptual stories from `/narratives` and structures them as nodes and edges you can traverse. Every **PIVOT** in a narrative becomes a `revisit` node that connects the old approach to the new one, with `observation` nodes capturing *why* things changed.
+
+```bash
+# The pivot pattern: old approach → observation → revisit → new approach
+deciduous add decision "JWT for all auth" -c 85 --date "2023-01-20"
+deciduous add observation "Mobile Safari 4KB cookie limit breaking JWT auth"
+deciduous link 2 3 -r "Discovered in production"
+deciduous add revisit "Reconsidering auth token strategy"
+deciduous link 3 4 -r "Cookie limits forced rethink"
+deciduous status 2 superseded
+deciduous add decision "Hybrid: JWT for API, sessions for web"
+deciduous link 4 5 -r "New approach"
+```
+
+After archaeology, you can query: "What did we try before?" (`--status superseded`), "What led to this decision?" (`edges --to <id>`), "What are the pivot points?" (`--type revisit`).
+
+### /narratives — Understand how the system evolved
+
+Narratives are the conceptual stories—how a subsystem evolved over time, what pivots happened, and how different parts of the system connect.
 
 ```markdown
 ## Authentication
@@ -223,20 +245,44 @@ Understand how the system evolved. Narratives are conceptual, not tied to commit
 **Connects to:** "Rate Limiting"
 ```
 
-Output: `.deciduous/narratives.md` with evolution stories and pivots.
+Output: `.deciduous/narratives.md` with evolution stories that archaeology can transform into graph structure.
 
-### The Revisit Node
+---
 
-When a design approach is abandoned and replaced:
+## Deep Q&A Interface
 
-```bash
-deciduous add observation "JWT too large for mobile"
-deciduous add revisit "Reconsidering token strategy"
-deciduous link <observation> <revisit> -r "forced rethinking"
-deciduous status <old_decision> superseded
+The web viewer includes a built-in Q&A interface where you can ask questions about your decision graph and get answers grounded in your actual development history.
+
+```
+POST /api/ask
+{
+  "question": "Why did we switch from JWT to sessions for web auth?",
+  "context": {
+    "selected_node_id": 42,
+    "branch": "main"
+  }
+}
 ```
 
-Revisit nodes connect old approaches to new ones, capturing WHY things changed.
+The Q&A system:
+
+- **Sends your question + graph context to Claude** — it sees the relevant nodes, edges, and narrative context
+- **Archaeology-aware** — when asking from the archaeology view, the agent gets full narrative context including pivots, superseded approaches, and GitHub links
+- **Stores every interaction** — questions and answers are saved with full-text search (FTS5), so you can search past Q&A sessions
+- **Searchable history** — `GET /api/qa/search?q=auth` finds past conversations about authentication decisions
+
+This turns the graph into a conversational interface. Instead of manually traversing nodes, ask: *"What was tried before the current approach?"* or *"What connects the auth system to rate limiting?"*
+
+```bash
+# Browse Q&A history
+GET /api/qa?offset=0&limit=20
+
+# Search past questions
+GET /api/qa/search?q=rate+limiting&limit=10
+
+# Get a specific interaction
+GET /api/qa/42
+```
 
 ---
 
@@ -248,7 +294,7 @@ Revisit nodes connect old approaches to new ones, capturing WHY things changed.
 deciduous serve --port 3000
 ```
 
-Four visualization modes:
+Five views:
 
 | View | Purpose |
 |------|---------|
@@ -256,8 +302,9 @@ Four visualization modes:
 | **Timeline** | Chronological view merged with git commits |
 | **Graph** | Force-directed interactive visualization |
 | **DAG** | Hierarchical goal→decision→outcome flow |
+| **Archaeology** | Narrative-driven exploration with Q&A |
 
-Features: branch filtering, node search, click-to-expand details, auto-refresh.
+Features: branch filtering, node search, click-to-expand details, Q&A panel, auto-refresh.
 
 ---
 
@@ -531,16 +578,21 @@ deciduous completion fish
 - Remember why you made choices months later
 - Review PRs by understanding the decision flow
 - Onboard to codebases by reading decision history
+- Ask questions about your own project's history and get grounded answers
 
 **Your AI assistant:**
 - Recover context after compaction or session boundaries
 - Build on previous reasoning instead of starting fresh
 - Leave a queryable trail for future sessions
+- Use `/pulse` to map current architecture before making changes
+- Use `/archaeology` to understand why things are the way they are
+- Ask deep questions via the Q&A interface grounded in actual graph data
 
 **Your team:**
 - Share decision context via patch files
 - Review PRs with full visibility into reasoning
 - Build institutional knowledge that survives turnover
+- Search past Q&A interactions to find answers that were already given
 
 ---
 
