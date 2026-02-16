@@ -885,15 +885,15 @@
 
         <div class="stats-banner">
             <a href="demo/" class="stat-item stat-link">
-                <span class="stat-num" id="node-count">540+</span>
+                <span class="stat-num" id="node-count">1,170+</span>
                 <span class="stat-label">Decisions Tracked</span>
             </a>
             <a href="demo/" class="stat-item stat-link">
-                <span class="stat-num" id="edge-count">470+</span>
+                <span class="stat-num" id="edge-count">1,020+</span>
                 <span class="stat-label">Connections</span>
             </a>
             <div class="stat-item">
-                <span class="stat-num">12</span>
+                <span class="stat-num">74</span>
                 <span class="stat-label">Days of Development</span>
             </div>
             <div class="stat-item">
@@ -908,7 +908,8 @@
 
         <div class="elevator-pitch">
             <p><strong>LLMs forget. Your decisions shouldn't.</strong> When AI sessions end and context windows reset, critical reasoning evaporates. Deciduous captures every goal, every approach considered, every choice made&mdash;creating a queryable record that survives session boundaries.</p>
-            <p><strong>Beyond context recovery.</strong> The graph improves how you work: logging decisions <em>before</em> you act forces clearer thinking. Generate PR writeups directly from your decision trail. Query past reasoning with <code>/recover</code> to recover state instantly. Share decisions across teammates with idempotent patches. Link commits to the goals that spawned them.</p>
+            <p><strong>Three skills for understanding any codebase.</strong> <code>/pulse</code> maps the current architecture as a decision tree&mdash;what design choices define how the system works today. <code>/archaeology</code> transforms evolution narratives into queryable graph structure, with pivot points showing exactly where and why approaches changed. <code>/narratives</code> captures the conceptual story of how each subsystem evolved.</p>
+            <p><strong>Ask your graph questions.</strong> The built-in Q&amp;A interface lets your agent ask questions grounded in the actual decision history. <em>"Why did we switch from JWT to sessions?"</em> <em>"What was tried before the current approach?"</em> Every Q&amp;A interaction is stored with full-text search, so answers compound over time.</p>
             <p><strong>Institutional memory that compounds.</strong> Every decision becomes searchable history. New developers can ask "why is this like this?" and get real answers. The graph outlives any single session, any single developer, any single AI assistant.</p>
         </div>
 
@@ -959,27 +960,27 @@
         </section>
 
         <section>
-            <h2>Three Ways to View</h2>
-            <p>Explore your decision graph however you prefer.</p>
+            <h2>Four Ways to Explore</h2>
+            <p>Query your decision graph however you prefer.</p>
 
             <div class="view-cards">
                 <a href="demo/" class="view-card">
                     <h3>Web Viewer</h3>
-                    <p>Interactive DAG, timeline, and graph views. Deploy to GitHub Pages for sharing.</p>
+                    <p>Interactive DAG, timeline, graph, and archaeology views. Deploy to GitHub Pages.</p>
                 </a>
+                <div class="view-card">
+                    <h3>Q&amp;A Interface</h3>
+                    <p>Ask questions in plain English. Answers grounded in your graph with full-text search history.</p>
+                </div>
                 <div class="view-card">
                     <h3>Terminal UI</h3>
                     <p>Vim-style navigation. Search, filter, preview files, view diffs. <code>deciduous tui</code></p>
-                </div>
-                <div class="view-card">
-                    <h3>CLI Queries</h3>
-                    <p>Script and pipe. <code>deciduous nodes</code>, <code>deciduous edges</code>, JSON export.</p>
                 </div>
             </div>
         </section>
 
         <section>
-            <h2>The Six Node Types</h2>
+            <h2>Seven Node Types</h2>
             <p>A simple vocabulary for capturing how software actually gets built.</p>
 
             <div class="node-types">
@@ -1006,6 +1007,10 @@
                 <div class="node-type observation">
                     <h3>Observation</h3>
                     <p>Technical insights along the way</p>
+                </div>
+                <div class="node-type" style="border-color: #f97583;">
+                    <h3 style="color: #cf222e;">Revisit</h3>
+                    <p>Pivot point&mdash;connects old approach to new via archaeology</p>
                 </div>
             </div>
         </section>
