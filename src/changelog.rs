@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.12.1",
+        highlights: &[
+            "Bootstrap all slash commands via init/update: /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync",
+            "Updated CLAUDE.md template with full command and skill reference tables",
+            "Documentation updated across README, QUICK_REFERENCE, ARCHITECTURE",
+        ],
+    },
+    Release {
         version: "0.12.0",
         highlights: &[
             "Redesigned web viewer with hierarchical narrative view",

@@ -423,7 +423,7 @@ The `update` command auto-detects which assistants are installed and updates the
 
 | Files | What's Updated |
 |-------|----------------|
-| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`) |
+| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/sync-graph`, `/decision-graph`, `/sync`) |
 | `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
 | `.claude/hooks/*.sh` | Enforcement hooks |
 | `.claude/agents.toml` | Subagent configurations |
@@ -586,6 +586,9 @@ deciduous completion fish
 - Leave a queryable trail for future sessions
 - Use `/pulse` to map current architecture before making changes
 - Use `/archaeology` to understand why things are the way they are
+- Use `/document` to generate comprehensive docs with test examples
+- Use `/decision-graph` to build decision graphs from commit history
+- Use `/sync` to synchronize decision graphs across teammates
 - Ask deep questions via the Q&A interface grounded in actual graph data
 
 **Your team:**

@@ -11,9 +11,10 @@ use std::fs;
 use std::path::Path;
 
 use templates::{
-    CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW, DECISION_MD,
-    DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE,
-    PAGES_VIEWER_HTML, RECOVER_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE,
+    BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
+    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, DOCUMENT_MD,
+    HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE, PAGES_VIEWER_HTML, RECOVER_MD,
+    SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD, SYNC_MD,
     WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER, WINDSURF_HOOK_REQUIRE_ACTION_NODE,
     WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
@@ -97,6 +98,42 @@ pub fn init_project(
         // Write work.md slash command (transaction model)
         let work_path = claude_dir.join("work.md");
         write_file_if_missing(&work_path, WORK_MD, ".claude/commands/work.md")?;
+
+        // Write document.md slash command
+        let document_path = claude_dir.join("document.md");
+        write_file_if_missing(&document_path, DOCUMENT_MD, ".claude/commands/document.md")?;
+
+        // Write build-test.md slash command
+        let build_test_path = claude_dir.join("build-test.md");
+        write_file_if_missing(
+            &build_test_path,
+            BUILD_TEST_MD,
+            ".claude/commands/build-test.md",
+        )?;
+
+        // Write serve-ui.md slash command
+        let serve_ui_path = claude_dir.join("serve-ui.md");
+        write_file_if_missing(&serve_ui_path, SERVE_UI_MD, ".claude/commands/serve-ui.md")?;
+
+        // Write sync-graph.md slash command
+        let sync_graph_path = claude_dir.join("sync-graph.md");
+        write_file_if_missing(
+            &sync_graph_path,
+            SYNC_GRAPH_MD,
+            ".claude/commands/sync-graph.md",
+        )?;
+
+        // Write decision-graph.md slash command
+        let decision_graph_path = claude_dir.join("decision-graph.md");
+        write_file_if_missing(
+            &decision_graph_path,
+            DECISION_GRAPH_MD,
+            ".claude/commands/decision-graph.md",
+        )?;
+
+        // Write sync.md slash command
+        let sync_path = claude_dir.join("sync.md");
+        write_file_if_missing(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
 
         // Write agents.toml for subagent configuration
         let claude_base = cwd.join(".claude");
@@ -256,9 +293,11 @@ pub fn init_project(
         "deciduous sync".cyan()
     );
     println!(
-        "  3. Use {} or {} slash commands",
+        "  3. Use slash commands: {}, {}, {}, {}, etc.",
         "/decision".cyan(),
-        "/recover".cyan()
+        "/recover".cyan(),
+        "/work".cyan(),
+        "/document".cyan()
     );
     println!();
     println!(
@@ -375,7 +414,7 @@ pub fn update_tooling() -> Result<(), String> {
             .bold()
     );
     println!("\nUpdated files contain the latest:");
-    println!("  - Slash commands (/decision, /recover, /work)");
+    println!("  - Slash commands (/decision, /recover, /work, /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync)");
     println!("  - Skills (/pulse, /narratives, /archaeology)");
     if has_claude {
         println!("  - Enforcement hooks (block edits without action nodes)");
@@ -411,6 +450,42 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     // Overwrite work.md slash command
     let work_path = claude_dir.join("work.md");
     write_file_overwrite(&work_path, WORK_MD, ".claude/commands/work.md")?;
+
+    // Overwrite document.md slash command
+    let document_path = claude_dir.join("document.md");
+    write_file_overwrite(&document_path, DOCUMENT_MD, ".claude/commands/document.md")?;
+
+    // Overwrite build-test.md slash command
+    let build_test_path = claude_dir.join("build-test.md");
+    write_file_overwrite(
+        &build_test_path,
+        BUILD_TEST_MD,
+        ".claude/commands/build-test.md",
+    )?;
+
+    // Overwrite serve-ui.md slash command
+    let serve_ui_path = claude_dir.join("serve-ui.md");
+    write_file_overwrite(&serve_ui_path, SERVE_UI_MD, ".claude/commands/serve-ui.md")?;
+
+    // Overwrite sync-graph.md slash command
+    let sync_graph_path = claude_dir.join("sync-graph.md");
+    write_file_overwrite(
+        &sync_graph_path,
+        SYNC_GRAPH_MD,
+        ".claude/commands/sync-graph.md",
+    )?;
+
+    // Overwrite decision-graph.md slash command
+    let decision_graph_path = claude_dir.join("decision-graph.md");
+    write_file_overwrite(
+        &decision_graph_path,
+        DECISION_GRAPH_MD,
+        ".claude/commands/decision-graph.md",
+    )?;
+
+    // Overwrite sync.md slash command
+    let sync_path = claude_dir.join("sync.md");
+    write_file_overwrite(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
 
     // Create/update hooks directory and enforcement hooks
     let claude_base = cwd.join(".claude");

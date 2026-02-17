@@ -65,6 +65,24 @@ Transform narratives into a queryable graph.
 
 ---
 
+## Slash Commands
+
+All slash commands are bootstrapped by `deciduous init` and updated by `deciduous update`.
+
+| Command | Purpose |
+|---------|---------|
+| `/decision` | Manage decision graph - add nodes, link edges, sync |
+| `/recover` | Recover context from decision graph on session start |
+| `/work` | Start a work transaction - creates goal node before implementation |
+| `/document` | Generate comprehensive documentation for a file or directory |
+| `/build-test` | Build the project and run the test suite |
+| `/serve-ui` | Start the decision graph web viewer |
+| `/sync-graph` | Export decision graph to GitHub Pages |
+| `/decision-graph` | Build a decision graph from commit history (archaeology) |
+| `/sync` | Multi-user sync - pull events, rebuild, push |
+
+---
+
 ## The Revisit Node
 
 When a design approach is abandoned and replaced:
