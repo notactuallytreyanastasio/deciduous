@@ -12,6 +12,17 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.12.2",
+        highlights: &[
+            "README rewritten to lead with /pulse, /archaeology, /narratives skills",
+            "New Deep Q&A Interface section documenting POST /api/ask and FTS5 search",
+            "Landing page updated: 1,170+ nodes, 1,020+ edges, 74 days of development",
+            "Elevator pitch rewritten around three skills and conversational Q&A",
+            "Revisit node type added to landing page (7 node types)",
+            "Web viewer section updated with Archaeology view and Q&A panel",
+        ],
+    },
+    Release {
         version: "0.12.1",
         highlights: &[
             "Bootstrap all slash commands via init/update: /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync",
