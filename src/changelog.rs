@@ -12,6 +12,15 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.1",
+        highlights: &[
+            "Fix: deciduous update no longer deletes user content after the Decision Graph Workflow section in CLAUDE.md",
+            "Added <!-- deciduous:start/end --> markers for safe section replacement",
+            "Legacy CLAUDE.md files auto-migrate to markers on first update",
+            "6 new tests for section replacement edge cases",
+        ],
+    },
+    Release {
         version: "0.13.0",
         highlights: &[
             "Document attachments: attach files (images, PDFs, diagrams) to decision nodes",

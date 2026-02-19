@@ -641,6 +641,7 @@ Git handles merging everyone's event files automatically.
 
 /// CLAUDE.md section to append for decision graph workflow
 pub const CLAUDE_MD_SECTION: &str = r#"
+<!-- deciduous:start -->
 ## Decision Graph Workflow
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
@@ -903,6 +904,7 @@ deciduous events checkpoint --clear-events
 ```
 
 Events auto-emit on add/link/status commands. Git merges event files automatically.
+<!-- deciduous:end -->
 "#;
 
 /// Claude Code document.md slash command template

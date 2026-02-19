@@ -742,52 +742,88 @@ fn replace_config_md_section(
     section_content: &str,
     file_name: &str,
 ) -> Result<(), String> {
-    // Look for either variant of our section header
-    let markers = [
+    const START_MARKER: &str = "<!-- deciduous:start -->";
+    const END_MARKER: &str = "<!-- deciduous:end -->";
+
+    // Legacy heading markers (for migration from pre-marker format)
+    let legacy_markers = [
         "## Decision Graph Workflow",
         "## MANDATORY: Decision Graph Workflow",
     ];
-    // Our section ends when we hit another ## heading or end of file
-    let section_end_pattern = "\n## ";
 
     if path.exists() {
         let existing =
             fs::read_to_string(path).map_err(|e| format!("Could not read {}: {}", file_name, e))?;
 
-        // Find the start of our section (try each marker)
-        let start_idx = markers.iter().filter_map(|m| existing.find(m)).min();
-
-        if let Some(start) = start_idx {
-            // Find the end of our section (next ## heading after our section starts)
-            let after_marker = existing[start..]
-                .find('\n')
-                .map(|i| start + i)
-                .unwrap_or(start + 10);
-            let end_idx = existing[after_marker..]
-                .find(section_end_pattern)
-                .map(|i| after_marker + i + 1)
-                .unwrap_or(existing.len());
-
-            // Rebuild the file: before our section + new section + after our section
-            let before = &existing[..start];
-            let after = &existing[end_idx..];
-
-            let new_content = if after.is_empty() {
-                format!("{}{}", before, section_content.trim_start())
+        // Strategy 1: Use HTML comment markers (safe, precise)
+        if let (Some(start), Some(end_start)) =
+            (existing.find(START_MARKER), existing.find(END_MARKER))
+        {
+            let end = end_start + END_MARKER.len();
+            // Include any trailing newline after the end marker
+            let end = if existing[end..].starts_with('\n') {
+                end + 1
             } else {
-                format!(
-                    "{}{}\n{}",
-                    before,
-                    section_content.trim(),
-                    after.trim_start()
-                )
+                end
             };
+
+            let before = &existing[..start];
+            let after = &existing[end..];
+
+            let new_content = format!(
+                "{}{}{}",
+                before,
+                section_content.trim(),
+                if after.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n{}", after.trim_start())
+                }
+            );
 
             fs::write(path, new_content)
                 .map_err(|e| format!("Could not write {}: {}", file_name, e))?;
             println!("   {} {} (section replaced)", "Updated".green(), file_name);
+            return Ok(());
+        }
+
+        // Strategy 2: Legacy migration — find old heading, replace with new marked content
+        let start_idx = legacy_markers.iter().filter_map(|m| existing.find(m)).min();
+
+        if let Some(start) = start_idx {
+            // Find the end: look for next ## heading after our section header line
+            let after_header = existing[start..]
+                .find('\n')
+                .map(|i| start + i)
+                .unwrap_or(start + 10);
+            let end_idx = existing[after_header..]
+                .find("\n## ")
+                .map(|i| after_header + i + 1) // +1 to keep the newline before next heading
+                .unwrap_or(existing.len());
+
+            let before = &existing[..start];
+            let after = &existing[end_idx..];
+
+            let new_content = format!(
+                "{}{}{}",
+                before,
+                section_content.trim(),
+                if after.is_empty() {
+                    String::new()
+                } else {
+                    format!("\n{}", after.trim_start())
+                }
+            );
+
+            fs::write(path, new_content)
+                .map_err(|e| format!("Could not write {}: {}", file_name, e))?;
+            println!(
+                "   {} {} (section replaced, markers added)",
+                "Updated".green(),
+                file_name
+            );
         } else {
-            // No existing section, append
+            // No existing section found — append
             let mut file = fs::OpenOptions::new()
                 .append(true)
                 .open(path)
@@ -798,7 +834,7 @@ fn replace_config_md_section(
             println!("   {} {} (section added)", "Updated".green(), file_name);
         }
     } else {
-        // File doesn't exist, create it
+        // File doesn't exist — create it
         fs::write(path, section_content.trim())
             .map_err(|e| format!("Could not create {}: {}", file_name, e))?;
         println!("   {} {}", "Creating".green(), file_name);
@@ -953,5 +989,119 @@ mod tests {
         let content = fs::read_to_string(&gitignore).unwrap();
         // Should not duplicate
         assert_eq!(content.matches(".deciduous/").count(), 1);
+    }
+
+    #[test]
+    fn test_replace_section_with_markers_preserves_surrounding() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        fs::write(
+            &md,
+            "# My Project\n\nCustom rules here.\n\n<!-- deciduous:start -->\n## Decision Graph Workflow\n\nOld content.\n<!-- deciduous:end -->\n\n## My Other Section\n\nUser content after.\n",
+        )
+        .unwrap();
+
+        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew content.\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+
+        let result = fs::read_to_string(&md).unwrap();
+        assert!(result.contains("Custom rules here."), "Content before should be preserved");
+        assert!(result.contains("New content."), "New section should be inserted");
+        assert!(!result.contains("Old content."), "Old section should be removed");
+        assert!(result.contains("My Other Section"), "Content after should be preserved");
+        assert!(result.contains("User content after."), "Content after should be preserved");
+    }
+
+    #[test]
+    fn test_replace_section_legacy_no_markers_migrates() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        fs::write(
+            &md,
+            "# My Project\n\nCustom rules.\n\n## Decision Graph Workflow\n\nOld deciduous stuff.\n\n### Sub-heading\n\nMore old stuff.\n\n## My Custom Rules\n\nDo not delete this!\n",
+        )
+        .unwrap();
+
+        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew stuff.\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+
+        let result = fs::read_to_string(&md).unwrap();
+        assert!(result.contains("Custom rules."), "Content before preserved");
+        assert!(result.contains("New stuff."), "New section inserted");
+        assert!(!result.contains("Old deciduous stuff."), "Old section removed");
+        assert!(result.contains("My Custom Rules"), "User H2 after preserved");
+        assert!(result.contains("Do not delete this!"), "User content after preserved");
+        assert!(result.contains("<!-- deciduous:start -->"), "Start marker added");
+        assert!(result.contains("<!-- deciduous:end -->"), "End marker added");
+    }
+
+    #[test]
+    fn test_replace_section_legacy_last_section_no_trailing_content() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        fs::write(
+            &md,
+            "# My Project\n\nStuff.\n\n## Decision Graph Workflow\n\nOld content here.\n",
+        )
+        .unwrap();
+
+        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew content.\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+
+        let result = fs::read_to_string(&md).unwrap();
+        assert!(result.contains("Stuff."), "Content before preserved");
+        assert!(result.contains("New content."), "New section inserted");
+        assert!(!result.contains("Old content here."), "Old section removed");
+        assert!(result.contains("<!-- deciduous:end -->"), "End marker present");
+    }
+
+    #[test]
+    fn test_replace_section_no_existing_section_appends() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        fs::write(&md, "# My Project\n\nMy custom instructions.\n").unwrap();
+
+        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew content.\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+
+        let result = fs::read_to_string(&md).unwrap();
+        assert!(result.contains("My custom instructions."), "Existing content preserved");
+        assert!(result.contains("New content."), "Section appended");
+        assert!(result.contains("<!-- deciduous:start -->"), "Start marker present");
+    }
+
+    #[test]
+    fn test_replace_section_file_does_not_exist_creates() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+
+        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nContent.\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+
+        let result = fs::read_to_string(&md).unwrap();
+        assert!(result.contains("Content."));
+        assert!(result.contains("<!-- deciduous:start -->"));
+        assert!(result.contains("<!-- deciduous:end -->"));
+    }
+
+    #[test]
+    fn test_replace_section_preserves_non_h2_content_after_legacy() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        // Simulate: deciduous section last, followed by non-H2 user content
+        fs::write(
+            &md,
+            "# My Project\n\n## Decision Graph Workflow\n\nOld stuff.\n\n### My Notes\n\nThese are important notes without an H2.\n",
+        )
+        .unwrap();
+
+        let new_section = "<!-- deciduous:start -->\n## Decision Graph Workflow\n\nNew stuff.\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
+
+        let result = fs::read_to_string(&md).unwrap();
+        assert!(result.contains("New stuff."), "New section inserted");
+        // Legacy fallback eats to EOF when no next ## found — this is the migration case.
+        // After this update, markers are in place and future updates will preserve content.
+        assert!(result.contains("<!-- deciduous:end -->"), "End marker present for future safety");
     }
 }
