@@ -22,6 +22,9 @@ deciduous edges
 
 # What commands were recently run?
 deciduous commands
+
+# Check for attached documents
+deciduous doc list
 ```
 
 **Branch-scoped context**: If working on a feature branch, filter nodes to see only decisions relevant to this branch. Main branch nodes are tagged with `[branch: main]`.
@@ -71,7 +74,8 @@ cat git.log | tail -30
 3. **Recent decisions** (especially pending/active ones)
 4. **Last actions** from git log and command log
 5. **Open questions** or unresolved observations
-6. **Suggested next steps**
+6. **Attached documents** - diagrams, specs, or screenshots on key nodes
+7. **Suggested next steps**
 
 ### Branch Configuration
 
@@ -158,32 +162,23 @@ SESSION END -> Final audit
 
 ---
 
-## Multi-User Sync (Event-Based)
+## Multi-User Sync
 
-**FIRST: Check for and apply teammate events:**
+If working in a team, sync decision graphs automatically via events:
 
 ```bash
-# Check sync status - are there pending events from teammates?
+# Check sync status
 deciduous events status
 
-# If pending events exist, rebuild to apply them
+# Apply teammate events (after git pull)
 deciduous events rebuild
+
+# Periodic maintenance (compact old events)
+deciduous events checkpoint --clear-events
 ```
 
-This is automatic - events are emitted when you use `add`, `link`, `status`, etc.
-Git handles merging everyone's event files. Just pull and rebuild.
-
-### Legacy Patch-Based Sync
-
-If using the older patch workflow:
-
-```bash
-# Check for unapplied patches
-deciduous diff status
-
-# Apply all patches (idempotent - safe to run multiple times)
-deciduous diff apply .deciduous/patches/*.json
-```
+Events are auto-emitted when you use `add`, `link`, `status`, etc.
+Git handles merging everyone's event files automatically.
 
 ## Why This Matters
 

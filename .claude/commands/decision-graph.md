@@ -26,7 +26,7 @@ Use a layered strategy to find all relevant commits:
 git log --oneline --after="..." --before="..." -- path/
 ```
 
-**Layer 2: Keyword expansion.** Once you have narratives, search for spelling variations and related terms you might have missed (e.g., "cache" → "caching", "cached", "LRU", "invalidate"). For each key identifier in your narratives, trace its full lifecycle:
+**Layer 2: Keyword expansion.** Once you have narratives, search for spelling variations and related terms you might have missed (e.g., "cache" -> "caching", "cached", "LRU", "invalidate"). For each key identifier in your narratives, trace its full lifecycle:
 
 - Introduction
 - Changes and modifications
@@ -37,20 +37,20 @@ git log --oneline --after="..." --before="..." -- path/
 
 If there's a feature flag controlling the feature, search for commits mentioning that flag.
 
-**Layer 3: Follow authors.** If a narrative has a key author, check their commits ±1 month from known commits. They often work on related things.
+**Layer 3: Follow authors.** If a narrative has a key author, check their commits +/-1 month from known commits. They often work on related things.
 
 ### DO NOT:
 
-- `git log ... | head -100` — **NO.** You will miss commits in the middle.
-- `git log ... | tail -200` — **NO.** Same problem.
-- Start with keyword filtering — **NO.** You'll miss things with unexpected names.
+- `git log ... | head -100` -- **NO.** You will miss commits in the middle.
+- `git log ... | tail -200` -- **NO.** Same problem.
+- Start with keyword filtering -- **NO.** You'll miss things with unexpected names.
 
 ### DO:
 
 - See all commits first, filter mentally while building narratives
-- Include "remove", "delete", "disable", "deprecate" in keyword searches — removals explain transitions
+- Include "remove", "delete", "disable", "deprecate" in keyword searches -- removals explain transitions
 - Check the commit count first (`| wc -l`), but then see them all
-- **Read full commit messages** for any commit whose title mentions an identifier or concept relevant to your narrative — you need precise understanding of what happened to each one you care about
+- **Read full commit messages** for any commit whose title mentions an identifier or concept relevant to your narrative -- you need precise understanding of what happened to each one you care about
 
 ## Finding the Story
 
@@ -107,7 +107,7 @@ For each narrative, list the key concepts/APIs/identifiers and their lifecycle s
 - **Introduced**: First appearance of the concept
 - **Changed**: Modifications to behavior or implementation
 - **Renamed/Deprecated/Removed**: End of life or replacement
-- **Marked stable**: Became public API or removed "unstable\_" prefix
+- **Marked stable**: Became public API or removed "unstable_" prefix
 
 Example addition to narrative:
 
@@ -155,8 +155,8 @@ When building the graph, don't just branch everything from the goal. Capture how
 
 **Branch from the spine, not goal:** If a narrative arose from work in another narrative, branch from that work.
 
-- Wrong: `goal → "How to preserve state?"`
-- Right: `outcome("timeout works") → "How to preserve state?"` (the question arose after implementing timeout)
+- Wrong: `goal -> "How to preserve state?"`
+- Right: `outcome("timeout works") -> "How to preserve state?"` (the question arose after implementing timeout)
 
 **Observations feed back:** If an observation in one narrative influenced decisions in another, add an edge.
 
@@ -200,7 +200,7 @@ Sources:
 deciduous status <id> rejected    # option that wasn't chosen
 deciduous status <id> completed   # option that was chosen
 
-# Connect nodes (from → to means "from leads_to to")
+# Connect nodes (from -> to means "from leads_to to")
 deciduous link <from-id> <to-id>
 deciduous link <from-id> <to-id> -r "Why this led to that"
 
@@ -213,7 +213,7 @@ deciduous delete <id>          # remove node and edges
 
 ## Narrative Discipline
 
-You're not collecting facts - you're crafting a story. Every node needs a _raison d'être_.
+You're not collecting facts - you're crafting a story. Every node needs a _raison d'etre_.
 
 Before adding a node, stop and ask: **Why does this exist? What prompted it?**
 
@@ -238,9 +238,9 @@ Example - DON'T model sequential attempts as parallel options:
 ```
 # WRONG - these were decided years apart, not simultaneously
 decision: "How to handle caching?"
-  ├→ option: in-memory cache (2019)
-  ├→ option: Redis (2020)
-  └→ option: CDN (2021)
+  |-> option: in-memory cache (2019)
+  |-> option: Redis (2020)
+  |-> option: CDN (2021)
 ```
 
 Example - DO model as chain of decisions with learning:
@@ -248,24 +248,24 @@ Example - DO model as chain of decisions with learning:
 ```
 # RIGHT - each attempt informs the next, options are simultaneous alternatives
 decision: "How to handle caching?" (2019)
-  ├→ option: in-memory cache [chosen]
-  └→ option: no caching [rejected] "Perf requirements too strict"
-        ↓
-option: in-memory cache → action → outcome
-        ↓
+  |-> option: in-memory cache [chosen]
+  |-> option: no caching [rejected] "Perf requirements too strict"
+        |
+option: in-memory cache -> action -> outcome
+        |
 observation: "Doesn't scale across instances"
-        ↓
+        |
 decision: "How to share cache across instances?" (2020)
-  ├→ option: Redis [chosen] "Team has Redis experience"
-  ├→ option: Memcached [rejected] "Less feature-rich"
-  └→ option: database caching [rejected] "Adds DB load"
-        ↓
-option: Redis → action → outcome
-        ↓
+  |-> option: Redis [chosen] "Team has Redis experience"
+  |-> option: Memcached [rejected] "Less feature-rich"
+  |-> option: database caching [rejected] "Adds DB load"
+        |
+option: Redis -> action -> outcome
+        |
 observation: "Latency too high for hot paths"
-        ↓
+        |
 decision: "How to reduce latency for static assets?" (2021)
-  └→ option: CDN [chosen]
+  |-> option: CDN [chosen]
 ```
 
 Multiple observations can converge into one decision. Multiple options can branch from one decision. But the graph flows forward in time.
@@ -292,14 +292,14 @@ For post-hoc abandonment (tried something, it failed later):
 
 ## Link Patterns (goal -> options -> decision -> actions -> outcomes)
 
-- `goal → option` - Goal leads to possible approaches
-- `option → decision` - Options lead to choosing (use chosen/rejected edge types)
-- `decision → action` - Chosen option leads to implementation
-- `action → outcome` - Action produces result
-- `outcome → observation` - Result reveals new insight
-- `observation → option` - Insight suggests new approach (feeds back to options)
-- `observation → revisit` - Insight forces reconsideration of previous approach
-- `revisit → option` - Pivot leads to exploring new options
+- `goal -> option` - Goal leads to possible approaches
+- `option -> decision` - Options lead to choosing (use chosen/rejected edge types)
+- `decision -> action` - Chosen option leads to implementation
+- `action -> outcome` - Action produces result
+- `outcome -> observation` - Result reveals new insight
+- `observation -> option` - Insight suggests new approach (feeds back to options)
+- `observation -> revisit` - Insight forces reconsideration of previous approach
+- `revisit -> option` - Pivot leads to exploring new options
 
 When a design approach is abandoned and replaced:
 

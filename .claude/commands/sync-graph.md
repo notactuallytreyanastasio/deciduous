@@ -9,7 +9,3 @@ Export the current decision graph to docs/graph-data.json so it's deployed to Gi
 3. If there are changes, stage them: `git add docs/graph-data.json`
 
 This should be run before any push to main to ensure the live site has the latest decisions.
-
-## Live Graph URL
-
-https://notactuallytreyanastasio.github.io/deciduous/

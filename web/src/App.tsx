@@ -1,11 +1,14 @@
 import { useState, useEffect, useMemo, useCallback, useRef, MouseEvent as ReactMouseEvent } from 'react';
 import * as d3 from 'd3';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import {
   DecisionNode,
   DecisionEdge,
   GraphData,
   NodeType,
   EdgeType,
+  Theme,
   parseMetadata,
   getConfidence,
   getBranch,
@@ -14,6 +17,10 @@ import {
   getFiles,
   getIncomingEdges,
   getOutgoingEdges,
+  getNodeThemes,
+  getNodeDocuments,
+  getNodeThemeSource,
+  formatFileSize,
 } from './types/graph';
 
 // =============================================================================
@@ -872,6 +879,107 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
         </div>
       )}
 
+      {/* Themes */}
+      {graphData && (() => {
+        const themes = getNodeThemes(node.id, graphData);
+        if (themes.length === 0) return null;
+        return (
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{
+              color: THEME.textMuted,
+              fontSize: '11px',
+              marginBottom: '8px',
+              letterSpacing: '0.5px',
+            }}>
+              THEMES
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+              {themes.map(theme => {
+                const source = getNodeThemeSource(node.id, theme.id, graphData);
+                return (
+                  <span
+                    key={theme.id}
+                    title={theme.description || theme.name}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                      fontWeight: 500,
+                      backgroundColor: `${theme.color}22`,
+                      color: theme.color,
+                      border: source === 'suggested'
+                        ? `1px dashed ${theme.color}`
+                        : `1px solid ${theme.color}55`,
+                    }}
+                  >
+                    {theme.name}
+                    {source === 'suggested' && (
+                      <span style={{ fontSize: '10px', marginLeft: '4px', opacity: 0.7 }}>?</span>
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Documents */}
+      {graphData && (() => {
+        const docs = getNodeDocuments(node.id, graphData);
+        if (docs.length === 0) return null;
+        return (
+          <div style={{ marginBottom: '20px' }}>
+            <div style={{
+              color: THEME.textMuted,
+              fontSize: '11px',
+              marginBottom: '8px',
+              letterSpacing: '0.5px',
+            }}>
+              DOCUMENTS ({docs.length})
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {docs.map(doc => (
+                <div
+                  key={doc.id}
+                  style={{
+                    padding: '8px 12px',
+                    backgroundColor: THEME.bgLight,
+                    borderRadius: '6px',
+                    borderLeft: `3px solid ${THEME.observation}`,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: THEME.text, fontSize: '13px', fontWeight: 500 }}>
+                      {doc.original_filename}
+                    </span>
+                    <span style={{ color: THEME.textDim, fontSize: '11px' }}>
+                      {formatFileSize(doc.file_size)}
+                    </span>
+                    <span style={{ color: THEME.textDim, fontSize: '11px', marginLeft: 'auto' }}>
+                      {doc.mime_type}
+                    </span>
+                  </div>
+                  {doc.description && (
+                    <div style={{
+                      color: THEME.textMuted,
+                      fontSize: '12px',
+                      marginTop: '4px',
+                      lineHeight: 1.4,
+                    }}>
+                      {doc.description}
+                      {doc.description_source === 'ai' && (
+                        <span style={{ fontSize: '10px', marginLeft: '4px', opacity: 0.6 }}>(AI)</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* Description */}
       {node.description && (
         <div style={{ marginBottom: '20px' }}>
@@ -1668,9 +1776,14 @@ interface HeaderProps {
   searchResultCount: number;
   searchTypes: Set<NodeType>;
   onToggleSearchType: (type: NodeType) => void;
+  qaOpen: boolean;
+  onToggleQA: () => void;
+  themes: Theme[];
+  activeThemeFilter: string | null;
+  onThemeFilterChange: (theme: string | null) => void;
 }
 
-function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, nodeCount, searchQuery, onSearchChange, searchResultCount, searchTypes, onToggleSearchType }: HeaderProps) {
+function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, nodeCount, searchQuery, onSearchChange, searchResultCount, searchTypes, onToggleSearchType, qaOpen, onToggleQA, themes, activeThemeFilter, onThemeFilterChange }: HeaderProps) {
   return (
     <div style={{
       display: 'flex',
@@ -1752,6 +1865,28 @@ function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, 
           )}
         </div>
 
+        {/* Ask AI button */}
+        <div style={{ paddingBottom: '8px' }}>
+          <button
+            onClick={onToggleQA}
+            style={{
+              padding: '10px 28px',
+              backgroundColor: qaOpen ? '#db2777' : '#ec4899',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '8px',
+              fontSize: '15px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              boxShadow: qaOpen ? '0 0 16px rgba(236, 72, 153, 0.5)' : '0 2px 10px rgba(236, 72, 153, 0.3)',
+              letterSpacing: '0.5px',
+            }}
+          >
+            {qaOpen ? 'Close Q&A' : 'Ask AI'}
+          </button>
+        </div>
+
         {/* Type filter buttons */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'] as NodeType[]).map(type => {
@@ -1779,6 +1914,37 @@ function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, 
             );
           })}
         </div>
+
+        {/* Theme filter buttons */}
+        {themes.length > 0 && (
+          <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ color: THEME.textDim, fontSize: '11px', marginRight: '4px' }}>Themes:</span>
+            {themes.map(theme => {
+              const isActive = activeThemeFilter === theme.name;
+              return (
+                <button
+                  key={theme.id}
+                  onClick={() => onThemeFilterChange(isActive ? null : theme.name)}
+                  title={theme.description || theme.name}
+                  style={{
+                    padding: '4px 10px',
+                    backgroundColor: isActive ? theme.color : 'transparent',
+                    color: isActive ? '#fff' : theme.color,
+                    border: `1px solid ${theme.color}`,
+                    borderRadius: '12px',
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.1s',
+                    opacity: isActive ? 1 : 0.7,
+                  }}
+                >
+                  {theme.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Mode selector (only when not focused and not searching) */}
@@ -1818,6 +1984,310 @@ function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, 
 }
 
 // =============================================================================
+// Q&A Dialogue Component
+// =============================================================================
+
+interface QAMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+interface QADialogueProps {
+  messages: QAMessage[];
+  isLoading: boolean;
+  error: string | null;
+  input: string;
+  onInputChange: (val: string) => void;
+  onSubmit: () => void;
+  onClose: () => void;
+  messagesRef: React.RefObject<HTMLDivElement>;
+}
+
+function QADialogue({ messages, isLoading, error, input, onInputChange, onSubmit, onClose, messagesRef }: QADialogueProps) {
+  return (
+    <div style={{
+      position: 'fixed',
+      top: '50%',
+      left: '50%',
+      transform: 'translate(-50%, -50%)',
+      width: 'min(1200px, 92vw)',
+      height: 'min(90vh, 1100px)',
+      display: 'flex',
+      flexDirection: 'column',
+      backgroundColor: THEME.bgLight,
+      border: `1px solid ${THEME.border}`,
+      borderRadius: '16px',
+      boxShadow: '0 16px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(236, 72, 153, 0.15)',
+      zIndex: 1000,
+      overflow: 'hidden',
+    }}>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.4)',
+          zIndex: -1,
+        }}
+      />
+
+      {/* Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        padding: '16px 24px',
+        borderBottom: `1px solid ${THEME.border}`,
+        backgroundColor: THEME.bgLight,
+        flexShrink: 0,
+      }}>
+        <span style={{
+          fontWeight: 700,
+          fontSize: '16px',
+          color: '#ec4899',
+          letterSpacing: '0.5px',
+        }}>
+          Ask AI
+        </span>
+        <button
+          onClick={onClose}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: THEME.textMuted,
+            cursor: 'pointer',
+            fontSize: '22px',
+            padding: '4px 8px',
+            borderRadius: '6px',
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* Messages area */}
+      <div
+        ref={messagesRef as React.RefObject<HTMLDivElement>}
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '24px 32px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+        }}
+      >
+        {messages.length === 0 && !isLoading && (
+          <div style={{
+            color: THEME.textDim,
+            fontSize: '15px',
+            textAlign: 'center',
+            padding: '80px 40px',
+            lineHeight: '1.8',
+          }}>
+            Ask questions about your decision graph.
+            <br />
+            <span style={{ fontSize: '13px', color: THEME.textDim }}>
+              Powered by Claude — queries your graph data for in-depth answers.
+            </span>
+          </div>
+        )}
+
+        {messages.map(msg => (
+          <div key={msg.id} style={{
+            display: 'flex',
+            justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',
+          }}>
+            <div style={{
+              maxWidth: msg.role === 'user' ? '75%' : '100%',
+              padding: msg.role === 'user' ? '10px 18px' : '20px 28px',
+              borderRadius: msg.role === 'user' ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
+              backgroundColor: msg.role === 'user' ? '#ec4899' : THEME.bg,
+              color: msg.role === 'user' ? '#fff' : THEME.text,
+              fontSize: '14px',
+              lineHeight: '1.7',
+              wordBreak: 'break-word' as const,
+            }}>
+              {msg.role === 'assistant' ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  components={{
+                    p: ({ children }) => <p style={{ margin: '0 0 12px 0', lineHeight: '1.7' }}>{children}</p>,
+                    pre: ({ children }) => (
+                      <pre style={{
+                        backgroundColor: THEME.bgLight,
+                        padding: '14px 16px',
+                        borderRadius: '8px',
+                        overflow: 'auto',
+                        fontSize: '13px',
+                        margin: '12px 0',
+                        border: `1px solid ${THEME.border}`,
+                        lineHeight: '1.5',
+                      }}>
+                        {children}
+                      </pre>
+                    ),
+                    code: ({ children, className }) => {
+                      const isBlock = className?.includes('language-');
+                      if (isBlock) return <code>{children}</code>;
+                      return (
+                        <code style={{
+                          backgroundColor: THEME.bgLight,
+                          padding: '2px 6px',
+                          borderRadius: '3px',
+                          fontSize: '13px',
+                          border: `1px solid ${THEME.border}`,
+                        }}>
+                          {children}
+                        </code>
+                      );
+                    },
+                    ul: ({ children }) => <ul style={{ margin: '4px 0 12px 0', paddingLeft: '22px' }}>{children}</ul>,
+                    ol: ({ children }) => <ol style={{ margin: '4px 0 12px 0', paddingLeft: '22px' }}>{children}</ol>,
+                    li: ({ children }) => <li style={{ marginBottom: '4px', lineHeight: '1.6' }}>{children}</li>,
+                    h1: ({ children }) => <h1 style={{ fontSize: '20px', margin: '20px 0 10px 0', color: THEME.text, fontWeight: 700 }}>{children}</h1>,
+                    h2: ({ children }) => <h2 style={{ fontSize: '18px', margin: '16px 0 8px 0', color: THEME.text, fontWeight: 700 }}>{children}</h2>,
+                    h3: ({ children }) => <h3 style={{ fontSize: '16px', margin: '14px 0 6px 0', color: THEME.text, fontWeight: 600 }}>{children}</h3>,
+                    a: ({ href, children }) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: THEME.action }}>{children}</a>,
+                    blockquote: ({ children }) => (
+                      <blockquote style={{
+                        borderLeft: `3px solid ${THEME.decision}`,
+                        margin: '12px 0',
+                        paddingLeft: '16px',
+                        color: THEME.textMuted,
+                      }}>
+                        {children}
+                      </blockquote>
+                    ),
+                    table: ({ children }) => (
+                      <table style={{
+                        borderCollapse: 'collapse',
+                        width: '100%',
+                        margin: '12px 0',
+                        fontSize: '13px',
+                      }}>
+                        {children}
+                      </table>
+                    ),
+                    th: ({ children }) => (
+                      <th style={{
+                        border: `1px solid ${THEME.border}`,
+                        padding: '8px 12px',
+                        textAlign: 'left',
+                        backgroundColor: THEME.bgLight,
+                        fontWeight: 600,
+                      }}>
+                        {children}
+                      </th>
+                    ),
+                    td: ({ children }) => (
+                      <td style={{
+                        border: `1px solid ${THEME.border}`,
+                        padding: '6px 8px',
+                      }}>
+                        {children}
+                      </td>
+                    ),
+                  }}
+                >
+                  {msg.content}
+                </ReactMarkdown>
+              ) : (
+                msg.content
+              )}
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '12px 16px',
+            backgroundColor: THEME.bg,
+            borderRadius: '12px 12px 12px 4px',
+            fontSize: '13px',
+            color: THEME.textMuted,
+          }}>
+            <span style={{ animation: 'pulse 1.5s ease-in-out infinite' }}>Thinking...</span>
+            <style>{`@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }`}</style>
+          </div>
+        )}
+
+        {error && (
+          <div style={{
+            padding: '10px 14px',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            border: `1px solid ${THEME.revisit}`,
+            borderRadius: '8px',
+            color: THEME.revisit,
+            fontSize: '12px',
+          }}>
+            {error}
+          </div>
+        )}
+      </div>
+
+      {/* Input area */}
+      <div style={{
+        display: 'flex',
+        gap: '10px',
+        padding: '16px 24px',
+        borderTop: `1px solid ${THEME.border}`,
+        backgroundColor: THEME.bgLight,
+        flexShrink: 0,
+      }}>
+        <input
+          type="text"
+          placeholder="Ask about your decision graph..."
+          value={input}
+          onChange={(e) => onInputChange(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+          disabled={isLoading}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            backgroundColor: THEME.bg,
+            color: THEME.text,
+            border: `1px solid ${THEME.border}`,
+            borderRadius: '8px',
+            fontSize: '14px',
+            outline: 'none',
+            opacity: isLoading ? 0.6 : 1,
+          }}
+        />
+        <button
+          onClick={onSubmit}
+          disabled={isLoading || !input.trim()}
+          style={{
+            padding: '12px 24px',
+            backgroundColor: isLoading || !input.trim() ? '#9ca3af' : '#ec4899',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '14px',
+            fontWeight: 600,
+            cursor: isLoading || !input.trim() ? 'default' : 'pointer',
+            transition: 'background-color 0.15s',
+          }}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// =============================================================================
 // Main App
 // =============================================================================
 
@@ -1835,10 +2305,30 @@ export function App() {
   const [searchTypes, setSearchTypes] = useState<Set<NodeType>>(
     new Set(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'])
   );
+  const [themeFilter, setThemeFilter] = useState<string | null>(null);
 
   // Panel sizes in pixels - defaults for good initial layout
   const [leftPanelWidth, setLeftPanelWidth] = useState(Math.max(500, Math.floor(window.innerWidth * 0.4)));
   const [detailPanelHeight, setDetailPanelHeight] = useState(Math.max(400, Math.floor(window.innerHeight * 0.55)));
+
+  // Fullscreen graph state
+  const [graphFullscreen, setGraphFullscreen] = useState(false);
+  const [fsCommitsOnly, setFsCommitsOnly] = useState(false);
+
+  // Q&A dialogue state
+  const [qaOpen, setQaOpen] = useState(false);
+  const [qaMessages, setQaMessages] = useState<QAMessage[]>([]);
+  const [qaLoading, setQaLoading] = useState(false);
+  const [qaError, setQaError] = useState<string | null>(null);
+  const [qaInput, setQaInput] = useState('');
+  const qaMessagesRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll Q&A messages
+  useEffect(() => {
+    if (qaMessagesRef.current) {
+      qaMessagesRef.current.scrollTop = qaMessagesRef.current.scrollHeight;
+    }
+  }, [qaMessages, qaLoading]);
 
   const handleLeftPanelResize = useCallback((delta: number) => {
     setLeftPanelWidth(prev => Math.max(300, Math.min(prev + delta, window.innerWidth - 400)));
@@ -1859,6 +2349,24 @@ export function App() {
       return next;
     });
   }, []);
+
+  const handleToggleQA = useCallback(() => {
+    setQaOpen(prev => !prev);
+  }, []);
+
+  const handleToggleFullscreen = useCallback(() => {
+    setGraphFullscreen(prev => !prev);
+  }, []);
+
+  // Escape key exits fullscreen
+  useEffect(() => {
+    if (!graphFullscreen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setGraphFullscreen(false);
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [graphFullscreen]);
 
   // Load data
   useEffect(() => {
@@ -1882,6 +2390,59 @@ export function App() {
 
   const focusedNarrative = narratives.find(n => n.id === focusedNarrativeId) || null;
   const selectedNode = graphData?.nodes.find(n => n.id === selectedNodeId) || null;
+  const allThemes = useMemo(() => graphData?.themes || [], [graphData]);
+
+  const handleQASubmit = useCallback(async () => {
+    if (!qaInput.trim() || qaLoading) return;
+
+    const userMessage = qaInput.trim();
+    const msgId = Date.now().toString();
+
+    setQaMessages(prev => [...prev, { id: msgId, role: 'user', content: userMessage }]);
+    setQaInput('');
+    setQaLoading(true);
+    setQaError(null);
+
+    try {
+      const context: Record<string, unknown> = {};
+      if (selectedNodeId) context.selected_node_id = selectedNodeId;
+      if (focusedNarrative) {
+        context.visible_node_ids = focusedNarrative.nodes.map((n: DecisionNode) => n.id);
+        context.narrative = {
+          name: focusedNarrative.name,
+          root_id: focusedNarrative.root.id,
+          node_ids: focusedNarrative.nodes.map((n: DecisionNode) => n.id),
+          pivots: [],
+          github_links: [],
+        };
+      }
+
+      const resp = await fetch('/api/ask', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: userMessage,
+          context: Object.keys(context).length > 0 ? context : undefined,
+        }),
+      });
+
+      const data = await resp.json();
+
+      if (data.ok && data.data) {
+        setQaMessages(prev => [...prev, {
+          id: (Date.now()).toString(),
+          role: 'assistant',
+          content: data.data.answer,
+        }]);
+      } else {
+        setQaError(data.error || 'Failed to get a response');
+      }
+    } catch (e) {
+      setQaError(e instanceof Error ? e.message : 'Network error — is `deciduous serve` running?');
+    } finally {
+      setQaLoading(false);
+    }
+  }, [qaInput, qaLoading, selectedNodeId, focusedNarrative]);
 
   // Build all goal-based narratives for search (regardless of current mode)
   const allNarratives = useMemo(() => {
@@ -1909,14 +2470,50 @@ export function App() {
     return null;
   }, [focusedNarrative, searchQuery, selectedNodeId, narrativesContainingNode]);
 
-  // Search results - full text search over nodes (newest first), filtered by type
+  // Fullscreen graph narrative - optionally filtered to commits-only
+  const fsNarrative = useMemo(() => {
+    if (!activeNarrativeForGraph) return null;
+    if (!fsCommitsOnly) return activeNarrativeForGraph;
+
+    const commitNodes = activeNarrativeForGraph.nodes.filter(n => getCommit(n));
+    if (commitNodes.length === 0) return activeNarrativeForGraph;
+
+    const commitNodeIds = new Set(commitNodes.map(n => n.id));
+    const commitEdges = activeNarrativeForGraph.edges.filter(
+      e => commitNodeIds.has(e.from_node_id) && commitNodeIds.has(e.to_node_id)
+    );
+
+    return {
+      ...activeNarrativeForGraph,
+      nodes: commitNodes,
+      edges: commitEdges,
+      nodeCount: commitNodes.length,
+    };
+  }, [activeNarrativeForGraph, fsCommitsOnly]);
+
+  // Search results - full text search over nodes (newest first), filtered by type and theme
   const searchResults = useMemo(() => {
     if (!searchQuery || !graphData) return [];
     const q = searchQuery.toLowerCase();
+
+    // Build set of node IDs matching theme filter
+    let themeNodeIds: Set<number> | null = null;
+    if (themeFilter && graphData.themes && graphData.node_themes) {
+      const theme = graphData.themes.find(t => t.name === themeFilter);
+      if (theme) {
+        themeNodeIds = new Set(
+          graphData.node_themes.filter(nt => nt.theme_id === theme.id).map(nt => nt.node_id)
+        );
+      }
+    }
+
     return graphData.nodes
       .filter(n => {
         // Filter by selected types
         if (!searchTypes.has(n.node_type)) return false;
+
+        // Filter by theme
+        if (themeNodeIds && !themeNodeIds.has(n.id)) return false;
 
         const title = n.title.toLowerCase();
         const desc = (n.description || '').toLowerCase();
@@ -1926,7 +2523,7 @@ export function App() {
         return title.includes(q) || desc.includes(q) || prompt.includes(q) || branch.includes(q);
       })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  }, [searchQuery, graphData, searchTypes]);
+  }, [searchQuery, graphData, searchTypes, themeFilter]);
 
   // Expand all nodes in focused narrative by default
   useEffect(() => {
@@ -2011,7 +2608,244 @@ export function App() {
         searchResultCount={searchResults.length}
         searchTypes={searchTypes}
         onToggleSearchType={handleToggleSearchType}
+        qaOpen={qaOpen}
+        onToggleQA={handleToggleQA}
+        themes={allThemes}
+        activeThemeFilter={themeFilter}
+        onThemeFilterChange={setThemeFilter}
       />
+
+      {qaOpen && (
+        <QADialogue
+          messages={qaMessages}
+          isLoading={qaLoading}
+          error={qaError}
+          input={qaInput}
+          onInputChange={setQaInput}
+          onSubmit={handleQASubmit}
+          onClose={handleToggleQA}
+          messagesRef={qaMessagesRef}
+        />
+      )}
+
+      {/* Fullscreen Graph Overlay */}
+      {graphFullscreen && fsNarrative && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 900,
+          backgroundColor: THEME.bg,
+          display: 'flex',
+          flexDirection: 'column',
+        }}>
+          {/* Floating top bar */}
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 910,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '12px 16px',
+            background: `linear-gradient(to bottom, ${THEME.bg}ee, ${THEME.bg}00)`,
+          }}>
+            {/* Ask AI button */}
+            <button
+              onClick={handleToggleQA}
+              style={{
+                padding: '8px 20px',
+                backgroundColor: qaOpen ? '#db2777' : '#ec4899',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '14px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                boxShadow: qaOpen ? '0 0 16px rgba(236, 72, 153, 0.5)' : '0 2px 10px rgba(236, 72, 153, 0.3)',
+                flexShrink: 0,
+              }}
+            >
+              {qaOpen ? 'Close Q&A' : 'Ask AI'}
+            </button>
+
+            {/* Search input */}
+            <div style={{ flex: 1, position: 'relative', maxWidth: '600px' }}>
+              <input
+                type="text"
+                placeholder="Search nodes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '8px 14px',
+                  paddingLeft: '36px',
+                  backgroundColor: `${THEME.bgLight}cc`,
+                  color: THEME.text,
+                  border: `1px solid ${THEME.border}`,
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  outline: 'none',
+                  backdropFilter: 'blur(8px)',
+                }}
+              />
+              <span style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: THEME.textMuted,
+                fontSize: '14px',
+              }}>
+                🔍
+              </span>
+              {searchQuery && (
+                <span style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: THEME.textMuted,
+                  fontSize: '12px',
+                }}>
+                  {searchResults.length} results
+                </span>
+              )}
+            </div>
+
+            {/* Narrative name */}
+            <div style={{
+              color: THEME.textMuted,
+              fontSize: '12px',
+              flexShrink: 0,
+            }}>
+              {fsNarrative.name.slice(0, 40)}{fsNarrative.name.length > 40 ? '...' : ''} · {fsNarrative.nodeCount} nodes
+            </div>
+
+            {/* Exit fullscreen */}
+            <button
+              onClick={handleToggleFullscreen}
+              title="Exit fullscreen (Esc)"
+              style={{
+                background: 'none',
+                border: `1px solid ${THEME.border}`,
+                color: THEME.textMuted,
+                cursor: 'pointer',
+                padding: '6px 12px',
+                borderRadius: '6px',
+                fontSize: '13px',
+                flexShrink: 0,
+              }}
+            >
+              ✕ Exit
+            </button>
+          </div>
+
+          {/* Main content: left sidebar + graph */}
+          <div style={{ display: 'flex', flex: 1, paddingTop: '52px' }}>
+            {/* Left sidebar - node list with commit filter */}
+            <div style={{
+              width: '280px',
+              flexShrink: 0,
+              borderRight: `1px solid ${THEME.border}`,
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+            }}>
+              {/* Commits-only checkbox */}
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 12px',
+                borderBottom: `1px solid ${THEME.border}`,
+                fontSize: '12px',
+                color: THEME.textMuted,
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}>
+                <input
+                  type="checkbox"
+                  checked={fsCommitsOnly}
+                  onChange={(e) => setFsCommitsOnly(e.target.checked)}
+                  style={{ accentColor: '#ec4899' }}
+                />
+                Commits only ({activeNarrativeForGraph ? activeNarrativeForGraph.nodes.filter(n => getCommit(n)).length : 0})
+              </label>
+
+              {/* Node list */}
+              <div style={{ flex: 1, overflowY: 'auto' }}>
+                {fsNarrative.nodes
+                  .slice()
+                  .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                  .map(node => {
+                    const commit = getCommit(node);
+                    const typeColor = THEME[node.node_type as keyof typeof THEME] || THEME.text;
+                    const isSelected = selectedNodeId === node.id;
+                    return (
+                      <div
+                        key={node.id}
+                        onClick={() => setSelectedNodeId(node.id)}
+                        style={{
+                          padding: '8px 12px',
+                          borderBottom: `1px solid ${THEME.border}22`,
+                          cursor: 'pointer',
+                          backgroundColor: isSelected ? THEME.bgSelected : 'transparent',
+                          borderLeft: `3px solid ${typeColor as string}`,
+                        }}
+                      >
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                        }}>
+                          <span style={{
+                            color: typeColor as string,
+                            fontSize: '9px',
+                            fontWeight: 700,
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                          }}>
+                            {TYPE_ABBREV[node.node_type]}
+                          </span>
+                          <span style={{
+                            color: THEME.text,
+                            fontSize: '12px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            flex: 1,
+                          }}>
+                            {node.title}
+                          </span>
+                        </div>
+                        {commit && (
+                          <div style={{
+                            fontSize: '10px',
+                            color: THEME.textDim,
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                            marginTop: '2px',
+                          }}>
+                            {commit.slice(0, 8)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+
+            {/* Full-screen graph */}
+            <div style={{ flex: 1, height: '100%' }}>
+              <D3Graph
+                narrative={fsNarrative}
+                selectedNodeId={selectedNodeId}
+                onSelectNode={setSelectedNodeId}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div style={{
         display: 'flex',
@@ -2176,8 +3010,27 @@ export function App() {
                 fontWeight: 600,
                 letterSpacing: '0.5px',
                 zIndex: 10,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
               }}>
                 GRAPH VIEW {searchQuery && `(${activeNarrativeForGraph.name.slice(0, 30)}${activeNarrativeForGraph.name.length > 30 ? '...' : ''})`}
+                <button
+                  onClick={handleToggleFullscreen}
+                  title="Fullscreen graph"
+                  style={{
+                    background: 'none',
+                    border: `1px solid ${THEME.border}`,
+                    color: THEME.textMuted,
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontSize: '13px',
+                    lineHeight: 1,
+                  }}
+                >
+                  ⛶
+                </button>
               </div>
               <D3Graph
                 narrative={activeNarrativeForGraph}

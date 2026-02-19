@@ -38,6 +38,7 @@
 //! println!("Nodes: {}, Edges: {}", graph.nodes.len(), graph.edges.len());
 //! ```
 
+pub mod archaeology;
 pub mod changelog;
 pub mod config;
 pub mod db;
@@ -47,7 +48,9 @@ pub mod export;
 pub mod github;
 pub mod hooks;
 pub mod init;
+pub mod narratives;
 pub mod opencode;
+pub mod pulse;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
@@ -56,20 +59,25 @@ pub use config::Config;
 pub use db::{
     build_metadata_json, get_current_git_branch, get_current_git_commit, CheckboxState, CommandLog,
     Database, DbRecord, DbSummary, DecisionContext, DecisionEdge, DecisionGraph, DecisionNode,
-    DecisionSession, DeleteSummary, GitHubIssueCache, RoadmapConflict, RoadmapItem,
-    RoadmapSyncState, CURRENT_SCHEMA,
+    DecisionSession, DeleteSummary, GitHubIssueCache, NodeDocument, NodeTheme, RoadmapConflict,
+    RoadmapItem, RoadmapSyncState, Theme, CURRENT_SCHEMA,
 };
-pub use diff::{ApplyResult, GraphPatch, PatchEdge, PatchNode};
+pub use diff::{
+    ApplyResult, GraphPatch, PatchDocument, PatchEdge, PatchNode, PatchNodeTheme, PatchTheme,
+};
 pub use events::{
-    Checkpoint, CheckpointEdge, CheckpointNode, Event, EventLog, EventLogError,
-    MaterializedState, RebuildResult, generate_edge_id, get_current_author,
+    Checkpoint, CheckpointDocument, CheckpointEdge, CheckpointNode, CheckpointNodeTheme,
+    CheckpointTheme, Event, EventLog, EventLogError, MaterializedState, RebuildResult,
+    generate_edge_id, get_current_author,
 };
 pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
     parse_node_range, DotConfig, WriteupConfig,
 };
 pub use hooks::{hooks_status, install_hooks, integration_status, uninstall_hooks};
+pub use narratives::PivotChain;
 pub use opencode::{install_opencode, opencode_status, uninstall_opencode, update_opencode};
+pub use pulse::PulseReport;
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]

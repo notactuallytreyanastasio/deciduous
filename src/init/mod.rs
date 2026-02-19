@@ -52,6 +52,10 @@ pub fn init_project(
     let deciduous_dir = cwd.join(".deciduous");
     create_dir_if_missing(&deciduous_dir)?;
 
+    // 1a. Create .deciduous/documents directory for file attachments
+    let documents_dir = deciduous_dir.join("documents");
+    create_dir_if_missing(&documents_dir)?;
+
     // 1b. Create default config.toml if it doesn't exist
     let config_path = deciduous_dir.join("config.toml");
     write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;

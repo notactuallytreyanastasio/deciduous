@@ -88,6 +88,49 @@ export interface DeciduousConfig {
 }
 
 /**
+ * Theme definition - matches Rust Theme struct in db.rs
+ */
+export interface Theme {
+  id: number;
+  change_id: string;
+  name: string;
+  color: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Node-theme association - matches Rust NodeTheme struct in db.rs
+ */
+export interface NodeThemeAssociation {
+  node_id: number;
+  theme_id: number;
+  source: string;  // 'manual' | 'suggested'
+  created_at: string;
+}
+
+/**
+ * Document attached to a node - matches Rust NodeDocument struct in db.rs
+ */
+export interface NodeDocument {
+  id: number;
+  change_id: string;
+  node_id: number;
+  node_change_id: string;
+  content_hash: string;
+  original_filename: string;
+  storage_filename: string;
+  mime_type: string;
+  file_size: number;
+  description: string | null;
+  description_source: string;  // 'none' | 'ai' | 'manual'
+  attached_at: string;
+  attached_by: string | null;
+  detached_at: string | null;
+}
+
+/**
  * Full graph data structure as exported by `deciduous sync`
  * This is the JSON format written to graph-data.json
  */
@@ -95,6 +138,9 @@ export interface GraphData {
   nodes: DecisionNode[];
   edges: DecisionEdge[];
   config?: DeciduousConfig;  // Optional config for external repo links
+  themes?: Theme[];
+  node_themes?: NodeThemeAssociation[];
+  documents?: NodeDocument[];
 }
 
 // =============================================================================
@@ -379,6 +425,68 @@ export function sortByTime(nodes: DecisionNode[], oldestFirst: boolean): Decisio
     return oldestFirst ? timeA - timeB : timeB - timeA;
   });
   return sorted;
+}
+
+/**
+ * Filter nodes by theme
+ */
+export function filterByTheme(
+  nodes: DecisionNode[],
+  themeName: string | null,
+  graphData: GraphData
+): DecisionNode[] {
+  if (!themeName || !graphData.themes || !graphData.node_themes) return nodes;
+  const theme = graphData.themes.find(t => t.name === themeName);
+  if (!theme) return nodes;
+  const taggedNodeIds = new Set(
+    graphData.node_themes
+      .filter(nt => nt.theme_id === theme.id)
+      .map(nt => nt.node_id)
+  );
+  return nodes.filter(n => taggedNodeIds.has(n.id));
+}
+
+/**
+ * Get themes for a specific node
+ */
+export function getNodeThemes(nodeId: number, graphData: GraphData): Theme[] {
+  if (!graphData.themes || !graphData.node_themes) return [];
+  const themeIds = graphData.node_themes
+    .filter(nt => nt.node_id === nodeId)
+    .map(nt => nt.theme_id);
+  return graphData.themes.filter(t => themeIds.includes(t.id));
+}
+
+/**
+ * Get theme association source for a node-theme pair
+ */
+export function getNodeThemeSource(nodeId: number, themeId: number, graphData: GraphData): string {
+  const assoc = graphData.node_themes?.find(nt => nt.node_id === nodeId && nt.theme_id === themeId);
+  return assoc?.source || 'manual';
+}
+
+/**
+ * Get documents for a specific node (excludes detached)
+ */
+export function getNodeDocuments(nodeId: number, graphData: GraphData): NodeDocument[] {
+  if (!graphData.documents) return [];
+  return graphData.documents.filter(d => d.node_id === nodeId && !d.detached_at);
+}
+
+/**
+ * Get all unique theme names from graph data
+ */
+export function getUniqueThemes(graphData: GraphData): Theme[] {
+  return graphData.themes || [];
+}
+
+/**
+ * Format file size for display
+ */
+export function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 /**

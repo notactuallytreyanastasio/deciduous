@@ -168,3 +168,51 @@ diesel::table! {
         deleted_at -> Nullable<Text>,
     }
 }
+
+// ============================================================================
+// Node Documents - File attachments on decision nodes
+// ============================================================================
+
+diesel::table! {
+    node_documents (id) {
+        id -> Integer,
+        change_id -> Text,
+        node_id -> Integer,
+        node_change_id -> Text,
+        content_hash -> Text,
+        original_filename -> Text,
+        storage_filename -> Text,
+        mime_type -> Text,
+        file_size -> Integer,
+        description -> Nullable<Text>,
+        description_source -> Text,
+        attached_at -> Text,
+        attached_by -> Nullable<Text>,
+        detached_at -> Nullable<Text>,
+    }
+}
+
+// ============================================================================
+// Themes - Tagging system for decision nodes
+// ============================================================================
+
+diesel::table! {
+    themes (id) {
+        id -> Integer,
+        change_id -> Text,
+        name -> Text,
+        color -> Text,
+        description -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    node_themes (node_id, theme_id) {
+        node_id -> Integer,
+        theme_id -> Integer,
+        source -> Text,
+        created_at -> Text,
+    }
+}

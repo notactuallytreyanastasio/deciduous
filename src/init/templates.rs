@@ -268,6 +268,19 @@ The graph viewer shows a branch dropdown in the stats bar:
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
 
+### Document Attachments
+- `doc attach <node_id> <file>` -> `deciduous doc attach <node_id> <file>`
+- `doc attach <node_id> <file> -d "desc"` -> attach with description
+- `doc attach <node_id> <file> --ai-describe` -> attach with AI-generated description
+- `doc list` -> `deciduous doc list` (all documents)
+- `doc list <node_id>` -> `deciduous doc list <node_id>` (documents for one node)
+- `doc show <id>` -> `deciduous doc show <id>`
+- `doc describe <id> "desc"` -> `deciduous doc describe <id> "desc"`
+- `doc describe <id> --ai` -> AI-generate description
+- `doc open <id>` -> `deciduous doc open <id>` (open in default app)
+- `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
+- `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
+
 ### Sync Graph
 - `sync` -> `deciduous sync`
 
@@ -459,6 +472,9 @@ deciduous edges
 
 # What commands were recently run?
 deciduous commands
+
+# Check for attached documents
+deciduous doc list
 ```
 
 **Branch-scoped context**: If working on a feature branch, filter nodes to see only decisions relevant to this branch. Main branch nodes are tagged with `[branch: main]`.
@@ -508,7 +524,8 @@ cat git.log | tail -30
 3. **Recent decisions** (especially pending/active ones)
 4. **Last actions** from git log and command log
 5. **Open questions** or unresolved observations
-6. **Suggested next steps**
+6. **Attached documents** - diagrams, specs, or screenshots on key nodes
+7. **Suggested next steps**
 
 ### Branch Configuration
 
@@ -687,6 +704,40 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
+### Document Attachments
+
+Attach files (images, PDFs, diagrams, specs, screenshots) to decision graph nodes for rich context.
+
+```bash
+# Attach a file to a node
+deciduous doc attach <node_id> <file_path>
+deciduous doc attach <node_id> <file_path> -d "Architecture diagram"
+deciduous doc attach <node_id> <file_path> --ai-describe
+
+# List documents
+deciduous doc list              # All documents
+deciduous doc list <node_id>    # Documents for a specific node
+
+# Manage documents
+deciduous doc show <doc_id>     # Show document details
+deciduous doc describe <doc_id> "Updated description"
+deciduous doc describe <doc_id> --ai   # AI-generate description
+deciduous doc open <doc_id>     # Open in default application
+deciduous doc detach <doc_id>   # Soft-delete (recoverable)
+deciduous doc gc                # Remove orphaned files from disk
+```
+
+**When to suggest document attachment:**
+
+| Situation | Action |
+|-----------|--------|
+| User shares an image or screenshot | Ask: "Want me to attach this to the current goal/action node?" |
+| User references an external document | Ask: "Should I attach a copy to the decision graph?" |
+| Architecture diagram is discussed | Suggest attaching it to the relevant goal node |
+| Files not in the project are dropped in | Attach to the most relevant active node |
+
+**Do NOT aggressively prompt for documents.** Only suggest when files are directly relevant to a decision node. Files are stored in `.deciduous/documents/` with content-hash naming for deduplication.
+
 ### CRITICAL: Capture VERBATIM User Prompts
 
 **Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
@@ -832,6 +883,7 @@ auto_detect = true
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected? Any gaps?
+deciduous doc list        # Any attached documents to review?
 git status                # Current state
 ```
 
@@ -1774,6 +1826,17 @@ deciduous link <action_id> <outcome_id> -r "Implementation complete"
 deciduous sync
 ```
 
+## Step 5: Attach Supporting Documents (Optional)
+
+If the work produced or referenced important files (diagrams, specs, screenshots):
+
+```bash
+deciduous doc attach <goal_id> path/to/diagram.png -d "Architecture diagram"
+deciduous doc attach <action_id> path/to/spec.pdf --ai-describe
+```
+
+If the user shares images or drops in files not in the project, attach them to the most relevant active node.
+
 ## The Transaction Model
 
 ```
@@ -1788,6 +1851,8 @@ Implementation happens (Edit/Write now allowed)
 git commit
     |
 Outcome node with --commit HEAD (links to action)
+    |
+Attach supporting documents (optional)
     |
 deciduous sync
 ```
@@ -1812,6 +1877,9 @@ deciduous link <goal> <action> -r "Implementation"
 # After committing
 deciduous add outcome "Result" -c 95 --commit HEAD
 deciduous link <action> <outcome> -r "Complete"
+
+# Attach documents (optional)
+deciduous doc attach <goal> diagram.png -d "Description"
 
 # Always sync
 deciduous sync
@@ -2091,6 +2159,15 @@ deciduous pulse --summary
 deciduous serve
 ```
 
+## Check for Supporting Documents
+
+If the system has architecture diagrams, specs, or reference docs relevant to the scope:
+
+```bash
+deciduous doc list <goal_id>
+deciduous doc attach <goal_id> docs/architecture.png -d "Current architecture"
+```
+
 ## Decision Criteria
 
 - **Worth capturing?** Does it define BEHAVIOR, not implementation?
@@ -2129,6 +2206,7 @@ Edit `.deciduous/narratives.md`. For each section:
 2. Infer the **evolution** (how it likely got this way)
 3. Identify **PIVOTs** (when the conceptual model changed)
 4. Find evidence (PRs, commits, docs) - optional
+5. Check attached documents (`deciduous doc list`) - diagrams or specs may provide evidence
 
 Signs of a pivot:
 - Two approaches coexisting (migration in progress)
@@ -2400,11 +2478,26 @@ deciduous add action "Implemented auth" -c 90 --commit HEAD
 deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
+## Document Attachments
+
+Attach files (images, PDFs, diagrams, specs) to decision nodes:
+
+```bash
+deciduous doc attach <node_id> <file> -d "description"
+deciduous doc list [node_id]
+deciduous doc show <id>
+deciduous doc detach <id>    # Soft-delete
+deciduous doc gc             # Clean orphaned files
+```
+
+When the user shares images or references external files, suggest attaching them to the relevant node.
+
 ## Session Start Checklist
 
 ```bash
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
+deciduous doc list        # Any attached documents?
 git status                # Current state
 ```
 "#;
@@ -2500,6 +2593,17 @@ deciduous narratives pivots
 # Visual exploration
 deciduous serve
 ```
+
+## Attach Evidence Documents
+
+If you find diagrams, screenshots, or specs that support the archaeology:
+
+```bash
+deciduous doc attach <goal_id> evidence/old-architecture.png -d "Architecture before refactor"
+deciduous doc attach <revisit_id> evidence/perf-report.pdf --ai-describe
+```
+
+Documents provide visual/tangible evidence alongside commit-based grounding.
 
 ## Querying the Graph
 

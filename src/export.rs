@@ -255,6 +255,9 @@ pub fn filter_graph_from_roots(graph: &DecisionGraph, root_ids: &[i32]) -> Decis
         nodes,
         edges,
         config: graph.config.clone(),
+        themes: graph.themes.clone(),
+        node_themes: graph.node_themes.clone(),
+        documents: graph.documents.clone(),
     }
 }
 
@@ -280,6 +283,9 @@ pub fn filter_graph_by_ids(graph: &DecisionGraph, node_ids: &[i32]) -> DecisionG
         nodes,
         edges,
         config: graph.config.clone(),
+        themes: graph.themes.clone(),
+        node_themes: graph.node_themes.clone(),
+        documents: graph.documents.clone(),
     }
 }
 
@@ -616,6 +622,9 @@ mod tests {
                 },
             ],
             config: None,
+            themes: vec![],
+            node_themes: vec![],
+            documents: vec![],
         }
     }
 
@@ -895,6 +904,9 @@ mod tests {
             nodes: vec![],
             edges: vec![],
             config: None,
+            themes: vec![],
+            node_themes: vec![],
+            documents: vec![],
         };
         let config = DotConfig::default();
         let dot = graph_to_dot(&graph, &config);
@@ -909,6 +921,9 @@ mod tests {
             nodes: vec![],
             edges: vec![],
             config: None,
+            themes: vec![],
+            node_themes: vec![],
+            documents: vec![],
         };
         let config = WriteupConfig {
             title: "Empty".to_string(),

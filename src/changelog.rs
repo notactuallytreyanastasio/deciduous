@@ -12,6 +12,21 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.0",
+        highlights: &[
+            "Document attachments: attach files (images, PDFs, diagrams) to decision nodes",
+            "7 doc subcommands: attach, list, show, describe, open, detach, gc",
+            "AI-generated descriptions for attached documents (--ai-describe)",
+            "Content-hash deduplication and soft-delete with garbage collection",
+            "Theme system: tag and group nodes by theme",
+            "Web viewer shows attached documents and themes in detail panel",
+            "REST API: /api/documents and /api/documents/file/<id> endpoints",
+            "Event-based sync support for document attachments",
+            "All skills, commands, and docs updated with document awareness",
+            "Init now creates .deciduous/documents/ directory",
+        ],
+    },
+    Release {
         version: "0.12.2",
         highlights: &[
             "README rewritten to lead with /pulse, /archaeology, /narratives skills",

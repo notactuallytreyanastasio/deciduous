@@ -348,6 +348,34 @@ deciduous nodes --status superseded # What was tried
 
 ---
 
+## Document Attachments
+
+Attach files to any decision node — architecture diagrams, specs, screenshots, PDFs.
+
+```bash
+# Attach a diagram to a goal
+deciduous doc attach 1 docs/architecture.png -d "System architecture diagram"
+
+# AI-generate a description
+deciduous doc attach 1 screenshot.png --ai-describe
+
+# List what's attached
+deciduous doc list 1
+
+# Open a document
+deciduous doc open 3
+
+# Soft-delete (recoverable)
+deciduous doc detach 3
+
+# Clean up orphaned files
+deciduous doc gc
+```
+
+Documents are stored in `.deciduous/documents/` with content-hash naming for deduplication. The web viewer displays attached documents in the node detail panel. Soft-delete with `doc detach`; garbage-collect orphaned files with `doc gc --dry-run` to preview.
+
+---
+
 ## Graph Maintenance
 
 Made a mistake? Fix it:
@@ -563,6 +591,20 @@ deciduous diff export -o patch.json
 deciduous diff apply patches/*.json
 deciduous migrate            # Add change_id columns for sync
 
+# Document attachments
+deciduous doc attach <node_id> <file>          # Attach file to node
+deciduous doc attach <node_id> <file> -d "..." # With description
+deciduous doc attach <node_id> <file> --ai-describe  # AI description
+deciduous doc list                             # List all documents
+deciduous doc list <node_id>                   # Documents for a node
+deciduous doc show <id>                        # Document details
+deciduous doc describe <id> "text"             # Set description
+deciduous doc describe <id> --ai               # AI-generate description
+deciduous doc open <id>                        # Open in default app
+deciduous doc detach <id>                      # Soft-delete
+deciduous doc gc                               # Clean orphaned files
+deciduous doc gc --dry-run                     # Preview cleanup
+
 # Shell completion
 deciduous completion zsh     # Add: source <(deciduous completion zsh)
 deciduous completion bash
@@ -590,6 +632,7 @@ deciduous completion fish
 - Use `/decision-graph` to build decision graphs from commit history
 - Use `/sync` to synchronize decision graphs across teammates
 - Ask deep questions via the Q&A interface grounded in actual graph data
+- Attach relevant documents (diagrams, screenshots, specs) to decision nodes
 
 **Your team:**
 - Share decision context via patch files

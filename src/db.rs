@@ -122,7 +122,7 @@ fn get_db_path() -> std::path::PathBuf {
 /// Current schema version for deciduous
 pub const CURRENT_SCHEMA: DecisionSchema = DecisionSchema {
     major: 1,
-    minor: 0,
+    minor: 1,
     patch: 0,
     name: "decision-graph",
     features: &[
@@ -131,6 +131,9 @@ pub const CURRENT_SCHEMA: DecisionSchema = DecisionSchema {
         "decision_context",
         "decision_sessions",
         "command_log",
+        "node_documents",
+        "themes",
+        "node_themes",
     ],
 };
 
@@ -1098,6 +1101,88 @@ impl Database {
         // Q&A indexes
         diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_qa_interactions_inserted_at ON qa_interactions(inserted_at)").execute(&mut conn)?;
 
+        // Node Documents table
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS node_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                change_id TEXT NOT NULL UNIQUE,
+                node_id INTEGER NOT NULL,
+                node_change_id TEXT NOT NULL,
+                content_hash TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                storage_filename TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                description TEXT,
+                description_source TEXT NOT NULL DEFAULT 'none',
+                attached_at TEXT NOT NULL,
+                attached_by TEXT,
+                detached_at TEXT,
+                FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        // Document indexes
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_docs_node_id ON node_documents(node_id)")
+            .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_docs_content_hash ON node_documents(content_hash)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_docs_change_id ON node_documents(change_id)",
+        )
+        .execute(&mut conn)?;
+
+        // Themes table
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS themes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                change_id TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL UNIQUE,
+                color TEXT NOT NULL DEFAULT '#6b7280',
+                description TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        // Node-Themes junction table
+        diesel::sql_query(
+            r#"
+            CREATE TABLE IF NOT EXISTS node_themes (
+                node_id INTEGER NOT NULL,
+                theme_id INTEGER NOT NULL,
+                source TEXT NOT NULL DEFAULT 'manual',
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (node_id, theme_id),
+                FOREIGN KEY (node_id) REFERENCES decision_nodes(id) ON DELETE CASCADE,
+                FOREIGN KEY (theme_id) REFERENCES themes(id) ON DELETE CASCADE
+            )
+        "#,
+        )
+        .execute(&mut conn)?;
+
+        // Theme indexes
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_themes_name ON themes(name)")
+            .execute(&mut conn)?;
+        diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_themes_change_id ON themes(change_id)")
+            .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_node_themes_node ON node_themes(node_id)",
+        )
+        .execute(&mut conn)?;
+        diesel::sql_query(
+            "CREATE INDEX IF NOT EXISTS idx_node_themes_theme ON node_themes(theme_id)",
+        )
+        .execute(&mut conn)?;
+
         // Register current schema
         self.register_schema(&CURRENT_SCHEMA)?;
         Ok(())
@@ -1672,10 +1757,16 @@ impl Database {
     pub fn get_graph(&self) -> Result<DecisionGraph> {
         let nodes = self.get_all_nodes()?;
         let edges = self.get_all_edges()?;
+        let themes = self.get_all_themes().unwrap_or_default();
+        let node_themes = self.get_all_node_themes().unwrap_or_default();
+        let documents = self.get_node_documents(None, false).unwrap_or_default();
         Ok(DecisionGraph {
             nodes,
             edges,
             config: None,
+            themes,
+            node_themes,
+            documents,
         })
     }
 
@@ -1686,10 +1777,16 @@ impl Database {
     ) -> Result<DecisionGraph> {
         let nodes = self.get_all_nodes()?;
         let edges = self.get_all_edges()?;
+        let themes = self.get_all_themes().unwrap_or_default();
+        let node_themes = self.get_all_node_themes().unwrap_or_default();
+        let documents = self.get_node_documents(None, false).unwrap_or_default();
         Ok(DecisionGraph {
             nodes,
             edges,
             config,
+            themes,
+            node_themes,
+            documents,
         })
     }
 
@@ -2306,6 +2403,327 @@ impl Database {
     }
 
     // ========================================================================
+    // Document Attachment Operations
+    // ========================================================================
+
+    /// Attach a document to a node
+    pub fn attach_document(
+        &self,
+        node_id: i32,
+        content_hash: &str,
+        original_filename: &str,
+        storage_filename: &str,
+        mime_type: &str,
+        file_size: i32,
+        description: Option<&str>,
+        description_source: &str,
+        attached_by: Option<&str>,
+    ) -> Result<i32> {
+        // Validate node exists and get its change_id
+        let node = self
+            .get_node(node_id)?
+            .ok_or_else(|| DbError::Validation(format!("Node {} not found", node_id)))?;
+
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+        let change_id = Uuid::new_v4().to_string();
+
+        let new_doc = NewNodeDocument {
+            change_id: &change_id,
+            node_id,
+            node_change_id: &node.change_id,
+            content_hash,
+            original_filename,
+            storage_filename,
+            mime_type,
+            file_size,
+            description,
+            description_source,
+            attached_at: &now,
+            attached_by,
+            detached_at: None,
+        };
+
+        diesel::insert_into(node_documents::table)
+            .values(&new_doc)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// List documents, optionally filtered by node_id
+    pub fn get_node_documents(
+        &self,
+        node_id: Option<i32>,
+        include_detached: bool,
+    ) -> Result<Vec<NodeDocument>> {
+        let mut conn = self.get_conn()?;
+
+        let mut query = node_documents::table.into_boxed();
+
+        if let Some(nid) = node_id {
+            query = query.filter(node_documents::node_id.eq(nid));
+        }
+
+        if !include_detached {
+            query = query.filter(node_documents::detached_at.is_null());
+        }
+
+        let results = query
+            .order(node_documents::attached_at.desc())
+            .load::<NodeDocument>(&mut conn)?;
+        Ok(results)
+    }
+
+    /// Get a specific document by ID
+    pub fn get_document(&self, doc_id: i32) -> Result<Option<NodeDocument>> {
+        let mut conn = self.get_conn()?;
+        let result = node_documents::table
+            .filter(node_documents::id.eq(doc_id))
+            .first::<NodeDocument>(&mut conn)
+            .optional()?;
+        Ok(result)
+    }
+
+    /// Update document description
+    pub fn update_document_description(
+        &self,
+        doc_id: i32,
+        description: &str,
+        source: &str,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(node_documents::table.filter(node_documents::id.eq(doc_id)))
+            .set((
+                node_documents::description.eq(description),
+                node_documents::description_source.eq(source),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Soft-delete (detach) a document
+    pub fn detach_document(&self, doc_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+        diesel::update(node_documents::table.filter(node_documents::id.eq(doc_id)))
+            .set(node_documents::detached_at.eq(&now))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Get all active content hashes (for garbage collection)
+    pub fn get_active_content_hashes(&self) -> Result<Vec<String>> {
+        let mut conn = self.get_conn()?;
+        let results = node_documents::table
+            .filter(node_documents::detached_at.is_null())
+            .select(node_documents::content_hash)
+            .distinct()
+            .load::<String>(&mut conn)?;
+        Ok(results)
+    }
+
+    // ========================================================================
+    // Theme Operations
+    // ========================================================================
+
+    /// Create a new theme
+    pub fn create_theme(
+        &self,
+        name: &str,
+        color: &str,
+        description: Option<&str>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+        let change_id = Uuid::new_v4().to_string();
+        let normalized_name = name.to_lowercase().replace(' ', "-");
+
+        let new_theme = NewTheme {
+            change_id: &change_id,
+            name: &normalized_name,
+            color,
+            description,
+            created_at: &now,
+            updated_at: &now,
+        };
+
+        diesel::insert_into(themes::table)
+            .values(&new_theme)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Get a theme by name
+    pub fn get_theme_by_name(&self, name: &str) -> Result<Option<Theme>> {
+        let mut conn = self.get_conn()?;
+        let normalized = name.to_lowercase().replace(' ', "-");
+
+        let result = themes::table
+            .filter(themes::name.eq(&normalized))
+            .first::<Theme>(&mut conn)
+            .optional()?;
+
+        Ok(result)
+    }
+
+    /// Get all themes
+    pub fn get_all_themes(&self) -> Result<Vec<Theme>> {
+        let mut conn = self.get_conn()?;
+        let results = themes::table
+            .order(themes::name.asc())
+            .load::<Theme>(&mut conn)?;
+        Ok(results)
+    }
+
+    /// Delete a theme by name (also removes all node_themes associations)
+    pub fn delete_theme(&self, name: &str) -> Result<bool> {
+        let mut conn = self.get_conn()?;
+        let normalized = name.to_lowercase().replace(' ', "-");
+
+        let theme = themes::table
+            .filter(themes::name.eq(&normalized))
+            .first::<Theme>(&mut conn)
+            .optional()?;
+
+        if let Some(theme) = theme {
+            // Delete junction entries first
+            diesel::delete(node_themes::table.filter(node_themes::theme_id.eq(theme.id)))
+                .execute(&mut conn)?;
+            // Delete theme
+            diesel::delete(themes::table.filter(themes::id.eq(theme.id))).execute(&mut conn)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Tag a node with a theme
+    pub fn tag_node(&self, node_id: i32, theme_name: &str, source: &str) -> Result<()> {
+        let theme = self.get_theme_by_name(theme_name)?.ok_or_else(|| {
+            DbError::Validation(format!(
+                "Theme '{}' not found. Create it with: deciduous themes create {}",
+                theme_name, theme_name
+            ))
+        })?;
+
+        // Validate node exists
+        let _ = self
+            .get_node(node_id)?
+            .ok_or_else(|| DbError::Validation(format!("Node {} not found", node_id)))?;
+
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_nt = NewNodeTheme {
+            node_id,
+            theme_id: theme.id,
+            source: source.to_string(),
+            created_at: now,
+        };
+
+        diesel::insert_or_ignore_into(node_themes::table)
+            .values(&new_nt)
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Remove a theme from a node
+    pub fn untag_node(&self, node_id: i32, theme_name: &str) -> Result<bool> {
+        let theme = self.get_theme_by_name(theme_name)?;
+
+        if let Some(theme) = theme {
+            let mut conn = self.get_conn()?;
+            let deleted = diesel::delete(
+                node_themes::table
+                    .filter(node_themes::node_id.eq(node_id))
+                    .filter(node_themes::theme_id.eq(theme.id)),
+            )
+            .execute(&mut conn)?;
+            Ok(deleted > 0)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Confirm a suggested tag (change source from "suggested" to "manual")
+    pub fn confirm_tag(&self, node_id: i32, theme_name: &str) -> Result<bool> {
+        let theme = self.get_theme_by_name(theme_name)?;
+
+        if let Some(theme) = theme {
+            let mut conn = self.get_conn()?;
+            let updated = diesel::update(
+                node_themes::table
+                    .filter(node_themes::node_id.eq(node_id))
+                    .filter(node_themes::theme_id.eq(theme.id)),
+            )
+            .set(node_themes::source.eq("manual"))
+            .execute(&mut conn)?;
+            Ok(updated > 0)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// Get themes for a specific node
+    pub fn get_node_themes(&self, node_id: i32) -> Result<Vec<Theme>> {
+        let mut conn = self.get_conn()?;
+
+        let theme_ids: Vec<i32> = node_themes::table
+            .filter(node_themes::node_id.eq(node_id))
+            .select(node_themes::theme_id)
+            .load(&mut conn)?;
+
+        let results = themes::table
+            .filter(themes::id.eq_any(theme_ids))
+            .order(themes::name.asc())
+            .load::<Theme>(&mut conn)?;
+
+        Ok(results)
+    }
+
+    /// Get nodes that have a specific theme
+    pub fn get_nodes_by_theme(&self, theme_name: &str) -> Result<Vec<DecisionNode>> {
+        let theme = self.get_theme_by_name(theme_name)?;
+
+        if let Some(theme) = theme {
+            let mut conn = self.get_conn()?;
+
+            let node_ids: Vec<i32> = node_themes::table
+                .filter(node_themes::theme_id.eq(theme.id))
+                .select(node_themes::node_id)
+                .load(&mut conn)?;
+
+            let results = decision_nodes::table
+                .filter(decision_nodes::id.eq_any(node_ids))
+                .load::<DecisionNode>(&mut conn)?;
+
+            Ok(results)
+        } else {
+            Ok(Vec::new())
+        }
+    }
+
+    /// Get all node-theme associations (for export)
+    pub fn get_all_node_themes(&self) -> Result<Vec<NodeTheme>> {
+        let mut conn = self.get_conn()?;
+        let results = node_themes::table.load::<NodeTheme>(&mut conn)?;
+        Ok(results)
+    }
+
+    // ========================================================================
     // Q&A Interactions
     // ========================================================================
 
@@ -2507,6 +2925,104 @@ pub struct QaSearchResult {
 }
 
 // ============================================================================
+// Node Document Models
+// ============================================================================
+
+/// Insertable node document attachment
+#[derive(Insertable)]
+#[diesel(table_name = node_documents)]
+pub struct NewNodeDocument<'a> {
+    pub change_id: &'a str,
+    pub node_id: i32,
+    pub node_change_id: &'a str,
+    pub content_hash: &'a str,
+    pub original_filename: &'a str,
+    pub storage_filename: &'a str,
+    pub mime_type: &'a str,
+    pub file_size: i32,
+    pub description: Option<&'a str>,
+    pub description_source: &'a str,
+    pub attached_at: &'a str,
+    pub attached_by: Option<&'a str>,
+    pub detached_at: Option<&'a str>,
+}
+
+/// Queryable node document attachment
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = node_documents)]
+pub struct NodeDocument {
+    pub id: i32,
+    pub change_id: String,
+    pub node_id: i32,
+    pub node_change_id: String,
+    pub content_hash: String,
+    pub original_filename: String,
+    pub storage_filename: String,
+    pub mime_type: String,
+    pub file_size: i32,
+    pub description: Option<String>,
+    pub description_source: String,
+    pub attached_at: String,
+    pub attached_by: Option<String>,
+    pub detached_at: Option<String>,
+}
+
+// ============================================================================
+// Theme Models
+// ============================================================================
+
+/// Insertable theme
+#[derive(Insertable)]
+#[diesel(table_name = themes)]
+pub struct NewTheme<'a> {
+    pub change_id: &'a str,
+    pub name: &'a str,
+    pub color: &'a str,
+    pub description: Option<&'a str>,
+    pub created_at: &'a str,
+    pub updated_at: &'a str,
+}
+
+/// Queryable theme
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = themes)]
+pub struct Theme {
+    pub id: i32,
+    pub change_id: String,
+    pub name: String,
+    pub color: String,
+    pub description: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Insertable node-theme association
+#[derive(Insertable)]
+#[diesel(table_name = node_themes)]
+pub struct NewNodeTheme {
+    pub node_id: i32,
+    pub theme_id: i32,
+    pub source: String,
+    pub created_at: String,
+}
+
+/// Queryable node-theme association
+#[derive(Queryable, Selectable, Debug, Clone, serde::Serialize)]
+#[cfg_attr(feature = "ts-rs", derive(TS))]
+#[cfg_attr(feature = "ts-rs", ts(export))]
+#[diesel(table_name = node_themes)]
+pub struct NodeTheme {
+    pub node_id: i32,
+    pub theme_id: i32,
+    pub source: String,
+    pub created_at: String,
+}
+
+// ============================================================================
 // Additional Types
 // ============================================================================
 
@@ -2528,6 +3044,15 @@ pub struct DecisionGraph {
     /// Optional config from .deciduous/config.toml (for external repo links, etc.)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub config: Option<crate::config::Config>,
+    /// Theme definitions
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub themes: Vec<Theme>,
+    /// Node-theme associations
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub node_themes: Vec<NodeTheme>,
+    /// Document attachments
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub documents: Vec<NodeDocument>,
 }
 
 #[cfg(test)]
@@ -2781,5 +3306,259 @@ mod tests {
             serde_json::from_str(node.metadata_json.as_ref().unwrap()).unwrap();
 
         assert_eq!(meta.get("commit").unwrap(), "new_commit_hash");
+    }
+
+    // === Theme Tests ===
+
+    #[test]
+    fn test_create_and_get_theme() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let id = db
+            .create_theme("security", "#ef4444", Some("Security concerns"))
+            .unwrap();
+        assert!(id > 0);
+
+        let theme = db.get_theme_by_name("security").unwrap().unwrap();
+        assert_eq!(theme.name, "security");
+        assert_eq!(theme.color, "#ef4444");
+        assert_eq!(theme.description.as_deref(), Some("Security concerns"));
+    }
+
+    #[test]
+    fn test_theme_name_normalization() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        db.create_theme("Technical Debt", "#666", None).unwrap();
+        let theme = db.get_theme_by_name("technical-debt").unwrap();
+        assert!(theme.is_some());
+        assert_eq!(theme.unwrap().name, "technical-debt");
+    }
+
+    #[test]
+    fn test_list_themes() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        db.create_theme("alpha", "#111", None).unwrap();
+        db.create_theme("beta", "#222", None).unwrap();
+        db.create_theme("gamma", "#333", None).unwrap();
+
+        let themes = db.get_all_themes().unwrap();
+        assert_eq!(themes.len(), 3);
+        // Should be sorted by name
+        assert_eq!(themes[0].name, "alpha");
+        assert_eq!(themes[1].name, "beta");
+        assert_eq!(themes[2].name, "gamma");
+    }
+
+    #[test]
+    fn test_delete_theme() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        db.create_theme("temp", "#000", None).unwrap();
+        assert!(db.delete_theme("temp").unwrap());
+        assert!(db.get_theme_by_name("temp").unwrap().is_none());
+        // Deleting non-existent returns false
+        assert!(!db.delete_theme("temp").unwrap());
+    }
+
+    #[test]
+    fn test_tag_and_untag_node() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Improve perf", None, None, None)
+            .unwrap();
+        db.create_theme("performance", "#10b981", None).unwrap();
+
+        db.tag_node(node_id, "performance", "manual").unwrap();
+
+        let themes = db.get_node_themes(node_id).unwrap();
+        assert_eq!(themes.len(), 1);
+        assert_eq!(themes[0].name, "performance");
+
+        let nodes = db.get_nodes_by_theme("performance").unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].id, node_id);
+
+        assert!(db.untag_node(node_id, "performance").unwrap());
+        let themes = db.get_node_themes(node_id).unwrap();
+        assert!(themes.is_empty());
+    }
+
+    #[test]
+    fn test_delete_theme_cascades_to_tags() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test", None, None, None)
+            .unwrap();
+        db.create_theme("temp", "#000", None).unwrap();
+        db.tag_node(node_id, "temp", "manual").unwrap();
+
+        db.delete_theme("temp").unwrap();
+        let themes = db.get_node_themes(node_id).unwrap();
+        assert!(themes.is_empty());
+    }
+
+    #[test]
+    fn test_confirm_tag() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test", None, None, None)
+            .unwrap();
+        db.create_theme("ux", "#3b82f6", None).unwrap();
+        db.tag_node(node_id, "ux", "suggested").unwrap();
+
+        // Check source is "suggested"
+        let all_nt = db.get_all_node_themes().unwrap();
+        assert_eq!(all_nt[0].source, "suggested");
+
+        // Confirm it
+        assert!(db.confirm_tag(node_id, "ux").unwrap());
+
+        let all_nt = db.get_all_node_themes().unwrap();
+        assert_eq!(all_nt[0].source, "manual");
+    }
+
+    #[test]
+    fn test_theme_in_graph_export() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test", None, None, None)
+            .unwrap();
+        db.create_theme("ux", "#3b82f6", None).unwrap();
+        db.tag_node(node_id, "ux", "manual").unwrap();
+
+        let graph = db.get_graph().unwrap();
+        assert_eq!(graph.themes.len(), 1);
+        assert_eq!(graph.node_themes.len(), 1);
+
+        // Verify serialization includes themes
+        let json = serde_json::to_string(&graph).unwrap();
+        assert!(json.contains("\"themes\""));
+        assert!(json.contains("\"ux\""));
+    }
+
+    // === Document Tests ===
+
+    #[test]
+    fn test_attach_and_list_documents() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test goal", None, None, None)
+            .unwrap();
+
+        let doc_id = db
+            .attach_document(
+                node_id,
+                "abc123hash",
+                "report.pdf",
+                "report.pdf.abc12345",
+                "application/pdf",
+                1024,
+                Some("A test report"),
+                "manual",
+                None,
+            )
+            .unwrap();
+        assert!(doc_id > 0);
+
+        let docs = db.get_node_documents(Some(node_id), false).unwrap();
+        assert_eq!(docs.len(), 1);
+        assert_eq!(docs[0].original_filename, "report.pdf");
+        assert_eq!(docs[0].description.as_deref(), Some("A test report"));
+    }
+
+    #[test]
+    fn test_detach_document() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test", None, None, None)
+            .unwrap();
+        let doc_id = db
+            .attach_document(
+                node_id, "hash1", "file.txt", "file.txt.hash1234", "text/plain", 100, None,
+                "none", None,
+            )
+            .unwrap();
+
+        // Detach
+        db.detach_document(doc_id).unwrap();
+
+        // Should not appear in default list
+        let docs = db.get_node_documents(Some(node_id), false).unwrap();
+        assert!(docs.is_empty());
+
+        // Should appear with include_detached
+        let docs = db.get_node_documents(Some(node_id), true).unwrap();
+        assert_eq!(docs.len(), 1);
+        assert!(docs[0].detached_at.is_some());
+    }
+
+    #[test]
+    fn test_update_document_description() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test", None, None, None)
+            .unwrap();
+        let doc_id = db
+            .attach_document(
+                node_id, "hash1", "file.txt", "file.txt.hash1234", "text/plain", 100, None,
+                "none", None,
+            )
+            .unwrap();
+
+        db.update_document_description(doc_id, "Updated desc", "manual")
+            .unwrap();
+
+        let doc = db.get_document(doc_id).unwrap().unwrap();
+        assert_eq!(doc.description.as_deref(), Some("Updated desc"));
+        assert_eq!(doc.description_source, "manual");
+    }
+
+    #[test]
+    fn test_documents_in_graph_export() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let node_id = db
+            .create_node("goal", "Test", None, None, None)
+            .unwrap();
+        db.attach_document(
+            node_id,
+            "hash1",
+            "file.txt",
+            "file.txt.hash1234",
+            "text/plain",
+            100,
+            Some("A file"),
+            "manual",
+            None,
+        )
+        .unwrap();
+
+        let graph = db.get_graph().unwrap();
+        assert_eq!(graph.documents.len(), 1);
+
+        let json = serde_json::to_string(&graph).unwrap();
+        assert!(json.contains("\"documents\""));
+        assert!(json.contains("file.txt"));
     }
 }

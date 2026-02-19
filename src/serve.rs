@@ -117,6 +117,14 @@ fn handle_request(request: Request) -> std::io::Result<()> {
         (&Method::Get, p) if p.starts_with("/api/qa/") => handle_qa_get(request, p),
         (&Method::Delete, p) if p.starts_with("/api/qa/") => handle_qa_delete(request, p),
 
+        // API: Get documents for a node (GET /api/documents?node_id=N)
+        (&Method::Get, "/api/documents") => handle_documents_list(request, &url),
+
+        // API: Serve document file content (GET /api/documents/file/<id>)
+        (&Method::Get, p) if p.starts_with("/api/documents/file/") => {
+            handle_document_file(request, p)
+        }
+
         // API: Get sync status (event-based sync)
         (&Method::Get, "/api/sync-status") => {
             let status = get_sync_status();
@@ -156,11 +164,17 @@ fn get_decision_graph() -> DecisionGraph {
                 nodes: vec![],
                 edges: vec![],
                 config: config_opt.clone(),
+                themes: vec![],
+                node_themes: vec![],
+                documents: vec![],
             }),
         Err(_) => DecisionGraph {
             nodes: vec![],
             edges: vec![],
             config: config_opt,
+            themes: vec![],
+            node_themes: vec![],
+            documents: vec![],
         },
     }
 }
@@ -1061,6 +1075,88 @@ fn handle_qa_delete(request: Request, path: &str) -> std::io::Result<()> {
     let response = Response::from_string(json)
         .with_status_code(status)
         .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+    request.respond(response)
+}
+
+// === Document API Handlers ===
+
+fn handle_documents_list(request: Request, url: &str) -> std::io::Result<()> {
+    let params = parse_query_params(url);
+    let node_id: Option<i32> = params.get("node_id").and_then(|s| s.parse().ok());
+
+    let documents = match Database::open() {
+        Ok(db) => db.get_node_documents(node_id, false).unwrap_or_default(),
+        Err(_) => vec![],
+    };
+
+    let json = serde_json::to_string(&ApiResponse::success(documents))?;
+    let response = Response::from_string(json)
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap());
+    request.respond(response)
+}
+
+fn handle_document_file(request: Request, path: &str) -> std::io::Result<()> {
+    let doc_id: i32 = match path
+        .strip_prefix("/api/documents/file/")
+        .and_then(|s| s.parse().ok())
+    {
+        Some(id) => id,
+        None => {
+            let response = Response::from_string("Invalid document ID").with_status_code(400);
+            return request.respond(response);
+        }
+    };
+
+    let db = match Database::open() {
+        Ok(db) => db,
+        Err(_) => {
+            let response = Response::from_string("Database error").with_status_code(500);
+            return request.respond(response);
+        }
+    };
+
+    let doc = match db.get_document(doc_id) {
+        Ok(Some(d)) => d,
+        Ok(None) => {
+            let response = Response::from_string("Document not found").with_status_code(404);
+            return request.respond(response);
+        }
+        Err(_) => {
+            let response = Response::from_string("Database error").with_status_code(500);
+            return request.respond(response);
+        }
+    };
+
+    // Find the file in .deciduous/documents/
+    let file_path = std::path::PathBuf::from(".deciduous")
+        .join("documents")
+        .join(&doc.storage_filename);
+
+    if !file_path.exists() {
+        let response = Response::from_string("File not found on disk").with_status_code(404);
+        return request.respond(response);
+    }
+
+    let file_data = match std::fs::read(&file_path) {
+        Ok(data) => data,
+        Err(_) => {
+            let response = Response::from_string("Failed to read file").with_status_code(500);
+            return request.respond(response);
+        }
+    };
+
+    let content_type = doc.mime_type.as_str();
+    let response = Response::from_data(file_data)
+        .with_header(
+            Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes()).unwrap(),
+        )
+        .with_header(
+            Header::from_bytes(
+                &b"Content-Disposition"[..],
+                format!("inline; filename=\"{}\"", doc.original_filename).as_bytes(),
+            )
+            .unwrap(),
+        );
     request.respond(response)
 }
 

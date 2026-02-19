@@ -130,6 +130,28 @@ deciduous nodes --type revisit
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
 
+### Available Slash Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/decision` | Manage decision graph - add nodes, link edges, sync |
+| `/recover` | Recover context from decision graph on session start |
+| `/work` | Start a work transaction - creates goal node before implementation |
+| `/document` | Generate comprehensive documentation for a file or directory |
+| `/build-test` | Build the project and run the test suite |
+| `/serve-ui` | Start the decision graph web viewer |
+| `/sync-graph` | Export decision graph to GitHub Pages |
+| `/decision-graph` | Build a decision graph from commit history |
+| `/sync` | Multi-user sync - pull events, rebuild, push |
+
+### Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pulse` | Map current design as decisions (Now mode) |
+| `/narratives` | Understand how the system evolved (History mode) |
+| `/archaeology` | Transform narratives into queryable graph |
+
 ### The Node Flow Rule - CRITICAL
 
 The canonical flow through the decision graph is:
@@ -167,6 +189,40 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
+### Document Attachments
+
+Attach files (images, PDFs, diagrams, specs, screenshots) to decision graph nodes for rich context.
+
+```bash
+# Attach a file to a node
+deciduous doc attach <node_id> <file_path>
+deciduous doc attach <node_id> <file_path> -d "Architecture diagram"
+deciduous doc attach <node_id> <file_path> --ai-describe
+
+# List documents
+deciduous doc list              # All documents
+deciduous doc list <node_id>    # Documents for a specific node
+
+# Manage documents
+deciduous doc show <doc_id>     # Show document details
+deciduous doc describe <doc_id> "Updated description"
+deciduous doc describe <doc_id> --ai   # AI-generate description
+deciduous doc open <doc_id>     # Open in default application
+deciduous doc detach <doc_id>   # Soft-delete (recoverable)
+deciduous doc gc                # Remove orphaned files from disk
+```
+
+**When to suggest document attachment:**
+
+| Situation | Action |
+|-----------|--------|
+| User shares an image or screenshot | Ask: "Want me to attach this to the current goal/action node?" |
+| User references an external document | Ask: "Should I attach a copy to the decision graph?" |
+| Architecture diagram is discussed | Suggest attaching it to the relevant goal node |
+| Files not in the project are dropped in | Attach to the most relevant active node |
+
+**Do NOT aggressively prompt for documents.** Only suggest when files are directly relevant to a decision node. Files are stored in `.deciduous/documents/` with content-hash naming for deduplication.
+
 ### CRITICAL: Capture VERBATIM User Prompts
 
 **Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
@@ -203,7 +259,7 @@ deciduous prompt <node_id> "full verbatim prompt here"
 cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
 ```
 
-Prompts are viewable in the TUI detail panel (`deciduous tui`) and web viewer.
+Prompts are viewable in the web viewer.
 
 ### CRITICAL: Maintain Connections
 
@@ -287,31 +343,51 @@ auto_detect = true
 2. Does every **action** link to why you did it?
 3. Any **dangling outcomes** without parents?
 
+### Git Staging Rules - CRITICAL
+
+**NEVER use broad git add commands that stage everything:**
+- ❌ `git add -A` - stages ALL changes including untracked files
+- ❌ `git add .` - stages everything in current directory
+- ❌ `git add -a` or `git commit -am` - auto-stages all tracked changes
+- ❌ `git add *` - glob patterns can catch unintended files
+
+**ALWAYS stage files explicitly by name:**
+- ✅ `git add src/main.rs src/lib.rs`
+- ✅ `git add Cargo.toml Cargo.lock`
+- ✅ `git add .claude/commands/decision.md`
+
+**Why this matters:**
+- Prevents accidentally committing sensitive files (.env, credentials)
+- Prevents committing large binaries or build artifacts
+- Forces you to review exactly what you're committing
+- Catches unintended changes before they enter git history
+
 ### Session Start Checklist
 
 ```bash
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected? Any gaps?
+deciduous doc list        # Any attached documents to review?
 git status                # Current state
 ```
 
 ### Multi-User Sync
 
-Share decisions across teammates:
+Sync decisions with teammates via event logs:
 
 ```bash
-# Export your branch's decisions
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+# Check sync status
+deciduous events status
 
-# Apply patches from teammates (idempotent)
-deciduous diff apply .deciduous/patches/*.json
+# Apply teammate events (after git pull)
+deciduous events rebuild
 
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/teammate.json
+# Compact old events periodically
+deciduous events checkpoint --clear-events
 ```
 
-PR workflow: Export patch -> commit patch file -> PR -> teammates apply.
+Events auto-emit on add/link/status commands. Git merges event files automatically.
 ## Session Start Checklist
 
 Every new session or after context recovery, run `/recover` or:
@@ -414,6 +490,13 @@ web/                     # React/TypeScript web viewer source
 │   │   └── graph.ts            # TypeScript types for graph data
 │   └── components/             # React components
 └── dist/                       # Built output (singlefile HTML)
+
+.deciduous/
+├── deciduous.db         # SQLite database (decision graph)
+├── documents/           # Content-hash named document attachments
+├── config.toml          # Branch/feature configuration
+├── sync/                # Event-based multi-user sync files
+└── narratives.md        # Narrative tracking
 ```
 
 ## Web Viewer Development
@@ -480,6 +563,13 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous diff apply` | Apply patches from teammates |
 | `deciduous diff status` | List available patches |
 | `deciduous migrate` | Add change_id columns for sync |
+| `deciduous doc attach <node_id> <file>` | Attach file to a decision node |
+| `deciduous doc list [node_id]` | List attached documents (all or per-node) |
+| `deciduous doc show <id>` | Show document details |
+| `deciduous doc describe <id> [text]` | Set/update document description (`--ai` for AI) |
+| `deciduous doc open <id>` | Open document in default application |
+| `deciduous doc detach <id>` | Soft-delete a document attachment |
+| `deciduous doc gc` | Garbage collect orphaned document files |
 
 ## DOT Export Options
 

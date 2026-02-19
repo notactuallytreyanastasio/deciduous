@@ -10,6 +10,7 @@
 //! The local database `.deciduous/deciduous.db` remains gitignored.
 
 use chrono::{DateTime, Utc};
+use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
@@ -70,28 +71,96 @@ pub enum Event {
         timestamp: DateTime<Utc>,
         author: String,
     },
+    /// Create a theme
+    AddTheme {
+        change_id: String,
+        name: String,
+        color: String,
+        description: Option<String>,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        timestamp: DateTime<Utc>,
+        author: String,
+    },
+    /// Delete a theme
+    DeleteTheme {
+        change_id: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        timestamp: DateTime<Utc>,
+        author: String,
+    },
+    /// Tag a node with a theme
+    TagNode {
+        node_change_id: String,
+        theme_change_id: String,
+        source: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        timestamp: DateTime<Utc>,
+        author: String,
+    },
+    /// Untag a node
+    UntagNode {
+        node_change_id: String,
+        theme_change_id: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        timestamp: DateTime<Utc>,
+        author: String,
+    },
+    /// Attach a document to a node
+    AttachDocument {
+        doc_change_id: String,
+        node_change_id: String,
+        content_hash: String,
+        original_filename: String,
+        storage_filename: String,
+        mime_type: String,
+        file_size: i32,
+        description: Option<String>,
+        description_source: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        timestamp: DateTime<Utc>,
+        author: String,
+    },
+    /// Detach a document
+    DetachDocument {
+        doc_change_id: String,
+        #[serde(with = "chrono::serde::ts_milliseconds")]
+        timestamp: DateTime<Utc>,
+        author: String,
+    },
 }
 
 impl Event {
     /// Get the timestamp of this event
     pub fn timestamp(&self) -> DateTime<Utc> {
         match self {
-            Event::AddNode { timestamp, .. } => *timestamp,
-            Event::UpdateNode { timestamp, .. } => *timestamp,
-            Event::DeleteNode { timestamp, .. } => *timestamp,
-            Event::AddEdge { timestamp, .. } => *timestamp,
-            Event::DeleteEdge { timestamp, .. } => *timestamp,
+            Event::AddNode { timestamp, .. }
+            | Event::UpdateNode { timestamp, .. }
+            | Event::DeleteNode { timestamp, .. }
+            | Event::AddEdge { timestamp, .. }
+            | Event::DeleteEdge { timestamp, .. }
+            | Event::AddTheme { timestamp, .. }
+            | Event::DeleteTheme { timestamp, .. }
+            | Event::TagNode { timestamp, .. }
+            | Event::UntagNode { timestamp, .. }
+            | Event::AttachDocument { timestamp, .. }
+            | Event::DetachDocument { timestamp, .. } => *timestamp,
         }
     }
 
     /// Get the author of this event
     pub fn author(&self) -> &str {
         match self {
-            Event::AddNode { author, .. } => author,
-            Event::UpdateNode { author, .. } => author,
-            Event::DeleteNode { author, .. } => author,
-            Event::AddEdge { author, .. } => author,
-            Event::DeleteEdge { author, .. } => author,
+            Event::AddNode { author, .. }
+            | Event::UpdateNode { author, .. }
+            | Event::DeleteNode { author, .. }
+            | Event::AddEdge { author, .. }
+            | Event::DeleteEdge { author, .. }
+            | Event::AddTheme { author, .. }
+            | Event::DeleteTheme { author, .. }
+            | Event::TagNode { author, .. }
+            | Event::UntagNode { author, .. }
+            | Event::AttachDocument { author, .. }
+            | Event::DetachDocument { author, .. } => author,
         }
     }
 }
@@ -108,6 +177,15 @@ pub struct Checkpoint {
     pub edges: Vec<CheckpointEdge>,
     /// Schema version
     pub version: String,
+    /// Theme definitions at checkpoint time
+    #[serde(default)]
+    pub themes: Vec<CheckpointTheme>,
+    /// Node-theme associations at checkpoint time
+    #[serde(default)]
+    pub node_themes: Vec<CheckpointNodeTheme>,
+    /// Document attachments at checkpoint time
+    #[serde(default)]
+    pub documents: Vec<CheckpointDocument>,
 }
 
 /// Node state in a checkpoint
@@ -132,6 +210,37 @@ pub struct CheckpointEdge {
     pub edge_type: String,
     pub rationale: Option<String>,
     pub created_at: String,
+}
+
+/// Theme state in a checkpoint
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointTheme {
+    pub change_id: String,
+    pub name: String,
+    pub color: String,
+    pub description: Option<String>,
+}
+
+/// Node-theme association in a checkpoint
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointNodeTheme {
+    pub node_change_id: String,
+    pub theme_change_id: String,
+    pub source: String,
+}
+
+/// Document attachment in a checkpoint
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CheckpointDocument {
+    pub change_id: String,
+    pub node_change_id: String,
+    pub content_hash: String,
+    pub original_filename: String,
+    pub storage_filename: String,
+    pub mime_type: String,
+    pub file_size: i32,
+    pub description: Option<String>,
+    pub description_source: String,
 }
 
 /// Manages the event log and checkpoints
@@ -456,6 +565,14 @@ impl MaterializedState {
                 self.edges.remove(edge_id);
                 self.deleted_edges.insert(edge_id.clone());
             }
+            // Theme and document events are tracked in the checkpoint
+            // but don't need in-memory materialization for rebuild
+            Event::AddTheme { .. }
+            | Event::DeleteTheme { .. }
+            | Event::TagNode { .. }
+            | Event::UntagNode { .. }
+            | Event::AttachDocument { .. }
+            | Event::DetachDocument { .. } => {}
         }
     }
 
@@ -486,6 +603,79 @@ impl std::fmt::Display for EventLogError {
 }
 
 impl std::error::Error for EventLogError {}
+
+/// Emit a sync event for a newly created node, if sync is initialized.
+/// Silently skips if sync is not set up. Prints warning on error.
+pub fn maybe_emit_add_node(node: &crate::db::DecisionNode) {
+    let sync_dir = std::path::PathBuf::from(".deciduous/sync");
+    if sync_dir.exists() {
+        let author = get_current_author();
+        if let Ok(event_log) = EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone()) {
+            let event = Event::AddNode {
+                change_id: node.change_id.clone(),
+                node_type: node.node_type.clone(),
+                title: node.title.clone(),
+                description: node.description.clone(),
+                status: node.status.clone(),
+                metadata_json: node.metadata_json.clone(),
+                timestamp: chrono::Utc::now(),
+                author,
+            };
+            if let Err(e) = event_log.append(event) {
+                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
+            }
+        }
+    }
+}
+
+/// Emit a sync event for a newly created edge, if sync is initialized.
+pub fn maybe_emit_add_edge(
+    from_change_id: &str,
+    to_change_id: &str,
+    edge_type: &str,
+    rationale: Option<&str>,
+) {
+    let sync_dir = std::path::PathBuf::from(".deciduous/sync");
+    if sync_dir.exists() {
+        let author = get_current_author();
+        if let Ok(event_log) = EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone()) {
+            let event = Event::AddEdge {
+                edge_id: generate_edge_id(from_change_id, to_change_id, edge_type),
+                from_change_id: from_change_id.to_string(),
+                to_change_id: to_change_id.to_string(),
+                edge_type: edge_type.to_string(),
+                rationale: rationale.map(|s| s.to_string()),
+                timestamp: chrono::Utc::now(),
+                author,
+            };
+            if let Err(e) = event_log.append(event) {
+                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
+            }
+        }
+    }
+}
+
+/// Emit a sync event for a node status update, if sync is initialized.
+pub fn maybe_emit_status_update(change_id: &str, new_status: &str) {
+    let sync_dir = std::path::PathBuf::from(".deciduous/sync");
+    if sync_dir.exists() {
+        let author = get_current_author();
+        if let Ok(event_log) = EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone()) {
+            let event = Event::UpdateNode {
+                change_id: change_id.to_string(),
+                title: None,
+                description: None,
+                status: Some(new_status.to_string()),
+                metadata_json: None,
+                timestamp: chrono::Utc::now(),
+                author,
+            };
+            if let Err(e) = event_log.append(event) {
+                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
+            }
+        }
+    }
+}
 
 /// Get the current user name for event authorship
 pub fn get_current_author() -> String {
@@ -679,6 +869,9 @@ mod tests {
             }],
             edges: vec![],
             version: "1.0".to_string(),
+            themes: vec![],
+            node_themes: vec![],
+            documents: vec![],
         };
 
         log.save_checkpoint(&checkpoint, false).unwrap();

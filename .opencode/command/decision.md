@@ -21,13 +21,14 @@ deciduous add $TYPE "$TITLE" -c <confidence 0-100>
 
 ## After creating the node
 
-**IMMEDIATELY** link it to related nodes:
+**IMMEDIATELY** link it to related nodes (flow: goal -> options -> decision -> actions -> outcomes):
 
 | Node Type | Link To |
 |-----------|---------|
-| outcome | The action/goal it resolves |
-| action | The goal/decision that spawned it |
-| option | Its parent decision |
+| option | Its parent goal |
+| decision | The option(s) it chose between |
+| action | The decision that spawned it |
+| outcome | The action that produced it |
 | observation | Related goal/action |
 | revisit | The decision being reconsidered |
 

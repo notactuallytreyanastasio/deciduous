@@ -2,254 +2,118 @@
 
 **Transform narratives into a queryable decision graph.**
 
-Run `/narratives` first. This skill takes conceptual narratives and structures them for querying.
+Run `/narratives` first to create `.deciduous/narratives.md`.
 
----
-
-## The Relationship
-
-```
-Narratives (conceptual)     →    Decision Graph (structural)
-"How auth evolved"          →    Nodes + edges you can query
-Human-readable stories      →    Machine-traversable graph
-```
-
-The narrative is the truth. The graph is a queryable representation of it.
-
----
-
-## When to Use
-
-When `.deciduous/narratives.md` exists and you want to:
-- Query the evolution ("what led to this?")
-- Visualize connections between design decisions
-- Build the "person in the room" that can answer questions
-
----
-
-## Process
-
-### 1. Read the narratives
+## Step 1: Read the narratives
 
 ```bash
-cat .deciduous/narratives.md
+deciduous narratives show
 ```
 
 For each narrative, you'll create a subgraph.
 
-### 2. Map narrative → graph
+## Step 2: Create root goals
 
-Each narrative becomes a connected subgraph:
-
-| Narrative Element | Graph Element |
-|-------------------|---------------|
-| Narrative title | `goal` node (the root) |
-| Evolution step | `action` or `decision` node |
-| **PIVOT** | `revisit` node |
-| Pivot "why" | `observation` node (links INTO revisit) |
-| Pre-pivot state | Nodes marked `superseded` |
-| **Connects to** | Cross-narrative edge |
-
-### 3. Build the subgraph
-
-For a narrative like:
-
-```markdown
-## Authentication
-**Evolution:**
-1. Started with JWT everywhere
-2. **PIVOT:** Mobile hit cookie limits
-3. Added sessions for web, kept JWT for API
-```
-
-Build:
+For each narrative, create a backdated goal:
 
 ```bash
-# Root (backdate to when project started)
-deciduous add goal "Authentication" -c 90 --date "2023-01-15"
-# → id: 1
-
-# First approach (backdate to when it was made)
-deciduous add decision "JWT for all auth" -c 85 --date "2023-01-20"
-deciduous link 1 2 -r "Initial design"
-
-# What was learned (leads to pivot)
-deciduous add observation "Mobile Safari 4KB cookie limit breaking JWT auth"
-deciduous link 2 3 -r "Discovered in production"
-
-# The pivot
-deciduous add revisit "Reconsidering auth token strategy"
-deciduous link 3 4 -r "Cookie limits forced rethink"
-
-# Mark pre-pivot as superseded
-deciduous status 2 superseded
-
-# New approach
-deciduous add decision "Hybrid: JWT for API, sessions for web"
-deciduous link 4 5 -r "New approach"
+deciduous add goal "<Narrative title>" -c 90 --date "YYYY-MM-DD"
 ```
 
-### 4. Connect narratives
+## Step 3: Build initial approaches
 
-For `**Connects to:** "Rate Limiting"`:
+```bash
+deciduous add decision "<First approach>" -c 85 --date "YYYY-MM-DD"
+deciduous link <goal> <decision> -r "Initial design"
+```
 
-Find a meaningful connection point (usually an observation or decision that influenced the other narrative):
+## Step 4: Create pivots with `archaeology pivot`
+
+For each **PIVOT** in a narrative, use the atomic pivot command:
+
+```bash
+# One command replaces 7 manual add/link/status commands
+deciduous archaeology pivot <from_id> "<what was learned>" "<new approach>" -c 85 -r "<why it failed>"
+```
+
+This automatically creates:
+- observation node (what was learned)
+- revisit node (reconsidering the old approach)
+- decision node (the new approach)
+- All 3 linking edges
+- Marks the old approach as superseded
+
+Preview before executing:
+```bash
+deciduous archaeology pivot <from_id> "observation" "new approach" --dry-run
+```
+
+## Step 5: Connect narratives
+
+When narratives reference each other:
 
 ```bash
 deciduous link <auth_observation> <ratelimit_decision> \
   -r "Auth failures drove rate limit redesign"
 ```
 
----
+## Step 6: Mark superseded paths
 
-## The Revisit Pattern
-
-Every **PIVOT** in a narrative becomes this structure:
-
-```
-[Previous approach]
-        │
-        ▼
-[Observation: what was learned]
-        │
-        ▼
-[Revisit: reconsidering X]
-        │
-        ▼
-[New approach]
-```
-
-The observation captures WHY. The revisit is the decision point. The new approach is what came after.
+For nodes that were replaced but not part of a pivot:
 
 ```bash
-# Pattern
-deciduous add observation "<what was learned>"
-deciduous link <previous_node> <observation> -r "Discovery"
+# Single node
+deciduous archaeology supersede <id>
 
-deciduous add revisit "<what's being reconsidered>"
-deciduous link <observation> <revisit> -r "Forced rethinking"
-
-deciduous add decision "<new approach>"
-deciduous link <revisit> <decision> -r "New direction"
-
-# Mark old path as superseded
-deciduous status <previous_node> superseded
+# Node and all descendants
+deciduous archaeology supersede <id> --cascade
 ```
 
----
-
-## What NOT to Do
-
-**Don't create nodes for every commit.**
-Commits are evidence. If a narrative mentions a commit as evidence, you might reference it (`--commit <hash>`), but don't enumerate commits.
-
-**Don't create implementation nodes.**
-The graph is about the MODEL, not the code. "Implemented JWT" is not interesting. "Chose JWT over sessions" is.
-
-**Don't over-structure.**
-If a narrative has a simple evolution with no pivots, it might just be: `goal → option → decision → action → outcome`. That's fine.
-
----
-
-## Example: Full Transformation
-
-**Narrative:**
-```markdown
-## API Rate Limiting
-> Protecting the API from abuse.
-
-**Current state:** Redis-based, per-user, auth-aware tiers.
-
-**Evolution:**
-1. No rate limiting initially
-2. **PIVOT:** Bot abuse caused outages → Added IP-based throttling
-3. **PIVOT:** Legitimate users on shared IPs blocked → Per-user limits
-4. **PIVOT:** Auth failures as abuse vector → Auth-aware tiers
-
-**Connects to:** "Authentication"
-```
-
-**Graph:**
-```bash
-# Use --date to place nodes at their historical point
-deciduous add goal "API Rate Limiting" -c 90 --date "2023-02-01"
-# → 1
-
-deciduous add decision "No rate limiting" -c 70 --date "2023-02-01"
-deciduous link 1 2 -r "Initial state"
-
-# Pivot 1
-deciduous add observation "Bot abuse causing service outages"
-deciduous link 2 3 -r "Problem discovered"
-
-deciduous add revisit "Need rate limiting"
-deciduous link 3 4 -r "Abuse forced action"
-
-deciduous add decision "IP-based throttling"
-deciduous link 4 5 -r "First solution"
-
-deciduous status 2 superseded
-
-# Pivot 2
-deciduous add observation "Legitimate users on shared IPs getting blocked"
-deciduous link 5 6 -r "Collateral damage"
-
-deciduous add revisit "IP-based approach too broad"
-deciduous link 6 7 -r "Rethinking granularity"
-
-deciduous add decision "Per-user rate limits"
-deciduous link 7 8 -r "More precise"
-
-deciduous status 5 superseded
-
-# Pivot 3
-deciduous add observation "Auth failures used to bypass rate limits"
-deciduous link 8 9 -r "New abuse pattern"
-
-deciduous add revisit "Rate limiting needs auth awareness"
-deciduous link 9 10 -r "Security gap"
-
-deciduous add decision "Auth-aware tier system"
-deciduous link 10 11 -r "Current approach"
-
-deciduous status 8 superseded
-
-# Connect to Auth narrative
-# deciduous link <auth_node> 9 -r "Auth design affected rate limiting"
-```
-
----
-
-## Querying the Graph
-
-After building, you can ask:
+## Step 7: Review the timeline
 
 ```bash
-# What's the current state?
-deciduous nodes --status active
+# See all nodes chronologically
+deciduous archaeology timeline
 
-# What was tried and abandoned?
-deciduous nodes --status superseded
+# Filter by type
+deciduous archaeology timeline --type revisit
 
-# What led to a specific decision?
-deciduous edges --to <node_id>
-
-# What are the pivot points?
-deciduous nodes --type revisit
+# See existing pivot chains
+deciduous narratives pivots
 
 # Visual exploration
 deciduous serve
 ```
 
----
+## Attach Evidence Documents
 
-## The "Person in the Room"
+If you find diagrams, screenshots, or specs that support the archaeology:
 
-The goal is to build a graph that can answer:
+```bash
+deciduous doc attach <goal_id> evidence/old-architecture.png -d "Architecture before refactor"
+deciduous doc attach <revisit_id> evidence/perf-report.pdf --ai-describe
+```
 
-- **"Why does it work this way?"** → Trace from current state back through revisits
-- **"What did we try before?"** → Look at superseded nodes
-- **"Can we change X?"** → Check what depends on X via edges
-- **"We should do Y"** → "We tried that, here's why it failed" (superseded + observation)
+Documents provide visual/tangible evidence alongside commit-based grounding.
 
-The graph is the institutional memory. The narratives are the source. The commits are just footnotes.
+## Querying the Graph
+
+```bash
+# Current state
+deciduous pulse
+
+# Pivot points
+deciduous narratives pivots
+
+# Timeline
+deciduous archaeology timeline
+
+# By status
+deciduous nodes --type revisit
+```
+
+## What NOT to Do
+
+- **Don't create nodes for every commit.** Commits are evidence, not graph nodes.
+- **Don't create implementation nodes.** The graph is about the MODEL, not the code.
+- **Don't over-structure.** Simple narratives might just be: goal → option → decision.

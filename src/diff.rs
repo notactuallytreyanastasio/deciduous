@@ -25,6 +25,15 @@ pub struct GraphPatch {
     pub nodes: Vec<PatchNode>,
     /// Edges included in this patch
     pub edges: Vec<PatchEdge>,
+    /// Theme definitions included in this patch
+    #[serde(default)]
+    pub themes: Vec<PatchTheme>,
+    /// Node-theme associations
+    #[serde(default)]
+    pub node_theme_tags: Vec<PatchNodeTheme>,
+    /// Document attachment metadata
+    #[serde(default)]
+    pub documents: Vec<PatchDocument>,
 }
 
 /// A node in a patch file (uses change_id, not integer id)
@@ -59,6 +68,37 @@ pub struct PatchEdge {
     pub rationale: Option<String>,
 }
 
+/// A theme definition in a patch file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatchTheme {
+    pub change_id: String,
+    pub name: String,
+    pub color: String,
+    pub description: Option<String>,
+}
+
+/// A node-theme association in a patch file
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatchNodeTheme {
+    pub node_change_id: String,
+    pub theme_change_id: String,
+    pub source: String,
+}
+
+/// A document attachment in a patch file (metadata only, file transferred out-of-band)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PatchDocument {
+    pub change_id: String,
+    pub node_change_id: String,
+    pub content_hash: String,
+    pub original_filename: String,
+    pub storage_filename: String,
+    pub mime_type: String,
+    pub file_size: i32,
+    pub description: Option<String>,
+    pub description_source: String,
+}
+
 impl GraphPatch {
     /// Create a new empty patch
     pub fn new(
@@ -74,6 +114,9 @@ impl GraphPatch {
             base_commit,
             nodes: Vec::new(),
             edges: Vec::new(),
+            themes: Vec::new(),
+            node_theme_tags: Vec::new(),
+            documents: Vec::new(),
         }
     }
 

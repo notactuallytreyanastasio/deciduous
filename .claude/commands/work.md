@@ -52,6 +52,17 @@ deciduous link <action_id> <outcome_id> -r "Implementation complete"
 deciduous sync
 ```
 
+## Step 5: Attach Supporting Documents (Optional)
+
+If the work produced or referenced important files (diagrams, specs, screenshots):
+
+```bash
+deciduous doc attach <goal_id> path/to/diagram.png -d "Architecture diagram"
+deciduous doc attach <action_id> path/to/spec.pdf --ai-describe
+```
+
+If the user shares images or drops in files not in the project, attach them to the most relevant active node.
+
 ## The Transaction Model
 
 ```
@@ -66,6 +77,8 @@ Implementation happens (Edit/Write now allowed)
 git commit
     |
 Outcome node with --commit HEAD (links to action)
+    |
+Attach supporting documents (optional)
     |
 deciduous sync
 ```
@@ -90,6 +103,9 @@ deciduous link <goal> <action> -r "Implementation"
 # After committing
 deciduous add outcome "Result" -c 95 --commit HEAD
 deciduous link <action> <outcome> -r "Complete"
+
+# Attach documents (optional)
+deciduous doc attach <goal> diagram.png -d "Description"
 
 # Always sync
 deciduous sync

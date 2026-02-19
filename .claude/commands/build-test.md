@@ -22,12 +22,4 @@ Build the project and run the test suite.
    cargo test <pattern>
    ```
 
-## Test categories in this project
-- `test_public_exports` - API verification
-- `test_filter_graph` - Graph filtering
-- `test_extract_commit` - Commit extraction from metadata
-- `test_extract_confidence` - Confidence extraction from metadata
-- `test_graph_to_dot` - DOT export
-- `test_generate_writeup` - PR writeup generation
-
 $ARGUMENTS
