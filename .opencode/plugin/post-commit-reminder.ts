@@ -12,9 +12,15 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
         return
       }
 
+      // Check if deciduous is initialized
+      const fs = await import("fs")
+      if (!fs.existsSync(".deciduous")) {
+        return
+      }
+
       // Check if this was a git commit command
       const command = input.args?.command || ""
-      if (!command.includes("git commit")) {
+      if (!command.match(/^git commit/)) {
         return
       }
 
@@ -28,15 +34,18 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
 
         // Show reminder
         console.log(`
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: Link this commit to the decision graph!               ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  Commit: ${commitHash} "${commitMsg}"
-║                                                                   ║
-║  Run NOW:                                                         ║
-║    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-║    deciduous link <action_id> <outcome_id> -r "Implementation"    ║
-╚═══════════════════════════════════════════════════════════════════╝
++===================================================================+
+|  DECIDUOUS: Link this commit to the decision graph!               |
++===================================================================+
+|  Commit: ${commitHash} "${commitMsg}"
+|                                                                   |
+|  Run NOW:                                                         |
+|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
+|                                                                   |
+|  Or if this was an action (not outcome):                          |
+|    deciduous add action "What was done" -c 90 --commit HEAD       |
++===================================================================+
 `)
       } catch (error) {
         // If git commands fail, skip the reminder

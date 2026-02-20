@@ -31,10 +31,15 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
       }
 
       try {
-        // Get recent nodes from deciduous
-        const result = await $`deciduous nodes 2>/dev/null | head -20`.quiet()
-        const stdout = result.stdout.toString()
+        // Check if deciduous is initialized
+        const fs = await import("fs")
+        if (!fs.existsSync(".deciduous")) {
+          return // No deciduous in this project, allow all edits
+        }
 
+        // Get recent nodes from deciduous
+        const result = await $`deciduous nodes 2>/dev/null | tail -5`.quiet()
+        const stdout = result.stdout.toString()
         const lines = stdout.trim().split("\n").filter((l: string) => l.trim())
 
         // Check for any goal or action node
@@ -47,14 +52,22 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
         }
 
         if (!hasRecentNode && lines.length > 2) {
-          // Show a toast reminder but don't block
+          // Show a reminder but don't block
           console.log(`
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: Consider adding a goal/action node!                   ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  Before editing files, log what you're about to do:               ║
-║    deciduous add action "Your action description" -c 85           ║
-╚═══════════════════════════════════════════════════════════════════╝
++===================================================================+
+|  DECIDUOUS: No recent action/goal node found                      |
++===================================================================+
+|  Before editing files, log what you're about to do:               |
+|                                                                   |
+|  For new work:                                                    |
+|    deciduous add goal "What you're trying to achieve" -c 90       |
+|                                                                   |
+|  For implementation:                                              |
+|    deciduous add action "What you're about to implement" -c 85    |
+|                                                                   |
+|  Then link to parent:                                             |
+|    deciduous link <parent_id> <new_id> -r "reason"                |
++===================================================================+
 `)
         }
       } catch (error) {
@@ -80,9 +93,15 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
         return
       }
 
+      // Check if deciduous is initialized
+      const fs = await import("fs")
+      if (!fs.existsSync(".deciduous")) {
+        return
+      }
+
       // Check if this was a git commit command
       const command = input.args?.command || ""
-      if (!command.includes("git commit")) {
+      if (!command.match(/^git commit/)) {
         return
       }
 
@@ -96,15 +115,18 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
 
         // Show reminder
         console.log(`
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: Link this commit to the decision graph!               ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  Commit: ${commitHash} "${commitMsg}"
-║                                                                   ║
-║  Run NOW:                                                         ║
-║    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-║    deciduous link <action_id> <outcome_id> -r "Implementation"    ║
-╚═══════════════════════════════════════════════════════════════════╝
++===================================================================+
+|  DECIDUOUS: Link this commit to the decision graph!               |
++===================================================================+
+|  Commit: ${commitHash} "${commitMsg}"
+|                                                                   |
+|  Run NOW:                                                         |
+|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
+|                                                                   |
+|  Or if this was an action (not outcome):                          |
+|    deciduous add action "What was done" -c 90 --commit HEAD       |
++===================================================================+
 `)
       } catch (error) {
         // If git commands fail, skip the reminder
@@ -116,7 +138,7 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
 
 /// OpenCode command template: /work
 pub const COMMAND_WORK: &str = r#"---
-description: Start a work transaction with decision graph logging
+description: Start a work transaction - creates goal node BEFORE any implementation
 arguments:
   - name: GOAL
     description: The goal you're working towards
@@ -125,125 +147,565 @@ arguments:
 
 # Work Transaction
 
-You are starting a work transaction for: **$GOAL**
+**USE THIS BEFORE STARTING ANY IMPLEMENTATION.**
 
-## Required Steps
+This skill creates the required deciduous nodes BEFORE you write any code. The Edit/Write hooks will BLOCK you if you don't have a recent node.
 
-1. **Create a goal node** (if this is new work):
-   ```bash
-   deciduous add goal "$GOAL" -c 90 --prompt-stdin << 'EOF'
-   <paste the user's original request here>
-   EOF
-   ```
+## Step 1: Create the Goal Node
 
-2. **Before any code changes**, create an action node:
-   ```bash
-   deciduous add action "What you're about to do" -c 85
-   deciduous link <goal_id> <action_id> -r "Implementation step"
-   ```
+Based on $GOAL (or the user's most recent request), create a goal node:
 
-3. **After successful changes**, create an outcome:
-   ```bash
-   deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-   deciduous link <action_id> <outcome_id> -r "Completed"
-   ```
+```bash
+# Create goal with the user's request captured verbatim
+deciduous add goal "$GOAL" -c 90 --prompt-stdin << 'EOF'
+[INSERT THE EXACT USER REQUEST HERE - VERBATIM, NOT SUMMARIZED]
+EOF
+```
 
-## Rules
-- NEVER edit files without an action node
-- ALWAYS link commits to the graph
-- Capture verbatim user prompts on goal nodes
+**IMPORTANT**: The prompt must be the user's EXACT words, not your summary.
+
+## Step 2: Announce the Goal ID
+
+After creating the goal, tell the user:
+- The goal ID that was created
+- What you're about to implement
+- That you'll create action nodes as you work
+
+## Step 3: Before Each Major Edit
+
+Before editing files, create an action node:
+
+```bash
+deciduous add action "What you're about to implement" -c 85 -f "file1.rs,file2.rs"
+deciduous link <goal_id> <action_id> -r "Implementation step"
+```
+
+## Step 4: After Completion
+
+When the work is done:
+
+```bash
+# After committing
+deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+deciduous link <action_id> <outcome_id> -r "Implementation complete"
+
+# Sync the graph
+deciduous sync
+```
+
+## Step 5: Attach Supporting Documents (Optional)
+
+If the work produced or referenced important files (diagrams, specs, screenshots):
+
+```bash
+deciduous doc attach <goal_id> path/to/diagram.png -d "Architecture diagram"
+deciduous doc attach <action_id> path/to/spec.pdf --ai-describe
+```
+
+If the user shares images or drops in files not in the project, attach them to the most relevant active node.
+
+## The Transaction Model
+
+```
+/work "Add feature X"
+    |
+Goal node created (ID: N)
+    |
+Action node before each edit (links to goal)
+    |
+Implementation happens (Edit/Write now allowed)
+    |
+git commit
+    |
+Outcome node with --commit HEAD (links to action)
+    |
+Attach supporting documents (optional)
+    |
+deciduous sync
+```
+
+## Why This Matters
+
+- **Hooks will block you** if no recent action/goal exists
+- **Commits will remind you** to link them to the graph
+- **The graph captures your reasoning** for future sessions
+- **Context recovery works** because the graph has everything
+
+## Quick Reference
+
+```bash
+# Start work
+deciduous add goal "Feature title" -c 90 -p "User request"
+
+# Before editing (required!)
+deciduous add action "What I'm implementing" -c 85
+deciduous link <goal> <action> -r "Implementation"
+
+# After committing
+deciduous add outcome "Result" -c 95 --commit HEAD
+deciduous link <action> <outcome> -r "Complete"
+
+# Attach documents (optional)
+deciduous doc attach <goal> diagram.png -d "Description"
+
+# Always sync
+deciduous sync
+```
+
+**Now create the goal node for: $GOAL**
 "#;
 
 /// OpenCode command template: /recover
 pub const COMMAND_RECOVER: &str = r#"---
-description: Recover context from decision graph and recent activity
+description: Recover context from decision graph and recent activity - USE THIS ON SESSION START
 arguments:
   - name: FOCUS
-    description: Optional focus area to filter by
+    description: Optional focus area to filter by (e.g. auth, ui, cli, api)
     required: false
 ---
 
 # Context Recovery
 
-Recovering context from the decision graph.
+**RUN THIS AT SESSION START.** The decision graph is your persistent memory.
 
-## Steps
+## Step 1: Query the Graph
 
-1. **Check recent nodes**:
-   ```bash
-   deciduous nodes --branch $(git branch --show-current 2>/dev/null || echo main) | head -30
-   ```
+```bash
+# See all decisions (look for recent ones and pending status)
+deciduous nodes
 
-2. **Check graph connections**:
-   ```bash
-   deciduous edges | tail -20
-   ```
+# Filter by current branch (useful for feature work)
+deciduous nodes --branch $(git rev-parse --abbrev-ref HEAD)
 
-3. **Check recent commands**:
-   ```bash
-   deciduous commands --limit 10
-   ```
+# See how decisions connect
+deciduous edges
 
-4. **Check git status**:
-   ```bash
-   git status
-   git log --oneline -10
-   ```
+# What commands were recently run?
+deciduous commands
 
-5. **Audit for orphan nodes** (nodes without connections):
-   - Every outcome should link to an action
-   - Every action should link to a goal
-   - Only root goals should be orphans
+# Check for attached documents
+deciduous doc list
+```
 
-Report what you find and any gaps that need attention.
+**Branch-scoped context**: If working on a feature branch, filter nodes to see only decisions relevant to this branch. Main branch nodes are tagged with `[branch: main]`.
+
+## Step 1.5: Audit Graph Integrity
+
+**CRITICAL: Check that all nodes are logically connected.**
+
+```bash
+# Find nodes with no incoming edges (potential missing connections)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+
+**Review each flagged node (flow: goal -> options -> decision -> actions -> outcomes):**
+- Root `goal` nodes are VALID without parents
+- `option` nodes MUST link to their parent goal
+- `decision` nodes MUST link from the option(s) being chosen
+- `action` nodes MUST link to their parent decision
+- `outcome` nodes MUST link back to their action
+
+**Fix missing connections:**
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <reason>"
+```
+
+## Step 2: Check Git State
+
+```bash
+git status
+git log --oneline -10
+git diff --stat
+```
+
+## Step 3: Check Session Log
+
+```bash
+cat git.log | tail -30
+```
+
+## After Gathering Context, Report:
+
+1. **Current branch** and pending changes
+2. **Branch-specific decisions** (filter by branch if on feature branch)
+3. **Recent decisions** (especially pending/active ones)
+4. **Last actions** from git log and command log
+5. **Open questions** or unresolved observations
+6. **Attached documents** - diagrams, specs, or screenshots on key nodes
+7. **Suggested next steps**
+
+### Branch Configuration
+
+Check `.deciduous/config.toml` for branch settings:
+```toml
+[branch]
+main_branches = ["main", "master"]  # Which branches are "main"
+auto_detect = true                    # Auto-detect branch on node creation
+```
+
+---
+
+## REMEMBER: Real-Time Logging Required
+
+After recovering context, you MUST follow the logging workflow:
+
+```
+EVERY USER REQUEST -> Log goal/decision first
+BEFORE CODE CHANGES -> Log action
+AFTER CHANGES -> Log outcome, link nodes
+BEFORE GIT PUSH -> deciduous sync
+```
+
+**The user is watching the graph live.** Log as you go, not after.
+
+### Quick Logging Commands
+
+```bash
+# Root goal with user prompt (capture what the user asked for)
+deciduous add goal "What we're trying to do" -c 90 -p "User asked: <their request>"
+
+deciduous add action "What I'm about to implement" -c 85
+deciduous add outcome "What happened" -c 95
+deciduous link FROM TO -r "Connection reason"
+
+# Capture prompt when user redirects mid-stream
+deciduous add action "Switching approach" -c 85 -p "User said: use X instead"
+
+deciduous sync  # Do this frequently!
+```
+
+**When to use `--prompt`:** On root goals (always) and when user gives new direction mid-stream. Downstream nodes inherit context via edges.
+
+---
+
+## Focus Areas
+
+If $FOCUS specifies a focus, prioritize context for:
+
+- **auth**: Authentication-related decisions
+- **ui** / **graph**: UI and graph viewer state
+- **cli**: Command-line interface changes
+- **api**: API endpoints and data structures
+
+---
+
+## The Memory Loop
+
+```
+SESSION START
+    |
+Run /recover -> See past decisions
+    |
+AUDIT -> Fix any orphan nodes first!
+    |
+DO WORK -> Log BEFORE each action
+    |
+CONNECT -> Link new nodes immediately
+    |
+AFTER CHANGES -> Log outcomes, observations
+    |
+AUDIT AGAIN -> Any new orphans?
+    |
+BEFORE PUSH -> deciduous sync
+    |
+PUSH -> Live graph updates
+    |
+SESSION END -> Final audit
+    |
+(repeat)
+```
+
+---
+
+## Multi-User Sync
+
+If working in a team, sync decision graphs automatically via events:
+
+```bash
+# Check sync status
+deciduous events status
+
+# Apply teammate events (after git pull)
+deciduous events rebuild
+
+# Periodic maintenance (compact old events)
+deciduous events checkpoint --clear-events
+```
+
+Events are auto-emitted when you use `add`, `link`, `status`, etc.
+Git handles merging everyone's event files automatically.
+
+## Why This Matters
+
+- Context loss during compaction loses your reasoning
+- The graph survives - query it early, query it often
+- Retroactive logging misses details - log in the moment
+- The user sees the graph live - show your work
+- Patches share reasoning with teammates
 "#;
 
 /// OpenCode command template: /decision
 pub const COMMAND_DECISION: &str = r#"---
-description: Log a decision to the decision graph
+description: Manage decision graph - track algorithm choices and reasoning
 arguments:
-  - name: TYPE
-    description: "Node type: goal, decision, option, action, outcome, observation, revisit"
-    required: true
-  - name: TITLE
-    description: Title of the node
+  - name: ACTION
+    description: "Command: add <type> <title>, link <from> <to>, nodes, edges, sync, etc."
     required: true
 ---
 
-# Decision Graph Entry
+# Decision Graph Management
 
-Create a **$TYPE** node: "$TITLE"
+**Log decisions IN REAL-TIME as you work, not retroactively.**
 
-## Command
+## When to Use This
+
+| You're doing this... | Log this type | Command |
+|---------------------|---------------|---------|
+| Starting a new feature | `goal` **with -p** | `/decision add goal "Add user auth" -p "user request"` |
+| Choosing between approaches | `decision` | `/decision add decision "Choose auth method"` |
+| Considering an option | `option` | `/decision add option "JWT tokens"` |
+| About to write code | `action` | `/decision add action "Implementing JWT"` |
+| Noticing something | `observation` | `/decision add obs "Found existing auth code"` |
+| Finished something | `outcome` | `/decision add outcome "JWT working"` |
+| Reconsidering a past decision | `revisit` | `/decision add revisit "Reconsidering auth"` |
+
+## Quick Commands
+
+Based on $ACTION:
+
+### View Commands
+- `nodes` or `list` -> `deciduous nodes`
+- `edges` -> `deciduous edges`
+- `graph` -> `deciduous graph`
+- `commands` -> `deciduous commands`
+
+### Create Nodes (with optional metadata)
+- `add goal <title>` -> `deciduous add goal "<title>" -c 90`
+- `add decision <title>` -> `deciduous add decision "<title>" -c 75`
+- `add option <title>` -> `deciduous add option "<title>" -c 70`
+- `add action <title>` -> `deciduous add action "<title>" -c 85`
+- `add obs <title>` -> `deciduous add observation "<title>" -c 80`
+- `add outcome <title>` -> `deciduous add outcome "<title>" -c 90`
+- `add revisit <title>` -> `deciduous add revisit "<title>" -c 75`
+
+### Optional Flags for Nodes
+- `-c, --confidence <0-100>` - Confidence level
+- `-p, --prompt "..."` - Store the user prompt that triggered this node
+- `-f, --files "file1.rs,file2.rs"` - Associate files with this node
+- `-b, --branch <name>` - Git branch (auto-detected by default)
+- `--no-branch` - Skip branch auto-detection
+- `--commit <hash|HEAD>` - Link to a git commit (use HEAD for current commit)
+- `--date "YYYY-MM-DD"` - Backdate node (for archaeology/retroactive logging)
+
+### CRITICAL: Link Commits to Actions/Outcomes
+
+**After every git commit, link it to the decision graph!**
 
 ```bash
-deciduous add $TYPE "$TITLE" -c <confidence 0-100>
+git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
-## After creating the node
+## CRITICAL: Capture VERBATIM User Prompts
 
-**IMMEDIATELY** link it to related nodes (flow: goal -> options -> decision -> actions -> outcomes):
+**Prompts must be the EXACT user message, not a summary.** When a user request triggers new work, capture their full message word-for-word.
 
-| Node Type | Link To |
-|-----------|---------|
-| option | Its parent goal |
-| decision | The option(s) it chose between |
-| action | The decision that spawned it |
-| outcome | The action that produced it |
-| observation | Related goal/action |
-| revisit | The decision being reconsidered |
-
+**BAD - summaries are useless for context recovery:**
 ```bash
-deciduous link <from_id> <to_id> -r "reason for connection"
+# DON'T DO THIS - this is a summary, not a prompt
+deciduous add goal "Add auth" -p "User asked: add login to the app"
 ```
 
-## Flags
+**GOOD - verbatim prompts enable full context recovery:**
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation.
+EOF
 
-- `-c, --confidence 0-100` - Confidence level
-- `-p, --prompt "..."` - Store verbatim user prompt
-- `-f, --files "a.rs,b.rs"` - Associate files
-- `--commit HEAD` - Link to current git commit
-- `--date "YYYY-MM-DD"` - Backdate for archaeology
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
+```
+
+**When to capture prompts:**
+- Root `goal` nodes: YES - the FULL original request
+- Major direction changes: YES - when user redirects the work
+- Routine downstream nodes: NO - they inherit context via edges
+
+**Updating prompts on existing nodes:**
+```bash
+deciduous prompt <node_id> "full verbatim prompt here"
+cat prompt.txt | deciduous prompt <node_id>  # Multi-line from stdin
+```
+
+Prompts are viewable in the web viewer.
+
+## Branch-Based Grouping
+
+**Nodes are automatically tagged with the current git branch.** This enables filtering by feature/PR.
+
+### How It Works
+- When you create a node, the current git branch is stored in `metadata_json`
+- Configure which branches are "main" in `.deciduous/config.toml`:
+  ```toml
+  [branch]
+  main_branches = ["main", "master"]  # Branches not treated as "feature branches"
+  auto_detect = true                    # Auto-detect branch on node creation
+  ```
+- Nodes on feature branches (anything not in `main_branches`) can be grouped/filtered
+
+### CLI Filtering
+```bash
+# Show only nodes from specific branch
+deciduous nodes --branch main
+deciduous nodes --branch feature-auth
+deciduous nodes -b my-feature
+
+# Override auto-detection when creating nodes
+deciduous add goal "Feature work" -b feature-x  # Force specific branch
+deciduous add goal "Universal note" --no-branch  # No branch tag
+```
+
+### Create Edges
+- `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
+
+### Document Attachments
+- `doc attach <node_id> <file>` -> `deciduous doc attach <node_id> <file>`
+- `doc attach <node_id> <file> -d "desc"` -> attach with description
+- `doc attach <node_id> <file> --ai-describe` -> attach with AI-generated description
+- `doc list` -> `deciduous doc list` (all documents)
+- `doc list <node_id>` -> `deciduous doc list <node_id>` (documents for one node)
+- `doc show <id>` -> `deciduous doc show <id>`
+- `doc describe <id> "desc"` -> `deciduous doc describe <id> "desc"`
+- `doc describe <id> --ai` -> AI-generate description
+- `doc open <id>` -> `deciduous doc open <id>` (open in default app)
+- `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
+- `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
+
+### Sync Graph
+- `sync` -> `deciduous sync`
+
+### Multi-User Sync (Event-Based) - RECOMMENDED
+- `events init` -> `deciduous events init` (initialize event-based sync)
+- `events status` -> `deciduous events status` (show pending events)
+- `events rebuild` -> `deciduous events rebuild` (apply teammate events)
+- `events checkpoint` -> `deciduous events checkpoint` (create snapshot)
+- `events checkpoint --clear-events` -> snapshot and clear old events
+
+### Multi-User Sync (Legacy Diff/Patch)
+- `diff export -o <file>` -> `deciduous diff export -o <file>` (export nodes as patch)
+- `diff export --nodes 1-10 -o <file>` -> export specific nodes
+- `diff export --branch feature-x -o <file>` -> export nodes from branch
+- `diff apply <file>` -> `deciduous diff apply <file>` (apply patch, idempotent)
+- `diff apply --dry-run <file>` -> preview without applying
+- `diff status` -> `deciduous diff status` (list patches in .deciduous/patches/)
+- `migrate` -> `deciduous migrate` (add change_id columns for sync)
+
+### Export & Visualization
+- `dot` -> `deciduous dot` (output DOT to stdout)
+- `dot --png` -> `deciduous dot --png -o graph.dot` (generate PNG)
+- `dot --nodes 1-11` -> `deciduous dot --nodes 1-11` (filter nodes)
+- `writeup` -> `deciduous writeup` (generate PR writeup)
+- `writeup -t "Title" --nodes 1-11` -> filtered writeup
+
+## Node Types
+
+| Type | Purpose | Example |
+|------|---------|---------|
+| `goal` | High-level objective | "Add user authentication" |
+| `decision` | Choice point with options | "Choose auth method" |
+| `option` | Possible approach | "Use JWT tokens" |
+| `action` | Something implemented | "Added JWT middleware" |
+| `outcome` | Result of action | "JWT auth working" |
+| `observation` | Finding or data point | "Existing code uses sessions" |
+| `revisit` | Pivot point / reconsideration | "Reconsidering auth approach" |
+
+## Edge Types
+
+| Type | Meaning |
+|------|---------|
+| `leads_to` | Natural progression |
+| `chosen` | Selected option |
+| `rejected` | Not selected (include reason!) |
+| `requires` | Dependency |
+| `blocks` | Preventing progress |
+| `enables` | Makes something possible |
+
+## Graph Integrity - CRITICAL
+
+**Every node MUST be logically connected.** Floating nodes break the graph's value.
+
+### Connection Rules (goal -> options -> decision -> actions -> outcomes)
+| Node Type | MUST connect to | Example |
+|-----------|----------------|---------|
+| `goal` | Can be a root (no parent needed) | Root goals are valid orphans |
+| `option` | Its parent goal | "Use JWT" -> links FROM "Add auth" |
+| `decision` | The option(s) it chose between | "Choose JWT" -> links FROM "Use JWT" option |
+| `action` | The decision that spawned it | "Implementing JWT" -> links FROM "Choose JWT" |
+| `outcome` | The action that produced it | "JWT working" -> links FROM "Implementing JWT" |
+| `observation` | Related goal/action/decision | "Found existing code" -> links TO relevant node |
+| `revisit` | The decision/outcome being reconsidered | "Reconsidering auth" -> links FROM original decision |
+
+### Audit Checklist
+Ask yourself after creating nodes:
+1. Does every **outcome** link back to the action that produced it?
+2. Does every **action** link to the decision that spawned it?
+3. Does every **option** link to its parent goal?
+4. Does every **decision** link from the option(s) being chosen?
+5. Are there **dangling outcomes** with no parent action?
+
+## Git Staging Rules - CRITICAL
+
+**NEVER use broad git add commands that stage everything:**
+- `git add -A` - stages ALL changes including untracked files
+- `git add .` - stages everything in current directory
+- `git add -a` or `git commit -am` - auto-stages all tracked changes
+- `git add *` - glob patterns can catch unintended files
+
+**ALWAYS stage files explicitly by name:**
+- `git add src/main.rs src/lib.rs`
+- `git add Cargo.toml Cargo.lock`
+
+## Multi-User Sync
+
+**Problem**: Multiple users work on the same codebase, each with a local `.deciduous/deciduous.db` (gitignored). How to share decisions?
+
+**Solution**: Event-based sync with append-only logs. Each user has their own event file that git merges automatically.
+
+### Event-Based Sync (Recommended)
+
+**Setup (once per repo):**
+```bash
+deciduous events init
+git add .deciduous/sync/
+git commit -m "feat: enable event-based sync"
+```
+
+**Daily workflow:**
+```bash
+git pull                    # Get teammate events
+deciduous events rebuild    # Apply to local DB
+# Work normally - events auto-emit on add/link/etc.
+git add .deciduous/sync/ && git commit -m "sync" && git push
+```
+
+## The Rule
+
+```
+LOG BEFORE YOU CODE, NOT AFTER.
+CONNECT EVERY NODE TO ITS PARENT.
+AUDIT FOR ORPHANS REGULARLY.
+SYNC BEFORE YOU PUSH.
+EXPORT PATCHES FOR YOUR TEAMMATES.
+```
 "#;
 
 /// OpenCode command template: /build-test
@@ -325,6 +787,7 @@ Launch the deciduous web server for viewing and navigating the decision graph.
   - Node metadata (confidence, commit, prompt, files)
   - Connected nodes (incoming/outgoing edges)
   - Timestamps and status
+  - Attached documents
 
 ## Alternative: Static Hosting
 
@@ -355,6 +818,404 @@ Export the current decision graph to docs/graph-data.json so it's deployed to Gi
 This should be run before any push to main to ensure the live site has the latest decisions.
 "#;
 
+/// OpenCode command template: /document
+pub const COMMAND_DOCUMENT: &str = r#"---
+description: Document a file or directory comprehensively - shaking the tree to truly understand it
+arguments:
+  - name: TARGET
+    description: File or directory path to document
+    required: true
+---
+
+# Document
+
+**Comprehensive documentation that shakes the tree to understand everything.**
+
+This skill generates in-depth documentation for a file or directory, focusing on:
+- Human readability while covering ALL surface area
+- Linking to tests as working examples
+- Refining tests to look more real-world if needed
+- Integration with the deciduous decision graph
+
+---
+
+## Step 1: Create Documentation Goal Node
+
+Before documenting, log what you're about to do:
+
+```bash
+deciduous add goal "Document $TARGET" -c 90 --prompt-stdin << 'EOF'
+[User's verbatim documentation request]
+EOF
+```
+
+Store the goal ID for linking later.
+
+---
+
+## Step 2: Understand the Target
+
+### For a File
+
+1. **Read the file completely**
+   - Understand every function, class, type, and export
+   - Note all imports and dependencies
+   - Identify the file's role in the larger system
+
+2. **Find tests for this file**
+   - Look for test files with similar names
+   - Search for imports/references in test directories
+   - These will become working examples in the docs
+
+3. **Trace callers/callees**
+   - Who calls this file?
+   - What does this file call?
+   - Map the dependency graph
+
+### For a Directory
+
+1. **Map the structure**
+   - List all files and their purposes
+   - Identify the public API (index/mod files)
+   - Find the entry point
+
+2. **Understand relationships**
+   - How do files in this directory interact?
+   - What's the data flow?
+
+3. **Find related tests**
+   - Test directories that cover this code
+   - Integration tests that exercise the whole module
+
+---
+
+## Step 3: Document Each Component
+
+For each file/component, document:
+
+### 3.1 Purpose
+- One sentence: what does this do?
+- Why does it exist? (The "why" is more important than the "what")
+
+### 3.2 API Surface
+For every public function/method/class:
+
+```markdown
+### `function_name(param1: Type, param2: Type) -> ReturnType`
+
+**Purpose:** What this does and why you'd call it.
+
+**Parameters:**
+- `param1` - Description and valid values
+- `param2` - Description and valid values
+
+**Returns:** What the return value means
+
+**Example:**
+// From: tests/example_test.rs:42
+let result = function_name("input", 42);
+assert_eq!(result, expected);
+```
+
+### 3.3 Internal Architecture
+- How does it work internally?
+- What are the key data structures?
+- What are the invariants?
+
+### 3.4 Dependencies
+- What does this depend on?
+- What depends on this?
+
+### 3.5 Tests as Examples
+
+For each relevant test:
+- Show the test as a working example
+- Explain what the test demonstrates
+- **If test is too synthetic/artificial, REFINE IT:**
+  - Make variable names descriptive
+  - Add comments explaining the scenario
+  - Use realistic values instead of "foo", "bar", 123
+  - Create a deciduous observation node noting the refinement
+
+---
+
+## Step 4: Create Documentation File
+
+**Output location:**
+- For file `src/auth/jwt.rs` -> `docs/src/auth/jwt.rs.md`
+- For directory `src/auth/` -> `docs/src/auth/README.md`
+
+---
+
+## Step 5: Link to Decision Graph
+
+After documentation is complete:
+
+```bash
+# Create documentation action (if not already created)
+deciduous add action "Documented <target>" -c 95 -f "<files-created>"
+
+# Link to goal
+deciduous link <goal_id> <action_id> -r "Documentation complete"
+
+# Create outcome
+deciduous add outcome "Documentation complete for <target>" -c 95
+deciduous link <action_id> <outcome_id> -r "Successfully documented"
+
+# Sync
+deciduous sync
+```
+
+---
+
+## Step 6: Verify Coverage
+
+**Checklist before completing:**
+
+- Every public function documented
+- Every parameter explained
+- Every return value explained
+- At least one example per function (from tests)
+- Architecture overview included
+- Dependencies mapped
+- Links to tests included
+
+**Now document: $TARGET**
+"#;
+
+/// OpenCode command template: /sync
+pub const COMMAND_SYNC: &str = r#"---
+description: Sync decision graph with teammates - pull events, rebuild, push
+arguments: []
+---
+
+# Multi-User Sync
+
+Synchronize decision graph with your team using event-based sync.
+
+## Step 1: Pull Latest
+
+```bash
+git pull --rebase
+```
+
+## Step 2: Check Sync Status
+
+```bash
+deciduous events status
+```
+
+Look for:
+- **Pending events**: Events from teammates not yet in your local DB
+- **Event files**: Each teammate has their own `.jsonl` file
+
+## Step 3: Rebuild if Needed
+
+If there are pending events:
+
+```bash
+# Preview what would change
+deciduous events rebuild --dry-run
+
+# Apply teammate events to your local database
+deciduous events rebuild
+```
+
+## Step 4: Push Your Changes
+
+```bash
+# Stage sync files (events are auto-committed to your event file)
+git add .deciduous/sync/
+
+# Commit and push
+git commit -m "sync: decision graph events"
+git push
+```
+
+## Checkpoint (Periodic Maintenance)
+
+To prevent repo bloat, periodically create a checkpoint:
+
+```bash
+# Create checkpoint and clear old events
+deciduous events checkpoint --clear-events
+
+# Commit the checkpoint
+git add .deciduous/sync/
+git commit -m "checkpoint: compact decision graph events"
+git push
+```
+
+**When to checkpoint:**
+- After major milestones
+- When event files get large (>100KB)
+- Before releases
+
+## Troubleshooting
+
+### Events not syncing?
+
+1. Make sure `.deciduous/sync/` is tracked in git
+2. Check that `deciduous events init` was run
+3. Verify events are being emitted: `deciduous events status`
+
+### Merge conflicts in event files?
+
+Event files are append-only JSONL. Git should auto-merge them.
+If conflicts occur, accept both versions (both sets of events are valid).
+
+### Missing nodes after rebuild?
+
+Nodes reference each other by `change_id` (UUID), not local `id`.
+If edges fail, the referenced node may be in a teammate's events
+that haven't been pulled yet. Pull and rebuild again.
+
+## Quick Reference
+
+| Command | What it does |
+|---------|--------------|
+| `deciduous events status` | Show pending events, authors, file sizes |
+| `deciduous events rebuild` | Apply all events to local DB |
+| `deciduous events rebuild --dry-run` | Preview without applying |
+| `deciduous events checkpoint` | Snapshot current state |
+| `deciduous events checkpoint --clear-events` | Snapshot + delete old events |
+| `deciduous events emit <id>` | Manually emit event for a node |
+"#;
+
+/// OpenCode command template: /decision-graph
+pub const COMMAND_DECISION_GRAPH: &str = r#"---
+description: Build a deciduous decision graph capturing design evolution from commit history
+arguments:
+  - name: REPO
+    description: Path to the repository to analyze (default current directory)
+    required: false
+---
+
+# Decision Graph Construction
+
+You are building a **deciduous decision graph** - a DAG that captures the evolution of design decisions in a codebase.
+
+**Target repository:** $REPO (if provided), otherwise the current directory.
+
+Use the `deciduous` CLI to build the graph. Run deciduous commands in the current directory (not inside the source repo).
+
+For git commands to explore commit history, use `git -C <repo-path>` to target the source repo.
+
+**CRITICAL: Only use information from the repository itself (commits, code, comments, tests). Do not use your prior knowledge about the project. Everything must be grounded in what you find in the repo.**
+
+## Commit Exploration
+
+Use a layered strategy to find all relevant commits:
+
+**Layer 1: See all commits.** Start with the full list when building narratives.
+
+```bash
+git log --oneline --after="..." --before="..." -- path/
+```
+
+**Layer 2: Keyword expansion.** Once you have narratives, search for spelling variations and related terms.
+
+**Layer 3: Follow authors.** If a narrative has a key author, check their commits +/-1 month from known commits.
+
+## Finding the Story
+
+Not every commit matters. Look for commits that change **the model** - how the system conceptualizes the problem:
+
+- Existing tests modified (contract changing)
+- Data structures replaced or reworked
+- Heuristics changed significantly
+- New abstractions introduced
+- API behavior shifts
+
+## Narrative Tracking
+
+**Don't build the graph as you explore.** First, collect commits into narratives.
+
+Maintain `narratives.md` as you explore:
+
+1. For each significant commit, read `narratives.md`
+2. Ask: "Does this commit evolve an existing narrative?"
+3. If yes: append the commit to that narrative's section
+4. If no: add a new narrative section
+
+## Node Types
+
+| Type | Purpose |
+|------|---------|
+| **goal** | High-level objective being pursued |
+| **decision** | A choice point with multiple possible paths |
+| **option** | A possible approach to a decision |
+| **observation** | Learning, insight, or new information discovered |
+| **action** | Something that was done (must reference a commit) |
+| **outcome** | Result or consequence of an action |
+| **revisit** | Pivot point where a previous approach is reconsidered |
+
+## CLI Commands
+
+```bash
+# Add nodes (returns node ID)
+deciduous add goal "Title of the goal"
+deciduous add decision "The question or choice point"
+deciduous add option "One possible approach"
+deciduous add observation "Something learned or discovered"
+deciduous add action "Descriptive title of what was done"
+deciduous add outcome "What resulted from the action"
+deciduous add revisit "Reconsidering previous approach"
+
+# Add nodes with descriptions
+deciduous add action "Title" -d "Explanation of what happened and why."
+
+# Set status on options
+deciduous status <id> rejected    # option that wasn't chosen
+deciduous status <id> completed   # option that was chosen
+
+# Connect nodes
+deciduous link <from-id> <to-id>
+deciduous link <from-id> <to-id> -r "Why this led to that"
+
+# View/restructure
+deciduous nodes           # list all
+deciduous edges           # list connections
+deciduous unlink <from> <to>   # remove edge
+deciduous delete <id>          # remove node and edges
+```
+
+## Temporal Rule
+
+**Time flows forward. Past influences future, never reverse.**
+
+Options under a decision are alternatives considered _at the same time_. If an approach was tried, failed, and a new approach was designed later - that's a **new decision node**, connected by observations about why the old approach failed.
+
+## Link Patterns (goal -> options -> decision -> actions -> outcomes)
+
+- `goal -> option` - Goal leads to possible approaches
+- `option -> decision` - Options lead to choosing
+- `decision -> action` - Chosen option leads to implementation
+- `action -> outcome` - Action produces result
+- `outcome -> observation` - Result reveals new insight
+- `observation -> revisit` - Insight forces reconsideration
+
+When a design approach is abandoned and replaced:
+
+```bash
+deciduous add observation "JWT too large for mobile"
+deciduous add revisit "Reconsidering token strategy"
+deciduous link <observation> <revisit> -r "forced rethinking"
+deciduous status <old_decision> superseded
+```
+
+## Grounding Requirements
+
+1. **Actions must cite commits**: Every action node must reference a real commit SHA in its description
+2. **Observations from evidence**: Observations should come from commit messages, code comments, or test descriptions
+3. **No speculation**: If you can't find evidence, don't include it
+4. **Quote sources**: When possible, quote the actual commit message that supports a node
+
+## Output
+
+When done, run `deciduous graph > graph.json` to export.
+"#;
+
 /// OpenCode skill template: /pulse
 pub const SKILL_PULSE: &str = r#"---
 description: Map the current model as decisions - no history, just now
@@ -368,19 +1229,25 @@ arguments:
 
 **Map the current model as decisions. No history, just now.**
 
-## What This Is
+## Step 1: Get current state
 
-Pulse captures the current heartbeat of a system - what decisions define how it works TODAY.
+```bash
+deciduous pulse
+```
 
-Not how it evolved. Not what was tried before. Just: *"What are the design decisions that make this system work the way it does?"*
+Review the report: active goals, coverage gaps, orphan nodes. This tells you what's already mapped and what needs attention.
 
-## Scope
+## Step 2: Pick a scope
 
-Taking the pulse of: **$SCOPE**
+What part of the system are you taking the pulse of?
 
-## Process
+- A feature ("Suspense fallback behavior")
+- A subsystem ("Authentication")
+- A boundary ("API request lifecycle")
 
-### 1. Ask: "What decisions define this?"
+Scope: **$SCOPE**
+
+## Step 3: Ask "What decisions define this?"
 
 Read the code. For the thing you're scoping, ask:
 
@@ -388,57 +1255,54 @@ Read the code. For the thing you're scoping, ask:
 
 Not implementation questions ("which library?") - model questions ("what's the behavior?")
 
-**Examples:**
-- "When should the fallback show?"
-- "How should nested components interact?"
-- "What happens on timeout?"
-- "How are errors handled?"
-
-### 2. Create the goal node
+## Step 4: Build the goal -> options -> decisions
 
 ```bash
+# Create the root goal
 deciduous add goal "$SCOPE: <Core question>" -c 90
+
+# Add options (possible approaches from the goal)
+deciduous add option "<Possible approach>" -c 85
+deciduous link <goal> <option> -r "possible_approach"
+
+# When an option is chosen, create a decision
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
 ```
 
-### 3. Map the decisions
+If a question is still open, leave it as option nodes without a decision.
 
-For each design question you identified:
+## Step 5: Review
 
 ```bash
-deciduous add decision "<Design question>" -c <confidence>
-deciduous link <parent> <decision> -r "leads_to"
+# Check the pulse again to see what's mapped
+deciduous pulse
+
+# Check for coverage gaps
+deciduous pulse --summary
+
+# View visually
+deciduous serve
 ```
 
-### 4. Add answers where known
+## Check for Supporting Documents
 
-If a decision has a clear answer in the current system:
+If the system has architecture diagrams, specs, or reference docs relevant to the scope:
 
 ```bash
-deciduous add option "<The answer/choice>" -c 90
-deciduous link <decision> <option> -r "resolved_by"
-deciduous status <option> chosen
+deciduous doc list <goal_id>
+deciduous doc attach <goal_id> docs/architecture.png -d "Current architecture"
 ```
-
-If a decision is still open or unclear, leave it as just the decision node.
 
 ## Decision Criteria
 
-**Is this a decision worth capturing?**
-- Does it define BEHAVIOR (not implementation)? → Yes
-- Would changing it change how users experience the system? → Yes
-- Is it a choice that could have gone differently? → Yes
-- Is it just "how the code is organized"? → No
+- **Worth capturing?** Does it define BEHAVIOR, not implementation?
+- **How deep?** Stop when decisions become implementation details
+- **Option vs Decision?** Option = possible approach. Decision = choosing which option.
 
-**How deep to go?**
-- Stop when decisions become implementation details
-- Stop when the answer is obvious/forced (no real choice)
-- Stop when you've captured what someone needs to understand the model
+## Connecting to History
 
-## View the result
-
-```bash
-deciduous serve
-```
+Pulse gives you the "Now". For history, run `/narratives` then `/archaeology`.
 "#;
 
 /// OpenCode skill template: /narratives
@@ -454,50 +1318,31 @@ arguments:
 
 **Narratives are the source of truth. Commits are just evidence.**
 
-## The Core Insight
+## Step 1: Initialize narratives file
 
-Don't start with commits. Start with understanding.
+```bash
+deciduous narratives init
+```
 
-A narrative is: *"The story of how one piece of the system's design evolved."*
+This creates `.deciduous/narratives.md` pre-populated with your active goal titles.
+
+## Step 2: Understand the system first
+
+Before looking at git, read the code. Ask: **What are the major pieces of this system?**
+
+Each major piece probably has a narrative behind it.
 
 Focus area: **$FOCUS**
 
-## Process
+## Step 3: Fill in the narratives
 
-### 1. Understand the system first
+Edit `.deciduous/narratives.md`. For each section:
 
-Before looking at git:
-
-```bash
-# Read the code
-cat README.md
-ls src/
-```
-
-Ask: **What are the major pieces of this system?**
-
-### 2. Identify narratives from the design
-
-Look at the current system and ask:
-
-- "How did this get this way?"
-- "Why is this done like this?"
-- "What's the story behind this design?"
-
-**Write down the narratives you can INFER from the code.** You don't need commits yet.
-
-### 3. Find evidence (optional)
-
-Now, IF you want supporting evidence, look at git:
-
-```bash
-git log --oneline --all -- src/$FOCUS/
-git log --oneline --grep="$FOCUS"
-```
-
-### 4. Look for pivots
-
-The most valuable thing in a narrative is: **when did the model change?**
+1. Describe the **current state** (how it works today)
+2. Infer the **evolution** (how it likely got this way)
+3. Identify **PIVOTs** (when the conceptual model changed)
+4. Find evidence (PRs, commits, docs) - optional
+5. Check attached documents (`deciduous doc list`) - diagrams or specs may provide evidence
 
 Signs of a pivot:
 - Two approaches coexisting (migration in progress)
@@ -505,21 +1350,25 @@ Signs of a pivot:
 - Config for old + new system
 - Deprecation warnings
 
-### 5. Find the "why" for pivots
+## Step 4: Review narratives
 
-Sources:
-- PR descriptions
-- Commit messages around the change
-- Issue discussions
-- Architecture decision records
+```bash
+deciduous narratives show
+```
+
+## Step 5: Check existing pivots
+
+```bash
+deciduous narratives pivots
+```
+
+This shows all revisit nodes already in the graph with their full chains.
 
 ## Output Format
 
-Write to `.deciduous/narratives.md`:
+Each narrative section in `.deciduous/narratives.md`:
 
 ```markdown
-# Narratives
-
 ## <Name>
 > <One sentence: what this piece of the system does>
 
@@ -535,7 +1384,16 @@ Write to `.deciduous/narratives.md`:
 **Status:** active | superseded | abandoned
 ```
 
-After collecting narratives, run `/archaeology` to transform them into a queryable graph.
+## What Makes a Good Narrative
+
+- Coherent story about ONE design aspect
+- Explains HOW something works and WHY it evolved
+- Would help a new team member understand the system
+- NOT a list of commits or feature changelog
+
+## Next Step
+
+After narratives are written, run `/archaeology` to transform them into a queryable decision graph.
 "#;
 
 /// OpenCode skill template: /archaeology
@@ -548,112 +1406,121 @@ arguments: []
 
 **Transform narratives into a queryable decision graph.**
 
-Run `/narratives` first. This skill takes conceptual narratives and structures them for querying.
+Run `/narratives` first to create `.deciduous/narratives.md`.
 
-## The Relationship
-
-```
-Narratives (conceptual)     →    Decision Graph (structural)
-"How auth evolved"          →    Nodes + edges you can query
-Human-readable stories      →    Machine-traversable graph
-```
-
-## Process
-
-### 1. Read the narratives
+## Step 1: Read the narratives
 
 ```bash
-cat .deciduous/narratives.md
+deciduous narratives show
 ```
 
-### 2. Map narrative → graph
+For each narrative, you'll create a subgraph.
 
-Each narrative becomes a connected subgraph:
+## Step 2: Create root goals
 
-| Narrative Element | Graph Element |
-|-------------------|---------------|
-| Narrative title | `goal` node (the root) |
-| Evolution step | `action` or `decision` node |
-| **PIVOT** | `revisit` node |
-| Pivot "why" | `observation` node (links INTO revisit) |
-| Pre-pivot state | Nodes marked `superseded` |
-| **Connects to** | Cross-narrative edge |
-
-### 3. Build the subgraph
-
-For a narrative with pivots:
+For each narrative, create a backdated goal:
 
 ```bash
-# Root (backdate to when project started)
-deciduous add goal "Authentication" -c 90 --date "2023-01-15"
-# → id: 1
-
-# First approach
-deciduous add decision "JWT for all auth" -c 85 --date "2023-01-20"
-deciduous link 1 2 -r "Initial design"
-
-# What was learned (leads to pivot)
-deciduous add observation "Mobile Safari 4KB cookie limit breaking JWT auth"
-deciduous link 2 3 -r "Discovered in production"
-
-# The pivot
-deciduous add revisit "Reconsidering auth token strategy"
-deciduous link 3 4 -r "Cookie limits forced rethink"
-
-# Mark pre-pivot as superseded
-deciduous status 2 superseded
-
-# New approach
-deciduous add decision "Hybrid: JWT for API, sessions for web"
-deciduous link 4 5 -r "New approach"
+deciduous add goal "<Narrative title>" -c 90 --date "YYYY-MM-DD"
 ```
 
-## The Revisit Pattern
-
-Every **PIVOT** in a narrative becomes this structure:
-
-```
-[Previous approach]
-        │
-        ▼
-[Observation: what was learned]
-        │
-        ▼
-[Revisit: reconsidering X]
-        │
-        ▼
-[New approach]
-```
-
-## Querying the Graph
-
-After building, you can ask:
+## Step 3: Build initial approaches
 
 ```bash
-# What's the current state?
-deciduous nodes --status active
+deciduous add decision "<First approach>" -c 85 --date "YYYY-MM-DD"
+deciduous link <goal> <decision> -r "Initial design"
+```
 
-# What was tried and abandoned?
-deciduous nodes --status superseded
+## Step 4: Create pivots with `archaeology pivot`
 
-# What led to a specific decision?
-deciduous edges --to <node_id>
+For each **PIVOT** in a narrative, use the atomic pivot command:
 
-# What are the pivot points?
-deciduous nodes --type revisit
+```bash
+# One command replaces 7 manual add/link/status commands
+deciduous archaeology pivot <from_id> "<what was learned>" "<new approach>" -c 85 -r "<why it failed>"
+```
+
+This automatically creates:
+- observation node (what was learned)
+- revisit node (reconsidering the old approach)
+- decision node (the new approach)
+- All 3 linking edges
+- Marks the old approach as superseded
+
+Preview before executing:
+```bash
+deciduous archaeology pivot <from_id> "observation" "new approach" --dry-run
+```
+
+## Step 5: Connect narratives
+
+When narratives reference each other:
+
+```bash
+deciduous link <auth_observation> <ratelimit_decision> \
+  -r "Auth failures drove rate limit redesign"
+```
+
+## Step 6: Mark superseded paths
+
+For nodes that were replaced but not part of a pivot:
+
+```bash
+# Single node
+deciduous archaeology supersede <id>
+
+# Node and all descendants
+deciduous archaeology supersede <id> --cascade
+```
+
+## Step 7: Review the timeline
+
+```bash
+# See all nodes chronologically
+deciduous archaeology timeline
+
+# Filter by type
+deciduous archaeology timeline --type revisit
+
+# See existing pivot chains
+deciduous narratives pivots
 
 # Visual exploration
 deciduous serve
 ```
 
-## The Goal
+## Attach Evidence Documents
 
-Build a graph that can answer:
+If you find diagrams, screenshots, or specs that support the archaeology:
 
-- **"Why does it work this way?"** → Trace from current state back through revisits
-- **"What did we try before?"** → Look at superseded nodes
-- **"Can we change X?"** → Check what depends on X via edges
-- **"We should do Y"** → "We tried that, here's why it failed"
+```bash
+deciduous doc attach <goal_id> evidence/old-architecture.png -d "Architecture before refactor"
+deciduous doc attach <revisit_id> evidence/perf-report.pdf --ai-describe
+```
+
+Documents provide visual/tangible evidence alongside commit-based grounding.
+
+## Querying the Graph
+
+```bash
+# Current state
+deciduous pulse
+
+# Pivot points
+deciduous narratives pivots
+
+# Timeline
+deciduous archaeology timeline
+
+# By status
+deciduous nodes --type revisit
+```
+
+## What NOT to Do
+
+- **Don't create nodes for every commit.** Commits are evidence, not graph nodes.
+- **Don't create implementation nodes.** The graph is about the MODEL, not the code.
+- **Don't over-structure.** Simple narratives might just be: goal -> option -> decision.
 "#;
 
 /// Default configuration file content (duplicated from init/templates.rs to avoid circular deps)
@@ -818,6 +1685,9 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         ("build-test.md", COMMAND_BUILD_TEST),
         ("serve-ui.md", COMMAND_SERVE_UI),
         ("sync-graph.md", COMMAND_SYNC_GRAPH),
+        ("document.md", COMMAND_DOCUMENT),
+        ("sync.md", COMMAND_SYNC),
+        ("decision-graph.md", COMMAND_DECISION_GRAPH),
     ];
 
     for (name, content) in commands {
@@ -960,6 +1830,9 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
         ("build-test.md", COMMAND_BUILD_TEST),
         ("serve-ui.md", COMMAND_SERVE_UI),
         ("sync-graph.md", COMMAND_SYNC_GRAPH),
+        ("document.md", COMMAND_DOCUMENT),
+        ("sync.md", COMMAND_SYNC),
+        ("decision-graph.md", COMMAND_DECISION_GRAPH),
     ];
 
     for (name, content) in commands {
@@ -1027,13 +1900,112 @@ fn get_agents_workflow_section() -> String {
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
 
+### Available Slash Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/decision` | Manage decision graph - add nodes, link edges, sync |
+| `/recover` | Recover context from decision graph on session start |
+| `/work` | Start a work transaction - creates goal node before implementation |
+| `/document` | Generate comprehensive documentation for a file or directory |
+| `/build-test` | Build the project and run the test suite |
+| `/serve-ui` | Start the decision graph web viewer |
+| `/sync-graph` | Export decision graph to GitHub Pages |
+| `/decision-graph` | Build a decision graph from commit history |
+| `/sync` | Multi-user sync - pull events, rebuild, push |
+
+### Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pulse` | Map current design as decisions (Now mode) |
+| `/narratives` | Understand how the system evolved (History mode) |
+| `/archaeology` | Transform narratives into queryable graph |
+
+### The Node Flow Rule - CRITICAL
+
+The canonical flow through the decision graph is:
+
+```
+goal -> options -> decision -> actions -> outcomes
+```
+
+- **Goals** lead to **options** (possible approaches to explore)
+- **Options** lead to a **decision** (choosing which option to pursue)
+- **Decisions** lead to **actions** (implementing the chosen approach)
+- **Actions** lead to **outcomes** (results of the implementation)
+- **Observations** attach anywhere relevant
+- Goals do NOT lead directly to decisions -- there must be options first
+- Options do NOT come after decisions -- options come BEFORE decisions
+
 ### The Core Rule
 
 ```
 BEFORE you do something -> Log what you're ABOUT to do
 AFTER it succeeds/fails -> Log the outcome
 CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
 ```
+
+### Behavioral Triggers - MUST LOG WHEN:
+
+| Trigger | Log Type | Example |
+|---------|----------|---------|
+| User asks for a new feature | `goal` **with -p** | "Add dark mode" |
+| Exploring possible approaches | `option` | "Use Redux for state" |
+| Choosing between approaches | `decision` | "Choose state management" |
+| About to write/edit code | `action` | "Implementing Redux store" |
+| Something worked or failed | `outcome` | "Redux integration successful" |
+| Notice something interesting | `observation` | "Existing code uses hooks" |
+
+### Document Attachments
+
+Attach files (images, PDFs, diagrams, specs, screenshots) to decision graph nodes for rich context.
+
+```bash
+# Attach a file to a node
+deciduous doc attach <node_id> <file_path>
+deciduous doc attach <node_id> <file_path> -d "Architecture diagram"
+deciduous doc attach <node_id> <file_path> --ai-describe
+
+# List documents
+deciduous doc list              # All documents
+deciduous doc list <node_id>    # Documents for a specific node
+
+# Manage documents
+deciduous doc show <doc_id>     # Show document details
+deciduous doc open <doc_id>     # Open in default application
+deciduous doc detach <doc_id>   # Soft-delete (recoverable)
+```
+
+### CRITICAL: Capture VERBATIM User Prompts
+
+**Prompts must be the EXACT user message, not a summary.**
+
+```bash
+# Use --prompt-stdin for multi-line prompts
+deciduous add goal "Add auth" -c 90 --prompt-stdin << 'EOF'
+The full verbatim user request goes here...
+EOF
+
+# Or use the prompt command to update existing nodes
+deciduous prompt 42 << 'EOF'
+The full verbatim user message goes here...
+EOF
+```
+
+### CRITICAL: Maintain Connections
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `outcome` | The action that produced it |
+| `action` | The decision that spawned it |
+| `decision` | The option(s) it chose between |
+| `option` | Its parent goal |
+| `observation` | Related goal/action |
+| `revisit` | The decision/outcome being reconsidered |
+
+**Root `goal` nodes are the ONLY valid orphans.**
 
 ### Quick Commands
 
@@ -1057,15 +2029,30 @@ deciduous sync    # Export for static hosting
 | `observation` | Technical insights (attach anywhere) |
 | `revisit` | Reconsidering a decision |
 
-### Node Flow: goal -> options -> decision -> actions -> outcomes
+### Multi-User Sync
 
-Goals do NOT lead directly to decisions. Options come first.
+Sync decisions with teammates via event logs:
+
+```bash
+# Check sync status
+deciduous events status
+
+# Apply teammate events (after git pull)
+deciduous events rebuild
+
+# Compact old events periodically
+deciduous events checkpoint --clear-events
+```
+
+Events auto-emit on add/link/status commands. Git merges event files automatically.
 
 ### Session Start Checklist
 
 ```bash
+deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
+deciduous doc list        # Any attached documents to review?
 git status                # Current state
 ```
 "#
@@ -1079,6 +2066,28 @@ fn generate_basic_agents_md() -> String {
 ## Decision Graph Workflow
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
+
+### Available Slash Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/decision` | Manage decision graph - add nodes, link edges, sync |
+| `/recover` | Recover context from decision graph on session start |
+| `/work` | Start a work transaction - creates goal node before implementation |
+| `/document` | Generate comprehensive documentation for a file or directory |
+| `/build-test` | Build the project and run the test suite |
+| `/serve-ui` | Start the decision graph web viewer |
+| `/sync-graph` | Export decision graph to GitHub Pages |
+| `/decision-graph` | Build a decision graph from commit history |
+| `/sync` | Multi-user sync - pull events, rebuild, push |
+
+### Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pulse` | Map current design as decisions (Now mode) |
+| `/narratives` | Understand how the system evolved (History mode) |
+| `/archaeology` | Transform narratives into queryable graph |
 
 ### Node Flow Rule: goal -> options -> decision -> actions -> outcomes
 
@@ -1120,11 +2129,29 @@ deciduous sync    # Export for static hosting
 | `observation` | Technical insights (attach anywhere) |
 | `revisit` | Reconsidering a decision |
 
+### Document Attachments
+
+```bash
+deciduous doc attach <node_id> <file_path> -d "Description"
+deciduous doc list [node_id]
+deciduous doc show <doc_id>
+```
+
+### Multi-User Sync
+
+```bash
+deciduous events status           # Check sync status
+deciduous events rebuild          # Apply teammate events
+deciduous events checkpoint --clear-events  # Compact old events
+```
+
 ### Session Start Checklist
 
 ```bash
+deciduous check-update    # Update needed? Run 'deciduous update' if yes
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
+deciduous doc list        # Any attached documents?
 git status                # Current state
 ```
 "#
@@ -1308,7 +2335,7 @@ mod tests {
             .join(".opencode/plugin/post-commit-reminder.ts")
             .exists());
 
-        // Check commands
+        // Check commands (original 6)
         assert!(project_root.join(".opencode/command/work.md").exists());
         assert!(project_root.join(".opencode/command/recover.md").exists());
         assert!(project_root.join(".opencode/command/decision.md").exists());
@@ -1318,6 +2345,15 @@ mod tests {
         assert!(project_root.join(".opencode/command/serve-ui.md").exists());
         assert!(project_root
             .join(".opencode/command/sync-graph.md")
+            .exists());
+
+        // Check new commands
+        assert!(project_root
+            .join(".opencode/command/document.md")
+            .exists());
+        assert!(project_root.join(".opencode/command/sync.md").exists());
+        assert!(project_root
+            .join(".opencode/command/decision-graph.md")
             .exists());
 
         // Check skills (installed as commands)
@@ -1332,5 +2368,52 @@ mod tests {
         // Check config files
         assert!(project_root.join("opencode.json").exists());
         assert!(project_root.join("AGENTS.md").exists());
+    }
+
+    #[test]
+    fn test_agents_workflow_section_has_all_commands() {
+        let section = get_agents_workflow_section();
+
+        // All 9 commands should be listed
+        assert!(section.contains("/decision"));
+        assert!(section.contains("/recover"));
+        assert!(section.contains("/work"));
+        assert!(section.contains("/document"));
+        assert!(section.contains("/build-test"));
+        assert!(section.contains("/serve-ui"));
+        assert!(section.contains("/sync-graph"));
+        assert!(section.contains("/decision-graph"));
+        assert!(section.contains("/sync"));
+
+        // All 3 skills should be listed
+        assert!(section.contains("/pulse"));
+        assert!(section.contains("/narratives"));
+        assert!(section.contains("/archaeology"));
+
+        // Key sections should be present
+        assert!(section.contains("Node Flow Rule"));
+        assert!(section.contains("Document Attachments"));
+        assert!(section.contains("Multi-User Sync"));
+        assert!(section.contains("VERBATIM User Prompts"));
+    }
+
+    #[test]
+    fn test_basic_agents_md_has_all_commands() {
+        let content = generate_basic_agents_md();
+
+        // All commands and skills should be listed
+        assert!(content.contains("/decision"));
+        assert!(content.contains("/recover"));
+        assert!(content.contains("/work"));
+        assert!(content.contains("/document"));
+        assert!(content.contains("/sync"));
+        assert!(content.contains("/pulse"));
+        assert!(content.contains("/narratives"));
+        assert!(content.contains("/archaeology"));
+
+        // Key features present
+        assert!(content.contains("Document Attachments"));
+        assert!(content.contains("Multi-User Sync"));
+        assert!(content.contains("Node Flow Rule"));
     }
 }

@@ -34,6 +34,7 @@ Launch the deciduous web server for viewing and navigating the decision graph.
   - Node metadata (confidence, commit, prompt, files)
   - Connected nodes (incoming/outgoing edges)
   - Timestamps and status
+  - Attached documents
 
 ## Alternative: Static Hosting
 

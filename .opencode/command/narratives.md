@@ -10,50 +10,31 @@ arguments:
 
 **Narratives are the source of truth. Commits are just evidence.**
 
-## The Core Insight
+## Step 1: Initialize narratives file
 
-Don't start with commits. Start with understanding.
+```bash
+deciduous narratives init
+```
 
-A narrative is: *"The story of how one piece of the system's design evolved."*
+This creates `.deciduous/narratives.md` pre-populated with your active goal titles.
+
+## Step 2: Understand the system first
+
+Before looking at git, read the code. Ask: **What are the major pieces of this system?**
+
+Each major piece probably has a narrative behind it.
 
 Focus area: **$FOCUS**
 
-## Process
+## Step 3: Fill in the narratives
 
-### 1. Understand the system first
+Edit `.deciduous/narratives.md`. For each section:
 
-Before looking at git:
-
-```bash
-# Read the code
-cat README.md
-ls src/
-```
-
-Ask: **What are the major pieces of this system?**
-
-### 2. Identify narratives from the design
-
-Look at the current system and ask:
-
-- "How did this get this way?"
-- "Why is this done like this?"
-- "What's the story behind this design?"
-
-**Write down the narratives you can INFER from the code.** You don't need commits yet.
-
-### 3. Find evidence (optional)
-
-Now, IF you want supporting evidence, look at git:
-
-```bash
-git log --oneline --all -- src/$FOCUS/
-git log --oneline --grep="$FOCUS"
-```
-
-### 4. Look for pivots
-
-The most valuable thing in a narrative is: **when did the model change?**
+1. Describe the **current state** (how it works today)
+2. Infer the **evolution** (how it likely got this way)
+3. Identify **PIVOTs** (when the conceptual model changed)
+4. Find evidence (PRs, commits, docs) - optional
+5. Check attached documents (`deciduous doc list`) - diagrams or specs may provide evidence
 
 Signs of a pivot:
 - Two approaches coexisting (migration in progress)
@@ -61,21 +42,25 @@ Signs of a pivot:
 - Config for old + new system
 - Deprecation warnings
 
-### 5. Find the "why" for pivots
+## Step 4: Review narratives
 
-Sources:
-- PR descriptions
-- Commit messages around the change
-- Issue discussions
-- Architecture decision records
+```bash
+deciduous narratives show
+```
+
+## Step 5: Check existing pivots
+
+```bash
+deciduous narratives pivots
+```
+
+This shows all revisit nodes already in the graph with their full chains.
 
 ## Output Format
 
-Write to `.deciduous/narratives.md`:
+Each narrative section in `.deciduous/narratives.md`:
 
 ```markdown
-# Narratives
-
 ## <Name>
 > <One sentence: what this piece of the system does>
 
@@ -91,4 +76,13 @@ Write to `.deciduous/narratives.md`:
 **Status:** active | superseded | abandoned
 ```
 
-After collecting narratives, run `/archaeology` to transform them into a queryable graph.
+## What Makes a Good Narrative
+
+- Coherent story about ONE design aspect
+- Explains HOW something works and WHY it evolved
+- Would help a new team member understand the system
+- NOT a list of commits or feature changelog
+
+## Next Step
+
+After narratives are written, run `/archaeology` to transform them into a queryable decision graph.

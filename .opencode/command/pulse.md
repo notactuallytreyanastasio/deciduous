@@ -10,19 +10,25 @@ arguments:
 
 **Map the current model as decisions. No history, just now.**
 
-## What This Is
+## Step 1: Get current state
 
-Pulse captures the current heartbeat of a system - what decisions define how it works TODAY.
+```bash
+deciduous pulse
+```
 
-Not how it evolved. Not what was tried before. Just: *"What are the design decisions that make this system work the way it does?"*
+Review the report: active goals, coverage gaps, orphan nodes. This tells you what's already mapped and what needs attention.
 
-## Scope
+## Step 2: Pick a scope
 
-Taking the pulse of: **$SCOPE**
+What part of the system are you taking the pulse of?
 
-## Process
+- A feature ("Suspense fallback behavior")
+- A subsystem ("Authentication")
+- A boundary ("API request lifecycle")
 
-### 1. Ask: "What decisions define this?"
+Scope: **$SCOPE**
+
+## Step 3: Ask "What decisions define this?"
 
 Read the code. For the thing you're scoping, ask:
 
@@ -30,54 +36,51 @@ Read the code. For the thing you're scoping, ask:
 
 Not implementation questions ("which library?") - model questions ("what's the behavior?")
 
-**Examples:**
-- "When should the fallback show?"
-- "How should nested components interact?"
-- "What happens on timeout?"
-- "How are errors handled?"
-
-### 2. Create the goal node
+## Step 4: Build the goal -> options -> decisions
 
 ```bash
+# Create the root goal
 deciduous add goal "$SCOPE: <Core question>" -c 90
+
+# Add options (possible approaches from the goal)
+deciduous add option "<Possible approach>" -c 85
+deciduous link <goal> <option> -r "possible_approach"
+
+# When an option is chosen, create a decision
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
 ```
 
-### 3. Map the decisions
+If a question is still open, leave it as option nodes without a decision.
 
-For each design question you identified:
+## Step 5: Review
 
 ```bash
-deciduous add decision "<Design question>" -c <confidence>
-deciduous link <parent> <decision> -r "leads_to"
+# Check the pulse again to see what's mapped
+deciduous pulse
+
+# Check for coverage gaps
+deciduous pulse --summary
+
+# View visually
+deciduous serve
 ```
 
-### 4. Add answers where known
+## Check for Supporting Documents
 
-If a decision has a clear answer in the current system:
+If the system has architecture diagrams, specs, or reference docs relevant to the scope:
 
 ```bash
-deciduous add option "<The answer/choice>" -c 90
-deciduous link <decision> <option> -r "resolved_by"
-deciduous status <option> chosen
+deciduous doc list <goal_id>
+deciduous doc attach <goal_id> docs/architecture.png -d "Current architecture"
 ```
-
-If a decision is still open or unclear, leave it as just the decision node.
 
 ## Decision Criteria
 
-**Is this a decision worth capturing?**
-- Does it define BEHAVIOR (not implementation)? → Yes
-- Would changing it change how users experience the system? → Yes
-- Is it a choice that could have gone differently? → Yes
-- Is it just "how the code is organized"? → No
+- **Worth capturing?** Does it define BEHAVIOR, not implementation?
+- **How deep?** Stop when decisions become implementation details
+- **Option vs Decision?** Option = possible approach. Decision = choosing which option.
 
-**How deep to go?**
-- Stop when decisions become implementation details
-- Stop when the answer is obvious/forced (no real choice)
-- Stop when you've captured what someone needs to understand the model
+## Connecting to History
 
-## View the result
-
-```bash
-deciduous serve
-```
+Pulse gives you the "Now". For history, run `/narratives` then `/archaeology`.

@@ -12,6 +12,17 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.2",
+        highlights: &[
+            "OpenCode integration fully updated to match Claude Code feature parity",
+            "3 new OpenCode commands: /document, /sync, /decision-graph",
+            "All 9 OpenCode commands updated with document attachments, event sync, graph integrity",
+            "All 3 OpenCode skills updated: /pulse, /narratives, /archaeology use latest CLI commands",
+            "OpenCode plugins improved: .deciduous check, better git commit detection",
+            "AGENTS.md workflow section now includes full command/skill tables and node flow rule",
+        ],
+    },
+    Release {
         version: "0.13.1",
         highlights: &[
             "Fix: deciduous update no longer deletes user content after the Decision Graph Workflow section in CLAUDE.md",

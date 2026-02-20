@@ -13,10 +13,15 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
       }
 
       try {
-        // Get recent nodes from deciduous
-        const result = await $`deciduous nodes 2>/dev/null | head -20`.quiet()
-        const stdout = result.stdout.toString()
+        // Check if deciduous is initialized
+        const fs = await import("fs")
+        if (!fs.existsSync(".deciduous")) {
+          return // No deciduous in this project, allow all edits
+        }
 
+        // Get recent nodes from deciduous
+        const result = await $`deciduous nodes 2>/dev/null | tail -5`.quiet()
+        const stdout = result.stdout.toString()
         const lines = stdout.trim().split("\n").filter((l: string) => l.trim())
 
         // Check for any goal or action node
@@ -29,14 +34,22 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
         }
 
         if (!hasRecentNode && lines.length > 2) {
-          // Show a toast reminder but don't block
+          // Show a reminder but don't block
           console.log(`
-╔═══════════════════════════════════════════════════════════════════╗
-║  DECIDUOUS: Consider adding a goal/action node!                   ║
-╠═══════════════════════════════════════════════════════════════════╣
-║  Before editing files, log what you're about to do:               ║
-║    deciduous add action "Your action description" -c 85           ║
-╚═══════════════════════════════════════════════════════════════════╝
++===================================================================+
+|  DECIDUOUS: No recent action/goal node found                      |
++===================================================================+
+|  Before editing files, log what you're about to do:               |
+|                                                                   |
+|  For new work:                                                    |
+|    deciduous add goal "What you're trying to achieve" -c 90       |
+|                                                                   |
+|  For implementation:                                              |
+|    deciduous add action "What you're about to implement" -c 85    |
+|                                                                   |
+|  Then link to parent:                                             |
+|    deciduous link <parent_id> <new_id> -r "reason"                |
++===================================================================+
 `)
         }
       } catch (error) {
