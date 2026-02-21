@@ -49,9 +49,8 @@
             <div class="toc-section">
                 <a href="../sharing/exporting-your-work.html" class="toc-title active">Sharing</a>
                 <ul>
-                    <li><a href="../sharing/exporting-your-work.html" class="active">Exporting Your Work</a></li>
-                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html" class="active">Exporting Your Work</a></li>
                 </ul>
             </div>
             <div class="toc-section">
@@ -126,24 +125,6 @@ Exported git-history.json (28 commits)</span>
             </div>
 
             <p>Then in your GitHub repository settings, go to <strong>Pages</strong>, select <strong>Deploy from branch</strong>, and choose the <code>/docs</code> folder. Your graph will be live at <code>https://&lt;user&gt;.github.io/&lt;repo&gt;/</code>.</p>
-
-            <h2>DOT Visualizations</h2>
-
-            <p>For embedding decision graphs in PRs or documentation, generate PNG images with <code>deciduous dot</code>. The <code>--auto</code> flag generates branch-specific filenames to avoid merge conflicts when multiple PRs have their own graphs:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Generating a visualization</div>
-                <div class="terminal-body"><span class="command">deciduous dot --auto --nodes 57-61 --png --title "CI Pipeline Decisions"</span>
-<span class="output">Wrote docs/decision-graph-main.dot
-Wrote docs/decision-graph-main.png (5 nodes, 4 edges)</span></div>
-            </div>
-
-            <p>Without <code>--auto</code>, the files are named <code>decision-graph.dot</code> and <code>decision-graph.png</code>. With <code>--auto</code>, the current branch name is appended, so a feature branch called <code>ci-pipelines</code> produces <code>decision-graph-ci-pipelines.png</code>. This prevents merge conflicts when multiple feature branches each generate their own graph.</p>
-
-            <div class="info-box tip">
-                <strong>Graphviz required for PNG</strong>
-                <p>The <code>--png</code> flag requires Graphviz to be installed (<code>brew install graphviz</code> on macOS, <code>apt install graphviz</code> on Linux). Without it, <code>deciduous dot</code> outputs the DOT format file only, which you can render with any compatible tool.</p>
-            </div>
 
             <h2>PR Writeups</h2>
 
@@ -245,13 +226,13 @@ This PR corresponds to deciduous nodes: 57, 58, 59, 60, 61</span></div>
             </div>
 
             <div class="page-nav">
-                <a href="../real-work/editing-and-fixing.html" class="prev">
+                <a href="pr-workflow.html" class="prev">
                     <span class="label">Previous</span>
-                    <span class="title">Editing the Graph</span>
+                    <span class="title">The PR Workflow</span>
                 </a>
-                <a href="multi-user-sync.html" class="next">
+                <a href="../advanced/themes-and-tags.html" class="next">
                     <span class="label">Next</span>
-                    <span class="title">Multi-User Sync</span>
+                    <span class="title">Themes &amp; Tags</span>
                 </a>
             </div>
         </article>

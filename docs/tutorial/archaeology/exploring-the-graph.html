@@ -49,9 +49,8 @@
             <div class="toc-section">
                 <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
                 <ul>
-                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
-                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
                 </ul>
             </div>
             <div class="toc-section">
@@ -72,11 +71,108 @@
         <article>
             <h1>Exploring What You Built</h1>
 
-            <p class="lead">With 56 nodes and 66 edges, snowflex's decision graph tells the complete story of how the library evolved. Let's explore it.</p>
+            <p class="lead">With 56 nodes and 66 edges, snowflex's decision graph tells the complete story of how the library evolved. The real power isn't in reading nodes one by one &mdash; it's in asking your AI questions and getting answers grounded in the graph.</p>
 
-            <h2>The Web Viewer</h2>
+            <h2>Asking Questions About Your Graph</h2>
 
-            <p>The fastest way to browse a decision graph is the built-in web viewer. One command starts it:</p>
+            <p>The decision graph is not designed for humans to read directly. It's a database that your AI assistant queries when you have questions. You ask in plain language; Claude searches the graph and answers with evidence.</p>
+
+            <div class="session-demo" id="qa-demo-1">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; Q&amp;A with the graph</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Why did we switch away from ODBC?</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous nodes --type revisit</div>
+                        <div class="step-output">ID    TYPE     STATUS  TITLE<br>34    revisit  active  Reconsider ODBC as transport - switch to HTTP REST API<br>46    revisit  active  Reconsider single-key auth - support multiple key formats</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous show 34</div>
+                        <div class="step-output">Node #34  revisit<br>Title: Reconsider ODBC as transport - switch to HTTP REST API<br>Incoming: #33 &mdash; "ODBC limitations forced rethinking"<br>Outgoing: #36 &mdash; "Revisit leads to new transport decision"</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 4.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous show 33</div>
+                        <div class="step-output">Node #33  observation<br>Title: ODBC accumulating problems - sessions expire after 4 hours, UTF-16 corruption, Apple Silicon incompatible, memory issues</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 6s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">The team switched away from ODBC because of four accumulating problems (node #33): ODBC sessions expired after 4 hours of idle time, UTF-16 data returned by Snowflake caused encoding corruption, the ODBC driver was incompatible with Apple Silicon Macs, and there were memory issues. These problems triggered revisit #34, which led to evaluating two alternatives (nodes #37 and #38). The team chose a transport behavior pattern with HTTP implementation using Req (#37) because it allowed future extensibility, and rejected a direct HTTP client (#38) as too rigid. The result was the v1.0 rewrite (node #40).</div>
+                    </div>
+                </div>
+            </div>
+
+            <p>Notice what happened: you asked a question in English, and Claude traced the full decision chain &mdash; from the observation, through the revisit, through the option evaluation, to the outcome. The graph gave it the evidence; Claude gave you the story.</p>
+
+            <h3>More Examples</h3>
+
+            <div class="session-demo" id="qa-demo-2">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; What's been tried before?</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">What approaches have been tried and abandoned?</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous nodes --status superseded</div>
+                        <div class="step-output">ID    TYPE      STATUS      TITLE<br>2     option    superseded  Use Erlang ODBC driver to connect to Snowflake<br>3     decision  superseded  How to connect Elixir to Snowflake?<br>5     outcome   superseded  Working single-connection ODBC wrapper<br>7     option    superseded  Explicit ConnectionPool in supervision tree<br>9     outcome   superseded  Multi-connection support via ConnectionPool (v0.1)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Three approaches were tried and superseded: (1) Direct ODBC connections &mdash; worked initially but couldn't handle concurrency. (2) ConnectionPool with supervision tree &mdash; solved concurrency but the API was cumbersome. (3) ODBC as transport entirely &mdash; replaced by HTTP REST in v1.0 due to reliability issues. If you're considering any of these approaches again, the graph has the specific reasons they were abandoned.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <strong>The graph makes your AI smarter</strong>
+                <p>Once the graph has history, Claude uses it to avoid repeating past mistakes. If you ask it to implement something that was already tried and rejected, it will check the graph first and warn you &mdash; explaining why that approach failed before and what replaced it.</p>
+            </div>
+
+            <h2>The Web Viewer (Optional)</h2>
+
+            <p>For a visual overview, the built-in web viewer renders the graph in a browser. It's useful for presentations and getting a high-level sense of the graph's shape, but the Q&amp;A interface above is how you'll interact with it day-to-day.</p>
 
             <div class="terminal-session">
                 <div class="terminal-header">Starting the web viewer</div>
@@ -84,166 +180,7 @@
 <span class="output">Serving at http://localhost:3000 (auto-refreshes every 30s)</span></div>
             </div>
 
-            <p>The viewer provides four ways to look at your graph:</p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>View</th>
-                        <th>What It Shows</th>
-                        <th>Best For</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><strong>DAG</strong></td>
-                        <td>Directed graph with nodes and edges rendered spatially</td>
-                        <td>Understanding the full structure and connections</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Timeline</strong></td>
-                        <td>Nodes arranged chronologically by creation date</td>
-                        <td>Seeing the order in which decisions were made</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Chains</strong></td>
-                        <td>Connected components grouped together</td>
-                        <td>Following a single line of reasoning end to end</td>
-                    </tr>
-                    <tr>
-                        <td><strong>Archaeology</strong></td>
-                        <td>Narrative stacks showing evolution and pivots</td>
-                        <td>Understanding how and why approaches changed over time</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p>Click any node in the viewer to see its details: type, status, confidence, connected edges, rationales, commit links, and any attached documents.</p>
-
-            <div class="info-box tip">
-                <strong>Leave it running</strong>
-                <p>The web viewer auto-refreshes every 30 seconds. Leave it running in a background tab while you work&mdash;your graph stays current as Claude adds nodes and edges during a session.</p>
-            </div>
-
-            <h2>CLI Queries</h2>
-
-            <p>For quick lookups and scripting, everything is accessible from the terminal.</p>
-
-            <h3>Listing All Nodes</h3>
-
-            <div class="terminal-session">
-                <div class="terminal-header">deciduous nodes</div>
-                <div class="terminal-body"><span class="command">deciduous nodes</span>
-<span class="output">56 nodes:
-ID    TYPE          STATUS       TITLE
-1     goal          active       Create an Elixir library for querying Snowflake
-2     option        superseded   Use Erlang ODBC driver to connect to Snowflake
-3     decision      superseded   How to connect Elixir to Snowflake?
-4     action        completed    Implement initial ODBC wrapper with single connection
-5     outcome       superseded   Working single-connection ODBC wrapper
-6     decision      superseded   How to support multiple Snowflake connections?
-7     option        superseded   Explicit ConnectionPool in supervision tree
-8     action        completed    Implement ConnectionPool-based multi-connection support
-9     outcome       superseded   Multi-connection support via ConnectionPool (v0.1)
-10    observation   active       ConnectionPool API is cumbersome compared to Ecto.Repo pattern
-...
-34    revisit       active       Reconsider ODBC as transport - switch to HTTP REST API
-...
-40    outcome       active       Snowflex v1.0 - Modern HTTP-based Snowflake adapter
-...</span></div>
-            </div>
-
-            <h3>Filtering by Type</h3>
-
-            <p>Zero in on specific node types. Want to see every pivot point?</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Filtering by type</div>
-                <div class="terminal-body"><span class="command">deciduous nodes --type revisit</span>
-<span class="output">2 nodes:
-ID    TYPE          STATUS       TITLE
-34    revisit       active       Reconsider ODBC as transport - switch to HTTP REST API
-46    revisit       active       Reconsider single-key auth - support multiple key formats</span></div>
-            </div>
-
-            <h3>Node Details</h3>
-
-            <p>Drill into any node with <code>deciduous show</code>:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">deciduous show</div>
-                <div class="terminal-body"><span class="command">deciduous show 34</span>
-<span class="output">Node #34  revisit
-────────────────────────────────────────────────────────────
-Title:    Reconsider ODBC as transport - switch to HTTP REST API
-Status:   active
-Created:  2021-03-15T10:30:00
-
-Metadata
-  Confidence: 90%
-  Branch:     main
-
-Connections
-  Incoming (1):
-    #33 ─[leads_to]→ here
-      "ODBC limitations forced rethinking"
-  Outgoing (1):
-    here ─[leads_to]→ #36: How to replace ODBC transport for v1.0?
-      "Revisit leads to new transport decision"</span></div>
-            </div>
-
-            <h3>Listing Edges</h3>
-
-            <div class="terminal-session">
-                <div class="terminal-header">deciduous edges</div>
-                <div class="terminal-body"><span class="command">deciduous edges</span>
-<span class="output">66 edges:
-FROM  TO    TYPE       RATIONALE
-1     2     leads_to   Goal leads to exploring ODBC approach
-2     3     leads_to   ODBC option evaluated
-3     2     chosen     ODBC was the only viable Elixir->Snowflake path
-3     4     leads_to   Implement chosen ODBC approach
-4     5     leads_to   Implementation complete
-...
-33    34    leads_to   ODBC limitations forced rethinking
-34    36    leads_to   Revisit leads to new transport decision
-36    37    chosen     Flexible transport pattern enables future extensibility
-36    38    rejected   Too rigid, no room for future transports
-36    39    leads_to   Implementing the chosen transport approach
-39    40    leads_to   v1.0 rewrite complete
-...</span></div>
-            </div>
-
-            <h3>Recent Commands</h3>
-
-            <p>See what happened recently in the graph:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">deciduous commands</div>
-                <div class="terminal-body"><span class="command">deciduous commands | head -10</span>
-<span class="output">2021-03-15 10:45:00  add outcome "Snowflex v1.0 - Modern HTTP-based Snowflake adapter"
-2021-03-15 10:44:30  link 39 40 -r "v1.0 rewrite complete"
-2021-03-15 10:44:00  add action "Complete v1.0 rewrite: HTTP REST API, JWT auth..."
-2021-03-15 10:43:00  link 36 38 --edge-type rejected
-2021-03-15 10:42:30  add option "Direct HTTP client without transport abstraction"
-2021-03-15 10:42:00  link 36 37 --edge-type chosen
-2021-03-15 10:41:30  add option "Transport behavior with HTTP implementation using Req"
-2021-03-15 10:41:00  archaeology pivot 32 "ODBC limitations accumulating..."
-2021-03-15 10:40:00  add observation "Community requests DBConnection/Ecto integration"
-2021-03-15 10:39:00  add observation "Snowflake returns UTF-16 data..."</span></div>
-            </div>
-
-            <h3>JSON Export</h3>
-
-            <p>Export the entire graph as JSON for programmatic access:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">JSON export</div>
-                <div class="terminal-body"><span class="command">deciduous graph > snowflex-graph.json</span>
-<span class="output"></span>
-<span class="command">wc -l snowflex-graph.json</span>
-<span class="output">     342 snowflex-graph.json</span></div>
-            </div>
+            <p>The viewer provides DAG, timeline, chains, and archaeology views. Leave it running in a background tab &mdash; it auto-refreshes as Claude adds nodes during a session.</p>
 
             <h2>Pulse &mdash; Graph Health Report</h2>
 
@@ -265,75 +202,11 @@ Statuses:
   active: 18    completed: 14    superseded: 12
   rejected: 6    pending: 4    abandoned: 2
 
-Branches:
-  main: 56 nodes
-
 Orphan nodes: 0
-Dangling outcomes: 0
-
-Last activity: 2021-03-15T10:45:00</span></div>
+Dangling outcomes: 0</span></div>
             </div>
 
             <p>Pulse is useful for catching problems: orphan nodes (nodes with no connections), dangling outcomes (outcomes not linked to an action), and overall balance of node types.</p>
-
-            <h2>DOT Visualizations</h2>
-
-            <p>For documentation and PRs, export subsets of the graph as DOT format (or directly to PNG if you have Graphviz installed):</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">DOT export</div>
-                <div class="terminal-body"><span class="command">deciduous dot --nodes 33-40 --title "ODBC to HTTP Pivot" --png</span>
-<span class="output">Wrote docs/decision-graph.dot
-Wrote docs/decision-graph.png (8 nodes, 7 edges)</span></div>
-            </div>
-
-            <p>This generates a visual graph of just the pivot&mdash;from the observation that ODBC was failing, through the revisit, to the new HTTP implementation and its outcome.</p>
-
-            <p>Useful flags for <code>deciduous dot</code>:</p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Flag</th>
-                        <th>What It Does</th>
-                        <th>Example</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>--nodes</code></td>
-                        <td>Select specific nodes by ID range</td>
-                        <td><code>--nodes 33-40</code> or <code>--nodes 1,3,5-10</code></td>
-                    </tr>
-                    <tr>
-                        <td><code>--roots</code></td>
-                        <td>Start from a root node and BFS outward</td>
-                        <td><code>--roots 1</code> (follow all children of goal #1)</td>
-                    </tr>
-                    <tr>
-                        <td><code>--title</code></td>
-                        <td>Set a graph title</td>
-                        <td><code>--title "ODBC to HTTP Pivot"</code></td>
-                    </tr>
-                    <tr>
-                        <td><code>--rankdir</code></td>
-                        <td>Graph direction</td>
-                        <td><code>--rankdir LR</code> for left-to-right layout</td>
-                    </tr>
-                    <tr>
-                        <td><code>--png</code></td>
-                        <td>Generate PNG image (requires Graphviz)</td>
-                        <td><code>--png</code></td>
-                    </tr>
-                    <tr>
-                        <td><code>--auto</code></td>
-                        <td>Branch-specific filenames (prevents merge conflicts)</td>
-                        <td><code>--auto</code> outputs <code>decision-graph-main.png</code></td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p>Without <code>--png</code>, the command outputs a DOT file that you can render with any Graphviz-compatible tool. With <code>--png</code>, it calls <code>dot</code> directly and gives you the image.</p>
 
             <div class="page-nav">
                 <a href="observations-and-pivots.html" class="prev">

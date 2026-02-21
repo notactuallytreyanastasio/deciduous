@@ -49,9 +49,8 @@
             <div class="toc-section">
                 <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
                 <ul>
-                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
-                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
                 </ul>
             </div>
             <div class="toc-section">
@@ -212,6 +211,14 @@
             <div class="info-box tip">
                 <strong>Recovery is why connections matter</strong>
                 <p>An orphaned node is useless for recovery. Claude can read the node title, but without edges it cannot tell what spawned the node, what it relates to, or what should happen next. This is why the CLAUDE.md instructions insist on linking every node immediately after creation: the edges are the recovery path.</p>
+            </div>
+
+            <div class="info-box warning">
+                <strong>Don't let compaction degrade your session</strong>
+                <p>If you notice Claude's responses becoming less contextual &mdash; forgetting what it was working on, asking questions it already answered &mdash; compaction is happening. Don't fight it. Instead, use <code>/clear</code> to wipe the degraded context, then immediately run <code>/recover</code> with a brief note about what you were doing:</p>
+                <p style="margin-top: 8px;"><code>&gt; /clear</code></p>
+                <p><code>&gt; /recover &mdash; I was implementing the integration test workflow, node 61 is complete</code></p>
+                <p style="margin-top: 8px;">This gives Claude a clean slate with fresh context recovered from the graph. It's faster and produces better results than letting a compacted session stumble forward.</p>
             </div>
 
             <h2>The Complete Chain</h2>
