@@ -244,6 +244,21 @@
       .cmd-table .type-command { background: #dbeafe; color: #1e40af; }
       .cmd-table .type-skill { background: #f3e8ff; color: #6b21a8; }
 
+      /* Install section */
+      .install-section {
+        max-width: 900px; margin: 50px auto 0; padding-top: 30px;
+        border-top: 1px solid #d0d7de; text-align: center;
+      }
+      .install-section h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 20px; }
+      .install-options {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+        margin-bottom: 16px; text-align: left;
+      }
+      @media (max-width: 600px) { .install-options { grid-template-columns: 1fr; } }
+      .install-alt { color: #57606a; font-size: 0.9rem; }
+      .install-alt a { color: #0969da; text-decoration: none; }
+      .install-alt a:hover { text-decoration: underline; }
+
       /* Footer */
       footer { text-align: center; padding: 40px 0; margin-top: 40px; color: #6e7781; font-size: 0.9rem; }
       footer a { color: #0969da; text-decoration: none; }
@@ -258,8 +273,10 @@
       <div class="narrow">
         <nav class="top-nav">
           <a href="story.html">Story</a>
+          <a href="demo/">Live Graph</a>
           <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
           <a href="https://crates.io/crates/deciduous">crates.io</a>
+          <a href="#install">Install</a>
         </nav>
 
         <header>
@@ -774,6 +791,42 @@ deciduous sync</div>
 
       </div><!-- /.feature-grid -->
 
+      <!-- ============================================================ -->
+      <!-- Install                                                       -->
+      <!-- ============================================================ -->
+      <div class="install-section" id="install">
+        <h2>Install</h2>
+        <div class="install-options">
+          <div class="install-option">
+            <div class="quickstart-terminal">
+              <div class="session-header">
+                <span class="session-dot red"></span>
+                <span class="session-dot yellow"></span>
+                <span class="session-dot green"></span>
+                <span class="session-title">Homebrew</span>
+              </div>
+              <div class="quickstart-content">
+                <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew install notactuallytreyanastasio/tap/deciduous</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="install-option">
+            <div class="quickstart-terminal">
+              <div class="session-header">
+                <span class="session-dot red"></span>
+                <span class="session-dot yellow"></span>
+                <span class="session-dot green"></span>
+                <span class="session-title">Cargo</span>
+              </div>
+              <div class="quickstart-content">
+                <div><span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="install-alt">Or download <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a> for macOS, Linux, and Windows.</p>
+      </div>
+
       <div class="narrow">
       <!-- ============================================================ -->
       <!-- Web Viewer                                                    -->
@@ -842,7 +895,7 @@ deciduous sync</div>
             <span class="quickstart-num">1</span>
             <div class="quickstart-info">
               <h3>Install</h3>
-              <p>From crates.io or <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a>.</p>
+              <p>Via Homebrew, Cargo, or <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a>.</p>
             </div>
           </div>
           <div class="quickstart-terminal">
@@ -853,8 +906,9 @@ deciduous sync</div>
               <span class="session-title">Terminal</span>
             </div>
             <div class="quickstart-content">
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew install notactuallytreyanastasio/tap/deciduous</span></div>
+              <div style="color: #57606a; margin: 4px 0;">or</div>
               <div><span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span></div>
-              <div><span class="qs-success">Installed deciduous to ~/.cargo/bin/deciduous</span></div>
             </div>
           </div>
         </div>

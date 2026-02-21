@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Assistant - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title active">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html" class="active">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Working with Multiple AI Assistants</h1>
+
+            <p class="lead">Deciduous is not limited to Claude Code. The same decision graph works with OpenCode, Windsurf, and other AI assistants.</p>
+
+            <p>The decision graph is stored in a SQLite database and operated through the <code>deciduous</code> CLI. Any AI assistant that can run shell commands can use it. What differs is the integration layer&mdash;the instruction files that teach the assistant when and how to log decisions.</p>
+
+            <h2>Supported Assistants</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Assistant</th>
+                        <th>Init Flag</th>
+                        <th>Integration Files</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Claude Code</strong></td>
+                        <td>(default)</td>
+                        <td><code>CLAUDE.md</code>, <code>.claude/commands/</code>, <code>.claude/skills/</code></td>
+                    </tr>
+                    <tr>
+                        <td><strong>OpenCode</strong></td>
+                        <td><code>--opencode</code></td>
+                        <td><code>AGENTS.md</code>, OpenCode-compatible instructions</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Windsurf</strong></td>
+                        <td><code>--windsurf</code></td>
+                        <td><code>.windsurfrules</code>, Windsurf-compatible instructions</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Initializing for Different Assistants</h2>
+
+            <p>When you run <code>deciduous init</code>, the default is Claude Code integration. To add support for other assistants, use the appropriate flag:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Initializing for OpenCode</div>
+                <div class="terminal-body"><span class="command">deciduous init --opencode</span>
+<span class="output">Initialized deciduous in /Users/alice/projects/snowflex
+  Created .deciduous/
+  Created .deciduous/config.toml
+  Created CLAUDE.md (decision graph workflow)
+  Created AGENTS.md (OpenCode integration)
+  Created .claude/commands/ (7 commands)
+  Created .claude/skills/ (3 skills)
+  Created docs/ (web viewer)</span></div>
+            </div>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Initializing for Windsurf</div>
+                <div class="terminal-body"><span class="command">deciduous init --windsurf</span>
+<span class="output">Initialized deciduous in /Users/alice/projects/snowflex
+  Created .deciduous/
+  Created .deciduous/config.toml
+  Created CLAUDE.md (decision graph workflow)
+  Created .windsurfrules (Windsurf integration)
+  Created .claude/commands/ (7 commands)
+  Created .claude/skills/ (3 skills)
+  Created docs/ (web viewer)</span></div>
+            </div>
+
+            <p>You can pass multiple flags to set up integration for several assistants simultaneously:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Multi-assistant init</div>
+                <div class="terminal-body"><span class="command">deciduous init --opencode --windsurf</span>
+<span class="output">Initialized deciduous in /Users/alice/projects/snowflex
+  Created .deciduous/
+  Created CLAUDE.md (decision graph workflow)
+  Created AGENTS.md (OpenCode integration)
+  Created .windsurfrules (Windsurf integration)
+  Created .claude/commands/ (7 commands)
+  ...</span></div>
+            </div>
+
+            <h2>Managing OpenCode Integration</h2>
+
+            <p>For finer control over the OpenCode integration, use the <code>opencode</code> subcommand:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">OpenCode management</div>
+                <div class="terminal-body"><span class="command">deciduous opencode install</span>
+<span class="output">Installed OpenCode integration:
+  Created AGENTS.md with decision graph workflow
+  Feature parity with Claude Code integration</span>
+
+<span class="command">deciduous opencode status</span>
+<span class="output">OpenCode integration: installed
+  AGENTS.md: up to date (v0.13.2)
+  Last updated: 2024-01-15</span></div>
+            </div>
+
+            <p>To remove the OpenCode integration without affecting other assistants:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Uninstalling OpenCode</div>
+                <div class="terminal-body"><span class="command">deciduous opencode uninstall</span>
+<span class="output">Removed OpenCode integration:
+  Deleted AGENTS.md</span></div>
+            </div>
+
+            <h2>Same Graph, Different Assistants</h2>
+
+            <p>The key insight is that every assistant writes to the same SQLite database. A node created by Claude Code is visible to OpenCode and vice versa. The CLI is the common interface:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Shared database</div>
+                <div class="terminal-body"><span class="comment"># Claude Code creates a goal</span>
+<span class="command">deciduous add goal "Add CI pipelines for snowflex" -c 90</span>
+<span class="output">Created node #57: goal "Add CI pipelines for snowflex"</span>
+
+<span class="comment"># OpenCode picks up where Claude left off</span>
+<span class="command">deciduous nodes --type goal</span>
+<span class="output">3 nodes:
+ID    TYPE    STATUS    TITLE
+1     goal    active    Create an Elixir library for querying Snowflake
+41    goal    active    Transport layer evolution
+57    goal    active    Add CI pipelines for snowflex</span>
+
+<span class="comment"># OpenCode adds an action linked to Claude's goal</span>
+<span class="command">deciduous add action "Implement unit test CI workflow" -c 85</span>
+<span class="output">Created node #60: action "Implement unit test CI workflow"</span>
+<span class="command">deciduous link 57 60 -r "Implementation"</span></div>
+            </div>
+
+            <p>This means you can switch between assistants mid-project without losing any decision context. The graph is the shared memory.</p>
+
+            <h2>Updating Integration Files</h2>
+
+            <p>When you upgrade deciduous, the integration files for all installed assistants are updated automatically:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Updating all integrations</div>
+                <div class="terminal-body"><span class="command">deciduous update</span>
+<span class="output">Updated integration files to v0.13.2:
+  Updated CLAUDE.md (decision graph workflow section)
+  Updated .claude/commands/ (7 commands)
+  Updated .claude/skills/ (3 skills)
+  Updated AGENTS.md (OpenCode integration)
+  Skipped .windsurfrules (not installed)</span></div>
+            </div>
+
+            <p>The <code>update</code> command auto-detects which assistants are installed by checking for their integration files. It only updates files for assistants that are present.</p>
+
+            <div class="info-box tip">
+                <strong>Check before updating</strong>
+                <p>Run <code>deciduous check-update</code> to see if your integration files are out of date without making any changes. This compares the version in <code>.deciduous/.version</code> with the current binary version.</p>
+            </div>
+
+            <h2>Integration Parity</h2>
+
+            <p>All assistant integrations have feature parity. The same behavioral rules&mdash;log before you code, connect every node, capture verbatim prompts&mdash;are encoded in each integration's instruction format. The decision graph workflow is identical; only the file format and location differ to match each assistant's conventions.</p>
+
+            <div class="page-nav">
+                <a href="hooks.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Hooks</span>
+                </a>
+                <a href="../reference/index.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">CLI Reference</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

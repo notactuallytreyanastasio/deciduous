@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Observations and Pivots - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title active">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html" class="active">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Tracking What Went Wrong</h1>
+
+            <p class="lead">The most valuable part of a decision graph isn't what succeeded&mdash;it's what failed and why.</p>
+
+            <p>As Claude reads through snowflex's git history, it doesn't just trace the happy path. It discovers the problems that forced the project to change direction. These problems are captured as <span class="node-observation">observation</span> nodes, and the direction changes are captured as <span class="node-revisit">revisit</span> nodes.</p>
+
+            <h2>Observations: Capturing Problems</h2>
+
+            <p>Observations are facts that emerge from the codebase. They don't carry confidence scores because they aren't judgments&mdash;they're things that happened. In snowflex's case, Claude found a series of ODBC-related problems scattered across the commit history:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Observations discovered during archaeology</div>
+                <div class="terminal-body"><span class="command">deciduous add observation "Snowflake ODBC sessions expire after 4 hours idle" --date "2020-01-15"</span>
+<span class="output">Created node 15 (type: observation)</span>
+<span class="command">deciduous link 14 15 -r "Session expiry discovered in production"</span>
+<span class="output">Created edge 14 &rarr; 15</span>
+
+<span class="command">deciduous add observation "Snowflake returns UTF-16 data that corrupts query results" --date "2020-06-10"</span>
+<span class="output">Created node 22 (type: observation)</span>
+
+<span class="command">deciduous add observation "Community requests DBConnection/Ecto integration" --date "2020-09-01"</span>
+<span class="output">Created node 24 (type: observation)</span>
+
+<span class="command">deciduous add observation "ODBC limitations accumulating - auth expiry, encoding, Apple Silicon, memory" --date "2021-03-01"</span>
+<span class="output">Created node 33 (type: observation)</span></div>
+            </div>
+
+            <p>Each observation is a data point. Individually, they're annoyances. Together, they tell a story: the ODBC approach was slowly breaking down under the weight of accumulated issues. Session expiry, encoding bugs, platform incompatibilities, memory problems&mdash;each one required a workaround, and the workarounds were getting more fragile.</p>
+
+            <p>Observations get linked to the nodes they relate to. Node 15 (session expiry) connects back to the outcome of the ODBC implementation. Node 33 (accumulating limitations) connects to the earlier observations that built up the case for change.</p>
+
+            <h2>The Pivot: ODBC to HTTP</h2>
+
+            <p>This is the climax of the snowflex story. After two years of ODBC workarounds, the team decided to throw out the entire transport layer and rewrite it from scratch using HTTP REST APIs. In the decision graph, this is captured with a <span class="node-revisit">revisit</span> node&mdash;deciduous's way of marking the moment when an old approach gets reconsidered.</p>
+
+            <p>The <code>archaeology pivot</code> command captures this entire pivot atomically:</p>
+
+            <div class="session-demo" id="pivot-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; Capturing the ODBC-to-HTTP pivot</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">I can see a major architectural pivot here. The ODBC approach accumulated too many issues. Let me capture this with an archaeology pivot...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous archaeology pivot 32 "ODBC limitations accumulating - auth expiry, encoding, Apple Silicon, memory" "Switch to HTTP REST API with JWT authentication" -c 90 -r "ODBC too fragile for production"</div>
+                        <div class="step-output">Created observation #33, revisit #34, decision #36<br>Linked: 32 &rarr; 33 &rarr; 34 &rarr; 36<br>Marked node 32 as superseded</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">The pivot chain is created atomically. One command replaces 7 manual steps. Now let me capture the options that were evaluated for the replacement...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add option "Transport behavior with HTTP implementation using Req" -c 90</div>
+                        <div class="step-output">Created node 37 (type: option)</div>
+                        <div class="cmd-inline">deciduous link 36 37 --edge-type chosen -r "Flexible transport pattern enables future extensibility"</div>
+                        <div class="step-output">Created edge 36 &rarr; 37 (chosen)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 7s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add option "Direct HTTP client without transport abstraction" -c 60</div>
+                        <div class="step-output">Created node 38 (type: option)</div>
+                        <div class="cmd-inline">deciduous link 36 38 --edge-type rejected -r "Too rigid, no room for future transports"</div>
+                        <div class="step-output">Created edge 36 &rarr; 38 (rejected)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 9s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add action "Complete v1.0 rewrite: HTTP REST API, JWT auth, Transport abstraction" -c 95</div>
+                        <div class="step-output">Created node 39 (type: action)</div>
+                        <div class="cmd-inline">deciduous link 36 39 -r "Implementing the chosen transport approach"</div>
+                        <div class="step-output">Created edge 36 &rarr; 39</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 11s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add outcome "Snowflex v1.0 - Modern HTTP-based Snowflake adapter" -c 95</div>
+                        <div class="step-output">Created node 40 (type: outcome)</div>
+                        <div class="cmd-inline">deciduous link 39 40 -r "v1.0 rewrite complete"</div>
+                        <div class="step-output">Created edge 39 &rarr; 40</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 13s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">The full pivot is captured: observations accumulated, the old approach was reconsidered, a new decision was made with two options evaluated, and the chosen option was implemented through to outcome.</div>
+                    </div>
+                </div>
+            </div>
+
+            <h3>The Revisit Node</h3>
+
+            <p>Revisit nodes are deciduous's way of capturing pivot points. They sit at the junction between an old approach that stopped working and a new approach that replaced it. The pattern is always the same:</p>
+
+            <pre style="line-height: 1.8; text-align: center;">
+<span style="color: #38bdf8;">[Old Outcome]</span> &rarr; <span style="color: #f472b6;">[Observation: why it failed]</span> &rarr; <span style="color: #f97316;">[REVISIT]</span> &rarr; <span style="color: #60a5fa;">[New Decision]</span></pre>
+
+            <p>In snowflex's case:</p>
+
+            <ul>
+                <li><strong>Old Outcome</strong> (node 32): The ODBC-based approach was working, but with increasing friction</li>
+                <li><strong>Observation</strong> (node 33): "ODBC limitations accumulating &mdash; auth expiry, encoding, Apple Silicon, memory"</li>
+                <li><strong>Revisit</strong> (node 34): "Reconsider ODBC as transport &mdash; switch to HTTP REST API"</li>
+                <li><strong>New Decision</strong> (node 36): "How to replace ODBC transport for v1.0?"</li>
+            </ul>
+
+            <p>This chain is what makes the graph useful for understanding <em>evolution</em>, not just current state. Anyone querying the graph in the future can trace exactly why ODBC was abandoned and what drove the decision to switch to HTTP.</p>
+
+            <div class="info-box tip">
+                <strong>One command, seven steps</strong>
+                <p><code>archaeology pivot</code> is the most powerful command for retroactive history. It creates an observation, a revisit, and a new decision, links them all together, and marks the old approach as superseded&mdash;all in one atomic operation. Without it, you'd need to run <code>deciduous add</code> three times, <code>deciduous link</code> three times, and <code>deciduous status</code> once.</p>
+            </div>
+
+            <h2>Statuses</h2>
+
+            <p>Every node in the graph has a status that reflects where it stands. As Claude builds the snowflex graph, it marks nodes appropriately:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Marking node statuses</div>
+                <div class="terminal-body"><span class="command">deciduous status 37 completed</span>
+<span class="output">Updated node 37 status: completed</span>
+
+<span class="command">deciduous status 38 rejected</span>
+<span class="output">Updated node 38 status: rejected</span></div>
+            </div>
+
+            <p>The full set of statuses:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Meaning</th>
+                        <th>Example from Snowflex</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>pending</code></td>
+                        <td>Not yet resolved</td>
+                        <td>A goal that's still being worked toward</td>
+                    </tr>
+                    <tr>
+                        <td><code>active</code></td>
+                        <td>Current truth &mdash; this is how things work now</td>
+                        <td>The HTTP transport approach (node 37)</td>
+                    </tr>
+                    <tr>
+                        <td><code>completed</code></td>
+                        <td>Done and working</td>
+                        <td>The v1.0 rewrite action (node 39)</td>
+                    </tr>
+                    <tr>
+                        <td><code>superseded</code></td>
+                        <td>Replaced by a newer approach</td>
+                        <td>The ODBC-based outcome (node 32) after the pivot</td>
+                    </tr>
+                    <tr>
+                        <td><code>abandoned</code></td>
+                        <td>Tried and given up on</td>
+                        <td>An approach that was started but never finished</td>
+                    </tr>
+                    <tr>
+                        <td><code>rejected</code></td>
+                        <td>Considered but not chosen</td>
+                        <td>"Direct HTTP client without transport abstraction" (node 38)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>Statuses make the graph queryable by intent. You can ask "show me only active nodes" to see the current design, or "show me superseded nodes" to find every pivot point in the project's history.</p>
+
+            <div class="page-nav">
+                <a href="the-decision-graph-skill.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Building from Git</span>
+                </a>
+                <a href="exploring-the-graph.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Exploring the Graph</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telling the Story - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title active">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html" class="active">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Telling the Story with Narratives</h1>
+
+            <p class="lead">The graph captures structure. Narratives capture the human-readable story.</p>
+
+            <p>A decision graph with 56 nodes and 66 edges is a powerful data structure, but it's not something you hand to a new team member and say "read this." Narratives are the layer on top&mdash;prose documents that explain the evolution of a system in plain language, grounded in the graph's structure.</p>
+
+            <h2>Initializing Narratives</h2>
+
+            <p>The <code>deciduous narratives init</code> command scaffolds a narrative document based on the active goals in your graph:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous narratives init</div>
+                <div class="terminal-body"><span class="command">deciduous narratives init</span>
+<span class="output">Created .deciduous/narratives.md with 3 active goal titles:
+  - Create an Elixir library for querying Snowflake
+  - Transport layer evolution
+  - Authentication and key management</span></div>
+            </div>
+
+            <p>This creates <code>.deciduous/narratives.md</code> with section headers pulled from your goal nodes. The file is a starting point&mdash;you or Claude fill in the evolution story for each section.</p>
+
+            <p>For snowflex, the scaffolded file looks like this:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">.deciduous/narratives.md (scaffolded)</div>
+                <div class="terminal-body"><span class="output"># Snowflex Narratives
+
+## Create an Elixir library for querying Snowflake
+
+<!-- Goal #1 - Describe the origin story and evolution -->
+
+## Transport layer evolution
+
+<!-- Goal #41 - How transport moved from ODBC to HTTP -->
+
+## Authentication and key management
+
+<!-- Goal #45 - JWT auth, key rotation, multi-key support --></span></div>
+            </div>
+
+            <p>Claude typically fills these in during the archaeology session, drawing on the commit history and the graph nodes it just created. The result is a prose document that reads like a project history, with references back to specific graph nodes for anyone who wants to dig deeper.</p>
+
+            <h2>Viewing Narratives</h2>
+
+            <p>Once narratives are written, view them from the CLI:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous narratives show</div>
+                <div class="terminal-body"><span class="command">deciduous narratives show</span>
+<span class="output"># Snowflex Narratives
+
+## Create an Elixir library for querying Snowflake
+
+Snowflex started in June 2019 as a thin wrapper around Erlang's ODBC driver.
+The goal was simple: give Elixir applications a way to query Snowflake data
+warehouses. At the time, there was no Elixir library for Snowflake, and the
+Erlang ODBC driver was the only viable bridge.
+
+The first version (nodes #1-5) was a single-connection wrapper. It worked,
+but couldn't handle concurrent queries. This led to the ConnectionPool era
+(nodes #6-9), which added a supervision tree for managing multiple ODBC
+connections. The pool worked but the API was cumbersome (node #10).
+
+The module-based API era (nodes #11-14) replaced the pool with a pattern
+modeled after Ecto.Repo, using Elixir's __using__ macro. This was the API
+that stuck through v0.2-v0.8.
+
+## Transport layer evolution
+
+The ODBC driver served snowflex for two years, but problems accumulated:
+session expiry after 4 hours idle (node #15), UTF-16 encoding corruption
+(node #22), Apple Silicon incompatibility, and memory issues (node #33).
+
+The pivot came in early 2021 (node #34). The team evaluated two approaches:
+a transport behavior with HTTP implementation using Req (node #37, chosen),
+and a direct HTTP client without abstraction (node #38, rejected). The
+transport behavior won because it allowed future extensibility.
+
+The v1.0 rewrite (node #39) replaced ODBC entirely with HTTP REST APIs
+and JWT authentication. The result (node #40) was a modern, portable
+Snowflake adapter with no native dependencies.
+
+## Authentication and key management
+
+...</span></div>
+            </div>
+
+            <p>The narrative references specific node IDs so readers can cross-reference with the graph. This is intentional&mdash;the narrative is the story, the graph is the evidence.</p>
+
+            <h2>Finding Pivot Points</h2>
+
+            <p>The <code>narratives pivots</code> command extracts every revisit node and shows the chain of events that led to each pivot:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous narratives pivots</div>
+                <div class="terminal-body"><span class="command">deciduous narratives pivots</span>
+<span class="output">Pivot chains:
+
+  #34: Reconsider ODBC as transport - switch to HTTP REST API
+    32 (outcome) &rarr; 33 (observation) &rarr; 34 (revisit) &rarr; 36 (decision)
+    Reason: ODBC too fragile for production
+
+  #46: Reconsider single-key auth - support multiple key formats
+    44 (outcome) &rarr; 45 (observation) &rarr; 46 (revisit) &rarr; 48 (decision)
+    Reason: Enterprise customers need key rotation</span></div>
+            </div>
+
+            <p>Each pivot chain traces the path from an old outcome, through the observation that revealed the problem, through the revisit that reconsidered the approach, to the new decision that replaced it. These are the most architecturally significant moments in any project, and this command surfaces them instantly.</p>
+
+            <h2>Archaeology Timeline</h2>
+
+            <p>For a chronological view of the entire project history as captured in the graph, use <code>archaeology timeline</code>:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous archaeology timeline</div>
+                <div class="terminal-body"><span class="command">deciduous archaeology timeline --limit 15</span>
+<span class="output">Timeline (15 of 56 nodes):
+
+2019-06-15  #1  goal         Create an Elixir library for querying Snowflake
+2019-06-15  #2  option       Use Erlang ODBC driver to connect to Snowflake
+2019-06-20  #3  decision     How to connect Elixir to Snowflake?
+2019-06-25  #4  action       Implement initial ODBC wrapper with single connection
+2019-07-01  #5  outcome      Working single-connection ODBC wrapper
+2019-08-15  #6  decision     How to support multiple Snowflake connections?
+2019-08-15  #7  option       Explicit ConnectionPool in supervision tree
+2019-09-01  #8  action       Implement ConnectionPool-based multi-connection support
+2019-09-15  #9  outcome      Multi-connection support via ConnectionPool (v0.1)
+2019-10-01  #10 observation  ConnectionPool API is cumbersome vs Ecto.Repo pattern
+2019-11-01  #11 decision     How to improve connection API ergonomics?
+2019-11-01  #12 option       Module-based connection using __using__ macro
+2019-12-01  #13 action       Replace ConnectionPool with module-based Connection
+2020-01-01  #14 outcome      Ergonomic module-based connection API (v0.2)
+2020-01-15  #15 observation  Snowflake ODBC sessions expire after 4 hours idle</span></div>
+            </div>
+
+            <p>Filter the timeline to show only specific node types:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Filtered timeline</div>
+                <div class="terminal-body"><span class="command">deciduous archaeology timeline --node-type revisit</span>
+<span class="output">Timeline (2 of 56 nodes, filtered to: revisit):
+
+2021-03-15  #34 revisit      Reconsider ODBC as transport - switch to HTTP REST API
+2021-08-01  #46 revisit      Reconsider single-key auth - support multiple key formats</span></div>
+            </div>
+
+            <p>The timeline gives you the "when" that complements the graph's "what" and "why." Combined with narratives and pivot chains, you have a complete picture of a project's evolution.</p>
+
+            <div class="info-box tip">
+                <strong>Two audiences, two formats</strong>
+                <p>Narratives bridge the gap between the structured graph and human understanding. The graph is for machines to query; narratives are for humans to read. Use the graph when you need precision and traceability. Use narratives when you need to onboard a teammate or write a design document.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="exploring-the-graph.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Exploring the Graph</span>
+                </a>
+                <a href="../real-work/starting-work.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Starting Work</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

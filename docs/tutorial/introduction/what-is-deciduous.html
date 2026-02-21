@@ -6,7 +6,7 @@
     <title>What is Deciduous? - The Deciduous Tutorial</title>
     <link rel="stylesheet" href="../style.css">
 </head>
-<body>
+<body style="padding-top: 0;">
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="../../" class="logo">DECIDUOUS</a>
@@ -14,52 +14,56 @@
         </div>
         <div class="toc">
             <div class="toc-section">
-                <a href="../index.html" class="toc-title active">Introduction</a>
+                <a href="../introduction/what-is-deciduous.html" class="toc-title active">Introduction</a>
                 <ul>
-                    <li><a href="what-is-deciduous.html" class="active">What is Deciduous?</a></li>
-                    <li><a href="how-to-read.html">How to Read This</a></li>
+                    <li><a href="../introduction/what-is-deciduous.html" class="active">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
                 <ul>
-                    <li><a href="../hello-world/installing.html">Installing</a></li>
-                    <li><a href="../hello-world/initializing.html">Initializing</a></li>
-                    <li><a href="../hello-world/first-nodes.html">Your First Nodes</a></li>
-                    <li><a href="../hello-world/connecting.html">Connecting Nodes</a></li>
-                    <li><a href="../hello-world/viewing.html">Viewing the Graph</a></li>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
                 <ul>
-                    <li><a href="../workflows/claude-code.html">The Claude Code Workflow</a></li>
-                    <li><a href="../workflows/archaeology.html">Project Archaeology</a></li>
-                    <li><a href="../workflows/session-recovery.html">Session Recovery</a></li>
-                    <li><a href="../workflows/pr-documentation.html">PR Documentation</a></li>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
                 <ul>
-                    <li><a href="../viewing/tui.html">The Terminal UI</a></li>
-                    <li><a href="../viewing/web.html">The Web Viewer</a></li>
-                    <li><a href="../viewing/cli.html">CLI Queries</a></li>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
                 <ul>
-                    <li><a href="../sharing/multi-user.html">The Multi-User Problem</a></li>
-                    <li><a href="../sharing/patches.html">Exporting Patches</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
                     <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
             </div>
             <div class="toc-section">
-                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
             </div>
         </div>
     </nav>
@@ -74,19 +78,11 @@
 
             <p>This is the <em>decision evaporation problem</em>, and it's gotten dramatically worse with AI-assisted development.</p>
 
-            <h2>The Story of a Real Project</h2>
+            <h2>The Story We'll Follow</h2>
 
-            <p>Let me tell you about a project we'll call "Acme Inventory." It started as a weekend prototype&mdash;a simple CRUD app for tracking warehouse stock. The founder hacked it together with Claude's help in a few sessions. Worked great.</p>
+            <p>Let me tell you about <a href="https://github.com/pepsico-ecommerce/snowflex">snowflex</a>, an Elixir library for connecting to Snowflake databases. It started as a simple ODBC wrapper&mdash;one module, one connection. Over 130 commits and two years, it evolved through five major architectural shifts: single connections to pools, pools to module-based APIs, ODBC to HTTP REST, single-auth to flexible key management. Each pivot was driven by real production pain. In this tutorial, you'll reconstruct that entire story using deciduous&mdash;then add a new chapter by working on a real open issue.</p>
 
-            <p>Six months later, Acme Inventory was running in production for 200 warehouses. The codebase had grown to 50,000 lines. And the founder was staring at a piece of code that made no sense:</p>
-
-            <pre>// Why do we batch inventory updates in groups of 100?
-// Why not 50? Why not 1000?
-// This comment says "performance" but provides no context</pre>
-
-            <p>The answer was in a Claude session from March. During a load test, they'd discovered that their PostgreSQL connection pool couldn't handle more than 100 concurrent inserts without timing out. The batch size of 100 was carefully chosen based on real performance data.</p>
-
-            <p>But that session was gone. The decision rationale was gone. All that remained was a magic number and a one-word comment.</p>
+            <p>snowflex is the perfect subject because it's small enough to understand completely, but rich enough to have real decision history. Every project has this story buried in its git log. Most never get it told.</p>
 
             <h2>The AI Context Problem</h2>
 
@@ -104,9 +100,9 @@
 
             <h2>What Deciduous Does</h2>
 
-            <p>Deciduous is a decision graph tool that captures every goal, decision, option, action, outcome, and revisit as you work. It stores them in a queryable SQLite database that survives session boundaries. When Claude's context compacts, the graph remains. When you start a new session six months later, you can query "what did we decide about batch sizes?" and get the full reasoning back.</p>
+            <p>Deciduous is a decision graph tool that captures every goal, decision, option, action, outcome, and revisit as you work. It stores them in a queryable SQLite database that survives session boundaries. When Claude's context compacts, the graph remains. When you start a new session six months later, you can query "what did we decide about connection pooling?" and get the full reasoning back.</p>
 
-            <p>But here's what makes it genuinely useful: <strong>it's designed to be logged in real-time by Claude itself.</strong> The workflow isn't "write documentation after the fact." It's "Claude logs decisions as it makes them, and those decisions become the documentation."</p>
+            <p>But here's what makes it genuinely useful: <strong>Deciduous is designed to be operated BY your AI assistant.</strong> You tell Claude to <code>/decision-graph</code> on your repo, or <code>/work</code> on an issue, and Claude handles the logging. You get to focus on the work.</p>
 
             <p>This means:</p>
 
@@ -121,55 +117,67 @@
 
             <p>There are two main workflows, and most projects use both:</p>
 
-            <h3>1. Forward Logging (New Work)</h3>
+            <h3>1. Archaeology (Existing Projects)</h3>
 
-            <p>As you work with Claude on new features, Claude logs decisions in real-time:</p>
+            <p>Got an existing project with months or years of history? Point Claude at the repo and let it reconstruct the story:</p>
 
             <div class="terminal-session">
-                <div class="terminal-header">Forward Logging</div>
+                <div class="terminal-header">Claude Code Session &mdash; Archaeology</div>
                 <div class="terminal-body">
-<span class="user-input">&gt; Add rate limiting to the API</span>
+<span class="user-input">&gt; /decision-graph</span>
 
-<span class="command">deciduous add goal "Add rate limiting" -c 90 -p "User asked: Add rate limiting to the API"</span>
-<span class="output">Created node #47: goal "Add rate limiting"</span>
+I'll analyze snowflex's git history to reconstruct its decision graph. Let me start by understanding the commit history.
 
-<span class="command">deciduous add decision "Choose rate limiting strategy" -c 75</span>
-<span class="command">deciduous add option "Redis sliding window" -c 80</span>
-<span class="command">deciduous add option "In-memory token bucket" -c 70</span>
+<span class="command">git log --oneline --reverse | head -20</span>
+<span class="output">a1b2c3d Initial commit - basic ODBC connection
+d4e5f6g Add query/2 function
+7h8i9j0 Add connection pooling with DBConnection
+k1l2m3n Refactor: module-based API pattern
+...</span>
 
-<em>[Claude evaluates options, implements chosen approach...]</em>
+I can see several major architectural shifts here. Let me map them out.
 
-<span class="command">deciduous add action "Implemented Redis rate limiter" --commit HEAD</span>
-<span class="command">deciduous link 48 51 --edge-type chosen -r "Redis already in stack, scales horizontally"</span>
+<span class="command">deciduous add goal "snowflex architecture evolution" -c 95</span>
+<span class="output">Created node #1: goal "snowflex architecture evolution"</span>
+
+<span class="command">deciduous add option "Direct ODBC connections" -c 90</span>
+<span class="command">deciduous add option "DBConnection pooling" -c 90</span>
+<span class="command">deciduous link 1 2 -r "initial approach"</span>
+<span class="command">deciduous link 1 3 -r "scaling response"</span>
                 </div>
             </div>
 
-            <p>Each decision is captured as it happens. The reasoning is fresh, the context is complete.</p>
+            <p>Claude reads the git log, identifies pivots, and builds the decision graph. You get months of architectural history mapped in minutes.</p>
 
-            <h3>2. Archaeology (Existing Projects)</h3>
+            <h3>2. Forward Logging (New Work)</h3>
 
-            <p>Got an existing project with months of history? Mine your git log, issues, and PRs to reconstruct the decision graph:</p>
+            <p>When you start new work, Claude logs decisions in real-time as it goes:</p>
 
             <div class="terminal-session">
-                <div class="terminal-header">Archaeology</div>
+                <div class="terminal-header">Claude Code Session &mdash; Forward Logging</div>
                 <div class="terminal-body">
-<span class="comment"># Find major decisions in git history</span>
-<span class="command">git log --oneline --grep="migrate\|switch\|choose" | head -10</span>
-<span class="output">abc123 migrate: PostgreSQL from MongoDB
-def456 switch: JWT tokens to session cookies
-ghi789 choose: React over Vue...</span>
+<span class="user-input">&gt; /work Fix issue #93 - connection timeout handling</span>
 
-<span class="comment"># Reconstruct the database decision</span>
-<span class="command">deciduous add decision "Database architecture" -c 85</span>
-<span class="command">deciduous add option "MongoDB" -c 60</span>
-<span class="command">deciduous add option "PostgreSQL" -c 90</span>
-<span class="command">deciduous link 2 3 -r "Initially chosen for flexible schema"</span>
-<span class="command">deciduous link 2 4 --edge-type chosen \
-    -r "Migrated: complex queries needed ACID, from issue #67"</span>
+I'll start by logging this as a goal and exploring the issue.
+
+<span class="command">deciduous add goal "Fix connection timeout handling" -c 90 --prompt-stdin &lt;&lt; 'EOF'
+Fix issue #93 - connection timeout handling
+EOF</span>
+<span class="output">Created node #42: goal "Fix connection timeout handling"</span>
+
+<span class="command">deciduous add option "Add retry with exponential backoff" -c 80</span>
+<span class="command">deciduous add option "Implement circuit breaker pattern" -c 70</span>
+<span class="command">deciduous link 42 43 -r "simpler approach"</span>
+<span class="command">deciduous link 42 44 -r "more resilient but complex"</span>
+
+<em>[Claude evaluates options, implements chosen approach, commits...]</em>
+
+<span class="command">deciduous add action "Implemented retry with backoff" --commit HEAD</span>
+<span class="command">deciduous add outcome "Timeout errors reduced 95% in test suite" -c 95</span>
                 </div>
             </div>
 
-            <p>Archaeology doesn't capture everything, but it captures the <em>important</em> decisions that shaped your architecture.</p>
+            <p>Each decision is captured as it happens. The reasoning is fresh, the context is complete. You didn't have to type a single deciduous command.</p>
 
             <h2>A Quick Example</h2>
 
@@ -177,36 +185,38 @@ ghi789 choose: React over Vue...</span>
 
             <pre style="line-height: 1.8;">
                 ┌────────────────────┐
-                │ goal: Add rate     │
-                │ limiting to API    │
-                └─────────┬──────────┘
-                          │
-                          ▼
-                ┌────────────────────┐
-                │ decision: Choose   │
-                │ strategy           │
+                │ goal: Fix timeout  │
+                │ handling (#93)     │
                 └─────────┬──────────┘
                           │
             ┌─────────────┼─────────────┐
-            ▼             │             ▼
-     ┌──────────┐        │      ┌──────────┐
-     │ option:  │        │      │ option:  │
-     │ Redis    │        │      │ In-mem   │
-     │ sliding  │        │      │ token    │
-     └──────────┘        │      └──────────┘
-                         │
-                         ▼
-                ┌────────────────────┐
-                │ action: Implement  │──── [chosen]
-                │ Redis rate limiter │
-                │ commit: abc123     │
-                └─────────┬──────────┘
-                          │
-                          ▼
-                ┌────────────────────┐
-                │ outcome: Rate      │
-                │ limiting working   │
-                └────────────────────┘</pre>
+            ▼                           ▼
+     ┌──────────────┐          ┌──────────────┐
+     │ option:      │          │ option:      │
+     │ Retry with   │          │ Circuit      │
+     │ backoff      │          │ breaker      │
+     └──────┬───────┘          └──────────────┘
+            │
+            ▼
+     ┌──────────────┐
+     │ decision:    │
+     │ Use retry    │──── "simpler, sufficient
+     │ approach     │      for this case"
+     └──────┬───────┘
+            │
+            ▼
+     ┌──────────────┐
+     │ action:      │
+     │ Implement    │──── commit: abc123
+     │ retry logic  │
+     └──────┬───────┘
+            │
+            ▼
+     ┌──────────────┐
+     │ outcome:     │
+     │ Timeouts     │
+     │ reduced 95%  │
+     └──────────────┘</pre>
 
             <p>Now this decision chain is permanently recorded. Anyone can query the graph to understand not just <em>what</em> was built, but <em>why</em>.</p>
 
@@ -231,7 +241,7 @@ ghi789 choose: React over Vue...</span>
                 <li><strong>Visual decision graphs</strong> for PRs and documentation</li>
                 <li><strong>Git commit integration</strong> linking decisions to code</li>
                 <li><strong>Multi-user sync</strong> so teams share decision context</li>
-                <li><strong>Three viewers</strong>: Terminal UI, web viewer, and CLI</li>
+                <li><strong>A web viewer</strong> for browsing the graph interactively</li>
             </ul>
 
             <h2>Why "Deciduous"?</h2>

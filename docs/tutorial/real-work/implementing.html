@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Implementation Session - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title active">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html" class="active">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The Implementation Session</h1>
+
+            <p class="lead">Claude writes the code, logs the actions, commits, and links everything back to the graph. You watch and steer.</p>
+
+            <p>With goal #57, options #58/#59, and decision #60 already recorded, Claude now moves into the implementation phase. This is where <span class="node-action">action</span> and <span class="node-outcome">outcome</span> nodes appear&mdash;the bottom half of the decision flow.</p>
+
+            <h2>Logging the Action</h2>
+
+            <p>Before writing any code, Claude creates an action node linked to the decision that spawned it. The <code>-f</code> flag records which files will be touched.</p>
+
+            <div class="session-demo" id="implement-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; Implementing issue #93</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Now I'll implement the unit test CI workflow. Let me log the action first.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add action "Implement unit test CI workflow" -c 85 -f ".github/workflows/ci.yml"</div>
+                        <div class="step-output">Created node 61 (type: action) [confidence: 85%] [files: .github/workflows/ci.yml]</div>
+                        <div class="cmd-inline">deciduous link 60 61 -r "implementation"</div>
+                        <div class="step-output">Created edge 70 (60 &rarr; 61 via leads_to)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Creating the workflow file...</div>
+                        <div class="step-output" style="font-size: 0.85em; opacity: 0.8;">[Claude writes .github/workflows/ci.yml with mix test configuration,<br>OTP/Elixir matrix, dependency caching, and PR trigger]</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 5.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Let me run the tests locally to make sure everything passes before committing.</div>
+                        <div class="step-output">mix test<br>...................................................<br>51 tests, 0 failures</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 7.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">git add .github/workflows/ci.yml</div>
+                        <div class="cmd-inline">git commit -m "ci: add unit test workflow for GitHub Actions"</div>
+                        <div class="step-output">[feature/ci-pipelines a1b2c3d] ci: add unit test workflow for GitHub Actions</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 9.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add outcome "Unit test CI workflow working - triggers on PR, caches deps" -c 90 --commit HEAD</div>
+                        <div class="step-output">Created node 62 (type: outcome) [confidence: 90%] [commit: a1b2c3d]</div>
+                        <div class="cmd-inline">deciduous link 61 62 -r "implementation succeeded"</div>
+                        <div class="step-output">Created edge 71 (61 &rarr; 62 via leads_to)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 11.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Unit test workflow is done. The outcome is linked to both the action and the commit. The full chain now reads: goal #57 &rarr; option #58 &rarr; decision #60 &rarr; action #61 &rarr; outcome #62.</div>
+                    </div>
+                </div>
+            </div>
+
+            <h2>The --commit HEAD Pattern</h2>
+
+            <p>After every <code>git commit</code>, Claude uses <code>--commit HEAD</code> on the next node (usually an outcome). This captures the commit hash and links it to the graph. The web viewer shows the commit message, author, and date alongside the node details.</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Linking commits to the graph</div>
+                <div class="terminal-body"><span class="comment"># The pattern: commit, then log the outcome with --commit HEAD</span>
+<span class="command">git commit -m "ci: add unit test workflow"</span>
+<span class="command">deciduous add outcome "Unit test CI working" -c 90 --commit HEAD</span>
+
+<span class="comment"># --commit HEAD resolves to the current commit hash</span>
+<span class="comment"># The web viewer displays this as a clickable commit link</span></div>
+            </div>
+
+            <p>The <code>-f</code> flag on action nodes serves a different purpose: it records which files Claude <em>intends</em> to modify, before the work begins. Together, <code>-f</code> on actions and <code>--commit</code> on outcomes create a complete audit trail: what was planned, what was changed, and the exact commit that contains those changes.</p>
+
+            <h2>Recovering Mid-Session</h2>
+
+            <p>Long sessions hit context limits. When Claude's context window fills up, it compacts&mdash;and loses the details of what it was working on. The <code>/recover</code> skill rebuilds context from the decision graph.</p>
+
+            <div class="session-demo" id="recover-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; After context compaction</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">/recover</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous nodes --status pending,active</div>
+                        <div class="step-output">ID    TYPE          STATUS       TITLE<br>57    goal          active       Add CI pipelines for snowflex<br>60    decision      active       Use separate workflow files...<br>61    action        active       Implement unit test CI workflow<br>62    outcome       active       Unit test CI workflow working...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous edges</div>
+                        <div class="step-output">FROM  TO    TYPE       RATIONALE<br>57    58    leads_to   possible approach<br>57    59    leads_to   possible approach<br>58    60    leads_to   chosen<br>60    61    leads_to   implementation<br>61    62    leads_to   implementation succeeded</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 5.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Context recovered. I'm working on issue #93: CI pipelines for snowflex. The unit test workflow (node 61) is complete with outcome #62 linked to commit a1b2c3d. The integration test workflow still needs to be implemented. Ready to continue.</div>
+                    </div>
+                </div>
+            </div>
+
+            <p>The graph told Claude everything it needed: the goal, the chosen approach, what's been done, and what remains. No re-reading of issue bodies or commit logs. The verbatim prompt on goal #57 gives Claude the original user request, and the edges trace the full reasoning chain.</p>
+
+            <div class="info-box tip">
+                <strong>Recovery is why connections matter</strong>
+                <p>An orphaned node is useless for recovery. Claude can read the node title, but without edges it cannot tell what spawned the node, what it relates to, or what should happen next. This is why the CLAUDE.md instructions insist on linking every node immediately after creation: the edges are the recovery path.</p>
+            </div>
+
+            <h2>The Complete Chain</h2>
+
+            <p>After the full issue #93 session, the graph contains a clean decision chain:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">The issue #93 chain</div>
+                <div class="terminal-body"><span class="command">deciduous show 57</span>
+<span class="output">Node #57  goal
+────────────────────────────────────────────────────────────
+Title:    Add CI pipelines for snowflex
+Status:   active
+Prompt:   Add support for running tests in CI/CD. We need
+          GitHub Actions workflows for both unit tests and
+          integration tests. See issue #93.
+
+Connections
+  Outgoing (2):
+    here &rarr; #58: Separate CI workflow files... (possible approach)
+    here &rarr; #59: Single CI workflow with... (possible approach)
+
+Documents (1):
+    #1  issue-93.md  (GitHub issue #93: Add CI pipelines)</span></div>
+            </div>
+
+            <p>Every node connects back to its parent. The goal leads to options, the chosen option leads to a decision, the decision leads to actions, and the actions lead to outcomes with linked commits. This is the full decision trail for a single piece of work.</p>
+
+            <div class="page-nav">
+                <a href="attaching-evidence.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Attaching Documents</span>
+                </a>
+                <a href="editing-and-fixing.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Editing the Graph</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

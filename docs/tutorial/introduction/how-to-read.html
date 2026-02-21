@@ -6,8 +6,7 @@
     <title>How to Read This Tutorial - The Deciduous Tutorial</title>
     <link rel="stylesheet" href="../style.css">
 </head>
-<body>
-    <div class="ai-warning-banner">This tutorial was AI-generated and is being fleshed out. Content may be incomplete or change.</div>
+<body style="padding-top: 0;">
     <nav class="sidebar">
         <div class="sidebar-header">
             <a href="../../" class="logo">DECIDUOUS</a>
@@ -15,46 +14,56 @@
         </div>
         <div class="toc">
             <div class="toc-section">
-                <a href="../index.html" class="toc-title active">Introduction</a>
+                <a href="../introduction/what-is-deciduous.html" class="toc-title active">Introduction</a>
                 <ul>
-                    <li><a href="what-is-deciduous.html">What is Deciduous?</a></li>
-                    <li><a href="how-to-read.html" class="active">How to Read This</a></li>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html" class="active">How to Read This</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../hello-world/index.html" class="toc-title">Hello, World!</a>
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
                 <ul>
-                    <li><a href="../hello-world/installing.html">Installing</a></li>
-                    <li><a href="../hello-world/initializing.html">Initializing</a></li>
-                    <li><a href="../hello-world/first-nodes.html">Your First Nodes</a></li>
-                    <li><a href="../hello-world/connecting.html">Connecting Nodes</a></li>
-                    <li><a href="../hello-world/viewing.html">Viewing the Graph</a></li>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../workflows/index.html" class="toc-title">Real-World Workflows</a>
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
                 <ul>
-                    <li><a href="../workflows/claude-code.html">The Claude Code Workflow</a></li>
-                    <li><a href="../workflows/session-recovery.html">Session Recovery</a></li>
-                    <li><a href="../workflows/pr-documentation.html">PR Documentation</a></li>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../viewing/index.html" class="toc-title">Viewing the Graph</a>
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
                 <ul>
-                    <li><a href="../viewing/tui.html">The Terminal UI</a></li>
-                    <li><a href="../viewing/web.html">The Web Viewer</a></li>
-                    <li><a href="../viewing/cli.html">CLI Queries</a></li>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
                 </ul>
             </div>
             <div class="toc-section">
-                <a href="../sharing/index.html" class="toc-title">Sharing with Others</a>
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
             </div>
             <div class="toc-section">
-                <a href="../advanced/index.html" class="toc-title">Advanced Topics</a>
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
             </div>
             <div class="toc-section">
-                <a href="../reference/index.html" class="toc-title">Plumbing Reference</a>
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
             </div>
         </div>
     </nav>
@@ -63,83 +72,102 @@
         <article>
             <h1>How to Read This Tutorial</h1>
 
-            <p>This tutorial is structured progressively, with each section building on the previous ones.</p>
+            <h2>One Continuous Story</h2>
+
+            <p>This tutorial follows a single project from start to finish: <strong>snowflex</strong>, an Elixir library for connecting to Snowflake databases. Rather than working through contrived examples, you'll reconstruct real architectural decisions from a real codebase, then extend it by working on an actual open issue.</p>
+
+            <p>Each section builds on the previous one. The decision graph you start building in "Reconstructing History" is the same graph you'll extend in "Live Development" and export in "Sharing." By the end, you'll have a complete, connected decision graph that tells the full story of a real project.</p>
+
+            <h2>Claude Drives, You Steer</h2>
+
+            <p>This tutorial emphasizes the LLM-assisted workflow. In most sections, you'll see Claude Code sessions where Claude operates deciduous commands on your behalf. You tell Claude what you want to accomplish&mdash;reconstruct this project's history, fix this issue, export this for a PR&mdash;and Claude handles the deciduous mechanics.</p>
+
+            <p>CLI details appear in "under the hood" sections for readers who want to understand what's happening at the command level. But the primary path through this tutorial assumes you're working with an AI assistant.</p>
+
+            <div class="info-box tip">
+                <strong>You don't need to memorize any deciduous CLI commands to get started.</strong>
+                <p>Your AI assistant already knows them all. The tutorial shows what happens during a session so you understand the system&mdash;not so you can type the commands yourself. Think of it like watching someone drive before you get behind the wheel: useful context, not a typing exercise.</p>
+            </div>
+
+            <h2>What the Sessions Look Like</h2>
+
+            <p>Throughout the tutorial, you'll see terminal demos that show real Claude Code interactions. They look like this:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; /decision-graph</span>
+
+I'll analyze the git history and reconstruct the decision graph. Let me start with the earliest commits.
+
+<span class="command">git log --oneline --reverse | head -15</span>
+<span class="output">a1b2c3d Initial commit - ODBC wrapper
+d4e5f6g Add basic query support
+...</span>
+
+<span class="command">deciduous add goal "snowflex connection architecture" -c 90</span>
+<span class="output">Created node #1: goal "snowflex connection architecture"</span>
+                </div>
+            </div>
+
+            <p>The <code>&gt;</code> line is what you type. Everything else is Claude working. The <span class="command">highlighted commands</span> are what Claude runs, and the <span class="output">dimmer text</span> is terminal output. Narrative text between commands is Claude explaining its thinking.</p>
+
+            <p>These sessions are edited for clarity&mdash;real sessions include more back-and-forth&mdash;but every command shown is a real deciduous command that produces real output.</p>
 
             <h2>Tutorial Structure</h2>
 
+            <p>The tutorial is organized into six sections:</p>
+
             <ol>
-                <li><strong>Hello, World!</strong> gets you from zero to a working decision graph in about five minutes.</li>
-                <li><strong>Real-World Workflows</strong> shows how deciduous actually gets used with Claude Code, including realistic terminal sessions.</li>
-                <li><strong>Viewing the Graph</strong> covers the three ways to explore your decisions: TUI, web viewer, and CLI.</li>
-                <li><strong>Sharing with Others</strong> explains the multi-user sync system for teams.</li>
-                <li><strong>Advanced Topics</strong> covers branch grouping, commit linking, and other power features.</li>
-                <li><strong>Plumbing Reference</strong> documents every command in detail.</li>
+                <li><strong>Getting Started</strong> &mdash; Install deciduous and initialize it in the snowflex repo. See what files Claude gets when you run <code>deciduous init</code> and why they matter.</li>
+                <li><strong>Reconstructing History</strong> &mdash; The heart of the tutorial. Use <code>/decision-graph</code> to mine snowflex's git log and build a decision graph covering two years of architectural evolution. Learn about observations, pivots, and the revisit node.</li>
+                <li><strong>Live Development</strong> &mdash; Switch from archaeology to forward logging. Use <code>/work</code> to tackle a real open issue (#93), attaching documents and evidence as you go.</li>
+                <li><strong>Sharing</strong> &mdash; Export your graph for teammates. Learn the patch-based sync system and the PR workflow with auto-generated writeups and decision visualizations.</li>
+                <li><strong>Advanced</strong> &mdash; Themes and tags for organizing large graphs, hooks for automating workflows, and multi-assistant support for teams using different AI tools.</li>
+                <li><strong>CLI Reference</strong> &mdash; Every command, every flag, every option. For when you need the specifics or want to script deciduous directly.</li>
             </ol>
 
-            <p>You can read straight through, or jump to the section you need. The <strong>Hello, World!</strong> section is recommended for everyone to establish the basics.</p>
+            <p>You can read straight through or jump to the section you need. If you're brand new, start with <strong>Getting Started</strong>&mdash;it takes about five minutes and gets you to a working setup. If you already have deciduous installed, skip ahead to <strong>Reconstructing History</strong> to see the tool in action on a real codebase.</p>
 
             <h2>Conventions</h2>
 
             <h3>Terminal Commands</h3>
 
-            <p>Commands you type are shown with a <code>$</code> prefix:</p>
+            <p>Standalone commands (outside of Claude sessions) are shown with a <code>$</code> prefix:</p>
 
-            <pre><span class="cmd">$ deciduous add goal "Add user authentication" -c 90</span>
-<span class="output">Created node #1: goal "Add user authentication"</span></pre>
+            <pre><span class="cmd">$ deciduous nodes --type goal</span>
+<span class="output">#1  goal  "snowflex connection architecture"  [active]  c:90
+#42 goal  "Fix connection timeout handling"   [active]  c:90</span></pre>
 
             <p>Lines without the <code>$</code> are output from the command.</p>
-
-            <h3>Claude Code Sessions</h3>
-
-            <p>When showing Claude Code sessions, I use a terminal-style box:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Claude Code Session</div>
-                <div class="terminal-body">
-<span class="user-input">&gt; Add a rate limiter to the API</span>
-
-I'll add rate limiting to protect your API endpoints. Let me first log this goal to the decision graph.
-
-<span class="command">deciduous add goal "Add rate limiting" -c 90</span>
-<span class="output">Created node #47: goal "Add rate limiting"</span>
-
-Now let me explore the options...
-                </div>
-            </div>
-
-            <p>The <code>&gt;</code> indicates your input to Claude. The rest is Claude's response and actions.</p>
 
             <h3>Info Boxes</h3>
 
             <div class="info-box">
                 <strong>Note</strong>
-                <p>Blue boxes contain additional information or context.</p>
+                <p>Blue boxes contain additional context or background information.</p>
             </div>
 
             <div class="info-box warning">
                 <strong>Warning</strong>
-                <p>Yellow boxes indicate important warnings or gotchas.</p>
+                <p>Yellow boxes flag important gotchas or things that can go wrong.</p>
             </div>
 
             <div class="info-box tip">
                 <strong>Tip</strong>
-                <p>Green boxes contain helpful tips and best practices.</p>
+                <p>Green boxes contain practical tips and shortcuts.</p>
             </div>
-
-            <h3>Keyboard Shortcuts</h3>
-
-            <p>Keyboard shortcuts are shown in boxes: <kbd>j</kbd> <kbd>k</kbd> <kbd>Enter</kbd></p>
 
             <h3>Node Types</h3>
 
-            <p>Node types are color-coded throughout:</p>
+            <p>Node types are color-coded throughout the tutorial and in the web viewer:</p>
             <ul>
-                <li><span class="node-goal"><strong>goal</strong></span> &mdash; High-level objectives</li>
-                <li><span class="node-decision"><strong>decision</strong></span> &mdash; Choice points</li>
-                <li><span class="node-option"><strong>option</strong></span> &mdash; Approaches considered</li>
-                <li><span class="node-action"><strong>action</strong></span> &mdash; Implementation steps</li>
-                <li><span class="node-outcome"><strong>outcome</strong></span> &mdash; Results</li>
-                <li><span class="node-observation"><strong>observation</strong></span> &mdash; Discoveries and insights</li>
+                <li><span class="node-goal"><strong>goal</strong></span> &mdash; High-level objectives ("Fix timeout handling")</li>
+                <li><span class="node-option"><strong>option</strong></span> &mdash; Approaches considered ("Retry with backoff")</li>
+                <li><span class="node-decision"><strong>decision</strong></span> &mdash; Choice points ("Use retry approach")</li>
+                <li><span class="node-action"><strong>action</strong></span> &mdash; Implementation steps ("Implement retry logic")</li>
+                <li><span class="node-outcome"><strong>outcome</strong></span> &mdash; Results ("Timeouts reduced 95%")</li>
+                <li><span class="node-observation"><strong>observation</strong></span> &mdash; Discoveries ("ODBC driver leaks memory under load")</li>
             </ul>
 
             <h2>Prerequisites</h2>
@@ -147,24 +175,25 @@ Now let me explore the options...
             <p>This tutorial assumes you:</p>
             <ul>
                 <li>Are comfortable with the command line</li>
-                <li>Have <a href="https://www.rust-lang.org/tools/install">Rust installed</a> (for <code>cargo install</code>)</li>
-                <li>Optionally use <a href="https://claude.com/claude-code">Claude Code</a> for AI-assisted development</li>
+                <li>Have <a href="https://www.rust-lang.org/tools/install">Rust installed</a> (for <code>cargo install</code>) or can install a prebuilt binary</li>
+                <li>Have <a href="https://claude.ai/claude-code">Claude Code</a> or another AI coding assistant set up</li>
+                <li>Have <code>git</code> installed</li>
             </ul>
 
-            <p>No prior knowledge of decision graphs or graph databases is needed.</p>
+            <p>No prior knowledge of Elixir is needed to follow the snowflex examples. The tutorial focuses on the decision-making process, not the language-specific code. No prior knowledge of decision graphs or graph databases is needed either.</p>
 
             <h2>Getting Help</h2>
 
             <p>If you get stuck:</p>
             <ul>
                 <li>Run <code>deciduous --help</code> for command documentation</li>
-                <li>Check the <a href="../reference/index.html">Plumbing Reference</a> for detailed command info</li>
+                <li>Check the <a href="../reference/index.html">CLI Reference</a> for detailed command info</li>
                 <li>Open an issue on <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a></li>
             </ul>
 
             <div class="next-section">
-                <span>Let's get started!</span>
-                <a href="../hello-world/index.html" class="btn">Hello, World! &rarr;</a>
+                <span>Ready to get started?</span>
+                <a href="../getting-started/installing.html" class="btn">Installing Deciduous &rarr;</a>
             </div>
 
             <div class="page-nav">
@@ -172,9 +201,9 @@ Now let me explore the options...
                     <span class="label">Previous</span>
                     <span class="title">What is Deciduous?</span>
                 </a>
-                <a href="../hello-world/index.html" class="next">
+                <a href="../getting-started/installing.html" class="next">
                     <span class="label">Next</span>
-                    <span class="title">Hello, World!</span>
+                    <span class="title">Installing</span>
                 </a>
             </div>
         </article>

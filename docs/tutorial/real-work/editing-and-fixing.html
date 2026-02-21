@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editing the Graph - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title active">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html" class="active">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                    <li><a href="../sharing/multi-user-sync.html">Multi-User Sync</a></li>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Editing and Fixing the Graph</h1>
+
+            <p class="lead">Graphs get messy. Titles have typos, links point the wrong way, nodes need status updates. Here is how to fix them.</p>
+
+            <p>Decision graphs are living documents. As work progresses, you will inevitably need to rename nodes, remove bad connections, update statuses, or delete nodes that should never have existed. Deciduous provides editing commands for all of these.</p>
+
+            <h2>Fixing a Title</h2>
+
+            <p>The most common edit: a typo in a node title, or a title that no longer accurately describes the decision.</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous edit</div>
+                <div class="terminal-body"><span class="command">deciduous edit 61 --title "Implement unit test CI workflow for GitHub Actions"</span>
+<span class="output">Updated node 61 title: "Implement unit test CI workflow for GitHub Actions"</span></div>
+            </div>
+
+            <p>The node ID stays the same. All edges pointing to or from node 61 remain intact. Only the title changes.</p>
+
+            <h2>Removing a Wrong Link</h2>
+
+            <p>Sometimes Claude creates an edge that doesn't make sense&mdash;linking the wrong nodes together, or duplicating a connection. The <code>unlink</code> command removes it.</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous unlink</div>
+                <div class="terminal-body"><span class="comment"># Check existing edges first</span>
+<span class="command">deciduous edges</span>
+<span class="output">FROM  TO    TYPE       RATIONALE
+57    58    leads_to   possible approach
+57    59    leads_to   possible approach
+58    60    leads_to   chosen
+60    61    leads_to   implementation
+61    62    leads_to   implementation succeeded
+57    60    leads_to   shortcut</span>
+
+<span class="comment"># Edge 57 -> 60 skips the option layer - remove it</span>
+<span class="command">deciduous unlink 57 60</span>
+<span class="output">Removed edge 57 &rarr; 60</span></div>
+            </div>
+
+            <p>The canonical flow is goal &rarr; option &rarr; decision. A direct link from goal #57 to decision #60 bypasses option #58, which misrepresents how the decision was reached. Removing the shortcut edge restores the correct chain.</p>
+
+            <h2>Deleting a Node</h2>
+
+            <p>For nodes that should not exist at all&mdash;duplicates, test nodes, or nodes created by mistake&mdash;use <code>delete</code>:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous delete</div>
+                <div class="terminal-body"><span class="comment"># A duplicate option was created by accident</span>
+<span class="command">deciduous show 63</span>
+<span class="output">Node #63  option
+Title:    Separate CI worklflow files (duplicate)
+Status:   pending
+Connections: none</span>
+
+<span class="command">deciduous delete 63</span>
+<span class="output">Deleted node 63 and its 0 edges</span></div>
+            </div>
+
+            <div class="info-box warning">
+                <strong>Delete removes edges too</strong>
+                <p>Deleting a node also removes all edges connected to it&mdash;both incoming and outgoing. If the node is in the middle of a chain, this will break the chain. Make sure to re-link the remaining nodes after deleting a mid-chain node, or use <code>edit</code> instead if you just need to fix the title.</p>
+            </div>
+
+            <h2>Updating Stored Prompts</h2>
+
+            <p>If the stored prompt on a goal node is wrong or incomplete, update it with <code>deciduous prompt</code>:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous prompt</div>
+                <div name="terminal-body" class="terminal-body"><span class="comment"># Update the verbatim prompt on an existing node</span>
+<span class="command">deciduous prompt 57 "Add CI/CD pipelines for snowflex. Need GitHub Actions workflows for unit tests and integration tests, with proper caching and matrix builds. Issue #93."</span>
+<span class="output">Updated prompt for node 57 (127 chars)</span>
+
+<span class="comment"># Or pipe from a file for longer prompts</span>
+<span class="command">cat issue-93-full.md | deciduous prompt 57</span>
+<span class="output">Updated prompt for node 57 (843 chars)</span></div>
+            </div>
+
+            <p>Prompts are stored alongside the node and are visible in the web viewer's detail panel. They are used by the <code>/recover</code> skill to rebuild context after session loss.</p>
+
+            <h2>Updating Node Status</h2>
+
+            <p>As work progresses, nodes move through statuses. The <code>status</code> command updates them:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous status</div>
+                <div class="terminal-body"><span class="comment"># Mark the action as completed</span>
+<span class="command">deciduous status 61 completed</span>
+<span class="output">Updated node 61 status: completed</span>
+
+<span class="comment"># Mark the rejected option</span>
+<span class="command">deciduous status 59 rejected</span>
+<span class="output">Updated node 59 status: rejected</span>
+
+<span class="comment"># Mark the goal as completed when all work is done</span>
+<span class="command">deciduous status 57 completed</span>
+<span class="output">Updated node 57 status: completed</span></div>
+            </div>
+
+            <p>The full set of statuses and when to use each:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Meaning</th>
+                        <th>Issue #93 Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>pending</code></td>
+                        <td>Not yet started or resolved</td>
+                        <td>A goal or action waiting for work</td>
+                    </tr>
+                    <tr>
+                        <td><code>active</code></td>
+                        <td>Currently in progress or current truth</td>
+                        <td>Decision #60 while implementation is underway</td>
+                    </tr>
+                    <tr>
+                        <td><code>completed</code></td>
+                        <td>Done and working</td>
+                        <td>Action #61 after the workflow passes tests</td>
+                    </tr>
+                    <tr>
+                        <td><code>superseded</code></td>
+                        <td>Replaced by a newer approach</td>
+                        <td>An old CI approach replaced by a better one</td>
+                    </tr>
+                    <tr>
+                        <td><code>abandoned</code></td>
+                        <td>Started but given up on</td>
+                        <td>An approach that was partially implemented then dropped</td>
+                    </tr>
+                    <tr>
+                        <td><code>rejected</code></td>
+                        <td>Considered but not chosen</td>
+                        <td>Option #59: single workflow approach</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>A Typical Editing Session</h2>
+
+            <p>Here is what cleaning up a graph looks like in practice. Claude usually does this unprompted before syncing or exporting, but you can ask for it explicitly:</p>
+
+            <div class="session-demo" id="cleanup-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; Cleaning up the graph</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Clean up the decision graph before we export.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous pulse</div>
+                        <div class="step-output">Orphan nodes: 1 (#63)<br>Dangling outcomes: 0</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Node #63 is an orphan&mdash;a duplicate option with no connections. I'll remove it and update the statuses for the completed work.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 4.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous delete 63</div>
+                        <div class="step-output">Deleted node 63 and its 0 edges</div>
+                        <div class="cmd-inline">deciduous status 61 completed</div>
+                        <div class="step-output">Updated node 61 status: completed</div>
+                        <div class="cmd-inline">deciduous status 59 rejected</div>
+                        <div class="step-output">Updated node 59 status: rejected</div>
+                        <div class="cmd-inline">deciduous status 57 completed</div>
+                        <div class="step-output">Updated node 57 status: completed</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 7s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous pulse</div>
+                        <div class="step-output">Orphan nodes: 0<br>Dangling outcomes: 0</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 8.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Graph is clean. No orphans, no dangling outcomes, all statuses updated. Ready to export.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box tip">
+                <strong>Audit before you share</strong>
+                <p>Run <code>deciduous pulse</code> before exporting or syncing. It catches orphan nodes (no connections), dangling outcomes (outcomes with no parent action), and other structural issues. Cleaning these up before sharing ensures teammates get a coherent graph, not a pile of disconnected nodes.</p>
+            </div>
+
+            <p>With the graph clean and statuses up to date, you're ready to share your work. The next section covers exporting the graph for GitHub Pages, generating PR writeups, and syncing with teammates.</p>
+
+            <div class="page-nav">
+                <a href="implementing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The Implementation</span>
+                </a>
+                <a href="../sharing/exporting-your-work.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Exporting Your Work</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>
