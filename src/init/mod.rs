@@ -427,6 +427,7 @@ pub fn update_tooling() -> Result<(), String> {
     }
     if has_opencode {
         println!("  - OpenCode plugins (TypeScript hooks)");
+        println!("  - OpenCode skills, agents, and tools");
         println!("  - OpenCode configuration (opencode.json)");
     }
     if has_windsurf {

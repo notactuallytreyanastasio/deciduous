@@ -1,11 +1,14 @@
 //! OpenCode integration
 //!
 //! Generates and installs OpenCode configuration files for decision graph integration.
-//! OpenCode uses TypeScript/JavaScript plugins instead of shell scripts for hooks.
+//! OpenCode uses TypeScript/JavaScript plugins and tools for hooks and automation.
 //!
 //! Directory structure:
-//! - `.opencode/plugin/` - TypeScript plugins (hooks)
-//! - `.opencode/command/` - Custom commands (markdown)
+//! - `.opencode/plugins/` - TypeScript plugins (hooks)
+//! - `.opencode/commands/` - Custom slash commands (markdown)
+//! - `.opencode/skills/<name>/SKILL.md` - Skills with OpenCode frontmatter
+//! - `.opencode/agents/` - Custom agent definitions (markdown)
+//! - `.opencode/tools/` - Custom tools (TypeScript)
 //! - `opencode.json` - Configuration file
 //! - `AGENTS.md` - Project instructions (equivalent to CLAUDE.md)
 
@@ -1523,6 +1526,371 @@ deciduous nodes --type revisit
 - **Don't over-structure.** Simple narratives might just be: goal -> option -> decision.
 "#;
 
+/// OpenCode skill: /pulse (SKILL.md format for .opencode/skills/pulse/SKILL.md)
+pub const SKILL_PULSE_OPENCODE: &str = r#"---
+name: pulse
+description: Map the current model as decisions - no history, just now
+compatibility: opencode
+---
+
+# Pulse
+
+**Map the current model as decisions. No history, just now.**
+
+## Step 1: Get current state
+
+```bash
+deciduous pulse
+```
+
+Review the report: active goals, coverage gaps, orphan nodes. This tells you what's already mapped and what needs attention.
+
+## Step 2: Pick a scope
+
+What part of the system are you taking the pulse of?
+
+- A feature ("Suspense fallback behavior")
+- A subsystem ("Authentication")
+- A boundary ("API request lifecycle")
+
+## Step 3: Ask "What decisions define this?"
+
+Read the code. For the thing you're scoping, ask:
+
+> "What design questions had to be answered for this to work?"
+
+Not implementation questions ("which library?") - model questions ("what's the behavior?")
+
+## Step 4: Build the goal -> options -> decisions
+
+```bash
+# Create the root goal
+deciduous add goal "<Scope>: <Core question>" -c 90
+
+# Add options (possible approaches from the goal)
+deciduous add option "<Possible approach>" -c 85
+deciduous link <goal> <option> -r "possible_approach"
+
+# When an option is chosen, create a decision
+deciduous add decision "Chose <approach>" -c 90
+deciduous link <option> <decision> -r "chosen"
+```
+
+If a question is still open, leave it as option nodes without a decision.
+
+## Step 5: Review
+
+```bash
+deciduous pulse
+deciduous pulse --summary
+deciduous serve
+```
+
+## Check for Supporting Documents
+
+```bash
+deciduous doc list <goal_id>
+deciduous doc attach <goal_id> docs/architecture.png -d "Current architecture"
+```
+
+## Decision Criteria
+
+- **Worth capturing?** Does it define BEHAVIOR, not implementation?
+- **How deep?** Stop when decisions become implementation details
+- **Option vs Decision?** Option = possible approach. Decision = choosing which option.
+
+## Connecting to History
+
+Pulse gives you the "Now". For history, run `/narratives` then `/archaeology`.
+"#;
+
+/// OpenCode skill: /narratives (SKILL.md format for .opencode/skills/narratives/SKILL.md)
+pub const SKILL_NARRATIVES_OPENCODE: &str = r#"---
+name: narratives
+description: Understand how a system evolved - narratives are the source of truth
+compatibility: opencode
+---
+
+# Narrative Tracking
+
+**Narratives are the source of truth. Commits are just evidence.**
+
+## Step 1: Initialize narratives file
+
+```bash
+deciduous narratives init
+```
+
+This creates `.deciduous/narratives.md` pre-populated with your active goal titles.
+
+## Step 2: Understand the system first
+
+Before looking at git, read the code. Ask: **What are the major pieces of this system?**
+
+Each major piece probably has a narrative behind it.
+
+## Step 3: Fill in the narratives
+
+Edit `.deciduous/narratives.md`. For each section:
+
+1. Describe the **current state** (how it works today)
+2. Infer the **evolution** (how it likely got this way)
+3. Identify **PIVOTs** (when the conceptual model changed)
+4. Find evidence (PRs, commits, docs) - optional
+5. Check attached documents (`deciduous doc list`)
+
+Signs of a pivot:
+- Two approaches coexisting (migration in progress)
+- Comments explaining "we used to do X"
+- Config for old + new system
+- Deprecation warnings
+
+## Step 4: Review narratives
+
+```bash
+deciduous narratives show
+```
+
+## Step 5: Check existing pivots
+
+```bash
+deciduous narratives pivots
+```
+
+## Output Format
+
+Each narrative section in `.deciduous/narratives.md`:
+
+```markdown
+## <Name>
+> <One sentence: what this piece of the system does>
+
+**Current state:** <How it works today>
+
+**Evolution:**
+1. <First approach> - <why>
+2. **PIVOT:** <what changed> - <why it changed>
+3. <Current approach> - <why this is better>
+
+**Evidence:** <Optional: PRs, commits, docs>
+**Connects to:** <Other narratives this influenced>
+**Status:** active | superseded | abandoned
+```
+
+## What Makes a Good Narrative
+
+- Coherent story about ONE design aspect
+- Explains HOW something works and WHY it evolved
+- Would help a new team member understand the system
+- NOT a list of commits or feature changelog
+
+## Next Step
+
+After narratives are written, run `/archaeology` to transform them into a queryable decision graph.
+"#;
+
+/// OpenCode skill: /archaeology (SKILL.md format for .opencode/skills/archaeology/SKILL.md)
+pub const SKILL_ARCHAEOLOGY_OPENCODE: &str = r#"---
+name: archaeology
+description: Transform narratives into a queryable decision graph
+compatibility: opencode
+---
+
+# Archaeology
+
+**Transform narratives into a queryable decision graph.**
+
+Run `/narratives` first to create `.deciduous/narratives.md`.
+
+## Step 1: Read the narratives
+
+```bash
+deciduous narratives show
+```
+
+For each narrative, you'll create a subgraph.
+
+## Step 2: Create root goals
+
+For each narrative, create a backdated goal:
+
+```bash
+deciduous add goal "<Narrative title>" -c 90 --date "YYYY-MM-DD"
+```
+
+## Step 3: Build initial approaches
+
+```bash
+deciduous add decision "<First approach>" -c 85 --date "YYYY-MM-DD"
+deciduous link <goal> <decision> -r "Initial design"
+```
+
+## Step 4: Create pivots with `archaeology pivot`
+
+For each **PIVOT** in a narrative, use the atomic pivot command:
+
+```bash
+deciduous archaeology pivot <from_id> "<what was learned>" "<new approach>" -c 85 -r "<why it failed>"
+```
+
+This automatically creates:
+- observation node (what was learned)
+- revisit node (reconsidering the old approach)
+- decision node (the new approach)
+- All 3 linking edges
+- Marks the old approach as superseded
+
+Preview before executing:
+```bash
+deciduous archaeology pivot <from_id> "observation" "new approach" --dry-run
+```
+
+## Step 5: Connect narratives
+
+When narratives reference each other:
+
+```bash
+deciduous link <auth_observation> <ratelimit_decision> \
+  -r "Auth failures drove rate limit redesign"
+```
+
+## Step 6: Mark superseded paths
+
+```bash
+deciduous archaeology supersede <id>
+deciduous archaeology supersede <id> --cascade
+```
+
+## Step 7: Review the timeline
+
+```bash
+deciduous archaeology timeline
+deciduous archaeology timeline --type revisit
+deciduous narratives pivots
+deciduous serve
+```
+
+## Attach Evidence Documents
+
+```bash
+deciduous doc attach <goal_id> evidence/old-architecture.png -d "Architecture before refactor"
+deciduous doc attach <revisit_id> evidence/perf-report.pdf --ai-describe
+```
+
+## What NOT to Do
+
+- **Don't create nodes for every commit.** Commits are evidence, not graph nodes.
+- **Don't create implementation nodes.** The graph is about the MODEL, not the code.
+- **Don't over-structure.** Simple narratives might just be: goal -> option -> decision.
+"#;
+
+/// OpenCode agent definition for .opencode/agents/deciduous.md
+pub const AGENT_DECIDUOUS: &str = r#"---
+description: Deciduous decision graph specialist - manages nodes, edges, and graph operations
+mode: subagent
+---
+
+# Deciduous Agent
+
+You are a specialized agent for managing the deciduous decision graph. Use the `deciduous` CLI to manage nodes, edges, and graph operations.
+
+## Core Commands
+
+```bash
+# Add nodes
+deciduous add goal "Title" -c 90 -p "User request"
+deciduous add option "Approach" -c 70
+deciduous add decision "Choice" -c 85
+deciduous add action "Implementation" -c 85 -f "file1.rs,file2.rs"
+deciduous add outcome "Result" -c 95 --commit HEAD
+deciduous add observation "Finding" -c 80
+deciduous add revisit "Reconsidering" -c 75
+
+# Connect nodes (ALWAYS do this immediately)
+deciduous link <from> <to> -r "reason"
+
+# Query
+deciduous nodes
+deciduous edges
+deciduous graph
+deciduous pulse
+
+# Sync and export
+deciduous sync
+deciduous dot --png
+```
+
+## Node Flow Rule
+
+```
+goal -> options -> decision -> actions -> outcomes
+```
+
+- Goals lead to options (possible approaches)
+- Options lead to decisions (choosing which option)
+- Decisions lead to actions (implementation)
+- Actions lead to outcomes (results)
+- Observations attach anywhere relevant
+- Root goals are the ONLY valid orphans
+
+## Connection Rules
+
+| When you create... | IMMEDIATELY link to... |
+|-------------------|------------------------|
+| `option` | Its parent goal |
+| `decision` | The option(s) it chose between |
+| `action` | The decision that spawned it |
+| `outcome` | The action that produced it |
+| `observation` | Related goal/action |
+| `revisit` | The decision being reconsidered |
+
+## After Git Commits
+
+```bash
+deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+deciduous link <action_id> <outcome_id> -r "Implementation complete"
+```
+"#;
+
+/// OpenCode custom tool for .opencode/tools/deciduous.ts
+pub const TOOL_DECIDUOUS: &str = r#"// OpenCode Custom Tool: Deciduous Decision Graph
+// Wraps the deciduous CLI for direct graph operations from OpenCode
+//
+// This tool allows agents to interact with the decision graph without
+// needing to use the bash tool directly.
+
+import { tool } from "@opencode-ai/plugin"
+
+export default tool({
+  description: "Manage the deciduous decision graph - add nodes, create edges, query the graph, and sync",
+  args: {
+    command: tool.schema.string().describe(
+      "The deciduous subcommand and arguments to run. Examples: " +
+      "'add goal \"Title\" -c 90', " +
+      "'link 1 2 -r \"reason\"', " +
+      "'nodes', 'edges', 'graph', 'pulse', 'sync'"
+    ),
+  },
+  async execute(args, context) {
+    const proc = Bun.spawn(["sh", "-c", `deciduous ${args.command}`], {
+      cwd: context.directory,
+      stdout: "pipe",
+      stderr: "pipe",
+    })
+
+    const stdout = await new Response(proc.stdout).text()
+    const stderr = await new Response(proc.stderr).text()
+    const exitCode = await proc.exited
+
+    if (exitCode !== 0) {
+      return `Error (exit ${exitCode}):\n${stderr}\n${stdout}`
+    }
+
+    return stdout || "(no output)"
+  },
+})
+"#;
+
 /// Default configuration file content (duplicated from init/templates.rs to avoid circular deps)
 const DEFAULT_CONFIG: &str = r#"# Deciduous Configuration
 # This file controls branch detection and grouping behavior
@@ -1639,11 +2007,21 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
     let config = Config::load();
 
     let opencode_dir = project_root.join(".opencode");
-    let plugin_dir = opencode_dir.join("plugin");
-    let command_dir = opencode_dir.join("command");
+    let plugin_dir = opencode_dir.join("plugins");
+    let command_dir = opencode_dir.join("commands");
+    let skill_dir = opencode_dir.join("skills");
+    let agent_dir = opencode_dir.join("agents");
+    let tool_dir = opencode_dir.join("tools");
 
     // Create directories
-    for dir in [&opencode_dir, &plugin_dir, &command_dir] {
+    for dir in [
+        &opencode_dir,
+        &plugin_dir,
+        &command_dir,
+        &skill_dir,
+        &agent_dir,
+        &tool_dir,
+    ] {
         if !dir.exists() {
             fs::create_dir_all(dir).map_err(|e| format!("Could not create {:?}: {}", dir, e))?;
             println!("   {} {:?}", "Creating".green(), dir);
@@ -1658,7 +2036,7 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
                 fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
                     .map_err(|e| format!("Could not write plugin: {}", e))?;
                 println!(
-                    "   {} .opencode/plugin/require-action-node.ts",
+                    "   {} .opencode/plugins/require-action-node.ts",
                     "Installed".green()
                 );
             }
@@ -1670,7 +2048,7 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
                 fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
                     .map_err(|e| format!("Could not write plugin: {}", e))?;
                 println!(
-                    "   {} .opencode/plugin/post-commit-reminder.ts",
+                    "   {} .opencode/plugins/post-commit-reminder.ts",
                     "Installed".green()
                 );
             }
@@ -1694,29 +2072,53 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         let cmd_path = command_dir.join(name);
         fs::write(&cmd_path, content)
             .map_err(|e| format!("Could not write command {}: {}", name, e))?;
-        println!("   {} .opencode/command/{}", "Installed".green(), name);
+        println!("   {} .opencode/commands/{}", "Installed".green(), name);
     }
 
-    // Install skills (in OpenCode, skills are just more complex commands)
+    // Install skills in proper directory structure (.opencode/skills/<name>/SKILL.md)
     let skills = [
-        ("pulse.md", SKILL_PULSE),
-        ("narratives.md", SKILL_NARRATIVES),
-        ("archaeology.md", SKILL_ARCHAEOLOGY),
+        ("pulse", SKILL_PULSE_OPENCODE),
+        ("narratives", SKILL_NARRATIVES_OPENCODE),
+        ("archaeology", SKILL_ARCHAEOLOGY_OPENCODE),
     ];
 
     for (name, content) in skills {
-        let skill_path = command_dir.join(name);
+        let skill_subdir = skill_dir.join(name);
+        if !skill_subdir.exists() {
+            fs::create_dir_all(&skill_subdir)
+                .map_err(|e| format!("Could not create {:?}: {}", skill_subdir, e))?;
+        }
+        let skill_path = skill_subdir.join("SKILL.md");
         fs::write(&skill_path, content)
             .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
         println!(
-            "   {} .opencode/command/{} (skill)",
+            "   {} .opencode/skills/{}/SKILL.md",
             "Installed".green(),
             name
         );
     }
 
+    // Install custom agent
+    let agent_path = agent_dir.join("deciduous.md");
+    fs::write(&agent_path, AGENT_DECIDUOUS)
+        .map_err(|e| format!("Could not write agent: {}", e))?;
+    println!(
+        "   {} .opencode/agents/deciduous.md",
+        "Installed".green()
+    );
+
+    // Install custom tool
+    let tool_path = tool_dir.join("deciduous.ts");
+    fs::write(&tool_path, TOOL_DECIDUOUS)
+        .map_err(|e| format!("Could not write tool: {}", e))?;
+    println!(
+        "   {} .opencode/tools/deciduous.ts",
+        "Installed".green()
+    );
+
     // Generate opencode.json config
-    // Note: Plugins are auto-loaded from .opencode/plugin/, not configured in JSON
+    // Plugins are auto-loaded from .opencode/plugins/
+    // Tools are auto-loaded from .opencode/tools/
     // Instructions/rules go in AGENTS.md, referenced via the 'instructions' key
     let opencode_config = json!({
         "$schema": "https://opencode.ai/config.json",
@@ -1784,21 +2186,96 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
 
     println!("\n{}", "OpenCode integration installed!".green().bold());
     println!();
-    println!("Plugins installed in .opencode/plugin/");
-    println!("Commands installed in .opencode/command/");
+    println!("Plugins installed in .opencode/plugins/");
+    println!("Commands installed in .opencode/commands/");
+    println!("Skills installed in .opencode/skills/");
+    println!("Agent installed in .opencode/agents/");
+    println!("Tool installed in .opencode/tools/");
     println!();
+
+    Ok(())
+}
+
+/// Migrate from old singular directory names (plugin/, command/) to plural (plugins/, commands/)
+fn migrate_opencode_dirs(project_root: &Path) -> Result<(), String> {
+    let opencode_dir = project_root.join(".opencode");
+
+    let migrations = [("plugin", "plugins"), ("command", "commands")];
+
+    for (old_name, new_name) in migrations {
+        let old_dir = opencode_dir.join(old_name);
+        let new_dir = opencode_dir.join(new_name);
+
+        if old_dir.exists() && !new_dir.exists() {
+            // Simple rename
+            fs::rename(&old_dir, &new_dir).map_err(|e| {
+                format!("Could not migrate {} to {}: {}", old_name, new_name, e)
+            })?;
+            println!(
+                "   {} .opencode/{} -> .opencode/{}",
+                "Migrated".green(),
+                old_name,
+                new_name
+            );
+        } else if old_dir.exists() && new_dir.exists() {
+            // Both exist - copy any files from old to new, then remove old
+            if let Ok(entries) = fs::read_dir(&old_dir) {
+                for entry in entries.flatten() {
+                    let dest = new_dir.join(entry.file_name());
+                    if !dest.exists() {
+                        fs::copy(entry.path(), &dest).ok();
+                    }
+                }
+            }
+            fs::remove_dir_all(&old_dir).ok();
+            println!(
+                "   {} .opencode/{} (merged into {})",
+                "Cleaned".green(),
+                old_name,
+                new_name
+            );
+        }
+    }
+
+    // Remove old skill files from commands/ if they exist (skills now live in skills/)
+    let commands_dir = opencode_dir.join("commands");
+    let old_skill_files = ["pulse.md", "narratives.md", "archaeology.md"];
+    for file in old_skill_files {
+        let old_path = commands_dir.join(file);
+        if old_path.exists() {
+            fs::remove_file(&old_path).ok();
+            println!(
+                "   {} .opencode/commands/{} (moved to skills/)",
+                "Removed".green(),
+                file
+            );
+        }
+    }
 
     Ok(())
 }
 
 /// Update OpenCode integration files to latest version (overwrites existing)
 pub fn update_opencode(project_root: &Path) -> Result<(), String> {
+    // Migrate from old singular directory names to plural
+    migrate_opencode_dirs(project_root)?;
+
     let opencode_dir = project_root.join(".opencode");
-    let plugin_dir = opencode_dir.join("plugin");
-    let command_dir = opencode_dir.join("command");
+    let plugin_dir = opencode_dir.join("plugins");
+    let command_dir = opencode_dir.join("commands");
+    let skill_dir = opencode_dir.join("skills");
+    let agent_dir = opencode_dir.join("agents");
+    let tool_dir = opencode_dir.join("tools");
 
     // Create directories if needed
-    for dir in [&opencode_dir, &plugin_dir, &command_dir] {
+    for dir in [
+        &opencode_dir,
+        &plugin_dir,
+        &command_dir,
+        &skill_dir,
+        &agent_dir,
+        &tool_dir,
+    ] {
         if !dir.exists() {
             fs::create_dir_all(dir).map_err(|e| format!("Could not create {:?}: {}", dir, e))?;
             println!("   {} {:?}", "Creating".green(), dir);
@@ -1810,7 +2287,7 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
     fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
         .map_err(|e| format!("Could not write plugin: {}", e))?;
     println!(
-        "   {} .opencode/plugin/require-action-node.ts",
+        "   {} .opencode/plugins/require-action-node.ts",
         "Updated".green()
     );
 
@@ -1818,7 +2295,7 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
     fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
         .map_err(|e| format!("Could not write plugin: {}", e))?;
     println!(
-        "   {} .opencode/plugin/post-commit-reminder.ts",
+        "   {} .opencode/plugins/post-commit-reminder.ts",
         "Updated".green()
     );
 
@@ -1839,26 +2316,49 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
         let cmd_path = command_dir.join(name);
         fs::write(&cmd_path, content)
             .map_err(|e| format!("Could not write command {}: {}", name, e))?;
-        println!("   {} .opencode/command/{}", "Updated".green(), name);
+        println!("   {} .opencode/commands/{}", "Updated".green(), name);
     }
 
-    // Update skills (overwrite)
+    // Update skills in proper directory structure
     let skills = [
-        ("pulse.md", SKILL_PULSE),
-        ("narratives.md", SKILL_NARRATIVES),
-        ("archaeology.md", SKILL_ARCHAEOLOGY),
+        ("pulse", SKILL_PULSE_OPENCODE),
+        ("narratives", SKILL_NARRATIVES_OPENCODE),
+        ("archaeology", SKILL_ARCHAEOLOGY_OPENCODE),
     ];
 
     for (name, content) in skills {
-        let skill_path = command_dir.join(name);
+        let skill_subdir = skill_dir.join(name);
+        if !skill_subdir.exists() {
+            fs::create_dir_all(&skill_subdir)
+                .map_err(|e| format!("Could not create {:?}: {}", skill_subdir, e))?;
+        }
+        let skill_path = skill_subdir.join("SKILL.md");
         fs::write(&skill_path, content)
             .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
         println!(
-            "   {} .opencode/command/{} (skill)",
+            "   {} .opencode/skills/{}/SKILL.md",
             "Updated".green(),
             name
         );
     }
+
+    // Update agent (overwrite)
+    let agent_path = agent_dir.join("deciduous.md");
+    fs::write(&agent_path, AGENT_DECIDUOUS)
+        .map_err(|e| format!("Could not write agent: {}", e))?;
+    println!(
+        "   {} .opencode/agents/deciduous.md",
+        "Updated".green()
+    );
+
+    // Update tool (overwrite)
+    let tool_path = tool_dir.join("deciduous.ts");
+    fs::write(&tool_path, TOOL_DECIDUOUS)
+        .map_err(|e| format!("Could not write tool: {}", e))?;
+    println!(
+        "   {} .opencode/tools/deciduous.ts",
+        "Updated".green()
+    );
 
     // Note: We don't overwrite opencode.json or AGENTS.md as they may have user customizations
     println!(
@@ -2185,9 +2685,16 @@ pub fn opencode_status() -> Result<(), String> {
         println!("   Run 'deciduous opencode install' to create it");
     }
 
-    // Check plugins
+    // Check plugins (support both old singular and new plural dirs)
     println!("\n{}", "Plugins (Hooks):".cyan());
-    let plugin_dir = opencode_dir.join("plugin");
+    let plugin_dir = {
+        let new_dir = opencode_dir.join("plugins");
+        if new_dir.exists() {
+            new_dir
+        } else {
+            opencode_dir.join("plugin")
+        }
+    };
     if plugin_dir.exists() {
         let entries: Vec<_> = fs::read_dir(&plugin_dir)
             .map(|rd| {
@@ -2210,12 +2717,19 @@ pub fn opencode_status() -> Result<(), String> {
             }
         }
     } else {
-        println!("   {} (plugin directory not found)", "○".yellow());
+        println!("   {} (plugins directory not found)", "○".yellow());
     }
 
-    // Check commands
+    // Check commands (support both old singular and new plural dirs)
     println!("\n{}", "Commands:".cyan());
-    let command_dir = opencode_dir.join("command");
+    let command_dir = {
+        let new_dir = opencode_dir.join("commands");
+        if new_dir.exists() {
+            new_dir
+        } else {
+            opencode_dir.join("command")
+        }
+    };
     if command_dir.exists() {
         let entries: Vec<_> = fs::read_dir(&command_dir)
             .map(|rd| {
@@ -2238,7 +2752,92 @@ pub fn opencode_status() -> Result<(), String> {
             }
         }
     } else {
-        println!("   {} (command directory not found)", "○".yellow());
+        println!("   {} (commands directory not found)", "○".yellow());
+    }
+
+    // Check skills
+    println!("\n{}", "Skills:".cyan());
+    let skill_dir = opencode_dir.join("skills");
+    if skill_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&skill_dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().is_dir())
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if entries.is_empty() {
+            println!("   {} (no skills installed)", "○".yellow());
+        } else {
+            for entry in entries {
+                let name = entry.file_name().to_string_lossy().to_string();
+                let skill_md = entry.path().join("SKILL.md");
+                if skill_md.exists() {
+                    println!("   {} /{}", "✓".green(), name);
+                } else {
+                    println!("   {} /{} (SKILL.md missing)", "○".yellow(), name);
+                }
+            }
+        }
+    } else {
+        println!("   {} (skills directory not found)", "○".yellow());
+    }
+
+    // Check agents
+    println!("\n{}", "Agents:".cyan());
+    let agent_dir = opencode_dir.join("agents");
+    if agent_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&agent_dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| e.path().extension().is_some_and(|ext| ext == "md"))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if entries.is_empty() {
+            println!("   {} (no agents defined)", "○".yellow());
+        } else {
+            for entry in entries {
+                let name = entry
+                    .path()
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                println!("   {} @{}", "✓".green(), name);
+            }
+        }
+    } else {
+        println!("   {} (agents directory not found)", "○".yellow());
+    }
+
+    // Check tools
+    println!("\n{}", "Tools:".cyan());
+    let tool_dir = opencode_dir.join("tools");
+    if tool_dir.exists() {
+        let entries: Vec<_> = fs::read_dir(&tool_dir)
+            .map(|rd| {
+                rd.filter_map(|e| e.ok())
+                    .filter(|e| {
+                        e.path()
+                            .extension()
+                            .is_some_and(|ext| ext == "ts" || ext == "js")
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        if entries.is_empty() {
+            println!("   {} (no custom tools)", "○".yellow());
+        } else {
+            for entry in entries {
+                let name = entry.file_name().to_string_lossy().to_string();
+                println!("   {} {}", "✓".green(), name);
+            }
+        }
+    } else {
+        println!("   {} (tools directory not found)", "○".yellow());
     }
 
     // Check configuration files
@@ -2327,47 +2926,125 @@ mod tests {
 
         assert!(result.is_ok());
 
-        // Check plugins
+        // Check plugins (now in plugins/ plural)
         assert!(project_root
-            .join(".opencode/plugin/require-action-node.ts")
+            .join(".opencode/plugins/require-action-node.ts")
             .exists());
         assert!(project_root
-            .join(".opencode/plugin/post-commit-reminder.ts")
-            .exists());
-
-        // Check commands (original 6)
-        assert!(project_root.join(".opencode/command/work.md").exists());
-        assert!(project_root.join(".opencode/command/recover.md").exists());
-        assert!(project_root.join(".opencode/command/decision.md").exists());
-        assert!(project_root
-            .join(".opencode/command/build-test.md")
-            .exists());
-        assert!(project_root.join(".opencode/command/serve-ui.md").exists());
-        assert!(project_root
-            .join(".opencode/command/sync-graph.md")
+            .join(".opencode/plugins/post-commit-reminder.ts")
             .exists());
 
-        // Check new commands
+        // Check commands (now in commands/ plural)
         assert!(project_root
-            .join(".opencode/command/document.md")
+            .join(".opencode/commands/work.md")
             .exists());
-        assert!(project_root.join(".opencode/command/sync.md").exists());
         assert!(project_root
-            .join(".opencode/command/decision-graph.md")
+            .join(".opencode/commands/recover.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/decision.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/build-test.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/serve-ui.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/sync-graph.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/document.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/sync.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/decision-graph.md")
             .exists());
 
-        // Check skills (installed as commands)
-        assert!(project_root.join(".opencode/command/pulse.md").exists());
+        // Check skills (now in skills/<name>/SKILL.md)
         assert!(project_root
-            .join(".opencode/command/narratives.md")
+            .join(".opencode/skills/pulse/SKILL.md")
             .exists());
         assert!(project_root
-            .join(".opencode/command/archaeology.md")
+            .join(".opencode/skills/narratives/SKILL.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/skills/archaeology/SKILL.md")
+            .exists());
+
+        // Skills should NOT be in commands/
+        assert!(!project_root
+            .join(".opencode/commands/pulse.md")
+            .exists());
+        assert!(!project_root
+            .join(".opencode/commands/narratives.md")
+            .exists());
+        assert!(!project_root
+            .join(".opencode/commands/archaeology.md")
+            .exists());
+
+        // Check agent and tool
+        assert!(project_root
+            .join(".opencode/agents/deciduous.md")
+            .exists());
+        assert!(project_root
+            .join(".opencode/tools/deciduous.ts")
             .exists());
 
         // Check config files
         assert!(project_root.join("opencode.json").exists());
         assert!(project_root.join("AGENTS.md").exists());
+    }
+
+    #[test]
+    fn test_migrate_opencode_dirs() {
+        let tmp = TempDir::new().unwrap();
+        let project_root = tmp.path();
+
+        // Create old singular directories with files
+        let old_plugin = project_root.join(".opencode/plugin");
+        fs::create_dir_all(&old_plugin).unwrap();
+        fs::write(old_plugin.join("test.ts"), "content").unwrap();
+
+        let old_command = project_root.join(".opencode/command");
+        fs::create_dir_all(&old_command).unwrap();
+        fs::write(old_command.join("work.md"), "content").unwrap();
+        fs::write(old_command.join("pulse.md"), "skill content").unwrap();
+
+        migrate_opencode_dirs(project_root).unwrap();
+
+        // Old dirs should be gone
+        assert!(!old_plugin.exists());
+        assert!(!old_command.exists());
+
+        // New dirs should have the files
+        assert!(project_root
+            .join(".opencode/plugins/test.ts")
+            .exists());
+        assert!(project_root
+            .join(".opencode/commands/work.md")
+            .exists());
+
+        // Skill files should be cleaned from commands
+        assert!(!project_root
+            .join(".opencode/commands/pulse.md")
+            .exists());
+    }
+
+    #[test]
+    fn test_skill_frontmatter_format() {
+        // Verify OpenCode skill format has required fields
+        assert!(SKILL_PULSE_OPENCODE.contains("name: pulse"));
+        assert!(SKILL_PULSE_OPENCODE.contains("description:"));
+        assert!(SKILL_PULSE_OPENCODE.contains("compatibility: opencode"));
+
+        assert!(SKILL_NARRATIVES_OPENCODE.contains("name: narratives"));
+        assert!(SKILL_NARRATIVES_OPENCODE.contains("compatibility: opencode"));
+
+        assert!(SKILL_ARCHAEOLOGY_OPENCODE.contains("name: archaeology"));
+        assert!(SKILL_ARCHAEOLOGY_OPENCODE.contains("compatibility: opencode"));
     }
 
     #[test]

@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.3",
+        highlights: &[
+            "OpenCode bootstrapping upgraded to modern directory conventions (plugins/, commands/, skills/)",
+            "Skills now use proper SKILL.md format in .opencode/skills/<name>/SKILL.md",
+            "New: custom deciduous agent in .opencode/agents/deciduous.md",
+            "New: custom deciduous tool in .opencode/tools/deciduous.ts wraps CLI for direct graph ops",
+            "Migration logic: deciduous update auto-migrates from old singular dirs to plural",
+        ],
+    },
+    Release {
         version: "0.13.2",
         highlights: &[
             "OpenCode integration fully updated to match Claude Code feature parity",
