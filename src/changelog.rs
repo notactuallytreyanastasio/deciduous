@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.5",
+        highlights: &[
+            "OpenCode command templates now match Claude Code verbosity (decision-graph, document, decision, archaeology)",
+            "decision-graph: added Hardening Phase, Cross-Narrative Connections, Narrative Discipline, Rich Node Content, Edge Types",
+            "document: added documentation structure template, test refinement step, decision criteria, example usage",
+            "decision: added Web UI Branch Filter, disconnected node auditing, expanded multi-user sync",
+            "archaeology skill: added Querying the Graph section and descriptive details",
+        ],
+    },
+    Release {
         version: "0.13.3",
         highlights: &[
             "OpenCode bootstrapping upgraded to modern directory conventions (plugins/, commands/, skills/)",

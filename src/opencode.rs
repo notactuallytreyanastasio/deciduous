@@ -577,6 +577,17 @@ deciduous add goal "Feature work" -b feature-x  # Force specific branch
 deciduous add goal "Universal note" --no-branch  # No branch tag
 ```
 
+### Web UI Branch Filter
+The graph viewer shows a branch dropdown in the stats bar:
+- "All branches" shows everything
+- Select a specific branch to filter all views (Chains, Timeline, Graph, DAG)
+
+### When to Use Branch Grouping
+- **Feature work**: Nodes created on `feature-auth` branch auto-grouped
+- **PR context**: Filter to see only decisions for a specific PR
+- **Cross-cutting concerns**: Use `--no-branch` for universal notes
+- **Retrospectives**: Filter by branch to see decision history per feature
+
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
 
@@ -665,6 +676,27 @@ Ask yourself after creating nodes:
 4. Does every **decision** link from the option(s) being chosen?
 5. Are there **dangling outcomes** with no parent action?
 
+### Find Disconnected Nodes
+```bash
+# List nodes with no incoming edges (potential orphans)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+Note: Root goals are VALID orphans. Outcomes/actions/options usually are NOT.
+
+### Fix Missing Connections
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
+```
+
+### When to Audit
+- Before every `deciduous sync`
+- After creating multiple nodes quickly
+- At session end
+- When the web UI graph looks disconnected
+
 ## Git Staging Rules - CRITICAL
 
 **NEVER use broad git add commands that stage everything:**
@@ -676,6 +708,13 @@ Ask yourself after creating nodes:
 **ALWAYS stage files explicitly by name:**
 - `git add src/main.rs src/lib.rs`
 - `git add Cargo.toml Cargo.lock`
+- `git add .claude/commands/decision.md`
+
+**Why this matters:**
+- Prevents accidentally committing sensitive files (.env, credentials)
+- Prevents committing large binaries or build artifacts
+- Forces you to review exactly what you're committing
+- Catches unintended changes before they enter git history
 
 ## Multi-User Sync
 
@@ -700,6 +739,24 @@ deciduous events rebuild    # Apply to local DB
 git add .deciduous/sync/ && git commit -m "sync" && git push
 ```
 
+**Periodic maintenance:**
+```bash
+deciduous events checkpoint --clear-events  # Compact old events
+git add .deciduous/sync/ && git commit -m "checkpoint"
+```
+
+### Legacy Patch Workflow
+
+For manual control, use the older patch system:
+
+```bash
+# Export nodes as a patch file
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates
+deciduous diff apply .deciduous/patches/*.json
+```
+
 ## The Rule
 
 ```
@@ -709,6 +766,8 @@ AUDIT FOR ORPHANS REGULARLY.
 SYNC BEFORE YOU PUSH.
 EXPORT PATCHES FOR YOUR TEAMMATES.
 ```
+
+**Live graph**: https://notactuallytreyanastasio.github.io/deciduous/
 "#;
 
 /// OpenCode command template: /build-test
@@ -914,10 +973,16 @@ For every public function/method/class:
 
 **Returns:** What the return value means
 
+**Throws/Errors:** What can go wrong
+
 **Example:**
+```code
 // From: tests/example_test.rs:42
 let result = function_name("input", 42);
 assert_eq!(result, expected);
+```
+
+**Related:** Links to related functions
 ```
 
 ### 3.3 Internal Architecture
@@ -948,9 +1013,71 @@ For each relevant test:
 - For file `src/auth/jwt.rs` -> `docs/src/auth/jwt.rs.md`
 - For directory `src/auth/` -> `docs/src/auth/README.md`
 
+**Document structure:**
+
+```markdown
+# <Component Name>
+
+> One-sentence description
+
+## Overview
+
+High-level explanation of what this does and why it exists.
+
+## Quick Start
+
+```code
+// Most common usage pattern - from real tests
+```
+
+## API Reference
+
+[For each public function/type/constant]
+
+### `function_name(...)`
+
+[Generated from Step 3.2]
+
+## Architecture
+
+[Internal design, data flow, key invariants - from Step 3.3]
+
+## Examples
+
+[Tests converted to examples - from Step 3.5]
+
+## Dependencies
+
+[What this depends on, what depends on this - from Step 3.4]
+
+## Related Documentation
+
+- Links to other relevant docs
+- Links to test files
+```
+
 ---
 
-## Step 5: Link to Decision Graph
+## Step 5: Refine Tests If Needed
+
+If tests are too synthetic (meaningless variable names, unrealistic values):
+
+1. Read the test file
+2. Improve it with:
+   - Descriptive variable names (user_email, order_total, not x, y)
+   - Realistic values (not "foo", "bar", 123)
+   - Comments explaining the scenario
+3. Edit the test file with improvements
+4. Create observation node:
+
+```bash
+deciduous add observation "Refined tests for <component> - made more real-world" -c 85
+deciduous link <action_id> <observation_id> -r "Test improvements during documentation"
+```
+
+---
+
+## Step 6: Link to Decision Graph
 
 After documentation is complete:
 
@@ -971,17 +1098,95 @@ deciduous sync
 
 ---
 
-## Step 6: Verify Coverage
+## Step 7: Verify Coverage
 
 **Checklist before completing:**
 
-- Every public function documented
-- Every parameter explained
-- Every return value explained
-- At least one example per function (from tests)
-- Architecture overview included
-- Dependencies mapped
-- Links to tests included
+- [ ] Every public function documented
+- [ ] Every parameter explained
+- [ ] Every return value explained
+- [ ] Every error case documented
+- [ ] At least one example per function (from tests)
+- [ ] Architecture overview included
+- [ ] Dependencies mapped
+- [ ] Links to tests included
+- [ ] Tests refined if they were synthetic
+
+If anything is missing, go back and fill it in. **Do not miss any surface area.**
+
+---
+
+## Decision Criteria
+
+**What to document:**
+- Public APIs (always)
+- Complex internal logic (when it's not obvious)
+- Design decisions (why, not just what)
+- Edge cases and error handling
+- Integration points
+
+**What NOT to document:**
+- Trivial getters/setters
+- Auto-generated code
+- Implementation details obvious from code
+
+**How deep to go:**
+- Deep enough that someone new could understand and use the code
+- Deep enough that someone could modify it without breaking things
+- Capture the "why" behind design decisions
+
+---
+
+## Example Usage
+
+```bash
+# Document a single file
+/document src/auth/jwt.rs
+
+# Document a directory
+/document src/auth/
+
+# Document the whole project
+/document .
+```
+
+**What happens:**
+1. Goal node created
+2. Code analyzed thoroughly
+3. Tests found and used as examples
+4. Tests refined if synthetic
+5. Documentation written to docs/
+6. Action/outcome nodes created
+7. Graph synced
+
+---
+
+## Integration with Documentation Enforcement
+
+When documentation is created, the `require-documentation.sh` hook will recognize it exists. This creates a virtuous cycle:
+
+1. Can't edit code without documentation (hook blocks)
+2. Run `/document` to create documentation
+3. Now code edits are allowed
+4. When code changes significantly, re-run `/document`
+
+---
+
+## Quick Reference
+
+```bash
+# Document and generate docs
+/document <path>
+
+# After documenting, you can edit the file
+# The require-documentation.sh hook will allow it
+```
+
+**Always creates:**
+- Goal node (before starting)
+- Action node (for the documentation work)
+- Outcome node (on completion)
+- Observation nodes (for test refinements)
 
 **Now document: $TARGET**
 "#;
@@ -1100,7 +1305,7 @@ You are building a **deciduous decision graph** - a DAG that captures the evolut
 
 **Target repository:** $REPO (if provided), otherwise the current directory.
 
-Use the `deciduous` CLI to build the graph. Run deciduous commands in the current directory (not inside the source repo).
+Use the `deciduous` CLI (at ~/.cargo/bin/deciduous) to build the graph. Run deciduous commands in the current directory (not inside the source repo).
 
 For git commands to explore commit history, use `git -C <repo-path>` to target the source repo.
 
@@ -1116,19 +1321,45 @@ Use a layered strategy to find all relevant commits:
 git log --oneline --after="..." --before="..." -- path/
 ```
 
-**Layer 2: Keyword expansion.** Once you have narratives, search for spelling variations and related terms.
+**Layer 2: Keyword expansion.** Once you have narratives, search for spelling variations and related terms you might have missed (e.g., "cache" -> "caching", "cached", "LRU", "invalidate"). For each key identifier in your narratives, trace its full lifecycle:
 
-**Layer 3: Follow authors.** If a narrative has a key author, check their commits +/-1 month from known commits.
+- Introduction
+- Changes and modifications
+- Renames
+- Deprecation or removal
+- Replacement by other mechanisms
+- Becoming stable/public API
+
+If there's a feature flag controlling the feature, search for commits mentioning that flag.
+
+**Layer 3: Follow authors.** If a narrative has a key author, check their commits +/-1 month from known commits. They often work on related things.
+
+### DO NOT:
+
+- `git log ... | head -100` -- **NO.** You will miss commits in the middle.
+- `git log ... | tail -200` -- **NO.** Same problem.
+- Start with keyword filtering -- **NO.** You'll miss things with unexpected names.
+
+### DO:
+
+- See all commits first, filter mentally while building narratives
+- Include "remove", "delete", "disable", "deprecate" in keyword searches -- removals explain transitions
+- Check the commit count first (`| wc -l`), but then see them all
+- **Read full commit messages** for any commit whose title mentions an identifier or concept relevant to your narrative -- you need precise understanding of what happened to each one you care about
 
 ## Finding the Story
 
 Not every commit matters. Look for commits that change **the model** - how the system conceptualizes the problem:
 
-- Existing tests modified (contract changing)
+- Existing tests modified (contract changing, not just bugs fixed)
 - Data structures replaced or reworked
 - Heuristics changed significantly
 - New abstractions introduced
 - API behavior shifts
+
+Skip commits that are pure implementation (same model, different code) or routine fixes that just add tests.
+
+Among model-changing commits, find the **spine**: what question keeps getting re-answered? What approach keeps getting replaced or refined? That's your central thread - build the graph around it.
 
 ## Narrative Tracking
 
@@ -1141,17 +1372,106 @@ Maintain `narratives.md` as you explore:
 3. If yes: append the commit to that narrative's section
 4. If no: add a new narrative section
 
+Example `narratives.md`:
+
+```
+## Cache Strategy
+- a1b2c3d: Add in-memory cache
+- e4f5g6h: Cache invalidation issues
+- i7j8k9l: Switch to Redis
+
+## API Rate Limiting
+- m1n2o3p: Add basic throttling
+- ...
+```
+
+**Before building the graph**, take a critical pass over `narratives.md`:
+
+- Merge narratives that are essentially the same evolving thing
+- Ensure each narrative clearly explains how one independent piece evolved
+- Note where narratives branch from or feed into each other
+
+## Hardening Phase
+
+After building initial narratives, harden them to ensure nothing is missed.
+
+### Step 1: Extract concepts per narrative
+
+For each narrative, list the key concepts/APIs/identifiers and their lifecycle stage:
+
+- **Introduced**: First appearance of the concept
+- **Changed**: Modifications to behavior or implementation
+- **Renamed/Deprecated/Removed**: End of life or replacement
+- **Marked stable**: Became public API or removed "unstable_" prefix
+
+Example addition to narrative:
+
+```
+## Cache Strategy
+Concepts: cache, LRUCache, cacheTimeout, invalidate
+
+Lifecycle:
+- cache: introduced (a1b2c3d), changed (e4f5g6h), renamed to LRUCache (x1y2z3)
+- cacheTimeout: introduced (e4f5g6h), removed (i7j8k9l)
+- LRUCache: introduced via rename (x1y2z3), marked stable (p1q2r3)
+
+Commits:
+- a1b2c3d: Add in-memory cache
+- ...
+```
+
+### Step 2: Exhaustive search per concept
+
+For each concept, search full commit messages (not just subject lines):
+
+```bash
+git log --all --after="..." --before="..." --grep="<concept>" --format="%H %s" -- path/
+```
+
+For each match, read the full commit message:
+
+```bash
+git show <sha> --format="%B" --no-patch
+```
+
+### Step 3: Rewrite narratives with gaps filled
+
+Rewrite `narratives.md` integrating any newly discovered commits. The rewritten version should:
+
+- Include ALL commits found for each concept
+- Update the lifecycle tracking for each concept
+- Ensure the arc is complete (if something was introduced, when was it changed/removed?)
+
+If a concept has an incomplete arc (e.g., introduced but never removed, yet it's not in current code), investigate further.
+
+## Cross-Narrative Connections
+
+When building the graph, don't just branch everything from the goal. Capture how narratives relate:
+
+**Branch from the spine, not goal:** If a narrative arose from work in another narrative, branch from that work.
+
+- Wrong: `goal -> "How to preserve state?"`
+- Right: `outcome("timeout works") -> "How to preserve state?"` (the question arose after implementing timeout)
+
+**Observations feed back:** If an observation in one narrative influenced decisions in another, add an edge.
+
+- Example: An observation about nested boundary timing might inform heuristics refinement in the main narrative
+
+**Keep truly independent things from goal:** If a narrative is genuinely a separate concern that doesn't arise from other work, branching from goal is appropriate.
+
+After consolidating, build the graph - one decision chain per narrative, with cross-links where they connect.
+
 ## Node Types
 
-| Type | Purpose |
-|------|---------|
-| **goal** | High-level objective being pursued |
-| **decision** | A choice point with multiple possible paths |
-| **option** | A possible approach to a decision |
-| **observation** | Learning, insight, or new information discovered |
-| **action** | Something that was done (must reference a commit) |
-| **outcome** | Result or consequence of an action |
-| **revisit** | Pivot point where a previous approach is reconsidered |
+| Type            | Purpose                                               |
+| --------------- | ----------------------------------------------------- |
+| **goal**        | High-level objective being pursued                    |
+| **decision**    | A choice point with multiple possible paths           |
+| **option**      | A possible approach to a decision                     |
+| **observation** | Learning, insight, or new information discovered      |
+| **action**      | Something that was done (must reference a commit)     |
+| **outcome**     | Result or consequence of an action                    |
+| **revisit**     | Pivot point where a previous approach is reconsidered |
 
 ## CLI Commands
 
@@ -1165,14 +1485,17 @@ deciduous add action "Descriptive title of what was done"
 deciduous add outcome "What resulted from the action"
 deciduous add revisit "Reconsidering previous approach"
 
-# Add nodes with descriptions
-deciduous add action "Title" -d "Explanation of what happened and why."
+# Add nodes with descriptions (use -d for explanations and sources)
+deciduous add action "Title" -d "Explanation of what happened and why.
+
+Sources:
+- abc123: 'Relevant quote from commit message'"
 
 # Set status on options
 deciduous status <id> rejected    # option that wasn't chosen
 deciduous status <id> completed   # option that was chosen
 
-# Connect nodes
+# Connect nodes (from -> to means "from leads_to to")
 deciduous link <from-id> <to-id>
 deciduous link <from-id> <to-id> -r "Why this led to that"
 
@@ -1183,20 +1506,95 @@ deciduous unlink <from> <to>   # remove edge
 deciduous delete <id>          # remove node and edges
 ```
 
+## Narrative Discipline
+
+You're not collecting facts - you're crafting a story. Every node needs a _raison d'etre_.
+
+Before adding a node, stop and ask: **Why does this exist? What prompted it?**
+
+- Is this commit evolving something that's already in the graph? Then connect it there - it's a continuation, not a new branch.
+- Is this a response to an observation about existing work? Then chain from that observation - something was learned, and this is the reaction.
+- Did the winds change? Look for the moment the team realized the old approach wasn't working. That's an observation node, and it's the bridge to what came next.
+
+**Don't branch from the goal unless it's genuinely new.** If you're about to draw an edge from the root goal, ask: does this replace or refine something we already designed? If yes, find that thing and connect there instead.
+
+The test: can someone read your graph and understand not just _what_ happened, but _why_ each thing happened? Every node should feel inevitable given what came before it.
+
+Think of commits as chapters in a story. Each chapter exists because of what happened in previous chapters. Your job is to find those causal threads and make them explicit.
+
 ## Temporal Rule
 
 **Time flows forward. Past influences future, never reverse.**
 
 Options under a decision are alternatives considered _at the same time_. If an approach was tried, failed, and a new approach was designed later - that's a **new decision node**, connected by observations about why the old approach failed.
 
+Example - DON'T model sequential attempts as parallel options:
+
+```
+# WRONG - these were decided years apart, not simultaneously
+decision: "How to handle caching?"
+  |-> option: in-memory cache (2019)
+  |-> option: Redis (2020)
+  |-> option: CDN (2021)
+```
+
+Example - DO model as chain of decisions with learning:
+
+```
+# RIGHT - each attempt informs the next, options are simultaneous alternatives
+decision: "How to handle caching?" (2019)
+  |-> option: in-memory cache [chosen]
+  |-> option: no caching [rejected] "Perf requirements too strict"
+        |
+option: in-memory cache -> action -> outcome
+        |
+observation: "Doesn't scale across instances"
+        |
+decision: "How to share cache across instances?" (2020)
+  |-> option: Redis [chosen] "Team has Redis experience"
+  |-> option: Memcached [rejected] "Less feature-rich"
+  |-> option: database caching [rejected] "Adds DB load"
+        |
+option: Redis -> action -> outcome
+        |
+observation: "Latency too high for hot paths"
+        |
+decision: "How to reduce latency for static assets?" (2021)
+  |-> option: CDN [chosen]
+```
+
+Multiple observations can converge into one decision. Multiple options can branch from one decision. But the graph flows forward in time.
+
+## Edge Types
+
+Use specific edge types to show relationships:
+
+```bash
+deciduous link <from> <to> -t chosen -r "Why this was selected"
+deciduous link <from> <to> -t rejected -r "Why this wasn't selected"
+deciduous link <from> <to> -t leads_to -r "How this led to that"
+```
+
+- `decision --chosen--> option` - This option was selected
+- `decision --rejected--> option` - This option was considered but not selected (with rationale)
+- `decision --leads_to--> option` - Lists available options
+
+For post-hoc abandonment (tried something, it failed later):
+
+- Mark the option status as `rejected`: `deciduous status <id> rejected`
+- Create an observation explaining why it failed
+- Link observation to the new decision it triggered
+
 ## Link Patterns (goal -> options -> decision -> actions -> outcomes)
 
 - `goal -> option` - Goal leads to possible approaches
-- `option -> decision` - Options lead to choosing
+- `option -> decision` - Options lead to choosing (use chosen/rejected edge types)
 - `decision -> action` - Chosen option leads to implementation
 - `action -> outcome` - Action produces result
 - `outcome -> observation` - Result reveals new insight
-- `observation -> revisit` - Insight forces reconsideration
+- `observation -> option` - Insight suggests new approach (feeds back to options)
+- `observation -> revisit` - Insight forces reconsideration of previous approach
+- `revisit -> option` - Pivot leads to exploring new options
 
 When a design approach is abandoned and replaced:
 
@@ -1207,12 +1605,61 @@ deciduous link <observation> <revisit> -r "forced rethinking"
 deciduous status <old_decision> superseded
 ```
 
+Revisit nodes connect old approaches to new ones, capturing WHY things changed.
+
 ## Grounding Requirements
 
-1. **Actions must cite commits**: Every action node must reference a real commit SHA in its description
-2. **Observations from evidence**: Observations should come from commit messages, code comments, or test descriptions
-3. **No speculation**: If you can't find evidence, don't include it
-4. **Quote sources**: When possible, quote the actual commit message that supports a node
+1. **Actions must cite commits**: Every action node must reference a real commit SHA in its description. Use `-d` when adding the node.
+
+2. **Observations from evidence**: Observations should come from commit messages, code comments, or test descriptions you find in the repo.
+
+3. **No speculation**: If you can't find evidence for something in the repo, don't include it. An incomplete but grounded graph is better than a complete but speculative one.
+
+4. **Quote sources**: When possible, quote or paraphrase the actual commit message or comment that supports a node.
+
+## Rich Node Content
+
+The graph is an **alternative interface to browsing commit history**. Someone reading a node should understand what happened without looking up commits.
+
+**Every node needs a description** - especially outcome and observation nodes. The description should be readable to someone exploring the graph who doesn't have the commits open.
+
+### Structure: Explanation first, then sources
+
+1. **Start with a readable explanation** that makes sense within the narrative. What happened? Why? How does it connect to what came before?
+2. **Add sources below** with direct quotes from commits that support the explanation.
+
+If you find your explanation doesn't make sense in context - something feels like a leap or a gap - that's a signal to dig deeper. There's probably a missing commit or transition you haven't found yet.
+
+The relationship is many-to-many:
+
+- One node may reference multiple commits (a decision informed by several changes)
+- One commit may appear in multiple nodes (a large commit touching several concerns)
+
+### Example
+
+```bash
+deciduous add decision "Should we switch from SQL to a document store?" -d "The team decided to switch from SQL to a document store.
+This eliminated the impedance mismatch between the object model and storage,
+at the cost of losing ad-hoc query capability (which wasn't being used anyway).
+
+Sources:
+- a1b2c3d: 'Our access patterns are almost entirely key-value lookups. The
+  JOIN operations we wrote are never actually used in production.'
+- e4f5g6h: 'Document store removes the ORM layer entirely - one less thing
+  to maintain and debug.'"
+```
+
+### DO NOT:
+
+- Leave nodes with just a title and no description
+- Put quotes first without explaining what they mean
+- Write explanations that don't make sense in the narrative flow (this signals missing context)
+
+### DO:
+
+- Write explanations that flow naturally from previous nodes
+- Include direct quotes that support the explanation
+- Treat gaps in the story as prompts to investigate further
 
 ## Output
 
@@ -1756,25 +2203,57 @@ deciduous link <auth_observation> <ratelimit_decision> \
 
 ## Step 6: Mark superseded paths
 
+For nodes that were replaced but not part of a pivot:
+
 ```bash
+# Single node
 deciduous archaeology supersede <id>
+
+# Node and all descendants
 deciduous archaeology supersede <id> --cascade
 ```
 
 ## Step 7: Review the timeline
 
 ```bash
+# See all nodes chronologically
 deciduous archaeology timeline
+
+# Filter by type
 deciduous archaeology timeline --type revisit
+
+# See existing pivot chains
 deciduous narratives pivots
+
+# Visual exploration
 deciduous serve
 ```
 
 ## Attach Evidence Documents
 
+If you find diagrams, screenshots, or specs that support the archaeology:
+
 ```bash
 deciduous doc attach <goal_id> evidence/old-architecture.png -d "Architecture before refactor"
 deciduous doc attach <revisit_id> evidence/perf-report.pdf --ai-describe
+```
+
+Documents provide visual/tangible evidence alongside commit-based grounding.
+
+## Querying the Graph
+
+```bash
+# Current state
+deciduous pulse
+
+# Pivot points
+deciduous narratives pivots
+
+# Timeline
+deciduous archaeology timeline
+
+# By status
+deciduous nodes --type revisit
 ```
 
 ## What NOT to Do
