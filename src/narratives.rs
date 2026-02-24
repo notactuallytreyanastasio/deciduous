@@ -39,15 +39,15 @@ fn get_branch(node: &DecisionNode) -> Option<String> {
     node.metadata_json
         .as_ref()
         .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()))
+        .and_then(|v| {
+            v.get("branch")
+                .and_then(|b| b.as_str())
+                .map(|s| s.to_string())
+        })
 }
 
 /// Initialize narratives.md with active goal titles as sections
-pub fn init_narratives(
-    db: &Database,
-    output_path: &Path,
-    force: bool,
-) -> Result<(), String> {
+pub fn init_narratives(db: &Database, output_path: &Path, force: bool) -> Result<(), String> {
     if output_path.exists() && !force {
         return Err(format!(
             "{} already exists. Use --force to overwrite.",
@@ -70,7 +70,10 @@ pub fn init_narratives(
     } else {
         for goal in &active_goals {
             content.push_str(&format!("## {}\n", goal.title));
-            content.push_str(&format!("> Node #{} | Status: {}\n\n", goal.id, goal.status));
+            content.push_str(&format!(
+                "> Node #{} | Status: {}\n\n",
+                goal.id, goal.status
+            ));
             content.push_str("**Current state:** [How it works today]\n\n");
             content.push_str("**Evolution:**\n");
             content.push_str("1. [First approach] - [why]\n");
@@ -109,10 +112,7 @@ pub fn show_narratives(path: &Path) -> Result<String, String> {
 }
 
 /// Find all revisit nodes and build their pivot chains
-pub fn find_pivots(
-    db: &Database,
-    branch: Option<&str>,
-) -> Result<Vec<PivotChain>, String> {
+pub fn find_pivots(db: &Database, branch: Option<&str>) -> Result<Vec<PivotChain>, String> {
     let all_nodes = db.get_all_nodes().map_err(|e| e.to_string())?;
     let all_edges = db.get_all_edges().map_err(|e| e.to_string())?;
 
@@ -140,10 +140,8 @@ pub fn find_pivots(
     }
 
     // Find all revisit nodes
-    let revisit_nodes: Vec<&&DecisionNode> = nodes
-        .iter()
-        .filter(|n| n.node_type == "revisit")
-        .collect();
+    let revisit_nodes: Vec<&&DecisionNode> =
+        nodes.iter().filter(|n| n.node_type == "revisit").collect();
 
     let mut pivots = Vec::new();
 
@@ -205,11 +203,7 @@ pub fn print_pivots(pivots: &[PivotChain]) {
         return;
     }
 
-    println!(
-        "{} ({} found)",
-        "=== PIVOTS ===".bold(),
-        pivots.len()
-    );
+    println!("{} ({} found)", "=== PIVOTS ===".bold(), pivots.len());
 
     for (i, pivot) in pivots.iter().enumerate() {
         println!();

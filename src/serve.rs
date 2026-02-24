@@ -314,19 +314,20 @@ fn get_sync_status() -> SyncStatus {
     // Count by author
     let mut events_by_author: HashMap<String, usize> = HashMap::new();
     for event in &events {
-        *events_by_author.entry(event.author().to_string()).or_default() += 1;
+        *events_by_author
+            .entry(event.author().to_string())
+            .or_default() += 1;
     }
 
     // Get checkpoint info
-    let (checkpoint_time, checkpoint_nodes, checkpoint_edges) =
-        match event_log.load_checkpoint() {
-            Ok(Some(cp)) => (
-                Some(cp.created_at.to_rfc3339()),
-                Some(cp.nodes.len()),
-                Some(cp.edges.len()),
-            ),
-            _ => (None, None, None),
-        };
+    let (checkpoint_time, checkpoint_nodes, checkpoint_edges) = match event_log.load_checkpoint() {
+        Ok(Some(cp)) => (
+            Some(cp.created_at.to_rfc3339()),
+            Some(cp.nodes.len()),
+            Some(cp.edges.len()),
+        ),
+        _ => (None, None, None),
+    };
 
     SyncStatus {
         initialized: true,
@@ -1147,9 +1148,7 @@ fn handle_document_file(request: Request, path: &str) -> std::io::Result<()> {
 
     let content_type = doc.mime_type.as_str();
     let response = Response::from_data(file_data)
-        .with_header(
-            Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes()).unwrap(),
-        )
+        .with_header(Header::from_bytes(&b"Content-Type"[..], content_type.as_bytes()).unwrap())
         .with_header(
             Header::from_bytes(
                 &b"Content-Disposition"[..],

@@ -85,7 +85,11 @@ fn get_branch(node: &DecisionNode) -> Option<String> {
     node.metadata_json
         .as_ref()
         .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()))
+        .and_then(|v| {
+            v.get("branch")
+                .and_then(|b| b.as_str())
+                .map(|s| s.to_string())
+        })
 }
 
 /// Generate the full pulse report
@@ -155,7 +159,10 @@ pub fn generate_pulse(
     // Build adjacency for BFS
     let mut outgoing: HashMap<i32, Vec<i32>> = HashMap::new();
     for edge in &edges {
-        outgoing.entry(edge.from_node_id).or_default().push(edge.to_node_id);
+        outgoing
+            .entry(edge.from_node_id)
+            .or_default()
+            .push(edge.to_node_id);
     }
 
     let node_map: HashMap<i32, &DecisionNode> = nodes.iter().map(|n| (n.id, *n)).collect();
@@ -217,7 +224,9 @@ pub fn generate_pulse(
     for node in &nodes {
         let has_outgoing = outgoing.contains_key(&node.id);
         match node.node_type.as_str() {
-            "goal" if !has_outgoing && node.status != "superseded" && node.status != "abandoned" => {
+            "goal"
+                if !has_outgoing && node.status != "superseded" && node.status != "abandoned" =>
+            {
                 gaps.push(CoverageGap {
                     node_id: node.id,
                     node_type: node.node_type.clone(),
@@ -225,7 +234,9 @@ pub fn generate_pulse(
                     gap_type: "goal_without_options".to_string(),
                 });
             }
-            "decision" if !has_outgoing && node.status != "superseded" && node.status != "abandoned" => {
+            "decision"
+                if !has_outgoing && node.status != "superseded" && node.status != "abandoned" =>
+            {
                 gaps.push(CoverageGap {
                     node_id: node.id,
                     node_type: node.node_type.clone(),
@@ -233,7 +244,9 @@ pub fn generate_pulse(
                     gap_type: "decision_without_actions".to_string(),
                 });
             }
-            "action" if !has_outgoing && node.status != "superseded" && node.status != "abandoned" => {
+            "action"
+                if !has_outgoing && node.status != "superseded" && node.status != "abandoned" =>
+            {
                 gaps.push(CoverageGap {
                     node_id: node.id,
                     node_type: node.node_type.clone(),
@@ -268,7 +281,15 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
     );
 
     // Types
-    let type_order = ["goal", "option", "decision", "action", "outcome", "observation", "revisit"];
+    let type_order = [
+        "goal",
+        "option",
+        "decision",
+        "action",
+        "outcome",
+        "observation",
+        "revisit",
+    ];
     let type_parts: Vec<String> = type_order
         .iter()
         .filter_map(|t| {
@@ -347,11 +368,7 @@ pub fn print_pulse(report: &PulseReport, summary_only: bool) {
     // Orphans
     if !report.orphan_nodes.is_empty() {
         println!();
-        println!(
-            "{} ({}):",
-            "Orphan Nodes".bold(),
-            report.orphan_nodes.len()
-        );
+        println!("{} ({}):", "Orphan Nodes".bold(), report.orphan_nodes.len());
         for node in &report.orphan_nodes {
             println!(
                 "  #{} {} \"{}\" - {}",

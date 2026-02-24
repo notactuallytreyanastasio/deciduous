@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.7",
+        highlights: &[
+            "Fix: OpenCode plugin uses console.error instead of console.log to avoid breaking TUI STDOUT",
+            "require-action-node and post-commit-reminder plugins no longer pollute OpenCode display",
+        ],
+    },
+    Release {
         version: "0.13.6",
         highlights: &[
             "decision-graph: new Layer 4 - use gh CLI to find PRs for design context and review discussion",

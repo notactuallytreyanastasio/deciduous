@@ -35,7 +35,7 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
 
         if (!hasRecentNode && lines.length > 2) {
           // Show a reminder but don't block
-          console.log(`
+          console.error(`
 +===================================================================+
 |  DECIDUOUS: No recent action/goal node found                      |
 +===================================================================+

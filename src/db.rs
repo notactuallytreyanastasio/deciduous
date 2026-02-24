@@ -2533,12 +2533,7 @@ impl Database {
     // ========================================================================
 
     /// Create a new theme
-    pub fn create_theme(
-        &self,
-        name: &str,
-        color: &str,
-        description: Option<&str>,
-    ) -> Result<i32> {
+    pub fn create_theme(&self, name: &str, color: &str, description: Option<&str>) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
@@ -3396,9 +3391,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
 
-        let node_id = db
-            .create_node("goal", "Test", None, None, None)
-            .unwrap();
+        let node_id = db.create_node("goal", "Test", None, None, None).unwrap();
         db.create_theme("temp", "#000", None).unwrap();
         db.tag_node(node_id, "temp", "manual").unwrap();
 
@@ -3412,9 +3405,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
 
-        let node_id = db
-            .create_node("goal", "Test", None, None, None)
-            .unwrap();
+        let node_id = db.create_node("goal", "Test", None, None, None).unwrap();
         db.create_theme("ux", "#3b82f6", None).unwrap();
         db.tag_node(node_id, "ux", "suggested").unwrap();
 
@@ -3434,9 +3425,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
 
-        let node_id = db
-            .create_node("goal", "Test", None, None, None)
-            .unwrap();
+        let node_id = db.create_node("goal", "Test", None, None, None).unwrap();
         db.create_theme("ux", "#3b82f6", None).unwrap();
         db.tag_node(node_id, "ux", "manual").unwrap();
 
@@ -3487,13 +3476,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
 
-        let node_id = db
-            .create_node("goal", "Test", None, None, None)
-            .unwrap();
+        let node_id = db.create_node("goal", "Test", None, None, None).unwrap();
         let doc_id = db
             .attach_document(
-                node_id, "hash1", "file.txt", "file.txt.hash1234", "text/plain", 100, None,
-                "none", None,
+                node_id,
+                "hash1",
+                "file.txt",
+                "file.txt.hash1234",
+                "text/plain",
+                100,
+                None,
+                "none",
+                None,
             )
             .unwrap();
 
@@ -3515,13 +3509,18 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
 
-        let node_id = db
-            .create_node("goal", "Test", None, None, None)
-            .unwrap();
+        let node_id = db.create_node("goal", "Test", None, None, None).unwrap();
         let doc_id = db
             .attach_document(
-                node_id, "hash1", "file.txt", "file.txt.hash1234", "text/plain", 100, None,
-                "none", None,
+                node_id,
+                "hash1",
+                "file.txt",
+                "file.txt.hash1234",
+                "text/plain",
+                100,
+                None,
+                "none",
+                None,
             )
             .unwrap();
 
@@ -3538,9 +3537,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
 
-        let node_id = db
-            .create_node("goal", "Test", None, None, None)
-            .unwrap();
+        let node_id = db.create_node("goal", "Test", None, None, None).unwrap();
         db.attach_document(
             node_id,
             "hash1",

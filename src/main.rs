@@ -6,11 +6,23 @@ use deciduous::roadmap::{
     generate_issue_body, parse_roadmap, write_roadmap_with_metadata, RoadmapSection,
 };
 use deciduous::{
-    filter_graph_by_ids, generate_pr_writeup, graph_to_dot, parse_node_range, Config, Database,
-    DotConfig, WriteupConfig,
+    filter_graph_by_ids,
+    generate_edge_id,
+    generate_pr_writeup,
+    get_current_author,
+    graph_to_dot,
+    parse_node_range,
     // Event log sync
-    Checkpoint, CheckpointEdge, CheckpointNode, Event, EventLog, MaterializedState,
-    generate_edge_id, get_current_author,
+    Checkpoint,
+    CheckpointEdge,
+    CheckpointNode,
+    Config,
+    Database,
+    DotConfig,
+    Event,
+    EventLog,
+    MaterializedState,
+    WriteupConfig,
 };
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -1145,7 +1157,9 @@ fn main() {
                     if sync_dir.exists() {
                         if let Ok(Some(node)) = db.get_node(id) {
                             let author = get_current_author();
-                            if let Ok(event_log) = EventLog::new(&PathBuf::from(".deciduous"), author.clone()) {
+                            if let Ok(event_log) =
+                                EventLog::new(&PathBuf::from(".deciduous"), author.clone())
+                            {
                                 let event = Event::AddNode {
                                     change_id: node.change_id.clone(),
                                     node_type: node.node_type.clone(),
@@ -1195,9 +1209,15 @@ fn main() {
 
                     if let (Some(from_n), Some(to_n)) = (from_node, to_node) {
                         let author = get_current_author();
-                        if let Ok(event_log) = EventLog::new(&PathBuf::from(".deciduous"), author.clone()) {
+                        if let Ok(event_log) =
+                            EventLog::new(&PathBuf::from(".deciduous"), author.clone())
+                        {
                             let event = Event::AddEdge {
-                                edge_id: generate_edge_id(&from_n.change_id, &to_n.change_id, &edge_type),
+                                edge_id: generate_edge_id(
+                                    &from_n.change_id,
+                                    &to_n.change_id,
+                                    &edge_type,
+                                ),
                                 from_change_id: from_n.change_id.clone(),
                                 to_change_id: to_n.change_id.clone(),
                                 edge_type: edge_type.clone(),
@@ -1232,10 +1252,16 @@ fn main() {
                     if sync_dir.exists() {
                         if let (Some(from_n), Some(to_n)) = (from_node, to_node) {
                             let author = get_current_author();
-                            if let Ok(event_log) = EventLog::new(&PathBuf::from(".deciduous"), author.clone()) {
+                            if let Ok(event_log) =
+                                EventLog::new(&PathBuf::from(".deciduous"), author.clone())
+                            {
                                 // We need to figure out the edge_type for the edge_id
                                 // For now, use "leads_to" as default since we don't have the edge info
-                                let edge_id = generate_edge_id(&from_n.change_id, &to_n.change_id, "leads_to");
+                                let edge_id = generate_edge_id(
+                                    &from_n.change_id,
+                                    &to_n.change_id,
+                                    "leads_to",
+                                );
                                 let event = Event::DeleteEdge {
                                     edge_id,
                                     timestamp: chrono::Utc::now(),
@@ -1287,7 +1313,9 @@ fn main() {
                         if sync_dir.exists() {
                             if let Some(node) = node_info {
                                 let author = get_current_author();
-                                if let Ok(event_log) = EventLog::new(&PathBuf::from(".deciduous"), author.clone()) {
+                                if let Ok(event_log) =
+                                    EventLog::new(&PathBuf::from(".deciduous"), author.clone())
+                                {
                                     let event = Event::DeleteNode {
                                         change_id: node.change_id.clone(),
                                         timestamp: chrono::Utc::now(),
@@ -1317,7 +1345,9 @@ fn main() {
                 if sync_dir.exists() {
                     if let Ok(Some(node)) = db.get_node(id) {
                         let author = get_current_author();
-                        if let Ok(event_log) = EventLog::new(&PathBuf::from(".deciduous"), author.clone()) {
+                        if let Ok(event_log) =
+                            EventLog::new(&PathBuf::from(".deciduous"), author.clone())
+                        {
                             let event = Event::UpdateNode {
                                 change_id: node.change_id.clone(),
                                 title: None,
@@ -2374,7 +2404,9 @@ fn main() {
                                 println!();
                                 println!("{}", "Next steps:".cyan());
                                 println!("  1. Add .deciduous/sync/ to git tracking");
-                                println!("  2. Team members pull and run 'deciduous events rebuild'");
+                                println!(
+                                    "  2. Team members pull and run 'deciduous events rebuild'"
+                                );
                             }
                             Err(e) => {
                                 eprintln!("{} Creating sync directory: {}", "Error:".red(), e);
@@ -2418,8 +2450,9 @@ fn main() {
                                     let mut by_author: std::collections::HashMap<String, usize> =
                                         std::collections::HashMap::new();
                                     for event in &events {
-                                        *by_author.entry(event.author().to_string()).or_default() +=
-                                            1;
+                                        *by_author
+                                            .entry(event.author().to_string())
+                                            .or_default() += 1;
                                     }
                                     if !by_author.is_empty() {
                                         println!("  Events by author:");
@@ -2446,7 +2479,9 @@ fn main() {
                                                 .unwrap_or(0);
                                             println!(
                                                 "    {} ({} bytes)",
-                                                path.file_name().unwrap_or_default().to_string_lossy(),
+                                                path.file_name()
+                                                    .unwrap_or_default()
+                                                    .to_string_lossy(),
                                                 size
                                             );
                                         }
@@ -2554,10 +2589,8 @@ fn main() {
                                         .as_ref()
                                         .and_then(|m| m.get("prompt"))
                                         .and_then(|p| p.as_str());
-                                    let files = meta
-                                        .as_ref()
-                                        .and_then(|m| m.get("files"))
-                                        .and_then(|f| {
+                                    let files =
+                                        meta.as_ref().and_then(|m| m.get("files")).and_then(|f| {
                                             f.as_array().map(|arr| {
                                                 arr.iter()
                                                     .filter_map(|v| v.as_str())
@@ -2607,13 +2640,11 @@ fn main() {
                                     String,
                                 )> = existing_edges
                                     .iter()
-                                    .filter_map(|e| {
-                                        match (&e.from_change_id, &e.to_change_id) {
-                                            (Some(from), Some(to)) => {
-                                                Some((from.clone(), to.clone(), e.edge_type.clone()))
-                                            }
-                                            _ => None,
+                                    .filter_map(|e| match (&e.from_change_id, &e.to_change_id) {
+                                        (Some(from), Some(to)) => {
+                                            Some((from.clone(), to.clone(), e.edge_type.clone()))
                                         }
+                                        _ => None,
                                     })
                                     .collect();
 
@@ -2712,18 +2743,16 @@ fn main() {
                                     .collect(),
                                 edges: edges
                                     .iter()
-                                    .filter_map(|e| {
-                                        match (&e.from_change_id, &e.to_change_id) {
-                                            (Some(from), Some(to)) => Some(CheckpointEdge {
-                                                edge_id: generate_edge_id(from, to, &e.edge_type),
-                                                from_change_id: from.clone(),
-                                                to_change_id: to.clone(),
-                                                edge_type: e.edge_type.clone(),
-                                                rationale: e.rationale.clone(),
-                                                created_at: e.created_at.clone(),
-                                            }),
-                                            _ => None,
-                                        }
+                                    .filter_map(|e| match (&e.from_change_id, &e.to_change_id) {
+                                        (Some(from), Some(to)) => Some(CheckpointEdge {
+                                            edge_id: generate_edge_id(from, to, &e.edge_type),
+                                            from_change_id: from.clone(),
+                                            to_change_id: to.clone(),
+                                            edge_type: e.edge_type.clone(),
+                                            rationale: e.rationale.clone(),
+                                            created_at: e.created_at.clone(),
+                                        }),
+                                        _ => None,
                                     })
                                     .collect(),
                                 version: "1.0".to_string(),
@@ -2982,10 +3011,7 @@ fn main() {
                     match generate_ai_description(&doc.original_filename, &file_path) {
                         Some(d) => (d, "ai"),
                         None => {
-                            eprintln!(
-                                "{} Could not generate AI description",
-                                "Error:".red()
-                            );
+                            eprintln!("{} Could not generate AI description", "Error:".red());
                             std::process::exit(1);
                         }
                     }
@@ -2998,11 +3024,7 @@ fn main() {
                 };
 
                 match db.update_document_description(doc_id, &desc.0, desc.1) {
-                    Ok(()) => println!(
-                        "{} description for document {}",
-                        "Updated".green(),
-                        doc_id
-                    ),
+                    Ok(()) => println!("{} description for document {}", "Updated".green(), doc_id),
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
                         std::process::exit(1);
@@ -3030,22 +3052,19 @@ fn main() {
                         println!("  MIME type:   {}", doc.mime_type);
                         println!("  Size:        {}", format_file_size(doc.file_size));
                         println!("  Hash:        {}", doc.content_hash);
-                        println!("  Storage:     .deciduous/documents/{}", doc.storage_filename);
+                        println!(
+                            "  Storage:     .deciduous/documents/{}",
+                            doc.storage_filename
+                        );
                         println!("  Attached:    {}", doc.attached_at);
                         if let Some(by) = &doc.attached_by {
                             println!("  Attached by: {}", by);
                         }
                         if let Some(desc) = &doc.description {
-                            println!(
-                                "  Description: {} ({})",
-                                desc, doc.description_source
-                            );
+                            println!("  Description: {} ({})", desc, doc.description_source);
                         }
                         if doc.detached_at.is_some() {
-                            println!(
-                                "  {}",
-                                "DETACHED".red()
-                            );
+                            println!("  {}", "DETACHED".red());
                         }
                     }
                 }
@@ -3086,15 +3105,8 @@ fn main() {
                     #[cfg(not(target_os = "macos"))]
                     let open_cmd = "xdg-open";
 
-                    match std::process::Command::new(open_cmd)
-                        .arg(&temp_path)
-                        .spawn()
-                    {
-                        Ok(_) => println!(
-                            "{} {}",
-                            "Opened".green(),
-                            doc.original_filename
-                        ),
+                    match std::process::Command::new(open_cmd).arg(&temp_path).spawn() {
+                        Ok(_) => println!("{} {}", "Opened".green(), doc.original_filename),
                         Err(e) => {
                             eprintln!("{} Failed to open file: {}", "Error:".red(), e);
                             std::process::exit(1);
@@ -3231,12 +3243,7 @@ fn main() {
         // ================================================================
         Command::Tag { action } => match action {
             TagAction::Add { node_id, theme } => match db.tag_node(node_id, &theme, "manual") {
-                Ok(()) => println!(
-                    "{} theme '{}' to node {}",
-                    "Tagged".green(),
-                    theme,
-                    node_id
-                ),
+                Ok(()) => println!("{} theme '{}' to node {}", "Tagged".green(), theme, node_id),
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
                     std::process::exit(1);
@@ -3301,7 +3308,9 @@ fn main() {
 
                 let all_themes = db.get_all_themes().unwrap_or_default();
                 if all_themes.is_empty() {
-                    println!("No themes defined. Create themes first: deciduous themes create <name>");
+                    println!(
+                        "No themes defined. Create themes first: deciduous themes create <name>"
+                    );
                     return;
                 }
 
@@ -3337,10 +3346,7 @@ fn main() {
                             if keywords.is_empty() {
                                 0.0
                             } else {
-                                let matches = keywords
-                                    .iter()
-                                    .filter(|k| text.contains(*k))
-                                    .count();
+                                let matches = keywords.iter().filter(|k| text.contains(*k)).count();
                                 matches as f64 / keywords.len() as f64
                             }
                         } else {
@@ -3596,147 +3602,139 @@ fn main() {
             recent,
             json,
             summary,
-        } => {
-            match deciduous::pulse::generate_pulse(&db, branch.as_deref(), recent) {
-                Ok(report) => {
-                    if json {
-                        match serde_json::to_string_pretty(&report) {
-                            Ok(j) => println!("{}", j),
-                            Err(e) => {
-                                eprintln!("{} {}", "Error:".red(), e);
-                                std::process::exit(1);
-                            }
+        } => match deciduous::pulse::generate_pulse(&db, branch.as_deref(), recent) {
+            Ok(report) => {
+                if json {
+                    match serde_json::to_string_pretty(&report) {
+                        Ok(j) => println!("{}", j),
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
                         }
-                    } else {
-                        deciduous::pulse::print_pulse(&report, summary);
                     }
+                } else {
+                    deciduous::pulse::print_pulse(&report, summary);
+                }
+            }
+            Err(e) => {
+                eprintln!("{} {}", "Error:".red(), e);
+                std::process::exit(1);
+            }
+        },
+
+        Command::Narratives { action } => match action {
+            NarrativesAction::Init { output, force } => {
+                let path = output.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
+                if let Err(e) = deciduous::narratives::init_narratives(&db, &path, force) {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+            NarrativesAction::Show { path } => {
+                let p = path.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
+                match deciduous::narratives::show_narratives(&p) {
+                    Ok(content) => print!("{}", content),
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            NarrativesAction::Pivots { branch, json } => {
+                match deciduous::narratives::find_pivots(&db, branch.as_deref()) {
+                    Ok(pivots) => {
+                        if json {
+                            match serde_json::to_string_pretty(&pivots) {
+                                Ok(j) => println!("{}", j),
+                                Err(e) => {
+                                    eprintln!("{} {}", "Error:".red(), e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        } else {
+                            deciduous::narratives::print_pivots(&pivots);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+        },
+
+        Command::Archaeology { action } => match action {
+            ArchaeologyAction::Pivot {
+                from_id,
+                observation,
+                new_approach,
+                confidence,
+                reason,
+                dry_run,
+            } => {
+                match deciduous::archaeology::create_pivot(
+                    &db,
+                    from_id,
+                    &observation,
+                    &new_approach,
+                    confidence,
+                    reason.as_deref(),
+                    dry_run,
+                ) {
+                    Ok(result) => {
+                        deciduous::archaeology::print_pivot_result(&result, dry_run);
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            ArchaeologyAction::Timeline {
+                limit,
+                node_type,
+                branch,
+                json,
+            } => {
+                match deciduous::archaeology::timeline(
+                    &db,
+                    limit,
+                    node_type.as_deref(),
+                    branch.as_deref(),
+                ) {
+                    Ok(nodes) => {
+                        if json {
+                            match serde_json::to_string_pretty(&nodes) {
+                                Ok(j) => println!("{}", j),
+                                Err(e) => {
+                                    eprintln!("{} {}", "Error:".red(), e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        } else {
+                            deciduous::archaeology::print_timeline(&nodes);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            ArchaeologyAction::Supersede {
+                id,
+                cascade,
+                dry_run,
+            } => match deciduous::archaeology::supersede(&db, id, cascade, dry_run) {
+                Ok(result) => {
+                    deciduous::archaeology::print_supersede_result(&result, dry_run);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
                     std::process::exit(1);
                 }
-            }
-        }
-
-        Command::Narratives { action } => {
-            match action {
-                NarrativesAction::Init { output, force } => {
-                    let path = output.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
-                    if let Err(e) = deciduous::narratives::init_narratives(&db, &path, force) {
-                        eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
-                    }
-                }
-                NarrativesAction::Show { path } => {
-                    let p = path.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
-                    match deciduous::narratives::show_narratives(&p) {
-                        Ok(content) => print!("{}", content),
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                NarrativesAction::Pivots { branch, json } => {
-                    match deciduous::narratives::find_pivots(&db, branch.as_deref()) {
-                        Ok(pivots) => {
-                            if json {
-                                match serde_json::to_string_pretty(&pivots) {
-                                    Ok(j) => println!("{}", j),
-                                    Err(e) => {
-                                        eprintln!("{} {}", "Error:".red(), e);
-                                        std::process::exit(1);
-                                    }
-                                }
-                            } else {
-                                deciduous::narratives::print_pivots(&pivots);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-            }
-        }
-
-        Command::Archaeology { action } => {
-            match action {
-                ArchaeologyAction::Pivot {
-                    from_id,
-                    observation,
-                    new_approach,
-                    confidence,
-                    reason,
-                    dry_run,
-                } => {
-                    match deciduous::archaeology::create_pivot(
-                        &db,
-                        from_id,
-                        &observation,
-                        &new_approach,
-                        confidence,
-                        reason.as_deref(),
-                        dry_run,
-                    ) {
-                        Ok(result) => {
-                            deciduous::archaeology::print_pivot_result(&result, dry_run);
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                ArchaeologyAction::Timeline {
-                    limit,
-                    node_type,
-                    branch,
-                    json,
-                } => {
-                    match deciduous::archaeology::timeline(
-                        &db,
-                        limit,
-                        node_type.as_deref(),
-                        branch.as_deref(),
-                    ) {
-                        Ok(nodes) => {
-                            if json {
-                                match serde_json::to_string_pretty(&nodes) {
-                                    Ok(j) => println!("{}", j),
-                                    Err(e) => {
-                                        eprintln!("{} {}", "Error:".red(), e);
-                                        std::process::exit(1);
-                                    }
-                                }
-                            } else {
-                                deciduous::archaeology::print_timeline(&nodes);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                ArchaeologyAction::Supersede {
-                    id,
-                    cascade,
-                    dry_run,
-                } => {
-                    match deciduous::archaeology::supersede(&db, id, cascade, dry_run) {
-                        Ok(result) => {
-                            deciduous::archaeology::print_supersede_result(&result, dry_run);
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-            }
-        }
+            },
+        },
 
         Command::Roadmap { action } => {
             match action {

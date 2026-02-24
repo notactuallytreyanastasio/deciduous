@@ -56,7 +56,7 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
 
         if (!hasRecentNode && lines.length > 2) {
           // Show a reminder but don't block
-          console.log(`
+          console.error(`
 +===================================================================+
 |  DECIDUOUS: No recent action/goal node found                      |
 +===================================================================+
@@ -2603,21 +2603,13 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
 
     // Install custom agent
     let agent_path = agent_dir.join("deciduous.md");
-    fs::write(&agent_path, AGENT_DECIDUOUS)
-        .map_err(|e| format!("Could not write agent: {}", e))?;
-    println!(
-        "   {} .opencode/agents/deciduous.md",
-        "Installed".green()
-    );
+    fs::write(&agent_path, AGENT_DECIDUOUS).map_err(|e| format!("Could not write agent: {}", e))?;
+    println!("   {} .opencode/agents/deciduous.md", "Installed".green());
 
     // Install custom tool
     let tool_path = tool_dir.join("deciduous.ts");
-    fs::write(&tool_path, TOOL_DECIDUOUS)
-        .map_err(|e| format!("Could not write tool: {}", e))?;
-    println!(
-        "   {} .opencode/tools/deciduous.ts",
-        "Installed".green()
-    );
+    fs::write(&tool_path, TOOL_DECIDUOUS).map_err(|e| format!("Could not write tool: {}", e))?;
+    println!("   {} .opencode/tools/deciduous.ts", "Installed".green());
 
     // Generate opencode.json config
     // Plugins are auto-loaded from .opencode/plugins/
@@ -2711,9 +2703,8 @@ fn migrate_opencode_dirs(project_root: &Path) -> Result<(), String> {
 
         if old_dir.exists() && !new_dir.exists() {
             // Simple rename
-            fs::rename(&old_dir, &new_dir).map_err(|e| {
-                format!("Could not migrate {} to {}: {}", old_name, new_name, e)
-            })?;
+            fs::rename(&old_dir, &new_dir)
+                .map_err(|e| format!("Could not migrate {} to {}: {}", old_name, new_name, e))?;
             println!(
                 "   {} .opencode/{} -> .opencode/{}",
                 "Migrated".green(),
@@ -2847,21 +2838,13 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
 
     // Update agent (overwrite)
     let agent_path = agent_dir.join("deciduous.md");
-    fs::write(&agent_path, AGENT_DECIDUOUS)
-        .map_err(|e| format!("Could not write agent: {}", e))?;
-    println!(
-        "   {} .opencode/agents/deciduous.md",
-        "Updated".green()
-    );
+    fs::write(&agent_path, AGENT_DECIDUOUS).map_err(|e| format!("Could not write agent: {}", e))?;
+    println!("   {} .opencode/agents/deciduous.md", "Updated".green());
 
     // Update tool (overwrite)
     let tool_path = tool_dir.join("deciduous.ts");
-    fs::write(&tool_path, TOOL_DECIDUOUS)
-        .map_err(|e| format!("Could not write tool: {}", e))?;
-    println!(
-        "   {} .opencode/tools/deciduous.ts",
-        "Updated".green()
-    );
+    fs::write(&tool_path, TOOL_DECIDUOUS).map_err(|e| format!("Could not write tool: {}", e))?;
+    println!("   {} .opencode/tools/deciduous.ts", "Updated".green());
 
     // Note: We don't overwrite opencode.json or AGENTS.md as they may have user customizations
     println!(
@@ -3438,30 +3421,18 @@ mod tests {
             .exists());
 
         // Check commands (now in commands/ plural)
-        assert!(project_root
-            .join(".opencode/commands/work.md")
-            .exists());
-        assert!(project_root
-            .join(".opencode/commands/recover.md")
-            .exists());
-        assert!(project_root
-            .join(".opencode/commands/decision.md")
-            .exists());
+        assert!(project_root.join(".opencode/commands/work.md").exists());
+        assert!(project_root.join(".opencode/commands/recover.md").exists());
+        assert!(project_root.join(".opencode/commands/decision.md").exists());
         assert!(project_root
             .join(".opencode/commands/build-test.md")
             .exists());
-        assert!(project_root
-            .join(".opencode/commands/serve-ui.md")
-            .exists());
+        assert!(project_root.join(".opencode/commands/serve-ui.md").exists());
         assert!(project_root
             .join(".opencode/commands/sync-graph.md")
             .exists());
-        assert!(project_root
-            .join(".opencode/commands/document.md")
-            .exists());
-        assert!(project_root
-            .join(".opencode/commands/sync.md")
-            .exists());
+        assert!(project_root.join(".opencode/commands/document.md").exists());
+        assert!(project_root.join(".opencode/commands/sync.md").exists());
         assert!(project_root
             .join(".opencode/commands/decision-graph.md")
             .exists());
@@ -3478,9 +3449,7 @@ mod tests {
             .exists());
 
         // Skills should NOT be in commands/
-        assert!(!project_root
-            .join(".opencode/commands/pulse.md")
-            .exists());
+        assert!(!project_root.join(".opencode/commands/pulse.md").exists());
         assert!(!project_root
             .join(".opencode/commands/narratives.md")
             .exists());
@@ -3489,12 +3458,8 @@ mod tests {
             .exists());
 
         // Check agent and tool
-        assert!(project_root
-            .join(".opencode/agents/deciduous.md")
-            .exists());
-        assert!(project_root
-            .join(".opencode/tools/deciduous.ts")
-            .exists());
+        assert!(project_root.join(".opencode/agents/deciduous.md").exists());
+        assert!(project_root.join(".opencode/tools/deciduous.ts").exists());
 
         // Check config files
         assert!(project_root.join("opencode.json").exists());
@@ -3523,17 +3488,11 @@ mod tests {
         assert!(!old_command.exists());
 
         // New dirs should have the files
-        assert!(project_root
-            .join(".opencode/plugins/test.ts")
-            .exists());
-        assert!(project_root
-            .join(".opencode/commands/work.md")
-            .exists());
+        assert!(project_root.join(".opencode/plugins/test.ts").exists());
+        assert!(project_root.join(".opencode/commands/work.md").exists());
 
         // Skill files should be cleaned from commands
-        assert!(!project_root
-            .join(".opencode/commands/pulse.md")
-            .exists());
+        assert!(!project_root.join(".opencode/commands/pulse.md").exists());
     }
 
     #[test]

@@ -40,7 +40,11 @@ fn get_branch(node: &DecisionNode) -> Option<String> {
     node.metadata_json
         .as_ref()
         .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| v.get("branch").and_then(|b| b.as_str()).map(|s| s.to_string()))
+        .and_then(|v| {
+            v.get("branch")
+                .and_then(|b| b.as_str())
+                .map(|s| s.to_string())
+        })
 }
 
 fn get_confidence(node: &DecisionNode) -> Option<u8> {
@@ -155,7 +159,9 @@ pub fn create_pivot(
         .create_edge(obs_id, revisit_id, "leads_to", Some("Forced rethinking"))
         .map_err(|e| e.to_string())?;
 
-    if let (Ok(Some(obs_node)), Ok(Some(revisit_node))) = (db.get_node(obs_id), db.get_node(revisit_id)) {
+    if let (Ok(Some(obs_node)), Ok(Some(revisit_node))) =
+        (db.get_node(obs_id), db.get_node(revisit_id))
+    {
         maybe_emit_add_edge(
             &obs_node.change_id,
             &revisit_node.change_id,
@@ -189,7 +195,9 @@ pub fn create_pivot(
         .create_edge(revisit_id, decision_id, "leads_to", Some("New direction"))
         .map_err(|e| e.to_string())?;
 
-    if let (Ok(Some(revisit_node)), Ok(Some(decision_node))) = (db.get_node(revisit_id), db.get_node(decision_id)) {
+    if let (Ok(Some(revisit_node)), Ok(Some(decision_node))) =
+        (db.get_node(revisit_id), db.get_node(decision_id))
+    {
         maybe_emit_add_edge(
             &revisit_node.change_id,
             &decision_node.change_id,
@@ -263,10 +271,7 @@ pub fn print_pivot_result(result: &PivotResult, dry_run: bool) {
         "[revisit]".yellow(),
         result.revisit_title
     );
-    println!(
-        "    └── linked from {}{} [observation]",
-        id_prefix, obs_id
-    );
+    println!("    └── linked from {}{} [observation]", id_prefix, obs_id);
 
     println!(
         "  {}{} {} \"{}\"",
@@ -275,10 +280,7 @@ pub fn print_pivot_result(result: &PivotResult, dry_run: bool) {
         "[decision]".green(),
         result.new_decision_title
     );
-    println!(
-        "    └── linked from {}{} [revisit]",
-        id_prefix, rev_id
-    );
+    println!("    └── linked from {}{} [revisit]", id_prefix, rev_id);
 
     println!();
     println!(
@@ -339,11 +341,7 @@ pub fn print_timeline(nodes: &[DecisionNode]) {
         return;
     }
 
-    println!(
-        "{} ({} nodes)",
-        "=== TIMELINE ===".bold(),
-        nodes.len()
-    );
+    println!("{} ({} nodes)", "=== TIMELINE ===".bold(), nodes.len());
     println!();
 
     for node in nodes {
@@ -433,7 +431,11 @@ pub fn supersede(
 
 /// Print supersede result
 pub fn print_supersede_result(result: &SupersedeResult, dry_run: bool) {
-    let verb = if dry_run { "Would supersede" } else { "Superseded" };
+    let verb = if dry_run {
+        "Would supersede"
+    } else {
+        "Superseded"
+    };
 
     if let Some(first) = result.superseded.first() {
         println!("{} node #{} \"{}\"", verb, first.id, first.title);

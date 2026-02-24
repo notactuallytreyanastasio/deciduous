@@ -1006,11 +1006,26 @@ mod tests {
         replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
 
         let result = fs::read_to_string(&md).unwrap();
-        assert!(result.contains("Custom rules here."), "Content before should be preserved");
-        assert!(result.contains("New content."), "New section should be inserted");
-        assert!(!result.contains("Old content."), "Old section should be removed");
-        assert!(result.contains("My Other Section"), "Content after should be preserved");
-        assert!(result.contains("User content after."), "Content after should be preserved");
+        assert!(
+            result.contains("Custom rules here."),
+            "Content before should be preserved"
+        );
+        assert!(
+            result.contains("New content."),
+            "New section should be inserted"
+        );
+        assert!(
+            !result.contains("Old content."),
+            "Old section should be removed"
+        );
+        assert!(
+            result.contains("My Other Section"),
+            "Content after should be preserved"
+        );
+        assert!(
+            result.contains("User content after."),
+            "Content after should be preserved"
+        );
     }
 
     #[test]
@@ -1029,11 +1044,26 @@ mod tests {
         let result = fs::read_to_string(&md).unwrap();
         assert!(result.contains("Custom rules."), "Content before preserved");
         assert!(result.contains("New stuff."), "New section inserted");
-        assert!(!result.contains("Old deciduous stuff."), "Old section removed");
-        assert!(result.contains("My Custom Rules"), "User H2 after preserved");
-        assert!(result.contains("Do not delete this!"), "User content after preserved");
-        assert!(result.contains("<!-- deciduous:start -->"), "Start marker added");
-        assert!(result.contains("<!-- deciduous:end -->"), "End marker added");
+        assert!(
+            !result.contains("Old deciduous stuff."),
+            "Old section removed"
+        );
+        assert!(
+            result.contains("My Custom Rules"),
+            "User H2 after preserved"
+        );
+        assert!(
+            result.contains("Do not delete this!"),
+            "User content after preserved"
+        );
+        assert!(
+            result.contains("<!-- deciduous:start -->"),
+            "Start marker added"
+        );
+        assert!(
+            result.contains("<!-- deciduous:end -->"),
+            "End marker added"
+        );
     }
 
     #[test]
@@ -1053,7 +1083,10 @@ mod tests {
         assert!(result.contains("Stuff."), "Content before preserved");
         assert!(result.contains("New content."), "New section inserted");
         assert!(!result.contains("Old content here."), "Old section removed");
-        assert!(result.contains("<!-- deciduous:end -->"), "End marker present");
+        assert!(
+            result.contains("<!-- deciduous:end -->"),
+            "End marker present"
+        );
     }
 
     #[test]
@@ -1066,9 +1099,15 @@ mod tests {
         replace_config_md_section(&md, new_section, "CLAUDE.md").unwrap();
 
         let result = fs::read_to_string(&md).unwrap();
-        assert!(result.contains("My custom instructions."), "Existing content preserved");
+        assert!(
+            result.contains("My custom instructions."),
+            "Existing content preserved"
+        );
         assert!(result.contains("New content."), "Section appended");
-        assert!(result.contains("<!-- deciduous:start -->"), "Start marker present");
+        assert!(
+            result.contains("<!-- deciduous:start -->"),
+            "Start marker present"
+        );
     }
 
     #[test]
@@ -1103,6 +1142,9 @@ mod tests {
         assert!(result.contains("New stuff."), "New section inserted");
         // Legacy fallback eats to EOF when no next ## found — this is the migration case.
         // After this update, markers are in place and future updates will preserve content.
-        assert!(result.contains("<!-- deciduous:end -->"), "End marker present for future safety");
+        assert!(
+            result.contains("<!-- deciduous:end -->"),
+            "End marker present for future safety"
+        );
     }
 }

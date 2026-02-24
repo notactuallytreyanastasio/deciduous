@@ -66,9 +66,9 @@ pub use diff::{
     ApplyResult, GraphPatch, PatchDocument, PatchEdge, PatchNode, PatchNodeTheme, PatchTheme,
 };
 pub use events::{
-    Checkpoint, CheckpointDocument, CheckpointEdge, CheckpointNode, CheckpointNodeTheme,
-    CheckpointTheme, Event, EventLog, EventLogError, MaterializedState, RebuildResult,
-    generate_edge_id, get_current_author,
+    generate_edge_id, get_current_author, Checkpoint, CheckpointDocument, CheckpointEdge,
+    CheckpointNode, CheckpointNodeTheme, CheckpointTheme, Event, EventLog, EventLogError,
+    MaterializedState, RebuildResult,
 };
 pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,

@@ -265,7 +265,9 @@ impl EventLog {
 
     /// Get the path to this user's event log file
     fn event_file_path(&self) -> PathBuf {
-        self.sync_dir.join("events").join(format!("{}.jsonl", self.author))
+        self.sync_dir
+            .join("events")
+            .join(format!("{}.jsonl", self.author))
     }
 
     /// Get the path to the checkpoint file
@@ -317,8 +319,12 @@ impl EventLog {
                     if line.trim().is_empty() {
                         continue;
                     }
-                    let event: Event = serde_json::from_str(&line)
-                        .map_err(|e| EventLogError::Serialization(format!("Failed to parse event: {} - line: {}", e, line)))?;
+                    let event: Event = serde_json::from_str(&line).map_err(|e| {
+                        EventLogError::Serialization(format!(
+                            "Failed to parse event: {} - line: {}",
+                            e, line
+                        ))
+                    })?;
                     all_events.push(event);
                 }
             }
@@ -340,14 +346,19 @@ impl EventLog {
         let content = fs::read_to_string(&path)
             .map_err(|e| EventLogError::Io(format!("Failed to read checkpoint: {}", e)))?;
 
-        let checkpoint: Checkpoint = serde_json::from_str(&content)
-            .map_err(|e| EventLogError::Serialization(format!("Failed to parse checkpoint: {}", e)))?;
+        let checkpoint: Checkpoint = serde_json::from_str(&content).map_err(|e| {
+            EventLogError::Serialization(format!("Failed to parse checkpoint: {}", e))
+        })?;
 
         Ok(Some(checkpoint))
     }
 
     /// Save a checkpoint and optionally clear old events
-    pub fn save_checkpoint(&self, checkpoint: &Checkpoint, clear_events: bool) -> Result<(), EventLogError> {
+    pub fn save_checkpoint(
+        &self,
+        checkpoint: &Checkpoint,
+        clear_events: bool,
+    ) -> Result<(), EventLogError> {
         let path = self.checkpoint_path();
 
         let json = serde_json::to_string_pretty(checkpoint)
@@ -359,10 +370,13 @@ impl EventLog {
         if clear_events {
             let events_dir = self.sync_dir.join("events");
             if events_dir.exists() {
-                for entry in fs::read_dir(&events_dir).map_err(|e| EventLogError::Io(e.to_string()))? {
+                for entry in
+                    fs::read_dir(&events_dir).map_err(|e| EventLogError::Io(e.to_string()))?
+                {
                     let entry = entry.map_err(|e| EventLogError::Io(e.to_string()))?;
-                    fs::remove_file(entry.path())
-                        .map_err(|e| EventLogError::Io(format!("Failed to remove event file: {}", e)))?;
+                    fs::remove_file(entry.path()).map_err(|e| {
+                        EventLogError::Io(format!("Failed to remove event file: {}", e))
+                    })?;
                 }
             }
         }
@@ -376,11 +390,10 @@ impl EventLog {
         let all_events = self.read_all_events()?;
 
         match checkpoint {
-            Some(cp) => {
-                Ok(all_events.into_iter()
-                    .filter(|e| e.timestamp() > cp.created_at)
-                    .collect())
-            }
+            Some(cp) => Ok(all_events
+                .into_iter()
+                .filter(|e| e.timestamp() > cp.created_at)
+                .collect()),
             None => Ok(all_events),
         }
     }
@@ -453,33 +466,39 @@ impl MaterializedState {
         let mut state = Self::default();
 
         for node in &checkpoint.nodes {
-            state.nodes.insert(node.change_id.clone(), MaterializedNode {
-                change_id: node.change_id.clone(),
-                node_type: node.node_type.clone(),
-                title: node.title.clone(),
-                description: node.description.clone(),
-                status: node.status.clone(),
-                metadata_json: node.metadata_json.clone(),
-                created_at: DateTime::parse_from_rfc3339(&node.created_at)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-                updated_at: DateTime::parse_from_rfc3339(&node.updated_at)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-            });
+            state.nodes.insert(
+                node.change_id.clone(),
+                MaterializedNode {
+                    change_id: node.change_id.clone(),
+                    node_type: node.node_type.clone(),
+                    title: node.title.clone(),
+                    description: node.description.clone(),
+                    status: node.status.clone(),
+                    metadata_json: node.metadata_json.clone(),
+                    created_at: DateTime::parse_from_rfc3339(&node.created_at)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    updated_at: DateTime::parse_from_rfc3339(&node.updated_at)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                },
+            );
         }
 
         for edge in &checkpoint.edges {
-            state.edges.insert(edge.edge_id.clone(), MaterializedEdge {
-                edge_id: edge.edge_id.clone(),
-                from_change_id: edge.from_change_id.clone(),
-                to_change_id: edge.to_change_id.clone(),
-                edge_type: edge.edge_type.clone(),
-                rationale: edge.rationale.clone(),
-                created_at: DateTime::parse_from_rfc3339(&edge.created_at)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or_else(|_| Utc::now()),
-            });
+            state.edges.insert(
+                edge.edge_id.clone(),
+                MaterializedEdge {
+                    edge_id: edge.edge_id.clone(),
+                    from_change_id: edge.from_change_id.clone(),
+                    to_change_id: edge.to_change_id.clone(),
+                    edge_type: edge.edge_type.clone(),
+                    rationale: edge.rationale.clone(),
+                    created_at: DateTime::parse_from_rfc3339(&edge.created_at)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                },
+            );
         }
 
         state
@@ -501,16 +520,19 @@ impl MaterializedState {
                 // Remove from tombstones if re-adding
                 self.deleted_nodes.remove(change_id);
 
-                self.nodes.insert(change_id.clone(), MaterializedNode {
-                    change_id: change_id.clone(),
-                    node_type: node_type.clone(),
-                    title: title.clone(),
-                    description: description.clone(),
-                    status: status.clone(),
-                    metadata_json: metadata_json.clone(),
-                    created_at: *timestamp,
-                    updated_at: *timestamp,
-                });
+                self.nodes.insert(
+                    change_id.clone(),
+                    MaterializedNode {
+                        change_id: change_id.clone(),
+                        node_type: node_type.clone(),
+                        title: title.clone(),
+                        description: description.clone(),
+                        status: status.clone(),
+                        metadata_json: metadata_json.clone(),
+                        created_at: *timestamp,
+                        updated_at: *timestamp,
+                    },
+                );
             }
             Event::UpdateNode {
                 change_id,
@@ -552,14 +574,17 @@ impl MaterializedState {
             } => {
                 self.deleted_edges.remove(edge_id);
 
-                self.edges.insert(edge_id.clone(), MaterializedEdge {
-                    edge_id: edge_id.clone(),
-                    from_change_id: from_change_id.clone(),
-                    to_change_id: to_change_id.clone(),
-                    edge_type: edge_type.clone(),
-                    rationale: rationale.clone(),
-                    created_at: *timestamp,
-                });
+                self.edges.insert(
+                    edge_id.clone(),
+                    MaterializedEdge {
+                        edge_id: edge_id.clone(),
+                        from_change_id: from_change_id.clone(),
+                        to_change_id: to_change_id.clone(),
+                        edge_type: edge_type.clone(),
+                        rationale: rationale.clone(),
+                        created_at: *timestamp,
+                    },
+                );
             }
             Event::DeleteEdge { edge_id, .. } => {
                 self.edges.remove(edge_id);
@@ -610,7 +635,9 @@ pub fn maybe_emit_add_node(node: &crate::db::DecisionNode) {
     let sync_dir = std::path::PathBuf::from(".deciduous/sync");
     if sync_dir.exists() {
         let author = get_current_author();
-        if let Ok(event_log) = EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone()) {
+        if let Ok(event_log) =
+            EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone())
+        {
             let event = Event::AddNode {
                 change_id: node.change_id.clone(),
                 node_type: node.node_type.clone(),
@@ -638,7 +665,9 @@ pub fn maybe_emit_add_edge(
     let sync_dir = std::path::PathBuf::from(".deciduous/sync");
     if sync_dir.exists() {
         let author = get_current_author();
-        if let Ok(event_log) = EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone()) {
+        if let Ok(event_log) =
+            EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone())
+        {
             let event = Event::AddEdge {
                 edge_id: generate_edge_id(from_change_id, to_change_id, edge_type),
                 from_change_id: from_change_id.to_string(),
@@ -660,7 +689,9 @@ pub fn maybe_emit_status_update(change_id: &str, new_status: &str) {
     let sync_dir = std::path::PathBuf::from(".deciduous/sync");
     if sync_dir.exists() {
         let author = get_current_author();
-        if let Ok(event_log) = EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone()) {
+        if let Ok(event_log) =
+            EventLog::new(&std::path::PathBuf::from(".deciduous"), author.clone())
+        {
             let event = Event::UpdateNode {
                 change_id: change_id.to_string(),
                 title: None,
@@ -748,7 +779,10 @@ mod tests {
         let json = serde_json::to_string(&event).unwrap();
         let parsed: Event = serde_json::from_str(&json).unwrap();
 
-        if let Event::AddNode { change_id, title, .. } = parsed {
+        if let Event::AddNode {
+            change_id, title, ..
+        } = parsed
+        {
             assert_eq!(change_id, "abc-123");
             assert_eq!(title, "Test Goal");
         } else {
@@ -839,11 +873,15 @@ mod tests {
 
         // Alice writes an event
         let alice_log = EventLog::new(temp_dir.path(), "alice".to_string()).unwrap();
-        alice_log.append(make_add_node_event("alice-node", "Alice's Node")).unwrap();
+        alice_log
+            .append(make_add_node_event("alice-node", "Alice's Node"))
+            .unwrap();
 
         // Bob writes an event
         let bob_log = EventLog::new(temp_dir.path(), "bob".to_string()).unwrap();
-        bob_log.append(make_add_node_event("bob-node", "Bob's Node")).unwrap();
+        bob_log
+            .append(make_add_node_event("bob-node", "Bob's Node"))
+            .unwrap();
 
         // Reading should get both
         let events = alice_log.read_all_events().unwrap();
