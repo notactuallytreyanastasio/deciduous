@@ -1342,6 +1342,30 @@ If there's a feature flag controlling the feature, search for commits mentioning
 
 **Layer 3: Follow authors.** If a narrative has a key author, check their commits +/-1 month from known commits. They often work on related things.
 
+**Layer 4: Pull request context.** If the `gh` CLI is available, use it to find PRs associated with key commits and paths. PRs often contain design discussion, review comments, and rationale that never appears in commit messages.
+
+```bash
+# Find PRs that touched a specific path
+gh pr list --state merged --search "path/to/module" --limit 50
+
+# Find the PR that introduced a specific commit
+gh pr list --state merged --search "<commit-sha>" --limit 5
+
+# Read PR description and review comments for context
+gh pr view <pr-number>
+gh api repos/{owner}/{repo}/pulls/<pr-number>/comments
+
+# Search PR titles/bodies for keywords from your narratives
+gh pr list --state merged --search "<keyword>" --limit 30
+```
+
+PR descriptions and review threads are goldmines for understanding **why** decisions were made. Reviewers often challenge approaches, surface alternatives that were considered, and document trade-offs - exactly the kind of reasoning that belongs in the decision graph.
+
+When you find relevant PR discussion:
+- Use it to enrich observation and decision node descriptions
+- Quote reviewer comments as evidence (e.g., "PR #42 review: 'We should use Redis instead because...'")
+- Note when a PR was blocked or revised - these are often pivot points
+
 ### DO NOT:
 
 - `git log ... | head -100` -- **NO.** You will miss commits in the middle.

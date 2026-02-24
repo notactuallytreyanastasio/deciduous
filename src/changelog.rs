@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.6",
+        highlights: &[
+            "decision-graph: new Layer 4 - use gh CLI to find PRs for design context and review discussion",
+            "PR descriptions and review threads mined for decision rationale, alternatives considered, and trade-offs",
+            "Updated in both Claude Code and OpenCode templates",
+        ],
+    },
+    Release {
         version: "0.13.5",
         highlights: &[
             "OpenCode command templates now match Claude Code verbosity (decision-graph, document, decision, archaeology)",
