@@ -3,7 +3,7 @@
 **Decision graph tooling for AI-assisted development.** Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
 
 [![Crates.io](https://img.shields.io/crates/v/deciduous.svg)](https://crates.io/crates/deciduous)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
 
@@ -48,7 +48,14 @@ This isn't documentation written after the fact. It's a real-time record of *how
 
 ## Installation
 
-### Pre-built Binaries (Recommended)
+### Homebrew (Recommended)
+
+```bash
+brew tap notactuallytreyanastasio/tap
+brew install deciduous
+```
+
+### Pre-built Binaries
 
 Download the latest release for your platform from [GitHub Releases](https://github.com/notactuallytreyanastasio/deciduous/releases):
 
@@ -93,14 +100,34 @@ deciduous init
 
 # Start logging decisions
 deciduous add goal "Add user authentication" -c 90
-deciduous add decision "Choose auth method" -c 75
-deciduous link 1 2 -r "Deciding implementation approach"
+deciduous add option "JWT tokens" -c 80
+deciduous add option "Session cookies" -c 75
+deciduous link 1 2 -r "Possible approach"
+deciduous link 1 3 -r "Possible approach"
+deciduous add decision "Use JWT for API, sessions for web" -c 85
+deciduous link 2 4 -r "Chosen approach"
+deciduous link 3 4 -r "Also incorporated"
 
 # View the graph
 deciduous serve    # Web viewer at localhost:3000
 ```
 
 That's it. Your first decision graph is live.
+
+### The Canonical Flow
+
+Every decision follows this path through the graph:
+
+```
+goal → options → decision → actions → outcomes
+```
+
+- **Goals** lead to **options** (possible approaches to explore)
+- **Options** lead to a **decision** (choosing which option to pursue)
+- **Decisions** lead to **actions** (implementing the chosen approach)
+- **Actions** lead to **outcomes** (results of the implementation)
+- **Observations** attach anywhere relevant
+- **Revisits** connect old approaches to new ones when you pivot
 
 ### Multi-Assistant Support
 
@@ -146,27 +173,60 @@ CONNECT immediately → Link every node to its parent
 # Starting a new feature
 deciduous add goal "Add rate limiting" -c 90 -p "User asked: add rate limiting to the API"
 
-# Making a choice
-deciduous add decision "Choose rate limiter approach" -c 75
-deciduous link 1 2 -r "Deciding implementation"
-
 # Considering options
 deciduous add option "Redis-based distributed" -c 80
 deciduous add option "In-memory sliding window" -c 70
-deciduous link 2 3 -r "Option A"
-deciduous link 2 4 -r "Option B"
+deciduous link 1 2 -r "Possible approach"
+deciduous link 1 3 -r "Possible approach"
+
+# Attach the design spec to the goal
+deciduous doc attach 1 docs/rate-limiting-spec.pdf -d "Rate limiting design spec"
+
+# Making a choice
+deciduous add decision "Use Redis rate limiter" -c 85
+deciduous link 2 4 --edge-type chosen -r "Scales across instances"
+deciduous link 3 4 --edge-type rejected -r "Doesn't scale horizontally"
 
 # Implementing the chosen approach
 deciduous add action "Implementing Redis rate limiter" -c 85
-deciduous link 3 5 --edge-type chosen -r "Scales across instances"
+deciduous link 4 5 -r "Implementation"
+
+# Attach the architecture diagram to the action
+deciduous doc attach 5 docs/redis-arch.png --ai-describe
 
 # Recording the outcome
 deciduous add outcome "Rate limiting working in prod" -c 95
 deciduous link 5 6 -r "Implementation complete"
 
-# Sync for GitHub Pages
+# Export the graph
 deciduous sync
 ```
+
+### Document Attachments
+
+Attach files to any decision node — architecture diagrams, specs, screenshots, PDFs.
+
+```bash
+# Attach a diagram to a goal
+deciduous doc attach 1 docs/architecture.png -d "System architecture diagram"
+
+# AI-generate a description
+deciduous doc attach 1 screenshot.png --ai-describe
+
+# List what's attached
+deciduous doc list 1
+
+# Open a document
+deciduous doc open 3
+
+# Soft-delete (recoverable)
+deciduous doc detach 3
+
+# Clean up orphaned files
+deciduous doc gc
+```
+
+Documents are stored in `.deciduous/documents/` with content-hash naming for deduplication. The web viewer displays attached documents in the node detail panel. Soft-delete with `doc detach`; garbage-collect orphaned files with `doc gc --dry-run` to preview.
 
 ### Session Recovery
 
@@ -187,42 +247,39 @@ The graph remembers what you don't. The Q&A interface lets you ask it.
 
 ---
 
-## Three Skills: Pulse, Archaeology, and Narratives
+## Skills: Archaeology, Decision-Graph, and Narratives
 
-Deciduous ships with three skills that give your AI assistant structured ways to understand a codebase. These aren't just CLI commands—they're workflows the agent follows to build and query the graph.
+Deciduous ships with skills that give your AI assistant structured ways to understand and work with a codebase's decision history.
 
-### /pulse — What decisions define this system right now?
+### /decision-graph — Visiting and documenting the past
 
-Pulse maps the current architecture as a decision tree. No history, no evolution—just the design choices that make the system work today.
+The `/decision-graph` skill builds a full decision graph from your repository's commit history — perfect for bootstrapping a graph on an existing project that wasn't using deciduous from the start. It works in four layers:
 
-Your agent reads the code, identifies the design questions that had to be answered, and logs them:
+1. **Commit analysis** — Groups commits into logical narratives
+2. **Code structure** — Identifies architectural decisions from the codebase
+3. **Narrative construction** — Builds evolution stories with pivots and connections
+4. **PR context** — Uses `gh` CLI to mine PR descriptions and review threads for decision rationale, alternatives considered, and trade-offs discussed
 
-```bash
-deciduous add goal "API rate limiting behavior" -c 90
-deciduous add decision "What identifies a user for rate limiting?" -c 85
-deciduous link 1 2 -r "leads_to"
-deciduous add decision "What happens when limit is exceeded?" -c 85
-deciduous link 1 3 -r "leads_to"
-deciduous add option "Return 429 with Retry-After header" -c 90
-deciduous link 3 4 -r "resolved_by"
-```
+### /archaeology — Revisit, correct, execute
 
-Output: A decision tree of the current model. Use this before making changes to understand what decisions you might affect.
-
-### /archaeology — Turn narratives into a queryable graph
-
-Archaeology takes the conceptual stories from `/narratives` and structures them as nodes and edges you can traverse. Every **PIVOT** in a narrative becomes a `revisit` node that connects the old approach to the new one, with `observation` nodes capturing *why* things changed.
+Archaeology is for revisiting past decisions in the graph—finding what went wrong, correcting the record, and executing on a new direction. When you discover a past decision was flawed, archaeology gives you the workflow to trace it back, mark it superseded, and connect the new approach.
 
 ```bash
-# The pivot pattern: old approach → observation → revisit → new approach
-deciduous add decision "JWT for all auth" -c 85 --date "2023-01-20"
+# Find the old decision and mark it
+deciduous nodes --status active --type decision
 deciduous add observation "Mobile Safari 4KB cookie limit breaking JWT auth"
-deciduous link 2 3 -r "Discovered in production"
+deciduous link 1 2 -r "Discovered in production"
+
+# Revisit: pivot from old approach to new
 deciduous add revisit "Reconsidering auth token strategy"
-deciduous link 3 4 -r "Cookie limits forced rethink"
-deciduous status 2 superseded
+deciduous link 2 3 -r "Cookie limits forced rethink"
+deciduous status 1 superseded
+
+# Execute the new direction
 deciduous add decision "Hybrid: JWT for API, sessions for web"
-deciduous link 4 5 -r "New approach"
+deciduous link 3 4 -r "New approach"
+deciduous add action "Implementing hybrid auth" -c 85
+deciduous link 4 5 -r "Implementation"
 ```
 
 After archaeology, you can query: "What did we try before?" (`--status superseded`), "What led to this decision?" (`edges --to <id>`), "What are the pivot points?" (`--type revisit`).
@@ -246,6 +303,10 @@ Narratives are the conceptual stories—how a subsystem evolved over time, what 
 ```
 
 Output: `.deciduous/narratives.md` with evolution stories that archaeology can transform into graph structure.
+
+### /pulse — Map the current design
+
+Pulse maps the current architecture as a decision tree — the design choices that make the system work today. Your agent reads the code, identifies the design questions that had to be answered, and logs them as nodes. Useful for understanding what decisions you might affect before making changes.
 
 ---
 
@@ -304,7 +365,7 @@ Five views:
 | **DAG** | Hierarchical goal→decision→outcome flow |
 | **Archaeology** | Narrative-driven exploration with Q&A |
 
-Features: branch filtering, node search, click-to-expand details, Q&A panel, auto-refresh.
+Features: branch filtering, full-text search with type filters, resizable panels, deep linking, click-to-expand details, keyboard navigation (j/k/g/G/Space), Q&A panel, and auto-refresh.
 
 ---
 
@@ -313,8 +374,8 @@ Features: branch filtering, node search, click-to-expand details, Q&A panel, aut
 | Type | Purpose | Example |
 |------|---------|---------|
 | `goal` | High-level objective | "Add user authentication" |
-| `decision` | Choice point | "Choose auth method" |
 | `option` | Approach considered | "Use JWT tokens" |
+| `decision` | Choice point | "Choose auth method" |
 | `action` | Implementation step | "Added JWT middleware" |
 | `outcome` | Result | "Auth working in prod" |
 | `observation` | Discovery or insight | "JWT tokens too large for mobile" |
@@ -348,34 +409,6 @@ deciduous nodes --status superseded # What was tried
 
 ---
 
-## Document Attachments
-
-Attach files to any decision node — architecture diagrams, specs, screenshots, PDFs.
-
-```bash
-# Attach a diagram to a goal
-deciduous doc attach 1 docs/architecture.png -d "System architecture diagram"
-
-# AI-generate a description
-deciduous doc attach 1 screenshot.png --ai-describe
-
-# List what's attached
-deciduous doc list 1
-
-# Open a document
-deciduous doc open 3
-
-# Soft-delete (recoverable)
-deciduous doc detach 3
-
-# Clean up orphaned files
-deciduous doc gc
-```
-
-Documents are stored in `.deciduous/documents/` with content-hash naming for deduplication. The web viewer displays attached documents in the node detail panel. Soft-delete with `doc detach`; garbage-collect orphaned files with `doc gc --dry-run` to preview.
-
----
-
 ## Graph Maintenance
 
 Made a mistake? Fix it:
@@ -390,46 +423,6 @@ deciduous delete 42
 # Preview before deleting
 deciduous delete 42 --dry-run
 ```
-
----
-
-## Multi-User Sync
-
-Share decisions across teammates. Each node has a globally unique `change_id` (UUID):
-
-```bash
-# Export your branch's decisions
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
-
-# Apply patches from teammates (idempotent)
-deciduous diff apply .deciduous/patches/*.json
-
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/teammate.json
-```
-
-### PR Workflow
-
-1. Create nodes while working
-2. Export: `deciduous diff export -o .deciduous/patches/my-feature.json`
-3. Commit the patch file (not the database)
-4. PR includes the patch; teammates apply after merge
-
----
-
-## GitHub Pages Deployment
-
-`deciduous init` creates workflows that deploy your graph viewer automatically:
-
-```bash
-deciduous sync    # Export to docs/graph-data.json
-git add docs/
-git push
-```
-
-Enable Pages: **Settings > Pages > Source > `gh-pages` branch**
-
-Your graph is live at `https://<user>.github.io/<repo>/`
 
 ---
 
@@ -462,6 +455,10 @@ The `update` command auto-detects which assistants are installed and updates the
 | Files | What's Updated |
 |-------|----------------|
 | `.opencode/plugins/*.ts` | TypeScript hooks (pre-edit, post-commit) |
+| `.opencode/commands/*.md` | Command templates |
+| `.opencode/skills/*/SKILL.md` | Skill definitions |
+| `.opencode/agents/*.md` | Custom deciduous agent |
+| `.opencode/tools/*.ts` | Custom deciduous tool |
 | `.opencode/opencode.json` | Plugin configuration |
 | `AGENTS.md` | Decision Graph Workflow section |
 
@@ -488,9 +485,9 @@ Add this to your session start routine to catch updates automatically.
 
 ---
 
-## How the Hooks Work
+## How the Hooks/Plugins Work
 
-Each AI assistant integration includes hooks that enforce the decision graph workflow:
+Each AI assistant integration includes hooks and plugins that enforce the decision graph workflow:
 
 ### Pre-Edit Hook (Blocks edits without context)
 
@@ -510,8 +507,8 @@ This connects your git history to the decision graph.
 
 ### Assistant-Specific Implementation
 
-| Assistant | Pre-Edit Hook | Post-Commit Hook |
-|-----------|---------------|------------------|
+| Assistant | Pre-Edit Hook/Plugin | Post-Commit Hook/Plugin |
+|-----------|----------------------|-------------------------|
 | **Claude Code** | `PreToolUse` on `Edit\|Write` | `PostToolUse` on `Bash` (git commit) |
 | **OpenCode** | TypeScript plugin `pre-edit` | TypeScript plugin `post-commit` |
 | **Windsurf** | Cascade `pre_write_code` | Cascade `post_run_command` |
@@ -574,8 +571,13 @@ deciduous delete <id> --dry-run
 # Query
 deciduous nodes              # List all nodes
 deciduous nodes -b main      # Filter by branch
+deciduous nodes --status active
+deciduous nodes --type goal
 deciduous edges              # List connections
+deciduous edges --to <id>    # Edges pointing to a node
+deciduous edges --from <id>  # Edges from a node
 deciduous graph              # Full graph as JSON
+deciduous commands           # Recent command log
 
 # Visualize
 deciduous serve              # Web viewer
@@ -585,11 +587,6 @@ deciduous dot --png          # Generate PNG (requires graphviz)
 deciduous sync               # Export to docs/
 deciduous writeup -t "Title" # Generate PR writeup
 deciduous backup             # Create database backup
-
-# Multi-user sync
-deciduous diff export -o patch.json
-deciduous diff apply patches/*.json
-deciduous migrate            # Add change_id columns for sync
 
 # Document attachments
 deciduous doc attach <node_id> <file>          # Attach file to node
@@ -626,11 +623,9 @@ deciduous completion fish
 - Recover context after compaction or session boundaries
 - Build on previous reasoning instead of starting fresh
 - Leave a queryable trail for future sessions
-- Use `/pulse` to map current architecture before making changes
-- Use `/archaeology` to understand why things are the way they are
-- Use `/document` to generate comprehensive docs with test examples
+- Use `/archaeology` to revisit and correct past decisions
 - Use `/decision-graph` to build decision graphs from commit history
-- Use `/sync` to synchronize decision graphs across teammates
+- Use `/document` to generate comprehensive docs with test examples
 - Ask deep questions via the Q&A interface grounded in actual graph data
 - Attach relevant documents (diagrams, screenshots, specs) to decision nodes
 
