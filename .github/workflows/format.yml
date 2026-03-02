@@ -1,0 +1,39 @@
+name: Auto-format
+# format it all yo
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: "27.0"
+          elixir-version: "1.17"
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Run mix format
+        run: mix format
+
+      - name: Commit formatting changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet && exit 0
+          git add $(for f in $(gst | grep md | grep -v deleted | grep md | awk '{print $2}'); do echo $f; done | xargs)
+          git commit -m "style: auto-format with mix format"
+          git push
+
