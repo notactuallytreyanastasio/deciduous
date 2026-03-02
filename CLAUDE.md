@@ -396,6 +396,7 @@ Every new session or after context recovery, run `/recover` or:
 
 ```bash
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
+                          # (auto-checked every 24h if auto-update is on)
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
 deciduous commands        # What happened recently?
@@ -416,9 +417,11 @@ cargo test
 
 # Initialize in a new project
 deciduous init
+deciduous init --no-auto-update  # Opt out of automatic version checking
 
 # Update Claude integration files to latest version
 deciduous update
+deciduous auto-update on/off  # Toggle automatic version checking
 
 # Start graph viewer
 deciduous serve --port 3000
@@ -549,6 +552,7 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous init` | Initialize deciduous in current directory |
 | `deciduous update` | Update Claude integration files to latest version |
 | `deciduous check-update` | Check if integration files need updating |
+| `deciduous auto-update on\|off` | Toggle automatic version checking (default: on) |
 | `deciduous add <type> "title"` | Add a node (goal/decision/option/action/outcome/observation/revisit) |
 | `deciduous link <from> <to>` | Create edge between nodes |
 | `deciduous status <id> <status>` | Update node status |

@@ -1611,6 +1611,11 @@ deciduous nodes           # list all
 deciduous edges           # list connections
 deciduous unlink <from> <to>   # remove edge
 deciduous delete <id>          # remove node and edges
+
+# Version management
+deciduous check-update         # check if update is needed
+deciduous auto-update on       # enable automatic version checking (default)
+deciduous auto-update off      # disable automatic version checking
 ```
 
 ## Narrative Discipline
@@ -3136,6 +3141,7 @@ Events auto-emit on add/link/status commands. Git merges event files automatical
 
 ```bash
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
+                          # (auto-checked every 24h if auto-update is on)
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
 deciduous doc list        # Any attached documents to review?
@@ -3235,6 +3241,7 @@ deciduous events checkpoint --clear-events  # Compact old events
 
 ```bash
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
+                          # (auto-checked every 24h if auto-update is on)
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected?
 deciduous doc list        # Any attached documents?

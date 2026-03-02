@@ -888,6 +888,7 @@ auto_detect = true
 
 ```bash
 deciduous check-update    # Update needed? Run 'deciduous update' if yes
+                          # (auto-checked every 24h if auto-update is on)
 deciduous nodes           # What decisions exist?
 deciduous edges           # How are they connected? Any gaps?
 deciduous doc list        # Any attached documents to review?
