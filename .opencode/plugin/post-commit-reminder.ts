@@ -32,8 +32,8 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
         const commitHash = hashResult.stdout.toString().trim()
         const commitMsg = msgResult.stdout.toString().trim().slice(0, 50)
 
-        // Show reminder
-        console.log(`
+        // Show reminder (must use stderr to avoid polluting OpenCode display)
+        console.error(`
 +===================================================================+
 |  DECIDUOUS: Link this commit to the decision graph!               |
 +===================================================================+
