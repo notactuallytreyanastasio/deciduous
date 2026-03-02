@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.8",
+        highlights: &[
+            "Fix: OpenCode post-commit hook still used console.log (stdout) instead of console.error (stderr)",
+            "Completes the stdout fix from 0.13.7 - both pre-edit and post-commit hooks now use stderr",
+        ],
+    },
+    Release {
         version: "0.13.7",
         highlights: &[
             "Fix: OpenCode plugin uses console.error instead of console.log to avoid breaking TUI STDOUT",
