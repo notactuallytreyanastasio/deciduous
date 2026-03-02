@@ -22,7 +22,7 @@ auto_detect = true
 # Automatically check for new versions (once per 24h)
 # When enabled, your AI assistant will inform you when an update is available
 # Toggle with: deciduous auto-update on/off
-auto_check = false
+auto_check = true
 "#;
 
 /// GitHub Pages deploy workflow (deploys to gh-pages branch, safe for project repos)

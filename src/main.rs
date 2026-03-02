@@ -61,6 +61,10 @@ enum Command {
         /// Set up both Claude Code and OpenCode
         #[arg(long)]
         both: bool,
+
+        /// Disable automatic version checking (enabled by default)
+        #[arg(long)]
+        no_auto_update: bool,
     },
 
     /// Update AI assistant integration files to latest version
@@ -893,6 +897,7 @@ fn main() {
         opencode,
         windsurf,
         both,
+        no_auto_update,
     } = args.command
     {
         // Determine which assistants to set up
@@ -910,7 +915,9 @@ fn main() {
             (true, true)
         };
 
-        if let Err(e) = deciduous::init::init_project(setup_claude, setup_opencode, windsurf) {
+        if let Err(e) =
+            deciduous::init::init_project(setup_claude, setup_opencode, windsurf, no_auto_update)
+        {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
