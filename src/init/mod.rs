@@ -13,10 +13,10 @@ use std::path::Path;
 use templates::{
     BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
     DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, DOCUMENT_MD,
-    HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE, PAGES_VIEWER_HTML, RECOVER_MD,
-    SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD, SYNC_MD,
-    WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER, WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-    WINDSURF_RULES_DECIDUOUS, WORK_MD,
+    HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE, HOOK_VERSION_CHECK, PAGES_VIEWER_HTML,
+    RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD,
+    SYNC_MD, WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER,
+    WINDSURF_HOOK_REQUIRE_ACTION_NODE, WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -162,6 +162,14 @@ pub fn init_project(
             &post_commit_path,
             HOOK_POST_COMMIT_REMINDER,
             ".claude/hooks/post-commit-reminder.sh",
+        )?;
+
+        // Write version-check.sh hook (opt-in auto-update check)
+        let version_check_path = hooks_dir.join("version-check.sh");
+        write_executable_if_missing(
+            &version_check_path,
+            HOOK_VERSION_CHECK,
+            ".claude/hooks/version-check.sh",
         )?;
 
         // Write settings.json with hooks configuration
@@ -513,6 +521,14 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
         ".claude/hooks/post-commit-reminder.sh",
     )?;
 
+    // Overwrite version-check.sh hook (opt-in auto-update check)
+    let version_check_path = hooks_dir.join("version-check.sh");
+    write_executable_overwrite(
+        &version_check_path,
+        HOOK_VERSION_CHECK,
+        ".claude/hooks/version-check.sh",
+    )?;
+
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");
     write_file_overwrite(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
@@ -585,6 +601,14 @@ fn setup_windsurf_integration(cwd: &Path) -> Result<(), String> {
         ".windsurf/hooks/post-commit-reminder.sh",
     )?;
 
+    // Write version-check.sh hook (opt-in auto-update check)
+    let version_check_path = windsurf_hooks_dir.join("version-check.sh");
+    write_executable_if_missing(
+        &version_check_path,
+        HOOK_VERSION_CHECK,
+        ".windsurf/hooks/version-check.sh",
+    )?;
+
     // Write deciduous.md rules file
     let rules_path = windsurf_rules_dir.join("deciduous.md");
     write_file_if_missing(
@@ -629,6 +653,14 @@ fn update_windsurf(cwd: &Path) -> Result<(), String> {
         &post_commit_path,
         WINDSURF_HOOK_POST_COMMIT_REMINDER,
         ".windsurf/hooks/post-commit-reminder.sh",
+    )?;
+
+    // Overwrite version-check.sh hook (opt-in auto-update check)
+    let version_check_path = windsurf_hooks_dir.join("version-check.sh");
+    write_executable_overwrite(
+        &version_check_path,
+        HOOK_VERSION_CHECK,
+        ".windsurf/hooks/version-check.sh",
     )?;
 
     // Overwrite deciduous.md rules file
