@@ -96,7 +96,7 @@
 
   <!-- DECIDUOUS branding -->
   <text x="750" y="540" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" fill="#64748b" text-anchor="middle" letter-spacing="0.15em">DECIDUOUS</text>
-  <text x="750" y="575" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#475569" text-anchor="middle">notactuallytreyanastasio.github.io/deciduous/demo</text>
+  <text x="750" y="575" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#475569" text-anchor="middle">deciduous.dev/demo</text>
 
   <!-- Decorative elements -->
   <circle cx="1080" cy="120" r="70" fill="#3b82f6" opacity="0.1"/>

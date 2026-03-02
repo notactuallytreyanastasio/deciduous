@@ -1,7 +1,7 @@
 title: Deciduous
 description: Decision graph tooling for AI-assisted development
-url: "https://notactuallytreyanastasio.github.io"
-baseurl: "/deciduous"
+url: "https://deciduous.dev"
+baseurl: ""
 
 # Exclude from Jekyll processing - these are static files
 exclude:

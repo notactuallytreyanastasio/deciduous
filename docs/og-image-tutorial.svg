@@ -84,7 +84,7 @@
   </g>
 
   <!-- Branding -->
-  <text x="780" y="545" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#475569" text-anchor="middle">notactuallytreyanastasio.github.io/deciduous</text>
+  <text x="780" y="545" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#475569" text-anchor="middle">deciduous.dev</text>
 
   <!-- Decorative elements -->
   <circle cx="1120" cy="100" r="80" fill="#3b82f6" opacity="0.08"/>
