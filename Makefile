@@ -1,4 +1,4 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
+.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview beta-build beta-install beta-uninstall beta-clean beta-tag
 
 # Default target
 all: release
@@ -304,6 +304,13 @@ help:
 	@echo "  make web-test     Run web tests"
 	@echo "  make web-preview  Preview production build"
 	@echo "  make web-sync     Sync graph data to web/public/"
+	@echo ""
+	@echo "Beta Release (Rust + Elixir):"
+	@echo "  make beta-build   Build Rust release + Elixir release"
+	@echo "  make beta-install Install into ~/.local/deciduous-beta, symlink to PATH"
+	@echo "  make beta-uninstall Remove beta installation"
+	@echo "  make beta-clean   Remove Elixir build artifacts"
+	@echo "  make beta-tag     Tag + push to trigger CI beta release"
 
 # ============ Deploy & Publish ============
 
@@ -375,3 +382,71 @@ web-sync: sync-graph
 
 # Full web development workflow
 web: web-sync web-dev
+
+# ============ Beta Release Channel ============
+#
+# Build and install both Rust CLI + Elixir sidecar in a
+# Homebrew-style layout for local testing.
+#
+# Usage:
+#   make beta-build    Build Rust release + Elixir release
+#   make beta-install  Install into BETA_PREFIX, symlink onto PATH
+#   make beta-uninstall Remove beta installation
+#   make beta-clean    Remove Elixir build artifacts
+#   make beta-tag      Tag + push for CI beta release
+
+BETA_PREFIX ?= $(HOME)/.local/deciduous-beta
+BETA_BIN_DIR ?= $(HOME)/.local/bin
+BETA_VERSION := $(shell grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+
+beta-build: release beta-build-elixir
+
+beta-build-elixir:
+	cd deciduous_elixir && \
+		mix local.hex --force && \
+		mix local.rebar --force && \
+		mix deps.get && \
+		MIX_ENV=prod mix release --overwrite
+
+beta-install: beta-build
+	@echo "Installing deciduous v$(BETA_VERSION) to $(BETA_PREFIX)..."
+	mkdir -p $(BETA_PREFIX)/bin
+	mkdir -p $(BETA_PREFIX)/libexec
+	cp target/release/deciduous $(BETA_PREFIX)/bin/deciduous
+	@# Install Elixir OTP release as a directory at libexec/deciduex/
+	@# Rust finds it via libexec/deciduex/bin/cli
+	rm -rf $(BETA_PREFIX)/libexec/deciduex
+	cp -R deciduous_elixir/_build/prod/rel/deciduex $(BETA_PREFIX)/libexec/deciduex
+	chmod 755 $(BETA_PREFIX)/libexec/deciduex/bin/cli
+	mkdir -p $(BETA_BIN_DIR)
+	ln -sf $(BETA_PREFIX)/bin/deciduous $(BETA_BIN_DIR)/deciduous
+	@echo ""
+	@echo "Installed:"
+	@echo "  Binary:  $(BETA_PREFIX)/bin/deciduous"
+	@echo "  Elixir:  $(BETA_PREFIX)/libexec/deciduex/"
+	@echo "  Symlink: $(BETA_BIN_DIR)/deciduous -> $(BETA_PREFIX)/bin/deciduous"
+	@echo ""
+	@if echo "$$PATH" | tr ':' '\n' | grep -qx "$(BETA_BIN_DIR)"; then \
+		echo "$(BETA_BIN_DIR) is on your PATH. You're all set!"; \
+	else \
+		echo "NOTE: $(BETA_BIN_DIR) is not on your PATH."; \
+		echo "Add this to your shell profile:"; \
+		echo "  export PATH=\"$(BETA_BIN_DIR):$$""PATH\""; \
+	fi
+
+beta-uninstall:
+	@echo "Removing deciduous beta installation..."
+	rm -f $(BETA_BIN_DIR)/deciduous
+	rm -rf $(BETA_PREFIX)
+	@echo "Done."
+
+beta-clean:
+	rm -rf deciduous_elixir/_build deciduous_elixir/deps
+
+beta-tag:
+	@echo "Tagging v$(BETA_VERSION) and pushing..."
+	git tag -a "v$(BETA_VERSION)" -m "Beta: Elixir integration for deciduous nodes command"
+	git push origin try-elixir-stuff
+	git push origin "v$(BETA_VERSION)"
+	@echo "Tag v$(BETA_VERSION) pushed. Watch CI at:"
+	@echo "  https://github.com/notactuallytreyanastasio/deciduous/actions"
