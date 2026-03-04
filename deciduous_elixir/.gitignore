@@ -24,3 +24,16 @@ deciduex-*.tar
 
 # Deciduous database (local)
 .deciduous/
+
+# Compiled binary (use bin/deciduex wrapper instead)
+/deciduex
+
+# Junk files
+/foo
+
+# Generated docs
+/docs/graph-data.json
+/docs/index.html
+
+# Duplicated documentation
+ELIXIR_AGENTS.md
