@@ -9,6 +9,13 @@ defmodule Deciduex.IntegrationTest do
   """
   use ExUnit.Case
 
+  alias Deciduex.Commands.CommandLog
+  alias Deciduex.Commands.Edges
+  alias Deciduex.Commands.Graph
+  alias Deciduex.Commands.Nodes
+  alias Deciduex.Commands.Show
+  alias Deciduex.Queries
+
   import ExUnit.CaptureIO
   import Deciduex.TestFixtures
 
@@ -56,13 +63,13 @@ defmodule Deciduex.IntegrationTest do
 
   describe "nodes command" do
     test "lists all 11 nodes with correct count" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
+      output = capture_io(fn -> Nodes.run([]) end)
 
       assert output =~ "11 nodes:"
     end
 
     test "header row has correct column labels" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
+      output = capture_io(fn -> Nodes.run([]) end)
 
       assert output =~ "ID"
       assert output =~ "TYPE"
@@ -71,7 +78,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "each node type appears in output" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
+      output = capture_io(fn -> Nodes.run([]) end)
 
       assert output =~ "goal"
       assert output =~ "option"
@@ -82,7 +89,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "filters by type" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-t", "goal"]) end)
+      output = capture_io(fn -> Nodes.run(["-t", "goal"]) end)
 
       assert output =~ "2 nodes:"
       assert output =~ "Add user authentication"
@@ -91,7 +98,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "filters by branch" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-b", "feature-auth"]) end)
+      output = capture_io(fn -> Nodes.run(["-b", "feature-auth"]) end)
 
       # Nodes 2-9 are on feature-auth
       assert output =~ "8 nodes:"
@@ -100,7 +107,8 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "combined type + branch filter" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-t", "action", "-b", "feature-auth"]) end)
+      output =
+        capture_io(fn -> Nodes.run(["-t", "action", "-b", "feature-auth"]) end)
 
       assert output =~ "2 nodes:"
       assert output =~ "Implement JWT auth middleware"
@@ -108,21 +116,23 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows superseded status" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-t", "option"]) end)
+      output = capture_io(fn -> Nodes.run(["-t", "option"]) end)
 
       # "Use session cookies" was rejected → superseded
       assert output =~ "superseded"
     end
 
     test "nodes are ordered chronologically by created_at" do
-      output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
+      output = capture_io(fn -> Nodes.run([]) end)
 
       lines = String.split(output, "\n", trim: true)
-      data_lines = Enum.drop(lines, 3)  # skip count, header, separator
+      # skip count, header, separator
+      data_lines = Enum.drop(lines, 3)
 
-      ids = Enum.map(data_lines, fn line ->
-        line |> String.trim() |> String.split(~r/\s+/, parts: 2) |> hd() |> String.to_integer()
-      end)
+      ids =
+        Enum.map(data_lines, fn line ->
+          line |> String.trim() |> String.split(~r/\s+/, parts: 2) |> hd() |> String.to_integer()
+        end)
 
       # OBS9 was created at 2024-01-02T11:00 (between O3 and D4)
       # so the chronological order puts 9 before 4
@@ -136,7 +146,7 @@ defmodule Deciduex.IntegrationTest do
 
   describe "edges command" do
     test "lists all 10 edges" do
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       lines = output |> String.split("\n", trim: true)
       # header + separator + 10 data lines
@@ -144,7 +154,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "header has correct columns" do
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       assert output =~ "ID"
       assert output =~ "FROM"
@@ -154,13 +164,13 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "separator is 70 dashes" do
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       assert output =~ String.duplicate("-", 70)
     end
 
     test "edge types are correct" do
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       assert output =~ "leads_to"
       assert output =~ "chosen"
@@ -168,7 +178,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "rationale text appears" do
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       assert output =~ "possible approach"
       assert output =~ "JWT is stateless, scales horizontally"
@@ -176,13 +186,15 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "edge with no rationale renders cleanly" do
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       # Edge 9 (G1 -> OBS9) has no rationale — line should end after TYPE column
       lines = String.split(output, "\n", trim: true)
-      edge_9_line = Enum.find(lines, fn line ->
-        String.starts_with?(String.trim(line), "9")
-      end)
+
+      edge_9_line =
+        Enum.find(lines, fn line ->
+          String.starts_with?(String.trim(line), "9")
+        end)
 
       assert edge_9_line != nil
       # After the TYPE field there should be no trailing rationale text
@@ -193,7 +205,7 @@ defmodule Deciduex.IntegrationTest do
     test "empty graph shows help message" do
       # Recreate with no edges
       create_tables!()
-      output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+      output = capture_io(fn -> Edges.run() end)
 
       assert output =~ "No edges found"
       assert output =~ "deciduous link"
@@ -206,13 +218,13 @@ defmodule Deciduex.IntegrationTest do
 
   describe "graph command" do
     test "outputs valid JSON" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
 
       assert {:ok, _} = Jason.decode(output)
     end
 
     test "JSON has nodes, edges, and documents keys" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
       {:ok, graph} = Jason.decode(output)
 
       assert Map.has_key?(graph, "nodes")
@@ -221,7 +233,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "contains all 11 nodes and 10 edges" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
       {:ok, graph} = Jason.decode(output)
 
       assert length(graph["nodes"]) == 11
@@ -230,21 +242,22 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "each node has all required fields" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
       {:ok, graph} = Jason.decode(output)
 
-      required_keys = ~w(id change_id node_type title description status created_at updated_at metadata_json)
+      required_keys =
+        ~w(id change_id node_type title description status created_at updated_at metadata_json)
 
       Enum.each(graph["nodes"], fn node ->
         Enum.each(required_keys, fn key ->
           assert Map.has_key?(node, key),
-            "Node #{node["id"]} missing key: #{key}"
+                 "Node #{node["id"]} missing key: #{key}"
         end)
       end)
     end
 
     test "each edge has all required fields" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
       {:ok, graph} = Jason.decode(output)
 
       required_keys = ~w(id from_node_id to_node_id edge_type rationale created_at)
@@ -252,19 +265,19 @@ defmodule Deciduex.IntegrationTest do
       Enum.each(graph["edges"], fn edge ->
         Enum.each(required_keys, fn key ->
           assert Map.has_key?(edge, key),
-            "Edge #{edge["id"]} missing key: #{key}"
+                 "Edge #{edge["id"]} missing key: #{key}"
         end)
       end)
     end
 
     test "node metadata_json is parseable" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
       {:ok, graph} = Jason.decode(output)
 
       nodes_with_metadata =
         Enum.filter(graph["nodes"], fn n -> n["metadata_json"] != nil end)
 
-      assert length(nodes_with_metadata) > 0
+      assert nodes_with_metadata != []
 
       Enum.each(nodes_with_metadata, fn node ->
         assert {:ok, meta} = Jason.decode(node["metadata_json"])
@@ -273,7 +286,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "graph can reconstruct the goal->option->decision->action->outcome chain" do
-      output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      output = capture_io(fn -> Graph.run() end)
       {:ok, graph} = Jason.decode(output)
 
       nodes_by_id = Map.new(graph["nodes"], fn n -> {n["id"], n} end)
@@ -299,7 +312,7 @@ defmodule Deciduex.IntegrationTest do
 
   describe "show command (formatted)" do
     test "shows goal node with full detail" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+      output = capture_io(fn -> Show.run(["1"]) end)
 
       assert output =~ "Node #1 goal"
       assert output =~ String.duplicate("─", 60)
@@ -310,13 +323,13 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows description when present" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+      output = capture_io(fn -> Show.run(["1"]) end)
 
       assert output =~ "Description: Implement login, signup, and token management"
     end
 
     test "shows metadata section" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+      output = capture_io(fn -> Show.run(["1"]) end)
 
       assert output =~ "Metadata"
       assert output =~ "Confidence: 95%"
@@ -324,19 +337,19 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows commit hash in metadata" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["5"]) end)
+      output = capture_io(fn -> Show.run(["5"]) end)
 
       assert output =~ "Commit: abc123def"
     end
 
     test "shows files in metadata" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["5"]) end)
+      output = capture_io(fn -> Show.run(["5"]) end)
 
       assert output =~ "Files: src/auth/middleware.rs, src/auth/jwt.rs"
     end
 
     test "shows prompt text" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+      output = capture_io(fn -> Show.run(["1"]) end)
 
       assert output =~ "Prompt"
       assert output =~ "I need to add user authentication to the app"
@@ -344,7 +357,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows outgoing connections" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+      output = capture_io(fn -> Show.run(["1"]) end)
 
       assert output =~ "Connections"
       assert output =~ "Outgoing (3):"
@@ -354,7 +367,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows incoming connections" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["4"]) end)
+      output = capture_io(fn -> Show.run(["4"]) end)
 
       assert output =~ "Incoming (2):"
       assert output =~ "#2 ─[chosen]→ here"
@@ -362,14 +375,14 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows both incoming and outgoing" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["4"]) end)
+      output = capture_io(fn -> Show.run(["4"]) end)
 
       assert output =~ "Incoming (2):"
       assert output =~ "Outgoing (2):"
     end
 
     test "node with no connections omits section" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["7"]) end)
+      output = capture_io(fn -> Show.run(["7"]) end)
 
       # OUT7 only has incoming, no outgoing
       assert output =~ "Incoming (1):"
@@ -378,21 +391,21 @@ defmodule Deciduex.IntegrationTest do
 
     test "all nodes with metadata show Metadata section" do
       # All nodes in our fixture have metadata — verify section appears
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["9"]) end)
+      output = capture_io(fn -> Show.run(["9"]) end)
       assert output =~ "Metadata"
 
-      output2 = capture_io(fn -> Deciduex.Commands.Show.run(["11"]) end)
+      output2 = capture_io(fn -> Show.run(["11"]) end)
       assert output2 =~ "Metadata"
     end
 
     test "superseded node shows correct status" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["3"]) end)
+      output = capture_io(fn -> Show.run(["3"]) end)
 
       assert output =~ "Status: superseded"
     end
 
     test "option node with different branches" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["2"]) end)
+      output = capture_io(fn -> Show.run(["2"]) end)
 
       assert output =~ "Node #2 option"
       assert output =~ "Branch: feature-auth"
@@ -405,13 +418,13 @@ defmodule Deciduex.IntegrationTest do
 
   describe "show command (JSON)" do
     test "outputs valid JSON" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1", "--json"]) end)
+      output = capture_io(fn -> Show.run(["1", "--json"]) end)
 
       assert {:ok, _} = Jason.decode(output)
     end
 
     test "JSON has all schema fields" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1", "--json"]) end)
+      output = capture_io(fn -> Show.run(["1", "--json"]) end)
       {:ok, node} = Jason.decode(output)
 
       assert node["id"] == 1
@@ -424,7 +437,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "metadata_json is a string, not parsed" do
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["1", "--json"]) end)
+      output = capture_io(fn -> Show.run(["1", "--json"]) end)
       {:ok, node} = Jason.decode(output)
 
       # metadata_json should be a raw JSON string, not a nested object
@@ -434,7 +447,7 @@ defmodule Deciduex.IntegrationTest do
 
     test "null fields are present in JSON" do
       # Node 9 (observation) has no description — check JSON still has the key
-      output = capture_io(fn -> Deciduex.Commands.Show.run(["9", "--json"]) end)
+      output = capture_io(fn -> Show.run(["9", "--json"]) end)
       {:ok, node} = Jason.decode(output)
 
       # description should be present as null
@@ -449,7 +462,7 @@ defmodule Deciduex.IntegrationTest do
 
   describe "commands command" do
     test "lists commands in reverse chronological order" do
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+      output = capture_io(fn -> CommandLog.run() end)
 
       lines = String.split(output, "\n", trim: true)
 
@@ -459,7 +472,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows timestamp, command, and exit code" do
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+      output = capture_io(fn -> CommandLog.run() end)
 
       assert output =~ "[2024-01-01T10:00:00Z]"
       assert output =~ ~s(deciduous add goal "Add user authentication")
@@ -467,13 +480,13 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "shows running for nil exit code" do
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+      output = capture_io(fn -> CommandLog.run() end)
 
       assert output =~ "(exit: running)"
     end
 
     test "truncates long commands at 60 chars" do
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+      output = capture_io(fn -> CommandLog.run() end)
 
       lines = String.split(output, "\n", trim: true)
       long_line = Enum.find(lines, &(&1 =~ "deciduous add action"))
@@ -483,14 +496,14 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "--limit flag restricts output" do
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run(["--limit", "3"]) end)
+      output = capture_io(fn -> CommandLog.run(["--limit", "3"]) end)
 
       lines = String.split(output, "\n", trim: true)
       assert length(lines) == 3
     end
 
     test "-l short flag works" do
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run(["-l", "2"]) end)
+      output = capture_io(fn -> CommandLog.run(["-l", "2"]) end)
 
       lines = String.split(output, "\n", trim: true)
       assert length(lines) == 2
@@ -498,7 +511,7 @@ defmodule Deciduex.IntegrationTest do
 
     test "empty command log shows message" do
       create_tables!()
-      output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+      output = capture_io(fn -> CommandLog.run() end)
 
       assert output =~ "No commands logged."
     end
@@ -510,17 +523,17 @@ defmodule Deciduex.IntegrationTest do
 
   describe "queries module integration" do
     test "list_nodes returns all 11 nodes" do
-      nodes = Deciduex.Queries.list_nodes()
+      nodes = Queries.list_nodes()
       assert length(nodes) == 11
     end
 
     test "list_edges returns all 10 edges" do
-      edges = Deciduex.Queries.list_edges()
+      edges = Queries.list_edges()
       assert length(edges) == 10
     end
 
     test "get_graph returns consistent counts" do
-      graph = Deciduex.Queries.get_graph()
+      graph = Queries.get_graph()
 
       assert length(graph.nodes) == 11
       assert length(graph.edges) == 10
@@ -528,30 +541,33 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "every edge references existing nodes" do
-      nodes = Deciduex.Queries.list_nodes()
+      nodes = Queries.list_nodes()
       node_ids = MapSet.new(Enum.map(nodes, & &1.id))
 
-      edges = Deciduex.Queries.list_edges()
+      edges = Queries.list_edges()
 
       Enum.each(edges, fn edge ->
         assert MapSet.member?(node_ids, edge.from_node_id),
-          "Edge #{edge.id} references non-existent from_node #{edge.from_node_id}"
+               "Edge #{edge.id} references non-existent from_node #{edge.from_node_id}"
+
         assert MapSet.member?(node_ids, edge.to_node_id),
-          "Edge #{edge.id} references non-existent to_node #{edge.to_node_id}"
+               "Edge #{edge.id} references non-existent to_node #{edge.to_node_id}"
       end)
     end
 
     test "goal nodes have no incoming edges" do
-      edges = Deciduex.Queries.list_edges()
-      nodes = Deciduex.Queries.list_nodes()
-      goal_ids = nodes |> Enum.filter(&(&1.node_type == "goal")) |> Enum.map(& &1.id) |> MapSet.new()
+      edges = Queries.list_edges()
+      nodes = Queries.list_nodes()
+
+      goal_ids =
+        nodes |> Enum.filter(&(&1.node_type == "goal")) |> Enum.map(& &1.id) |> MapSet.new()
 
       incoming_to_goals = Enum.filter(edges, fn e -> MapSet.member?(goal_ids, e.to_node_id) end)
       assert incoming_to_goals == [], "Goals should not have incoming edges"
     end
 
     test "get_node_edges returns correct counts for decision node" do
-      {incoming, outgoing} = Deciduex.Queries.get_node_edges(4)
+      {incoming, outgoing} = Queries.get_node_edges(4)
 
       # D4 has incoming from O2 (chosen) and O3 (rejected)
       assert length(incoming) == 2
@@ -560,7 +576,7 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "get_node returns struct with all fields" do
-      node = Deciduex.Queries.get_node(1)
+      node = Queries.get_node(1)
 
       assert node.id == 1
       assert node.node_type == "goal"
@@ -578,12 +594,12 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "list_recent_commands respects limit" do
-      cmds = Deciduex.Queries.list_recent_commands(3)
+      cmds = Queries.list_recent_commands(3)
       assert length(cmds) == 3
     end
 
     test "list_recent_commands returns newest first" do
-      cmds = Deciduex.Queries.list_recent_commands()
+      cmds = Queries.list_recent_commands()
 
       timestamps = Enum.map(cmds, & &1.started_at)
       assert timestamps == Enum.sort(timestamps, :desc)
@@ -596,8 +612,8 @@ defmodule Deciduex.IntegrationTest do
 
   describe "cross-command consistency" do
     test "nodes count matches graph JSON node count" do
-      nodes_output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
-      graph_output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      nodes_output = capture_io(fn -> Nodes.run([]) end)
+      graph_output = capture_io(fn -> Graph.run() end)
 
       [count_str | _] = Regex.run(~r/(\d+) nodes:/, nodes_output, capture: :all_but_first)
       nodes_count = String.to_integer(count_str)
@@ -608,8 +624,8 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "edges count matches graph JSON edge count" do
-      edges_output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
-      graph_output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      edges_output = capture_io(fn -> Edges.run() end)
+      graph_output = capture_io(fn -> Graph.run() end)
 
       {:ok, graph} = Jason.decode(graph_output)
 
@@ -621,8 +637,8 @@ defmodule Deciduex.IntegrationTest do
     end
 
     test "show JSON matches graph JSON for same node" do
-      show_output = capture_io(fn -> Deciduex.Commands.Show.run(["1", "--json"]) end)
-      graph_output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+      show_output = capture_io(fn -> Show.run(["1", "--json"]) end)
+      graph_output = capture_io(fn -> Graph.run() end)
 
       {:ok, show_node} = Jason.decode(show_output)
       {:ok, graph} = Jason.decode(graph_output)
@@ -643,7 +659,7 @@ defmodule Deciduex.IntegrationTest do
 
   describe "graph topology" do
     test "canonical flow: goal -> options -> decision -> actions -> outcomes" do
-      graph = Deciduex.Queries.get_graph()
+      graph = Queries.get_graph()
       nodes_by_id = Map.new(graph.nodes, fn n -> {n.id, n} end)
       adjacency = Enum.group_by(graph.edges, & &1.from_node_id)
 
@@ -655,52 +671,64 @@ defmodule Deciduex.IntegrationTest do
 
       # From option 2, we reach decision 4
       option_children = adjacency[2] || []
+
       assert Enum.any?(option_children, fn e ->
-        nodes_by_id[e.to_node_id].node_type == "decision"
-      end)
+               nodes_by_id[e.to_node_id].node_type == "decision"
+             end)
 
       # From decision 4, we reach actions
       decision_children = adjacency[4] || []
-      decision_child_types = Enum.map(decision_children, fn e -> nodes_by_id[e.to_node_id].node_type end)
+
+      decision_child_types =
+        Enum.map(decision_children, fn e -> nodes_by_id[e.to_node_id].node_type end)
+
       assert Enum.all?(decision_child_types, &(&1 == "action"))
 
       # From actions, we reach outcomes
       Enum.each([5, 6], fn action_id ->
         action_children = adjacency[action_id] || []
-        action_child_types = Enum.map(action_children, fn e -> nodes_by_id[e.to_node_id].node_type end)
+
+        action_child_types =
+          Enum.map(action_children, fn e -> nodes_by_id[e.to_node_id].node_type end)
+
         assert "outcome" in action_child_types
       end)
     end
 
     test "rejected option edge has correct type" do
-      edges = Deciduex.Queries.list_edges()
+      edges = Queries.list_edges()
       rejected = Enum.find(edges, fn e -> e.edge_type == "rejected" end)
 
       assert rejected != nil
-      assert rejected.from_node_id == 3  # "Use session cookies"
-      assert rejected.to_node_id == 4    # "Choose JWT"
+      # "Use session cookies"
+      assert rejected.from_node_id == 3
+      # "Choose JWT"
+      assert rejected.to_node_id == 4
     end
 
     test "chosen option edge has correct type" do
-      edges = Deciduex.Queries.list_edges()
+      edges = Queries.list_edges()
       chosen = Enum.find(edges, fn e -> e.edge_type == "chosen" end)
 
       assert chosen != nil
-      assert chosen.from_node_id == 2  # "Use JWT tokens"
-      assert chosen.to_node_id == 4    # "Choose JWT"
+      # "Use JWT tokens"
+      assert chosen.from_node_id == 2
+      # "Choose JWT"
+      assert chosen.to_node_id == 4
     end
 
     test "second goal tree is disconnected from first" do
-      edges = Deciduex.Queries.list_edges()
+      edges = Queries.list_edges()
 
       # Goal 10 tree edges should only reference nodes >= 10
-      tree2_edges = Enum.filter(edges, fn e ->
-        e.from_node_id >= 10 or e.to_node_id >= 10
-      end)
+      tree2_edges =
+        Enum.filter(edges, fn e ->
+          e.from_node_id >= 10 or e.to_node_id >= 10
+        end)
 
       Enum.each(tree2_edges, fn e ->
         assert e.from_node_id >= 10 and e.to_node_id >= 10,
-          "Edge #{e.id} crosses between trees: #{e.from_node_id} -> #{e.to_node_id}"
+               "Edge #{e.id} crosses between trees: #{e.from_node_id} -> #{e.to_node_id}"
       end)
     end
   end
@@ -717,11 +745,13 @@ defmodule Deciduex.IntegrationTest do
       title: "Add user authentication",
       description: "Implement login, signup, and token management",
       created_at: "2024-01-01T09:00:00Z",
-      metadata_json: Jason.encode!(%{
-        "branch" => "main",
-        "confidence" => 95,
-        "prompt" => "I need to add user authentication to the app.\nUsers should be able to sign up with email/password,\nand we need to support OAuth for Google and GitHub."
-      })
+      metadata_json:
+        Jason.encode!(%{
+          "branch" => "main",
+          "confidence" => 95,
+          "prompt" =>
+            "I need to add user authentication to the app.\nUsers should be able to sign up with email/password,\nand we need to support OAuth for Google and GitHub."
+        })
     })
 
     # ── Option 2: Use JWT tokens ──
@@ -761,12 +791,13 @@ defmodule Deciduex.IntegrationTest do
       node_type: "action",
       title: "Implement JWT auth middleware",
       created_at: "2024-01-04T09:00:00Z",
-      metadata_json: Jason.encode!(%{
-        "branch" => "feature-auth",
-        "confidence" => 85,
-        "commit" => "abc123def",
-        "files" => ["src/auth/middleware.rs", "src/auth/jwt.rs"]
-      })
+      metadata_json:
+        Jason.encode!(%{
+          "branch" => "feature-auth",
+          "confidence" => 85,
+          "commit" => "abc123def",
+          "files" => ["src/auth/middleware.rs", "src/auth/jwt.rs"]
+        })
     })
 
     # ── Action 6: Add refresh token rotation ──
@@ -775,11 +806,12 @@ defmodule Deciduex.IntegrationTest do
       node_type: "action",
       title: "Add refresh token rotation",
       created_at: "2024-01-05T09:00:00Z",
-      metadata_json: Jason.encode!(%{
-        "branch" => "feature-auth",
-        "confidence" => 80,
-        "commit" => "def456abc"
-      })
+      metadata_json:
+        Jason.encode!(%{
+          "branch" => "feature-auth",
+          "confidence" => 80,
+          "commit" => "def456abc"
+        })
     })
 
     # ── Outcome 7: JWT auth working ──
@@ -831,54 +863,104 @@ defmodule Deciduex.IntegrationTest do
     # ── EDGES ──
 
     # G1 -> O2 (possible approach)
-    insert_edge!(%{id: 1, from_node_id: 1, to_node_id: 2,
-      edge_type: "leads_to", rationale: "possible approach",
-      created_at: "2024-01-02T09:00:00Z"})
+    insert_edge!(%{
+      id: 1,
+      from_node_id: 1,
+      to_node_id: 2,
+      edge_type: "leads_to",
+      rationale: "possible approach",
+      created_at: "2024-01-02T09:00:00Z"
+    })
 
     # G1 -> O3 (possible approach)
-    insert_edge!(%{id: 2, from_node_id: 1, to_node_id: 3,
-      edge_type: "leads_to", rationale: "possible approach",
-      created_at: "2024-01-02T10:00:00Z"})
+    insert_edge!(%{
+      id: 2,
+      from_node_id: 1,
+      to_node_id: 3,
+      edge_type: "leads_to",
+      rationale: "possible approach",
+      created_at: "2024-01-02T10:00:00Z"
+    })
 
     # O2 -> D4 (chosen)
-    insert_edge!(%{id: 3, from_node_id: 2, to_node_id: 4,
-      edge_type: "chosen", rationale: "JWT is stateless, scales horizontally",
-      created_at: "2024-01-03T09:00:00Z"})
+    insert_edge!(%{
+      id: 3,
+      from_node_id: 2,
+      to_node_id: 4,
+      edge_type: "chosen",
+      rationale: "JWT is stateless, scales horizontally",
+      created_at: "2024-01-03T09:00:00Z"
+    })
 
     # O3 -> D4 (rejected)
-    insert_edge!(%{id: 4, from_node_id: 3, to_node_id: 4,
-      edge_type: "rejected", rationale: "requires sticky sessions",
-      created_at: "2024-01-03T09:01:00Z"})
+    insert_edge!(%{
+      id: 4,
+      from_node_id: 3,
+      to_node_id: 4,
+      edge_type: "rejected",
+      rationale: "requires sticky sessions",
+      created_at: "2024-01-03T09:01:00Z"
+    })
 
     # D4 -> A5
-    insert_edge!(%{id: 5, from_node_id: 4, to_node_id: 5,
-      edge_type: "leads_to", rationale: "implementation step",
-      created_at: "2024-01-04T09:00:00Z"})
+    insert_edge!(%{
+      id: 5,
+      from_node_id: 4,
+      to_node_id: 5,
+      edge_type: "leads_to",
+      rationale: "implementation step",
+      created_at: "2024-01-04T09:00:00Z"
+    })
 
     # D4 -> A6
-    insert_edge!(%{id: 6, from_node_id: 4, to_node_id: 6,
-      edge_type: "leads_to", rationale: "implementation step",
-      created_at: "2024-01-05T09:00:00Z"})
+    insert_edge!(%{
+      id: 6,
+      from_node_id: 4,
+      to_node_id: 6,
+      edge_type: "leads_to",
+      rationale: "implementation step",
+      created_at: "2024-01-05T09:00:00Z"
+    })
 
     # A5 -> OUT7
-    insert_edge!(%{id: 7, from_node_id: 5, to_node_id: 7,
-      edge_type: "leads_to", rationale: "result",
-      created_at: "2024-01-06T09:00:00Z"})
+    insert_edge!(%{
+      id: 7,
+      from_node_id: 5,
+      to_node_id: 7,
+      edge_type: "leads_to",
+      rationale: "result",
+      created_at: "2024-01-06T09:00:00Z"
+    })
 
     # A6 -> OUT8
-    insert_edge!(%{id: 8, from_node_id: 6, to_node_id: 8,
-      edge_type: "leads_to", rationale: "result",
-      created_at: "2024-01-07T09:00:00Z"})
+    insert_edge!(%{
+      id: 8,
+      from_node_id: 6,
+      to_node_id: 8,
+      edge_type: "leads_to",
+      rationale: "result",
+      created_at: "2024-01-07T09:00:00Z"
+    })
 
     # G1 -> OBS9 (no rationale)
-    insert_edge!(%{id: 9, from_node_id: 1, to_node_id: 9,
-      edge_type: "leads_to", rationale: nil,
-      created_at: "2024-01-02T11:00:00Z"})
+    insert_edge!(%{
+      id: 9,
+      from_node_id: 1,
+      to_node_id: 9,
+      edge_type: "leads_to",
+      rationale: nil,
+      created_at: "2024-01-02T11:00:00Z"
+    })
 
     # G10 -> OBS11
-    insert_edge!(%{id: 10, from_node_id: 10, to_node_id: 11,
-      edge_type: "leads_to", rationale: "noticed during review",
-      created_at: "2024-01-08T10:00:00Z"})
+    insert_edge!(%{
+      id: 10,
+      from_node_id: 10,
+      to_node_id: 11,
+      edge_type: "leads_to",
+      rationale: "noticed during review",
+      created_at: "2024-01-08T10:00:00Z"
+    })
 
     # ── COMMAND LOG ──
 
@@ -924,7 +1006,8 @@ defmodule Deciduex.IntegrationTest do
 
     insert_command!(%{
       id: 6,
-      command: ~s(deciduous add action "Implement JWT auth middleware" -c 85 --commit abc123def -f "src/auth/middleware.rs,src/auth/jwt.rs"),
+      command:
+        ~s(deciduous add action "Implement JWT auth middleware" -c 85 --commit abc123def -f "src/auth/middleware.rs,src/auth/jwt.rs"),
       started_at: "2024-01-04T10:00:00Z",
       exit_code: 0,
       duration_ms: 15

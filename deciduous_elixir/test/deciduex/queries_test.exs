@@ -1,6 +1,8 @@
 defmodule Deciduex.QueriesTest do
   use ExUnit.Case
 
+  alias Deciduex.Queries
+
   import Deciduex.TestFixtures
 
   setup do
@@ -10,14 +12,25 @@ defmodule Deciduex.QueriesTest do
 
   describe "list_nodes/0" do
     test "returns empty list when no nodes" do
-      assert Deciduex.Queries.list_nodes() == []
+      assert Queries.list_nodes() == []
     end
 
     test "returns nodes ordered by created_at" do
-      insert_node!(%{id: 1, node_type: "goal", title: "Second", created_at: "2024-01-02T00:00:00Z"})
-      insert_node!(%{id: 2, node_type: "action", title: "First", created_at: "2024-01-01T00:00:00Z"})
+      insert_node!(%{
+        id: 1,
+        node_type: "goal",
+        title: "Second",
+        created_at: "2024-01-02T00:00:00Z"
+      })
 
-      nodes = Deciduex.Queries.list_nodes()
+      insert_node!(%{
+        id: 2,
+        node_type: "action",
+        title: "First",
+        created_at: "2024-01-01T00:00:00Z"
+      })
+
+      nodes = Queries.list_nodes()
 
       assert length(nodes) == 2
       assert Enum.at(nodes, 0).title == "First"
@@ -35,21 +48,21 @@ defmodule Deciduex.QueriesTest do
         metadata_json: metadata
       })
 
-      [node] = Deciduex.Queries.list_nodes()
+      [node] = Queries.list_nodes()
       assert {:ok, %{"branch" => "main"}} = Jason.decode(node.metadata_json)
     end
   end
 
   describe "list_edges/0" do
     test "returns empty list when no edges" do
-      assert Deciduex.Queries.list_edges() == []
+      assert Queries.list_edges() == []
     end
 
     test "returns edges ordered by created_at" do
       insert_edge!(%{id: 1, from_node_id: 1, to_node_id: 2, created_at: "2024-01-02T00:00:00Z"})
       insert_edge!(%{id: 2, from_node_id: 2, to_node_id: 3, created_at: "2024-01-01T00:00:00Z"})
 
-      edges = Deciduex.Queries.list_edges()
+      edges = Queries.list_edges()
 
       assert length(edges) == 2
       assert Enum.at(edges, 0).id == 2
@@ -59,15 +72,20 @@ defmodule Deciduex.QueriesTest do
 
   describe "get_node/1" do
     test "returns node when found" do
-      insert_node!(%{id: 42, node_type: "goal", title: "My goal", created_at: "2024-01-01T00:00:00Z"})
+      insert_node!(%{
+        id: 42,
+        node_type: "goal",
+        title: "My goal",
+        created_at: "2024-01-01T00:00:00Z"
+      })
 
-      node = Deciduex.Queries.get_node(42)
+      node = Queries.get_node(42)
       assert node.title == "My goal"
       assert node.node_type == "goal"
     end
 
     test "returns nil when not found" do
-      assert Deciduex.Queries.get_node(999) == nil
+      assert Queries.get_node(999) == nil
     end
   end
 
@@ -75,12 +93,18 @@ defmodule Deciduex.QueriesTest do
     test "returns incoming and outgoing edges" do
       insert_node!(%{id: 1, node_type: "goal", title: "A", created_at: "2024-01-01T00:00:00Z"})
       insert_node!(%{id: 2, node_type: "option", title: "B", created_at: "2024-01-02T00:00:00Z"})
-      insert_node!(%{id: 3, node_type: "decision", title: "C", created_at: "2024-01-03T00:00:00Z"})
+
+      insert_node!(%{
+        id: 3,
+        node_type: "decision",
+        title: "C",
+        created_at: "2024-01-03T00:00:00Z"
+      })
 
       insert_edge!(%{id: 1, from_node_id: 1, to_node_id: 2, rationale: "in"})
       insert_edge!(%{id: 2, from_node_id: 2, to_node_id: 3, rationale: "out"})
 
-      {incoming, outgoing} = Deciduex.Queries.get_node_edges(2)
+      {incoming, outgoing} = Queries.get_node_edges(2)
 
       assert length(incoming) == 1
       assert Enum.at(incoming, 0).from_node_id == 1
@@ -90,7 +114,7 @@ defmodule Deciduex.QueriesTest do
     end
 
     test "returns empty lists when no edges" do
-      {incoming, outgoing} = Deciduex.Queries.get_node_edges(999)
+      {incoming, outgoing} = Queries.get_node_edges(999)
       assert incoming == []
       assert outgoing == []
     end
@@ -101,7 +125,7 @@ defmodule Deciduex.QueriesTest do
       insert_node!(%{id: 1, node_type: "goal", title: "A", created_at: "2024-01-01T00:00:00Z"})
       insert_edge!(%{id: 1, from_node_id: 1, to_node_id: 2})
 
-      graph = Deciduex.Queries.get_graph()
+      graph = Queries.get_graph()
 
       assert length(graph.nodes) == 1
       assert length(graph.edges) == 1
@@ -111,14 +135,14 @@ defmodule Deciduex.QueriesTest do
 
   describe "list_recent_commands/1" do
     test "returns empty list when no commands" do
-      assert Deciduex.Queries.list_recent_commands() == []
+      assert Queries.list_recent_commands() == []
     end
 
     test "returns commands ordered by started_at descending" do
       insert_command!(%{id: 1, command: "first", started_at: "2024-01-01T10:00:00Z"})
       insert_command!(%{id: 2, command: "second", started_at: "2024-01-02T10:00:00Z"})
 
-      commands = Deciduex.Queries.list_recent_commands()
+      commands = Queries.list_recent_commands()
 
       assert length(commands) == 2
       assert Enum.at(commands, 0).command == "second"
@@ -130,7 +154,7 @@ defmodule Deciduex.QueriesTest do
       insert_command!(%{id: 2, command: "second", started_at: "2024-01-02T10:00:00Z"})
       insert_command!(%{id: 3, command: "third", started_at: "2024-01-03T10:00:00Z"})
 
-      commands = Deciduex.Queries.list_recent_commands(2)
+      commands = Queries.list_recent_commands(2)
 
       assert length(commands) == 2
       assert Enum.at(commands, 0).command == "third"

@@ -1,6 +1,8 @@
 defmodule Deciduex.Commands.ShowTest do
   use ExUnit.Case
 
+  alias Deciduex.Commands.Show
+
   import ExUnit.CaptureIO
   import Deciduex.TestFixtures
 
@@ -42,7 +44,7 @@ defmodule Deciduex.Commands.ShowTest do
   end
 
   test "renders node with all fields" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+    output = capture_io(fn -> Show.run(["1"]) end)
 
     assert output =~ "Node #1 goal"
     assert output =~ String.duplicate("─", 60)
@@ -54,7 +56,7 @@ defmodule Deciduex.Commands.ShowTest do
   end
 
   test "renders metadata" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+    output = capture_io(fn -> Show.run(["1"]) end)
 
     assert output =~ "Metadata"
     assert output =~ "Confidence: 90%"
@@ -64,7 +66,7 @@ defmodule Deciduex.Commands.ShowTest do
   end
 
   test "renders prompt" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+    output = capture_io(fn -> Show.run(["1"]) end)
 
     assert output =~ "Prompt"
     assert output =~ "Add user authentication"
@@ -72,7 +74,7 @@ defmodule Deciduex.Commands.ShowTest do
   end
 
   test "renders connections" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["1"]) end)
+    output = capture_io(fn -> Show.run(["1"]) end)
 
     assert output =~ "Connections"
     assert output =~ "Outgoing (1):"
@@ -80,14 +82,14 @@ defmodule Deciduex.Commands.ShowTest do
   end
 
   test "renders incoming connections" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["2"]) end)
+    output = capture_io(fn -> Show.run(["2"]) end)
 
     assert output =~ "Incoming (1):"
     assert output =~ "#1 ─[leads_to]→ here: possible approach"
   end
 
   test "renders node without metadata" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["2"]) end)
+    output = capture_io(fn -> Show.run(["2"]) end)
 
     assert output =~ "Node #2 option"
     assert output =~ "Title: Use JWT"
@@ -95,7 +97,7 @@ defmodule Deciduex.Commands.ShowTest do
   end
 
   test "--json outputs valid JSON" do
-    output = capture_io(fn -> Deciduex.Commands.Show.run(["1", "--json"]) end)
+    output = capture_io(fn -> Show.run(["1", "--json"]) end)
 
     assert {:ok, decoded} = Jason.decode(output)
     assert decoded["id"] == 1

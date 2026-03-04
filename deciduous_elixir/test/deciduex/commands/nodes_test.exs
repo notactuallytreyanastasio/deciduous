@@ -1,6 +1,8 @@
 defmodule Deciduex.Commands.NodesTest do
   use ExUnit.Case
 
+  alias Deciduex.Commands.Nodes
+
   import ExUnit.CaptureIO
   import Deciduex.TestFixtures
 
@@ -11,7 +13,7 @@ defmodule Deciduex.Commands.NodesTest do
   end
 
   test "renders all nodes with count header" do
-    output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
+    output = capture_io(fn -> Nodes.run([]) end)
 
     assert output =~ "3 nodes:"
     assert output =~ "Add auth"
@@ -20,7 +22,7 @@ defmodule Deciduex.Commands.NodesTest do
   end
 
   test "renders column headers" do
-    output = capture_io(fn -> Deciduex.Commands.Nodes.run([]) end)
+    output = capture_io(fn -> Nodes.run([]) end)
 
     assert output =~ "ID"
     assert output =~ "TYPE"
@@ -29,7 +31,7 @@ defmodule Deciduex.Commands.NodesTest do
   end
 
   test "filters by type" do
-    output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-t", "goal"]) end)
+    output = capture_io(fn -> Nodes.run(["-t", "goal"]) end)
 
     assert output =~ "1 nodes:"
     assert output =~ "Add auth"
@@ -37,7 +39,7 @@ defmodule Deciduex.Commands.NodesTest do
   end
 
   test "filters by branch" do
-    output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-b", "feature-auth"]) end)
+    output = capture_io(fn -> Nodes.run(["-b", "feature-auth"]) end)
 
     assert output =~ "2 nodes:"
     assert output =~ "Use JWT"
@@ -46,7 +48,8 @@ defmodule Deciduex.Commands.NodesTest do
   end
 
   test "combined type and branch filter" do
-    output = capture_io(fn -> Deciduex.Commands.Nodes.run(["-t", "option", "-b", "feature-auth"]) end)
+    output =
+      capture_io(fn -> Nodes.run(["-t", "option", "-b", "feature-auth"]) end)
 
     assert output =~ "1 nodes:"
     assert output =~ "Use JWT"

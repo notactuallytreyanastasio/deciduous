@@ -7,14 +7,15 @@ defmodule Deciduex.TestFixtures do
   """
 
   alias Deciduex.Repo
+  alias Ecto.Adapters.SQL
 
   def create_tables! do
     # Drop and recreate to ensure clean state between tests
-    Ecto.Adapters.SQL.query!(Repo, "DROP TABLE IF EXISTS command_log")
-    Ecto.Adapters.SQL.query!(Repo, "DROP TABLE IF EXISTS decision_edges")
-    Ecto.Adapters.SQL.query!(Repo, "DROP TABLE IF EXISTS decision_nodes")
+    SQL.query!(Repo, "DROP TABLE IF EXISTS command_log")
+    SQL.query!(Repo, "DROP TABLE IF EXISTS decision_edges")
+    SQL.query!(Repo, "DROP TABLE IF EXISTS decision_nodes")
 
-    Ecto.Adapters.SQL.query!(Repo, """
+    SQL.query!(Repo, """
     CREATE TABLE decision_nodes (
       id INTEGER PRIMARY KEY,
       change_id TEXT NOT NULL,
@@ -28,7 +29,7 @@ defmodule Deciduex.TestFixtures do
     )
     """)
 
-    Ecto.Adapters.SQL.query!(Repo, """
+    SQL.query!(Repo, """
     CREATE TABLE decision_edges (
       id INTEGER PRIMARY KEY,
       from_node_id INTEGER NOT NULL,
@@ -42,7 +43,7 @@ defmodule Deciduex.TestFixtures do
     )
     """)
 
-    Ecto.Adapters.SQL.query!(Repo, """
+    SQL.query!(Repo, """
     CREATE TABLE command_log (
       id INTEGER PRIMARY KEY,
       command TEXT NOT NULL,
@@ -70,10 +71,24 @@ defmodule Deciduex.TestFixtures do
 
     row = Map.merge(defaults, attrs)
 
-    Ecto.Adapters.SQL.query!(Repo, """
-    INSERT INTO decision_nodes (id, change_id, node_type, title, description, status, created_at, updated_at, metadata_json)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, [row.id, row.change_id, row.node_type, row.title, row.description, row.status, row.created_at, row.updated_at, row.metadata_json])
+    SQL.query!(
+      Repo,
+      """
+      INSERT INTO decision_nodes (id, change_id, node_type, title, description, status, created_at, updated_at, metadata_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      [
+        row.id,
+        row.change_id,
+        row.node_type,
+        row.title,
+        row.description,
+        row.status,
+        row.created_at,
+        row.updated_at,
+        row.metadata_json
+      ]
+    )
   end
 
   def insert_edge!(attrs) do
@@ -88,10 +103,24 @@ defmodule Deciduex.TestFixtures do
 
     row = Map.merge(defaults, attrs)
 
-    Ecto.Adapters.SQL.query!(Repo, """
-    INSERT INTO decision_edges (id, from_node_id, to_node_id, from_change_id, to_change_id, edge_type, weight, rationale, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, [row.id, row.from_node_id, row.to_node_id, row.from_change_id, row.to_change_id, row.edge_type, row.weight, row.rationale, row.created_at])
+    SQL.query!(
+      Repo,
+      """
+      INSERT INTO decision_edges (id, from_node_id, to_node_id, from_change_id, to_change_id, edge_type, weight, rationale, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      [
+        row.id,
+        row.from_node_id,
+        row.to_node_id,
+        row.from_change_id,
+        row.to_change_id,
+        row.edge_type,
+        row.weight,
+        row.rationale,
+        row.created_at
+      ]
+    )
   end
 
   def insert_command!(attrs) do
@@ -108,10 +137,26 @@ defmodule Deciduex.TestFixtures do
 
     row = Map.merge(defaults, attrs)
 
-    Ecto.Adapters.SQL.query!(Repo, """
-    INSERT INTO command_log (id, command, description, working_dir, exit_code, stdout, stderr, started_at, completed_at, duration_ms, decision_node_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, [row.id, row.command, row.description, row.working_dir, row.exit_code, row.stdout, row.stderr, row.started_at, row.completed_at, row.duration_ms, row.decision_node_id])
+    SQL.query!(
+      Repo,
+      """
+      INSERT INTO command_log (id, command, description, working_dir, exit_code, stdout, stderr, started_at, completed_at, duration_ms, decision_node_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      [
+        row.id,
+        row.command,
+        row.description,
+        row.working_dir,
+        row.exit_code,
+        row.stdout,
+        row.stderr,
+        row.started_at,
+        row.completed_at,
+        row.duration_ms,
+        row.decision_node_id
+      ]
+    )
   end
 
   def seed_sample_data! do

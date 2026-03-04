@@ -1,6 +1,8 @@
 defmodule Deciduex.Commands.CommandLogTest do
   use ExUnit.Case
 
+  alias Deciduex.Commands.CommandLog
+
   import ExUnit.CaptureIO
   import Deciduex.TestFixtures
 
@@ -10,13 +12,13 @@ defmodule Deciduex.Commands.CommandLogTest do
   end
 
   test "shows message when no commands" do
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+    output = capture_io(fn -> CommandLog.run() end)
     assert output =~ "No commands logged."
   end
 
   test "renders commands with timestamp and exit code" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+    output = capture_io(fn -> CommandLog.run() end)
 
     assert output =~ "[2024-01-02T10:30:00Z]"
     assert output =~ ~s(deciduous add option "Use JWT")
@@ -25,7 +27,7 @@ defmodule Deciduex.Commands.CommandLogTest do
 
   test "renders commands in reverse chronological order" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+    output = capture_io(fn -> CommandLog.run() end)
 
     lines = String.split(output, "\n", trim: true)
     # Most recent first
@@ -35,7 +37,7 @@ defmodule Deciduex.Commands.CommandLogTest do
 
   test "respects --limit flag" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run(["--limit", "1"]) end)
+    output = capture_io(fn -> CommandLog.run(["--limit", "1"]) end)
 
     lines = String.split(output, "\n", trim: true)
     assert length(lines) == 1
@@ -43,7 +45,7 @@ defmodule Deciduex.Commands.CommandLogTest do
 
   test "respects -l flag" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run(["-l", "1"]) end)
+    output = capture_io(fn -> CommandLog.run(["-l", "1"]) end)
 
     lines = String.split(output, "\n", trim: true)
     assert length(lines) == 1
@@ -57,7 +59,7 @@ defmodule Deciduex.Commands.CommandLogTest do
       exit_code: nil
     })
 
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+    output = capture_io(fn -> CommandLog.run() end)
     assert output =~ "(exit: running)"
   end
 
@@ -70,7 +72,7 @@ defmodule Deciduex.Commands.CommandLogTest do
       started_at: "2024-01-01T10:00:00Z"
     })
 
-    output = capture_io(fn -> Deciduex.Commands.CommandLog.run() end)
+    output = capture_io(fn -> CommandLog.run() end)
     assert output =~ "..."
     refute output =~ long_cmd
   end

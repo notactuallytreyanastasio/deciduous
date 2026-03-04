@@ -1,6 +1,8 @@
 defmodule Deciduex.Commands.GraphTest do
   use ExUnit.Case
 
+  alias Deciduex.Commands.Graph
+
   import ExUnit.CaptureIO
   import Deciduex.TestFixtures
 
@@ -11,7 +13,7 @@ defmodule Deciduex.Commands.GraphTest do
 
   test "outputs valid JSON" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
 
     assert {:ok, decoded} = Jason.decode(output)
     assert is_list(decoded["nodes"])
@@ -21,7 +23,7 @@ defmodule Deciduex.Commands.GraphTest do
 
   test "includes all nodes" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
     {:ok, decoded} = Jason.decode(output)
 
     assert length(decoded["nodes"]) == 3
@@ -33,7 +35,7 @@ defmodule Deciduex.Commands.GraphTest do
 
   test "includes all edges" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
     {:ok, decoded} = Jason.decode(output)
 
     assert length(decoded["edges"]) == 2
@@ -41,7 +43,7 @@ defmodule Deciduex.Commands.GraphTest do
 
   test "documents is empty list" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
     {:ok, decoded} = Jason.decode(output)
 
     assert decoded["documents"] == []
@@ -49,7 +51,7 @@ defmodule Deciduex.Commands.GraphTest do
 
   test "node has expected fields" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
     {:ok, decoded} = Jason.decode(output)
 
     node = Enum.at(decoded["nodes"], 0)
@@ -65,7 +67,7 @@ defmodule Deciduex.Commands.GraphTest do
 
   test "edge has expected fields" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
     {:ok, decoded} = Jason.decode(output)
 
     edge = Enum.at(decoded["edges"], 0)
@@ -78,7 +80,7 @@ defmodule Deciduex.Commands.GraphTest do
   end
 
   test "empty graph outputs valid JSON" do
-    output = capture_io(fn -> Deciduex.Commands.Graph.run() end)
+    output = capture_io(fn -> Graph.run() end)
     {:ok, decoded} = Jason.decode(output)
 
     assert decoded["nodes"] == []

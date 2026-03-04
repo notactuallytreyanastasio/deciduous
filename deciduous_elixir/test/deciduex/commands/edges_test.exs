@@ -1,6 +1,8 @@
 defmodule Deciduex.Commands.EdgesTest do
   use ExUnit.Case
 
+  alias Deciduex.Commands.Edges
+
   import ExUnit.CaptureIO
   import Deciduex.TestFixtures
 
@@ -10,7 +12,7 @@ defmodule Deciduex.Commands.EdgesTest do
   end
 
   test "shows message when no edges" do
-    output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+    output = capture_io(fn -> Edges.run() end)
 
     assert output =~ "No edges found"
     assert output =~ "deciduous link"
@@ -18,7 +20,7 @@ defmodule Deciduex.Commands.EdgesTest do
 
   test "renders edges with correct columns" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+    output = capture_io(fn -> Edges.run() end)
 
     assert output =~ "ID"
     assert output =~ "FROM"
@@ -30,7 +32,7 @@ defmodule Deciduex.Commands.EdgesTest do
 
   test "renders edge data" do
     seed_sample_data!()
-    output = capture_io(fn -> Deciduex.Commands.Edges.run() end)
+    output = capture_io(fn -> Edges.run() end)
 
     assert output =~ "leads_to"
     assert output =~ "possible approach"
