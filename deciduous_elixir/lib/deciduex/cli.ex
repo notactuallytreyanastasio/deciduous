@@ -16,7 +16,9 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Serve
   alias Deciduex.Commands.Show
   alias Deciduex.Commands.Status
+  alias Deciduex.Commands.Sync
   alias Deciduex.Commands.Unlink
+  alias Deciduex.Commands.Writeup
   alias Deciduex.DB
   alias Deciduex.Repo
 
@@ -81,6 +83,12 @@ defmodule Deciduex.CLI do
       ["serve" | rest] ->
         Serve.run(rest)
 
+      ["sync" | rest] ->
+        Sync.run(rest)
+
+      ["writeup" | rest] ->
+        Writeup.run(rest)
+
       [] ->
         print_usage()
 
@@ -108,5 +116,7 @@ defmodule Deciduex.CLI do
     IO.puts("  commands              Show recent command log")
     IO.puts("  doc <subcommand>      Manage document attachments")
     IO.puts("  serve [--port PORT]   Start the graph viewer server")
+    IO.puts("  sync [output]         Export graph to JSON for static hosting")
+    IO.puts("  writeup [options]     Generate PR writeup from graph")
   end
 end
