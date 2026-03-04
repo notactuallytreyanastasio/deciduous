@@ -7,6 +7,7 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Backup
   alias Deciduex.Commands.CommandLog
   alias Deciduex.Commands.Delete
+  alias Deciduex.Commands.Diff
   alias Deciduex.Commands.Doc
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
@@ -89,6 +90,9 @@ defmodule Deciduex.CLI do
       ["writeup" | rest] ->
         Writeup.run(rest)
 
+      ["diff" | rest] ->
+        Diff.run(rest)
+
       [] ->
         print_usage()
 
@@ -118,5 +122,6 @@ defmodule Deciduex.CLI do
     IO.puts("  serve [--port PORT]   Start the graph viewer server")
     IO.puts("  sync [output]         Export graph to JSON for static hosting")
     IO.puts("  writeup [options]     Generate PR writeup from graph")
+    IO.puts("  diff <subcommand>     Export/apply graph patches for multi-user sync")
   end
 end
