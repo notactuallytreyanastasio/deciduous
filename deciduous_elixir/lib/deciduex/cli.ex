@@ -55,6 +55,8 @@ defmodule Deciduex.CLI do
     case DB.find_db_path() do
       {:ok, db_path} ->
         {:ok, _} = Repo.start_link(database: db_path)
+        # Ensure all required tables exist (auto-migration)
+        :ok = DB.ensure_schema(Repo)
         dispatch(args)
 
       :error ->
