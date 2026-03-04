@@ -9,7 +9,13 @@ defmodule Deciduex.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      releases: releases()
+      releases: releases(),
+      aliases: aliases(),
+      dialyzer: [
+        plt_local_path: "_build/plts",
+        plt_core_path: "_build/plts",
+        plt_add_apps: [:credo]
+      ]
     ]
   end
 
@@ -27,7 +33,20 @@ defmodule Deciduex.MixProject do
     [
       {:ecto_sqlite3, "~> 0.17"},
       {:jason, "~> 1.4"},
-      {:burrito, "~> 1.0"}
+      {:burrito, "~> 1.0"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+    ]
+  end
+
+  defp aliases do
+    [
+      precommit: [
+        "format --check-formatted",
+        "credo --strict",
+        "dialyzer",
+        "test --warnings-as-errors"
+      ]
     ]
   end
 
