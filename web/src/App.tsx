@@ -2110,7 +2110,18 @@ function QADialogue({ messages, isLoading, error, input, onInputChange, onSubmit
               fontSize: '14px',
               lineHeight: '1.7',
               wordBreak: 'break-word' as const,
+              position: 'relative' as const,
             }}>
+              {msg.role === 'assistant' && (
+                <div style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  zIndex: 1,
+                }}>
+                  <CopyButton text={msg.content} label="markdown" />
+                </div>
+              )}
               {msg.role === 'assistant' ? (
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm]}
