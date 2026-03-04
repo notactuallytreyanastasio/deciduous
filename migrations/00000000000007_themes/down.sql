@@ -1,2 +1,0 @@
-DROP TABLE IF EXISTS node_themes;
-DROP TABLE IF EXISTS themes;

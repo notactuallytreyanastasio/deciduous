@@ -1,7 +1,0 @@
-[profile.dev]
-# Line tables only - dramatically reduces debug artifact size
-debug = 1
-
-[profile.dev.package."*"]
-# Optimize dependencies in dev builds (smaller + faster runtime, minimal compile cost)
-opt-level = 1
