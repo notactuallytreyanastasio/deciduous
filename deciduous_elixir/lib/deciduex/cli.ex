@@ -7,6 +7,7 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Backup
   alias Deciduex.Commands.CommandLog
   alias Deciduex.Commands.Delete
+  alias Deciduex.Commands.Doc
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
   alias Deciduex.Commands.Link
@@ -73,6 +74,9 @@ defmodule Deciduex.CLI do
       ["commands" | rest] ->
         CommandLog.run(rest)
 
+      ["doc" | rest] ->
+        Doc.run(rest)
+
       [] ->
         print_usage()
 
@@ -98,5 +102,6 @@ defmodule Deciduex.CLI do
     IO.puts("  graph                 Output full graph as JSON")
     IO.puts("  show <id>             Show detailed node information")
     IO.puts("  commands              Show recent command log")
+    IO.puts("  doc <subcommand>      Manage document attachments")
   end
 end

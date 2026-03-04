@@ -9,6 +9,7 @@ defmodule Deciduex.Queries do
   alias Deciduex.Schema.CommandLog
   alias Deciduex.Schema.DecisionEdge
   alias Deciduex.Schema.DecisionNode
+  alias Deciduex.Schema.NodeDocument
 
   def list_nodes do
     DecisionNode
@@ -46,8 +47,40 @@ defmodule Deciduex.Queries do
     %{
       nodes: list_nodes(),
       edges: list_edges(),
-      documents: []
+      documents: list_documents()
     }
+  end
+
+  def list_documents(node_id \\ nil, include_detached \\ false) do
+    query = NodeDocument |> order_by(desc: :attached_at)
+
+    query =
+      if node_id do
+        query |> where([d], d.node_id == ^node_id)
+      else
+        query
+      end
+
+    query =
+      if include_detached do
+        query
+      else
+        query |> where([d], is_nil(d.detached_at))
+      end
+
+    Repo.all(query)
+  end
+
+  def get_document(id) do
+    Repo.get(NodeDocument, id)
+  end
+
+  def get_active_content_hashes do
+    NodeDocument
+    |> where([d], is_nil(d.detached_at))
+    |> select([d], d.content_hash)
+    |> distinct(true)
+    |> Repo.all()
   end
 
   def list_recent_commands(limit \\ 20) do

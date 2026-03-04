@@ -188,6 +188,85 @@ defmodule Deciduex.Mutations do
     :ok
   end
 
+  @doc """
+  Attach a document to a node.
+  """
+  def attach_document(attrs) do
+    change_id = UUID.uuid4()
+    now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    result =
+      SQL.query(
+        Repo,
+        """
+        INSERT INTO node_documents
+          (change_id, node_id, node_change_id, content_hash, original_filename, storage_filename, mime_type, file_size, description, description_source, attached_at, attached_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+          change_id,
+          attrs[:node_id],
+          attrs[:node_change_id],
+          attrs[:content_hash],
+          attrs[:original_filename],
+          attrs[:storage_filename],
+          attrs[:mime_type],
+          attrs[:file_size],
+          attrs[:description],
+          attrs[:description_source] || "none",
+          now,
+          attrs[:attached_by]
+        ]
+      )
+
+    case result do
+      {:ok, _} ->
+        {:ok, %{rows: [[id]]}} = SQL.query(Repo, "SELECT last_insert_rowid()", [])
+        {:ok, id}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  @doc """
+  Update document description.
+  """
+  def update_document_description(id, description, source) do
+    result =
+      SQL.query(
+        Repo,
+        "UPDATE node_documents SET description = ?, description_source = ? WHERE id = ?",
+        [description, source, id]
+      )
+
+    case result do
+      {:ok, %{num_rows: 1}} -> :ok
+      {:ok, %{num_rows: 0}} -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Soft-delete a document (set detached_at timestamp).
+  """
+  def detach_document(id) do
+    now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    result =
+      SQL.query(
+        Repo,
+        "UPDATE node_documents SET detached_at = ? WHERE id = ?",
+        [now, id]
+      )
+
+    case result do
+      {:ok, %{num_rows: 1}} -> :ok
+      {:ok, %{num_rows: 0}} -> {:error, :not_found}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   # Private helpers
 
   defp build_metadata_json(attrs) do

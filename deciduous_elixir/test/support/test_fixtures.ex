@@ -11,6 +11,7 @@ defmodule Deciduex.TestFixtures do
 
   def create_tables! do
     # Drop and recreate to ensure clean state between tests
+    SQL.query!(Repo, "DROP TABLE IF EXISTS node_documents")
     SQL.query!(Repo, "DROP TABLE IF EXISTS command_log")
     SQL.query!(Repo, "DROP TABLE IF EXISTS decision_edges")
     SQL.query!(Repo, "DROP TABLE IF EXISTS decision_nodes")
@@ -56,6 +57,26 @@ defmodule Deciduex.TestFixtures do
       completed_at TEXT,
       duration_ms INTEGER,
       decision_node_id INTEGER
+    )
+    """)
+
+    SQL.query!(Repo, """
+    CREATE TABLE node_documents (
+      id INTEGER PRIMARY KEY,
+      change_id TEXT NOT NULL UNIQUE,
+      node_id INTEGER NOT NULL,
+      node_change_id TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      original_filename TEXT NOT NULL,
+      storage_filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      file_size INTEGER NOT NULL,
+      description TEXT,
+      description_source TEXT NOT NULL DEFAULT 'none',
+      attached_at TEXT NOT NULL,
+      attached_by TEXT,
+      detached_at TEXT,
+      FOREIGN KEY (node_id) REFERENCES decision_nodes(id)
     )
     """)
   end
@@ -155,6 +176,43 @@ defmodule Deciduex.TestFixtures do
         row.completed_at,
         row.duration_ms,
         row.decision_node_id
+      ]
+    )
+  end
+
+  def insert_document!(attrs) do
+    defaults = %{
+      change_id: "doc-#{attrs[:id]}",
+      node_change_id: "node-#{attrs[:node_id]}",
+      description: nil,
+      description_source: "none",
+      attached_by: nil,
+      detached_at: nil
+    }
+
+    row = Map.merge(defaults, attrs)
+
+    SQL.query!(
+      Repo,
+      """
+      INSERT INTO node_documents (id, change_id, node_id, node_change_id, content_hash, original_filename, storage_filename, mime_type, file_size, description, description_source, attached_at, attached_by, detached_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      """,
+      [
+        row.id,
+        row.change_id,
+        row.node_id,
+        row.node_change_id,
+        row.content_hash,
+        row.original_filename,
+        row.storage_filename,
+        row.mime_type,
+        row.file_size,
+        row.description,
+        row.description_source,
+        row.attached_at,
+        row.attached_by,
+        row.detached_at
       ]
     )
   end
