@@ -4,6 +4,7 @@ defmodule Deciduex.CLI do
   """
 
   alias Deciduex.Commands.Add
+  alias Deciduex.Commands.Backup
   alias Deciduex.Commands.CommandLog
   alias Deciduex.Commands.Delete
   alias Deciduex.Commands.Edges
@@ -54,6 +55,9 @@ defmodule Deciduex.CLI do
       ["delete" | rest] ->
         Delete.run(rest)
 
+      ["backup" | rest] ->
+        Backup.run(rest)
+
       ["nodes" | rest] ->
         Nodes.run(rest)
 
@@ -88,6 +92,7 @@ defmodule Deciduex.CLI do
     IO.puts("  status <id> <status>  Update node status")
     IO.puts("  prompt <id> [text]    Update node prompt")
     IO.puts("  delete <id>           Delete node and its edges")
+    IO.puts("  backup [path]         Create database backup")
     IO.puts("  nodes                 List all decision graph nodes")
     IO.puts("  edges                 List all decision graph edges")
     IO.puts("  graph                 Output full graph as JSON")
