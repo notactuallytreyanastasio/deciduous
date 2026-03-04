@@ -4,6 +4,8 @@ defmodule Deciduex.CLI do
   """
 
   alias Deciduex.Commands.Add
+  alias Deciduex.Commands.Archaeology
+  alias Deciduex.Commands.Audit
   alias Deciduex.Commands.Backup
   alias Deciduex.Commands.CommandLog
   alias Deciduex.Commands.Delete
@@ -12,8 +14,10 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
   alias Deciduex.Commands.Link
+  alias Deciduex.Commands.Narratives
   alias Deciduex.Commands.Nodes
   alias Deciduex.Commands.Prompt
+  alias Deciduex.Commands.Pulse
   alias Deciduex.Commands.Serve
   alias Deciduex.Commands.Show
   alias Deciduex.Commands.Status
@@ -93,6 +97,18 @@ defmodule Deciduex.CLI do
       ["diff" | rest] ->
         Diff.run(rest)
 
+      ["audit" | rest] ->
+        Audit.run(rest)
+
+      ["pulse" | rest] ->
+        Pulse.run(rest)
+
+      ["narratives" | rest] ->
+        Narratives.run(rest)
+
+      ["archaeology" | rest] ->
+        Archaeology.run(rest)
+
       [] ->
         print_usage()
 
@@ -123,5 +139,9 @@ defmodule Deciduex.CLI do
     IO.puts("  sync [output]         Export graph to JSON for static hosting")
     IO.puts("  writeup [options]     Generate PR writeup from graph")
     IO.puts("  diff <subcommand>     Export/apply graph patches for multi-user sync")
+    IO.puts("  audit [options]       Audit and maintain graph data quality")
+    IO.puts("  pulse [options]       Show graph health and activity")
+    IO.puts("  narratives <sub>      Manage evolution narratives")
+    IO.puts("  archaeology <sub>     Retroactive graph building")
   end
 end
