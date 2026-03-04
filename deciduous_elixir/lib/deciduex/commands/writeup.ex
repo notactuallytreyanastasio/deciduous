@@ -283,7 +283,9 @@ defmodule Deciduex.Commands.Writeup do
   defp expand_range(start_str, end_str) do
     with {start_val, ""} <- Integer.parse(start_str),
          {end_val, ""} <- Integer.parse(end_str) do
-      Enum.to_list(start_val..end_val)
+      # Use explicit step to handle both ascending and descending ranges
+      step = if start_val <= end_val, do: 1, else: -1
+      Enum.to_list(start_val..end_val//step)
     else
       _ -> []
     end
