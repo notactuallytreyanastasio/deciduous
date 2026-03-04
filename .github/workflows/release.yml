@@ -87,8 +87,58 @@ jobs:
           name: deciduous-${{ matrix.name }}
           path: deciduous-${{ matrix.name }}${{ matrix.ext }}
 
+  build-elixir:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            name: darwin-arm64
+            burrito_target: darwin_arm64
+          - os: macos-13
+            name: darwin-amd64
+            burrito_target: darwin_amd64
+          - os: ubuntu-latest
+            name: linux-amd64
+            burrito_target: linux_amd64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install Erlang/Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.0'
+          elixir-version: '1.18'
+
+      - name: Install Zig
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.13.0
+
+      - name: Build Burrito release
+        working-directory: deciduous_elixir
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --only prod
+          BURRITO_TARGET=${{ matrix.burrito_target }} MIX_ENV=prod mix release
+
+      - name: Rename binary
+        run: |
+          cp deciduous_elixir/burrito_out/deciduex_${{ matrix.burrito_target }} deciduex-${{ matrix.name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deciduex-${{ matrix.name }}
+          path: deciduex-${{ matrix.name }}
+
   release:
-    needs: [build]
+    needs: [build, build-elixir]
     runs-on: ubuntu-latest
 
     steps:
@@ -121,18 +171,23 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
+          prerelease: ${{ contains(inputs.tag || github.ref_name, 'beta') }}
           files: |
             artifacts/deciduous-linux-amd64/deciduous-linux-amd64
             artifacts/deciduous-linux-arm64/deciduous-linux-arm64
             artifacts/deciduous-darwin-amd64/deciduous-darwin-amd64
             artifacts/deciduous-darwin-arm64/deciduous-darwin-arm64
             artifacts/deciduous-windows-amd64/deciduous-windows-amd64.exe
+            artifacts/deciduex-darwin-arm64/deciduex-darwin-arm64
+            artifacts/deciduex-darwin-amd64/deciduex-darwin-amd64
+            artifacts/deciduex-linux-amd64/deciduex-linux-amd64
             checksums.txt
           generate_release_notes: true
 
   publish-crate:
     needs: [build]
     runs-on: ubuntu-latest
+    if: ${{ !contains(github.ref_name, 'beta') && !contains(inputs.tag || '', 'beta') }}
 
     steps:
       - uses: actions/checkout@v4

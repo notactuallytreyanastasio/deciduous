@@ -1,0 +1,23 @@
+#!/bin/sh
+# Wrapper script for OTP release. Called by the Rust CLI.
+# Invokes `deciduex eval` with CLI args serialized as an Elixir list.
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+RELEASE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+RELEASE_BIN="$RELEASE_ROOT/bin/deciduex"
+
+if [ ! -f "$RELEASE_BIN" ]; then
+  echo "Error: deciduex release binary not found at $RELEASE_BIN" >&2
+  exit 1
+fi
+
+# Build Elixir list string from shell arguments
+args=""
+for arg in "$@"; do
+  if [ -n "$args" ]; then
+    args="$args, "
+  fi
+  args="$args\"$arg\""
+done
+
+exec "$RELEASE_BIN" eval "Deciduex.CLI.main([$args])"

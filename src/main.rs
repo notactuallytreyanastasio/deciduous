@@ -875,6 +875,46 @@ enum TagAction {
     },
 }
 
+/// Locate the deciduex Elixir binary.
+/// Search order:
+/// 1. ../libexec/deciduex (Burrito single binary, Homebrew layout)
+/// 2. ../libexec/deciduex/bin/cli (legacy OTP release, Homebrew layout)
+/// 3. DECIDUEX_PATH env var as direct binary path
+/// 4. DECIDUEX_PATH env var as release root (legacy: $DECIDUEX_PATH/bin/cli)
+/// 5. None (fall back to Rust implementation)
+fn find_deciduex_cli() -> Option<PathBuf> {
+    if let Ok(self_path) = std::env::current_exe() {
+        if let Some(prefix) = self_path.parent().and_then(|p| p.parent()) {
+            // 1. Burrito: single binary at ../libexec/deciduex
+            let binary = prefix.join("libexec/deciduex");
+            if binary.exists() && !binary.is_dir() {
+                return Some(binary);
+            }
+            // 2. Legacy: OTP release with bin/cli wrapper
+            let cli = prefix.join("libexec/deciduex/bin/cli");
+            if cli.exists() {
+                return Some(cli);
+            }
+        }
+    }
+
+    // 3-4. DECIDUEX_PATH env var
+    if let Ok(path) = std::env::var("DECIDUEX_PATH") {
+        let path = PathBuf::from(&path);
+        // Try as direct binary path first
+        if path.exists() && !path.is_dir() {
+            return Some(path);
+        }
+        // Try as release root (legacy)
+        let cli = path.join("bin/cli");
+        if cli.exists() {
+            return Some(cli);
+        }
+    }
+
+    None
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -1419,120 +1459,182 @@ fn main() {
             node_type,
             theme,
         } => {
-            // Pre-compute theme node IDs if filtering by theme
-            let theme_node_ids: Option<std::collections::HashSet<i32>> = theme.as_ref().map(|t| {
-                db.get_nodes_by_theme(t)
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|n| n.id)
-                    .collect()
-            });
+            // Try delegating to the Elixir deciduex binary (unless --theme is used,
+            // which the Elixir version doesn't support yet)
+            let use_elixir = theme.is_none();
+            let delegated = if use_elixir {
+                if let Some(cli_path) = find_deciduex_cli() {
+                    let mut cmd = ProcessCommand::new(&cli_path);
+                    cmd.arg("nodes");
+                    if let Some(ref b) = branch {
+                        cmd.args(["--branch", b]);
+                    }
+                    if let Some(ref t) = node_type {
+                        cmd.args(["--type", t]);
+                    }
+                    match cmd.status() {
+                        Ok(status) if status.success() => true,
+                        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                        Err(_) => false, // Fall back to Rust
+                    }
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
 
-            match db.get_all_nodes() {
-                Ok(nodes) => {
-                    // Filter nodes by branch, type, and/or theme
-                    let filtered: Vec<_> = nodes
-                        .into_iter()
-                        .filter(|n| {
-                            // Filter by branch if specified
-                            let branch_match = match &branch {
-                                Some(b) => n.metadata_json.as_ref().is_some_and(|meta| {
-                                    serde_json::from_str::<serde_json::Value>(meta)
-                                        .ok()
-                                        .and_then(|v| {
-                                            v.get("branch")
-                                                .and_then(|br| br.as_str())
-                                                .map(|s| s.to_string())
-                                        })
-                                        .is_some_and(|node_branch| node_branch == *b)
-                                }),
-                                None => true,
-                            };
-                            // Filter by type if specified
-                            let type_match = match &node_type {
-                                Some(t) => n.node_type == *t,
-                                None => true,
-                            };
-                            // Filter by theme if specified
-                            let theme_match = match &theme_node_ids {
-                                Some(ids) => ids.contains(&n.id),
-                                None => true,
-                            };
-                            branch_match && type_match && theme_match
-                        })
-                        .collect();
+            if !delegated {
+                // Rust fallback implementation
+                let theme_node_ids: Option<std::collections::HashSet<i32>> =
+                    theme.as_ref().map(|t| {
+                        db.get_nodes_by_theme(t)
+                            .unwrap_or_default()
+                            .iter()
+                            .map(|n| n.id)
+                            .collect()
+                    });
 
-                    if filtered.is_empty() {
-                        if branch.is_some() || node_type.is_some() {
-                            println!("No nodes found matching filters.");
-                        } else {
-                            println!(
-                                "No nodes found. Add one with: deciduous add goal \"My goal\""
-                            );
-                        }
-                    } else {
-                        let header = match &branch {
-                            Some(b) => {
-                                format!("Nodes on branch '{}' ({} total):", b, filtered.len())
+                match db.get_all_nodes() {
+                    Ok(nodes) => {
+                        let filtered: Vec<_> = nodes
+                            .into_iter()
+                            .filter(|n| {
+                                let branch_match = match &branch {
+                                    Some(b) => n.metadata_json.as_ref().is_some_and(|meta| {
+                                        serde_json::from_str::<serde_json::Value>(meta)
+                                            .ok()
+                                            .and_then(|v| {
+                                                v.get("branch")
+                                                    .and_then(|br| br.as_str())
+                                                    .map(|s| s.to_string())
+                                            })
+                                            .is_some_and(|node_branch| node_branch == *b)
+                                    }),
+                                    None => true,
+                                };
+                                let type_match = match &node_type {
+                                    Some(t) => n.node_type == *t,
+                                    None => true,
+                                };
+                                let theme_match = match &theme_node_ids {
+                                    Some(ids) => ids.contains(&n.id),
+                                    None => true,
+                                };
+                                branch_match && type_match && theme_match
+                            })
+                            .collect();
+
+                        if filtered.is_empty() {
+                            if branch.is_some() || node_type.is_some() {
+                                println!("No nodes found matching filters.");
+                            } else {
+                                println!(
+                                    "No nodes found. Add one with: deciduous add goal \"My goal\""
+                                );
                             }
-                            None => format!("{} nodes:", filtered.len()),
-                        };
-                        println!("{}", header.cyan());
-                        println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");
-                        println!("{}", "-".repeat(70));
-                        for n in filtered {
-                            let type_colored = match n.node_type.as_str() {
-                                "goal" => n.node_type.yellow(),
-                                "decision" => n.node_type.cyan(),
-                                "action" => n.node_type.green(),
-                                "outcome" => n.node_type.blue(),
-                                "observation" => n.node_type.magenta(),
-                                "revisit" => n.node_type.truecolor(249, 115, 22), // Orange
-                                _ => n.node_type.white(),
+                        } else {
+                            let header = match &branch {
+                                Some(b) => {
+                                    format!(
+                                        "Nodes on branch '{}' ({} total):",
+                                        b,
+                                        filtered.len()
+                                    )
+                                }
+                                None => format!("{} nodes:", filtered.len()),
                             };
-                            println!(
-                                "{:<5} {:<12} {:<10} {}",
-                                n.id, type_colored, n.status, n.title
-                            );
+                            println!("{}", header.cyan());
+                            println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");
+                            println!("{}", "-".repeat(70));
+                            for n in filtered {
+                                let type_colored = match n.node_type.as_str() {
+                                    "goal" => n.node_type.yellow(),
+                                    "decision" => n.node_type.cyan(),
+                                    "action" => n.node_type.green(),
+                                    "outcome" => n.node_type.blue(),
+                                    "observation" => n.node_type.magenta(),
+                                    "revisit" => n.node_type.truecolor(249, 115, 22),
+                                    _ => n.node_type.white(),
+                                };
+                                println!(
+                                    "{:<5} {:<12} {:<10} {}",
+                                    n.id, type_colored, n.status, n.title
+                                );
+                            }
                         }
                     }
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
                 }
             }
         }
 
-        Command::Edges => match db.get_all_edges() {
-            Ok(edges) => {
-                if edges.is_empty() {
-                    println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
-                } else {
-                    println!(
-                        "{:<5} {:<6} {:<6} {:<12} RATIONALE",
-                        "ID", "FROM", "TO", "TYPE"
-                    );
-                    println!("{}", "-".repeat(70));
-                    for e in edges {
-                        println!(
-                            "{:<5} {:<6} {:<6} {:<12} {}",
-                            e.id,
-                            e.from_node_id,
-                            e.to_node_id,
-                            e.edge_type,
-                            e.rationale.unwrap_or_default()
-                        );
+        Command::Edges => {
+            // Try delegating to Elixir
+            let delegated = if let Some(cli_path) = find_deciduex_cli() {
+                let mut cmd = ProcessCommand::new(&cli_path);
+                cmd.arg("edges");
+                match cmd.status() {
+                    Ok(status) if status.success() => true,
+                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                    Err(_) => false,
+                }
+            } else {
+                false
+            };
+
+            if !delegated {
+                match db.get_all_edges() {
+                    Ok(edges) => {
+                        if edges.is_empty() {
+                            println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
+                        } else {
+                            println!(
+                                "{:<5} {:<6} {:<6} {:<12} RATIONALE",
+                                "ID", "FROM", "TO", "TYPE"
+                            );
+                            println!("{}", "-".repeat(70));
+                            for e in edges {
+                                println!(
+                                    "{:<5} {:<6} {:<6} {:<12} {}",
+                                    e.id,
+                                    e.from_node_id,
+                                    e.to_node_id,
+                                    e.edge_type,
+                                    e.rationale.unwrap_or_default()
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
-            }
-        },
+        }
 
         Command::Show { id, json } => {
+            // Try delegating to Elixir
+            let delegated = if let Some(cli_path) = find_deciduex_cli() {
+                let mut cmd = ProcessCommand::new(&cli_path);
+                cmd.args(["show", &id.to_string()]);
+                if json {
+                    cmd.arg("--json");
+                }
+                match cmd.status() {
+                    Ok(status) if status.success() => true,
+                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                    Err(_) => false,
+                }
+            } else {
+                false
+            };
+
+            if !delegated {
             match db.get_node(id) {
                 Ok(Some(node)) => {
                     if json {
@@ -1692,21 +1794,39 @@ fn main() {
                     std::process::exit(1);
                 }
             }
+            } // end if !delegated
         }
 
-        Command::Graph => match db.get_graph() {
-            Ok(graph) => match serde_json::to_string_pretty(&graph) {
-                Ok(json) => println!("{}", json),
-                Err(e) => {
-                    eprintln!("{} Serializing graph: {}", "Error:".red(), e);
-                    std::process::exit(1);
+        Command::Graph => {
+            // Try delegating to Elixir
+            let delegated = if let Some(cli_path) = find_deciduex_cli() {
+                let mut cmd = ProcessCommand::new(&cli_path);
+                cmd.arg("graph");
+                match cmd.status() {
+                    Ok(status) if status.success() => true,
+                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                    Err(_) => false,
                 }
-            },
-            Err(e) => {
-                eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
+            } else {
+                false
+            };
+
+            if !delegated {
+                match db.get_graph() {
+                    Ok(graph) => match serde_json::to_string_pretty(&graph) {
+                        Ok(json) => println!("{}", json),
+                        Err(e) => {
+                            eprintln!("{} Serializing graph: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
             }
-        },
+        }
 
         Command::Serve { port } => {
             println!(
@@ -1866,28 +1986,45 @@ fn main() {
             }
         }
 
-        Command::Commands { limit } => match db.get_recent_commands(limit) {
-            Ok(commands) => {
-                if commands.is_empty() {
-                    println!("No commands logged.");
-                } else {
-                    for c in commands {
-                        println!(
-                            "[{}] {} (exit: {})",
-                            c.started_at,
-                            truncate(&c.command, 60),
-                            c.exit_code
-                                .map(|c| c.to_string())
-                                .unwrap_or_else(|| "running".to_string())
-                        );
+        Command::Commands { limit } => {
+            // Try delegating to Elixir
+            let delegated = if let Some(cli_path) = find_deciduex_cli() {
+                let mut cmd = ProcessCommand::new(&cli_path);
+                cmd.args(["commands", "--limit", &limit.to_string()]);
+                match cmd.status() {
+                    Ok(status) if status.success() => true,
+                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
+                    Err(_) => false,
+                }
+            } else {
+                false
+            };
+
+            if !delegated {
+                match db.get_recent_commands(limit) {
+                    Ok(commands) => {
+                        if commands.is_empty() {
+                            println!("No commands logged.");
+                        } else {
+                            for c in commands {
+                                println!(
+                                    "[{}] {} (exit: {})",
+                                    c.started_at,
+                                    truncate(&c.command, 60),
+                                    c.exit_code
+                                        .map(|c| c.to_string())
+                                        .unwrap_or_else(|| "running".to_string())
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
                     }
                 }
             }
-            Err(e) => {
-                eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
-            }
-        },
+        }
 
         Command::Dot {
             output,
