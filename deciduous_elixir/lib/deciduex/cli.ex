@@ -5,11 +5,14 @@ defmodule Deciduex.CLI do
 
   alias Deciduex.Commands.Add
   alias Deciduex.Commands.CommandLog
+  alias Deciduex.Commands.Delete
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
   alias Deciduex.Commands.Link
   alias Deciduex.Commands.Nodes
+  alias Deciduex.Commands.Prompt
   alias Deciduex.Commands.Show
+  alias Deciduex.Commands.Status
   alias Deciduex.Commands.Unlink
   alias Deciduex.DB
   alias Deciduex.Repo
@@ -42,6 +45,15 @@ defmodule Deciduex.CLI do
       ["unlink" | rest] ->
         Unlink.run(rest)
 
+      ["status" | rest] ->
+        Status.run(rest)
+
+      ["prompt" | rest] ->
+        Prompt.run(rest)
+
+      ["delete" | rest] ->
+        Delete.run(rest)
+
       ["nodes" | rest] ->
         Nodes.run(rest)
 
@@ -73,6 +85,9 @@ defmodule Deciduex.CLI do
     IO.puts("  add <type> <title>    Create a new decision node")
     IO.puts("  link <from> <to>      Create edge between nodes")
     IO.puts("  unlink <from> <to>    Remove edge between nodes")
+    IO.puts("  status <id> <status>  Update node status")
+    IO.puts("  prompt <id> [text]    Update node prompt")
+    IO.puts("  delete <id>           Delete node and its edges")
     IO.puts("  nodes                 List all decision graph nodes")
     IO.puts("  edges                 List all decision graph edges")
     IO.puts("  graph                 Output full graph as JSON")
