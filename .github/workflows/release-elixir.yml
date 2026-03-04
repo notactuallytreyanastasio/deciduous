@@ -1,0 +1,141 @@
+name: Release Elixir
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  MIX_ENV: prod
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: darwin_arm64
+            artifact: deciduex_darwin_arm64
+          - os: macos-13
+            target: darwin_amd64
+            artifact: deciduex_darwin_amd64
+          - os: ubuntu-latest
+            target: linux_amd64
+            artifact: deciduex_linux_amd64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Erlang/Elixir (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install erlang elixir
+
+      - name: Install Erlang/Elixir (Linux)
+        if: runner.os == 'Linux'
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.0'
+          elixir-version: '1.17'
+
+      - name: Install Zig (for Burrito cross-compilation)
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.11.0
+
+      - name: Get dependencies
+        working-directory: deciduous_elixir
+        run: mix deps.get
+
+      - name: Build Burrito release
+        working-directory: deciduous_elixir
+        env:
+          BURRITO_TARGET: ${{ matrix.target }}
+        run: |
+          mix release deciduex --overwrite
+
+      - name: Package release
+        working-directory: deciduous_elixir
+        run: |
+          cd burrito_out
+          tar -czvf ${{ matrix.artifact }}.tar.gz deciduex_*
+          shasum -a 256 ${{ matrix.artifact }}.tar.gz > ${{ matrix.artifact }}.tar.gz.sha256
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            deciduous_elixir/burrito_out/${{ matrix.artifact }}.tar.gz
+            deciduous_elixir/burrito_out/${{ matrix.artifact }}.tar.gz.sha256
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display artifacts
+        run: ls -R artifacts
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/**/*.tar.gz
+            artifacts/**/*.sha256
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref, 'beta') || contains(github.ref, 'alpha') || contains(github.ref, 'rc') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
+    runs-on: ubuntu-latest
+    if: "!contains(github.ref, 'beta') && !contains(github.ref, 'alpha') && !contains(github.ref, 'rc')"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts for SHA256
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Update Formula
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+
+          # Get SHA256 values
+          SHA_DARWIN_ARM64=$(cat artifacts/deciduex_darwin_arm64/deciduex_darwin_arm64.tar.gz.sha256 | cut -d' ' -f1)
+          SHA_DARWIN_AMD64=$(cat artifacts/deciduex_darwin_amd64/deciduex_darwin_amd64.tar.gz.sha256 | cut -d' ' -f1)
+          SHA_LINUX_AMD64=$(cat artifacts/deciduex_linux_amd64/deciduex_linux_amd64.tar.gz.sha256 | cut -d' ' -f1)
+
+          echo "Version: $VERSION"
+          echo "SHA Darwin ARM64: $SHA_DARWIN_ARM64"
+          echo "SHA Darwin AMD64: $SHA_DARWIN_AMD64"
+          echo "SHA Linux AMD64: $SHA_LINUX_AMD64"
+
+          # Update formula (for stable releases only)
+          sed -i "s/version \".*\"/version \"$VERSION\"/" Formula/deciduous.rb
+          sed -i "s/sha256 \".*\" # darwin-arm64/sha256 \"$SHA_DARWIN_ARM64\" # darwin-arm64/" Formula/deciduous.rb
+          sed -i "s/sha256 \".*\" # darwin-amd64/sha256 \"$SHA_DARWIN_AMD64\" # darwin-amd64/" Formula/deciduous.rb
+          sed -i "s/sha256 \".*\" # linux-amd64/sha256 \"$SHA_LINUX_AMD64\" # linux-amd64/" Formula/deciduous.rb
+
+      - name: Commit Formula Update
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore: update homebrew formula to ${{ github.ref_name }}"
+          file_pattern: Formula/deciduous.rb

@@ -4,7 +4,7 @@ defmodule Deciduex.MixProject do
   def project do
     [
       app: :deciduex,
-      version: "0.14.0-beta.1",
+      version: "0.14.0-beta.2",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
