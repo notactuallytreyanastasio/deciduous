@@ -31,9 +31,14 @@ deciduex-*.tar
 # Junk files
 /foo
 
-# Generated docs
-/docs/graph-data.json
-/docs/index.html
+# Generated docs (parent repo handles GitHub Pages)
+/docs/
 
 # Duplicated documentation
 ELIXIR_AGENTS.md
+
+# Claude config (use parent repo's .claude/)
+.claude/
+
+# Default mix readme (not customized)
+README.md
