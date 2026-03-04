@@ -7,8 +7,10 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.CommandLog
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
+  alias Deciduex.Commands.Link
   alias Deciduex.Commands.Nodes
   alias Deciduex.Commands.Show
+  alias Deciduex.Commands.Unlink
   alias Deciduex.DB
   alias Deciduex.Repo
 
@@ -33,6 +35,12 @@ defmodule Deciduex.CLI do
     case args do
       ["add" | rest] ->
         Add.run(rest)
+
+      ["link" | rest] ->
+        Link.run(rest)
+
+      ["unlink" | rest] ->
+        Unlink.run(rest)
 
       ["nodes" | rest] ->
         Nodes.run(rest)
@@ -62,11 +70,13 @@ defmodule Deciduex.CLI do
     IO.puts("Usage: deciduex <command> [options]")
     IO.puts("")
     IO.puts("Commands:")
-    IO.puts("  add <type> <title>  Create a new decision node")
-    IO.puts("  nodes               List all decision graph nodes")
-    IO.puts("  edges               List all decision graph edges")
-    IO.puts("  graph               Output full graph as JSON")
-    IO.puts("  show <id>           Show detailed node information")
-    IO.puts("  commands            Show recent command log")
+    IO.puts("  add <type> <title>    Create a new decision node")
+    IO.puts("  link <from> <to>      Create edge between nodes")
+    IO.puts("  unlink <from> <to>    Remove edge between nodes")
+    IO.puts("  nodes                 List all decision graph nodes")
+    IO.puts("  edges                 List all decision graph edges")
+    IO.puts("  graph                 Output full graph as JSON")
+    IO.puts("  show <id>             Show detailed node information")
+    IO.puts("  commands              Show recent command log")
   end
 end
