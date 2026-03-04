@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(deciduous nodes)",
+      "Bash(find:*)"
+    ]
+  }
+}

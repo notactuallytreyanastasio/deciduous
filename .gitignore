@@ -1,54 +1,51 @@
-target/
+# Elixir build artifacts
+_build/
+deps/
+*.ez
+*.beam
+erl_crash.dump
+
+# Generated files
+*.pot
+.elixir_ls/
+
+# Mix artifacts
+/mix.lock.bak
+
+# Burrito build artifacts
+burrito_out/
+
+# Editor files
 *.swp
 *.swo
 *~
 .DS_Store
-losselot-reports/
-test_files/
-test_report.html
-*.flac
-sus.mp3
-1992-10-09 Tape.flac
-reference_implementation.sh
 
-# Demo source files
-*.mov
-screen.png
-s0.png
-s1.png
-s2.png
-sus2.mp3
-docs/demo.mov
-
-# Frontend build artifacts
-docs/node_modules/
-docs/dist/
-
-# Database (tracked separately)
-losselot.db
-
-# Reports
-report.html
-
-# Generated/temp files
-git.log
-
-# Web build artifacts
-web/bun.lock
-web/build-embed.sh
-web/node_modules/
-
-# Database
-deciduous.db
-*.db
+# Test artifacts
+/cover/
+/tmp/
 
 # Deciduous database (local) - but track patches for sharing
 .deciduous/*
 !.deciduous/patches/
 !.deciduous/config.toml
 
-# Proptest regressions (local test failures)
-proptest-regressions/
+# Local config overrides
+config/*.local.exs
 
-# Deciduous database (local)
-.deciduous/
+# Environment files
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+
+# Claude docs cache
+priv/static/claude_docs/
+
+# Old demo files
+*.mov
+*.cast
+*.flac
+*.mp3

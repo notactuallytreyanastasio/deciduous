@@ -2,7 +2,6 @@
 
 **Decision graph tooling for AI-assisted development.** Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
 
-[![Crates.io](https://img.shields.io/crates/v/deciduous.svg)](https://crates.io/crates/deciduous)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
@@ -12,8 +11,6 @@
 **[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 1,100+ decisions from building deciduous itself
 
 **[Interactive Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** — Learn the workflow in 15 minutes
-
-**[Watch the Demo](https://asciinema.org/a/761574)** — Full session walkthrough
 
 ---
 
@@ -61,32 +58,27 @@ Download the latest release for your platform from [GitHub Releases](https://git
 
 | Platform | Binary |
 |----------|--------|
-| Linux (x86_64) | `deciduous-linux-amd64` |
-| Linux (ARM64) | `deciduous-linux-arm64` |
-| macOS (Intel) | `deciduous-darwin-amd64` |
-| macOS (Apple Silicon) | `deciduous-darwin-arm64` |
-| Windows | `deciduous-windows-amd64.exe` |
+| Linux (x86_64) | `deciduex-linux-amd64` |
+| macOS (Intel) | `deciduex-darwin-amd64` |
+| macOS (Apple Silicon) | `deciduex-darwin-arm64` |
 
 ```bash
-# Example: Linux/macOS
-curl -LO https://github.com/notactuallytreyanastasio/deciduous/releases/latest/download/deciduous-darwin-arm64
-chmod +x deciduous-darwin-arm64
-sudo mv deciduous-darwin-arm64 /usr/local/bin/deciduous
-```
-
-### Via Cargo
-
-```bash
-cargo install deciduous
+# Example: macOS Apple Silicon
+curl -LO https://github.com/notactuallytreyanastasio/deciduous/releases/latest/download/deciduex-darwin-arm64
+chmod +x deciduex-darwin-arm64
+sudo mv deciduex-darwin-arm64 /usr/local/bin/deciduous
 ```
 
 ### From Source
 
+Requires Elixir 1.19+ and Erlang/OTP 27+.
+
 ```bash
 git clone https://github.com/notactuallytreyanastasio/deciduous.git
 cd deciduous
-cargo build --release
-# Binary at target/release/deciduous
+mix deps.get
+mix release
+# Binary at _build/prod/rel/deciduex/bin/cli
 ```
 
 ---
@@ -108,11 +100,11 @@ deciduous add decision "Use JWT for API, sessions for web" -c 85
 deciduous link 2 4 -r "Chosen approach"
 deciduous link 3 4 -r "Also incorporated"
 
-# View the graph
-deciduous serve    # Web viewer at localhost:3000
+# Export the graph
+deciduous sync     # Export to docs/graph-data.json
 ```
 
-That's it. Your first decision graph is live.
+That's it. Your first decision graph is ready.
 
 ### The Canonical Flow
 
@@ -312,50 +304,26 @@ Pulse maps the current architecture as a decision tree — the design choices th
 
 ## Deep Q&A Interface
 
-The web viewer includes a built-in Q&A interface where you can ask questions about your decision graph and get answers grounded in your actual development history.
-
-```
-POST /api/ask
-{
-  "question": "Why did we switch from JWT to sessions for web auth?",
-  "context": {
-    "selected_node_id": 42,
-    "branch": "main"
-  }
-}
-```
+The [deciduous-viewer](https://github.com/notactuallytreyanastasio/deciduous-viewer) Phoenix app includes a built-in Q&A interface where you can ask questions about your decision graph and get answers grounded in your actual development history.
 
 The Q&A system:
 
 - **Sends your question + graph context to Claude** — it sees the relevant nodes, edges, and narrative context
 - **Archaeology-aware** — when asking from the archaeology view, the agent gets full narrative context including pivots, superseded approaches, and GitHub links
-- **Stores every interaction** — questions and answers are saved with full-text search (FTS5), so you can search past Q&A sessions
-- **Searchable history** — `GET /api/qa/search?q=auth` finds past conversations about authentication decisions
+- **Stores every interaction** — questions and answers are saved with full-text search
+- **Searchable history** — find past conversations about specific topics
 
 This turns the graph into a conversational interface. Instead of manually traversing nodes, ask: *"What was tried before the current approach?"* or *"What connects the auth system to rate limiting?"*
-
-```bash
-# Browse Q&A history
-GET /api/qa?offset=0&limit=20
-
-# Search past questions
-GET /api/qa/search?q=rate+limiting&limit=10
-
-# Get a specific interaction
-GET /api/qa/42
-```
 
 ---
 
 ## Viewing the Graph
 
-### Web Viewer
+### Web Viewer (Separate Package)
 
-```bash
-deciduous serve --port 3000
-```
+The decision graph web viewer is available as a separate Phoenix application. See [deciduous-viewer](https://github.com/notactuallytreyanastasio/deciduous-viewer) for installation and usage.
 
-Five views:
+The viewer provides five views:
 
 | View | Purpose |
 |------|---------|
@@ -365,7 +333,15 @@ Five views:
 | **DAG** | Hierarchical goal→decision→outcome flow |
 | **Archaeology** | Narrative-driven exploration with Q&A |
 
-Features: branch filtering, full-text search with type filters, resizable panels, deep linking, click-to-expand details, keyboard navigation (j/k/g/G/Space), Q&A panel, and auto-refresh.
+### Static Export
+
+Export your graph for hosting on GitHub Pages:
+
+```bash
+deciduous sync    # Export to docs/graph-data.json
+```
+
+Then push to GitHub with Pages enabled for the `/docs` folder.
 
 ---
 
@@ -485,38 +461,6 @@ Add this to your session start routine to catch updates automatically.
 
 ---
 
-## How the Hooks/Plugins Work
-
-Each AI assistant integration includes hooks and plugins that enforce the decision graph workflow:
-
-### Pre-Edit Hook (Blocks edits without context)
-
-Before the AI can edit files, it must have logged a recent goal or action node (within 15 minutes). This ensures decisions are captured *before* code is written.
-
-```
-AI tries to edit → Hook checks for recent node → Blocks if missing → AI logs decision → Edit proceeds
-```
-
-### Post-Commit Hook (Reminds to link commits)
-
-After any `git commit`, the AI is reminded to:
-1. Create an outcome or action node with `--commit HEAD`
-2. Link it to the parent goal/action
-
-This connects your git history to the decision graph.
-
-### Assistant-Specific Implementation
-
-| Assistant | Pre-Edit Hook/Plugin | Post-Commit Hook/Plugin |
-|-----------|----------------------|-------------------------|
-| **Claude Code** | `PreToolUse` on `Edit\|Write` | `PostToolUse` on `Bash` (git commit) |
-| **OpenCode** | TypeScript plugin `pre-edit` | TypeScript plugin `post-commit` |
-| **Windsurf** | Cascade `pre_write_code` | Cascade `post_run_command` |
-
-All hooks use **exit code 2** to block actions and provide guidance to the AI.
-
----
-
 ## The Premises
 
 1. **Decisions are the unit of institutional knowledge.** Code tells you *what*, but decisions tell you *why*. Six months from now, you won't remember why you chose Redis over Postgres for that cache. The graph will.
@@ -556,7 +500,7 @@ deciduous add action "Title" -c 85 --commit HEAD  # Link to git commit
 -c, --confidence <0-100>     # Confidence level
 -p, --prompt "..."           # User prompt that triggered this
 --prompt-stdin               # Read prompt from stdin (multi-line)
--f, --files "a.rs,b.rs"      # Associated files
+-f, --files "a.ex,b.ex"      # Associated files
 --commit <hash|HEAD>         # Link to git commit
 --date "YYYY-MM-DD"          # Backdate node (for archaeology)
 
@@ -579,10 +523,6 @@ deciduous edges --from <id>  # Edges from a node
 deciduous graph              # Full graph as JSON
 deciduous commands           # Recent command log
 
-# Visualize
-deciduous serve              # Web viewer
-deciduous dot --png          # Generate PNG (requires graphviz)
-
 # Export
 deciduous sync               # Export to docs/
 deciduous writeup -t "Title" # Generate PR writeup
@@ -601,12 +541,32 @@ deciduous doc open <id>                        # Open in default app
 deciduous doc detach <id>                      # Soft-delete
 deciduous doc gc                               # Clean orphaned files
 deciduous doc gc --dry-run                     # Preview cleanup
-
-# Shell completion
-deciduous completion zsh     # Add: source <(deciduous completion zsh)
-deciduous completion bash
-deciduous completion fish
 ```
+
+---
+
+## Architecture
+
+Deciduous is built with Elixir/OTP for reliability and easy deployment as a single binary.
+
+```
+lib/
+├── deciduex/
+│   ├── cli.ex              # CLI entry point
+│   ├── commands/           # Command implementations
+│   ├── queries.ex          # Read operations
+│   ├── mutations.ex        # Write operations
+│   └── schema/             # Ecto schemas
+└── priv/
+    └── templates/          # Integration file templates
+
+.deciduous/
+├── deciduous.db            # SQLite database
+├── documents/              # Attached files
+└── config.toml             # Configuration
+```
+
+The web viewer is a separate package: [deciduous-viewer](https://github.com/notactuallytreyanastasio/deciduous-viewer).
 
 ---
 
