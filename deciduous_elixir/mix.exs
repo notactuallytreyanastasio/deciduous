@@ -77,7 +77,48 @@ defmodule Deciduex.MixProject do
     if System.get_env("BURRITO_TARGET") do
       [:assemble, &Burrito.wrap/1]
     else
-      [:assemble]
+      [:assemble, &create_cli_wrapper/1]
     end
+  end
+
+  # Create the cli wrapper script that handles symlinks properly
+  defp create_cli_wrapper(release) do
+    cli_path = Path.join([release.path, "bin", "cli"])
+
+    cli_content = ~S"""
+    #!/bin/sh
+    # Deciduous CLI entry point.
+
+    # Resolve symlinks to get the real script location
+    SCRIPT="$0"
+    while [ -L "$SCRIPT" ]; do
+      SCRIPT_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+      SCRIPT="$(readlink "$SCRIPT")"
+      [ "${SCRIPT#/}" = "$SCRIPT" ] && SCRIPT="$SCRIPT_DIR/$SCRIPT"
+    done
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT")" && pwd)"
+    RELEASE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+    RELEASE_BIN="$RELEASE_ROOT/bin/deciduex"
+
+    if [ ! -f "$RELEASE_BIN" ]; then
+      echo "Error: deciduex release not found at $RELEASE_BIN" >&2
+      exit 1
+    fi
+
+    # Build Elixir list string from shell arguments
+    args=""
+    for arg in "$@"; do
+      if [ -n "$args" ]; then
+        args="$args, "
+      fi
+      args="$args\"$arg\""
+    done
+
+    exec "$RELEASE_BIN" eval "Deciduex.CLI.main([$args])"
+    """
+
+    File.write!(cli_path, String.trim_leading(cli_content))
+    File.chmod!(cli_path, 0o755)
+    release
   end
 end

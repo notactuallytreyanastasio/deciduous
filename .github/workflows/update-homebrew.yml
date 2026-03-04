@@ -27,10 +27,14 @@ jobs:
       - name: Parse checksums
         id: checksums
         run: |
-          echo "darwin_arm64=$(grep darwin-arm64 checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "darwin_amd64=$(grep darwin-amd64 checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "linux_arm64=$(grep linux-arm64 checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
-          echo "linux_amd64=$(grep linux-amd64 checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "darwin_arm64=$(grep 'deciduous-darwin-arm64$' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "darwin_amd64=$(grep 'deciduous-darwin-amd64$' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_arm64=$(grep 'deciduous-linux-arm64$' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "linux_amd64=$(grep 'deciduous-linux-amd64$' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "deciduex_darwin_arm64=$(grep 'deciduex-darwin-arm64' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "deciduex_darwin_amd64=$(grep 'deciduex-darwin-amd64' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "deciduex_linux_arm64=$(grep 'deciduex-linux-arm64' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          echo "deciduex_linux_amd64=$(grep 'deciduex-linux-amd64' checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
 
       - name: Generate formula
         env:
@@ -39,6 +43,10 @@ jobs:
           SHA_DARWIN_AMD64: ${{ steps.checksums.outputs.darwin_amd64 }}
           SHA_LINUX_ARM64: ${{ steps.checksums.outputs.linux_arm64 }}
           SHA_LINUX_AMD64: ${{ steps.checksums.outputs.linux_amd64 }}
+          SHA_DECIDUEX_DARWIN_ARM64: ${{ steps.checksums.outputs.deciduex_darwin_arm64 }}
+          SHA_DECIDUEX_DARWIN_AMD64: ${{ steps.checksums.outputs.deciduex_darwin_amd64 }}
+          SHA_DECIDUEX_LINUX_ARM64: ${{ steps.checksums.outputs.deciduex_linux_arm64 }}
+          SHA_DECIDUEX_LINUX_AMD64: ${{ steps.checksums.outputs.deciduex_linux_amd64 }}
         run: |
           cat > deciduous.rb << FORMULA
           class Deciduous < Formula
@@ -51,10 +59,20 @@ jobs:
               on_arm do
                 url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-darwin-arm64"
                 sha256 "${SHA_DARWIN_ARM64}"
+
+                resource "deciduex" do
+                  url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex-darwin-arm64.tar.gz"
+                  sha256 "${SHA_DECIDUEX_DARWIN_ARM64}"
+                end
               end
               on_intel do
                 url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-darwin-amd64"
                 sha256 "${SHA_DARWIN_AMD64}"
+
+                resource "deciduex" do
+                  url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex-darwin-amd64.tar.gz"
+                  sha256 "${SHA_DECIDUEX_DARWIN_AMD64}"
+                end
               end
             end
 
@@ -62,16 +80,34 @@ jobs:
               on_arm do
                 url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-linux-arm64"
                 sha256 "${SHA_LINUX_ARM64}"
+
+                resource "deciduex" do
+                  url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex-linux-arm64.tar.gz"
+                  sha256 "${SHA_DECIDUEX_LINUX_ARM64}"
+                end
               end
               on_intel do
                 url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-linux-amd64"
                 sha256 "${SHA_LINUX_AMD64}"
+
+                resource "deciduex" do
+                  url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex-linux-amd64.tar.gz"
+                  sha256 "${SHA_DECIDUEX_LINUX_AMD64}"
+                end
               end
             end
 
             def install
+              # Install Rust binary
               binary_name = Dir["deciduous-*"].first
               bin.install binary_name => "deciduous"
+
+              # Install Elixir release under libexec
+              resource("deciduex").stage do
+                (libexec/"deciduex").install Dir["deciduex/*"]
+              end
+              chmod 0755, libexec/"deciduex/bin/cli"
+              chmod 0755, libexec/"deciduex/bin/deciduex"
             end
 
             test do

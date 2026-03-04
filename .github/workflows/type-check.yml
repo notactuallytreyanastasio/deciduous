@@ -148,3 +148,59 @@ jobs:
           echo "## Web Build ✓" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Web build completed successfully" >> $GITHUB_STEP_SUMMARY
+
+  build-elixir:
+    name: Build and Test (Elixir)
+    runs-on: ubuntu-latest
+    needs: format-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Erlang/Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '27.0'
+          elixir-version: '1.18'
+
+      - name: Cache Elixir deps and PLTs
+        uses: actions/cache@v4
+        with:
+          path: |
+            deciduous_elixir/deps
+            deciduous_elixir/_build
+          key: elixir-${{ runner.os }}-${{ hashFiles('deciduous_elixir/mix.lock') }}
+
+      - name: Install dependencies
+        working-directory: deciduous_elixir
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+
+      - name: Check formatting
+        working-directory: deciduous_elixir
+        run: mix format --check-formatted
+
+      - name: Credo strict
+        working-directory: deciduous_elixir
+        run: mix credo --strict
+
+      - name: Dialyzer
+        working-directory: deciduous_elixir
+        run: mix dialyzer
+
+      - name: Tests (warnings as errors)
+        working-directory: deciduous_elixir
+        run: mix test --warnings-as-errors
+
+      - name: Elixir Summary
+        if: success()
+        run: |
+          echo "## Elixir Quality ✓" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "All Elixir checks passed:" >> $GITHUB_STEP_SUMMARY
+          echo "- Format check" >> $GITHUB_STEP_SUMMARY
+          echo "- Credo strict" >> $GITHUB_STEP_SUMMARY
+          echo "- Dialyzer" >> $GITHUB_STEP_SUMMARY
+          echo "- Tests (warnings as errors)" >> $GITHUB_STEP_SUMMARY

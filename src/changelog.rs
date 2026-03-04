@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.14.0-beta.1",
+        highlights: &[
+            "Beta: Elixir integration for deciduous nodes command",
+            "Deciduex sidecar built and distributed alongside Rust binary",
+            "Beta release channel - does not affect stable cargo/brew installs",
+        ],
+    },
+    Release {
         version: "0.13.8",
         highlights: &[
             "Fix: OpenCode post-commit hook still used console.log (stdout) instead of console.error (stderr)",
@@ -282,8 +290,16 @@ pub fn format_releases(releases: &[&Release]) -> String {
 }
 
 /// Check if integration files are outdated and return a brief reminder message
-/// Returns None if up to date or if version file doesn't exist
+/// Returns None if up to date, if version file doesn't exist, or if running a pre-release
 pub fn check_version_reminder(current_binary_version: &str) -> Option<String> {
+    // Skip reminders for pre-release versions (beta, alpha, rc)
+    if current_binary_version.contains("-beta")
+        || current_binary_version.contains("-alpha")
+        || current_binary_version.contains("-rc")
+    {
+        return None;
+    }
+
     let version_file = std::path::Path::new(".deciduous/.version");
 
     if !version_file.exists() {

@@ -2246,7 +2246,7 @@ defmodule Deciduex.EndToEndTest do
       File.mkdir_p!(empty_dir)
 
       output = capture_io(fn -> Diff.run(["status", empty_dir]) end)
-      assert output =~ "No patches" or output =~ "0 patches" or output == ""
+      assert output =~ "No patch files" or output =~ "0 patches" or output == ""
     end
 
     test "diff status with non-json files" do

@@ -915,6 +915,27 @@ fn find_deciduex_cli() -> Option<PathBuf> {
     None
 }
 
+/// Delegate a command to the Elixir deciduex CLI.
+/// Always exits - either with the Elixir process's exit code or an error.
+/// The Elixir CLI is required - there is no Rust fallback.
+fn delegate_to_elixir(args: &[&str]) {
+    if let Some(cli_path) = find_deciduex_cli() {
+        let mut cmd = ProcessCommand::new(&cli_path);
+        cmd.args(args);
+        match cmd.status() {
+            Ok(status) => std::process::exit(status.code().unwrap_or(0)),
+            Err(e) => {
+                eprintln!("Failed to run deciduex: {}", e);
+                std::process::exit(1);
+            }
+        }
+    } else {
+        eprintln!("Error: deciduex Elixir CLI not found.");
+        eprintln!("Set DECIDUEX_PATH environment variable or install the Elixir sidecar.");
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -982,7 +1003,13 @@ fn main() {
             }
         };
 
-        if installed_version != current_version {
+        // Skip update warnings for pre-release versions (beta, alpha, rc)
+        // Pre-release users are expected to have version mismatches
+        let is_prerelease = current_version.contains("-beta")
+            || current_version.contains("-alpha")
+            || current_version.contains("-rc");
+
+        if installed_version != current_version && !is_prerelease {
             println!();
             println!(
                 "{}",
@@ -1027,11 +1054,19 @@ fn main() {
             std::process::exit(1);
         }
 
-        println!(
-            "{} Integration files are up to date (v{}).",
-            "OK:".green(),
-            current_version
-        );
+        if is_prerelease {
+            println!(
+                "{} Running pre-release version (v{}). Version checks skipped.",
+                "OK:".green(),
+                current_version
+            );
+        } else {
+            println!(
+                "{} Integration files are up to date (v{}).",
+                "OK:".green(),
+                current_version
+            );
+        }
         return;
     }
 
@@ -1071,7 +1106,39 @@ fn main() {
             no_branch,
             date,
         } => {
-            // Handle prompt from stdin if requested
+            // Build args for Elixir delegation
+            let mut elixir_args: Vec<String> = vec!["add".into(), node_type.clone(), title.clone()];
+            if let Some(ref d) = description {
+                elixir_args.extend(["-d".into(), d.clone()]);
+            }
+            if let Some(c) = confidence {
+                elixir_args.extend(["-c".into(), c.to_string()]);
+            }
+            if let Some(ref c) = commit {
+                elixir_args.extend(["--commit".into(), c.clone()]);
+            }
+            if let Some(ref p) = prompt {
+                elixir_args.extend(["-p".into(), p.clone()]);
+            }
+            if prompt_stdin {
+                elixir_args.push("--prompt-stdin".into());
+            }
+            if let Some(ref f) = files {
+                elixir_args.extend(["-f".into(), f.clone()]);
+            }
+            if let Some(ref b) = branch {
+                elixir_args.extend(["-b".into(), b.clone()]);
+            }
+            if no_branch {
+                elixir_args.push("--no-branch".into());
+            }
+            if let Some(ref d) = date {
+                elixir_args.extend(["--date".into(), d.clone()]);
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback: Handle prompt from stdin if requested
             let effective_prompt = if prompt_stdin {
                 use std::io::{self, Read};
                 let mut buffer = String::new();
@@ -1229,7 +1296,20 @@ fn main() {
             to,
             rationale,
             edge_type,
-        } => match db.create_edge(from, to, &edge_type, rationale.as_deref()) {
+        } => {
+            // Delegate to Elixir
+            let mut elixir_args: Vec<String> = vec!["link".into(), from.to_string(), to.to_string()];
+            if let Some(ref r) = rationale {
+                elixir_args.extend(["-r".into(), r.clone()]);
+            }
+            if edge_type != "leads_to" {
+                elixir_args.extend(["-t".into(), edge_type.clone()]);
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
+            match db.create_edge(from, to, &edge_type, rationale.as_deref()) {
             Ok(id) => {
                 println!(
                     "{} edge {} ({} -> {} via {})",
@@ -1276,10 +1356,14 @@ fn main() {
                 eprintln!("{} {}", "Error:".red(), e);
                 std::process::exit(1);
             }
+        }
         },
 
         Command::Unlink { from, to } => {
-            // Get node info before deletion for event emission
+            // Delegate to Elixir
+            delegate_to_elixir(&["unlink", &from.to_string(), &to.to_string()]);
+
+            // Rust fallback: Get node info before deletion for event emission
             let from_node = db.get_node(from).ok().flatten();
             let to_node = db.get_node(to).ok().flatten();
 
@@ -1322,7 +1406,15 @@ fn main() {
         }
 
         Command::Delete { id, dry_run } => {
-            // Get node info before deletion for event emission
+            // Delegate to Elixir
+            let mut elixir_args: Vec<String> = vec!["delete".into(), id.to_string()];
+            if dry_run {
+                elixir_args.push("--dry-run".into());
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback: Get node info before deletion for event emission
             let node_info = if !dry_run {
                 db.get_node(id).ok().flatten()
             } else {
@@ -1376,7 +1468,12 @@ fn main() {
             }
         }
 
-        Command::Status { id, status } => match db.update_node_status(id, &status) {
+        Command::Status { id, status } => {
+            // Delegate to Elixir
+            delegate_to_elixir(&["status", &id.to_string(), &status]);
+
+            // Rust fallback
+            match db.update_node_status(id, &status) {
             Ok(()) => {
                 println!("{} node {} status to '{}'", "Updated".green(), id, status);
 
@@ -1408,10 +1505,19 @@ fn main() {
                 eprintln!("{} {}", "Error:".red(), e);
                 std::process::exit(1);
             }
-        },
+        }
+        }
 
         Command::Prompt { id, prompt } => {
-            // Read prompt from stdin if not provided as argument
+            // Delegate to Elixir
+            let mut elixir_args: Vec<String> = vec!["prompt".into(), id.to_string()];
+            if let Some(ref p) = prompt {
+                elixir_args.push(p.clone());
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback: Read prompt from stdin if not provided as argument
             let effective_prompt = match prompt {
                 Some(p) => p,
                 None => {
@@ -1457,391 +1563,56 @@ fn main() {
         Command::Nodes {
             branch,
             node_type,
-            theme,
+            theme: _, // Deprecated, ignored
         } => {
-            // Try delegating to the Elixir deciduex binary (unless --theme is used,
-            // which the Elixir version doesn't support yet)
-            let use_elixir = theme.is_none();
-            let delegated = if use_elixir {
-                if let Some(cli_path) = find_deciduex_cli() {
-                    let mut cmd = ProcessCommand::new(&cli_path);
-                    cmd.arg("nodes");
-                    if let Some(ref b) = branch {
-                        cmd.args(["--branch", b]);
-                    }
-                    if let Some(ref t) = node_type {
-                        cmd.args(["--type", t]);
-                    }
-                    match cmd.status() {
-                        Ok(status) if status.success() => true,
-                        Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-                        Err(_) => false, // Fall back to Rust
-                    }
-                } else {
-                    false
-                }
-            } else {
-                false
-            };
-
-            if !delegated {
-                // Rust fallback implementation
-                let theme_node_ids: Option<std::collections::HashSet<i32>> =
-                    theme.as_ref().map(|t| {
-                        db.get_nodes_by_theme(t)
-                            .unwrap_or_default()
-                            .iter()
-                            .map(|n| n.id)
-                            .collect()
-                    });
-
-                match db.get_all_nodes() {
-                    Ok(nodes) => {
-                        let filtered: Vec<_> = nodes
-                            .into_iter()
-                            .filter(|n| {
-                                let branch_match = match &branch {
-                                    Some(b) => n.metadata_json.as_ref().is_some_and(|meta| {
-                                        serde_json::from_str::<serde_json::Value>(meta)
-                                            .ok()
-                                            .and_then(|v| {
-                                                v.get("branch")
-                                                    .and_then(|br| br.as_str())
-                                                    .map(|s| s.to_string())
-                                            })
-                                            .is_some_and(|node_branch| node_branch == *b)
-                                    }),
-                                    None => true,
-                                };
-                                let type_match = match &node_type {
-                                    Some(t) => n.node_type == *t,
-                                    None => true,
-                                };
-                                let theme_match = match &theme_node_ids {
-                                    Some(ids) => ids.contains(&n.id),
-                                    None => true,
-                                };
-                                branch_match && type_match && theme_match
-                            })
-                            .collect();
-
-                        if filtered.is_empty() {
-                            if branch.is_some() || node_type.is_some() {
-                                println!("No nodes found matching filters.");
-                            } else {
-                                println!(
-                                    "No nodes found. Add one with: deciduous add goal \"My goal\""
-                                );
-                            }
-                        } else {
-                            let header = match &branch {
-                                Some(b) => {
-                                    format!(
-                                        "Nodes on branch '{}' ({} total):",
-                                        b,
-                                        filtered.len()
-                                    )
-                                }
-                                None => format!("{} nodes:", filtered.len()),
-                            };
-                            println!("{}", header.cyan());
-                            println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");
-                            println!("{}", "-".repeat(70));
-                            for n in filtered {
-                                let type_colored = match n.node_type.as_str() {
-                                    "goal" => n.node_type.yellow(),
-                                    "decision" => n.node_type.cyan(),
-                                    "action" => n.node_type.green(),
-                                    "outcome" => n.node_type.blue(),
-                                    "observation" => n.node_type.magenta(),
-                                    "revisit" => n.node_type.truecolor(249, 115, 22),
-                                    _ => n.node_type.white(),
-                                };
-                                println!(
-                                    "{:<5} {:<12} {:<10} {}",
-                                    n.id, type_colored, n.status, n.title
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
-                    }
-                }
+            let mut args: Vec<&str> = vec!["nodes"];
+            let branch_val: String;
+            let type_val: String;
+            if let Some(ref b) = branch {
+                branch_val = b.clone();
+                args.push("--branch");
+                args.push(&branch_val);
             }
+            if let Some(ref t) = node_type {
+                type_val = t.clone();
+                args.push("--type");
+                args.push(&type_val);
+            }
+            delegate_to_elixir(&args);
         }
 
         Command::Edges => {
-            // Try delegating to Elixir
-            let delegated = if let Some(cli_path) = find_deciduex_cli() {
-                let mut cmd = ProcessCommand::new(&cli_path);
-                cmd.arg("edges");
-                match cmd.status() {
-                    Ok(status) if status.success() => true,
-                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-                    Err(_) => false,
-                }
-            } else {
-                false
-            };
-
-            if !delegated {
-                match db.get_all_edges() {
-                    Ok(edges) => {
-                        if edges.is_empty() {
-                            println!("No edges found. Link nodes with: deciduous link 1 2 -r \"reason\"");
-                        } else {
-                            println!(
-                                "{:<5} {:<6} {:<6} {:<12} RATIONALE",
-                                "ID", "FROM", "TO", "TYPE"
-                            );
-                            println!("{}", "-".repeat(70));
-                            for e in edges {
-                                println!(
-                                    "{:<5} {:<6} {:<6} {:<12} {}",
-                                    e.id,
-                                    e.from_node_id,
-                                    e.to_node_id,
-                                    e.edge_type,
-                                    e.rationale.unwrap_or_default()
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
-                    }
-                }
-            }
+            delegate_to_elixir(&["edges"]);
         }
 
         Command::Show { id, json } => {
-            // Try delegating to Elixir
-            let delegated = if let Some(cli_path) = find_deciduex_cli() {
-                let mut cmd = ProcessCommand::new(&cli_path);
-                cmd.args(["show", &id.to_string()]);
-                if json {
-                    cmd.arg("--json");
-                }
-                match cmd.status() {
-                    Ok(status) if status.success() => true,
-                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-                    Err(_) => false,
-                }
+            let id_str = id.to_string();
+            if json {
+                delegate_to_elixir(&["show", &id_str, "--json"]);
             } else {
-                false
-            };
-
-            if !delegated {
-            match db.get_node(id) {
-                Ok(Some(node)) => {
-                    if json {
-                        // JSON output mode
-                        match serde_json::to_string_pretty(&node) {
-                            Ok(json_str) => println!("{}", json_str),
-                            Err(e) => {
-                                eprintln!("{} Serializing node: {}", "Error:".red(), e);
-                                std::process::exit(1);
-                            }
-                        }
-                    } else {
-                        // Formatted output mode
-                        let type_colored = match node.node_type.as_str() {
-                            "goal" => node.node_type.yellow().bold(),
-                            "decision" => node.node_type.cyan().bold(),
-                            "action" => node.node_type.green().bold(),
-                            "outcome" => node.node_type.blue().bold(),
-                            "observation" => node.node_type.magenta().bold(),
-                            "option" => node.node_type.white().bold(),
-                            "revisit" => node.node_type.truecolor(249, 115, 22).bold(), // Orange
-                            _ => node.node_type.white().bold(),
-                        };
-
-                        println!();
-                        println!(
-                            "{} {} {}",
-                            "Node".bold(),
-                            format!("#{}", id).cyan(),
-                            type_colored
-                        );
-                        println!("{}", "─".repeat(60));
-                        println!("{}: {}", "Title".bold(), node.title);
-
-                        if let Some(desc) = &node.description {
-                            println!("{}: {}", "Description".bold(), desc);
-                        }
-
-                        println!("{}: {}", "Status".bold(), node.status);
-                        println!("{}: {}", "Created".bold(), node.created_at);
-                        println!("{}: {}", "Updated".bold(), node.updated_at);
-
-                        // Parse metadata
-                        if let Some(ref meta_str) = node.metadata_json {
-                            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_str) {
-                                println!();
-                                println!("{}", "Metadata".bold().underline());
-
-                                if let Some(conf) = meta.get("confidence").and_then(|v| v.as_i64())
-                                {
-                                    let conf_colored = if conf >= 80 {
-                                        format!("{}%", conf).green()
-                                    } else if conf >= 50 {
-                                        format!("{}%", conf).yellow()
-                                    } else {
-                                        format!("{}%", conf).red()
-                                    };
-                                    println!("  {}: {}", "Confidence".bold(), conf_colored);
-                                }
-
-                                if let Some(branch) = meta.get("branch").and_then(|v| v.as_str()) {
-                                    println!("  {}: {}", "Branch".bold(), branch.cyan());
-                                }
-
-                                if let Some(commit) = meta.get("commit").and_then(|v| v.as_str()) {
-                                    println!("  {}: {}", "Commit".bold(), commit.yellow());
-                                }
-
-                                if let Some(files) = meta.get("files").and_then(|v| v.as_array()) {
-                                    let file_list: Vec<&str> =
-                                        files.iter().filter_map(|f| f.as_str()).collect();
-                                    if !file_list.is_empty() {
-                                        println!("  {}: {}", "Files".bold(), file_list.join(", "));
-                                    }
-                                }
-
-                                if let Some(prompt) = meta.get("prompt").and_then(|v| v.as_str()) {
-                                    println!();
-                                    println!("{}", "Prompt".bold().underline());
-                                    // Word-wrap long prompts
-                                    for line in prompt.lines() {
-                                        println!("  {}", line.italic());
-                                    }
-                                }
-                            }
-                        }
-
-                        // Get edges
-                        if let Ok(edges) = db.get_all_edges() {
-                            let incoming: Vec<_> =
-                                edges.iter().filter(|e| e.to_node_id == id).collect();
-                            let outgoing: Vec<_> =
-                                edges.iter().filter(|e| e.from_node_id == id).collect();
-
-                            if !incoming.is_empty() || !outgoing.is_empty() {
-                                println!();
-                                println!("{}", "Connections".bold().underline());
-                            }
-
-                            if !incoming.is_empty() {
-                                println!("  {} ({}):", "Incoming".bold(), incoming.len());
-                                for edge in incoming {
-                                    let rationale = edge.rationale.as_deref().unwrap_or("");
-                                    let edge_type = match edge.edge_type.as_str() {
-                                        "chosen" => edge.edge_type.green(),
-                                        "rejected" => edge.edge_type.red(),
-                                        _ => edge.edge_type.white(),
-                                    };
-                                    if rationale.is_empty() {
-                                        println!(
-                                            "    #{} ─[{}]→ here",
-                                            edge.from_node_id, edge_type
-                                        );
-                                    } else {
-                                        println!(
-                                            "    #{} ─[{}]→ here: {}",
-                                            edge.from_node_id,
-                                            edge_type,
-                                            rationale.dimmed()
-                                        );
-                                    }
-                                }
-                            }
-
-                            if !outgoing.is_empty() {
-                                println!("  {} ({}):", "Outgoing".bold(), outgoing.len());
-                                for edge in outgoing {
-                                    let rationale = edge.rationale.as_deref().unwrap_or("");
-                                    let edge_type = match edge.edge_type.as_str() {
-                                        "chosen" => edge.edge_type.green(),
-                                        "rejected" => edge.edge_type.red(),
-                                        _ => edge.edge_type.white(),
-                                    };
-                                    if rationale.is_empty() {
-                                        println!("    here ─[{}]→ #{}", edge_type, edge.to_node_id);
-                                    } else {
-                                        println!(
-                                            "    here ─[{}]→ #{}: {}",
-                                            edge_type,
-                                            edge.to_node_id,
-                                            rationale.dimmed()
-                                        );
-                                    }
-                                }
-                            }
-                        }
-
-                        println!();
-                    }
-                }
-                Ok(None) => {
-                    eprintln!("{} Node #{} not found", "Error:".red(), id);
-                    std::process::exit(1);
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
+                delegate_to_elixir(&["show", &id_str]);
             }
-            } // end if !delegated
         }
 
         Command::Graph => {
-            // Try delegating to Elixir
-            let delegated = if let Some(cli_path) = find_deciduex_cli() {
-                let mut cmd = ProcessCommand::new(&cli_path);
-                cmd.arg("graph");
-                match cmd.status() {
-                    Ok(status) if status.success() => true,
-                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-                    Err(_) => false,
-                }
-            } else {
-                false
-            };
-
-            if !delegated {
-                match db.get_graph() {
-                    Ok(graph) => match serde_json::to_string_pretty(&graph) {
-                        Ok(json) => println!("{}", json),
-                        Err(e) => {
-                            eprintln!("{} Serializing graph: {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    },
-                    Err(e) => {
-                        eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
-                    }
-                }
-            }
+            delegate_to_elixir(&["graph"]);
         }
 
         Command::Serve { port } => {
-            println!(
-                "{} Starting graph viewer at http://localhost:{}",
-                "Deciduous".cyan(),
-                port
-            );
-            if let Err(e) = deciduous::serve::start_graph_server(port) {
-                eprintln!("{} Server error: {}", "Error:".red(), e);
-                std::process::exit(1);
-            }
+            let port_str = port.to_string();
+            delegate_to_elixir(&["serve", "--port", &port_str]);
         }
 
         Command::Sync { output } => {
-            // Default to docs/ for GitHub Pages compatibility
+            // Delegate to Elixir
+            let mut elixir_args: Vec<String> = vec!["sync".into()];
+            if let Some(ref o) = output {
+                elixir_args.push(o.to_string_lossy().to_string());
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback: Default to docs/ for GitHub Pages compatibility
             let output_path = output.unwrap_or_else(|| PathBuf::from("docs/graph-data.json"));
 
             // Create parent directories if needed
@@ -1955,6 +1726,15 @@ fn main() {
         }
 
         Command::Backup { output } => {
+            // Delegate to Elixir
+            let mut elixir_args: Vec<String> = vec!["backup".into()];
+            if let Some(ref o) = output {
+                elixir_args.push(o.to_string_lossy().to_string());
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
             let db_path = Database::db_path();
             if !db_path.exists() {
                 eprintln!(
@@ -1987,43 +1767,8 @@ fn main() {
         }
 
         Command::Commands { limit } => {
-            // Try delegating to Elixir
-            let delegated = if let Some(cli_path) = find_deciduex_cli() {
-                let mut cmd = ProcessCommand::new(&cli_path);
-                cmd.args(["commands", "--limit", &limit.to_string()]);
-                match cmd.status() {
-                    Ok(status) if status.success() => true,
-                    Ok(status) => std::process::exit(status.code().unwrap_or(1)),
-                    Err(_) => false,
-                }
-            } else {
-                false
-            };
-
-            if !delegated {
-                match db.get_recent_commands(limit) {
-                    Ok(commands) => {
-                        if commands.is_empty() {
-                            println!("No commands logged.");
-                        } else {
-                            for c in commands {
-                                println!(
-                                    "[{}] {} (exit: {})",
-                                    c.started_at,
-                                    truncate(&c.command, 60),
-                                    c.exit_code
-                                        .map(|c| c.to_string())
-                                        .unwrap_or_else(|| "running".to_string())
-                                );
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
-                    }
-                }
-            }
+            let limit_str = limit.to_string();
+            delegate_to_elixir(&["commands", "--limit", &limit_str]);
         }
 
         Command::Dot {
@@ -2166,6 +1911,29 @@ fn main() {
             no_dot,
             no_test_plan,
         } => {
+            // Delegate to Elixir (DOT/PNG not supported in Elixir, fall back if those are used)
+            if !auto && png.is_none() && !no_dot {
+                let mut elixir_args: Vec<String> = vec!["writeup".into()];
+                if let Some(ref t) = title {
+                    elixir_args.extend(["-t".into(), t.clone()]);
+                }
+                if let Some(ref r) = roots {
+                    elixir_args.extend(["-r".into(), r.clone()]);
+                }
+                if let Some(ref n) = nodes {
+                    elixir_args.extend(["-n".into(), n.clone()]);
+                }
+                if let Some(ref o) = output {
+                    elixir_args.extend(["-o".into(), o.to_string_lossy().to_string()]);
+                }
+                if no_test_plan {
+                    elixir_args.push("--no-test-plan".into());
+                }
+                let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+                delegate_to_elixir(&elixir_args_refs);
+            }
+
+            // Rust fallback
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
@@ -2272,6 +2040,49 @@ fn main() {
         },
 
         Command::Diff { action } => {
+            // Delegate all diff subcommands to Elixir
+            let elixir_args: Vec<String> = match &action {
+                DiffAction::Export { output, nodes, branch, author, base_commit } => {
+                    let mut args = vec!["diff".into(), "export".into(), "-o".into(), output.to_string_lossy().to_string()];
+                    if let Some(ref n) = nodes {
+                        args.extend(["-n".into(), n.clone()]);
+                    }
+                    if let Some(ref b) = branch {
+                        args.extend(["-b".into(), b.clone()]);
+                    }
+                    if let Some(ref a) = author {
+                        args.extend(["--author".into(), a.clone()]);
+                    }
+                    if let Some(ref c) = base_commit {
+                        args.extend(["--base-commit".into(), c.clone()]);
+                    }
+                    args
+                }
+                DiffAction::Apply { files, dry_run } => {
+                    let mut args = vec!["diff".into(), "apply".into()];
+                    if *dry_run {
+                        args.push("--dry-run".into());
+                    }
+                    args.extend(files.iter().map(|f| f.to_string_lossy().to_string()));
+                    args
+                }
+                DiffAction::Status { path } => {
+                    let mut args = vec!["diff".into(), "status".into()];
+                    if let Some(ref p) = path {
+                        args.push(p.to_string_lossy().to_string());
+                    }
+                    args
+                }
+                DiffAction::Validate { files } => {
+                    let mut args = vec!["diff".into(), "validate".into()];
+                    args.extend(files.iter().map(|f| f.to_string_lossy().to_string()));
+                    args
+                }
+            };
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
             match action {
                 DiffAction::Export {
                     output,
@@ -2977,7 +2788,64 @@ fn main() {
         // ================================================================
         // Document Attachment Commands
         // ================================================================
-        Command::Doc { action } => match action {
+        Command::Doc { action } => {
+            // Delegate all doc subcommands to Elixir
+            let elixir_args: Vec<String> = match &action {
+                DocAction::Attach { node_id, file, description, ai_describe } => {
+                    let mut args = vec!["doc".into(), "attach".into(), node_id.to_string(), file.to_string_lossy().to_string()];
+                    if let Some(ref d) = description {
+                        args.extend(["-d".into(), d.clone()]);
+                    }
+                    if *ai_describe {
+                        args.push("--ai-describe".into());
+                    }
+                    args
+                }
+                DocAction::List { node_id, include_detached, json } => {
+                    let mut args = vec!["doc".into(), "list".into()];
+                    if let Some(id) = node_id {
+                        args.push(id.to_string());
+                    }
+                    if *include_detached {
+                        args.push("--include-detached".into());
+                    }
+                    if *json {
+                        args.push("--json".into());
+                    }
+                    args
+                }
+                DocAction::Show { doc_id, json } => {
+                    let mut args = vec!["doc".into(), "show".into(), doc_id.to_string()];
+                    if *json {
+                        args.push("--json".into());
+                    }
+                    args
+                }
+                DocAction::Describe { doc_id, description, ai } => {
+                    let mut args = vec!["doc".into(), "describe".into(), doc_id.to_string()];
+                    if let Some(ref d) = description {
+                        args.push(d.clone());
+                    }
+                    if *ai {
+                        args.push("--ai".into());
+                    }
+                    args
+                }
+                DocAction::Open { doc_id } => vec!["doc".into(), "open".into(), doc_id.to_string()],
+                DocAction::Detach { doc_id } => vec!["doc".into(), "detach".into(), doc_id.to_string()],
+                DocAction::Gc { dry_run } => {
+                    let mut args = vec!["doc".into(), "gc".into()];
+                    if *dry_run {
+                        args.push("--dry-run".into());
+                    }
+                    args
+                }
+            };
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
+            match action {
             DocAction::Attach {
                 node_id,
                 file,
@@ -3312,6 +3180,7 @@ fn main() {
 
                 drop(active_hashes);
             }
+        }
         },
 
         // ================================================================
@@ -3548,6 +3417,22 @@ fn main() {
             dry_run,
             yes,
         } => {
+            // Delegate to Elixir
+            let mut elixir_args: Vec<String> = vec!["audit".into()];
+            if associate_commits {
+                elixir_args.push("--associate-commits".into());
+            }
+            elixir_args.extend(["--min-score".into(), min_score.to_string()]);
+            if dry_run {
+                elixir_args.push("--dry-run".into());
+            }
+            if yes {
+                elixir_args.push("--yes".into());
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
             if !associate_commits {
                 eprintln!(
                     "{} No audit action specified. Use --associate-commits",
@@ -3739,7 +3624,26 @@ fn main() {
             recent,
             json,
             summary,
-        } => match deciduous::pulse::generate_pulse(&db, branch.as_deref(), recent) {
+        } => {
+            // Try Elixir delegation first
+            let mut elixir_args: Vec<String> = vec!["pulse".to_string()];
+            if let Some(b) = &branch {
+                elixir_args.push("-b".to_string());
+                elixir_args.push(b.clone());
+            }
+            elixir_args.push("-r".to_string());
+            elixir_args.push(recent.to_string());
+            if json {
+                elixir_args.push("--json".to_string());
+            }
+            if summary {
+                elixir_args.push("--summary".to_string());
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
+            match deciduous::pulse::generate_pulse(&db, branch.as_deref(), recent) {
             Ok(report) => {
                 if json {
                     match serde_json::to_string_pretty(&report) {
@@ -3757,9 +3661,45 @@ fn main() {
                 eprintln!("{} {}", "Error:".red(), e);
                 std::process::exit(1);
             }
+        }
         },
 
-        Command::Narratives { action } => match action {
+        Command::Narratives { action } => {
+            // Try Elixir delegation first
+            let mut elixir_args: Vec<String> = vec!["narratives".to_string()];
+            match &action {
+                NarrativesAction::Init { output, force } => {
+                    elixir_args.push("init".to_string());
+                    if let Some(o) = output {
+                        elixir_args.push("-o".to_string());
+                        elixir_args.push(o.to_string_lossy().to_string());
+                    }
+                    if *force {
+                        elixir_args.push("--force".to_string());
+                    }
+                }
+                NarrativesAction::Show { path } => {
+                    elixir_args.push("show".to_string());
+                    if let Some(p) = path {
+                        elixir_args.push(p.to_string_lossy().to_string());
+                    }
+                }
+                NarrativesAction::Pivots { branch, json } => {
+                    elixir_args.push("pivots".to_string());
+                    if let Some(b) = branch {
+                        elixir_args.push("-b".to_string());
+                        elixir_args.push(b.clone());
+                    }
+                    if *json {
+                        elixir_args.push("--json".to_string());
+                    }
+                }
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
+            match action {
             NarrativesAction::Init { output, force } => {
                 let path = output.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
                 if let Err(e) = deciduous::narratives::init_narratives(&db, &path, force) {
@@ -3798,9 +3738,80 @@ fn main() {
                     }
                 }
             }
+        }
         },
 
-        Command::Archaeology { action } => match action {
+        Command::Archaeology { action } => {
+            // Try Elixir delegation first
+            let mut elixir_args: Vec<String> = vec!["archaeology".to_string()];
+            match &action {
+                ArchaeologyAction::Pivot {
+                    from_id,
+                    observation,
+                    new_approach,
+                    confidence,
+                    reason,
+                    dry_run: _,
+                } => {
+                    elixir_args.push("pivot".to_string());
+                    elixir_args.push("--from".to_string());
+                    elixir_args.push(from_id.to_string());
+                    elixir_args.push("--observation".to_string());
+                    elixir_args.push(observation.clone());
+                    elixir_args.push("--new-approach".to_string());
+                    elixir_args.push(new_approach.clone());
+                    if let Some(c) = confidence {
+                        elixir_args.push("-c".to_string());
+                        elixir_args.push(c.to_string());
+                    }
+                    if let Some(r) = reason {
+                        elixir_args.push("--reason".to_string());
+                        elixir_args.push(r.clone());
+                    }
+                }
+                ArchaeologyAction::Timeline {
+                    limit,
+                    node_type,
+                    branch,
+                    json,
+                } => {
+                    elixir_args.push("timeline".to_string());
+                    if *limit > 0 {
+                        elixir_args.push("--limit".to_string());
+                        elixir_args.push(limit.to_string());
+                    }
+                    if let Some(t) = node_type {
+                        elixir_args.push("--type".to_string());
+                        elixir_args.push(t.clone());
+                    }
+                    if let Some(b) = branch {
+                        elixir_args.push("-b".to_string());
+                        elixir_args.push(b.clone());
+                    }
+                    if *json {
+                        elixir_args.push("--json".to_string());
+                    }
+                }
+                ArchaeologyAction::Supersede {
+                    id,
+                    cascade,
+                    dry_run,
+                } => {
+                    elixir_args.push("supersede".to_string());
+                    elixir_args.push(id.to_string());
+                    if *cascade {
+                        elixir_args.push("--cascade".to_string());
+                    }
+                    if *dry_run {
+                        elixir_args.push("--dry-run".to_string());
+                    }
+                }
+            }
+            let elixir_args_refs: Vec<&str> = elixir_args.iter().map(|s| s.as_str()).collect();
+            delegate_to_elixir(&elixir_args_refs);
+
+            // Rust fallback
+            match action {
             ArchaeologyAction::Pivot {
                 from_id,
                 observation,
@@ -3871,6 +3882,7 @@ fn main() {
                     std::process::exit(1);
                 }
             },
+        }
         },
 
         Command::Roadmap { action } => {

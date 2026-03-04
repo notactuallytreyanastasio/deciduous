@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "pre_write_code": [
+      {
+        "command": "./.windsurf/hooks/require-action-node.sh",
+        "show_output": true
+      }
+    ],
+    "post_run_command": [
+      {
+        "command": "./.windsurf/hooks/post-commit-reminder.sh",
+        "show_output": true
+      }
+    ]
+  }
+}

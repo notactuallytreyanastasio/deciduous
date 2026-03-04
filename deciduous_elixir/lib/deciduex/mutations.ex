@@ -17,6 +17,7 @@ defmodule Deciduex.Mutations do
 
     metadata_json = build_metadata_json(attrs)
 
+    # Use RETURNING clause to get the id directly (SQLite 3.35+)
     result =
       SQL.query(
         Repo,
@@ -24,6 +25,7 @@ defmodule Deciduex.Mutations do
         INSERT INTO decision_nodes
           (change_id, node_type, title, description, status, created_at, updated_at, metadata_json)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
         """,
         [
           change_id,
@@ -38,9 +40,7 @@ defmodule Deciduex.Mutations do
       )
 
     case result do
-      {:ok, _} ->
-        # Get the last inserted row ID
-        {:ok, %{rows: [[id]]}} = SQL.query(Repo, "SELECT last_insert_rowid()", [])
+      {:ok, %{rows: [[id]]}} ->
         {:ok, id}
 
       {:error, reason} ->
@@ -65,13 +65,13 @@ defmodule Deciduex.Mutations do
         INSERT INTO decision_edges
           (from_node_id, to_node_id, from_change_id, to_change_id, edge_type, weight, rationale, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
         """,
         [from_id, to_id, from_change_id, to_change_id, edge_type, 1.0, rationale, now]
       )
 
     case result do
-      {:ok, _} ->
-        {:ok, %{rows: [[id]]}} = SQL.query(Repo, "SELECT last_insert_rowid()", [])
+      {:ok, %{rows: [[id]]}} ->
         {:ok, id}
 
       {:error, reason} ->
