@@ -20,27 +20,30 @@ defmodule Deciduex.Commands.Status do
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{reason}")
         print_usage()
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
   defp update_status(id, status) do
-    # Verify node exists first
     case Queries.get_node(id) do
       nil ->
         IO.puts(:stderr, "Error: Node ##{id} not found")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       node ->
-        case Mutations.update_status(id, status) do
-          :ok ->
-            IO.puts("Updated node #{id} status: #{node.status} -> #{status}")
-            Mutations.log_command("status", [to_string(id), status], 0)
+        do_update_status(id, status, node)
+    end
+  end
 
-          {:error, reason} ->
-            IO.puts(:stderr, "Error: #{inspect(reason)}")
-            System.halt(1)
-        end
+  defp do_update_status(id, status, node) do
+    case Mutations.update_status(id, status) do
+      :ok ->
+        IO.puts("Updated node #{id} status: #{node.status} -> #{status}")
+        Mutations.log_command("status", [to_string(id), status], 0)
+
+      {:error, reason} ->
+        IO.puts(:stderr, "Error: #{inspect(reason)}")
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -48,16 +51,13 @@ defmodule Deciduex.Commands.Status do
   defp parse_args([_id]), do: {:error, "Missing status"}
 
   defp parse_args([id_str, status | _rest]) do
-    case Integer.parse(id_str) do
-      {id, ""} ->
-        if status in @valid_statuses do
-          {:ok, id, status}
-        else
-          {:error, "Invalid status: #{status}. Valid: #{Enum.join(@valid_statuses, ", ")}"}
-        end
-
-      _ ->
-        {:error, "Invalid node ID: #{id_str}"}
+    with {id, ""} <- Integer.parse(id_str),
+         true <- status in @valid_statuses do
+      {:ok, id, status}
+    else
+      :error -> {:error, "Invalid node ID: #{id_str}"}
+      {_, _} -> {:error, "Invalid node ID: #{id_str}"}
+      false -> {:error, "Invalid status: #{status}. Valid: #{Enum.join(@valid_statuses, ", ")}"}
     end
   end
 

@@ -13,24 +13,26 @@ defmodule Deciduex.Commands.Audit do
 
   alias Deciduex.Queries
   alias Deciduex.Repo
+
   alias Ecto.Adapters.SQL
 
   def run(args) do
-    opts = parse_args(args)
-
-    if opts[:associate_commits] do
-      associate_commits(opts)
-    else
-      show_graph_health()
-    end
+    args
+    |> parse_args()
+    |> execute_command()
   end
+
+  defp execute_command(%{associate_commits: true} = opts), do: associate_commits(opts)
+  defp execute_command(_opts), do: show_graph_health()
 
   defp show_graph_health do
     graph = Queries.get_graph()
 
     # Find orphan nodes (no incoming or outgoing edges)
     connected_ids = get_connected_node_ids(graph.edges)
-    orphans = Enum.filter(graph.nodes, fn n -> n.id not in connected_ids and n.node_type != "goal" end)
+
+    orphans =
+      Enum.filter(graph.nodes, fn n -> n.id not in connected_ids and n.node_type != "goal" end)
 
     # Find nodes missing change_id
     missing_change_id = Enum.filter(graph.nodes, &(is_nil(&1.change_id) or &1.change_id == ""))
@@ -88,44 +90,59 @@ defmodule Deciduex.Commands.Audit do
 
   defp associate_commits(opts) do
     min_score = (opts[:min_score] || 50) / 100.0
-    dry_run = opts[:dry_run] || false
-
     graph = Queries.get_graph()
     commits = get_git_commits()
 
-    # Find nodes that need commits
-    nodes_to_check =
-      graph.nodes
-      |> Enum.filter(&node_missing_commit?/1)
-      |> Enum.filter(&(&1.node_type in ["action", "outcome"]))
+    nodes_to_check = find_nodes_needing_commits(graph.nodes)
 
-    if Enum.empty?(nodes_to_check) do
-      IO.puts("All action/outcome nodes already have commits linked.")
-      return()
+    case nodes_to_check do
+      [] ->
+        IO.puts("All action/outcome nodes already have commits linked.")
+
+      nodes ->
+        matches = find_commit_matches(nodes, commits, min_score)
+        process_matches(matches, min_score, opts)
     end
+  end
 
-    IO.puts("Finding commit matches for #{length(nodes_to_check)} nodes...")
+  defp find_nodes_needing_commits(nodes) do
+    Enum.filter(nodes, fn node ->
+      node.node_type in ["action", "outcome"] and node_missing_commit?(node)
+    end)
+  end
+
+  defp find_commit_matches(nodes, commits, min_score) do
+    IO.puts("Finding commit matches for #{length(nodes)} nodes...")
     IO.puts("")
 
-    matches =
-      Enum.flat_map(nodes_to_check, fn node ->
-        best_match =
-          commits
-          |> Enum.map(fn commit -> {commit, keyword_match_score(node.title, commit.message)} end)
-          |> Enum.filter(fn {_, score} -> score >= min_score end)
-          |> Enum.max_by(fn {_, score} -> score end, fn -> nil end)
+    Enum.flat_map(nodes, fn node ->
+      find_best_match(node, commits, min_score)
+    end)
+  end
 
-        case best_match do
-          {commit, score} -> [%{node: node, commit: commit, score: score}]
-          nil -> []
-        end
-      end)
+  defp find_best_match(node, commits, min_score) do
+    best_match =
+      commits
+      |> Enum.map(fn commit -> {commit, keyword_match_score(node.title, commit.message)} end)
+      |> Enum.filter(fn {_, score} -> score >= min_score end)
+      |> Enum.max_by(fn {_, score} -> score end, fn -> nil end)
 
-    if Enum.empty?(matches) do
-      IO.puts("No matches found above threshold (#{round(min_score * 100)}%)")
-      return()
+    case best_match do
+      {commit, score} -> [%{node: node, commit: commit, score: score}]
+      nil -> []
     end
+  end
 
+  defp process_matches([], min_score, _opts) do
+    IO.puts("No matches found above threshold (#{round(min_score * 100)}%)")
+  end
+
+  defp process_matches(matches, _min_score, opts) do
+    print_matches(matches)
+    maybe_apply_matches(matches, opts)
+  end
+
+  defp print_matches(matches) do
     IO.puts("Found #{length(matches)} potential matches:")
     IO.puts("")
 
@@ -135,16 +152,18 @@ defmodule Deciduex.Commands.Audit do
       IO.puts("    Score: #{round(m.score * 100)}%")
       IO.puts("")
     end)
+  end
 
-    if dry_run do
-      IO.puts("Dry run - no changes applied")
+  defp maybe_apply_matches(_matches, %{dry_run: true}) do
+    IO.puts("Dry run - no changes applied")
+  end
+
+  defp maybe_apply_matches(matches, opts) do
+    if opts[:yes] || confirm?("Apply #{length(matches)} matches?") do
+      apply_matches(matches)
+      IO.puts("Applied #{length(matches)} commit associations")
     else
-      if opts[:yes] || confirm?("Apply #{length(matches)} matches?") do
-        apply_matches(matches)
-        IO.puts("Applied #{length(matches)} commit associations")
-      else
-        IO.puts("Aborted")
-      end
+      IO.puts("Aborted")
     end
   end
 
@@ -243,6 +262,4 @@ defmodule Deciduex.Commands.Audit do
   defp parse_args(["--dry-run" | rest], opts), do: parse_args(rest, Map.put(opts, :dry_run, true))
   defp parse_args(["--yes" | rest], opts), do: parse_args(rest, Map.put(opts, :yes, true))
   defp parse_args([_ | rest], opts), do: parse_args(rest, opts)
-
-  defp return, do: :ok
 end

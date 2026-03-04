@@ -28,18 +28,18 @@ defmodule Deciduex.Schema.NodeDocument do
            ]}
 
   schema "node_documents" do
-    field :change_id, :string
-    field :node_id, :integer
-    field :node_change_id, :string
-    field :content_hash, :string
-    field :original_filename, :string
-    field :storage_filename, :string
-    field :mime_type, :string
-    field :file_size, :integer
-    field :description, :string
-    field :description_source, :string
-    field :attached_at, :string
-    field :attached_by, :string
-    field :detached_at, :string
+    field(:change_id, :string)
+    field(:node_id, :integer)
+    field(:node_change_id, :string)
+    field(:content_hash, :string)
+    field(:original_filename, :string)
+    field(:storage_filename, :string)
+    field(:mime_type, :string)
+    field(:file_size, :integer)
+    field(:description, :string)
+    field(:description_source, :string)
+    field(:attached_at, :string)
+    field(:attached_by, :string)
+    field(:detached_at, :string)
   end
 end

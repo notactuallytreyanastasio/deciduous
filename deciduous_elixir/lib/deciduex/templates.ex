@@ -47,7 +47,9 @@ defmodule Deciduex.Templates do
   @opencode_serve_ui File.read!(Path.join(@template_dir, "opencode/commands/serve-ui.md"))
   @opencode_sync_graph File.read!(Path.join(@template_dir, "opencode/commands/sync-graph.md"))
   @opencode_sync File.read!(Path.join(@template_dir, "opencode/commands/sync.md"))
-  @opencode_decision_graph File.read!(Path.join(@template_dir, "opencode/commands/decision-graph.md"))
+  @opencode_decision_graph File.read!(
+                             Path.join(@template_dir, "opencode/commands/decision-graph.md")
+                           )
 
   # OpenCode skills
   @opencode_pulse File.read!(Path.join(@template_dir, "opencode/skills/pulse.md"))
@@ -57,14 +59,22 @@ defmodule Deciduex.Templates do
   # OpenCode agents/tools/plugins
   @opencode_agent File.read!(Path.join(@template_dir, "opencode/agents/deciduous.md"))
   @opencode_tool File.read!(Path.join(@template_dir, "opencode/tools/deciduous.ts"))
-  @opencode_plugin_action File.read!(Path.join(@template_dir, "opencode/plugins/require-action-node.ts"))
-  @opencode_plugin_commit File.read!(Path.join(@template_dir, "opencode/plugins/post-commit-reminder.ts"))
+  @opencode_plugin_action File.read!(
+                            Path.join(@template_dir, "opencode/plugins/require-action-node.ts")
+                          )
+  @opencode_plugin_commit File.read!(
+                            Path.join(@template_dir, "opencode/plugins/post-commit-reminder.ts")
+                          )
 
   # Windsurf
   @windsurf_rules File.read!(Path.join(@template_dir, "windsurf/rules/deciduous.md"))
   @windsurf_hooks_json File.read!(Path.join(@template_dir, "windsurf/hooks.json"))
-  @windsurf_hook_action File.read!(Path.join(@template_dir, "windsurf/hooks/require-action-node.sh"))
-  @windsurf_hook_commit File.read!(Path.join(@template_dir, "windsurf/hooks/post-commit-reminder.sh"))
+  @windsurf_hook_action File.read!(
+                          Path.join(@template_dir, "windsurf/hooks/require-action-node.sh")
+                        )
+  @windsurf_hook_commit File.read!(
+                          Path.join(@template_dir, "windsurf/hooks/post-commit-reminder.sh")
+                        )
 
   @doc "Get template content by name"
   def get(name, assigns \\ %{})

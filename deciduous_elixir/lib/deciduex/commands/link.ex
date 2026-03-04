@@ -12,7 +12,7 @@ defmodule Deciduex.Commands.Link do
   alias Deciduex.Mutations
   alias Deciduex.Queries
 
-  @valid_edge_types ~w(leads_to chosen rejected)
+  @valid_edge_types ~w(leads_to chosen rejected revisits informs supersedes)
 
   def run(args) do
     case parse_args(args) do
@@ -22,7 +22,7 @@ defmodule Deciduex.Commands.Link do
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{reason}")
         print_usage()
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -30,22 +30,18 @@ defmodule Deciduex.Commands.Link do
     edge_type = opts[:type] || "leads_to"
     rationale = opts[:rationale]
 
-    # Validate nodes exist
-    case validate_nodes(from_id, to_id) do
-      :ok ->
-        case Mutations.create_edge(from_id, to_id, edge_type, rationale) do
-          {:ok, id} ->
-            IO.puts("Created edge #{id} (#{from_id} -> #{to_id} via #{edge_type})")
-            log_command(from_id, to_id, opts)
-
-          {:error, reason} ->
-            IO.puts(:stderr, "Error: #{inspect(reason)}")
-            System.halt(1)
-        end
+    with :ok <- validate_nodes(from_id, to_id),
+         {:ok, id} <- Mutations.create_edge(from_id, to_id, edge_type, rationale) do
+      IO.puts("Created edge #{id} (#{from_id} -> #{to_id} via #{edge_type})")
+      log_command(from_id, to_id, opts)
+    else
+      {:error, reason} when is_binary(reason) ->
+        IO.puts(:stderr, "Error: #{reason}")
+        Deciduex.CLI.exit_with_error()
 
       {:error, reason} ->
-        IO.puts(:stderr, "Error: #{reason}")
-        System.halt(1)
+        IO.puts(:stderr, "Error: #{inspect(reason)}")
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -70,8 +66,8 @@ defmodule Deciduex.Commands.Link do
       {:ok, from_id, to_id, opts}
     else
       :error -> {:error, "Invalid node ID"}
-      {_num, _rest} -> {:error, "Invalid node ID format"}
       {:error, reason} -> {:error, reason}
+      {_num, _rest} -> {:error, "Invalid node ID format"}
     end
   end
 

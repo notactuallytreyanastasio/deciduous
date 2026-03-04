@@ -29,13 +29,13 @@ defmodule Deciduex.Commands.Show do
   @spec node_not_found(integer()) :: no_return()
   defp node_not_found(id) do
     IO.puts(:stderr, "Error: Node ##{id} not found")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   @spec usage_error() :: no_return()
   defp usage_error do
     IO.puts(:stderr, "Usage: deciduex show <id> [--json]")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   defp parse_args(args) do

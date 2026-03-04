@@ -21,12 +21,12 @@ defmodule Deciduex.Commands.Update do
     cwd = File.cwd!()
     deciduous_dir = Path.join(cwd, ".deciduous")
 
-    unless File.exists?(deciduous_dir) do
+    if File.exists?(deciduous_dir) do
+      do_update(cwd, opts)
+    else
       IO.puts("\e[31mError:\e[0m No .deciduous directory found.")
       IO.puts("Run 'deciduex init' first to initialize deciduous.")
       {:error, :not_initialized}
-    else
-      do_update(cwd, opts)
     end
   end
 

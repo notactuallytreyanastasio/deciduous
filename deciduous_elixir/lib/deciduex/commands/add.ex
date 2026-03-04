@@ -28,7 +28,7 @@ defmodule Deciduex.Commands.Add do
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{reason}")
         print_usage()
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -67,7 +67,7 @@ defmodule Deciduex.Commands.Add do
 
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -236,7 +236,11 @@ defmodule Deciduex.Commands.Add do
   defp warn_short_prompt(nil), do: :ok
 
   defp warn_short_prompt(prompt) when byte_size(prompt) < 200 do
-    IO.puts(:stderr, "Warning: Prompt is only #{byte_size(prompt)} chars. This looks like a summary, not a full prompt.")
+    IO.puts(
+      :stderr,
+      "Warning: Prompt is only #{byte_size(prompt)} chars. This looks like a summary, not a full prompt."
+    )
+
     IO.puts(:stderr, "         Capture the verbatim user message for better context recovery.")
   end
 
@@ -284,7 +288,11 @@ defmodule Deciduex.Commands.Add do
         DateTime.new!(date, ~T[00:00:00], "Etc/UTC") |> DateTime.to_iso8601()
 
       true ->
-        IO.puts(:stderr, "Warning: Could not parse date '#{date_str}'. Use RFC3339 or YYYY-MM-DD format.")
+        IO.puts(
+          :stderr,
+          "Warning: Could not parse date '#{date_str}'. Use RFC3339 or YYYY-MM-DD format."
+        )
+
         date_str
     end
   end
@@ -292,9 +300,19 @@ defmodule Deciduex.Commands.Add do
   defp print_success(id, node_type, title, attrs) do
     parts = ["Created node #{id} (type: #{node_type}, title: #{title})"]
 
-    parts = if attrs[:confidence], do: parts ++ ["[confidence: #{attrs[:confidence]}%]"], else: parts
-    parts = if attrs[:commit], do: parts ++ ["[commit: #{String.slice(attrs[:commit], 0..6)}]"], else: parts
-    parts = if attrs[:prompt], do: parts ++ ["[prompt: #{byte_size(attrs[:prompt])} chars]"], else: parts
+    parts =
+      if attrs[:confidence], do: parts ++ ["[confidence: #{attrs[:confidence]}%]"], else: parts
+
+    parts =
+      if attrs[:commit],
+        do: parts ++ ["[commit: #{String.slice(attrs[:commit], 0..6)}]"],
+        else: parts
+
+    parts =
+      if attrs[:prompt],
+        do: parts ++ ["[prompt: #{byte_size(attrs[:prompt])} chars]"],
+        else: parts
+
     parts = if attrs[:files], do: parts ++ ["[files: #{attrs[:files]}]"], else: parts
     parts = if attrs[:branch], do: parts ++ ["[branch: #{attrs[:branch]}]"], else: parts
     parts = if attrs[:created_at], do: parts ++ ["[date: #{attrs[:created_at]}]"], else: parts

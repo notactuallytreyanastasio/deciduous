@@ -67,7 +67,15 @@ defmodule Deciduex.Commands.Doc do
   end
 
   defp insert_document(node, hash, original_filename, storage_filename, file_bytes, description) do
-    attrs = build_document_attrs(node, hash, original_filename, storage_filename, file_bytes, description)
+    attrs =
+      build_document_attrs(
+        node,
+        hash,
+        original_filename,
+        storage_filename,
+        file_bytes,
+        description
+      )
 
     case Mutations.attach_document(attrs) do
       {:ok, id} ->
@@ -79,7 +87,14 @@ defmodule Deciduex.Commands.Doc do
     end
   end
 
-  defp build_document_attrs(node, hash, original_filename, storage_filename, file_bytes, description) do
+  defp build_document_attrs(
+         node,
+         hash,
+         original_filename,
+         storage_filename,
+         file_bytes,
+         description
+       ) do
     %{
       node_id: node.id,
       node_change_id: node.change_id,
@@ -176,7 +191,10 @@ defmodule Deciduex.Commands.Doc do
     IO.puts("  Storage:     .deciduous/documents/#{doc.storage_filename}")
     IO.puts("  Attached:    #{doc.attached_at}")
     if doc.attached_by, do: IO.puts("  Attached by: #{doc.attached_by}")
-    if doc.description, do: IO.puts("  Description: #{doc.description} (#{doc.description_source})")
+
+    if doc.description,
+      do: IO.puts("  Description: #{doc.description} (#{doc.description_source})")
+
     if doc.detached_at, do: IO.puts("  DETACHED")
   end
 
@@ -443,7 +461,7 @@ defmodule Deciduex.Commands.Doc do
 
   defp error(msg) do
     IO.puts(:stderr, "Error: #{msg}")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   defp print_usage do

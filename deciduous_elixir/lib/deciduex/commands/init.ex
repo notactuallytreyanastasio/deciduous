@@ -274,11 +274,21 @@ defmodule Deciduex.Commands.Init do
 
     # Write agent
     agent_path = Path.join(cwd, ".opencode/agents/deciduous.md")
-    write_file_if_missing(agent_path, Templates.get(:opencode_agent), ".opencode/agents/deciduous.md")
+
+    write_file_if_missing(
+      agent_path,
+      Templates.get(:opencode_agent),
+      ".opencode/agents/deciduous.md"
+    )
 
     # Write tool
     tool_path = Path.join(cwd, ".opencode/tools/deciduous.ts")
-    write_file_if_missing(tool_path, Templates.get(:opencode_tool), ".opencode/tools/deciduous.ts")
+
+    write_file_if_missing(
+      tool_path,
+      Templates.get(:opencode_tool),
+      ".opencode/tools/deciduous.ts"
+    )
 
     :ok
   end

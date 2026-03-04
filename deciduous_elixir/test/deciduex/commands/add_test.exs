@@ -94,7 +94,12 @@ defmodule Deciduex.Commands.AddTest do
     test "creates node with prompt" do
       output =
         capture_io(fn ->
-          Add.run(["goal", "Test prompt", "-p", "This is a long prompt that should be captured verbatim for context recovery and should be at least 200 characters to avoid the warning message about short prompts being summaries instead of full prompts"])
+          Add.run([
+            "goal",
+            "Test prompt",
+            "-p",
+            "This is a long prompt that should be captured verbatim for context recovery and should be at least 200 characters to avoid the warning message about short prompts being summaries instead of full prompts"
+          ])
         end)
 
       assert output =~ "[prompt:"

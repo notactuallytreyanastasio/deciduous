@@ -3,6 +3,18 @@ defmodule Deciduex.CLI do
   CLI entry point. Dispatches subcommands.
   """
 
+  @doc """
+  Exit with error code. When `:deciduex, :raise_on_exit` is true (test mode),
+  raises instead of halting the VM.
+  """
+  def exit_with_error(code \\ 1) do
+    if Application.get_env(:deciduex, :raise_on_exit, false) do
+      raise "CLI exit with code #{code}"
+    else
+      System.halt(code)
+    end
+  end
+
   alias Deciduex.Commands.Add
   alias Deciduex.Commands.Archaeology
   alias Deciduex.Commands.Audit
@@ -62,7 +74,7 @@ defmodule Deciduex.CLI do
       :error ->
         IO.puts(:stderr, "No .deciduous/deciduous.db found in current or parent directories.")
         IO.puts(:stderr, "Run 'deciduous init' first.")
-        System.halt(1)
+        exit_with_error()
     end
   end
 
@@ -85,7 +97,7 @@ defmodule Deciduex.CLI do
     end
   end
 
-  defp parse_init_opts(args), do: parse_init_opts(args, [claude: true])
+  defp parse_init_opts(args), do: parse_init_opts(args, claude: true)
 
   defp parse_init_opts([], opts), do: opts
 
@@ -118,78 +130,45 @@ defmodule Deciduex.CLI do
     IO.puts("Check https://hex.pm/packages/deciduex for updates.")
   end
 
-  defp dispatch(args) do
-    case args do
-      ["add" | rest] ->
-        Add.run(rest)
+  # Command dispatch table: command name -> {module, arity}
+  # :noargs means command takes no arguments, :args means it takes rest of args
+  @commands %{
+    "add" => {Add, :args},
+    "link" => {Link, :args},
+    "unlink" => {Unlink, :args},
+    "status" => {Status, :args},
+    "prompt" => {Prompt, :args},
+    "delete" => {Delete, :args},
+    "backup" => {Backup, :args},
+    "nodes" => {Nodes, :args},
+    "edges" => {Edges, :noargs},
+    "graph" => {Graph, :noargs},
+    "show" => {Show, :args},
+    "commands" => {CommandLog, :args},
+    "doc" => {Doc, :args},
+    "serve" => {Serve, :args},
+    "sync" => {Sync, :args},
+    "writeup" => {Writeup, :args},
+    "diff" => {Diff, :args},
+    "audit" => {Audit, :args},
+    "pulse" => {Pulse, :args},
+    "narratives" => {Narratives, :args},
+    "archaeology" => {Archaeology, :args}
+  }
 
-      ["link" | rest] ->
-        Link.run(rest)
+  defp dispatch([]), do: print_usage()
 
-      ["unlink" | rest] ->
-        Unlink.run(rest)
-
-      ["status" | rest] ->
-        Status.run(rest)
-
-      ["prompt" | rest] ->
-        Prompt.run(rest)
-
-      ["delete" | rest] ->
-        Delete.run(rest)
-
-      ["backup" | rest] ->
-        Backup.run(rest)
-
-      ["nodes" | rest] ->
-        Nodes.run(rest)
-
-      ["edges" | _rest] ->
-        Edges.run()
-
-      ["graph" | _rest] ->
-        Graph.run()
-
-      ["show" | rest] ->
-        Show.run(rest)
-
-      ["commands" | rest] ->
-        CommandLog.run(rest)
-
-      ["doc" | rest] ->
-        Doc.run(rest)
-
-      ["serve" | rest] ->
-        Serve.run(rest)
-
-      ["sync" | rest] ->
-        Sync.run(rest)
-
-      ["writeup" | rest] ->
-        Writeup.run(rest)
-
-      ["diff" | rest] ->
-        Diff.run(rest)
-
-      ["audit" | rest] ->
-        Audit.run(rest)
-
-      ["pulse" | rest] ->
-        Pulse.run(rest)
-
-      ["narratives" | rest] ->
-        Narratives.run(rest)
-
-      ["archaeology" | rest] ->
-        Archaeology.run(rest)
-
-      [] ->
-        print_usage()
-
-      [unknown | _] ->
-        IO.puts(:stderr, "Unknown command: #{unknown}")
-        System.halt(1)
+  defp dispatch([cmd | rest]) do
+    case Map.get(@commands, cmd) do
+      {module, :args} -> module.run(rest)
+      {module, :noargs} -> module.run()
+      nil -> unknown_command(cmd)
     end
+  end
+
+  defp unknown_command(cmd) do
+    IO.puts(:stderr, "Unknown command: #{cmd}")
+    exit_with_error()
   end
 
   defp print_usage do

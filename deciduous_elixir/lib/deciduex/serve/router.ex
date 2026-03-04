@@ -13,8 +13,8 @@ defmodule Deciduex.Serve.Router do
 
   alias Deciduex.Queries
 
-  plug :match
-  plug :dispatch
+  plug(:match)
+  plug(:dispatch)
 
   # API: Get decision graph
   get "/api/graph" do

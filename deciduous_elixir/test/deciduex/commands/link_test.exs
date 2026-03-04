@@ -11,7 +11,14 @@ defmodule Deciduex.Commands.LinkTest do
     create_tables!()
     # Create two nodes to link
     insert_node!(%{id: 1, node_type: "goal", title: "Goal 1", created_at: "2024-01-01T10:00:00Z"})
-    insert_node!(%{id: 2, node_type: "option", title: "Option 1", created_at: "2024-01-01T11:00:00Z"})
+
+    insert_node!(%{
+      id: 2,
+      node_type: "option",
+      title: "Option 1",
+      created_at: "2024-01-01T11:00:00Z"
+    })
+
     :ok
   end
 

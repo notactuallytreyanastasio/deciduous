@@ -10,7 +10,14 @@ defmodule Deciduex.Commands.DeleteTest do
   setup do
     create_tables!()
     insert_node!(%{id: 1, node_type: "goal", title: "Goal 1", created_at: "2024-01-01T10:00:00Z"})
-    insert_node!(%{id: 2, node_type: "option", title: "Option 1", created_at: "2024-01-01T11:00:00Z"})
+
+    insert_node!(%{
+      id: 2,
+      node_type: "option",
+      title: "Option 1",
+      created_at: "2024-01-01T11:00:00Z"
+    })
+
     insert_edge!(%{id: 1, from_node_id: 1, to_node_id: 2, edge_type: "leads_to"})
     :ok
   end
@@ -29,7 +36,7 @@ defmodule Deciduex.Commands.DeleteTest do
       assert output =~ "Option 1"
 
       assert length(Queries.list_nodes()) == 1
-      assert length(Queries.list_edges()) == 0
+      assert Queries.list_edges() == []
     end
 
     test "dry run shows what would be deleted" do
@@ -54,7 +61,7 @@ defmodule Deciduex.Commands.DeleteTest do
         end)
 
       assert output =~ "Deleted node #1"
-      assert length(Queries.list_edges()) == 0
+      assert Queries.list_edges() == []
     end
   end
 end

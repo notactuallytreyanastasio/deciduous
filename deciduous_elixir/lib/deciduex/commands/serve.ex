@@ -45,7 +45,9 @@ defmodule Deciduex.Commands.Serve do
   defp ensure_applications_started do
     Enum.each(@required_apps, fn app ->
       case Application.ensure_all_started(app) do
-        {:ok, _} -> :ok
+        {:ok, _} ->
+          :ok
+
         {:error, {app, reason}} ->
           IO.puts(:stderr, "Warning: Failed to start #{app}: #{inspect(reason)}")
       end
@@ -66,11 +68,11 @@ defmodule Deciduex.Commands.Serve do
 
       {:error, {:already_started, _}} ->
         IO.puts(:stderr, "Server already running on port #{port}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       {:error, reason} ->
         IO.puts(:stderr, "Failed to start server: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 end

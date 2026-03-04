@@ -36,12 +36,12 @@ defmodule Deciduex.Commands.Narratives do
     IO.puts(:stderr, "  init      Initialize narratives.md with active goal titles")
     IO.puts(:stderr, "  show      Display current narratives")
     IO.puts(:stderr, "  pivots    Find pivot points in the graph")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   def run([unknown | _]) do
     IO.puts(:stderr, "Unknown narratives subcommand: #{unknown}")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   # Init subcommand
@@ -49,11 +49,21 @@ defmodule Deciduex.Commands.Narratives do
   defp init_narratives(opts) do
     path = opts[:output] || @default_path
 
-    if File.exists?(path) and not opts[:force] do
-      IO.puts(:stderr, "Error: #{path} already exists. Use --force to overwrite.")
-      System.halt(1)
+    with :ok <- check_file_exists(path, opts[:force]) do
+      do_init_narratives(path)
     end
+  end
 
+  defp check_file_exists(path, force) do
+    if File.exists?(path) and not force do
+      IO.puts(:stderr, "Error: #{path} already exists. Use --force to overwrite.")
+      Deciduex.CLI.exit_with_error()
+    else
+      :ok
+    end
+  end
+
+  defp do_init_narratives(path) do
     graph = Queries.get_graph()
 
     active_goals =
@@ -71,7 +81,7 @@ defmodule Deciduex.Commands.Narratives do
 
       {:error, reason} ->
         IO.puts(:stderr, "Error writing file: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -123,11 +133,11 @@ defmodule Deciduex.Commands.Narratives do
       {:error, :enoent} ->
         IO.puts(:stderr, "No narratives file found at #{path}")
         IO.puts(:stderr, "Run 'deciduex narratives init' to create one")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       {:error, reason} ->
         IO.puts(:stderr, "Error reading file: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -135,22 +145,16 @@ defmodule Deciduex.Commands.Narratives do
 
   defp find_pivots(opts) do
     graph = Queries.get_graph()
-
-    filtered =
-      if opts[:branch] do
-        filter_by_branch(graph, opts[:branch])
-      else
-        graph
-      end
-
+    filtered = maybe_filter_by_branch(graph, opts[:branch])
     pivots = identify_pivots(filtered)
-
-    if opts[:json] do
-      IO.puts(Jason.encode!(pivots, pretty: true))
-    else
-      print_pivots(pivots)
-    end
+    output_pivots(pivots, opts[:json])
   end
+
+  defp maybe_filter_by_branch(graph, nil), do: graph
+  defp maybe_filter_by_branch(graph, branch), do: filter_by_branch(graph, branch)
+
+  defp output_pivots(pivots, true), do: IO.puts(Jason.encode!(pivots, pretty: true))
+  defp output_pivots(pivots, _), do: print_pivots(pivots)
 
   defp filter_by_branch(graph, branch) do
     nodes = Enum.filter(graph.nodes, &node_matches_branch?(&1, branch))
@@ -223,21 +227,17 @@ defmodule Deciduex.Commands.Narratives do
   end
 
   defp find_superseding_node(node, graph) do
-    # Look for a node that links to this one via "supersedes" edge
-    superseding_edge =
-      Enum.find(graph.edges, fn e ->
-        e.to_node_id == node.id and e.edge_type == "supersedes"
-      end)
+    graph.edges
+    |> Enum.find(&(&1.to_node_id == node.id and &1.edge_type == "supersedes"))
+    |> lookup_superseding_node(graph)
+  end
 
-    case superseding_edge do
-      %{from_node_id: id} ->
-        case Enum.find(graph.nodes, &(&1.id == id)) do
-          nil -> nil
-          node -> %{id: node.id, type: node.node_type, title: node.title}
-        end
+  defp lookup_superseding_node(nil, _graph), do: nil
 
-      nil ->
-        nil
+  defp lookup_superseding_node(%{from_node_id: id}, graph) do
+    case Enum.find(graph.nodes, &(&1.id == id)) do
+      nil -> nil
+      found_node -> %{id: found_node.id, type: found_node.node_type, title: found_node.title}
     end
   end
 
@@ -251,26 +251,33 @@ defmodule Deciduex.Commands.Narratives do
     IO.puts("")
 
     Enum.each(pivots, fn p ->
-      case p.type do
-        "revisit" ->
-          IO.puts("[#{p.id}] REVISIT: #{p.title}")
-          IO.puts("  Created: #{p.created_at}")
-
-          if Enum.any?(p.related) do
-            IO.puts("  Related:")
-            Enum.each(p.related, fn r -> IO.puts("    - [#{r.id}] #{r.type}: #{r.title}") end)
-          end
-
-        "superseded" ->
-          IO.puts("[#{p.id}] SUPERSEDED: #{p.title}")
-
-          if p.superseded_by do
-            IO.puts("  Replaced by: [#{p.superseded_by.id}] #{p.superseded_by.title}")
-          end
-      end
-
+      print_pivot(p)
       IO.puts("")
     end)
+  end
+
+  defp print_pivot(%{type: "revisit"} = p) do
+    IO.puts("[#{p.id}] REVISIT: #{p.title}")
+    IO.puts("  Created: #{p.created_at}")
+    print_related(p.related)
+  end
+
+  defp print_pivot(%{type: "superseded"} = p) do
+    IO.puts("[#{p.id}] SUPERSEDED: #{p.title}")
+    print_superseded_by(p.superseded_by)
+  end
+
+  defp print_related([]), do: :ok
+
+  defp print_related(related) do
+    IO.puts("  Related:")
+    Enum.each(related, fn r -> IO.puts("    - [#{r.id}] #{r.type}: #{r.title}") end)
+  end
+
+  defp print_superseded_by(nil), do: :ok
+
+  defp print_superseded_by(superseded_by) do
+    IO.puts("  Replaced by: [#{superseded_by.id}] #{superseded_by.title}")
   end
 
   defp parse_init_args(args), do: parse_init_args(args, %{})

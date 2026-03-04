@@ -159,7 +159,10 @@ defmodule Deciduex.Commands.Pulse do
   end
 
   defp print_summary(pulse) do
-    IO.puts("Pulse: #{pulse.total_nodes} nodes, #{pulse.total_edges} edges, health: #{pulse.health}%")
+    IO.puts(
+      "Pulse: #{pulse.total_nodes} nodes, #{pulse.total_edges} edges, health: #{pulse.health}%"
+    )
+
     IO.puts("Active goals: #{length(pulse.active_goals)}, Gaps: #{length(pulse.gaps)}")
   end
 
@@ -221,7 +224,9 @@ defmodule Deciduex.Commands.Pulse do
   defp parse_args(args), do: parse_args(args, %{})
 
   defp parse_args([], opts), do: opts
-  defp parse_args(["-b", branch | rest], opts), do: parse_args(rest, Map.put(opts, :branch, branch))
+
+  defp parse_args(["-b", branch | rest], opts),
+    do: parse_args(rest, Map.put(opts, :branch, branch))
 
   defp parse_args(["--branch", branch | rest], opts),
     do: parse_args(rest, Map.put(opts, :branch, branch))

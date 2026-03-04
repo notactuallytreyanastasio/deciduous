@@ -13,7 +13,13 @@ defmodule Deciduex.Commands.DocTest do
 
   setup do
     create_tables!()
-    insert_node!(%{id: 1, node_type: "goal", title: "Test Goal", created_at: "2024-01-01T10:00:00Z"})
+
+    insert_node!(%{
+      id: 1,
+      node_type: "goal",
+      title: "Test Goal",
+      created_at: "2024-01-01T10:00:00Z"
+    })
 
     # Create test file
     File.write!(@test_file_path, @test_file_content)
@@ -145,7 +151,12 @@ defmodule Deciduex.Commands.DocTest do
     end
 
     test "filters by node_id" do
-      insert_node!(%{id: 2, node_type: "option", title: "Option 1", created_at: "2024-01-02T10:00:00Z"})
+      insert_node!(%{
+        id: 2,
+        node_type: "option",
+        title: "Option 1",
+        created_at: "2024-01-02T10:00:00Z"
+      })
 
       insert_document!(%{
         id: 3,

@@ -17,7 +17,7 @@ defmodule Deciduex.Commands.Backup do
 
       :error ->
         IO.puts(:stderr, "Error: No .deciduous/deciduous.db found")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -50,7 +50,7 @@ defmodule Deciduex.Commands.Backup do
 
       {:error, reason} ->
         IO.puts(:stderr, "Error creating backup: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 end

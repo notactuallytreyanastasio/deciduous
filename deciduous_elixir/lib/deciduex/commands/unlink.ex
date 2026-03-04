@@ -15,7 +15,7 @@ defmodule Deciduex.Commands.Unlink do
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{reason}")
         print_usage()
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -27,11 +27,11 @@ defmodule Deciduex.Commands.Unlink do
 
       {:error, :not_found} ->
         IO.puts(:stderr, "Error: No edge found from #{from_id} to #{to_id}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 

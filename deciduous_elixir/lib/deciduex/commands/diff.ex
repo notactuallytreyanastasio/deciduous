@@ -44,12 +44,12 @@ defmodule Deciduex.Commands.Diff do
     IO.puts(:stderr, "  apply     Apply patch files (idempotent)")
     IO.puts(:stderr, "  status    List available patches")
     IO.puts(:stderr, "  validate  Validate patch files")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   def run([unknown | _]) do
     IO.puts(:stderr, "Unknown diff subcommand: #{unknown}")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   # Export subcommand
@@ -57,7 +57,7 @@ defmodule Deciduex.Commands.Diff do
   defp export_patch(opts) do
     unless opts[:output] do
       IO.puts(:stderr, "Error: --output/-o is required")
-      System.halt(1)
+      Deciduex.CLI.exit_with_error()
     end
 
     graph = Queries.get_graph()
@@ -76,7 +76,7 @@ defmodule Deciduex.Commands.Diff do
 
       {:error, reason} ->
         IO.puts(:stderr, "Error writing file: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -156,7 +156,7 @@ defmodule Deciduex.Commands.Diff do
 
     if Enum.empty?(files) do
       IO.puts(:stderr, "Error: No patch files specified")
-      System.halt(1)
+      Deciduex.CLI.exit_with_error()
     end
 
     dry_run = opts[:dry_run] || false
@@ -165,8 +165,8 @@ defmodule Deciduex.Commands.Diff do
       Enum.reduce(files, {0, 0, 0, 0}, fn file, {na, ns, ea, es} ->
         case apply_patch_file(file, dry_run) do
           {:ok, result} ->
-            {na + result.nodes_added, ns + result.nodes_skipped,
-             ea + result.edges_added, es + result.edges_skipped}
+            {na + result.nodes_added, ns + result.nodes_skipped, ea + result.edges_added,
+             es + result.edges_skipped}
 
           {:error, reason} ->
             IO.puts(:stderr, "Error processing #{file}: #{reason}")
@@ -370,14 +370,17 @@ defmodule Deciduex.Commands.Diff do
     edges = patch["edges"] || []
     author = patch["author"] || "unknown"
     branch = patch["branch"] || "unknown"
-    IO.puts("  #{filename}: #{length(nodes)} nodes, #{length(edges)} edges (#{author}, #{branch})")
+
+    IO.puts(
+      "  #{filename}: #{length(nodes)} nodes, #{length(edges)} edges (#{author}, #{branch})"
+    )
   end
 
   # Validate subcommand
 
   defp validate_patches([]) do
     IO.puts(:stderr, "Error: No patch files specified")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   defp validate_patches(files) do
@@ -390,7 +393,7 @@ defmodule Deciduex.Commands.Diff do
       end)
 
     if any_errors do
-      System.halt(1)
+      Deciduex.CLI.exit_with_error()
     end
   end
 
@@ -423,8 +426,17 @@ defmodule Deciduex.Commands.Diff do
         to_id = edge["to_change_id"]
 
         errors = []
-        errors = if from_id && !MapSet.member?(node_ids, from_id), do: ["Missing node: #{from_id}" | errors], else: errors
-        errors = if to_id && !MapSet.member?(node_ids, to_id), do: ["Missing node: #{to_id}" | errors], else: errors
+
+        errors =
+          if from_id && !MapSet.member?(node_ids, from_id),
+            do: ["Missing node: #{from_id}" | errors],
+            else: errors
+
+        errors =
+          if to_id && !MapSet.member?(node_ids, to_id),
+            do: ["Missing node: #{to_id}" | errors],
+            else: errors
+
         errors
       end)
 
@@ -496,20 +508,39 @@ defmodule Deciduex.Commands.Diff do
   defp parse_export_args(args), do: parse_export_args(args, %{})
 
   defp parse_export_args([], opts), do: opts
-  defp parse_export_args(["-o", path | rest], opts), do: parse_export_args(rest, Map.put(opts, :output, path))
-  defp parse_export_args(["--output", path | rest], opts), do: parse_export_args(rest, Map.put(opts, :output, path))
-  defp parse_export_args(["-n", nodes | rest], opts), do: parse_export_args(rest, Map.put(opts, :nodes, nodes))
-  defp parse_export_args(["--nodes", nodes | rest], opts), do: parse_export_args(rest, Map.put(opts, :nodes, nodes))
-  defp parse_export_args(["-b", branch | rest], opts), do: parse_export_args(rest, Map.put(opts, :branch, branch))
-  defp parse_export_args(["--branch", branch | rest], opts), do: parse_export_args(rest, Map.put(opts, :branch, branch))
-  defp parse_export_args(["--author", author | rest], opts), do: parse_export_args(rest, Map.put(opts, :author, author))
-  defp parse_export_args(["--base-commit", commit | rest], opts), do: parse_export_args(rest, Map.put(opts, :base_commit, commit))
+
+  defp parse_export_args(["-o", path | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :output, path))
+
+  defp parse_export_args(["--output", path | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :output, path))
+
+  defp parse_export_args(["-n", nodes | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :nodes, nodes))
+
+  defp parse_export_args(["--nodes", nodes | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :nodes, nodes))
+
+  defp parse_export_args(["-b", branch | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :branch, branch))
+
+  defp parse_export_args(["--branch", branch | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :branch, branch))
+
+  defp parse_export_args(["--author", author | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :author, author))
+
+  defp parse_export_args(["--base-commit", commit | rest], opts),
+    do: parse_export_args(rest, Map.put(opts, :base_commit, commit))
+
   defp parse_export_args([_ | rest], opts), do: parse_export_args(rest, opts)
 
   defp parse_apply_args(args), do: parse_apply_args(args, %{files: []})
 
   defp parse_apply_args([], opts), do: opts
-  defp parse_apply_args(["--dry-run" | rest], opts), do: parse_apply_args(rest, Map.put(opts, :dry_run, true))
+
+  defp parse_apply_args(["--dry-run" | rest], opts),
+    do: parse_apply_args(rest, Map.put(opts, :dry_run, true))
 
   defp parse_apply_args(["-" <> _ | rest], opts), do: parse_apply_args(rest, opts)
 

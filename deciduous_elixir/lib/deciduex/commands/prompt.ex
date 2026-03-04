@@ -18,57 +18,50 @@ defmodule Deciduex.Commands.Prompt do
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{reason}")
         print_usage()
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
   defp update_prompt(id, prompt) do
-    # Verify node exists first
     case Queries.get_node(id) do
       nil ->
         IO.puts(:stderr, "Error: Node ##{id} not found")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       _node ->
-        case Mutations.update_prompt(id, prompt) do
-          :ok ->
-            IO.puts("Updated prompt for node #{id} (#{byte_size(prompt)} chars)")
-            Mutations.log_command("prompt", [to_string(id)], 0)
+        do_update_prompt(id, prompt)
+    end
+  end
 
-          {:error, reason} ->
-            IO.puts(:stderr, "Error: #{inspect(reason)}")
-            System.halt(1)
-        end
+  defp do_update_prompt(id, prompt) do
+    case Mutations.update_prompt(id, prompt) do
+      :ok ->
+        IO.puts("Updated prompt for node #{id} (#{byte_size(prompt)} chars)")
+        Mutations.log_command("prompt", [to_string(id)], 0)
+
+      {:error, reason} ->
+        IO.puts(:stderr, "Error: #{inspect(reason)}")
+        Deciduex.CLI.exit_with_error()
     end
   end
 
   defp parse_args([]), do: {:error, "Missing node ID"}
 
   defp parse_args([id_str]) do
-    # Read prompt from stdin
-    case Integer.parse(id_str) do
-      {id, ""} ->
-        prompt = read_stdin()
-
-        if prompt == "" do
-          {:error, "No prompt provided (stdin was empty)"}
-        else
-          {:ok, id, prompt}
-        end
-
-      _ ->
-        {:error, "Invalid node ID: #{id_str}"}
+    with {id, ""} <- Integer.parse(id_str),
+         prompt when prompt != "" <- read_stdin() do
+      {:ok, id, prompt}
+    else
+      :error -> {:error, "Invalid node ID: #{id_str}"}
+      {_, _} -> {:error, "Invalid node ID: #{id_str}"}
+      "" -> {:error, "No prompt provided (stdin was empty)"}
     end
   end
 
   defp parse_args([id_str | rest]) do
     case Integer.parse(id_str) do
-      {id, ""} ->
-        prompt = Enum.join(rest, " ")
-        {:ok, id, prompt}
-
-      _ ->
-        {:error, "Invalid node ID: #{id_str}"}
+      {id, ""} -> {:ok, id, Enum.join(rest, " ")}
+      _ -> {:error, "Invalid node ID: #{id_str}"}
     end
   end
 

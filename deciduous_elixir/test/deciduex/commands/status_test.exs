@@ -9,7 +9,15 @@ defmodule Deciduex.Commands.StatusTest do
 
   setup do
     create_tables!()
-    insert_node!(%{id: 1, node_type: "goal", title: "Test goal", status: "pending", created_at: "2024-01-01T10:00:00Z"})
+
+    insert_node!(%{
+      id: 1,
+      node_type: "goal",
+      title: "Test goal",
+      status: "pending",
+      created_at: "2024-01-01T10:00:00Z"
+    })
+
     :ok
   end
 

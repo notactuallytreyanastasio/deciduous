@@ -16,25 +16,23 @@ defmodule Deciduex.Commands.Delete do
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{reason}")
         print_usage()
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 
   defp delete_node(id, opts) do
-    # Verify node exists first
     case Queries.get_node(id) do
       nil ->
         IO.puts(:stderr, "Error: Node ##{id} not found")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       node ->
-        if opts[:dry_run] do
-          print_dry_run(id, node)
-        else
-          do_delete(id, node)
-        end
+        execute_delete(id, node, opts)
     end
   end
+
+  defp execute_delete(id, node, %{dry_run: true}), do: print_dry_run(id, node)
+  defp execute_delete(id, node, _opts), do: do_delete(id, node)
 
   defp print_dry_run(id, node) do
     # Count edges that would be deleted
@@ -59,7 +57,7 @@ defmodule Deciduex.Commands.Delete do
 
       {:error, reason} ->
         IO.puts(:stderr, "Error: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 

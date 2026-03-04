@@ -11,7 +11,14 @@ defmodule Deciduex.Commands.UnlinkTest do
     create_tables!()
     # Create two nodes and an edge
     insert_node!(%{id: 1, node_type: "goal", title: "Goal 1", created_at: "2024-01-01T10:00:00Z"})
-    insert_node!(%{id: 2, node_type: "option", title: "Option 1", created_at: "2024-01-01T11:00:00Z"})
+
+    insert_node!(%{
+      id: 2,
+      node_type: "option",
+      title: "Option 1",
+      created_at: "2024-01-01T11:00:00Z"
+    })
+
     insert_edge!(%{id: 1, from_node_id: 1, to_node_id: 2, edge_type: "leads_to"})
     :ok
   end
@@ -30,12 +37,18 @@ defmodule Deciduex.Commands.UnlinkTest do
       assert output =~ "1 -> 2"
 
       # Verify edge is deleted
-      assert length(Queries.list_edges()) == 0
+      assert Queries.list_edges() == []
     end
 
     test "multiple edges - only deletes specified one" do
       # Add another node and edge
-      insert_node!(%{id: 3, node_type: "decision", title: "Decision 1", created_at: "2024-01-01T12:00:00Z"})
+      insert_node!(%{
+        id: 3,
+        node_type: "decision",
+        title: "Decision 1",
+        created_at: "2024-01-01T12:00:00Z"
+      })
+
       insert_edge!(%{id: 2, from_node_id: 2, to_node_id: 3, edge_type: "chosen"})
 
       assert length(Queries.list_edges()) == 2

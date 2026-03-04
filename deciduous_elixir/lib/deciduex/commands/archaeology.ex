@@ -12,6 +12,7 @@ defmodule Deciduex.Commands.Archaeology do
 
   alias Deciduex.Queries
   alias Deciduex.Repo
+
   alias Ecto.Adapters.SQL
 
   def run(["pivot" | args]) do
@@ -36,12 +37,12 @@ defmodule Deciduex.Commands.Archaeology do
     IO.puts(:stderr, "  pivot       Create a pivot chain atomically")
     IO.puts(:stderr, "  timeline    Show timeline of graph evolution")
     IO.puts(:stderr, "  supersede   Mark a node as superseded")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   def run([unknown | _]) do
     IO.puts(:stderr, "Unknown archaeology subcommand: #{unknown}")
-    System.halt(1)
+    Deciduex.CLI.exit_with_error()
   end
 
   # Pivot subcommand
@@ -53,7 +54,7 @@ defmodule Deciduex.Commands.Archaeology do
 
     unless from_id && observation && new_approach do
       IO.puts(:stderr, "Error: --from, --observation, and --new-approach are required")
-      System.halt(1)
+      Deciduex.CLI.exit_with_error()
     end
 
     confidence = opts[:confidence] || 80
@@ -63,7 +64,7 @@ defmodule Deciduex.Commands.Archaeology do
     case get_node(from_id) do
       nil ->
         IO.puts(:stderr, "Error: Node #{from_id} not found")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       from_node ->
         IO.puts("Creating pivot chain from [#{from_id}] #{from_node.title}...")
@@ -108,23 +109,25 @@ defmodule Deciduex.Commands.Archaeology do
       |> Enum.sort_by(& &1.created_at)
       |> maybe_limit(opts[:limit])
 
-    if opts[:json] do
-      timeline =
-        Enum.map(filtered, fn n ->
-          %{
-            id: n.id,
-            type: n.node_type,
-            title: n.title,
-            status: n.status,
-            created_at: n.created_at
-          }
-        end)
-
-      IO.puts(Jason.encode!(timeline, pretty: true))
-    else
-      print_timeline(filtered)
-    end
+    output_timeline(filtered, opts[:json])
   end
+
+  defp output_timeline(nodes, true) do
+    timeline =
+      Enum.map(nodes, fn n ->
+        %{
+          id: n.id,
+          type: n.node_type,
+          title: n.title,
+          status: n.status,
+          created_at: n.created_at
+        }
+      end)
+
+    IO.puts(Jason.encode!(timeline, pretty: true))
+  end
+
+  defp output_timeline(nodes, _), do: print_timeline(nodes)
 
   defp filter_by_type(nodes, nil), do: nodes
   defp filter_by_type(nodes, type), do: Enum.filter(nodes, &(&1.node_type == type))
@@ -164,46 +167,51 @@ defmodule Deciduex.Commands.Archaeology do
 
   # Supersede subcommand
 
+  defp supersede_node(%{id: nil}) do
+    IO.puts(:stderr, "Error: Node ID required")
+    Deciduex.CLI.exit_with_error()
+  end
+
   defp supersede_node(opts) do
     id = opts[:id]
-
-    unless id do
-      IO.puts(:stderr, "Error: Node ID required")
-      System.halt(1)
-    end
 
     case get_node(id) do
       nil ->
         IO.puts(:stderr, "Error: Node #{id} not found")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
 
       node ->
-        dry_run = opts[:dry_run] || false
-        cascade = opts[:cascade] || false
-
-        nodes_to_supersede =
-          if cascade do
-            find_descendants(id, Queries.get_graph())
-          else
-            [node]
-          end
-
-        if dry_run do
-          IO.puts("Would supersede #{length(nodes_to_supersede)} nodes:")
-
-          Enum.each(nodes_to_supersede, fn n ->
-            IO.puts("  [#{n.id}] #{n.node_type}: #{n.title}")
-          end)
-        else
-          Enum.each(nodes_to_supersede, fn n ->
-            update_status(n.id, "superseded")
-            IO.puts("Superseded [#{n.id}] #{n.title}")
-          end)
-
-          IO.puts("")
-          IO.puts("Total: #{length(nodes_to_supersede)} nodes superseded")
-        end
+        execute_supersede(node, opts)
     end
+  end
+
+  defp execute_supersede(node, opts) do
+    nodes_to_supersede = collect_nodes_to_supersede(node, opts)
+    do_supersede(nodes_to_supersede, opts[:dry_run])
+  end
+
+  defp collect_nodes_to_supersede(node, %{cascade: true}) do
+    find_descendants(node.id, Queries.get_graph())
+  end
+
+  defp collect_nodes_to_supersede(node, _opts), do: [node]
+
+  defp do_supersede(nodes, true) do
+    IO.puts("Would supersede #{length(nodes)} nodes:")
+
+    Enum.each(nodes, fn n ->
+      IO.puts("  [#{n.id}] #{n.node_type}: #{n.title}")
+    end)
+  end
+
+  defp do_supersede(nodes, _dry_run) do
+    Enum.each(nodes, fn n ->
+      update_status(n.id, "superseded")
+      IO.puts("Superseded [#{n.id}] #{n.title}")
+    end)
+
+    IO.puts("")
+    IO.puts("Total: #{length(nodes)} nodes superseded")
   end
 
   defp find_descendants(root_id, graph) do
@@ -219,7 +227,9 @@ defmodule Deciduex.Commands.Archaeology do
     |> Enum.map(fn id -> Enum.find(graph.nodes, &(&1.id == id)) end)
     |> Enum.filter(& &1)
     |> Enum.sort_by(& &1.id)
-    |> then(fn nodes -> if root, do: [root | Enum.reject(nodes, &(&1.id == root_id))], else: nodes end)
+    |> then(fn nodes ->
+      if root, do: [root | Enum.reject(nodes, &(&1.id == root_id))], else: nodes
+    end)
   end
 
   defp do_bfs([], _adj, visited), do: MapSet.to_list(visited)

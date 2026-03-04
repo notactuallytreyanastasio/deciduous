@@ -43,7 +43,7 @@ defmodule Deciduex.Commands.Writeup do
 
       {:error, reason} ->
         IO.puts(:stderr, "Error writing file: #{inspect(reason)}")
-        System.halt(1)
+        Deciduex.CLI.exit_with_error()
     end
   end
 

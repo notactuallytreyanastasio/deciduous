@@ -3,8 +3,8 @@ defmodule Deciduex.Mutations do
   Write operations for the decision graph database.
   """
 
-  alias Ecto.Adapters.SQL
   alias Deciduex.Repo
+  alias Ecto.Adapters.SQL
 
   @doc """
   Create a new decision node with all metadata fields.
@@ -123,33 +123,31 @@ defmodule Deciduex.Mutations do
   Update a node's prompt in metadata_json.
   """
   def update_prompt(id, prompt) do
-    now = DateTime.utc_now() |> DateTime.to_iso8601()
-
-    # Get current metadata
     case get_node_metadata(id) do
-      nil ->
-        {:error, :not_found}
-
-      metadata ->
-        new_metadata =
-          metadata
-          |> Map.put("prompt", prompt)
-          |> Jason.encode!()
-
-        result =
-          SQL.query(
-            Repo,
-            "UPDATE decision_nodes SET metadata_json = ?, updated_at = ? WHERE id = ?",
-            [new_metadata, now, id]
-          )
-
-        case result do
-          {:ok, %{num_rows: 1}} -> :ok
-          {:ok, %{num_rows: 0}} -> {:error, :not_found}
-          {:error, reason} -> {:error, reason}
-        end
+      nil -> {:error, :not_found}
+      metadata -> do_update_prompt(id, metadata, prompt)
     end
   end
+
+  defp do_update_prompt(id, metadata, prompt) do
+    now = DateTime.utc_now() |> DateTime.to_iso8601()
+
+    new_metadata =
+      metadata
+      |> Map.put("prompt", prompt)
+      |> Jason.encode!()
+
+    Repo
+    |> SQL.query(
+      "UPDATE decision_nodes SET metadata_json = ?, updated_at = ? WHERE id = ?",
+      [new_metadata, now, id]
+    )
+    |> handle_update_result()
+  end
+
+  defp handle_update_result({:ok, %{num_rows: 1}}), do: :ok
+  defp handle_update_result({:ok, %{num_rows: 0}}), do: {:error, :not_found}
+  defp handle_update_result({:error, reason}), do: {:error, reason}
 
   @doc """
   Delete a node and all its edges.
