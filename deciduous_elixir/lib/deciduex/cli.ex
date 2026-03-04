@@ -3,6 +3,7 @@ defmodule Deciduex.CLI do
   CLI entry point. Dispatches subcommands.
   """
 
+  alias Deciduex.Commands.Add
   alias Deciduex.Commands.CommandLog
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
@@ -30,6 +31,9 @@ defmodule Deciduex.CLI do
 
   defp dispatch(args) do
     case args do
+      ["add" | rest] ->
+        Add.run(rest)
+
       ["nodes" | rest] ->
         Nodes.run(rest)
 
@@ -58,10 +62,11 @@ defmodule Deciduex.CLI do
     IO.puts("Usage: deciduex <command> [options]")
     IO.puts("")
     IO.puts("Commands:")
-    IO.puts("  nodes      List all decision graph nodes")
-    IO.puts("  edges      List all decision graph edges")
-    IO.puts("  graph      Output full graph as JSON")
-    IO.puts("  show <id>  Show detailed node information")
-    IO.puts("  commands   Show recent command log")
+    IO.puts("  add <type> <title>  Create a new decision node")
+    IO.puts("  nodes               List all decision graph nodes")
+    IO.puts("  edges               List all decision graph edges")
+    IO.puts("  graph               Output full graph as JSON")
+    IO.puts("  show <id>           Show detailed node information")
+    IO.puts("  commands            Show recent command log")
   end
 end

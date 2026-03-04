@@ -35,6 +35,7 @@ defmodule Deciduex.MixProject do
     [
       {:ecto_sqlite3, "~> 0.17"},
       {:jason, "~> 1.4"},
+      {:elixir_uuid, "~> 1.2"},
       {:burrito, "~> 1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
