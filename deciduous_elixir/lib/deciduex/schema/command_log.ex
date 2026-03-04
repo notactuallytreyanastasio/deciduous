@@ -3,6 +3,20 @@ defmodule Deciduex.Schema.CommandLog do
 
   @primary_key {:id, :id, autogenerate: false}
   @timestamps_opts false
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :command,
+             :description,
+             :working_dir,
+             :exit_code,
+             :stdout,
+             :stderr,
+             :started_at,
+             :completed_at,
+             :duration_ms,
+             :decision_node_id
+           ]}
 
   schema "command_log" do
     field(:command, :string)

@@ -3,6 +3,18 @@ defmodule Deciduex.Schema.DecisionNode do
 
   @primary_key {:id, :id, autogenerate: false}
   @timestamps_opts false
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :change_id,
+             :node_type,
+             :title,
+             :description,
+             :status,
+             :created_at,
+             :updated_at,
+             :metadata_json
+           ]}
 
   schema "decision_nodes" do
     field(:change_id, :string)

@@ -13,6 +13,7 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Link
   alias Deciduex.Commands.Nodes
   alias Deciduex.Commands.Prompt
+  alias Deciduex.Commands.Serve
   alias Deciduex.Commands.Show
   alias Deciduex.Commands.Status
   alias Deciduex.Commands.Unlink
@@ -77,6 +78,9 @@ defmodule Deciduex.CLI do
       ["doc" | rest] ->
         Doc.run(rest)
 
+      ["serve" | rest] ->
+        Serve.run(rest)
+
       [] ->
         print_usage()
 
@@ -103,5 +107,6 @@ defmodule Deciduex.CLI do
     IO.puts("  show <id>             Show detailed node information")
     IO.puts("  commands              Show recent command log")
     IO.puts("  doc <subcommand>      Manage document attachments")
+    IO.puts("  serve [--port PORT]   Start the graph viewer server")
   end
 end

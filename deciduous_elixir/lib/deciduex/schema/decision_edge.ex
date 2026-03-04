@@ -3,6 +3,18 @@ defmodule Deciduex.Schema.DecisionEdge do
 
   @primary_key {:id, :id, autogenerate: false}
   @timestamps_opts false
+  @derive {Jason.Encoder,
+           only: [
+             :id,
+             :from_node_id,
+             :to_node_id,
+             :from_change_id,
+             :to_change_id,
+             :edge_type,
+             :weight,
+             :rationale,
+             :created_at
+           ]}
 
   schema "decision_edges" do
     field(:from_node_id, :integer)
