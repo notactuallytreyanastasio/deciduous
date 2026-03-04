@@ -3,14 +3,22 @@ defmodule Deciduex.CLI do
   CLI entry point. Dispatches subcommands.
   """
 
+  alias Deciduex.Commands.CommandLog
+  alias Deciduex.Commands.Edges
+  alias Deciduex.Commands.Graph
+  alias Deciduex.Commands.Nodes
+  alias Deciduex.Commands.Show
+  alias Deciduex.DB
+  alias Deciduex.Repo
+
   def main(args) do
     # When called via OTP release `eval`, the application tree isn't started.
     # Ensure Ecto and its dependencies are running before we open the DB.
     {:ok, _} = Application.ensure_all_started(:ecto_sqlite3)
 
-    case Deciduex.DB.find_db_path() do
+    case DB.find_db_path() do
       {:ok, db_path} ->
-        {:ok, _} = Deciduex.Repo.start_link(database: db_path)
+        {:ok, _} = Repo.start_link(database: db_path)
         dispatch(args)
 
       :error ->
@@ -23,19 +31,19 @@ defmodule Deciduex.CLI do
   defp dispatch(args) do
     case args do
       ["nodes" | rest] ->
-        Deciduex.Commands.Nodes.run(rest)
+        Nodes.run(rest)
 
       ["edges" | _rest] ->
-        Deciduex.Commands.Edges.run()
+        Edges.run()
 
       ["graph" | _rest] ->
-        Deciduex.Commands.Graph.run()
+        Graph.run()
 
       ["show" | rest] ->
-        Deciduex.Commands.Show.run(rest)
+        Show.run(rest)
 
       ["commands" | rest] ->
-        Deciduex.Commands.CommandLog.run(rest)
+        CommandLog.run(rest)
 
       [] ->
         print_usage()

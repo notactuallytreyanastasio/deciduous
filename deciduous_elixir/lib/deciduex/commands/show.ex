@@ -6,26 +6,36 @@ defmodule Deciduex.Commands.Show do
   Supports `--json` flag for JSON output.
   """
 
+  alias Deciduex.Queries
+
   def run(args) do
     case parse_args(args) do
-      {:ok, id, opts} ->
-        case Deciduex.Queries.get_node(id) do
-          nil ->
-            IO.puts(:stderr, "Error: Node ##{id} not found")
-            System.halt(1)
-
-          node ->
-            if opts[:json] do
-              render_json(node)
-            else
-              render_formatted(node)
-            end
-        end
-
-      :error ->
-        IO.puts(:stderr, "Usage: deciduex show <id> [--json]")
-        System.halt(1)
+      {:ok, id, %{json: true}} -> show_node(id, :json)
+      {:ok, id, _opts} -> show_node(id, :formatted)
+      :error -> usage_error()
     end
+  end
+
+  defp show_node(id, format) do
+    case Queries.get_node(id) do
+      nil -> node_not_found(id)
+      node -> render(node, format)
+    end
+  end
+
+  defp render(node, :json), do: render_json(node)
+  defp render(node, :formatted), do: render_formatted(node)
+
+  @spec node_not_found(integer()) :: no_return()
+  defp node_not_found(id) do
+    IO.puts(:stderr, "Error: Node ##{id} not found")
+    System.halt(1)
+  end
+
+  @spec usage_error() :: no_return()
+  defp usage_error do
+    IO.puts(:stderr, "Usage: deciduex show <id> [--json]")
+    System.halt(1)
   end
 
   defp parse_args(args) do
@@ -84,78 +94,74 @@ defmodule Deciduex.Commands.Show do
 
   defp render_metadata(metadata_json) do
     case Jason.decode(metadata_json) do
-      {:ok, meta} when meta != %{} ->
-        IO.puts("")
-        IO.puts("Metadata")
-
-        if confidence = meta["confidence"] do
-          IO.puts("  Confidence: #{confidence}%")
-        end
-
-        if branch = meta["branch"] do
-          IO.puts("  Branch: #{branch}")
-        end
-
-        if commit = meta["commit"] do
-          IO.puts("  Commit: #{commit}")
-        end
-
-        if files = meta["files"] do
-          file_list = Enum.join(files, ", ")
-
-          if file_list != "" do
-            IO.puts("  Files: #{file_list}")
-          end
-        end
-
-        if prompt = meta["prompt"] do
-          IO.puts("")
-          IO.puts("Prompt")
-
-          prompt
-          |> String.split("\n")
-          |> Enum.each(fn line -> IO.puts("  #{line}") end)
-        end
-
-      _ ->
-        :ok
+      {:ok, meta} when meta != %{} -> render_meta_fields(meta)
+      _ -> :ok
     end
   end
 
+  defp render_meta_fields(meta) do
+    IO.puts("")
+    IO.puts("Metadata")
+    render_meta_field("Confidence", meta["confidence"], &"#{&1}%")
+    render_meta_field("Branch", meta["branch"])
+    render_meta_field("Commit", meta["commit"])
+    render_meta_files(meta["files"])
+    render_prompt(meta["prompt"])
+  end
+
+  defp render_meta_field(_label, nil), do: :ok
+  defp render_meta_field(label, value), do: IO.puts("  #{label}: #{value}")
+
+  defp render_meta_field(_label, nil, _formatter), do: :ok
+  defp render_meta_field(label, value, formatter), do: IO.puts("  #{label}: #{formatter.(value)}")
+
+  defp render_meta_files(nil), do: :ok
+
+  defp render_meta_files(files) do
+    case Enum.join(files, ", ") do
+      "" -> :ok
+      file_list -> IO.puts("  Files: #{file_list}")
+    end
+  end
+
+  defp render_prompt(nil), do: :ok
+
+  defp render_prompt(prompt) do
+    IO.puts("")
+    IO.puts("Prompt")
+    prompt |> String.split("\n") |> Enum.each(&IO.puts("  #{&1}"))
+  end
+
   defp render_connections(node_id) do
-    {incoming, outgoing} = Deciduex.Queries.get_node_edges(node_id)
+    {incoming, outgoing} = Queries.get_node_edges(node_id)
 
     if incoming != [] or outgoing != [] do
       IO.puts("")
       IO.puts("Connections")
     end
 
-    if incoming != [] do
-      IO.puts("  Incoming (#{length(incoming)}):")
-
-      Enum.each(incoming, fn edge ->
-        rationale = edge.rationale || ""
-
-        if rationale == "" do
-          IO.puts("    ##{edge.from_node_id} ─[#{edge.edge_type}]→ here")
-        else
-          IO.puts("    ##{edge.from_node_id} ─[#{edge.edge_type}]→ here: #{rationale}")
-        end
-      end)
-    end
-
-    if outgoing != [] do
-      IO.puts("  Outgoing (#{length(outgoing)}):")
-
-      Enum.each(outgoing, fn edge ->
-        rationale = edge.rationale || ""
-
-        if rationale == "" do
-          IO.puts("    here ─[#{edge.edge_type}]→ ##{edge.to_node_id}")
-        else
-          IO.puts("    here ─[#{edge.edge_type}]→ ##{edge.to_node_id}: #{rationale}")
-        end
-      end)
-    end
+    render_edge_group("Incoming", incoming, &format_incoming_edge/1)
+    render_edge_group("Outgoing", outgoing, &format_outgoing_edge/1)
   end
+
+  defp render_edge_group(_label, [], _formatter), do: :ok
+
+  defp render_edge_group(label, edges, formatter) do
+    IO.puts("  #{label} (#{length(edges)}):")
+    Enum.each(edges, fn edge -> IO.puts("    #{formatter.(edge)}") end)
+  end
+
+  defp format_incoming_edge(edge) do
+    base = "##{edge.from_node_id} ─[#{edge.edge_type}]→ here"
+    append_rationale(base, edge.rationale)
+  end
+
+  defp format_outgoing_edge(edge) do
+    base = "here ─[#{edge.edge_type}]→ ##{edge.to_node_id}"
+    append_rationale(base, edge.rationale)
+  end
+
+  defp append_rationale(base, nil), do: base
+  defp append_rationale(base, ""), do: base
+  defp append_rationale(base, rationale), do: "#{base}: #{rationale}"
 end

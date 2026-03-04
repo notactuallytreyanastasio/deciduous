@@ -5,6 +5,8 @@ defmodule Deciduex.Commands.Nodes do
   Mirrors the output format of `deciduous nodes` from the Rust CLI.
   """
 
+  alias Deciduex.Queries
+
   @type_width 12
   @status_width 10
   @id_width 5
@@ -12,7 +14,7 @@ defmodule Deciduex.Commands.Nodes do
   def run(args) do
     opts = parse_args(args)
 
-    Deciduex.Queries.list_nodes()
+    Queries.list_nodes()
     |> apply_filters(opts)
     |> render()
   end

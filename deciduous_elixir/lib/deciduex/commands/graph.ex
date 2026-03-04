@@ -5,8 +5,10 @@ defmodule Deciduex.Commands.Graph do
   Mirrors the output format of `deciduous graph` from the Rust CLI.
   """
 
+  alias Deciduex.Queries
+
   def run do
-    graph = Deciduex.Queries.get_graph()
+    graph = Queries.get_graph()
 
     output = %{
       "nodes" => Enum.map(graph.nodes, &node_to_map/1),
