@@ -26,8 +26,10 @@ defmodule Deciduex.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
+  # Credo checks in dev/ only compiled in dev/test (Credo not available in prod)
+  defp elixirc_paths(:prod), do: ["lib"]
+  defp elixirc_paths(:test), do: ["lib", "dev", "test/support"]
+  defp elixirc_paths(:dev), do: ["lib", "dev"]
 
   defp deps do
     [

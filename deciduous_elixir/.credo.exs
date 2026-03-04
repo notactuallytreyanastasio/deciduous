@@ -42,8 +42,8 @@
       # them here, so they can be loaded by Credo before running the analysis.
       #
       requires: [
-        "lib/deciduex/checks/no_if_inside_case.ex",
-        "lib/deciduex/checks/no_nested_case.ex"
+        "dev/checks/no_if_inside_case.ex",
+        "dev/checks/no_nested_case.ex"
       ],
       #
       # If you want to enforce a style guide and need a more traditional linting
