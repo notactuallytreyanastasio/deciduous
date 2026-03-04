@@ -13,6 +13,7 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Doc
   alias Deciduex.Commands.Edges
   alias Deciduex.Commands.Graph
+  alias Deciduex.Commands.Init
   alias Deciduex.Commands.Link
   alias Deciduex.Commands.Narratives
   alias Deciduex.Commands.Nodes
@@ -23,11 +24,30 @@ defmodule Deciduex.CLI do
   alias Deciduex.Commands.Status
   alias Deciduex.Commands.Sync
   alias Deciduex.Commands.Unlink
+  alias Deciduex.Commands.Update
   alias Deciduex.Commands.Writeup
   alias Deciduex.DB
   alias Deciduex.Repo
 
   def main(args) do
+    # Handle commands that don't require a database first
+    case args do
+      ["init" | rest] ->
+        dispatch_no_db(["init" | rest])
+
+      ["update" | rest] ->
+        dispatch_no_db(["update" | rest])
+
+      ["check-update" | _rest] ->
+        dispatch_no_db(["check-update"])
+
+      _ ->
+        # Commands that require database
+        require_db_and_dispatch(args)
+    end
+  end
+
+  defp require_db_and_dispatch(args) do
     # When called via OTP release `eval`, the application tree isn't started.
     # Ensure Ecto and its dependencies are running before we open the DB.
     {:ok, _} = Application.ensure_all_started(:ecto_sqlite3)
@@ -42,6 +62,58 @@ defmodule Deciduex.CLI do
         IO.puts(:stderr, "Run 'deciduous init' first.")
         System.halt(1)
     end
+  end
+
+  # Commands that don't require a database
+  defp dispatch_no_db(args) do
+    case args do
+      ["init" | rest] ->
+        opts = parse_init_opts(rest)
+        Init.run(opts)
+
+      ["update" | rest] ->
+        opts = parse_update_opts(rest)
+        Update.run(opts)
+
+      ["check-update"] ->
+        check_update()
+
+      _ ->
+        print_usage()
+    end
+  end
+
+  defp parse_init_opts(args), do: parse_init_opts(args, [claude: true])
+
+  defp parse_init_opts([], opts), do: opts
+
+  defp parse_init_opts(["--claude" | rest], opts),
+    do: parse_init_opts(rest, Keyword.put(opts, :claude, true))
+
+  defp parse_init_opts(["--opencode" | rest], opts),
+    do: parse_init_opts(rest, Keyword.put(opts, :opencode, true))
+
+  defp parse_init_opts(["--windsurf" | rest], opts),
+    do: parse_init_opts(rest, Keyword.put(opts, :windsurf, true))
+
+  defp parse_init_opts(["--no-workflows" | rest], opts),
+    do: parse_init_opts(rest, Keyword.put(opts, :workflows, false))
+
+  defp parse_init_opts([_ | rest], opts), do: parse_init_opts(rest, opts)
+
+  defp parse_update_opts(args), do: parse_update_opts(args, [])
+
+  defp parse_update_opts([], opts), do: opts
+
+  defp parse_update_opts(["--force" | rest], opts),
+    do: parse_update_opts(rest, Keyword.put(opts, :force, true))
+
+  defp parse_update_opts([_ | rest], opts), do: parse_update_opts(rest, opts)
+
+  defp check_update do
+    version = Application.spec(:deciduex, :vsn) |> to_string()
+    IO.puts("Current version: #{version}")
+    IO.puts("Check https://hex.pm/packages/deciduex for updates.")
   end
 
   defp dispatch(args) do
@@ -122,6 +194,9 @@ defmodule Deciduex.CLI do
     IO.puts("Usage: deciduex <command> [options]")
     IO.puts("")
     IO.puts("Commands:")
+    IO.puts("  init [options]        Initialize deciduous in current directory")
+    IO.puts("  update [options]      Update integration files to latest version")
+    IO.puts("  check-update          Check for available updates")
     IO.puts("  add <type> <title>    Create a new decision node")
     IO.puts("  link <from> <to>      Create edge between nodes")
     IO.puts("  unlink <from> <to>    Remove edge between nodes")
@@ -143,5 +218,11 @@ defmodule Deciduex.CLI do
     IO.puts("  pulse [options]       Show graph health and activity")
     IO.puts("  narratives <sub>      Manage evolution narratives")
     IO.puts("  archaeology <sub>     Retroactive graph building")
+    IO.puts("")
+    IO.puts("Init options:")
+    IO.puts("  --claude              Enable Claude Code integration (default)")
+    IO.puts("  --opencode            Enable OpenCode integration")
+    IO.puts("  --windsurf            Enable Windsurf integration")
+    IO.puts("  --no-workflows        Skip GitHub workflow files")
   end
 end

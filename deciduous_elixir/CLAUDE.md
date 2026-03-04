@@ -323,30 +323,23 @@ A comprehensive set of rules for AI agents working on Elixir/Phoenix/OTP codebas
 - **BL Layer**: Hard enforcement of permissions
 - **DL Layer**: No application permission handling
 
-### Umbrella Project Structure
-
-Organize code primarily by business domain and team ownership rather than technical concerns.
-
 #### MyAppWeb Organization
 
-All new UI code goes into `pathfinder_web/`:
+All new UI code goes into `your_app_web/`:
 
 ```
-pathfinder_web/
+your_app_web/
 ├── components/              # Shared domain components
 ├── common/                  # Cross-cutting concerns, utilities, helpers
 └── live/
     ├── admin/
-    └── <team>/              # Team-specific features
-        └── <feature>/       # Feature-specific live views and components
-            └── components/  # Feature-specific components (if needed)
 ```
 
 **Key Rules:**
 
-- `pathfinder_web/components/`: Domain components reused across teams/features
-- `pathfinder_web/common/`: Cross-cutting concerns and shared helpers
-- `pathfinder_web/live/<team>/<feature>/components/`: Components specific to a single feature
+- `your_app_web/components/`: Domain components reused across teams/features
+- `your_app_web/common/`: Cross-cutting concerns and shared helpers
+- `your_app_web/live/<team>/<feature>/components/`: Components specific to a single feature
 
 #### API Services Organization
 
@@ -377,7 +370,7 @@ Entry point modules (`<feature>.ex`) must handle:
 
 **Example:**
 
-- **File:** `apps/api/lib/pathfinder_web/live/marketing/forecasting/forecasting_live.ex`
+- **File:** `apps/api/lib/your_app_web/live/marketing/forecasting/forecasting_live.ex`
 - **Module:** `MyAppWeb.Live.Marketing.Forecasting.ForecastingLive`
 
 ### File Naming and Placement
@@ -396,8 +389,8 @@ apps/api_services/lib/api_services/azure/cli.ex
 
 Test files MUST mirror source code structure exactly.
 
-- **Source:** `apps/api/lib/pathfinder_web/live/marketing/forecasting/forecasting_live.ex`
-- **Test:** `apps/api/test/pathfinder_web/live/marketing/forecasting/forecasting_live_test.exs`
+- **Source:** `apps/api/lib/your_app_web/live/marketing/forecasting/forecasting_live.ex`
+- **Test:** `apps/api/test/your_app_web/live/marketing/forecasting/forecasting_live_test.exs`
 
 ---
 
@@ -1033,3 +1026,75 @@ psql "postgresql://pepsico:development@localhost:9650/rtb_proxy_repo" -c "SELECT
 ```
 
 Use this to validate data state (user_id, join records, etc.) that plays into program logic.
+
+
+<!-- deciduous:start -->
+## Decision Graph Workflow
+
+**THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
+
+### Available Slash Commands
+
+| Command | Purpose |
+|---------|---------|
+| `/decision` | Manage decision graph - add nodes, link edges, sync |
+| `/recover` | Recover context from decision graph on session start |
+| `/work` | Start a work transaction - creates goal node before implementation |
+| `/document` | Generate comprehensive documentation for a file or directory |
+| `/build-test` | Build the project and run the test suite |
+| `/serve-ui` | Start the decision graph web viewer |
+| `/sync-graph` | Export decision graph to GitHub Pages |
+| `/decision-graph` | Build a decision graph from commit history |
+| `/sync` | Multi-user sync - pull events, rebuild, push |
+
+### Available Skills
+
+| Skill | Purpose |
+|-------|---------|
+| `/pulse` | Map current design as decisions (Now mode) |
+| `/narratives` | Understand how the system evolved (History mode) |
+| `/archaeology` | Transform narratives into queryable graph |
+
+### The Node Flow Rule - CRITICAL
+
+The canonical flow through the decision graph is:
+
+```
+goal -> options -> decision -> actions -> outcomes
+```
+
+- **Goals** lead to **options** (possible approaches to explore)
+- **Options** lead to a **decision** (choosing which option to pursue)
+- **Decisions** lead to **actions** (implementing the chosen approach)
+- **Actions** lead to **outcomes** (results of the implementation)
+- **Observations** attach anywhere relevant
+
+### The Core Rule
+
+```
+BEFORE you do something -> Log what you're ABOUT to do
+AFTER it succeeds/fails -> Log the outcome
+CONNECT immediately -> Link every node to its parent
+AUDIT regularly -> Check for missing connections
+```
+
+### Quick Commands
+
+```bash
+deciduous add goal "Title" -c 90 -p "User's original request"
+deciduous add action "Title" -c 85
+deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
+deciduous serve   # View live (auto-refreshes every 30s)
+deciduous sync    # Export for static hosting
+```
+
+### Session Start Checklist
+
+```bash
+deciduous check-update    # Update needed? Run 'deciduous update' if yes
+deciduous nodes           # What decisions exist?
+deciduous edges           # How are they connected? Any gaps?
+deciduous doc list        # Any attached documents to review?
+git status                # Current state
+```
+<!-- deciduous:end -->
