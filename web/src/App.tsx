@@ -2113,14 +2113,38 @@ function QADialogue({ messages, isLoading, error, input, onInputChange, onSubmit
               position: 'relative' as const,
             }}>
               {msg.role === 'assistant' && (
-                <div style={{
-                  position: 'absolute',
-                  top: '8px',
-                  right: '8px',
-                  zIndex: 1,
-                }}>
-                  <CopyButton text={msg.content} label="markdown" />
-                </div>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await navigator.clipboard.writeText(msg.content);
+                    const btn = e.currentTarget;
+                    const orig = btn.innerHTML;
+                    btn.innerHTML = `<span style="font-size:18px">✓</span> Copied!`;
+                    setTimeout(() => { btn.innerHTML = orig; }, 1500);
+                  }}
+                  title="Copy as Markdown"
+                  style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    zIndex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    background: 'none',
+                    border: `1px solid ${THEME.border}`,
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    padding: '4px 8px',
+                    fontSize: '12px',
+                    color: THEME.textMuted,
+                    opacity: 0.8,
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.8'; }}
+                >
+                  <span style={{ fontSize: '18px' }}>📋</span> Copy as Markdown
+                </button>
               )}
               {msg.role === 'assistant' ? (
                 <ReactMarkdown
