@@ -1,7 +1,7 @@
 class DeciduousAT014 < Formula
   desc "Decision graph tooling for AI-assisted development (beta)"
   homepage "https://notactuallytreyanastasio.github.io/deciduous/"
-  version "0.14.0-beta.2"
+  version "0.14.0-beta.3"
   license "Apache-2.0"
 
   on_macos do

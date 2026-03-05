@@ -1,7 +1,7 @@
 defmodule Deciduex.MixProject do
   use Mix.Project
 
-  @version "0.14.0-beta.2"
+  @version "0.14.0-beta.3"
 
   def project do
     [
