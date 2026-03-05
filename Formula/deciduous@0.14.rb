@@ -7,18 +7,18 @@ class DeciduousAT014 < Formula
   on_macos do
     on_arm do
       url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex_darwin_arm64.tar.gz"
-      sha256 "PLACEHOLDER_SHA256_DARWIN_ARM64"
+      sha256 "PLACEHOLDER_SHA256_DARWIN_ARM64" # darwin_arm64
     end
     on_intel do
       url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex_darwin_amd64.tar.gz"
-      sha256 "PLACEHOLDER_SHA256_DARWIN_AMD64"
+      sha256 "PLACEHOLDER_SHA256_DARWIN_AMD64" # darwin_amd64
     end
   end
 
   on_linux do
     on_intel do
       url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduex_linux_amd64.tar.gz"
-      sha256 "PLACEHOLDER_SHA256_LINUX_AMD64"
+      sha256 "PLACEHOLDER_SHA256_LINUX_AMD64" # linux_amd64
     end
   end
 
@@ -28,9 +28,7 @@ class DeciduousAT014 < Formula
     if burrito_binary
       bin.install burrito_binary => "deciduous"
     else
-      # Fallback for OTP release tarball
-      libexec.install Dir["*"]
-      bin.install_symlink libexec/"bin/cli" => "deciduous"
+      odie "No deciduex binary found in tarball"
     end
   end
 
@@ -39,6 +37,7 @@ class DeciduousAT014 < Formula
       This is a BETA release of deciduous (Elixir rewrite).
 
       To use the stable Rust version instead:
+        brew uninstall deciduous@0.14
         brew install deciduous
 
       Report issues at:
@@ -47,6 +46,6 @@ class DeciduousAT014 < Formula
   end
 
   test do
-    system "#{bin}/deciduous", "check-update"
+    assert_match "deciduous", shell_output("#{bin}/deciduous --help 2>&1", 1)
   end
 end

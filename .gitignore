@@ -15,6 +15,10 @@ erl_crash.dump
 # Burrito build artifacts
 burrito_out/
 
+# Rust build artifacts (thin wrapper for cargo distribution)
+target/
+Cargo.lock
+
 # Editor files
 *.swp
 *.swo

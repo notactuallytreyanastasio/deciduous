@@ -1,0 +1,24 @@
+[package]
+name = "deciduous"
+version = "0.14.0"
+edition = "2021"
+authors = ["Trey Anastasio <trey@example.com>"]
+description = "Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome."
+license = "Apache-2.0"
+repository = "https://github.com/notactuallytreyanastasio/deciduous"
+homepage = "https://github.com/notactuallytreyanastasio/deciduous"
+documentation = "https://github.com/notactuallytreyanastasio/deciduous#readme"
+readme = "README.md"
+keywords = ["decision", "graph", "ai", "development", "tooling"]
+categories = ["command-line-utilities", "development-tools"]
+
+[dependencies]
+
+[[bin]]
+name = "deciduous"
+path = "src/main.rs"
+
+[profile.release]
+lto = true
+strip = true
+opt-level = "z"

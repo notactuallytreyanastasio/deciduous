@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v0.11.1)'
+        description: 'Tag to release (e.g., v0.14.0-beta.2)'
         required: true
         type: string
 
@@ -15,83 +15,12 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-burrito:
+    name: Build Elixir (${{ matrix.name }})
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            name: linux-amd64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-musl
-            name: linux-arm64
-          - os: windows-latest
-            target: x86_64-pc-windows-msvc
-            name: windows-amd64
-            ext: .exe
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            name: darwin-amd64
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            name: darwin-arm64
-
-    runs-on: ${{ matrix.os }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.tag || github.ref }}
-
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
-      - name: Install musl-tools (Linux x86_64)
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
-
-      - name: Install cross-compilation tools (Linux ARM64)
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y musl-tools
-          # Install cross for ARM64 cross-compilation
-          cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Build (Linux x86_64)
-        if: matrix.target == 'x86_64-unknown-linux-musl'
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Build (Linux ARM64 with cross)
-        if: matrix.target == 'aarch64-unknown-linux-musl'
-        run: cross build --release --target ${{ matrix.target }}
-
-      - name: Build (macOS/Windows)
-        if: matrix.os != 'ubuntu-latest'
-        run: cargo build --release --target ${{ matrix.target }}
-
-      - name: Rename binary
-        shell: bash
-        run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cp target/${{ matrix.target }}/release/deciduous.exe deciduous-${{ matrix.name }}.exe
-          else
-            cp target/${{ matrix.target }}/release/deciduous deciduous-${{ matrix.name }}
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: deciduous-${{ matrix.name }}
-          path: deciduous-${{ matrix.name }}${{ matrix.ext }}
-
-  build-elixir:
-    strategy:
-      matrix:
-        include:
-          - os: macos-latest
+          - os: macos-14
             name: darwin-arm64
             burrito_target: darwin_arm64
           - os: macos-13
@@ -112,7 +41,7 @@ jobs:
         uses: erlef/setup-beam@v1
         with:
           otp-version: '27.0'
-          elixir-version: '1.18'
+          elixir-version: '1.17'
 
       - name: Install Zig
         uses: goto-bus-stop/setup-zig@v2
@@ -120,25 +49,90 @@ jobs:
           version: 0.13.0
 
       - name: Build Burrito release
-        working-directory: deciduous_elixir
         run: |
           mix local.hex --force
           mix local.rebar --force
           mix deps.get --only prod
           BURRITO_TARGET=${{ matrix.burrito_target }} MIX_ENV=prod mix release
 
-      - name: Rename binary
+      - name: Create tarball
         run: |
-          cp deciduous_elixir/burrito_out/deciduex_${{ matrix.burrito_target }} deciduex-${{ matrix.name }}
+          cd burrito_out
+          tar -czvf deciduex_${{ matrix.burrito_target }}.tar.gz deciduex_${{ matrix.burrito_target }}
+          cp deciduex_${{ matrix.burrito_target }} ../deciduex-${{ matrix.name }}
 
-      - name: Upload artifact
+      - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
           name: deciduex-${{ matrix.name }}
           path: deciduex-${{ matrix.name }}
 
+      - name: Upload tarball artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deciduex_${{ matrix.burrito_target }}_tar
+          path: burrito_out/deciduex_${{ matrix.burrito_target }}.tar.gz
+
+  build-rust-wrapper:
+    name: Build Rust Wrapper (${{ matrix.name }})
+    needs: build-burrito
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: aarch64-apple-darwin
+            name: darwin-arm64
+            burrito: darwin_arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            name: darwin-amd64
+            burrito: darwin_amd64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            name: linux-amd64
+            burrito: linux_amd64
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Download Burrito binary
+        uses: actions/download-artifact@v4
+        with:
+          name: deciduex-${{ matrix.name }}
+          path: burrito_out/
+
+      - name: Rename for embedding
+        run: |
+          mv burrito_out/deciduex-${{ matrix.name }} burrito_out/deciduex_${{ matrix.burrito }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl-tools (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Build Rust wrapper
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename binary
+        run: cp target/${{ matrix.target }}/release/deciduous deciduous-${{ matrix.name }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: deciduous-${{ matrix.name }}
+          path: deciduous-${{ matrix.name }}
+
   release:
-    needs: [build, build-elixir]
+    name: Create GitHub Release
+    needs: [build-burrito, build-rust-wrapper]
     runs-on: ubuntu-latest
 
     steps:
@@ -151,54 +145,137 @@ jobs:
         with:
           path: artifacts
 
-      - name: Display structure of downloaded files
+      - name: Display artifacts
         run: ls -la artifacts/*/
+
+      - name: Flatten artifacts
+        run: |
+          mkdir -p release
+          # Burrito binaries (direct)
+          cp artifacts/deciduex-darwin-arm64/deciduex-darwin-arm64 release/
+          cp artifacts/deciduex-darwin-amd64/deciduex-darwin-amd64 release/
+          cp artifacts/deciduex-linux-amd64/deciduex-linux-amd64 release/
+          # Burrito tarballs (for Homebrew)
+          cp artifacts/deciduex_darwin_arm64_tar/*.tar.gz release/
+          cp artifacts/deciduex_darwin_amd64_tar/*.tar.gz release/
+          cp artifacts/deciduex_linux_amd64_tar/*.tar.gz release/
+          # Rust wrappers (for cargo)
+          cp artifacts/deciduous-darwin-arm64/deciduous-darwin-arm64 release/
+          cp artifacts/deciduous-darwin-amd64/deciduous-darwin-amd64 release/
+          cp artifacts/deciduous-linux-amd64/deciduous-linux-amd64 release/
 
       - name: Create checksums
         run: |
-          cd artifacts
-          for dir in */; do
-            for file in "$dir"*; do
-              if [ -f "$file" ]; then
-                sha256sum "$file" >> ../checksums.txt
-              fi
-            done
-          done
-          cd ..
+          cd release
+          sha256sum * > checksums.txt
           cat checksums.txt
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          prerelease: ${{ contains(inputs.tag || github.ref_name, 'beta') }}
-          files: |
-            artifacts/deciduous-linux-amd64/deciduous-linux-amd64
-            artifacts/deciduous-linux-arm64/deciduous-linux-arm64
-            artifacts/deciduous-darwin-amd64/deciduous-darwin-amd64
-            artifacts/deciduous-darwin-arm64/deciduous-darwin-arm64
-            artifacts/deciduous-windows-amd64/deciduous-windows-amd64.exe
-            artifacts/deciduex-darwin-arm64/deciduex-darwin-arm64
-            artifacts/deciduex-darwin-amd64/deciduex-darwin-amd64
-            artifacts/deciduex-linux-amd64/deciduex-linux-amd64
-            checksums.txt
-          generate_release_notes: true
+          name: v${{ steps.version.outputs.version }}
+          prerelease: ${{ contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'alpha') }}
+          files: release/*
+          body: |
+            ## Deciduous v${{ steps.version.outputs.version }}
 
-  publish-crate:
-    needs: [build]
+            ### Installation
+
+            **Homebrew (recommended):**
+            ```bash
+            brew tap notactuallytreyanastasio/deciduous
+            brew install deciduous@0.14
+            ```
+
+            **Cargo:**
+            ```bash
+            cargo install deciduous --version ${{ steps.version.outputs.version }}
+            ```
+
+            **Direct download:**
+            | Platform | Elixir (native) | Rust (wrapper) |
+            |----------|-----------------|----------------|
+            | macOS ARM64 | `deciduex-darwin-arm64` | `deciduous-darwin-arm64` |
+            | macOS x86_64 | `deciduex-darwin-amd64` | `deciduous-darwin-amd64` |
+            | Linux x86_64 | `deciduex-linux-amd64` | `deciduous-linux-amd64` |
+
+  update-homebrew:
+    name: Update Homebrew Formula
+    needs: release
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.ref_name, 'beta') && !contains(inputs.tag || '', 'beta') }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Download tarballs
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: deciduex_*_tar
+
+      - name: Calculate SHA256
+        id: sha
+        run: |
+          echo "darwin_arm64=$(sha256sum artifacts/deciduex_darwin_arm64_tar/*.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "darwin_amd64=$(sha256sum artifacts/deciduex_darwin_amd64_tar/*.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "linux_amd64=$(sha256sum artifacts/deciduex_linux_amd64_tar/*.tar.gz | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+
+      - name: Update formula SHA256
+        run: |
+          sed -i 's/sha256 ".*" # darwin_arm64/sha256 "${{ steps.sha.outputs.darwin_arm64 }}" # darwin_arm64/' Formula/deciduous@0.14.rb
+          sed -i 's/sha256 ".*" # darwin_amd64/sha256 "${{ steps.sha.outputs.darwin_amd64 }}" # darwin_amd64/' Formula/deciduous@0.14.rb
+          sed -i 's/sha256 ".*" # linux_amd64/sha256 "${{ steps.sha.outputs.linux_amd64 }}" # linux_amd64/' Formula/deciduous@0.14.rb
+          # Also handle placeholder format
+          sed -i 's/PLACEHOLDER_SHA256_DARWIN_ARM64/${{ steps.sha.outputs.darwin_arm64 }}/' Formula/deciduous@0.14.rb
+          sed -i 's/PLACEHOLDER_SHA256_DARWIN_AMD64/${{ steps.sha.outputs.darwin_amd64 }}/' Formula/deciduous@0.14.rb
+          sed -i 's/PLACEHOLDER_SHA256_LINUX_AMD64/${{ steps.sha.outputs.linux_amd64 }}/' Formula/deciduous@0.14.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/deciduous@0.14.rb
+          git diff --staged --quiet || git commit -m "chore: update deciduous@0.14 SHA256 for ${{ github.ref_name }}"
+          git push origin main
+
+  publish-cargo:
+    name: Publish to Crates.io
+    needs: build-burrito
+    runs-on: ubuntu-latest
+    # Only publish non-beta to crates.io automatically
+    # Beta requires manual: cargo publish --version X.Y.Z-beta.N
+    if: ${{ !contains(github.ref_name, 'beta') }}
 
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
 
-      - name: Install Rust toolchain
+      - name: Download all Burrito binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: burrito_out/
+          pattern: deciduex-*
+          merge-multiple: true
+
+      - name: Rename binaries for embedding
+        run: |
+          mv burrito_out/deciduex-darwin-arm64 burrito_out/deciduex_darwin_arm64
+          mv burrito_out/deciduex-darwin-amd64 burrito_out/deciduex_darwin_amd64
+          mv burrito_out/deciduex-linux-amd64 burrito_out/deciduex_linux_amd64
+          ls -la burrito_out/
+
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish to crates.io
-        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --no-verify
