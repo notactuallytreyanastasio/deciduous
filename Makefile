@@ -155,6 +155,17 @@ sync-graph:
 	$(BINARY) graph > docs/demo/graph-data.json
 	@echo "Graph exported."
 
+# ============ Hex.pm Release ============
+#
+# Hex package provides Mix tasks: mix deciduous init, mix deciduous add, etc.
+# Note: escript doesn't work (exqlite uses NIFs). Use Homebrew/Cargo for PATH binary.
+
+hex-publish:
+	mix hex.publish
+
+hex-publish-dry:
+	mix hex.publish --dry-run
+
 # ============ Cargo/Crates.io Release ============
 #
 # The Rust crate is a thin wrapper that embeds the Burrito binary.

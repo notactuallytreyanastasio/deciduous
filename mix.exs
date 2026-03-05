@@ -1,16 +1,23 @@
 defmodule Deciduex.MixProject do
   use Mix.Project
 
+  @version "0.14.0-beta.2"
+
   def project do
     [
       app: :deciduex,
-      version: "0.14.0-beta.2",
-      elixir: "~> 1.19",
+      version: @version,
+      elixir: "~> 1.17",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       releases: releases(),
       aliases: aliases(),
+      package: package(),
+      description: "Decision graph tooling for AI-assisted development",
+      source_url: "https://github.com/notactuallytreyanastasio/deciduous",
+      homepage_url: "https://notactuallytreyanastasio.github.io/deciduous/",
+      docs: docs(),
       dialyzer: [
         plt_local_path: "_build/plts",
         plt_core_path: "_build/plts",
@@ -38,7 +45,8 @@ defmodule Deciduex.MixProject do
       {:elixir_uuid, "~> 1.2"},
       {:burrito, "~> 1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.31", only: :dev, runtime: false}
     ]
   end
 
@@ -47,6 +55,29 @@ defmodule Deciduex.MixProject do
       preferred_envs: [
         precommit: :test
       ]
+    ]
+  end
+
+  # Note: escript doesn't work because exqlite uses NIFs.
+  # Use Mix tasks instead: mix deciduous init, mix deciduous add, etc.
+  # Or install standalone via Homebrew/Cargo for PATH binary.
+
+  defp package do
+    [
+      name: "deciduex",
+      licenses: ["Apache-2.0"],
+      links: %{
+        "GitHub" => "https://github.com/notactuallytreyanastasio/deciduous",
+        "Docs" => "https://notactuallytreyanastasio.github.io/deciduous/"
+      },
+      files: ~w(lib priv .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      extras: ["README.md", "CHANGELOG.md"]
     ]
   end
 
