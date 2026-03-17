@@ -12,6 +12,12 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.12",
+        highlights: &[
+            "Web viewer now defaults to showing all goals instead of only 10+ node trees",
+        ],
+    },
+    Release {
         version: "0.13.11",
         highlights: &[
             "Version checking is now always-on (no opt-in needed)",

@@ -2331,8 +2331,8 @@ export function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // View state - default to 'significant' to show major narratives
-  const [mode, setMode] = useState<NarrativeMode>('significant');
+  // View state - default to 'goals' to show all goals
+  const [mode, setMode] = useState<NarrativeMode>('goals');
   const [focusedNarrativeId, setFocusedNarrativeId] = useState<string | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
