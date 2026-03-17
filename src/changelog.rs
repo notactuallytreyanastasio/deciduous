@@ -12,6 +12,15 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.10",
+        highlights: &[
+            "Opt-in auto-update version check hook - checks crates.io once per 24h, non-blocking",
+            "Toggle with `deciduous auto-update on/off`, or `deciduous init --no-auto-update`",
+            "Copy markdown button added to Q&A chat responses in web viewer",
+            "CI: auto-format on push to non-main branches",
+        ],
+    },
+    Release {
         version: "0.13.9",
         highlights: &[
             "Fix: OpenCode plugins write to .deciduous/plugin.log instead of console.error (stderr also corrupts TUI)",

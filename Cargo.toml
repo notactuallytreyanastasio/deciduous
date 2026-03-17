@@ -1,6 +1,6 @@
 [package]
 name = "deciduous"
-version = "0.13.9"
+version = "0.13.10"
 edition = "2021"
 rust-version = "1.70"
 authors = ["Trey Anastasio <trey@example.com>"]
@@ -26,6 +26,12 @@ exclude = [
     "*.png",
     # AppImage packaging
     "appimage/**",
+    # Elixir/Erlang build artifacts (from decidulixir)
+    "_build/**",
+    "deps/**",
+    # Misc stray files
+    "prodigious/**",
+    "burrito_out/**",
 ]
 
 [[bin]]
