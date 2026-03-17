@@ -1,6 +1,6 @@
 [package]
 name = "deciduous"
-version = "0.13.10"
+version = "0.13.11"
 edition = "2021"
 rust-version = "1.70"
 authors = ["Trey Anastasio <trey@example.com>"]

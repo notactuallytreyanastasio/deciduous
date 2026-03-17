@@ -19,10 +19,8 @@ main_branches = ["main", "master"]
 auto_detect = true
 
 [updates]
-# Automatically check for new versions (once per 24h)
-# When enabled, your AI assistant will inform you when an update is available
-# Toggle with: deciduous auto-update on/off
-auto_check = true
+# Version checking is always-on (once per 24h, non-blocking)
+# Patch updates show a quiet one-liner; minor/major updates show a prominent banner
 "#;
 
 /// GitHub Pages deploy workflow (deploys to gh-pages branch, safe for project repos)
@@ -2030,27 +2028,51 @@ EOF
 exit 2
 "#;
 
-/// PreToolUse hook script - checks for new deciduous versions (opt-in, rate-limited)
+/// PreToolUse hook script - checks for new deciduous versions (always-on, rate-limited)
 pub const HOOK_VERSION_CHECK: &str = r#"#!/bin/bash
 # version-check.sh
-# Checks for new deciduous versions via crates.io (opt-in, once per 24h)
+# Checks for new deciduous versions via crates.io (always-on, once per 24h)
 # Non-blocking: exit 0 always, informational only
+# Patch updates get a quiet one-liner; minor/major updates get a prominent banner
 
 # Check if deciduous is initialized
 if [ ! -d ".deciduous" ]; then
     exit 0
 fi
 
-# Check if auto_check is enabled in config
-config_file=".deciduous/config.toml"
-if [ ! -f "$config_file" ]; then
-    exit 0
-fi
+# Semver comparison: returns "patch" or "major" based on version difference
+classify_update() {
+    local cur="$1" lat="$2"
+    local cur_major cur_minor lat_major lat_minor
+    cur_major=$(echo "$cur" | cut -d. -f1)
+    cur_minor=$(echo "$cur" | cut -d. -f2)
+    lat_major=$(echo "$lat" | cut -d. -f1)
+    lat_minor=$(echo "$lat" | cut -d. -f2)
+    if [ "$cur_major" = "$lat_major" ] && [ "$cur_minor" = "$lat_minor" ]; then
+        echo "patch"
+    else
+        echo "major"
+    fi
+}
 
-# Simple grep for auto_check = true (handles spaces around =)
-if ! grep -qE '^\s*auto_check\s*=\s*true' "$config_file" 2>/dev/null; then
-    exit 0
-fi
+# Display update message based on severity
+notify_update() {
+    local current="$1" latest="$2"
+    local kind
+    kind=$(classify_update "$current" "$latest")
+    if [ "$kind" = "patch" ]; then
+        echo "DECIDUOUS: Patch update available (v${current} -> v${latest}). Run 'cargo install deciduous' to upgrade." >&2
+    else
+        cat >&2 << BANNER
+╔══════════════════════════════════════════════════════════════╗
+║  DECIDUOUS: New major update available! v${current} -> v${latest}
+╚══════════════════════════════════════════════════════════════╝
+Run 'deciduous check-update' for details, then 'cargo install deciduous' to upgrade.
+After upgrading, run 'deciduous update' to refresh integration files.
+Please let the user know a significant new version is available and encourage them to upgrade.
+BANNER
+    fi
+}
 
 # Rate limit: only check once per 24 hours
 check_file=".deciduous/.last_version_check"
@@ -2066,12 +2088,7 @@ if [ -f "$check_file" ]; then
             latest=$(cat "$cached_file" 2>/dev/null)
             current=$(deciduous --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
             if [ -n "$latest" ] && [ -n "$current" ] && [ "$latest" != "$current" ]; then
-                cat >&2 << EOF
-DECIDUOUS: New version available (v${current} -> v${latest})
-Run 'deciduous check-update' for details, then 'cargo install deciduous' to upgrade.
-After upgrading, run 'deciduous update' to refresh integration files.
-Please let the user know a new version is available.
-EOF
+                notify_update "$current" "$latest"
             fi
         fi
         exit 0
@@ -2094,12 +2111,7 @@ date +%s > "$check_file"
 current=$(deciduous --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
 
 if [ -n "$current" ] && [ "$latest" != "$current" ]; then
-    cat >&2 << EOF
-DECIDUOUS: New version available (v${current} -> v${latest})
-Run 'deciduous check-update' for details, then 'cargo install deciduous' to upgrade.
-After upgrading, run 'deciduous update' to refresh integration files.
-Please let the user know a new version is available.
-EOF
+    notify_update "$current" "$latest"
 fi
 
 exit 0

@@ -12,6 +12,15 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.11",
+        highlights: &[
+            "Version checking is now always-on (no opt-in needed)",
+            "Patch updates show a quiet one-liner notification",
+            "Minor/major updates show a prominent banner encouraging upgrade",
+            "Deprecated `deciduous auto-update on/off` and `--no-auto-update` flag",
+        ],
+    },
+    Release {
         version: "0.13.10",
         highlights: &[
             "Opt-in auto-update version check hook - checks crates.io once per 24h, non-blocking",
@@ -298,6 +307,13 @@ pub fn format_releases(releases: &[&Release]) -> String {
     output
 }
 
+/// Returns true if the version difference is patch-only (same major.minor)
+pub fn is_patch_only(current: &str, latest: &str) -> bool {
+    let (cur_major, cur_minor, _) = parse_version(current);
+    let (lat_major, lat_minor, _) = parse_version(latest);
+    cur_major == lat_major && cur_minor == lat_minor
+}
+
 /// Check if integration files are outdated and return a brief reminder message
 /// Returns None if up to date or if version file doesn't exist
 pub fn check_version_reminder(current_binary_version: &str) -> Option<String> {
@@ -348,6 +364,15 @@ mod tests {
     fn test_get_releases_between_same_version() {
         let releases = get_releases_between("0.9.5", "0.9.5");
         assert!(releases.is_empty());
+    }
+
+    #[test]
+    fn test_is_patch_only() {
+        assert!(is_patch_only("0.13.10", "0.13.11"));
+        assert!(is_patch_only("1.2.3", "1.2.9"));
+        assert!(!is_patch_only("0.13.10", "0.14.0"));
+        assert!(!is_patch_only("0.13.10", "1.0.0"));
+        assert!(!is_patch_only("1.0.0", "2.0.0"));
     }
 
     #[test]

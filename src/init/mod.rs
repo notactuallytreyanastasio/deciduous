@@ -25,12 +25,12 @@ use templates::{
 /// * `setup_claude` - Whether to set up Claude Code integration
 /// * `setup_opencode` - Whether to set up OpenCode integration
 /// * `setup_windsurf` - Whether to set up Windsurf integration (also auto-detects .windsurf/)
-/// * `no_auto_update` - If true, disable automatic version checking in config
+/// * `no_auto_update` - Deprecated (ignored). Version checking is now always-on.
 pub fn init_project(
     setup_claude: bool,
     setup_opencode: bool,
     setup_windsurf: bool,
-    no_auto_update: bool,
+    _no_auto_update: bool,
 ) -> Result<(), String> {
     let cwd =
         std::env::current_dir().map_err(|e| format!("Could not get current directory: {}", e))?;
@@ -60,13 +60,7 @@ pub fn init_project(
 
     // 1b. Create default config.toml if it doesn't exist
     let config_path = deciduous_dir.join("config.toml");
-    if no_auto_update {
-        // Write config with auto_check disabled
-        let config_content = DEFAULT_CONFIG.replace("auto_check = true", "auto_check = false");
-        write_file_if_missing(&config_path, &config_content, ".deciduous/config.toml")?;
-    } else {
-        write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
-    }
+    write_file_if_missing(&config_path, DEFAULT_CONFIG, ".deciduous/config.toml")?;
 
     // 1c. Write version file for auto-update detection
     let version_path = deciduous_dir.join(".version");

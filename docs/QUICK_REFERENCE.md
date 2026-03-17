@@ -252,9 +252,8 @@ deciduous writeup --auto --title "Add auth" --nodes 1-15
 ## Session Recovery
 
 ```bash
-# Check for updates (auto-checked every 24h if auto-update is on)
+# Check for updates (always-on, checked every 24h)
 deciduous check-update
-deciduous auto-update on/off  # Toggle automatic version checking
 
 # Show recent decisions
 deciduous nodes

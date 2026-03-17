@@ -474,16 +474,10 @@ The `update` command auto-detects which assistants are installed and updates the
 
 ### Automatic Version Checking
 
-By default, deciduous checks [crates.io](https://crates.io/crates/deciduous) for new versions once per 24 hours via a lightweight hook. When a newer version is available, your AI assistant will let you know conversationally.
+Deciduous always checks [crates.io](https://crates.io/crates/deciduous) for new versions once per 24 hours via a lightweight hook. The notification varies by severity:
 
-```bash
-# Toggle automatic checking
-deciduous auto-update on     # Enable (default for new projects)
-deciduous auto-update off    # Disable
-
-# Or opt out during init
-deciduous init --no-auto-update
-```
+- **Patch updates** (e.g., 0.13.10 → 0.13.11): quiet one-line notification
+- **Minor/major updates** (e.g., 0.13.x → 0.14.0): prominent banner encouraging upgrade
 
 You can also check manually at any time:
 
@@ -492,7 +486,7 @@ $ deciduous check-update
 Update available: Integration files are v0.9.4, binary is v0.9.5. Run 'deciduous update'.
 ```
 
-The auto-check is rate-limited (once per 24h), has a 3-second timeout, and never blocks your workflow. Results are cached in `.deciduous/.latest_version`.
+The check is rate-limited (once per 24h), has a 3-second timeout, and never blocks your workflow. Results are cached in `.deciduous/.latest_version`.
 
 ---
 
@@ -518,7 +512,7 @@ This connects your git history to the decision graph.
 
 ### Version-Check Hook (Notifies of new versions)
 
-Checks crates.io once per 24 hours for newer versions of deciduous. When a new version is available, the AI assistant informs you conversationally. Enabled by default; toggle with `deciduous auto-update on/off`.
+Checks crates.io once per 24 hours for newer versions of deciduous. Patch updates get a quiet one-liner; minor/major updates get a prominent banner encouraging upgrade. Always-on, non-blocking.
 
 ```
 Session starts → Hook checks cached version → If stale, queries crates.io (3s timeout) → AI tells user
@@ -563,11 +557,8 @@ deciduous init --opencode    # Initialize with OpenCode
 deciduous init --windsurf    # Initialize with Windsurf
 deciduous init --both        # Initialize with Claude Code + OpenCode
 deciduous init --both --windsurf  # All three assistants
-deciduous init --no-auto-update  # Disable automatic version checking
 deciduous update             # Update tooling (auto-detects installed assistants)
 deciduous check-update       # Check if update is needed
-deciduous auto-update on     # Enable automatic version checking
-deciduous auto-update off    # Disable automatic version checking
 
 # Add nodes
 deciduous add goal "Title" -c 90

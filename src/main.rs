@@ -1011,72 +1011,16 @@ fn main() {
         return;
     }
 
-    // Handle auto-update toggle
-    if let Command::AutoUpdate { toggle } = &args.command {
-        let config_path = std::path::Path::new(".deciduous/config.toml");
-        if !config_path.exists() {
-            eprintln!(
-                "{} No config file found. Run 'deciduous init' first.",
-                "Error:".red()
-            );
-            std::process::exit(1);
-        }
-
-        let enable = match toggle.as_str() {
-            "on" | "enable" | "true" => true,
-            "off" | "disable" | "false" => false,
-            _ => {
-                eprintln!(
-                    "{} Expected 'on' or 'off'. Usage: deciduous auto-update on",
-                    "Error:".red()
-                );
-                std::process::exit(1);
-            }
-        };
-
-        let content = std::fs::read_to_string(config_path).unwrap_or_default();
-
-        let new_content = if content.contains("auto_check") {
-            // Replace existing value
-            let re = regex::Regex::new(r"(?m)^(\s*auto_check\s*=\s*)(?:true|false)")
-                .expect("valid regex");
-            re.replace(&content, format!("${{1}}{}", enable))
-                .to_string()
-        } else if content.contains("[updates]") {
-            // Section exists but no auto_check key
-            content.replace(
-                "[updates]",
-                &format!("[updates]\nauto_check = {}", enable),
-            )
-        } else {
-            // No [updates] section at all
-            format!(
-                "{}\n[updates]\n# Automatically check for new versions (once per 24h)\n# When enabled, your AI assistant will inform you when an update is available\nauto_check = {}\n",
-                content.trim_end(),
-                enable
-            )
-        };
-
-        std::fs::write(config_path, new_content).unwrap_or_else(|e| {
-            eprintln!("{} Could not write config: {}", "Error:".red(), e);
-            std::process::exit(1);
-        });
-
-        if enable {
-            println!(
-                "{} Automatic version checking {}.",
-                "OK:".green(),
-                "enabled".green().bold()
-            );
-            println!("  Your AI assistant will notify you when new versions are available.");
-            println!("  Checks crates.io once per 24 hours via hook.");
-        } else {
-            println!(
-                "{} Automatic version checking {}.",
-                "OK:".green(),
-                "disabled".yellow().bold()
-            );
-        }
+    // Handle auto-update toggle (deprecated - version checking is now always-on)
+    if let Command::AutoUpdate { toggle: _ } = &args.command {
+        println!(
+            "{} The 'auto-update' command is deprecated. Version checking is now {}.",
+            "Note:".yellow(),
+            "always-on".green().bold()
+        );
+        println!("  Checks crates.io once per 24 hours (non-blocking, rate-limited).");
+        println!("  Patch updates show a quiet notification.");
+        println!("  Minor/major updates show a prominent banner encouraging upgrade.");
         return;
     }
 
