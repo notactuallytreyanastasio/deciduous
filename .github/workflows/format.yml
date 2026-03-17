@@ -1,5 +1,4 @@
 name: Auto-format
-# format it all yo
 on:
   push:
     branches-ignore:

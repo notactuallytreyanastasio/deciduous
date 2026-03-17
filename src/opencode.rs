@@ -55,23 +55,11 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
         }
 
         if (!hasRecentNode && lines.length > 2) {
-          // Show a reminder but don't block
-          console.error(`
-+===================================================================+
-|  DECIDUOUS: No recent action/goal node found                      |
-+===================================================================+
-|  Before editing files, log what you're about to do:               |
-|                                                                   |
-|  For new work:                                                    |
-|    deciduous add goal "What you're trying to achieve" -c 90       |
-|                                                                   |
-|  For implementation:                                              |
-|    deciduous add action "What you're about to implement" -c 85    |
-|                                                                   |
-|  Then link to parent:                                             |
-|    deciduous link <parent_id> <new_id> -r "reason"                |
-+===================================================================+
-`)
+          // Write reminder to log file instead of console (console output corrupts TUI)
+          const path = await import("path")
+          const logFile = path.join(".deciduous", "plugin.log")
+          const msg = `[${new Date().toISOString()}] REMINDER: No recent action/goal node found. Run: deciduous add goal "..." or deciduous add action "..."\n`
+          fs.appendFileSync(logFile, msg)
         }
       } catch (error) {
         // If deciduous isn't available, continue silently
@@ -116,21 +104,11 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
         const commitHash = hashResult.stdout.toString().trim()
         const commitMsg = msgResult.stdout.toString().trim().slice(0, 50)
 
-        // Show reminder (must use stderr to avoid polluting OpenCode display)
-        console.error(`
-+===================================================================+
-|  DECIDUOUS: Link this commit to the decision graph!               |
-+===================================================================+
-|  Commit: ${commitHash} "${commitMsg}"
-|                                                                   |
-|  Run NOW:                                                         |
-|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
-|                                                                   |
-|  Or if this was an action (not outcome):                          |
-|    deciduous add action "What was done" -c 90 --commit HEAD       |
-+===================================================================+
-`)
+        // Write reminder to log file instead of console (console output corrupts TUI)
+        const path = await import("path")
+        const logFile = path.join(".deciduous", "plugin.log")
+        const msg = `[${new Date().toISOString()}] POST-COMMIT: ${commitHash} "${commitMsg}" - Run: deciduous add outcome "..." --commit HEAD\n`
+        fs.appendFileSync(logFile, msg)
       } catch (error) {
         // If git commands fail, skip the reminder
       }
@@ -2594,6 +2572,9 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
 
     // First, ensure core deciduous infrastructure exists
     ensure_core_infrastructure(project_root)?;
+
+    // Migrate old singular dirs before creating anything
+    migrate_opencode_dirs(project_root)?;
 
     let config = Config::load();
 
