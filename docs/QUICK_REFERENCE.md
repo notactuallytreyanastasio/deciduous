@@ -252,8 +252,9 @@ deciduous writeup --auto --title "Add auth" --nodes 1-15
 ## Session Recovery
 
 ```bash
-# Check for updates
+# Check for updates (auto-checked every 24h if auto-update is on)
 deciduous check-update
+deciduous auto-update on/off  # Toggle automatic version checking
 
 # Show recent decisions
 deciduous nodes
@@ -357,7 +358,9 @@ All bootstrapped by `deciduous init` and updated by `deciduous update`.
 |------|---------|
 | `.deciduous/deciduous.db` | SQLite database (gitignored) |
 | `.deciduous/config.toml` | Configuration |
-| `.deciduous/.version` | Binary version for auto-update |
+| `.deciduous/.version` | Binary version for update detection |
+| `.deciduous/.latest_version` | Cached latest version from crates.io |
+| `.deciduous/.last_version_check` | Timestamp of last version check |
 | `.deciduous/patches/` | Multi-user sync patches |
 | `.claude/hooks/` | Claude Code hooks |
 | `.claude/commands/` | Claude Code slash commands |

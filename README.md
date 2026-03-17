@@ -474,14 +474,25 @@ The `update` command auto-detects which assistants are installed and updates the
 
 ### Automatic Version Checking
 
-The `check-update` command compares `.deciduous/.version` with the binary version:
+By default, deciduous checks [crates.io](https://crates.io/crates/deciduous) for new versions once per 24 hours via a lightweight hook. When a newer version is available, your AI assistant will let you know conversationally.
+
+```bash
+# Toggle automatic checking
+deciduous auto-update on     # Enable (default for new projects)
+deciduous auto-update off    # Disable
+
+# Or opt out during init
+deciduous init --no-auto-update
+```
+
+You can also check manually at any time:
 
 ```bash
 $ deciduous check-update
 Update available: Integration files are v0.9.4, binary is v0.9.5. Run 'deciduous update'.
 ```
 
-Add this to your session start routine to catch updates automatically.
+The auto-check is rate-limited (once per 24h), has a 3-second timeout, and never blocks your workflow. Results are cached in `.deciduous/.latest_version`.
 
 ---
 
@@ -505,15 +516,23 @@ After any `git commit`, the AI is reminded to:
 
 This connects your git history to the decision graph.
 
+### Version-Check Hook (Notifies of new versions)
+
+Checks crates.io once per 24 hours for newer versions of deciduous. When a new version is available, the AI assistant informs you conversationally. Enabled by default; toggle with `deciduous auto-update on/off`.
+
+```
+Session starts → Hook checks cached version → If stale, queries crates.io (3s timeout) → AI tells user
+```
+
 ### Assistant-Specific Implementation
 
-| Assistant | Pre-Edit Hook/Plugin | Post-Commit Hook/Plugin |
-|-----------|----------------------|-------------------------|
-| **Claude Code** | `PreToolUse` on `Edit\|Write` | `PostToolUse` on `Bash` (git commit) |
-| **OpenCode** | TypeScript plugin `pre-edit` | TypeScript plugin `post-commit` |
-| **Windsurf** | Cascade `pre_write_code` | Cascade `post_run_command` |
+| Assistant | Pre-Edit | Post-Commit | Version Check |
+|-----------|----------|-------------|---------------|
+| **Claude Code** | `PreToolUse` on `Edit\|Write` | `PostToolUse` on `Bash` | `PreToolUse` on `Bash` |
+| **OpenCode** | TypeScript `pre-edit` | TypeScript `post-commit` | TypeScript `pre-tool` |
+| **Windsurf** | Cascade `pre_write_code` | Cascade `post_run_command` | Cascade `pre_write_code` |
 
-All hooks use **exit code 2** to block actions and provide guidance to the AI.
+Pre-edit and post-commit hooks use **exit code 2** to block/alert. Version-check hooks use **exit code 0** (informational, never blocks).
 
 ---
 
@@ -544,8 +563,11 @@ deciduous init --opencode    # Initialize with OpenCode
 deciduous init --windsurf    # Initialize with Windsurf
 deciduous init --both        # Initialize with Claude Code + OpenCode
 deciduous init --both --windsurf  # All three assistants
+deciduous init --no-auto-update  # Disable automatic version checking
 deciduous update             # Update tooling (auto-detects installed assistants)
 deciduous check-update       # Check if update is needed
+deciduous auto-update on     # Enable automatic version checking
+deciduous auto-update off    # Disable automatic version checking
 
 # Add nodes
 deciduous add goal "Title" -c 90

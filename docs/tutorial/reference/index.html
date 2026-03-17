@@ -95,6 +95,7 @@
                     <tr><td><code>init</code></td><td>Initialize deciduous in a project</td></tr>
                     <tr><td><code>update</code></td><td>Update integration files to current version</td></tr>
                     <tr><td><code>check-update</code></td><td>Check if integration files need updating</td></tr>
+                    <tr><td><code>auto-update</code></td><td>Toggle automatic version checking (on/off)</td></tr>
                     <tr><td><code>add</code></td><td>Add a node to the decision graph</td></tr>
                     <tr><td><code>link</code></td><td>Create an edge between two nodes</td></tr>
                     <tr><td><code>unlink</code></td><td>Remove an edge between two nodes</td></tr>
@@ -169,8 +170,9 @@
             <h3><code>deciduous init [OPTIONS]</code></h3>
             <p>Initialize deciduous in the current directory. Creates <code>.deciduous/</code>, <code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>CLAUDE.md</code>, and <code>docs/</code>.</p>
             <pre>Options:
-  --opencode    Also create OpenCode integration (AGENTS.md)
-  --windsurf    Also create Windsurf integration (.windsurfrules)</pre>
+  --opencode         Also create OpenCode integration (AGENTS.md)
+  --windsurf         Also create Windsurf integration (.windsurf/)
+  --no-auto-update   Disable automatic version checking (enabled by default)</pre>
 
             <h3><code>deciduous update</code></h3>
             <p>Update integration files to the current binary version. Auto-detects installed assistants. Overwrites <code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>.claude/hooks/</code>, <code>.claude/agents.toml</code>, and the deciduous section of <code>CLAUDE.md</code>.</p>
@@ -178,6 +180,13 @@
 
             <h3><code>deciduous check-update</code></h3>
             <p>Compare <code>.deciduous/.version</code> with current binary version. Exit code 0 if up to date, 1 if update needed.</p>
+
+            <h3><code>deciduous auto-update &lt;on|off&gt;</code></h3>
+            <p>Toggle automatic version checking. When enabled (the default for new projects), a hook checks <a href="https://crates.io/crates/deciduous">crates.io</a> once per 24 hours for newer versions. Your AI assistant will inform you conversationally when an update is available.</p>
+            <pre>deciduous auto-update on     # Enable automatic checking
+deciduous auto-update off    # Disable automatic checking
+deciduous init --no-auto-update  # Opt out during initialization</pre>
+            <p>The check is rate-limited (once per 24h), has a 3-second timeout, and never blocks your workflow. The setting is stored as <code>auto_check</code> in <code>.deciduous/config.toml</code> under the <code>[updates]</code> section.</p>
 
             <h3><code>deciduous add &lt;TYPE&gt; &lt;TITLE&gt; [OPTIONS]</code></h3>
             <p>Add a node to the decision graph.</p>
@@ -646,6 +655,12 @@ main_branches = ["main", "master", "develop"]
 
 <span class="comment"># Auto-detect git branch when creating nodes</span>
 auto_detect = true
+
+[updates]
+<span class="comment"># Automatically check crates.io for new versions (once per 24h)</span>
+<span class="comment"># Your AI assistant will inform you when an update is available</span>
+<span class="comment"># Toggle with: deciduous auto-update on/off</span>
+auto_check = true
 
 [hooks]
 <span class="comment"># Require an active goal before committing</span>

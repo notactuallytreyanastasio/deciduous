@@ -107,7 +107,7 @@
 
             <h3><code>.deciduous/config.toml</code> &mdash; Configuration</h3>
 
-            <p>Controls branch detection, hook behavior, and other project-level settings. The defaults work for most projects. The main thing it configures is which branches count as "main" branches (for grouping and filtering decisions by branch).</p>
+            <p>Controls branch detection, hook behavior, automatic version checking, and other project-level settings. The defaults work for most projects. Automatic version checking is enabled by default &mdash; a hook checks crates.io once per 24 hours and your AI assistant will let you know when an update is available. You can opt out during init with <code>--no-auto-update</code> or toggle later with <code>deciduous auto-update off</code>.</p>
 
             <h3><code>.claude/commands/</code> &mdash; Slash Commands</h3>
 

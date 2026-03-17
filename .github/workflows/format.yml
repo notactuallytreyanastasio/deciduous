@@ -1,5 +1,4 @@
 name: Auto-format
-
 on:
   push:
     branches-ignore:
