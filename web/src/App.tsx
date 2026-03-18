@@ -238,7 +238,7 @@ function buildNarratives(
         },
         branches: [branch],
       };
-    }).sort((a, b) => b.nodeCount - a.nodeCount); // Sort by size for branches
+    }).sort((a, b) => b.dateRange.end.getTime() - a.dateRange.end.getTime()); // Sort by most recent activity
   }
 
   if (mode === 'hubs') {
@@ -298,7 +298,7 @@ function buildNarratives(
       });
     }
 
-    return narratives.sort((a, b) => b.nodeCount - a.nodeCount);
+    return narratives.sort((a, b) => b.dateRange.end.getTime() - a.dateRange.end.getTime());
   }
 
   // For 'significant' and 'goals' modes, start with all goals
@@ -310,12 +310,10 @@ function buildNarratives(
     goalTreeSizes.set(goal.id, calculateTreeSize(goal.id, outgoing));
   }
 
-  // Sort goals by tree size descending
-  goals.sort((a, b) => {
-    const sizeA = goalTreeSizes.get(a.id) || 0;
-    const sizeB = goalTreeSizes.get(b.id) || 0;
-    return sizeB - sizeA;
-  });
+  // Sort goals by most recently created descending
+  goals.sort((a, b) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
 
   // For 'significant' mode, only include goals with significant tree sizes
   const roots = mode === 'significant'
@@ -363,8 +361,8 @@ function buildNarratives(
     });
   }
 
-  // Sort by tree size (largest narratives first)
-  return narratives.sort((a, b) => b.nodeCount - a.nodeCount);
+  // Sort by most recent activity (newest first)
+  return narratives.sort((a, b) => b.dateRange.end.getTime() - a.dateRange.end.getTime());
 }
 
 // =============================================================================
