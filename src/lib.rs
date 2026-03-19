@@ -42,7 +42,6 @@ pub mod archaeology;
 pub mod changelog;
 pub mod config;
 pub mod db;
-pub mod diff;
 pub mod events;
 pub mod export;
 pub mod github;
@@ -61,9 +60,6 @@ pub use db::{
     Database, DbRecord, DbSummary, DecisionContext, DecisionEdge, DecisionGraph, DecisionNode,
     DecisionSession, DeleteSummary, GitHubIssueCache, NodeDocument, NodeTheme, RoadmapConflict,
     RoadmapItem, RoadmapSyncState, Theme, CURRENT_SCHEMA,
-};
-pub use diff::{
-    ApplyResult, GraphPatch, PatchDocument, PatchEdge, PatchNode, PatchNodeTheme, PatchTheme,
 };
 pub use events::{
     generate_edge_id, get_current_author, Checkpoint, CheckpointDocument, CheckpointEdge,

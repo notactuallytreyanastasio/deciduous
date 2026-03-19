@@ -467,70 +467,498 @@ fn test_invalid_node_type() {
 }
 
 // =============================================================================
-// Diff/Patch Tests
+// Node Delete Tests
 // =============================================================================
 
 #[test]
-fn test_diff_export_import() {
+fn test_delete_node() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
-    let patch_path = temp_dir.path().join("patch.json");
 
-    // Create some nodes
-    run_deciduous(&["add", "goal", "Patch Test Goal", "-c", "90"], &db_path);
-    run_deciduous(
-        &["add", "action", "Patch Test Action", "-c", "85"],
-        &db_path,
-    );
-    run_deciduous(&["link", "1", "2", "-r", "test link"], &db_path);
+    // Create a node
+    run_deciduous(&["add", "goal", "Delete Me", "-c", "90"], &db_path);
 
-    // Export patch
-    let output = run_deciduous(
-        &["diff", "export", "-o", patch_path.to_str().unwrap()],
-        &db_path,
-    );
+    // Verify it exists
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(stdout(&output).contains("Delete Me"));
+
+    // Delete it
+    let output = run_deciduous(&["delete", "1"], &db_path);
     assert!(
         output.status.success(),
-        "diff export failed: {}",
+        "delete failed: {}",
         stderr(&output)
     );
 
-    // Verify patch file exists and is valid JSON
-    let patch_content = std::fs::read_to_string(&patch_path).expect("Patch file should exist");
-    let patch: serde_json::Value =
-        serde_json::from_str(&patch_content).expect("Patch should be valid JSON");
-
-    assert!(patch.get("nodes").is_some());
-    assert!(patch.get("edges").is_some());
-    assert_eq!(patch["version"], "1.0");
+    // Verify it's gone
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(!stdout(&output).contains("Delete Me"));
 }
 
 #[test]
-fn test_diff_dry_run() {
+fn test_delete_node_cascades_edges() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
-    let patch_path = temp_dir.path().join("patch.json");
 
-    // Create and export from first db
-    run_deciduous(&["add", "goal", "Dry Run Test"], &db_path);
+    // Create two nodes and link them
+    run_deciduous(&["add", "goal", "Parent"], &db_path);
+    run_deciduous(&["add", "action", "Child"], &db_path);
+    run_deciduous(&["link", "1", "2", "-r", "parent-child"], &db_path);
+
+    // Verify edge exists
+    let output = run_deciduous(&["edges"], &db_path);
+    assert!(stdout(&output).contains("leads_to"));
+
+    // Delete parent node (edges are automatically cleaned up)
+    let output = run_deciduous(&["delete", "1"], &db_path);
+    assert!(
+        output.status.success(),
+        "delete failed: {}",
+        stderr(&output)
+    );
+
+    // Verify edge is gone too (deleting a node removes its edges)
+    let output = run_deciduous(&["edges"], &db_path);
+    let out = stdout(&output);
+    assert!(
+        !out.contains("parent-child"),
+        "Edge should be removed after node delete"
+    );
+}
+
+// =============================================================================
+// Unlink Tests
+// =============================================================================
+
+#[test]
+fn test_unlink_nodes() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create and link nodes
+    run_deciduous(&["add", "goal", "Goal"], &db_path);
+    run_deciduous(&["add", "action", "Action"], &db_path);
+    run_deciduous(&["link", "1", "2", "-r", "test link"], &db_path);
+
+    // Verify edge exists
+    let output = run_deciduous(&["edges"], &db_path);
+    assert!(stdout(&output).contains("1"));
+
+    // Unlink (requires FROM and TO)
+    let output = run_deciduous(&["unlink", "1", "2"], &db_path);
+    assert!(
+        output.status.success(),
+        "unlink failed: {}",
+        stderr(&output)
+    );
+}
+
+// =============================================================================
+// Show/Detail Tests
+// =============================================================================
+
+#[test]
+fn test_show_node_detail() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create node with metadata
     run_deciduous(
-        &["diff", "export", "-o", patch_path.to_str().unwrap()],
+        &[
+            "add",
+            "goal",
+            "Detailed Goal",
+            "-c",
+            "95",
+            "-p",
+            "User prompt here",
+        ],
         &db_path,
     );
 
-    // Create second db and try dry-run apply
-    let db_path2 = temp_dir.path().join("test2.db");
-    let output = run_deciduous(
-        &["diff", "apply", "--dry-run", patch_path.to_str().unwrap()],
-        &db_path2,
-    );
+    // Show detail
+    let output = run_deciduous(&["show", "1"], &db_path);
+    assert!(output.status.success(), "show failed: {}", stderr(&output));
+    let out = stdout(&output);
+    assert!(out.contains("Detailed Goal"));
+}
 
+#[test]
+fn test_show_node_json() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    run_deciduous(&["add", "goal", "JSON Goal", "-c", "90"], &db_path);
+
+    let output = run_deciduous(&["show", "1", "--json"], &db_path);
     assert!(
         output.status.success(),
-        "diff apply dry-run failed: {}",
+        "show --json failed: {}",
         stderr(&output)
     );
     let out = stdout(&output);
-    // Dry run should report what would be added
-    assert!(out.contains("added") || out.contains("would"));
+    let json: serde_json::Value =
+        serde_json::from_str(&out).expect("show --json should output valid JSON");
+    assert_eq!(json["title"], "JSON Goal");
+}
+
+// =============================================================================
+// Prompt Tests
+// =============================================================================
+
+#[test]
+fn test_update_prompt() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    run_deciduous(&["add", "goal", "Prompt Goal"], &db_path);
+
+    // Update prompt
+    let output = run_deciduous(&["prompt", "1", "Updated prompt text"], &db_path);
+    assert!(
+        output.status.success(),
+        "prompt update failed: {}",
+        stderr(&output)
+    );
+
+    // Verify via show
+    let output = run_deciduous(&["show", "1", "--json"], &db_path);
+    let out = stdout(&output);
+    assert!(out.contains("Updated prompt text"));
+}
+
+// =============================================================================
+// Status Transitions Tests
+// =============================================================================
+
+#[test]
+fn test_all_status_values() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    run_deciduous(&["add", "goal", "Status Test"], &db_path);
+
+    let statuses = ["active", "completed", "superseded", "abandoned", "rejected"];
+    for status in &statuses {
+        let output = run_deciduous(&["status", "1", status], &db_path);
+        assert!(
+            output.status.success(),
+            "status {} failed: {}",
+            status,
+            stderr(&output)
+        );
+    }
+}
+
+// =============================================================================
+// Graph Traversal Tests
+// =============================================================================
+
+#[test]
+fn test_complex_graph_structure() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Build a proper decision tree:
+    // goal -> option1, option2
+    // option1 -> decision
+    // decision -> action
+    // action -> outcome
+    run_deciduous(&["add", "goal", "Root Goal", "-c", "90"], &db_path);
+    run_deciduous(&["add", "option", "Option A", "-c", "80"], &db_path);
+    run_deciduous(&["add", "option", "Option B", "-c", "75"], &db_path);
+    run_deciduous(&["add", "decision", "Choose A", "-c", "95"], &db_path);
+    run_deciduous(&["add", "action", "Implement A", "-c", "85"], &db_path);
+    run_deciduous(&["add", "outcome", "A works", "-c", "90"], &db_path);
+    run_deciduous(&["add", "observation", "Noticed X", "-c", "70"], &db_path);
+
+    // Link the full chain
+    run_deciduous(&["link", "1", "2", "-r", "possible approach"], &db_path);
+    run_deciduous(&["link", "1", "3", "-r", "possible approach"], &db_path);
+    run_deciduous(
+        &["link", "2", "4", "-t", "chosen", "-r", "better fit"],
+        &db_path,
+    );
+    run_deciduous(
+        &["link", "3", "4", "-t", "rejected", "-r", "too complex"],
+        &db_path,
+    );
+    run_deciduous(&["link", "4", "5", "-r", "implementation"], &db_path);
+    run_deciduous(&["link", "5", "6", "-r", "result"], &db_path);
+    run_deciduous(&["link", "7", "1", "-r", "context"], &db_path);
+
+    // Verify full graph
+    let output = run_deciduous(&["graph"], &db_path);
+    assert!(output.status.success());
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&output)).expect("Graph should be valid JSON");
+    assert_eq!(json["nodes"].as_array().unwrap().len(), 7);
+    assert_eq!(json["edges"].as_array().unwrap().len(), 7);
+
+    // Verify DOT export includes all nodes
+    let output = run_deciduous(&["dot"], &db_path);
+    assert!(output.status.success());
+    let dot = stdout(&output);
+    assert!(dot.contains("Root Goal"));
+    assert!(dot.contains("Option A"));
+    assert!(dot.contains("Choose A"));
+    assert!(dot.contains("Implement A"));
+    assert!(dot.contains("A works"));
+    assert!(dot.contains("Noticed X"));
+}
+
+#[test]
+fn test_dot_with_root_filter() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create two separate chains
+    run_deciduous(&["add", "goal", "Chain 1 Root"], &db_path);
+    run_deciduous(&["add", "action", "Chain 1 Action"], &db_path);
+    run_deciduous(&["link", "1", "2"], &db_path);
+
+    run_deciduous(&["add", "goal", "Chain 2 Root"], &db_path);
+    run_deciduous(&["add", "action", "Chain 2 Action"], &db_path);
+    run_deciduous(&["link", "3", "4"], &db_path);
+
+    // Filter DOT to only chain 1
+    let output = run_deciduous(&["dot", "-r", "1"], &db_path);
+    assert!(output.status.success());
+    let dot = stdout(&output);
+    assert!(dot.contains("Chain 1 Root"));
+    assert!(dot.contains("Chain 1 Action"));
+    assert!(!dot.contains("Chain 2 Root"));
+}
+
+#[test]
+fn test_dot_with_node_range() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    run_deciduous(&["add", "goal", "Node 1"], &db_path);
+    run_deciduous(&["add", "action", "Node 2"], &db_path);
+    run_deciduous(&["add", "outcome", "Node 3"], &db_path);
+
+    // Filter to nodes 1-2 only
+    let output = run_deciduous(&["dot", "-n", "1-2"], &db_path);
+    assert!(output.status.success());
+    let dot = stdout(&output);
+    assert!(dot.contains("Node 1"));
+    assert!(dot.contains("Node 2"));
+    assert!(!dot.contains("Node 3"));
+}
+
+// =============================================================================
+// Backup Tests
+// =============================================================================
+
+#[test]
+fn test_backup() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create some data
+    run_deciduous(&["add", "goal", "Backup Test"], &db_path);
+
+    // Run backup
+    let output = run_deciduous(&["backup"], &db_path);
+    assert!(
+        output.status.success(),
+        "backup failed: {}",
+        stderr(&output)
+    );
+}
+
+// =============================================================================
+// Empty Database Edge Cases
+// =============================================================================
+
+#[test]
+fn test_empty_db_nodes() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // List nodes on empty database
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(
+        output.status.success(),
+        "nodes on empty db failed: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn test_empty_db_edges() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let output = run_deciduous(&["edges"], &db_path);
+    assert!(
+        output.status.success(),
+        "edges on empty db failed: {}",
+        stderr(&output)
+    );
+}
+
+#[test]
+fn test_empty_db_graph() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let output = run_deciduous(&["graph"], &db_path);
+    assert!(
+        output.status.success(),
+        "graph on empty db failed: {}",
+        stderr(&output)
+    );
+    let json: serde_json::Value =
+        serde_json::from_str(&stdout(&output)).expect("Empty graph should be valid JSON");
+    assert_eq!(json["nodes"].as_array().unwrap().len(), 0);
+    assert_eq!(json["edges"].as_array().unwrap().len(), 0);
+}
+
+// =============================================================================
+// Branch Filter Tests
+// =============================================================================
+
+#[test]
+fn test_filter_nodes_by_branch() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create nodes on different branches
+    run_deciduous(&["add", "goal", "Main Goal", "-b", "main"], &db_path);
+    run_deciduous(
+        &["add", "goal", "Feature Goal", "-b", "feature-x"],
+        &db_path,
+    );
+
+    // Filter by branch
+    let output = run_deciduous(&["nodes", "-b", "main"], &db_path);
+    assert!(output.status.success());
+    let out = stdout(&output);
+    assert!(out.contains("Main Goal"));
+    assert!(!out.contains("Feature Goal"));
+}
+
+// =============================================================================
+// Writeup Tests
+// =============================================================================
+
+#[test]
+fn test_writeup_basic() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    run_deciduous(&["add", "goal", "PR Goal", "-c", "90"], &db_path);
+    run_deciduous(&["add", "action", "PR Action", "-c", "85"], &db_path);
+    run_deciduous(&["link", "1", "2", "-r", "implementation"], &db_path);
+
+    let output = run_deciduous(&["writeup", "-t", "Test PR", "-n", "1-2"], &db_path);
+    assert!(
+        output.status.success(),
+        "writeup failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("Test PR"));
+}
+
+// =============================================================================
+// Multiple Edge Types Tests
+// =============================================================================
+
+#[test]
+fn test_all_edge_types() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create nodes
+    for i in 0..6 {
+        run_deciduous(&["add", "goal", &format!("Node {}", i)], &db_path);
+    }
+
+    let edge_types = [
+        "leads_to", "chosen", "rejected", "blocks", "enables", "requires",
+    ];
+    for (i, edge_type) in edge_types.iter().enumerate() {
+        let from = format!("{}", i + 1);
+        let to = format!("{}", ((i + 1) % 6) + 1);
+        let output = run_deciduous(
+            &[
+                "link",
+                &from,
+                &to,
+                "-t",
+                edge_type,
+                "-r",
+                &format!("test {}", edge_type),
+            ],
+            &db_path,
+        );
+        assert!(
+            output.status.success(),
+            "link with type {} failed: {}",
+            edge_type,
+            stderr(&output)
+        );
+    }
+
+    // Verify all edges created
+    let output = run_deciduous(&["edges"], &db_path);
+    let out = stdout(&output);
+    for edge_type in &edge_types {
+        assert!(out.contains(edge_type), "Missing edge type: {}", edge_type);
+    }
+}
+
+// =============================================================================
+// Revisit Node Tests
+// =============================================================================
+
+#[test]
+fn test_revisit_node_type() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let output = run_deciduous(
+        &["add", "revisit", "Reconsider approach", "-c", "80"],
+        &db_path,
+    );
+    assert!(
+        output.status.success(),
+        "add revisit failed: {}",
+        stderr(&output)
+    );
+    assert!(stdout(&output).contains("Created node"));
+
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(stdout(&output).contains("revisit"));
+}
+
+// =============================================================================
+// Supersede Tests
+// =============================================================================
+
+#[test]
+fn test_supersede_node() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create original decision and its replacement
+    run_deciduous(&["add", "decision", "Old Approach"], &db_path);
+    run_deciduous(&["add", "decision", "New Approach"], &db_path);
+
+    // Supersede old with new
+    let output = run_deciduous(&["status", "1", "superseded"], &db_path);
+    assert!(
+        output.status.success(),
+        "supersede failed: {}",
+        stderr(&output)
+    );
+
+    // Verify status changed
+    let output = run_deciduous(&["show", "1", "--json"], &db_path);
+    let out = stdout(&output);
+    assert!(out.contains("superseded"));
 }
