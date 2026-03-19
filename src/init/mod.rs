@@ -445,6 +445,29 @@ pub fn update_tooling() -> Result<(), String> {
     }
     println!();
 
+    // Prompt user to commit the updated configuration files
+    let version = env!("CARGO_PKG_VERSION");
+    println!(
+        "{}",
+        "Commit the updated files to lock in the new configuration:".yellow()
+    );
+    if has_claude {
+        println!(
+            "  git add .claude/commands/ .claude/hooks/ .claude/skills/ .claude/settings.json .claude/agents.toml CLAUDE.md"
+        );
+    }
+    if has_opencode {
+        println!("  git add .opencode/ AGENTS.md");
+    }
+    if has_windsurf {
+        println!("  git add .windsurf/");
+    }
+    println!(
+        "  git commit -m \"chore: update deciduous tooling to v{}\"",
+        version
+    );
+    println!();
+
     Ok(())
 }
 
