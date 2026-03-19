@@ -564,17 +564,21 @@ fn test_show_node_detail() {
 
     // Create node with metadata
     run_deciduous(
-        &["add", "goal", "Detailed Goal", "-c", "95", "-p", "User prompt here"],
+        &[
+            "add",
+            "goal",
+            "Detailed Goal",
+            "-c",
+            "95",
+            "-p",
+            "User prompt here",
+        ],
         &db_path,
     );
 
     // Show detail
     let output = run_deciduous(&["show", "1"], &db_path);
-    assert!(
-        output.status.success(),
-        "show failed: {}",
-        stderr(&output)
-    );
+    assert!(output.status.success(), "show failed: {}", stderr(&output));
     let out = stdout(&output);
     assert!(out.contains("Detailed Goal"));
 }
@@ -671,8 +675,14 @@ fn test_complex_graph_structure() {
     // Link the full chain
     run_deciduous(&["link", "1", "2", "-r", "possible approach"], &db_path);
     run_deciduous(&["link", "1", "3", "-r", "possible approach"], &db_path);
-    run_deciduous(&["link", "2", "4", "-t", "chosen", "-r", "better fit"], &db_path);
-    run_deciduous(&["link", "3", "4", "-t", "rejected", "-r", "too complex"], &db_path);
+    run_deciduous(
+        &["link", "2", "4", "-t", "chosen", "-r", "better fit"],
+        &db_path,
+    );
+    run_deciduous(
+        &["link", "3", "4", "-t", "rejected", "-r", "too complex"],
+        &db_path,
+    );
     run_deciduous(&["link", "4", "5", "-r", "implementation"], &db_path);
     run_deciduous(&["link", "5", "6", "-r", "result"], &db_path);
     run_deciduous(&["link", "7", "1", "-r", "context"], &db_path);
@@ -817,10 +827,7 @@ fn test_filter_nodes_by_branch() {
     let db_path = temp_dir.path().join("test.db");
 
     // Create nodes on different branches
-    run_deciduous(
-        &["add", "goal", "Main Goal", "-b", "main"],
-        &db_path,
-    );
+    run_deciduous(&["add", "goal", "Main Goal", "-b", "main"], &db_path);
     run_deciduous(
         &["add", "goal", "Feature Goal", "-b", "feature-x"],
         &db_path,
@@ -847,10 +854,7 @@ fn test_writeup_basic() {
     run_deciduous(&["add", "action", "PR Action", "-c", "85"], &db_path);
     run_deciduous(&["link", "1", "2", "-r", "implementation"], &db_path);
 
-    let output = run_deciduous(
-        &["writeup", "-t", "Test PR", "-n", "1-2"],
-        &db_path,
-    );
+    let output = run_deciduous(&["writeup", "-t", "Test PR", "-n", "1-2"], &db_path);
     assert!(
         output.status.success(),
         "writeup failed: {}",
@@ -871,18 +875,25 @@ fn test_all_edge_types() {
 
     // Create nodes
     for i in 0..6 {
-        run_deciduous(
-            &["add", "goal", &format!("Node {}", i)],
-            &db_path,
-        );
+        run_deciduous(&["add", "goal", &format!("Node {}", i)], &db_path);
     }
 
-    let edge_types = ["leads_to", "chosen", "rejected", "blocks", "enables", "requires"];
+    let edge_types = [
+        "leads_to", "chosen", "rejected", "blocks", "enables", "requires",
+    ];
     for (i, edge_type) in edge_types.iter().enumerate() {
         let from = format!("{}", i + 1);
         let to = format!("{}", ((i + 1) % 6) + 1);
         let output = run_deciduous(
-            &["link", &from, &to, "-t", edge_type, "-r", &format!("test {}", edge_type)],
+            &[
+                "link",
+                &from,
+                &to,
+                "-t",
+                edge_type,
+                "-r",
+                &format!("test {}", edge_type),
+            ],
             &db_path,
         );
         assert!(

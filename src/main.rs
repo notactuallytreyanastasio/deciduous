@@ -314,7 +314,6 @@ enum Command {
         no_test_plan: bool,
     },
 
-
     /// Migrate database to add change_id columns (for multi-user sync)
     Migrate,
 
@@ -423,7 +422,6 @@ enum Command {
         shell: clap_complete::Shell,
     },
 }
-
 
 #[derive(Subcommand, Debug)]
 enum EventsAction {
