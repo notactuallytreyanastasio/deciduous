@@ -1985,10 +1985,11 @@ exit 2
 "#;
 
 /// PostToolUse hook script - reminds to link commits after git commit
+/// Advisory only (exit 0) — does not block or error
 pub const HOOK_POST_COMMIT_REMINDER: &str = r#"#!/bin/bash
 # post-commit-reminder.sh
-# Runs after git commit to remind Claude to link the commit to deciduous
-# Uses exit code 2 to ensure Claude sees the message and acts on it
+# Runs after git commit to nudge Claude to link the commit to deciduous.
+# Advisory only (exit 0) — does not block or error.
 
 # Check if deciduous is initialized
 if [ ! -d ".deciduous" ]; then
@@ -2008,24 +2009,10 @@ fi
 commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
 commit_msg=$(git log -1 --format=%s 2>/dev/null)
 
-# Output reminder to stderr (exit 2 ensures Claude sees and processes this)
-cat >&2 << EOF
-+===================================================================+
-|  DECIDUOUS: Link this commit to the decision graph!               |
-+===================================================================+
-|  Commit: $commit_hash "$commit_msg"
-|                                                                   |
-|  Run NOW:                                                         |
-|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
-|                                                                   |
-|  Or if this was an action (not outcome):                          |
-|    deciduous add action "What was done" -c 90 --commit HEAD       |
-+===================================================================+
-EOF
+# Soft reminder on stdout — exit 0 so it's advisory, not blocking
+echo "deciduous: commit $commit_hash — remember to link with --commit HEAD"
 
-# Exit 2 to ensure Claude processes this as important feedback
-exit 2
+exit 0
 "#;
 
 /// PreToolUse hook script - checks for new deciduous versions (always-on, rate-limited)
@@ -2477,11 +2464,12 @@ exit 2
 "#;
 
 /// Windsurf post_run_command hook - reminds to link commits
+/// Advisory only (exit 0) — does not block or error
 pub const WINDSURF_HOOK_POST_COMMIT_REMINDER: &str = r#"#!/bin/bash
 # post-commit-reminder.sh
-# Runs after git commit to remind Cascade to link the commit to deciduous
+# Runs after git commit to nudge Cascade to link the commit to deciduous.
 # Works with: Windsurf (Cascade)
-# Uses exit code 2 to ensure Cascade sees the message and acts on it
+# Advisory only (exit 0) — does not block or error.
 
 # Check if deciduous is initialized
 if [ ! -d ".deciduous" ]; then
@@ -2508,23 +2496,10 @@ fi
 commit_hash=$(git rev-parse --short HEAD 2>/dev/null)
 commit_msg=$(git log -1 --format=%s 2>/dev/null)
 
-# Output reminder (exit 2 ensures Cascade processes this)
-cat >&2 << EOF
-+===================================================================+
-|  DECIDUOUS: Link this commit to the decision graph!               |
-+===================================================================+
-|  Commit: $commit_hash "$commit_msg"
-|                                                                   |
-|  Run NOW:                                                         |
-|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
-|                                                                   |
-|  Or if this was an action (not outcome):                          |
-|    deciduous add action "What was done" -c 90 --commit HEAD       |
-+===================================================================+
-EOF
+# Soft reminder on stdout — exit 0 so it's advisory, not blocking
+echo "deciduous: commit $commit_hash — remember to link with --commit HEAD"
 
-exit 2
+exit 0
 "#;
 
 /// Windsurf rules file - always-on deciduous workflow

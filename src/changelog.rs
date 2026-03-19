@@ -12,6 +12,13 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.14",
+        highlights: &[
+            "Post-commit hook is now advisory (exit 0) instead of blocking (exit 2)",
+            "Run `deciduous update` to apply the fix to existing projects",
+        ],
+    },
+    Release {
         version: "0.13.13",
         highlights: &[
             "Web viewer sorts narratives by most recent activity instead of tree size",
