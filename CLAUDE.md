@@ -190,6 +190,29 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
+### What NOT to Log - CRITICAL
+
+**The decision graph records the USER'S project decisions, not your internal process.**
+
+Nodes should capture what the user is building, choosing, and accomplishing. Do NOT create nodes for your own thinking, planning, or tooling steps.
+
+**DO NOT create nodes for:**
+- Reading/exploring the codebase ("Analyzing project structure", "Reading config files")
+- Your planning process ("Planning implementation approach", "Evaluating options internally")
+- Tool usage ("Running tests to check status", "Checking git log")
+- Context gathering ("Understanding existing auth code", "Reviewing PR comments")
+- Meta-commentary ("Starting work on this task", "Preparing to implement")
+
+**DO create nodes for:**
+- What the user asked for (goals)
+- Concrete approaches being considered (options)
+- Choices made between approaches (decisions)
+- Code being written or changed (actions)
+- Results of implementation (outcomes)
+- Technical findings that affect decisions (observations)
+
+**Rule of thumb:** If a node describes something the user would put on a project timeline or in a PR description, log it. If it describes your internal process of reading and thinking, don't.
+
 ### Document Attachments
 
 Attach files (images, PDFs, diagrams, specs, screenshots) to decision graph nodes for rich context.

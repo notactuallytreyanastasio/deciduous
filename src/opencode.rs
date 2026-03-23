@@ -3035,6 +3035,24 @@ AUDIT regularly -> Check for missing connections
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
 
+### What NOT to Log - CRITICAL
+
+**The decision graph records the USER'S project decisions, not your internal process.**
+
+Do NOT create nodes for your own thinking, planning, reading, or tooling steps. Only log things the user would recognize as project milestones or decisions.
+
+**Skip these (meta/process noise):**
+- "Reading codebase to understand structure"
+- "Planning implementation approach"
+- "Running tests to check status"
+- "Analyzing existing code"
+
+**Log these (user-visible project work):**
+- "Add user authentication" (goal)
+- "Use JWT tokens" (option)
+- "Implemented JWT middleware" (action)
+- "JWT auth working, all tests pass" (outcome)
+
 ### Document Attachments
 
 Attach files (images, PDFs, diagrams, specs, screenshots) to decision graph nodes for rich context.
@@ -3182,6 +3200,10 @@ BEFORE you do something -> Log what you're ABOUT to do
 AFTER it succeeds/fails -> Log the outcome
 CONNECT immediately -> Link every node to its parent
 ```
+
+### What NOT to Log
+
+**The decision graph records the USER'S project decisions, not your internal process.** Do NOT create nodes for reading code, planning your approach, running tests to check status, or exploring the codebase. Only log things the user would recognize as project milestones or decisions.
 
 ### Quick Commands
 

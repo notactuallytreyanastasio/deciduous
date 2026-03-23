@@ -156,6 +156,24 @@ argument-hint: <action> [args...]
 | Finished something | `outcome` | `/decision add outcome "JWT working"` |
 | Reconsidering a past decision | `revisit` | `/decision add revisit "Reconsidering auth"` |
 
+## What NOT to Log - CRITICAL
+
+**The decision graph records the USER'S project decisions, not your internal process.**
+
+Do NOT create nodes for your own thinking, planning, reading, or tooling steps. Only log things the user would recognize as project milestones or decisions.
+
+**Skip these (meta/process noise):**
+- "Reading codebase to understand structure"
+- "Planning implementation approach"
+- "Running tests to check status"
+- "Analyzing existing code"
+
+**Log these (user-visible project work):**
+- "Add user authentication" (goal)
+- "Use JWT tokens" (option)
+- "Implemented JWT middleware" (action)
+- "JWT auth working, all tests pass" (outcome)
+
 ## Quick Commands
 
 Based on $ARGUMENTS:
@@ -708,6 +726,29 @@ AUDIT regularly -> Check for missing connections
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
+
+### What NOT to Log - CRITICAL
+
+**The decision graph records the USER'S project decisions, not your internal process.**
+
+Nodes should capture what the user is building, choosing, and accomplishing. Do NOT create nodes for your own thinking, planning, or tooling steps.
+
+**DO NOT create nodes for:**
+- Reading/exploring the codebase ("Analyzing project structure", "Reading config files")
+- Your planning process ("Planning implementation approach", "Evaluating options internally")
+- Tool usage ("Running tests to check status", "Checking git log")
+- Context gathering ("Understanding existing auth code", "Reviewing PR comments")
+- Meta-commentary ("Starting work on this task", "Preparing to implement")
+
+**DO create nodes for:**
+- What the user asked for (goals)
+- Concrete approaches being considered (options)
+- Choices made between approaches (decisions)
+- Code being written or changed (actions)
+- Results of implementation (outcomes)
+- Technical findings that affect decisions (observations)
+
+**Rule of thumb:** If a node describes something the user would put on a project timeline or in a PR description, log it. If it describes your internal process of reading and thinking, don't.
 
 ### Document Attachments
 
@@ -1888,6 +1929,14 @@ Attach supporting documents (optional)
 deciduous sync
 ```
 
+## What NOT to Log
+
+**Only create nodes for user-visible project work, not your internal process.**
+
+Do NOT create action nodes for reading code, running tests to check status, exploring the codebase, or planning your approach. These are your process, not the user's project decisions.
+
+Action nodes should describe code being written or changed. Outcome nodes should describe results the user cares about. If the user wouldn't put it in a PR description, don't log it.
+
 ## Why This Matters
 
 - **Hooks will block you** if no recent action/goal exists
@@ -2530,6 +2579,10 @@ AUDIT regularly -> Check for missing connections
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
 | Notice something interesting | `observation` | "Existing code uses hooks" |
+
+## What NOT to Log
+
+**The decision graph records the USER'S project decisions, not your internal process.** Do NOT create nodes for reading code, planning your approach, running tests to check status, or exploring the codebase. Only log things the user would recognize as project milestones or decisions.
 
 ## CRITICAL: Capture VERBATIM User Prompts
 
