@@ -281,7 +281,7 @@ dependencies = [
 
 [[package]]
 name = "deciduous"
-version = "0.13.14"
+version = "0.13.15"
 dependencies = [
  "chrono",
  "clap",

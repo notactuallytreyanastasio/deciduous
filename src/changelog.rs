@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.13.15",
+        highlights: &[
+            "Templates now include 'What NOT to Log' guidance to reduce meta-process noise",
+            "Decision graph nodes should capture user project decisions, not AI internal process",
+            "Run `deciduous update` to apply to existing projects",
+        ],
+    },
+    Release {
         version: "0.13.14",
         highlights: &[
             "Post-commit hook is now advisory (exit 0) instead of blocking (exit 2)",
