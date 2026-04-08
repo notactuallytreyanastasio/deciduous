@@ -776,6 +776,22 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
           </h2>
           <CopyButton text={node.title} label="title" />
         </div>
+        {node.node_type === 'observation' && node.description && (
+          <div style={{
+            marginTop: '8px',
+            padding: '10px 12px',
+            backgroundColor: THEME.bgLight,
+            borderLeft: `3px solid ${THEME.observation}`,
+            borderRadius: '4px',
+            color: THEME.text,
+            fontSize: '14px',
+            lineHeight: 1.5,
+            whiteSpace: 'pre-wrap',
+          }}>
+            {node.description}
+            <CopyButton text={node.description} label="description" />
+          </div>
+        )}
       </div>
 
       {/* Metadata Grid */}
@@ -978,8 +994,8 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
         );
       })()}
 
-      {/* Description */}
-      {node.description && (
+      {/* Description (skip for observations — shown in header) */}
+      {node.description && node.node_type !== 'observation' && (
         <div style={{ marginBottom: '20px' }}>
           <div style={{
             display: 'flex',

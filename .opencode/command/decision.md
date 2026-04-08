@@ -18,7 +18,7 @@ arguments:
 | Choosing between approaches | `decision` | `/decision add decision "Choose auth method"` |
 | Considering an option | `option` | `/decision add option "JWT tokens"` |
 | About to write code | `action` | `/decision add action "Implementing JWT"` |
-| Noticing something | `observation` | `/decision add obs "Found existing auth code"` |
+| Noticing something | `observation` **with -d** | `/decision add obs "Found existing auth code" -d "The legacy auth system uses cookie-based sessions with express-session, not JWT"` |
 | Finished something | `outcome` | `/decision add outcome "JWT working"` |
 | Reconsidering a past decision | `revisit` | `/decision add revisit "Reconsidering auth"` |
 
@@ -37,12 +37,14 @@ Based on $ACTION:
 - `add decision <title>` -> `deciduous add decision "<title>" -c 75`
 - `add option <title>` -> `deciduous add option "<title>" -c 70`
 - `add action <title>` -> `deciduous add action "<title>" -c 85`
-- `add obs <title>` -> `deciduous add observation "<title>" -c 80`
+- `add obs <title> -d <description>` -> `deciduous add observation "<title>" -c 80 -d "<description>"`
+  - **Observations MUST have both a title (short summary) and description (full detail)**
 - `add outcome <title>` -> `deciduous add outcome "<title>" -c 90`
 - `add revisit <title>` -> `deciduous add revisit "<title>" -c 75`
 
 ### Optional Flags for Nodes
 - `-c, --confidence <0-100>` - Confidence level
+- `-d, --description "..."` - Description (**REQUIRED for observations** - the detail behind the title)
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
 - `-f, --files "file1.rs,file2.rs"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
@@ -175,7 +177,7 @@ deciduous add goal "Universal note" --no-branch  # No branch tag
 | `option` | Possible approach | "Use JWT tokens" |
 | `action` | Something implemented | "Added JWT middleware" |
 | `outcome` | Result of action | "JWT auth working" |
-| `observation` | Finding or data point | "Existing code uses sessions" |
+| `observation` | Finding or data point (title + description) | Title: "Existing code uses sessions", -d: "The legacy auth uses express-session with cookie store, not token-based" |
 | `revisit` | Pivot point / reconsideration | "Reconsidering auth approach" |
 
 ## Edge Types

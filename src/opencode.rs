@@ -558,12 +558,14 @@ Based on $ACTION:
 - `add decision <title>` -> `deciduous add decision "<title>" -c 75`
 - `add option <title>` -> `deciduous add option "<title>" -c 70`
 - `add action <title>` -> `deciduous add action "<title>" -c 85`
-- `add obs <title>` -> `deciduous add observation "<title>" -c 80`
+- `add obs <title> -d <description>` -> `deciduous add observation "<title>" -c 80 -d "<description>"`
+  - **Observations MUST have both a title (short summary) and description (full detail)**
 - `add outcome <title>` -> `deciduous add outcome "<title>" -c 90`
 - `add revisit <title>` -> `deciduous add revisit "<title>" -c 75`
 
 ### Optional Flags for Nodes
 - `-c, --confidence <0-100>` - Confidence level
+- `-d, --description "..."` - Description (**REQUIRED for observations** - the detail behind the title)
 - `-p, --prompt "..."` - Store the user prompt that triggered this node
 - `-f, --files "file1.rs,file2.rs"` - Associate files with this node
 - `-b, --branch <name>` - Git branch (auto-detected by default)
@@ -707,7 +709,7 @@ The graph viewer shows a branch dropdown in the stats bar:
 | `option` | Possible approach | "Use JWT tokens" |
 | `action` | Something implemented | "Added JWT middleware" |
 | `outcome` | Result of action | "JWT auth working" |
-| `observation` | Finding or data point | "Existing code uses sessions" |
+| `observation` | Finding or data point (title + description) | Title: "Existing code uses sessions", -d: "The legacy auth uses express-session with cookie store, not token-based" |
 | `revisit` | Pivot point / reconsideration | "Reconsidering auth approach" |
 
 ## Edge Types
@@ -1139,7 +1141,7 @@ If tests are too synthetic (meaningless variable names, unrealistic values):
 4. Create observation node:
 
 ```bash
-deciduous add observation "Refined tests for <component> - made more real-world" -c 85
+deciduous add observation "Refined tests for <component>" -c 85 -d "Made tests more real-world: descriptive variable names, realistic values, scenario comments added"
 deciduous link <action_id> <observation_id> -r "Test improvements during documentation"
 ```
 
@@ -1572,7 +1574,7 @@ After consolidating, build the graph - one decision chain per narrative, with cr
 deciduous add goal "Title of the goal"
 deciduous add decision "The question or choice point"
 deciduous add option "One possible approach"
-deciduous add observation "Something learned or discovered"
+deciduous add observation "Short summary" -d "Detailed description of what was learned and why it matters"
 deciduous add action "Descriptive title of what was done"
 deciduous add outcome "What resulted from the action"
 deciduous add revisit "Reconsidering previous approach"
@@ -1694,7 +1696,7 @@ For post-hoc abandonment (tried something, it failed later):
 When a design approach is abandoned and replaced:
 
 ```bash
-deciduous add observation "JWT too large for mobile"
+deciduous add observation "JWT too large for mobile" -d "Mobile clients hit payload size limits with full JWT claims. Token refresh adds 2-3s on slow connections."
 deciduous add revisit "Reconsidering token strategy"
 deciduous link <observation> <revisit> -r "forced rethinking"
 deciduous status <old_decision> superseded
@@ -2377,7 +2379,7 @@ deciduous add option "Approach" -c 70
 deciduous add decision "Choice" -c 85
 deciduous add action "Implementation" -c 85 -f "file1.rs,file2.rs"
 deciduous add outcome "Result" -c 95 --commit HEAD
-deciduous add observation "Finding" -c 80
+deciduous add observation "Finding title" -c 80 -d "Detailed description of the finding and why it matters"
 deciduous add revisit "Reconsidering" -c 75
 
 # Connect nodes (ALWAYS do this immediately)

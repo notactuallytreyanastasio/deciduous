@@ -97,7 +97,7 @@ The revisit captures:
 - Connects old approach to new
 
 ```bash
-deciduous add observation "JWT too large for mobile"
+deciduous add observation "JWT too large for mobile" -d "Mobile clients hit payload size limits with full JWT claims. Token refresh adds 2-3s on slow connections."
 deciduous add revisit "Reconsidering token strategy"
 deciduous link <observation> <revisit> -r "forced rethinking"
 deciduous status <old_decision> superseded
@@ -188,7 +188,7 @@ AUDIT regularly -> Check for missing connections
 | Choosing between approaches | `decision` | "Choose state management" |
 | About to write/edit code | `action` | "Implementing Redux store" |
 | Something worked or failed | `outcome` | "Redux integration successful" |
-| Notice something interesting | `observation` | "Existing code uses hooks" |
+| Notice something interesting | `observation` **with -d** | Title: "Existing code uses hooks" + Description via -d |
 
 ### What NOT to Log - CRITICAL
 
@@ -209,7 +209,7 @@ Nodes should capture what the user is building, choosing, and accomplishing. Do 
 - Choices made between approaches (decisions)
 - Code being written or changed (actions)
 - Results of implementation (outcomes)
-- Technical findings that affect decisions (observations)
+- Technical findings that affect decisions (observations - always with title + description)
 
 **Rule of thumb:** If a node describes something the user would put on a project timeline or in a PR description, log it. If it describes your internal process of reading and thinking, don't.
 
@@ -305,12 +305,14 @@ Prompts are viewable in the web viewer.
 ```bash
 deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
+deciduous add observation "Short title" -c 80 -d "Detailed description of what was observed and why it matters"
 deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
 deciduous sync    # Export for static hosting
 
 # Metadata flags
 # -c, --confidence 0-100   Confidence level
+# -d, --description "..."  Description (REQUIRED for observations - the detail behind the title)
 # -p, --prompt "..."       Store the user prompt (use when semantically meaningful)
 # -f, --files "a.rs,b.rs"  Associate files
 # -b, --branch <name>      Git branch (auto-detected)

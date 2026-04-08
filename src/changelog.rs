@@ -12,6 +12,17 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.14.0",
+        highlights: &[
+            "Observations now require both a title and description (-d flag)",
+            "CLI warns when creating observations without a description",
+            "Observation descriptions shown inline in `deciduous nodes` listing",
+            "Web viewer detail panel shows observation description prominently below title",
+            "All templates and instructions updated for observation title+description convention",
+            "Run `deciduous update` to apply to existing projects",
+        ],
+    },
+    Release {
         version: "0.13.15",
         highlights: &[
             "Templates now include 'What NOT to Log' guidance to reduce meta-process noise",

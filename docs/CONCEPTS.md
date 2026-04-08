@@ -48,7 +48,7 @@ Think of it as a DAG (Directed Acyclic Graph) where:
 | **option** | One possible choice | "Use Redis" or "Use JWT" |
 | **action** | Work is being done | "Implementing session middleware" |
 | **outcome** | Work is complete | "Sessions working in dev" |
-| **observation** | Something was noticed | "Redis adds infrastructure cost" |
+| **observation** | Something was noticed (title + description) | "Redis adds infrastructure cost" + -d "Running Redis requires a managed instance or self-hosted server, adding $50/mo minimum and ops burden" |
 | **revisit** | Reconsidering past work | "Rethinking session approach" |
 
 ### Edge Types
@@ -340,7 +340,7 @@ EOF
 When you notice something that might matter later:
 
 ```bash
-deciduous add observation "Redis requires additional infrastructure" -c 70
+deciduous add observation "Redis requires additional infrastructure" -c 70 -d "Running Redis requires a managed instance or self-hosted server. Adds operational complexity and ~$50/mo minimum cost."
 deciduous link <action> <observation> -r "Discovered during implementation"
 ```
 

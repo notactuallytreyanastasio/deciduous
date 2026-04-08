@@ -60,7 +60,7 @@ Maintain `narratives.md` as you explore:
 | **goal** | High-level objective being pursued |
 | **decision** | A choice point with multiple possible paths |
 | **option** | A possible approach to a decision |
-| **observation** | Learning, insight, or new information discovered |
+| **observation** | Learning, insight, or new information (title + description via -d) |
 | **action** | Something that was done (must reference a commit) |
 | **outcome** | Result or consequence of an action |
 | **revisit** | Pivot point where a previous approach is reconsidered |
@@ -72,7 +72,7 @@ Maintain `narratives.md` as you explore:
 deciduous add goal "Title of the goal"
 deciduous add decision "The question or choice point"
 deciduous add option "One possible approach"
-deciduous add observation "Something learned or discovered"
+deciduous add observation "Short summary" -d "Detailed description of what was learned and why it matters"
 deciduous add action "Descriptive title of what was done"
 deciduous add outcome "What resulted from the action"
 deciduous add revisit "Reconsidering previous approach"
@@ -113,7 +113,7 @@ Options under a decision are alternatives considered _at the same time_. If an a
 When a design approach is abandoned and replaced:
 
 ```bash
-deciduous add observation "JWT too large for mobile"
+deciduous add observation "JWT too large for mobile" -d "Mobile clients hit payload size limits with full JWT claims. Token refresh adds 2-3s on slow connections."
 deciduous add revisit "Reconsidering token strategy"
 deciduous link <observation> <revisit> -r "forced rethinking"
 deciduous status <old_decision> superseded

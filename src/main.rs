@@ -1006,6 +1006,17 @@ fn main() {
             no_branch,
             date,
         } => {
+            // Warn if observation is missing a description
+            if node_type == "observation" && description.is_none() {
+                eprintln!(
+                    "{} Observations should have both a title and a description (-d \"...\").",
+                    "Warning:".yellow(),
+                );
+                eprintln!(
+                    "         Use the title for a {} and -d for the full detail.",
+                    "short summary".bold()
+                );
+            }
             // Handle prompt from stdin if requested
             let effective_prompt = if prompt_stdin {
                 use std::io::{self, Read};
@@ -1465,10 +1476,34 @@ fn main() {
                                 "revisit" => n.node_type.truecolor(249, 115, 22), // Orange
                                 _ => n.node_type.white(),
                             };
-                            println!(
-                                "{:<5} {:<12} {:<10} {}",
-                                n.id, type_colored, n.status, n.title
-                            );
+                            if n.node_type == "observation" {
+                                if let Some(ref desc) = n.description {
+                                    let truncated = if desc.len() > 80 {
+                                        format!("{}...", &desc[..77])
+                                    } else {
+                                        desc.clone()
+                                    };
+                                    println!(
+                                        "{:<5} {:<12} {:<10} {}",
+                                        n.id, type_colored, n.status, n.title
+                                    );
+                                    println!(
+                                        "      {:<22} {}",
+                                        "",
+                                        truncated.dimmed()
+                                    );
+                                } else {
+                                    println!(
+                                        "{:<5} {:<12} {:<10} {}",
+                                        n.id, type_colored, n.status, n.title
+                                    );
+                                }
+                            } else {
+                                println!(
+                                    "{:<5} {:<12} {:<10} {}",
+                                    n.id, type_colored, n.status, n.title
+                                );
+                            }
                         }
                     }
                 }
