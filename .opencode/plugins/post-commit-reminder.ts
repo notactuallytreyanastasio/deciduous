@@ -32,21 +32,11 @@ export const PostCommitReminder: Plugin = async ({ $ }) => {
         const commitHash = hashResult.stdout.toString().trim()
         const commitMsg = msgResult.stdout.toString().trim().slice(0, 50)
 
-        // Show reminder (must use stderr to avoid polluting OpenCode display)
-        console.error(`
-+===================================================================+
-|  DECIDUOUS: Link this commit to the decision graph!               |
-+===================================================================+
-|  Commit: ${commitHash} "${commitMsg}"
-|                                                                   |
-|  Run NOW:                                                         |
-|    deciduous add outcome "What was accomplished" -c 95 --commit HEAD
-|    deciduous link <action_id> <outcome_id> -r "Implementation complete"
-|                                                                   |
-|  Or if this was an action (not outcome):                          |
-|    deciduous add action "What was done" -c 90 --commit HEAD       |
-+===================================================================+
-`)
+        // Write reminder to log file instead of console (console output corrupts TUI)
+        const path = await import("path")
+        const logFile = path.join(".deciduous", "plugin.log")
+        const msg = `[${new Date().toISOString()}] POST-COMMIT: ${commitHash} "${commitMsg}" - Run: deciduous add outcome "..." --commit HEAD\n`
+        fs.appendFileSync(logFile, msg)
       } catch (error) {
         // If git commands fail, skip the reminder
       }

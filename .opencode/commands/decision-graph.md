@@ -1,14 +1,16 @@
 ---
 description: Build a deciduous decision graph capturing design evolution from commit history
-allowed-tools: *
-argument-hint: [repo-path]
+arguments:
+  - name: REPO
+    description: Path to the repository to analyze (default current directory)
+    required: false
 ---
 
 # Decision Graph Construction
 
 You are building a **deciduous decision graph** - a DAG that captures the evolution of design decisions in a codebase.
 
-**Target repository:** $ARGUMENTS (if provided), otherwise the current directory.
+**Target repository:** $REPO (if provided), otherwise the current directory.
 
 Use the `deciduous` CLI (at ~/.cargo/bin/deciduous) to build the graph. Run deciduous commands in the current directory (not inside the source repo).
 
@@ -233,6 +235,9 @@ deciduous nodes           # list all
 deciduous edges           # list connections
 deciduous unlink <from> <to>   # remove edge
 deciduous delete <id>          # remove node and edges
+
+# Version management
+deciduous check-update         # check if update is needed (version checking is always-on)
 ```
 
 ## Narrative Discipline

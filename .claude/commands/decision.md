@@ -16,9 +16,27 @@ argument-hint: <action> [args...]
 | Choosing between approaches | `decision` | `/decision add decision "Choose auth method"` |
 | Considering an option | `option` | `/decision add option "JWT tokens"` |
 | About to write code | `action` | `/decision add action "Implementing JWT"` |
-| Noticing something | `observation` **with -d** | `/decision add obs "Found existing auth code" -d "The legacy auth system uses cookie-based sessions with express-session, not JWT"` |
+| Noticing something | `observation` | `/decision add obs "Found existing auth code"` |
 | Finished something | `outcome` | `/decision add outcome "JWT working"` |
 | Reconsidering a past decision | `revisit` | `/decision add revisit "Reconsidering auth"` |
+
+## What NOT to Log - CRITICAL
+
+**The decision graph records the USER'S project decisions, not your internal process.**
+
+Do NOT create nodes for your own thinking, planning, reading, or tooling steps. Only log things the user would recognize as project milestones or decisions.
+
+**Skip these (meta/process noise):**
+- "Reading codebase to understand structure"
+- "Planning implementation approach"
+- "Running tests to check status"
+- "Analyzing existing code"
+
+**Log these (user-visible project work):**
+- "Add user authentication" (goal)
+- "Use JWT tokens" (option)
+- "Implemented JWT middleware" (action)
+- "JWT auth working, all tests pass" (outcome)
 
 ## Quick Commands
 

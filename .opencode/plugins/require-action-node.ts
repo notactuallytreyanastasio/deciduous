@@ -34,23 +34,11 @@ export const RequireActionNode: Plugin = async ({ $ }) => {
         }
 
         if (!hasRecentNode && lines.length > 2) {
-          // Show a reminder but don't block
-          console.error(`
-+===================================================================+
-|  DECIDUOUS: No recent action/goal node found                      |
-+===================================================================+
-|  Before editing files, log what you're about to do:               |
-|                                                                   |
-|  For new work:                                                    |
-|    deciduous add goal "What you're trying to achieve" -c 90       |
-|                                                                   |
-|  For implementation:                                              |
-|    deciduous add action "What you're about to implement" -c 85    |
-|                                                                   |
-|  Then link to parent:                                             |
-|    deciduous link <parent_id> <new_id> -r "reason"                |
-+===================================================================+
-`)
+          // Write reminder to log file instead of console (console output corrupts TUI)
+          const path = await import("path")
+          const logFile = path.join(".deciduous", "plugin.log")
+          const msg = `[${new Date().toISOString()}] REMINDER: No recent action/goal node found. Run: deciduous add goal "..." or deciduous add action "..."\n`
+          fs.appendFileSync(logFile, msg)
         }
       } catch (error) {
         // If deciduous isn't available, continue silently

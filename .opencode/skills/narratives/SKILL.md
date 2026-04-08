@@ -1,9 +1,7 @@
 ---
+name: narratives
 description: Understand how a system evolved - narratives are the source of truth
-arguments:
-  - name: FOCUS
-    description: "What part of the system to trace (e.g., 'auth', 'caching', 'API')"
-    required: true
+compatibility: opencode
 ---
 
 # Narrative Tracking
@@ -24,8 +22,6 @@ Before looking at git, read the code. Ask: **What are the major pieces of this s
 
 Each major piece probably has a narrative behind it.
 
-Focus area: **$FOCUS**
-
 ## Step 3: Fill in the narratives
 
 Edit `.deciduous/narratives.md`. For each section:
@@ -34,7 +30,7 @@ Edit `.deciduous/narratives.md`. For each section:
 2. Infer the **evolution** (how it likely got this way)
 3. Identify **PIVOTs** (when the conceptual model changed)
 4. Find evidence (PRs, commits, docs) - optional
-5. Check attached documents (`deciduous doc list`) - diagrams or specs may provide evidence
+5. Check attached documents (`deciduous doc list`)
 
 Signs of a pivot:
 - Two approaches coexisting (migration in progress)
@@ -53,8 +49,6 @@ deciduous narratives show
 ```bash
 deciduous narratives pivots
 ```
-
-This shows all revisit nodes already in the graph with their full chains.
 
 ## Output Format
 

@@ -90,10 +90,16 @@ For every public function/method/class:
 
 **Returns:** What the return value means
 
+**Throws/Errors:** What can go wrong
+
 **Example:**
+```code
 // From: tests/example_test.rs:42
 let result = function_name("input", 42);
 assert_eq!(result, expected);
+```
+
+**Related:** Links to related functions
 ```
 
 ### 3.3 Internal Architecture
@@ -124,9 +130,71 @@ For each relevant test:
 - For file `src/auth/jwt.rs` -> `docs/src/auth/jwt.rs.md`
 - For directory `src/auth/` -> `docs/src/auth/README.md`
 
+**Document structure:**
+
+```markdown
+# <Component Name>
+
+> One-sentence description
+
+## Overview
+
+High-level explanation of what this does and why it exists.
+
+## Quick Start
+
+```code
+// Most common usage pattern - from real tests
+```
+
+## API Reference
+
+[For each public function/type/constant]
+
+### `function_name(...)`
+
+[Generated from Step 3.2]
+
+## Architecture
+
+[Internal design, data flow, key invariants - from Step 3.3]
+
+## Examples
+
+[Tests converted to examples - from Step 3.5]
+
+## Dependencies
+
+[What this depends on, what depends on this - from Step 3.4]
+
+## Related Documentation
+
+- Links to other relevant docs
+- Links to test files
+```
+
 ---
 
-## Step 5: Link to Decision Graph
+## Step 5: Refine Tests If Needed
+
+If tests are too synthetic (meaningless variable names, unrealistic values):
+
+1. Read the test file
+2. Improve it with:
+   - Descriptive variable names (user_email, order_total, not x, y)
+   - Realistic values (not "foo", "bar", 123)
+   - Comments explaining the scenario
+3. Edit the test file with improvements
+4. Create observation node:
+
+```bash
+deciduous add observation "Refined tests for <component>" -c 85 -d "Made tests more real-world: descriptive variable names, realistic values, scenario comments added"
+deciduous link <action_id> <observation_id> -r "Test improvements during documentation"
+```
+
+---
+
+## Step 6: Link to Decision Graph
 
 After documentation is complete:
 
@@ -147,16 +215,94 @@ deciduous sync
 
 ---
 
-## Step 6: Verify Coverage
+## Step 7: Verify Coverage
 
 **Checklist before completing:**
 
-- Every public function documented
-- Every parameter explained
-- Every return value explained
-- At least one example per function (from tests)
-- Architecture overview included
-- Dependencies mapped
-- Links to tests included
+- [ ] Every public function documented
+- [ ] Every parameter explained
+- [ ] Every return value explained
+- [ ] Every error case documented
+- [ ] At least one example per function (from tests)
+- [ ] Architecture overview included
+- [ ] Dependencies mapped
+- [ ] Links to tests included
+- [ ] Tests refined if they were synthetic
+
+If anything is missing, go back and fill it in. **Do not miss any surface area.**
+
+---
+
+## Decision Criteria
+
+**What to document:**
+- Public APIs (always)
+- Complex internal logic (when it's not obvious)
+- Design decisions (why, not just what)
+- Edge cases and error handling
+- Integration points
+
+**What NOT to document:**
+- Trivial getters/setters
+- Auto-generated code
+- Implementation details obvious from code
+
+**How deep to go:**
+- Deep enough that someone new could understand and use the code
+- Deep enough that someone could modify it without breaking things
+- Capture the "why" behind design decisions
+
+---
+
+## Example Usage
+
+```bash
+# Document a single file
+/document src/auth/jwt.rs
+
+# Document a directory
+/document src/auth/
+
+# Document the whole project
+/document .
+```
+
+**What happens:**
+1. Goal node created
+2. Code analyzed thoroughly
+3. Tests found and used as examples
+4. Tests refined if synthetic
+5. Documentation written to docs/
+6. Action/outcome nodes created
+7. Graph synced
+
+---
+
+## Integration with Documentation Enforcement
+
+When documentation is created, the `require-documentation.sh` hook will recognize it exists. This creates a virtuous cycle:
+
+1. Can't edit code without documentation (hook blocks)
+2. Run `/document` to create documentation
+3. Now code edits are allowed
+4. When code changes significantly, re-run `/document`
+
+---
+
+## Quick Reference
+
+```bash
+# Document and generate docs
+/document <path>
+
+# After documenting, you can edit the file
+# The require-documentation.sh hook will allow it
+```
+
+**Always creates:**
+- Goal node (before starting)
+- Action node (for the documentation work)
+- Outcome node (on completion)
+- Observation nodes (for test refinements)
 
 **Now document: $TARGET**

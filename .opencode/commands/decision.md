@@ -18,7 +18,7 @@ arguments:
 | Choosing between approaches | `decision` | `/decision add decision "Choose auth method"` |
 | Considering an option | `option` | `/decision add option "JWT tokens"` |
 | About to write code | `action` | `/decision add action "Implementing JWT"` |
-| Noticing something | `observation` **with -d** | `/decision add obs "Found existing auth code" -d "The legacy auth system uses cookie-based sessions with express-session, not JWT"` |
+| Noticing something | `observation` | `/decision add obs "Found existing auth code"` |
 | Finished something | `outcome` | `/decision add outcome "JWT working"` |
 | Reconsidering a past decision | `revisit` | `/decision add revisit "Reconsidering auth"` |
 
@@ -126,6 +126,17 @@ deciduous add goal "Feature work" -b feature-x  # Force specific branch
 deciduous add goal "Universal note" --no-branch  # No branch tag
 ```
 
+### Web UI Branch Filter
+The graph viewer shows a branch dropdown in the stats bar:
+- "All branches" shows everything
+- Select a specific branch to filter all views (Chains, Timeline, Graph, DAG)
+
+### When to Use Branch Grouping
+- **Feature work**: Nodes created on `feature-auth` branch auto-grouped
+- **PR context**: Filter to see only decisions for a specific PR
+- **Cross-cutting concerns**: Use `--no-branch` for universal notes
+- **Retrospectives**: Filter by branch to see decision history per feature
+
 ### Create Edges
 - `link <from> <to> [reason]` -> `deciduous link <from> <to> -r "<reason>"`
 
@@ -214,6 +225,27 @@ Ask yourself after creating nodes:
 4. Does every **decision** link from the option(s) being chosen?
 5. Are there **dangling outcomes** with no parent action?
 
+### Find Disconnected Nodes
+```bash
+# List nodes with no incoming edges (potential orphans)
+deciduous edges | cut -d'>' -f2 | cut -d' ' -f2 | sort -u > /tmp/has_parent.txt
+deciduous nodes | tail -n+3 | awk '{print $1}' | while read id; do
+  grep -q "^$id$" /tmp/has_parent.txt || echo "CHECK: $id"
+done
+```
+Note: Root goals are VALID orphans. Outcomes/actions/options usually are NOT.
+
+### Fix Missing Connections
+```bash
+deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
+```
+
+### When to Audit
+- Before every `deciduous sync`
+- After creating multiple nodes quickly
+- At session end
+- When the web UI graph looks disconnected
+
 ## Git Staging Rules - CRITICAL
 
 **NEVER use broad git add commands that stage everything:**
@@ -225,6 +257,13 @@ Ask yourself after creating nodes:
 **ALWAYS stage files explicitly by name:**
 - `git add src/main.rs src/lib.rs`
 - `git add Cargo.toml Cargo.lock`
+- `git add .claude/commands/decision.md`
+
+**Why this matters:**
+- Prevents accidentally committing sensitive files (.env, credentials)
+- Prevents committing large binaries or build artifacts
+- Forces you to review exactly what you're committing
+- Catches unintended changes before they enter git history
 
 ## Multi-User Sync
 
@@ -249,6 +288,24 @@ deciduous events rebuild    # Apply to local DB
 git add .deciduous/sync/ && git commit -m "sync" && git push
 ```
 
+**Periodic maintenance:**
+```bash
+deciduous events checkpoint --clear-events  # Compact old events
+git add .deciduous/sync/ && git commit -m "checkpoint"
+```
+
+### Legacy Patch Workflow
+
+For manual control, use the older patch system:
+
+```bash
+# Export nodes as a patch file
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates
+deciduous diff apply .deciduous/patches/*.json
+```
+
 ## The Rule
 
 ```
@@ -258,3 +315,5 @@ AUDIT FOR ORPHANS REGULARLY.
 SYNC BEFORE YOU PUSH.
 EXPORT PATCHES FOR YOUR TEAMMATES.
 ```
+
+**Live graph**: https://notactuallytreyanastasio.github.io/deciduous/

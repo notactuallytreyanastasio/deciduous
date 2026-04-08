@@ -83,6 +83,14 @@ Attach supporting documents (optional)
 deciduous sync
 ```
 
+## What NOT to Log
+
+**Only create nodes for user-visible project work, not your internal process.**
+
+Do NOT create action nodes for reading code, running tests to check status, exploring the codebase, or planning your approach. These are your process, not the user's project decisions.
+
+Action nodes should describe code being written or changed. Outcome nodes should describe results the user cares about. If the user wouldn't put it in a PR description, don't log it.
+
 ## Why This Matters
 
 - **Hooks will block you** if no recent action/goal exists

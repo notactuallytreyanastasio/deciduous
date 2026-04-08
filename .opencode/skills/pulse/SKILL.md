@@ -1,9 +1,7 @@
 ---
+name: pulse
 description: Map the current model as decisions - no history, just now
-arguments:
-  - name: SCOPE
-    description: "What part of the system to map (e.g., 'Authentication', 'API rate limiting')"
-    required: true
+compatibility: opencode
 ---
 
 # Pulse
@@ -26,8 +24,6 @@ What part of the system are you taking the pulse of?
 - A subsystem ("Authentication")
 - A boundary ("API request lifecycle")
 
-Scope: **$SCOPE**
-
 ## Step 3: Ask "What decisions define this?"
 
 Read the code. For the thing you're scoping, ask:
@@ -40,7 +36,7 @@ Not implementation questions ("which library?") - model questions ("what's the b
 
 ```bash
 # Create the root goal
-deciduous add goal "$SCOPE: <Core question>" -c 90
+deciduous add goal "<Scope>: <Core question>" -c 90
 
 # Add options (possible approaches from the goal)
 deciduous add option "<Possible approach>" -c 85
@@ -56,19 +52,12 @@ If a question is still open, leave it as option nodes without a decision.
 ## Step 5: Review
 
 ```bash
-# Check the pulse again to see what's mapped
 deciduous pulse
-
-# Check for coverage gaps
 deciduous pulse --summary
-
-# View visually
 deciduous serve
 ```
 
 ## Check for Supporting Documents
-
-If the system has architecture diagrams, specs, or reference docs relevant to the scope:
 
 ```bash
 deciduous doc list <goal_id>
