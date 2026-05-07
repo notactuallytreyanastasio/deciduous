@@ -273,6 +273,7 @@
       <div class="narrow">
         <nav class="top-nav">
           <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
+          <a href="mcp.html">MCP</a>
           <a href="story.html">Story</a>
           <a href="demo/">Live Graph</a>
           <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
@@ -786,6 +787,70 @@ deciduous sync</div>
               <div class="step-content">Auth narrative is structured. The pivot from sessions to JWT is captured with the observation that drove it. Run <span style="color: #7ee787">deciduous archaeology timeline</span> to see everything chronologically.</div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 7: MCP Server — Direct AI Access                     -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge new">New in v0.14</span>
+        <h2>MCP Server &mdash; Direct AI Access to the Graph</h2>
+        <p class="feature-desc">
+          Give Claude (Code, Desktop, or cowork) direct structured access to your decision graph via the <a href="https://modelcontextprotocol.io/">Model Context Protocol</a>. 31 tools for creating, querying, analyzing, and reporting on decisions &mdash; no shell commands needed. Each conversation gets its own decision tree.
+        </p>
+
+        <div class="session-demo" id="demo-mcp">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Desktop &mdash; querying decisions via MCP</span>
+            <button class="replay-btn" onclick="replayDemo('demo-mcp')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">Why did we switch from in-memory caching to Redis? Show me the full decision chain.</div>
+            </div>
+            <div class="session-step" style="--delay: 1.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">search_nodes({ query: "cache" })</div>
+              <div class="step-output">Found 4 nodes matching "cache"</div>
+            </div>
+            <div class="session-step" style="--delay: 3s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">trace_chain({ node_id: 1, direction: "outgoing" })</div>
+              <div class="step-output">{ node_count: 6, edge_count: 5, nodes: [...] }</div>
+            </div>
+            <div class="session-step" style="--delay: 5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>Decision Chain: Caching Strategy</strong><br><br>
+                Goal #1: "Caching strategy" [95%]<br>
+                &nbsp;&nbsp;&#9500;&#9472; Action #2: "In-memory LRU cache" <span style="color: #f97583">[superseded]</span><br>
+                &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Observation #3: "Memory pressure at 10k RPM"<br>
+                &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Revisit #4: "Reconsider caching"<br>
+                &nbsp;&nbsp;&#9492;&#9472; Decision #5: "Switch to Redis with TTL" [90%]<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Outcome #6: "Redis deployed, p95 &lt;12ms"<br><br>
+                <strong>Rationale:</strong> In-memory LRU consuming 1.2GB at scale. Redis TTL gives horizontal scaling without memory pressure.
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 8s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">
+                The switch happened because the in-memory LRU was consuming 1.2GB at 10k requests/min.
+                Decision #5 chose Redis with TTL-based invalidation. The outcome (node #6) confirmed p95 latency under 12ms.
+                The full pivot chain is: Goal #1 &rarr; Action #2 (superseded) &rarr; Observation #3 &rarr; Revisit #4 &rarr; Decision #5 &rarr; Outcome #6.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 12px; font-size: 0.9rem;">
+          <strong>Works with:</strong> Claude Code &middot; Claude Desktop &middot; Cowork &middot; Any MCP client<br>
+          <strong>Setup:</strong> Add <code>{"mcpServers": {"deciduous": {"command": "deciduous", "args": ["mcp"]}}}</code> to your config<br>
+          <a href="mcp.html" style="color: #0969da; font-weight: 600;">Full MCP documentation &rarr;</a>
         </div>
       </div>
 

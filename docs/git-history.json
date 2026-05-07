@@ -1,11 +1,307 @@
 [
   {
-    "hash": "62c155133eedf36cc73d5445a3f1258ad635f9b0",
-    "short_hash": "62c1551",
-    "author": "=",
-    "date": "2026-01-23T12:53:39-05:00",
-    "message": "feat: add Windsurf and OpenCode multi-assistant support\n\n- Add --windsurf flag to `deciduous init` for Windsurf/Cascade integration\n- Auto-detect .windsurf/ directory and set up hooks/rules automatically\n- Add Windsurf templates: hooks.json, pre-write hook, post-commit hook, rules\n- Update `deciduous update` to auto-detect and update all installed assistants\n- Document multi-assistant support in README.md\n- Update tutorial workflows to be assistant-agnostic\n\nSupported assistants:\n- Claude Code (default): .claude/, CLAUDE.md\n- OpenCode: .opencode/, AGENTS.md\n- Windsurf: .windsurf/hooks/, .windsurf/rules/\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "hash": "c06a5daceecd678f62783df8424c197e1a8f87d0",
+    "short_hash": "c06a5da",
+    "author": "Robert Grayson",
+    "date": "2026-04-08T07:28:20-04:00",
+    "message": "chore: update deciduous tooling to v0.14.0\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 33
+  },
+  {
+    "hash": "93bea7f3a28e089a155bfada47b9113fa2e7a1e9",
+    "short_hash": "93bea7f",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T12:00:54-04:00",
+    "message": "refactor(tester): replace nested hash tree with flat array + setup inheritance\n\nSupersedes the over-engineered recursive hash tree approach.\nDSL now collects tests into a flat array with path-prefix names.\nSetup/teardown inherited via stack — parent setups propagate to children.\nRunner simplified: no more recursive tree walking.\nFixed Ruby gotcha: [nil].any? returns false, use .empty? instead.\n30 tests passing across 3 suites.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 3
+  },
+  {
+    "hash": "18949d9c03c39c8327a2c4926f02d7f64cf065d6",
+    "short_hash": "18949d9",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T11:58:18-04:00",
+    "message": "feat(tester): add multi-suite runner and split tests into separate files\n\nRunner.run_all aggregates results across multiple suites.\nSplit smoke_test into assertion_test, mailbox_test, dsl_test.\nrun_all.rb as entry point. 28 tests across 3 suites.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
     "files_changed": 6
+  },
+  {
+    "hash": "ad799d2b435227d1cc033563c119bee1f7557b9c",
+    "short_hash": "ad799d2",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T11:56:17-04:00",
+    "message": "feat(tester): add assert_receive/refute_receive with mailbox pattern\n\nPure data mailbox: send messages, receive by exact match or regex.\nassert_receive pulls matching message from queue.\nrefute_receive verifies no match exists.\n25 self-hosting tests passing.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 4
+  },
+  {
+    "hash": "fccd25dfe5698d2f1baa1225a3585b78e184fb68",
+    "short_hash": "fccd25d",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T11:54:51-04:00",
+    "message": "feat(tester): scaffold Ruby testing framework with nested hash tree\n\nCore assertions: assert, refute, assert_equal, refute_equal,\nassert_raise, assert_match, assert_includes.\n\nDSL with describe/test/setup/teardown blocks using nested hash tree\nstructure (deliberate over-engineering — will revisit).\n\nRunner with colored output and recursive tree walking.\n19 self-hosting tests passing.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 5
+  },
+  {
+    "hash": "741a3f6d510bc7f97a57cf6b230564bed081e731",
+    "short_hash": "741a3f6",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T11:48:39-04:00",
+    "message": "feat(tester): scaffold Ruby testing framework with hash-based test cases\n\nCore assertions (assert, refute, assert_equal, assert_raise), DSL with\ndescribe/test/setup/teardown blocks, and a runner with colored output.\nDeliberately using plain hashes for test case representation.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 6
+  },
+  {
+    "hash": "02cd9607a6dfc919a7eb78280161efd8aa79f07c",
+    "short_hash": "02cd960",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T08:18:06-04:00",
+    "message": "cleanup: extract roadmap, events, and doc commands from main.rs\n\nMechanical extraction of three large command groups into dedicated modules\nunder src/commands/:\n\n- roadmap.rs (957 LOC) — roadmap sync + GitHub integration handlers\n- sync.rs (516 LOC) — event-based multi-user sync handlers\n- docs.rs (500 LOC) — document attachment handlers + helpers\n\nmain.rs reduced from 4,793 → 2,851 lines (40% reduction).\nNo logic changes — pure code movement with updated imports.\n\nAll 164 tests pass (117 lib + 9 main + 37 integration + 1 doc).\n\nPart of Phase 2: Decompose Monoliths (#186)\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 5
+  },
+  {
+    "hash": "a5713eac384b070bbcdc34997b47d6079193c655",
+    "short_hash": "a5713ea",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T07:39:09-04:00",
+    "message": "cleanup: remove diff.rs and git_guard/ — Phase 1 dead code deletion\n\nRemove two subsystems identified as dead/redundant code:\n\n- diff.rs (607 LOC): Legacy patch-based sync superseded by events.rs\n- git_guard/ (1,337 LOC): Redundant git safety — Claude Code has built-in protections\n\nAlso removes ~285 LOC of Diff command handling from main.rs and re-exports\nfrom lib.rs. Adds 24 new regression tests covering core functionality:\nnode CRUD, delete cascading, unlink, show/JSON, prompt updates,\nstatus transitions, complex graph traversal, DOT filtering, backup,\nempty DB edge cases, branch filtering, writeup, all edge types,\nrevisit nodes, and supersede.\n\nNet: -2,266 lines deleted, +448 lines added (regression tests)\nCloses #184, closes #185\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 10
+  },
+  {
+    "hash": "57315ca2d34e719adad381909a243d5489188001",
+    "short_hash": "57315ca",
+    "author": "Robert Grayson",
+    "date": "2026-03-18T01:22:09-04:00",
+    "message": "release: v0.13.13 - sort narratives by most recent activity\n\nNarratives in the web viewer are now sorted by most recent activity\n(latest node timestamp) instead of tree size, across all modes:\ngoals, significant, branches, and hubs.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 6
+  },
+  {
+    "hash": "9925de1e7803585eb77dd31ff2d464daef11ce02",
+    "short_hash": "9925de1",
+    "author": "Robert Grayson",
+    "date": "2026-03-17T19:56:58-04:00",
+    "message": "release: v0.13.12 - web viewer defaults to showing all goals\n\nChanged default narrative mode from 'significant' (10+ nodes only)\nto 'goals' (all goals) so the viewer page shows everything by default.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 6
+  },
+  {
+    "hash": "45905ab98da86462d10faa32593ee0548e6ee9a8",
+    "short_hash": "45905ab",
+    "author": "Robert Grayson",
+    "date": "2026-03-17T19:27:00-04:00",
+    "message": "release: v0.13.11 - always-on version check with semver-aware messaging\n\nVersion checking is now always-on (removed opt-in toggle). Notifications\nvary by severity: patch updates get a quiet one-liner, minor/major updates\nget a prominent banner encouraging upgrade.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "files_changed": 12
+  },
+  {
+    "hash": "2ab89c73e7d1f9ab5a967c241cf75302a7c65a69",
+    "short_hash": "2ab89c7",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T21:05:33-05:00",
+    "message": "feat: add Hex package with Mix tasks\n\n- Add mix deciduous COMMAND - main CLI wrapper\n- Add mix deciduous.init - initialize in project\n- Add Hex package metadata (package/0, docs/0)\n- Add ex_doc for documentation\n- Remove escript config (NIFs don't work with escript)\n\nInstallation via Hex:\n  # Add to mix.exs deps\n  {:deciduex, \"~> 0.14\"}\n\n  # Then use Mix tasks\n  mix deciduous.init\n  mix deciduous add goal \"My goal\" -c 90\n  mix deciduous nodes\n\nFor standalone PATH binary, use Homebrew or Cargo instead.\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+    "files_changed": 5
+  },
+  {
+    "hash": "8ea1ebb79b6f9f80660934afca8ac1b6a936ce5d",
+    "short_hash": "8ea1ebb",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T20:52:43-05:00",
+    "message": "feat: add Rust wrapper for cargo distribution + Homebrew beta formula\n\n- Add src/main.rs: thin Rust wrapper that embeds Burrito binary\n- Add Cargo.toml: crates.io package config\n- Update release.yml: build Burrito → embed in Rust → publish both\n- Update Formula/deciduous@0.14.rb: Homebrew beta formula\n- Update Makefile: Elixir-native targets + cargo release targets\n- Add dev/: Credo custom checks (NoIfInsideCase, NoNestedCase)\n\nDistribution channels:\n- `cargo install deciduous --version 0.14.0-beta.2`\n- `brew tap notactuallytreyanastasio/deciduous && brew install deciduous@0.14`\n- Direct download from GitHub releases\n\nCo-Authored-By: Claude <noreply@anthropic.com>",
+    "files_changed": 8
+  },
+  {
+    "hash": "4065a55dab71d6a7c3316e5c0c2237f80fc1adde",
+    "short_hash": "4065a55",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T15:17:17-05:00",
+    "message": "ci: add Elixir release workflow and beta Homebrew formula\n\n- Add release-elixir.yml workflow for Burrito builds on tag push\n- Builds for darwin-arm64, darwin-amd64, linux-amd64\n- Creates GitHub release with artifacts\n- Auto-updates Homebrew formula on stable releases\n\n- Add deciduous@0.14.rb for beta installs:\n  brew tap notactuallytreyanastasio/deciduous\n  brew install deciduous@0.14\n\n- Bump version to 0.14.0-beta.2\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 4
+  },
+  {
+    "hash": "6058855ca1c3a40ca5234d3a4eaacaf55e0b6eb0",
+    "short_hash": "6058855",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T14:56:30-05:00",
+    "message": "feat: remove Rust CLI, Elixir-only implementation\n\nBREAKING: This release removes the Rust CLI entirely. The deciduous\nCLI is now 100% Elixir/OTP.\n\n- Remove all Rust source code (src/, Cargo.toml, migrations/, etc.)\n- Elixir version at 0.14.0-beta.1\n- All 24 commands implemented in Elixir\n- SQLite database with Ecto\n- OTP release with CLI wrapper\n\nRemoved (deprecated):\n- dot command (use graphviz directly)\n- events subsystem (replaced by diff)\n- themes, roadmap, tag, migrate\n\nAdded:\n- TDD-first Elixir development skill\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 54
+  },
+  {
+    "hash": "f153a6e016c72af45cae34d986d47080760f13f3",
+    "short_hash": "f153a6e",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:31:25-05:00",
+    "message": "feat(elixir): implement `serve` command with Plug router\n\nAdd HTTP server for decision graph viewer:\n- Plug.Cowboy HTTP server with configurable port\n- API endpoints: /api/graph, /api/commands, /api/documents\n- SPA fallback for all GET requests (serves viewer HTML)\n- Default HTML viewer with API endpoint links\n\nAlso adds Jason.Encoder derivations to all schemas:\n- DecisionNode, DecisionEdge, CommandLog for JSON serialization\n\nIncludes 7 new tests for router endpoints.\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 8
+  },
+  {
+    "hash": "a322d571872f01b9734e5d54dc9eaf34374af1cb",
+    "short_hash": "a322d57",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:28:24-05:00",
+    "message": "feat(elixir): implement `doc` subcommands for document management\n\nAdd full document attachment functionality to deciduex CLI:\n- doc attach: attach files to decision nodes with SHA-256 hashing\n- doc list: list documents with optional JSON output and filtering\n- doc show: display detailed document information\n- doc describe: update document descriptions\n- doc open: open documents in default application\n- doc detach: soft-delete documents\n- doc gc: garbage collect orphaned files\n\nIncludes:\n- NodeDocument schema with Jason.Encoder derivation\n- Document mutations (attach, update_description, detach)\n- Document queries (list, get, get_active_content_hashes)\n- 13 new tests covering all subcommands\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 7
+  },
+  {
+    "hash": "a8b8837d70bd15ab5376946721771f9ff727b773",
+    "short_hash": "a8b8837",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:21:10-05:00",
+    "message": "feat(elixir): implement `backup` command\n\n- Create timestamped database backup\n- Default name: deciduous_backup_YYYYMMDD_HHMMSS.db\n- Optional custom output path\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 2
+  },
+  {
+    "hash": "05b4bae05597c15a75c87d49ff0f71015e1e1b5e",
+    "short_hash": "05b4bae",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:20:27-05:00",
+    "message": "feat(elixir): implement `status`, `prompt`, `delete` commands\n\n- Add status command to update node status (pending/active/superseded/abandoned)\n- Add prompt command to update node prompt in metadata\n- Add delete command with --dry-run flag to preview deletion\n- Delete removes node and all connected edges\n- 7 new tests (128 total)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 6
+  },
+  {
+    "hash": "f94ae5e977b63a1159c0ec037791f5064594fed2",
+    "short_hash": "f94ae5e",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:19:01-05:00",
+    "message": "feat(elixir): implement `link` and `unlink` commands\n\n- Add Deciduex.Commands.Link with -r/--rationale and -t/--type flags\n- Add Deciduex.Commands.Unlink to remove edges\n- Validate that source and target nodes exist before linking\n- 6 new tests (121 total)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 5
+  },
+  {
+    "hash": "edfe403942b615fe6c7397ec19993b9b963ede27",
+    "short_hash": "edfe403",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:17:26-05:00",
+    "message": "feat(elixir): implement `add` command with full flag support\n\n- Add Deciduex.Mutations module for write operations\n- Add Deciduex.Commands.Add with all flags:\n  -c/--confidence, -p/--prompt, --prompt-stdin, -f/--files,\n  -b/--branch, --no-branch, --commit, --date, -d/--description\n- Auto-detect git branch and expand HEAD to commit hash\n- Warn on short prompts (< 200 chars)\n- Log commands to command_log table\n- Add elixir_uuid dependency for UUID generation\n- 10 new tests (115 total)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 6
+  },
+  {
+    "hash": "7b5e0e1570c4eef51e768841532e9de1996d7dda",
+    "short_hash": "7b5e0e1",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T09:10:31-05:00",
+    "message": "docs(elixir): add migration status inventory\n\nDocument which CLI commands are migrated to Elixir vs still in Rust.\n- 5/32 commands migrated (nodes, edges, show, graph, commands)\n- Testing instructions for verifying delegation\n- Iteration plan for remaining commands\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 1
+  },
+  {
+    "hash": "3cca3dd5d4248e3ebc5066e6bd102502128f4978",
+    "short_hash": "3cca3dd",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T01:40:46-05:00",
+    "message": "ci: add Burrito cross-compilation for Elixir sidecar binaries\n\nNew build-elixir job in release workflow:\n- Matrix: darwin-arm64, darwin-amd64, linux-amd64\n- Installs Erlang/Elixir via erlef/setup-beam + Zig via setup-zig\n- Builds standalone Burrito binary per target\n- Uploads deciduex-{platform} artifacts alongside Rust binaries\n\nRelease job now depends on both build + build-elixir, attaches\nElixir binaries to GitHub releases. Beta tags marked as prerelease.\nCrate publishing skipped for beta tags.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 1
+  },
+  {
+    "hash": "f685f98021faac8d5d0d23ac5fb10fd8291a4e5e",
+    "short_hash": "f685f98",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T01:40:29-05:00",
+    "message": "build: add beta release targets for Rust + Elixir OTP release\n\nMakefile targets:\n- beta-build: cargo release + mix release (plain OTP, no Zig needed)\n- beta-install: Homebrew-style layout at ~/.local/deciduous-beta/\n- beta-uninstall, beta-clean, beta-tag\n\nOTP release wrapper script (rel/overlays/bin/cli) serializes shell\nargs into Elixir list and calls `deciduex eval`. Rust finds it at\n../libexec/deciduex/bin/cli relative to its own binary.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 2
+  },
+  {
+    "hash": "368d9b72d2729667e6a4616aa7d4927ae1e68e72",
+    "short_hash": "368d9b7",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T01:40:07-05:00",
+    "message": "feat(rust): delegate nodes/edges/graph/show/commands to Elixir sidecar\n\nAdd find_deciduex_cli() to locate the Elixir binary via:\n1. Burrito binary at ../libexec/deciduex (single file)\n2. OTP release at ../libexec/deciduex/bin/cli (directory)\n3. DECIDUEX_PATH env var (direct binary or release root)\n\nEach delegated command tries Elixir first, falls back to Rust on\nfailure. Theme filtering bypasses Elixir (not yet implemented there).\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 1
+  },
+  {
+    "hash": "fc87e986ce39b7c147969650f877f42390a5ee01",
+    "short_hash": "fc87e98",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T01:39:45-05:00",
+    "message": "test(elixir): add 105 tests for Ecto queries and CLI commands\n\nTest infrastructure:\n- Shared SQLite memory DB (file::memory:?cache=shared, pool_size: 1)\n- TestFixtures module with table creation + seed helpers\n- max_cases: 1 to avoid SQLite concurrency issues\n\nUnit tests: db_test, queries_test, nodes_test, edges_test,\ngraph_test, show_test, command_log_test\n\nIntegration test (62 tests): builds an 11-node decision graph\nexercising the full canonical flow (goal -> options -> decision ->\nactions -> outcomes) and verifies all 5 commands produce correct\noutput against it.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 10
+  },
+  {
+    "hash": "8ede9feec5eca2e26cccb9eb45f09f9725e7ae5b",
+    "short_hash": "8ede9fe",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T01:39:23-05:00",
+    "message": "feat(elixir): add Ecto queries and 5 read-only CLI commands\n\nQueries module with 6 functions: list_nodes, list_edges, get_node,\nget_node_edges, get_graph, list_recent_commands.\n\nCommands (matching Rust output format):\n- nodes: table with ID/TYPE/STATUS/TITLE, branch/type filtering\n- edges: table with ID/FROM/TO/TYPE/RATIONALE columns\n- graph: full JSON export with nodes/edges/documents\n- show: formatted detail view + --json flag, metadata, connections\n- commands: recent command log with --limit flag\n\nCLI dispatch starts Ecto repo dynamically with ensure_all_started\nfor OTP release eval compatibility. Burrito entry point via BURRITO\nenv var in Application.start.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 9
+  },
+  {
+    "hash": "09384150b0f6cf9c143aec9c5b918a8be1b1b5b6",
+    "short_hash": "0938415",
+    "author": "Robert Grayson",
+    "date": "2026-03-04T01:38:59-05:00",
+    "message": "feat(elixir): add Ecto infrastructure for deciduex read commands\n\nReplace raw exqlite with ecto_sqlite3 for type-safe database access.\nAdd Burrito dep (conditional - only wraps when BURRITO_TARGET is set).\n\n- mix.exs: ecto_sqlite3, jason, burrito deps with conditional release steps\n- config/: env-specific configs (prod suppresses debug logging)\n- Repo: Ecto.Adapters.SQLite3 repo (started dynamically, not in sup tree)\n- DB: stripped to find_db_path/0 only (removed raw exqlite code)\n- Schemas: DecisionNode, DecisionEdge, CommandLog (read-only, no migrations)\n- CLAUDE.md: Elixir development rules and project conventions\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 14
+  },
+  {
+    "hash": "379037bad85a7d35bab0ee9f481af796181b7933",
+    "short_hash": "379037b",
+    "author": "Robert Grayson",
+    "date": "2026-03-02T13:29:13-05:00",
+    "message": "release: v0.13.8 - complete OpenCode stderr fix for post-commit hook\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 3
+  },
+  {
+    "hash": "8e779ffb6871987503bf24dda8b29c6fca7fdecc",
+    "short_hash": "8e779ff",
+    "author": "Robert Grayson",
+    "date": "2026-02-23T15:51:22-05:00",
+    "message": "release: v0.13.3 - upgrade OpenCode bootstrapping to modern conventions\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 5
+  },
+  {
+    "hash": "23507c51c5b1e95e57051dc91181b70ee3b5d414",
+    "short_hash": "23507c5",
+    "author": "Robert Grayson",
+    "date": "2026-02-20T09:53:12-05:00",
+    "message": "release: v0.13.2 - OpenCode integration feature parity with Claude Code\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 17
+  },
+  {
+    "hash": "056b84f84798ad0530931ab19eee0bf3e16cf1ff",
+    "short_hash": "056b84f",
+    "author": "Robert Grayson",
+    "date": "2026-02-19T11:43:07-05:00",
+    "message": "fix: deciduous update no longer deletes user content in CLAUDE.md\n\nThe replace_config_md_section() function found the end of the deciduous\nsection by searching for the next ## heading. When the section was last\nin the file (or followed by non-H2 content), it fell through to EOF and\ndeleted all user content after the section.\n\nFix: Use <!-- deciduous:start/end --> HTML comment markers for precise\nsection boundaries. Legacy CLAUDE.md files without markers auto-migrate\non first update. 6 new tests cover all edge cases.\n\nAlso adds docs/DECIDUOUS_DOCUMENT_ADDITION_PROCESS.md - comprehensive\nguide to document attachments in the deciduous workflow.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 7
+  },
+  {
+    "hash": "50ab53e5ac500114a01ca453e73c0ed978387200",
+    "short_hash": "50ab53e",
+    "author": "Robert Grayson",
+    "date": "2026-02-19T10:59:05-05:00",
+    "message": "release: v0.13.0 - document attachments, themes, and full doc refresh\n\nNew features:\n- Document attachments: attach files to decision nodes (doc attach/list/show/describe/open/detach/gc)\n- AI-generated descriptions for attached documents (--ai-describe)\n- Content-hash deduplication and soft-delete with garbage collection\n- Theme system: tag and group nodes by theme\n- Web viewer shows documents and themes in detail panel\n- REST API: /api/documents and /api/documents/file/<id> endpoints\n- Event-based sync support for document and theme events\n- New modules: pulse.rs, narratives.rs, archaeology.rs\n\nDocumentation:\n- All skills, commands, and CLAUDE.md updated with document awareness\n- New docs: ARCHITECTURE.md, CONCEPTS.md, WEB_VIEWER.md\n- Developer reference: docs/developer/index.html\n- README updated with Document Attachments section and commands\n- Init now creates .deciduous/documents/ directory\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 41
+  },
+  {
+    "hash": "f91256f86f3af246df1646c7b67dacc3a183b631",
+    "short_hash": "f91256f",
+    "author": "Robert Grayson",
+    "date": "2026-02-16T21:45:11-05:00",
+    "message": "release: v0.12.1 - bootstrap all slash commands via init/update\n\nAdd 6 new slash commands to the deciduous bootstrap system so they're\ncreated by `deciduous init` and updated by `deciduous update`:\n\n- /document - comprehensive documentation generator\n- /build-test - build and run test suite\n- /serve-ui - start decision graph web viewer\n- /sync-graph - export graph to GitHub Pages\n- /decision-graph - build decision graph from commit history\n- /sync - multi-user event-based sync workflow\n\nUpdated documentation across CLAUDE.md, README.md, QUICK_REFERENCE.md,\nand the CLAUDE_MD_SECTION template with full command/skill reference tables.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 8
+  },
+  {
+    "hash": "8563cf07aead7cb658a13d5174b61aba22ef2c02",
+    "short_hash": "8563cf0",
+    "author": "--replace-all",
+    "date": "2026-02-05T21:47:08-05:00",
+    "message": "feat: add event log sync system for async teams\n\nAppend-only event logs per user (.deciduous/sync/events/{user}.jsonl)\nreplace snapshot patches for multi-user sync. Auto-emits events on\nadd/link/status/delete/unlink. CLI: deciduous events init/status/emit/\nrebuild/checkpoint. Includes /api/sync-status endpoint and /sync skill.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 7
+  },
+  {
+    "hash": "f634ec5e63ed61d2eba9480953a9e91b97b051c4",
+    "short_hash": "f634ec5",
+    "author": "--replace-all",
+    "date": "2026-02-05T21:46:52-05:00",
+    "message": "feat: enforce canonical node flow (goal -> options -> decision -> actions -> outcomes)\n\nEstablish rigorous node typing and edge rules across all documentation,\ntemplates, skills, and hooks. Options come from goals, decisions choose\nbetween options, actions implement decisions, outcomes result from actions.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
+    "files_changed": 13
+  },
+  {
+    "hash": "156f6be708c7dfea19adad9fc9384deb6e26e0bb",
+    "short_hash": "156f6be",
+    "author": "--replace-all",
+    "date": "2026-02-05T13:15:46-05:00",
+    "message": "release: v0.12.0 - redesigned web viewer with hierarchical narrative view\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 3
+  },
+  {
+    "hash": "19cea5153c27f827e919b315d41507778b3372aa",
+    "short_hash": "19cea51",
+    "author": "--replace-all",
+    "date": "2026-02-05T13:14:07-05:00",
+    "message": "feat: redesign web viewer with hierarchical narrative view\n\nComplete rewrite of the React web viewer with:\n- Smart narrative detection (filters to 10+ node trees)\n- D3 DAG flowchart visualization (hierarchical left-to-right layout)\n- Full-text search with type filter buttons\n- Resizable panels (drag to resize all sections)\n- Gold shimmer effect for selected node highlighting\n- Automatic graph loading when clicking search results\n- Edge type legend in graph view\n- Removed unused status column (98% were \"pending\")\n\nDeleted old components, hooks, utils, and views in favor of\na single unified App.tsx (~2000 LOC vs ~24K scattered).\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
+    "files_changed": 48
   },
   {
     "hash": "62c155133eedf36cc73d5445a3f1258ad635f9b0",
