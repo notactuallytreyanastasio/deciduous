@@ -12,6 +12,18 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.15.0",
+        highlights: &[
+            "Built-in MCP server: `deciduous mcp` exposes 31 tools over Model Context Protocol",
+            "Works with Claude Code, Claude Desktop, and cowork",
+            "Graph CRUD, querying, full-text search, chain tracing, node context, pulse, orphan detection",
+            "Session management: each conversation gets its own decision tree (start/end/resume)",
+            "Sessions persist across server restarts for long-running cowork conversations",
+            "/query slash command for natural language reports from the decision graph",
+            "Run `deciduous update` to apply to existing projects",
+        ],
+    },
+    Release {
         version: "0.14.0",
         highlights: &[
             "Observations now require both a title and description (-d flag)",

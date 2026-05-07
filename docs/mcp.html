@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Server - Deciduous</title>
+    <meta property="og:title" content="MCP Server - Deciduous">
+    <meta property="og:description" content="Give Claude direct access to your decision graph. Works with Claude Code, Desktop, and cowork.">
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #24292f; line-height: 1.6; }
+      .container { max-width: 1400px; margin: 0 auto; padding: 60px 20px; }
+      .narrow { max-width: 900px; margin: 0 auto; }
+      .top-nav { display: flex; justify-content: center; gap: 30px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #d0d7de; }
+      .top-nav a { color: #57606a; text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
+      .top-nav a:hover { color: #0969da; }
+      .top-nav a.active { color: #0969da; }
+      header { text-align: center; margin-bottom: 20px; }
+      header h1 { font-size: 2.8rem; font-weight: 700; color: #24292f; margin-bottom: 12px; letter-spacing: -0.5px; }
+      .tagline { font-size: 1.1rem; color: #57606a; max-width: 600px; margin: 0 auto 30px; }
+      section { margin-top: 50px; padding-top: 30px; border-top: 1px solid #d0d7de; }
+      h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 12px; }
+      h3 { font-size: 1.1rem; color: #24292f; margin: 20px 0 8px; }
+      p { color: #57606a; margin-bottom: 12px; }
+      a { color: #0969da; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      code { background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-family: "SF Mono", Consolas, monospace; font-size: 0.88em; color: #24292f; }
+      ul, ol { margin: 8px 0 16px 24px; color: #57606a; }
+      li { margin-bottom: 6px; }
+
+      /* Terminal windows */
+      .session-demo { background: #1e1e1e; border-radius: 12px; overflow: hidden; margin: 20px 0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15); }
+      .session-header { background: #2d2d2d; padding: 12px 16px; display: flex; align-items: center; gap: 8px; }
+      .session-dot { width: 12px; height: 12px; border-radius: 50%; }
+      .session-dot.red { background: #ff5f56; }
+      .session-dot.yellow { background: #ffbd2e; }
+      .session-dot.green { background: #27c93f; }
+      .session-title { color: #888; font-size: 0.85rem; margin-left: 8px; }
+      .session-content { padding: 20px; font-family: "SF Mono", Monaco, "Courier New", monospace; font-size: 0.88rem; line-height: 1.7; max-height: 500px; overflow-y: auto; }
+      .session-content::-webkit-scrollbar { width: 8px; }
+      .session-content::-webkit-scrollbar-track { background: #2d2d2d; }
+      .session-content::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+      .session-step { margin-bottom: 16px; }
+      .session-step:last-child { margin-bottom: 0; }
+      .step-label { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; }
+      .step-label.user { background: #3b82f6; color: #fff; }
+      .step-label.claude { background: #d97706; color: #fff; }
+      .step-label.system { background: #6b7280; color: #fff; }
+      .step-content { color: #e5e5e5; padding-left: 4px; }
+      .step-content.code { color: #7ee787; }
+      .step-output { color: #8b949e; font-size: 0.85rem; margin-top: 4px; padding-left: 4px; }
+      .step-result {
+        background: #1a3a1a; border: 1px solid #22543d; border-radius: 6px;
+        padding: 12px; margin-top: 8px; color: #86efac; font-size: 0.82rem; line-height: 1.5;
+      }
+      .step-result strong { color: #4ade80; }
+      .step-json { color: #c9d1d9; }
+
+      /* Query response — rendered Claude output */
+      .query-response {
+        background: #ffffff; border: 1px solid #d0d7de; border-top: none;
+        border-radius: 0 0 12px 12px; padding: 24px 28px; margin-top: 0; margin-bottom: 20px;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .qr-header h3 { font-size: 1.25rem; color: #24292f; margin-bottom: 8px; }
+      .qr-tldr { background: #f0fdf4; border-left: 3px solid #2da44e; padding: 10px 14px; border-radius: 0 6px 6px 0; color: #1a3a1a; font-size: 0.92rem; margin-bottom: 20px; }
+      .query-response h4 { font-size: 0.85rem; color: #57606a; text-transform: uppercase; letter-spacing: 0.05em; margin: 20px 0 10px; }
+      .qr-table { width: 100%; border-collapse: collapse; font-size: 0.88rem; margin-bottom: 8px; }
+      .qr-table th { text-align: left; padding: 8px 10px; background: #f6f8fa; border: 1px solid #d0d7de; font-weight: 600; color: #24292f; font-size: 0.82rem; }
+      .qr-table td { padding: 8px 10px; border: 1px solid #d0d7de; color: #57606a; }
+      .qr-chosen { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 0.78rem; font-weight: 600; }
+      .qr-rejected { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 10px; font-size: 0.78rem; font-weight: 600; }
+
+      .qr-tree { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 16px 20px; margin-bottom: 8px; }
+      .qr-tree-node { padding: 4px 0; font-size: 0.88rem; color: #24292f; }
+      .qr-tree-children { padding-left: 24px; border-left: 2px solid #d0d7de; margin-left: 8px; }
+      .qr-goal { font-weight: 600; color: #9a6700; }
+      .qr-option { color: #8250df; }
+      .qr-option.rejected { color: #8b949e; }
+      .qr-option.chosen { font-weight: 600; }
+      .qr-decision { font-weight: 600; color: #0969da; }
+      .qr-action { color: #2da44e; font-size: 0.85rem; }
+
+      .qr-observation { background: #fffbeb; border-left: 3px solid #d97706; padding: 10px 14px; border-radius: 0 6px 6px 0; font-size: 0.9rem; color: #78350f; margin-bottom: 16px; font-style: italic; }
+      .qr-observation strong { font-style: normal; }
+      .qr-result { background: #f6f8fa; border-radius: 6px; padding: 10px 14px; font-size: 0.9rem; color: #24292f; font-weight: 500; }
+
+      /* Config blocks */
+      .config-block { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 10px; padding: 20px 24px; margin: 16px 0; }
+      .config-block h4 { font-size: 0.85rem; color: #57606a; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; }
+      .config-block pre { background: #24292f; border-radius: 6px; padding: 14px 16px; color: #e6edf3; font-size: 0.85rem; overflow-x: auto; margin: 0; }
+      .config-block code { background: transparent; color: inherit; padding: 0; }
+      .config-block p { font-size: 0.88rem; margin-top: 10px; margin-bottom: 0; }
+
+      /* Feature badge */
+      .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 600; margin-bottom: 8px; }
+      .badge-new { background: #dcfce7; color: #166534; }
+
+      /* API link */
+      .api-link { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 20px; margin-top: 30px; text-align: center; }
+      .api-link a { font-weight: 600; font-size: 1.05rem; }
+
+      footer { text-align: center; padding: 40px 0; margin-top: 40px; color: #6e7781; font-size: 0.9rem; }
+      footer a { color: #0969da; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+      <div class="narrow">
+        <nav class="top-nav">
+          <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
+          <a href="mcp.html" class="active">MCP</a>
+          <a href="story.html">Story</a>
+          <a href="demo/">Live Graph</a>
+          <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+        </nav>
+
+        <header>
+          <span class="badge badge-new">New in v0.14</span>
+          <h1>MCP Server</h1>
+          <p class="tagline">Give Claude direct access to your decision graph. 31 tools for searching, tracing, and analyzing decisions. Works with Claude Code, Desktop, and cowork.</p>
+        </header>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Quick Start: Cowork</h2>
+          <p>Each cowork agent gets its own decision tree. One config change:</p>
+
+          <div class="config-block">
+            <h4>.claude/settings.local.json</h4>
+<pre><code>{
+  "mcpServers": {
+    "deciduous": {
+      "command": "deciduous",
+      "args": ["mcp"]
+    }
+  }
+}</code></pre>
+            <p>Each agent's MCP server auto-resumes sessions across restarts. Nodes auto-associate with the active conversation.</p>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Quick Start: Claude Desktop</h2>
+
+          <div class="config-block">
+            <h4>~/Library/Application Support/Claude/claude_desktop_config.json</h4>
+<pre><code>{
+  "mcpServers": {
+    "deciduous": {
+      "command": "deciduous",
+      "args": ["mcp"],
+      "cwd": "/path/to/your/project"
+    }
+  }
+}</code></pre>
+            <p>Set <code>cwd</code> to your project root (where <code>.deciduous/</code> lives). Restart Claude Desktop.</p>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Quick Start: Claude Code</h2>
+
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">Setting up MCP in Claude Code</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label system">Config</div>
+                <div class="step-content">Add to <span style="color:#7ee787">.claude/settings.local.json</span>:</div>
+              </div>
+              <div class="session-step">
+                <div class="step-content code">{
+  "mcpServers": {
+    "deciduous": { "command": "deciduous", "args": ["mcp"] }
+  }
+}</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label system">Result</div>
+                <div class="step-content">Restart Claude Code. Tools appear as <span style="color:#7ee787">mcp__deciduous__*</span></div>
+              </div>
+              <div class="session-step">
+                <div class="step-label user">You</div>
+                <div class="step-content">What decisions were made about authentication?</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">search_nodes({ query: "auth" })</div>
+                <div class="step-output">Found 8 nodes matching "auth"</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">trace_chain({ node_id: 5, direction: "outgoing" })</div>
+                <div class="step-output">{ node_count: 12, edge_count: 11 }</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content">The auth system went through 2 pivots. Started with JWT everywhere (Goal #5), hit mobile cookie size limits (Observation #8), pivoted to hybrid approach (Revisit #9, Decision #10). 12 nodes trace the full story.</div>
+              </div>
+            </div>
+          </div>
+          <p>Also available: <code>/query</code> slash command wraps MCP tools into a natural language interface.</p>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Natural Language Queries</h2>
+          <p>In Claude Code, <code>/query</code> uses MCP tools to answer questions about your decisions:</p>
+
+          <div class="session-demo" style="margin-bottom:0; border-radius:12px 12px 0 0;">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">Claude Code &mdash; /query in action</span>
+            </div>
+            <div class="session-content" style="padding-bottom:16px;">
+              <div class="session-step">
+                <div class="step-label user">You</div>
+                <div class="step-content">/query why did we choose an embedded MCP server over a CLI wrapper?</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content" style="color:#8b949e; font-size:0.82rem;">Querying decision graph...</div>
+              </div>
+              <div class="session-step" style="margin-bottom:0;">
+                <div class="step-content code" style="font-size:0.78rem;">search_nodes({ query: "embedded MCP" })    &rarr; 2 matches
+get_node_context({ node_id: 1361 })        &rarr; 3 parents, 7 children
+trace_chain({ node_id: 1361 })             &rarr; 13 nodes, 14 edges</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Claude's rendered response — proper HTML, not monospace -->
+          <div class="query-response">
+            <div class="qr-header">
+              <h3>Why Embedded Over CLI Wrapper</h3>
+              <div class="qr-tldr">The embedded approach won at 92% confidence. It fits the project's "functional core, imperative shell" constraint and gives direct DB access with no subprocess overhead.</div>
+            </div>
+
+            <h4>Options Compared</h4>
+            <table class="qr-table">
+              <tr><th>Option</th><th>Confidence</th><th>Verdict</th><th>Rationale</th></tr>
+              <tr><td>#1358 Embedded server</td><td>90%</td><td><span class="qr-chosen">Chosen</span></td><td>Single binary, pure functions, testable</td></tr>
+              <tr><td>#1359 CLI wrapper</td><td>40%</td><td><span class="qr-rejected">Rejected</span></td><td>Process spawn per call, fragile text parsing</td></tr>
+              <tr><td>#1360 Separate crate</td><td>50%</td><td><span class="qr-rejected">Rejected</span></td><td>Unnecessary build complexity</td></tr>
+            </table>
+
+            <h4>Decision Chain</h4>
+            <div class="qr-tree">
+              <div class="qr-tree-node qr-goal">Goal #1356 &mdash; Add MCP server to deciduous</div>
+              <div class="qr-tree-children">
+                <div class="qr-tree-node qr-option chosen">Option #1358 &mdash; Embedded MCP server <span class="qr-chosen">chosen</span></div>
+                <div class="qr-tree-node qr-option rejected">Option #1359 &mdash; Thin CLI wrapper <span class="qr-rejected">rejected</span></div>
+                <div class="qr-tree-node qr-option rejected">Option #1360 &mdash; Separate crate <span class="qr-rejected">rejected</span></div>
+                <div class="qr-tree-node qr-decision">Decision #1361 &mdash; Choose embedded MCP server <span style="color:#57606a">[92%]</span></div>
+                <div class="qr-tree-children">
+                  <div class="qr-tree-node qr-action">Action #1362 &mdash; Implement protocol types</div>
+                  <div class="qr-tree-node qr-action">Action #1363 &mdash; Build tool registry</div>
+                  <div class="qr-tree-node qr-action">Action #1364 &mdash; Implement CRUD handlers</div>
+                  <div class="qr-tree-node qr-action">Action #1365 &mdash; Build query/analysis engine</div>
+                  <div class="qr-tree-node qr-action">Action #1366 &mdash; Wire server loop</div>
+                  <div class="qr-tree-node qr-action">Action #1367 &mdash; Write test suite</div>
+                </div>
+              </div>
+            </div>
+
+            <h4>Key Observation</h4>
+            <div class="qr-observation">
+              <strong>#1357</strong>: &ldquo;User explicitly requested functional core, imperative shell, lots of tests&rdquo; &mdash; this made pure-function parsing and zero-IO modules the obvious architectural choice.
+            </div>
+
+            <div class="qr-result">7 actions completed. 108 MCP-specific tests passing. All pure functions trivially unit-testable, as the architecture predicted.</div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Searching Decisions</h2>
+          <p>Real output from deciduous's own graph (1,300+ nodes from building this tool):</p>
+
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">search_nodes &mdash; full-text across titles, descriptions, prompts</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label user">You</div>
+                <div class="step-content">What decisions were made about the MCP server?</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">search_nodes({ query: "MCP" })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{
+  "count": 26,
+  "nodes": [
+    { "id": 1356, "node_type": "goal", "title": "Add MCP server to deciduous", "confidence": 90 },
+    { "id": 1361, "node_type": "decision", "title": "Choose embedded MCP server (Option A)", "confidence": 92 },
+    { "id": 1381, "node_type": "outcome", "title": "Session lifecycle complete", "confidence": 95 },
+    ...
+  ]
+}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Tracing Decision Chains</h2>
+          <p>BFS traversal from any node. Shows the full connected decision tree with depth:</p>
+
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">trace_chain &mdash; follow edges outward from a goal</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label user">You</div>
+                <div class="step-content">Show me everything that came from the MCP server goal</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">trace_chain({ node_id: 1356, direction: "outgoing", max_depth: 2 })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "start_node_id": 1356, "node_count": 13, "edge_count": 14,
+  "nodes": [
+    { "id": 1356, "node_type": "goal",        "title": "Add MCP server to deciduous",                     "depth": 0 },
+    { "id": 1358, "node_type": "option",      "title": "Embedded MCP server via deciduous mcp subcommand","depth": 1 },
+    { "id": 1359, "node_type": "option",      "title": "Thin CLI wrapper - shells out to commands",       "depth": 1 },
+    { "id": 1360, "node_type": "option",      "title": "Separate mcp-deciduous crate/binary",            "depth": 1 },
+    { "id": 1361, "node_type": "decision",    "title": "Choose embedded MCP server (Option A)",           "depth": 2 },
+    { "id": 1376, "node_type": "goal",        "title": "Auto-create decision trees per conversation",    "depth": 1 },
+    { "id": 1377, "node_type": "option",      "title": "Session-scoped: start/end_session tools",        "depth": 2 }
+  ]
+}</span>
+                </div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content">The MCP goal spawned 3 options at depth 1 (embedded, CLI wrapper, separate crate). The embedded approach was chosen (depth 2). A sub-goal for conversation scoping also branched off at depth 1.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Node Context</h2>
+          <p>Get a decision's full neighborhood &mdash; what options led to it, what actions came from it:</p>
+
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">get_node_context &mdash; parents, children, siblings</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label user">You</div>
+                <div class="step-content">What led to choosing the embedded MCP server, and what came from it?</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">get_node_context({ node_id: 1361 })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<strong>Node:</strong> #1361 [decision] "Choose embedded MCP server (Option A)" (92%)
+
+<strong>Parents (3 options considered):</strong>
+  #1358 [option] "Embedded MCP server via deciduous mcp subcommand" (90%)
+  #1359 [option] "Thin CLI wrapper MCP - shells out to commands" (40%)
+  #1360 [option] "Separate mcp-deciduous crate/binary" (50%)
+
+<strong>Children (7 actions spawned):</strong>
+  #1362 [action] "Implement MCP protocol types (protocol.rs)"
+  #1363 [action] "Build tool registry and definitions (tools.rs)"
+  #1364 [action] "Implement CRUD handlers (handlers.rs)"
+  #1365 [action] "Build query/analysis engine (query.rs)"
+  #1366 [action] "Wire server loop and CLI subcommand"
+  #1367 [action] "Write comprehensive test suite"
+  #1374 [action] "Create /query skill for NL reports"
+                </div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content">3 options were considered. The embedded approach won at 92% confidence (CLI wrapper was only 40% &mdash; too fragile). It spawned 7 implementation actions covering protocol, tools, handlers, query engine, server loop, tests, and a slash command.</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Graph Pulse</h2>
+          <p>Health check &mdash; stats, active goals, and what needs attention:</p>
+
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">get_pulse &mdash; branch health at a glance</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">get_pulse({ branch: "add-mcp-server" })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<strong>total_nodes:</strong> 37  |  <strong>total_edges:</strong> 1229
+
+<strong>By type:</strong>
+  goal: 4  |  option: 6  |  decision: 3
+  action: 11  |  outcome: 11  |  observation: 2
+
+<strong>Active goals:</strong>
+  #1356 Add MCP server to deciduous
+  #1376 MCP server auto-creates decision trees for each conversation
+  #1387 Write MCP setup docs for README + deciduous.dev
+  #1391 Rewrite MCP docs: quickstarts first, real examples
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Sessions: Per-Conversation Trees</h2>
+          <p>Each conversation gets its own scoped decision tree. Nodes auto-associate.</p>
+
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">Cowork agent starting a session</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">start_session({ name: "cowork: add MCP server", goal_title: "Add MCP server to deciduous" })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "session_id": 1, "root_node_id": 1356, "name": "cowork: add MCP server" }</span>
+                </div>
+              </div>
+              <div class="session-step">
+                <div class="step-label system">Later</div>
+                <div class="step-content" style="color:#8b949e">... hours of work, server may restart ...</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">get_session({})</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "session_id": 1, "is_active": true, "node_count": 37, "nodes": [...] }</span>
+                </div>
+              </div>
+              <div class="session-step">
+                <div class="step-label system">After a break</div>
+                <div class="step-content" style="color:#8b949e">Explicitly reconnect to a previous session:</div>
+              </div>
+              <div class="session-step">
+                <div class="step-label claude">Claude</div>
+                <div class="step-content code">resume_session({ session_id: 1 })</div>
+              </div>
+              <div class="session-step">
+                <div class="step-result">
+<span class="step-json">{ "session_id": 1, "node_count": 37, "message": "Resumed session #1 (37 nodes)" }</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p>Sessions persist to <code>.deciduous/active_session</code>. Server restarts auto-resume. Long pauses use <code>resume_session</code>.</p>
+        </section>
+
+        <!-- =========================================================== -->
+        <div class="api-link">
+          <p><a href="mcp-api.html">MCP API Reference &rarr;</a></p>
+          <p style="color:#57606a; font-size:0.9rem; margin-top:6px;">All 31 tools with parameters, types, and CLI equivalents.</p>
+        </div>
+
+        <footer>
+          <a href="index.html">Home</a> &middot; <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a> &middot; <a href="demo/">Live Graph</a> &middot; <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+        </footer>
+      </div>
+    </div>
+</body>
+</html>
