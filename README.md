@@ -161,6 +161,8 @@ deciduous init --both --windsurf   # All three
 
 Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 31 tools for managing and querying the decision graph.
 
+> **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
+
 **Claude Code** (project-level):
 
 Add to `.claude/settings.local.json`:
@@ -176,20 +178,29 @@ Add to `.claude/settings.local.json`:
 }
 ```
 
-**Claude Desktop / Claude Code (user-level)**:
+**Claude Desktop**:
 
-Add to `claude_desktop_config.json` or `~/.claude/settings.json`:
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
 
 ```json
 {
   "mcpServers": {
     "deciduous": {
-      "command": "deciduous",
-      "args": ["mcp"]
+      "command": "/Users/you/.cargo/bin/deciduous",
+      "args": ["mcp"],
+      "env": {
+        "DECIDUOUS_DB_PATH": "/path/to/your/project/.deciduous/deciduous.db"
+      }
     }
   }
 }
 ```
+
+Use the **absolute path** to the `deciduous` binary (run `which deciduous` to find it) — Claude Desktop doesn't inherit your shell `PATH`. Point `DECIDUOUS_DB_PATH` at the SQLite database in your project's `.deciduous/` directory, then restart Claude Desktop.
+
+**Claude Code (user-level)**:
+
+Add the project-level config above to `~/.claude/settings.json` instead of `.claude/settings.local.json` to make the server available across all projects.
 
 Once configured, the AI gets tools for:
 
@@ -201,7 +212,7 @@ Once configured, the AI gets tools for:
 | **Sessions** | `start_session`, `end_session`, `resume_session`, ... | Each conversation gets its own decision tree |
 | **Export** | `export_dot`, `generate_writeup` | DOT visualization and PR writeups |
 
-Sessions persist to disk and auto-resume across server restarts, so long-running cowork conversations keep their decision trees intact.
+Sessions persist to disk and auto-resume across server restarts, so long-running conversations keep their decision trees intact.
 
 **[Full MCP documentation and tutorial](https://deciduous.dev/mcp)**
 

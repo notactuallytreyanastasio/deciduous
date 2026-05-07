@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MCP Server - Deciduous</title>
     <meta property="og:title" content="MCP Server - Deciduous">
-    <meta property="og:description" content="Give Claude direct access to your decision graph. Works with Claude Code, Desktop, and cowork.">
+    <meta property="og:description" content="Give Claude direct access to your decision graph. Works with Claude Code and Claude Desktop (Cowork support coming soon).">
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #24292f; line-height: 1.6; }
@@ -118,30 +118,18 @@
         <header>
           <span class="badge badge-new">New in v0.14</span>
           <h1>MCP Server</h1>
-          <p class="tagline">Give Claude direct access to your decision graph. 31 tools for searching, tracing, and analyzing decisions. Works with Claude Code, Desktop, and cowork.</p>
+          <p class="tagline">Give Claude direct access to your decision graph. 31 tools for searching, tracing, and analyzing decisions. Works with Claude Code and Claude Desktop.</p>
         </header>
 
         <!-- =========================================================== -->
         <section>
-          <h2>Quick Start: Cowork</h2>
-          <p>Each cowork agent gets its own decision tree. One config change:</p>
-
-          <div class="config-block">
-            <h4>.claude/settings.local.json</h4>
-<pre><code>{
-  "mcpServers": {
-    "deciduous": {
-      "command": "deciduous",
-      "args": ["mcp"]
-    }
-  }
-}</code></pre>
-            <p>Each agent's MCP server auto-resumes sessions across restarts. Nodes auto-associate with the active conversation.</p>
-          </div>
+          <h2>Quick Start: Cowork <span class="badge" style="background:#fef3c7; color:#854d0e; vertical-align: middle;">Coming soon</span></h2>
+          <p>MCP support for Claude Cowork is not yet available &mdash; cowork agents currently can't load custom MCP servers. Track progress on <a href="https://github.com/anthropics/claude-code/issues/48909">anthropics/claude-code#48909</a>.</p>
+          <p>In the meantime, use the <a href="#claude-code">Claude Code</a> setup below for project-level work, or <a href="#claude-desktop">Claude Desktop</a> for free-form querying.</p>
         </section>
 
         <!-- =========================================================== -->
-        <section>
+        <section id="claude-desktop">
           <h2>Quick Start: Claude Desktop</h2>
 
           <div class="config-block">
@@ -149,18 +137,20 @@
 <pre><code>{
   "mcpServers": {
     "deciduous": {
-      "command": "deciduous",
+      "command": "/Users/you/.cargo/bin/deciduous",
       "args": ["mcp"],
-      "cwd": "/path/to/your/project"
+      "env": {
+        "DECIDUOUS_DB_PATH": "/path/to/your/project/.deciduous/deciduous.db"
+      }
     }
   }
 }</code></pre>
-            <p>Set <code>cwd</code> to your project root (where <code>.deciduous/</code> lives). Restart Claude Desktop.</p>
+            <p>Use the <strong>absolute path</strong> to the <code>deciduous</code> binary (run <code>which deciduous</code> to find it) &mdash; Claude Desktop doesn't inherit your shell <code>PATH</code>. Point <code>DECIDUOUS_DB_PATH</code> at the SQLite database in your project's <code>.deciduous/</code> directory, then restart Claude Desktop.</p>
           </div>
         </section>
 
         <!-- =========================================================== -->
-        <section>
+        <section id="claude-code">
           <h2>Quick Start: Claude Code</h2>
 
           <div class="session-demo">

@@ -797,7 +797,7 @@ deciduous sync</div>
         <span class="feature-badge new">New in v0.14</span>
         <h2>MCP Server &mdash; Direct AI Access to the Graph</h2>
         <p class="feature-desc">
-          Give Claude (Code, Desktop, or cowork) direct structured access to your decision graph via the <a href="https://modelcontextprotocol.io/">Model Context Protocol</a>. 31 tools for creating, querying, analyzing, and reporting on decisions &mdash; no shell commands needed. Each conversation gets its own decision tree.
+          Give Claude (Code or Desktop) direct structured access to your decision graph via the <a href="https://modelcontextprotocol.io/">Model Context Protocol</a>. 31 tools for creating, querying, analyzing, and reporting on decisions &mdash; no shell commands needed. Each conversation gets its own decision tree. <em>(Cowork support coming soon &mdash; <a href="https://github.com/anthropics/claude-code/issues/48909">tracking issue</a>.)</em>
         </p>
 
         <div class="session-demo" id="demo-mcp">
@@ -848,7 +848,7 @@ deciduous sync</div>
         </div>
 
         <div style="margin-top: 12px; font-size: 0.9rem;">
-          <strong>Works with:</strong> Claude Code &middot; Claude Desktop &middot; Cowork &middot; Any MCP client<br>
+          <strong>Works with:</strong> Claude Code &middot; Claude Desktop &middot; Any MCP client (Cowork coming soon)<br>
           <strong>Setup:</strong> Add <code>{"mcpServers": {"deciduous": {"command": "deciduous", "args": ["mcp"]}}}</code> to your config<br>
           <a href="mcp.html" style="color: #0969da; font-weight: 600;">Full MCP documentation &rarr;</a>
         </div>
