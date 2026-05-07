@@ -157,6 +157,54 @@ deciduous init --both --windsurf   # All three
 
 **Auto-detection:** `deciduous update` auto-detects which assistants are installed (`.claude/`, `.opencode/`, `.windsurf/`) and updates them all. Windsurf is also auto-detected during `init` if `.windsurf/` already exists.
 
+### MCP Server
+
+Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 31 tools for managing and querying the decision graph.
+
+**Claude Code** (project-level):
+
+Add to `.claude/settings.local.json`:
+
+```json
+{
+  "mcpServers": {
+    "deciduous": {
+      "command": "deciduous",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+**Claude Desktop / Claude Code (user-level)**:
+
+Add to `claude_desktop_config.json` or `~/.claude/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "deciduous": {
+      "command": "deciduous",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Once configured, the AI gets tools for:
+
+| Category | Tools | What they do |
+|----------|-------|-------------|
+| **Graph CRUD** | `add_node`, `link_nodes`, `delete_node`, ... | Create and manage decision nodes and edges |
+| **Querying** | `list_nodes`, `search_nodes`, `show_node`, ... | Find and filter nodes across the graph |
+| **Analysis** | `trace_chain`, `get_node_context`, `get_pulse`, ... | Traverse chains, get neighborhood context, find orphans |
+| **Sessions** | `start_session`, `end_session`, `resume_session`, ... | Each conversation gets its own decision tree |
+| **Export** | `export_dot`, `generate_writeup` | DOT visualization and PR writeups |
+
+Sessions persist to disk and auto-resume across server restarts, so long-running cowork conversations keep their decision trees intact.
+
+**[Full MCP documentation and tutorial](https://deciduous.dev/mcp)**
+
 ---
 
 ## The Workflow

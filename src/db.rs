@@ -2719,6 +2719,114 @@ impl Database {
     }
 
     // ========================================================================
+    // Sessions — conversation-scoped decision trees
+    // ========================================================================
+
+    /// Create a new session with an optional name and root goal node.
+    pub fn create_session(
+        &self,
+        name: Option<&str>,
+        root_node_id: Option<i32>,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        let new_session = NewDecisionSession {
+            name,
+            started_at: &now,
+            ended_at: None,
+            root_node_id,
+            summary: None,
+        };
+
+        diesel::insert_into(decision_sessions::table)
+            .values(&new_session)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// End a session (set ended_at timestamp and optional summary).
+    pub fn end_session(&self, session_id: i32, summary: Option<&str>) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::update(decision_sessions::table.filter(decision_sessions::id.eq(session_id)))
+            .set((
+                decision_sessions::ended_at.eq(Some(&now)),
+                decision_sessions::summary.eq(summary),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Associate a node with a session.
+    pub fn add_node_to_session(&self, session_id: i32, node_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let now = chrono::Local::now().to_rfc3339();
+
+        diesel::sql_query(
+            "INSERT OR IGNORE INTO session_nodes (session_id, node_id, added_at) VALUES (?, ?, ?)",
+        )
+        .bind::<diesel::sql_types::Integer, _>(session_id)
+        .bind::<diesel::sql_types::Integer, _>(node_id)
+        .bind::<diesel::sql_types::Text, _>(&now)
+        .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Get all nodes in a session.
+    pub fn get_session_nodes(&self, session_id: i32) -> Result<Vec<DecisionNode>> {
+        let mut conn = self.get_conn()?;
+
+        let node_ids: Vec<i32> = session_nodes::table
+            .filter(session_nodes::session_id.eq(session_id))
+            .select(session_nodes::node_id)
+            .load(&mut conn)?;
+
+        let nodes = decision_nodes::table
+            .filter(decision_nodes::id.eq_any(node_ids))
+            .order(decision_nodes::created_at.asc())
+            .load::<DecisionNode>(&mut conn)?;
+
+        Ok(nodes)
+    }
+
+    /// Get a session by ID.
+    pub fn get_session(&self, session_id: i32) -> Result<Option<DecisionSession>> {
+        let mut conn = self.get_conn()?;
+        let session = decision_sessions::table
+            .filter(decision_sessions::id.eq(session_id))
+            .first::<DecisionSession>(&mut conn)
+            .optional()?;
+        Ok(session)
+    }
+
+    /// Get all sessions (optionally only active ones).
+    pub fn get_sessions(&self, active_only: bool) -> Result<Vec<DecisionSession>> {
+        let mut conn = self.get_conn()?;
+        if active_only {
+            let sessions = decision_sessions::table
+                .filter(decision_sessions::ended_at.is_null())
+                .order(decision_sessions::started_at.desc())
+                .load::<DecisionSession>(&mut conn)?;
+            Ok(sessions)
+        } else {
+            let sessions = decision_sessions::table
+                .order(decision_sessions::started_at.desc())
+                .load::<DecisionSession>(&mut conn)?;
+            Ok(sessions)
+        }
+    }
+
+    // ========================================================================
     // Q&A Interactions
     // ========================================================================
 

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cargo build:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(timeout 3 ./target/release/deciduous proxy:*)",
+      "Bash(./target/release/deciduous proxy:*)",
+      "Bash(xargs ls:*)",
+      "mcp__deciduous__*"
+    ]
+  },
+  "mcpServers": {
+    "deciduous": {
+      "command": "deciduous",
+      "args": ["mcp"]
+    }
+  }
+}

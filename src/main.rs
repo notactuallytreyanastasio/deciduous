@@ -416,6 +416,13 @@ enum Command {
         action: TagAction,
     },
 
+    /// Start MCP (Model Context Protocol) server on stdin/stdout
+    ///
+    /// Exposes the full deciduous API as MCP tools for AI assistants.
+    /// Configure in your MCP client:
+    /// {"command": "deciduous", "args": ["mcp"]}
+    Mcp {},
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
@@ -966,6 +973,15 @@ fn main() {
         println!("  Checks crates.io once per 24 hours (non-blocking, rate-limited).");
         println!("  Patch updates show a quiet notification.");
         println!("  Minor/major updates show a prominent banner encouraging upgrade.");
+        return;
+    }
+
+    // Handle MCP server separately - it manages its own database connection
+    if let Command::Mcp {} = args.command {
+        if let Err(e) = deciduous::mcp::run_server() {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
         return;
     }
 
@@ -3180,6 +3196,7 @@ fn main() {
         },
 
         Command::Completion { .. } => unreachable!(), // Handled above
+        Command::Mcp { .. } => unreachable!(),        // Handled above
 
         Command::Audit {
             associate_commits,
