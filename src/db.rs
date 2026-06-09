@@ -1406,6 +1406,221 @@ impl Database {
         Ok(id)
     }
 
+    /// Create a node verbatim from materialized event-log state, preserving
+    /// status, metadata, and timestamps exactly as recorded in the events.
+    /// Unlike `create_node_with_change_id`, nothing is defaulted or rebuilt.
+    fn create_node_verbatim(&self, node: &crate::events::MaterializedNode) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let created_at = node.created_at.to_rfc3339();
+        let updated_at = node.updated_at.to_rfc3339();
+
+        let new_node = NewDecisionNode {
+            change_id: &node.change_id,
+            node_type: &node.node_type,
+            title: &node.title,
+            description: node.description.as_deref(),
+            status: &node.status,
+            created_at: &created_at,
+            updated_at: &updated_at,
+            metadata_json: node.metadata_json.as_deref(),
+        };
+
+        diesel::insert_into(decision_nodes::table)
+            .values(&new_node)
+            .execute(&mut conn)?;
+
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+
+        Ok(id)
+    }
+
+    /// Update an existing node's fields verbatim from materialized event-log state.
+    fn update_node_verbatim(
+        &self,
+        node_id: i32,
+        node: &crate::events::MaterializedNode,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+
+        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+            .set((
+                decision_nodes::title.eq(&node.title),
+                decision_nodes::description.eq(node.description.as_deref()),
+                decision_nodes::status.eq(&node.status),
+                decision_nodes::metadata_json.eq(node.metadata_json.as_deref()),
+                decision_nodes::updated_at.eq(node.updated_at.to_rfc3339()),
+            ))
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    /// Reconcile the database with materialized event-log state.
+    ///
+    /// Creates missing nodes/edges, updates existing nodes whose fields differ
+    /// (title, description, status, metadata), and applies `DeleteNode` /
+    /// `DeleteEdge` tombstones. Idempotent: re-running with the same state is
+    /// a no-op. With `dry_run`, returns the same counts without mutating.
+    pub fn rebuild_from_state(
+        &self,
+        state: &crate::events::MaterializedState,
+        dry_run: bool,
+    ) -> Result<crate::events::RebuildResult> {
+        use std::collections::{HashMap, HashSet};
+
+        let mut result = crate::events::RebuildResult::default();
+
+        // 1. Nodes: create missing, update changed
+        let existing_nodes = self.get_all_nodes()?;
+        let nodes_by_change_id: HashMap<&str, &DecisionNode> = existing_nodes
+            .iter()
+            .map(|n| (n.change_id.as_str(), n))
+            .collect();
+
+        for node in state.nodes.values() {
+            match nodes_by_change_id.get(node.change_id.as_str()) {
+                Some(existing) => {
+                    let differs = existing.title != node.title
+                        || existing.status != node.status
+                        || existing.description != node.description
+                        || existing.metadata_json != node.metadata_json;
+                    if differs {
+                        if !dry_run {
+                            self.update_node_verbatim(existing.id, node)?;
+                        }
+                        result.nodes_updated += 1;
+                    }
+                }
+                None => {
+                    if !dry_run {
+                        if let Err(e) = self.create_node_verbatim(node) {
+                            eprintln!("  Warning: Failed to create node {}: {}", node.change_id, e);
+                            continue;
+                        }
+                    }
+                    result.nodes_created += 1;
+                }
+            }
+        }
+
+        // 2. Node deletions (tombstones); delete_node cascades connected edges
+        for change_id in &state.deleted_nodes {
+            if let Some(existing) = nodes_by_change_id.get(change_id.as_str()) {
+                if !dry_run {
+                    self.delete_node(existing.id, false)?;
+                }
+                result.nodes_deleted += 1;
+            }
+        }
+
+        // 3. Edge deletions (tombstones). Delete the specific tombstoned edge
+        //    by its primary key — matching on (from, to, edge_type) via the
+        //    deterministic edge_id, so a parallel edge between the same pair
+        //    with a different type is left intact. Read after node deletions
+        //    so edges already cascaded by delete_node are excluded.
+        let edges_after_node_deletes = self.get_all_edges()?;
+        let mut edge_ids_to_delete: Vec<i32> = Vec::new();
+        for db_edge in &edges_after_node_deletes {
+            if let (Some(from), Some(to)) = (&db_edge.from_change_id, &db_edge.to_change_id) {
+                let edge_id = crate::events::generate_edge_id(from, to, &db_edge.edge_type);
+                if state.deleted_edges.contains(&edge_id) {
+                    edge_ids_to_delete.push(db_edge.id);
+                    result.edges_deleted += 1;
+                }
+            }
+        }
+        if !dry_run && !edge_ids_to_delete.is_empty() {
+            let mut conn = self.get_conn()?;
+            diesel::delete(
+                decision_edges::table.filter(decision_edges::id.eq_any(&edge_ids_to_delete)),
+            )
+            .execute(&mut conn)?;
+        }
+
+        // 4. Edges: create missing
+        let all_nodes = self.get_all_nodes()?;
+        let local_ids: HashMap<&str, i32> = all_nodes
+            .iter()
+            .map(|n| (n.change_id.as_str(), n.id))
+            .collect();
+
+        let existing_edges = self.get_all_edges()?;
+        let existing_edge_keys: HashSet<(&str, &str, &str)> = existing_edges
+            .iter()
+            .filter_map(|e| {
+                Some((
+                    e.from_change_id.as_deref()?,
+                    e.to_change_id.as_deref()?,
+                    e.edge_type.as_str(),
+                ))
+            })
+            .collect();
+
+        for edge in state.edges.values() {
+            let key = (
+                edge.from_change_id.as_str(),
+                edge.to_change_id.as_str(),
+                edge.edge_type.as_str(),
+            );
+            // Tombstoned edges are never in state.edges, so a present edge
+            // is never one we just deleted (or would delete in dry-run)
+            if existing_edge_keys.contains(&key) {
+                continue;
+            }
+
+            // An endpoint resolves if it will exist after reconciliation. In a
+            // real run `local_ids` was re-read after creations and deletions,
+            // so it is exact; in dry-run, predict the post-reconcile state.
+            let resolves = |change_id: &str| {
+                if dry_run {
+                    state.nodes.contains_key(change_id)
+                        || (local_ids.contains_key(change_id)
+                            && !state.deleted_nodes.contains(change_id))
+                } else {
+                    local_ids.contains_key(change_id)
+                }
+            };
+
+            if !resolves(&edge.from_change_id) || !resolves(&edge.to_change_id) {
+                result.edges_failed += 1;
+                continue;
+            }
+
+            if dry_run {
+                result.edges_created += 1;
+                continue;
+            }
+
+            match (
+                local_ids.get(edge.from_change_id.as_str()),
+                local_ids.get(edge.to_change_id.as_str()),
+            ) {
+                (Some(&from_id), Some(&to_id)) => {
+                    match self.create_edge(
+                        from_id,
+                        to_id,
+                        &edge.edge_type,
+                        edge.rationale.as_deref(),
+                    ) {
+                        Ok(_) => result.edges_created += 1,
+                        Err(e) => {
+                            eprintln!("  Warning: Failed to create edge: {}", e);
+                            result.edges_failed += 1;
+                        }
+                    }
+                }
+                _ => {
+                    result.edges_failed += 1;
+                }
+            }
+        }
+
+        Ok(result)
+    }
+
     /// Create an edge between nodes
     pub fn create_edge(
         &self,
@@ -3665,5 +3880,324 @@ mod tests {
         let json = serde_json::to_string(&graph).unwrap();
         assert!(json.contains("\"documents\""));
         assert!(json.contains("file.txt"));
+    }
+
+    // ------------------------------------------------------------------
+    // rebuild_from_state (events rebuild reconciliation)
+    // ------------------------------------------------------------------
+
+    fn rebuild_test_db() -> (tempfile::TempDir, Database) {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+        (dir, db)
+    }
+
+    fn add_node_event(change_id: &str, title: &str) -> crate::events::Event {
+        crate::events::Event::AddNode {
+            change_id: change_id.to_string(),
+            node_type: "goal".to_string(),
+            title: title.to_string(),
+            description: None,
+            status: "pending".to_string(),
+            metadata_json: None,
+            timestamp: chrono::Utc::now(),
+            author: "test".to_string(),
+        }
+    }
+
+    fn update_node_event(
+        change_id: &str,
+        title: Option<&str>,
+        description: Option<&str>,
+        status: Option<&str>,
+        metadata_json: Option<&str>,
+    ) -> crate::events::Event {
+        crate::events::Event::UpdateNode {
+            change_id: change_id.to_string(),
+            title: title.map(String::from),
+            description: description.map(String::from),
+            status: status.map(String::from),
+            metadata_json: metadata_json.map(String::from),
+            timestamp: chrono::Utc::now(),
+            author: "test".to_string(),
+        }
+    }
+
+    fn delete_node_event(change_id: &str) -> crate::events::Event {
+        crate::events::Event::DeleteNode {
+            change_id: change_id.to_string(),
+            timestamp: chrono::Utc::now(),
+            author: "test".to_string(),
+        }
+    }
+
+    fn add_edge_event(from: &str, to: &str, edge_type: &str) -> crate::events::Event {
+        crate::events::Event::AddEdge {
+            edge_id: crate::events::generate_edge_id(from, to, edge_type),
+            from_change_id: from.to_string(),
+            to_change_id: to.to_string(),
+            edge_type: edge_type.to_string(),
+            rationale: None,
+            timestamp: chrono::Utc::now(),
+            author: "test".to_string(),
+        }
+    }
+
+    fn delete_edge_event(from: &str, to: &str, edge_type: &str) -> crate::events::Event {
+        crate::events::Event::DeleteEdge {
+            edge_id: crate::events::generate_edge_id(from, to, edge_type),
+            timestamp: chrono::Utc::now(),
+            author: "test".to_string(),
+        }
+    }
+
+    /// Regression: a status transition recorded as an UpdateNode event must
+    /// survive a rebuild into a fresh database (was: every node came back
+    /// "pending" because rebuild only replayed node creation).
+    #[test]
+    fn test_rebuild_applies_status_transitions() {
+        let (_dir, db) = rebuild_test_db();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "Ship the feature"));
+        state.apply(&update_node_event(
+            "node-1",
+            None,
+            None,
+            Some("completed"),
+            None,
+        ));
+
+        let result = db.rebuild_from_state(&state, false).unwrap();
+
+        assert_eq!(result.nodes_created, 1);
+        let nodes = db.get_all_nodes().unwrap();
+        assert_eq!(nodes.len(), 1);
+        assert_eq!(nodes[0].status, "completed");
+    }
+
+    #[test]
+    fn test_rebuild_updates_existing_node() {
+        let (_dir, db) = rebuild_test_db();
+
+        db.create_node_with_change_id(
+            "node-1",
+            "goal",
+            "Old title",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "Old title"));
+        state.apply(&update_node_event(
+            "node-1",
+            Some("New title"),
+            None,
+            Some("completed"),
+            None,
+        ));
+
+        let result = db.rebuild_from_state(&state, false).unwrap();
+
+        assert_eq!(result.nodes_created, 0);
+        assert_eq!(result.nodes_updated, 1);
+        let nodes = db.get_all_nodes().unwrap();
+        assert_eq!(nodes.len(), 1, "must update in place, not duplicate");
+        assert_eq!(nodes[0].title, "New title");
+        assert_eq!(nodes[0].status, "completed");
+    }
+
+    #[test]
+    fn test_rebuild_preserves_fields_verbatim() {
+        let (_dir, db) = rebuild_test_db();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "Title"));
+        state.apply(&update_node_event(
+            "node-1",
+            None,
+            Some("A description"),
+            Some("superseded"),
+            Some(r#"{"custom":"value","confidence":90}"#),
+        ));
+
+        db.rebuild_from_state(&state, false).unwrap();
+
+        let nodes = db.get_all_nodes().unwrap();
+        assert_eq!(nodes[0].description.as_deref(), Some("A description"));
+        assert_eq!(nodes[0].status, "superseded");
+        // Raw metadata is preserved, including keys the create path's
+        // field-by-field extraction would have dropped
+        assert_eq!(
+            nodes[0].metadata_json.as_deref(),
+            Some(r#"{"custom":"value","confidence":90}"#)
+        );
+    }
+
+    #[test]
+    fn test_rebuild_applies_node_deletions() {
+        let (_dir, db) = rebuild_test_db();
+
+        db.create_node_with_change_id(
+            "node-1", "goal", "Doomed", None, None, None, None, None, None,
+        )
+        .unwrap();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "Doomed"));
+        state.apply(&delete_node_event("node-1"));
+
+        let result = db.rebuild_from_state(&state, false).unwrap();
+
+        assert_eq!(result.nodes_deleted, 1);
+        assert!(db.get_all_nodes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_rebuild_applies_edge_changes() {
+        let (_dir, db) = rebuild_test_db();
+
+        let a = db
+            .create_node_with_change_id("a", "goal", "A", None, None, None, None, None, None)
+            .unwrap();
+        let b = db
+            .create_node_with_change_id("b", "action", "B", None, None, None, None, None, None)
+            .unwrap();
+        db.create_edge(a, b, "leads_to", None).unwrap();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("a", "A"));
+        state.apply(&add_node_event("b", "B"));
+        state.apply(&add_node_event("c", "C"));
+        state.apply(&add_edge_event("a", "b", "leads_to"));
+        state.apply(&delete_edge_event("a", "b", "leads_to"));
+        state.apply(&add_edge_event("b", "c", "leads_to"));
+
+        let result = db.rebuild_from_state(&state, false).unwrap();
+
+        assert_eq!(result.edges_deleted, 1);
+        assert_eq!(result.edges_created, 1);
+        let edges = db.get_all_edges().unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].from_change_id.as_deref(), Some("b"));
+        assert_eq!(edges[0].to_change_id.as_deref(), Some("c"));
+    }
+
+    #[test]
+    fn test_rebuild_dry_run_does_not_mutate() {
+        let (_dir, db) = rebuild_test_db();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "One"));
+        state.apply(&add_node_event("node-2", "Two"));
+        state.apply(&add_edge_event("node-1", "node-2", "leads_to"));
+
+        let result = db.rebuild_from_state(&state, true).unwrap();
+
+        assert_eq!(result.nodes_created, 2);
+        assert_eq!(result.edges_created, 1);
+        assert!(db.get_all_nodes().unwrap().is_empty());
+        assert!(db.get_all_edges().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_rebuild_deletes_only_tombstoned_parallel_edge() {
+        // Two edges between the same node pair with different types; only one
+        // is tombstoned. The sibling must survive (edge deletion is keyed on
+        // (from, to, edge_type), not just the node pair).
+        let (_dir, db) = rebuild_test_db();
+
+        let a = db
+            .create_node_with_change_id("a", "goal", "A", None, None, None, None, None, None)
+            .unwrap();
+        let b = db
+            .create_node_with_change_id("b", "action", "B", None, None, None, None, None, None)
+            .unwrap();
+        db.create_edge(a, b, "leads_to", None).unwrap();
+        db.create_edge(a, b, "blocks", None).unwrap();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("a", "A"));
+        state.apply(&add_node_event("b", "B"));
+        state.apply(&add_edge_event("a", "b", "leads_to"));
+        state.apply(&add_edge_event("a", "b", "blocks"));
+        state.apply(&delete_edge_event("a", "b", "leads_to"));
+
+        let dry = db.rebuild_from_state(&state, true).unwrap();
+        let real = db.rebuild_from_state(&state, false).unwrap();
+
+        assert_eq!(dry.edges_deleted, real.edges_deleted);
+        assert_eq!(dry.edges_created, real.edges_created);
+        assert_eq!(real.edges_deleted, 1);
+        assert_eq!(real.edges_created, 0);
+
+        let edges = db.get_all_edges().unwrap();
+        assert_eq!(edges.len(), 1, "the non-tombstoned sibling must survive");
+        assert_eq!(edges[0].edge_type, "blocks");
+    }
+
+    #[test]
+    fn test_rebuild_dry_run_counts_match_real_run_for_deleted_targets() {
+        // An edge whose target node is tombstoned must be reported as
+        // unresolvable in BOTH dry-run and real runs (dry-run used to count
+        // it as created because the doomed node still existed locally)
+        let (_dir, db) = rebuild_test_db();
+
+        db.create_node_with_change_id("node-1", "goal", "One", None, None, None, None, None, None)
+            .unwrap();
+        db.create_node_with_change_id("node-2", "goal", "Two", None, None, None, None, None, None)
+            .unwrap();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "One"));
+        state.apply(&add_node_event("node-2", "Two"));
+        state.apply(&add_edge_event("node-1", "node-2", "leads_to"));
+        state.apply(&delete_node_event("node-2"));
+
+        let dry = db.rebuild_from_state(&state, true).unwrap();
+        let real = db.rebuild_from_state(&state, false).unwrap();
+
+        assert_eq!(dry.nodes_deleted, real.nodes_deleted);
+        assert_eq!(dry.edges_created, real.edges_created);
+        assert_eq!(dry.edges_failed, real.edges_failed);
+        assert_eq!(real.edges_failed, 1);
+        assert_eq!(real.edges_created, 0);
+    }
+
+    #[test]
+    fn test_rebuild_is_idempotent() {
+        let (_dir, db) = rebuild_test_db();
+
+        let mut state = crate::events::MaterializedState::default();
+        state.apply(&add_node_event("node-1", "One"));
+        state.apply(&add_node_event("node-2", "Two"));
+        state.apply(&update_node_event(
+            "node-1",
+            None,
+            None,
+            Some("completed"),
+            None,
+        ));
+        state.apply(&add_edge_event("node-1", "node-2", "leads_to"));
+
+        let first = db.rebuild_from_state(&state, false).unwrap();
+        assert_eq!(first.nodes_created, 2);
+        assert_eq!(first.edges_created, 1);
+
+        let second = db.rebuild_from_state(&state, false).unwrap();
+        assert_eq!(second.nodes_created, 0);
+        assert_eq!(second.nodes_updated, 0);
+        assert_eq!(second.nodes_deleted, 0);
+        assert_eq!(second.edges_created, 0);
+        assert_eq!(second.edges_deleted, 0);
+
+        assert_eq!(db.get_all_nodes().unwrap().len(), 2);
+        assert_eq!(db.get_all_edges().unwrap().len(), 1);
     }
 }

@@ -418,6 +418,7 @@ pub struct RebuildResult {
     pub nodes_deleted: usize,
     pub edges_created: usize,
     pub edges_deleted: usize,
+    pub edges_failed: usize,
     pub events_processed: usize,
     pub from_checkpoint: bool,
 }
