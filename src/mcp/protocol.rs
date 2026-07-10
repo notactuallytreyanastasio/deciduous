@@ -422,8 +422,6 @@ mod tests {
         assert!(value.get("protocolVersion").is_some());
         assert!(value.get("serverInfo").is_some());
         assert!(value["serverInfo"].get("name").is_some());
-        assert!(value["capabilities"]["tools"]
-            .get("listChanged")
-            .is_some());
+        assert!(value["capabilities"]["tools"].get("listChanged").is_some());
     }
 }

@@ -77,10 +77,10 @@ demo:
 
 # Installation
 install: release
-	cp target/release/losselot /usr/local/bin/
+	cp target/release/deciduous /usr/local/bin/
 
 uninstall:
-	rm -f /usr/local/bin/losselot
+	rm -f /usr/local/bin/deciduous
 
 # Clean build artifacts
 clean:

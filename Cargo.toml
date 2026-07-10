@@ -95,7 +95,6 @@ all = { level = "deny", priority = -1 }
 too_many_arguments = "allow"
 
 [dev-dependencies]
-proptest = "1.7.0"
 serde_yaml = "0.9.34"
 tempfile = "3.23.0"
 ts-rs = "10.1.0"

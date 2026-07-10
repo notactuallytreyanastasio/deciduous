@@ -795,7 +795,10 @@ mod tests {
             "update_status",
             "update_prompt",
         ] {
-            assert!(names.contains(&name.to_string()), "Missing CRUD tool: {name}");
+            assert!(
+                names.contains(&name.to_string()),
+                "Missing CRUD tool: {name}"
+            );
         }
     }
 

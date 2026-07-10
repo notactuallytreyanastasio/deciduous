@@ -1503,11 +1503,7 @@ fn main() {
                                         "{:<5} {:<12} {:<10} {}",
                                         n.id, type_colored, n.status, n.title
                                     );
-                                    println!(
-                                        "      {:<22} {}",
-                                        "",
-                                        truncated.dimmed()
-                                    );
+                                    println!("      {:<22} {}", "", truncated.dimmed());
                                 } else {
                                     println!(
                                         "{:<5} {:<12} {:<10} {}",
