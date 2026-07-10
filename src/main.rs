@@ -4602,17 +4602,6 @@ fn keyword_match_score(node_title: &str, commit_message: &str) -> f64 {
 // Git history export helpers
 // =============================================================================
 
-/// Git commit info for timeline view (matches web/src/types/graph.ts GitCommit)
-#[derive(serde::Serialize)]
-struct GitCommit {
-    hash: String,
-    short_hash: String,
-    author: String,
-    date: String,
-    message: String,
-    files_changed: Option<u32>,
-}
-
 /// Extract all unique commit hashes from nodes' metadata_json
 fn extract_commit_hashes(nodes: &[deciduous::DecisionNode]) -> Vec<String> {
     let mut hashes = std::collections::HashSet::new();
@@ -4626,63 +4615,16 @@ fn extract_commit_hashes(nodes: &[deciduous::DecisionNode]) -> Vec<String> {
     hashes.into_iter().collect()
 }
 
-/// Get commit info from git for a given hash
-fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
-    // Get commit info: hash, author, date (ISO), full message body
-    // Use %x00 (null byte) as separator since message can have newlines
-    let output = ProcessCommand::new("git")
-        .args(["log", "-1", "--format=%H%x00%an%x00%aI%x00%B", hash])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = stdout.trim().split('\x00').collect();
-    if parts.len() < 4 {
-        return None;
-    }
-
-    // Clean up the message - trim whitespace
-    let message = parts[3].trim().to_string();
-
-    // Get files changed count
-    let files_output = ProcessCommand::new("git")
-        .args(["diff-tree", "--no-commit-id", "--name-only", "-r", hash])
-        .output()
-        .ok();
-
-    let files_changed = files_output.and_then(|o| {
-        if o.status.success() {
-            let count = String::from_utf8_lossy(&o.stdout).trim().lines().count();
-            Some(count as u32)
-        } else {
-            None
-        }
-    });
-
-    Some(GitCommit {
-        hash: parts[0].to_string(),
-        short_hash: parts[0].chars().take(7).collect(),
-        author: parts[1].to_string(),
-        date: parts[2].to_string(),
-        message,
-        files_changed,
-    })
-}
-
 /// Generate git-history.json for all commits linked to nodes
 fn export_git_history(
     nodes: &[deciduous::DecisionNode],
     output_dir: &std::path::Path,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let hashes = extract_commit_hashes(nodes);
-    let mut commits: Vec<GitCommit> = Vec::new();
+    let mut commits: Vec<deciduous::util::GitCommit> = Vec::new();
 
     for hash in &hashes {
-        if let Some(commit) = get_git_commit_info(hash) {
+        if let Some(commit) = deciduous::util::get_git_commit_info(hash, None) {
             commits.push(commit);
         }
     }
