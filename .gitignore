@@ -1,54 +1,27 @@
+
+# Build artifacts
 target/
+
+# Editor / OS files
 *.swp
 *.swo
 *~
 .DS_Store
-losselot-reports/
-test_files/
-test_report.html
-*.flac
-sus.mp3
-1992-10-09 Tape.flac
-reference_implementation.sh
-
-# Demo source files
-*.mov
-screen.png
-s0.png
-s1.png
-s2.png
-sus2.mp3
-docs/demo.mov
-
-# Frontend build artifacts
-docs/node_modules/
-docs/dist/
-
-# Database (tracked separately)
-losselot.db
-
-# Reports
-report.html
 
 # Generated/temp files
 git.log
 
-# Web build artifacts
+# Frontend build artifacts
+docs/node_modules/
+docs/dist/
 web/bun.lock
 web/build-embed.sh
 web/node_modules/
 
-# Database
-deciduous.db
+# Databases (local state, never committed)
 *.db
 
-# Deciduous database (local) - but track patches for sharing
+# Deciduous local state - but track patches and config for sharing
 .deciduous/*
 !.deciduous/patches/
 !.deciduous/config.toml
-
-# Proptest regressions (local test failures)
-proptest-regressions/
-
-# Deciduous database (local)
-.deciduous/
