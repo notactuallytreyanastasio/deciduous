@@ -7,8 +7,11 @@ import {
   DecisionEdge,
   GraphData,
   NodeType,
+  NodeStatus,
   EdgeType,
   Theme,
+  NODE_TYPES,
+  DEFAULT_COMMIT_REPO,
   parseMetadata,
   getConfidence,
   getBranch,
@@ -22,6 +25,12 @@ import {
   getNodeThemeSource,
   formatFileSize,
 } from './types/graph';
+import {
+  TreeNode,
+  Narrative,
+  NarrativeMode,
+  buildNarratives,
+} from './utils/graphProcessing';
 
 // =============================================================================
 // Theme - Dark purple like beads
@@ -67,303 +76,25 @@ const TYPE_ABBREV: Record<NodeType, string> = {
   revisit: 'RVST',
 };
 
-// =============================================================================
-// Types
-// =============================================================================
+// Exhaustive, compiler-checked color maps (replaces `THEME[x as keyof typeof THEME]` casts)
+const NODE_TYPE_COLORS: Record<NodeType, string> = {
+  goal: THEME.goal,
+  decision: THEME.decision,
+  action: THEME.action,
+  outcome: THEME.outcome,
+  observation: THEME.observation,
+  option: THEME.option,
+  revisit: THEME.revisit,
+};
 
-interface TreeNode {
-  node: DecisionNode;
-  children: TreeNode[];
-  depth: number;
-}
-
-interface Narrative {
-  id: string;
-  name: string;
-  root: DecisionNode;
-  nodes: DecisionNode[];
-  edges: DecisionEdge[];
-  tree: TreeNode;
-  nodeCount: number;
-  dateRange: { start: Date; end: Date };
-  branches: string[];
-}
-
-type NarrativeMode = 'significant' | 'goals' | 'branches' | 'hubs' | 'custom';
-
-// Threshold for "significant" narratives - trees with this many nodes or more
-const SIGNIFICANT_TREE_SIZE = 10;
-
-interface AdjacencyLists {
-  outgoing: Map<number, Array<{ to: number; edge: DecisionEdge }>>;
-  incoming: Map<number, Array<{ from: number; edge: DecisionEdge }>>;
-}
-
-// =============================================================================
-// Graph Processing
-// =============================================================================
-
-function buildAdjacencyLists(edges: DecisionEdge[]): AdjacencyLists {
-  const outgoing = new Map<number, Array<{ to: number; edge: DecisionEdge }>>();
-  const incoming = new Map<number, Array<{ from: number; edge: DecisionEdge }>>();
-
-  for (const edge of edges) {
-    if (!outgoing.has(edge.from_node_id)) {
-      outgoing.set(edge.from_node_id, []);
-    }
-    outgoing.get(edge.from_node_id)!.push({ to: edge.to_node_id, edge });
-
-    if (!incoming.has(edge.to_node_id)) {
-      incoming.set(edge.to_node_id, []);
-    }
-    incoming.get(edge.to_node_id)!.push({ from: edge.from_node_id, edge });
-  }
-
-  return { outgoing, incoming };
-}
-
-function buildTree(
-  rootId: number,
-  outgoing: Map<number, Array<{ to: number; edge: DecisionEdge }>>,
-  nodeMap: Map<number, DecisionNode>,
-  visited: Set<number>,
-  depth: number = 0
-): TreeNode | null {
-  if (visited.has(rootId)) return null;
-  const node = nodeMap.get(rootId);
-  if (!node) return null;
-
-  visited.add(rootId);
-
-  const children: TreeNode[] = [];
-  const edges = outgoing.get(rootId) || [];
-
-  for (const { to } of edges) {
-    const childTree = buildTree(to, outgoing, nodeMap, visited, depth + 1);
-    if (childTree) {
-      children.push(childTree);
-    }
-  }
-
-  // Sort children by created_at
-  children.sort((a, b) =>
-    new Date(a.node.created_at).getTime() - new Date(b.node.created_at).getTime()
-  );
-
-  return { node, children, depth };
-}
-
-function collectTreeNodes(tree: TreeNode): DecisionNode[] {
-  const nodes: DecisionNode[] = [tree.node];
-  for (const child of tree.children) {
-    nodes.push(...collectTreeNodes(child));
-  }
-  return nodes;
-}
-
-/**
- * Calculate tree size (total descendants) for a root node using BFS
- */
-function calculateTreeSize(
-  rootId: number,
-  outgoing: Map<number, Array<{ to: number; edge: DecisionEdge }>>,
-): number {
-  const visited = new Set<number>();
-  const queue = [rootId];
-
-  while (queue.length > 0) {
-    const nodeId = queue.shift()!;
-    if (visited.has(nodeId)) continue;
-    visited.add(nodeId);
-
-    const children = outgoing.get(nodeId) || [];
-    for (const { to } of children) {
-      if (!visited.has(to)) {
-        queue.push(to);
-      }
-    }
-  }
-
-  return visited.size;
-}
-
-function buildNarratives(
-  graphData: GraphData,
-  mode: NarrativeMode
-): Narrative[] {
-  const { nodes, edges } = graphData;
-  const { outgoing } = buildAdjacencyLists(edges);
-  const nodeMap = new Map(nodes.map(n => [n.id, n]));
-
-  if (mode === 'branches') {
-    // Group by branch
-    const branchGroups = new Map<string, DecisionNode[]>();
-    for (const node of nodes) {
-      const branch = getBranch(node) || 'unknown';
-      if (!branchGroups.has(branch)) {
-        branchGroups.set(branch, []);
-      }
-      branchGroups.get(branch)!.push(node);
-    }
-
-    return Array.from(branchGroups.entries()).map(([branch, branchNodes]) => {
-      const sortedNodes = branchNodes.sort((a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-      const root = sortedNodes[0];
-      const nodeIds = new Set(branchNodes.map(n => n.id));
-      const branchEdges = edges.filter(e =>
-        nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
-      );
-
-      // Build tree from first node
-      const visited = new Set<number>();
-      const tree = buildTree(root.id, outgoing, nodeMap, visited, 0) || {
-        node: root,
-        children: [],
-        depth: 0,
-      };
-
-      return {
-        id: `branch-${branch}`,
-        name: branch,
-        root,
-        nodes: branchNodes,
-        edges: branchEdges,
-        tree,
-        nodeCount: branchNodes.length,
-        dateRange: {
-          start: new Date(sortedNodes[0].created_at),
-          end: new Date(sortedNodes[sortedNodes.length - 1].created_at),
-        },
-        branches: [branch],
-      };
-    }).sort((a, b) => b.dateRange.end.getTime() - a.dateRange.end.getTime()); // Sort by most recent activity
-  }
-
-  if (mode === 'hubs') {
-    // Find nodes with high out-degree (3+ outgoing edges)
-    const hubNodes = nodes.filter(n => {
-      const outEdges = outgoing.get(n.id) || [];
-      return outEdges.length >= 3;
-    });
-
-    // Sort by out-degree descending
-    hubNodes.sort((a, b) => {
-      const aOut = (outgoing.get(a.id) || []).length;
-      const bOut = (outgoing.get(b.id) || []).length;
-      return bOut - aOut;
-    });
-
-    const visited = new Set<number>();
-    const narratives: Narrative[] = [];
-
-    for (const hub of hubNodes) {
-      if (visited.has(hub.id)) continue;
-
-      const tree = buildTree(hub.id, outgoing, nodeMap, visited, 0);
-      if (!tree) continue;
-
-      const narrativeNodes = collectTreeNodes(tree);
-      if (narrativeNodes.length < 3) continue; // Skip tiny hubs
-
-      const nodeIds = new Set(narrativeNodes.map(n => n.id));
-      const narrativeEdges = edges.filter(e =>
-        nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
-      );
-
-      const sortedNodes = narrativeNodes.sort((a, b) =>
-        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      );
-
-      const branches = new Set<string>();
-      narrativeNodes.forEach(n => {
-        const b = getBranch(n);
-        if (b) branches.add(b);
-      });
-
-      narratives.push({
-        id: `hub-${hub.id}`,
-        name: hub.title,
-        root: hub,
-        nodes: narrativeNodes,
-        edges: narrativeEdges,
-        tree,
-        nodeCount: narrativeNodes.length,
-        dateRange: {
-          start: new Date(sortedNodes[0].created_at),
-          end: new Date(sortedNodes[sortedNodes.length - 1].created_at),
-        },
-        branches: Array.from(branches),
-      });
-    }
-
-    return narratives.sort((a, b) => b.dateRange.end.getTime() - a.dateRange.end.getTime());
-  }
-
-  // For 'significant' and 'goals' modes, start with all goals
-  const goals = nodes.filter(n => n.node_type === 'goal');
-
-  // Calculate tree sizes for all goals
-  const goalTreeSizes = new Map<number, number>();
-  for (const goal of goals) {
-    goalTreeSizes.set(goal.id, calculateTreeSize(goal.id, outgoing));
-  }
-
-  // Sort goals by most recently created descending
-  goals.sort((a, b) =>
-    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-  );
-
-  // For 'significant' mode, only include goals with significant tree sizes
-  const roots = mode === 'significant'
-    ? goals.filter(g => (goalTreeSizes.get(g.id) || 0) >= SIGNIFICANT_TREE_SIZE)
-    : goals;
-
-  const visited = new Set<number>();
-  const narratives: Narrative[] = [];
-
-  for (const root of roots) {
-    if (visited.has(root.id)) continue;
-
-    const tree = buildTree(root.id, outgoing, nodeMap, visited, 0);
-    if (!tree) continue;
-
-    const narrativeNodes = collectTreeNodes(tree);
-    const nodeIds = new Set(narrativeNodes.map(n => n.id));
-    const narrativeEdges = edges.filter(e =>
-      nodeIds.has(e.from_node_id) && nodeIds.has(e.to_node_id)
-    );
-
-    const sortedNodes = narrativeNodes.sort((a, b) =>
-      new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-    );
-
-    const branches = new Set<string>();
-    narrativeNodes.forEach(n => {
-      const b = getBranch(n);
-      if (b) branches.add(b);
-    });
-
-    narratives.push({
-      id: `narrative-${root.id}`,
-      name: root.title,
-      root,
-      nodes: narrativeNodes,
-      edges: narrativeEdges,
-      tree,
-      nodeCount: narrativeNodes.length,
-      dateRange: {
-        start: new Date(sortedNodes[0].created_at),
-        end: new Date(sortedNodes[sortedNodes.length - 1].created_at),
-      },
-      branches: Array.from(branches),
-    });
-  }
-
-  // Sort by most recent activity (newest first)
-  return narratives.sort((a, b) => b.dateRange.end.getTime() - a.dateRange.end.getTime());
-}
+const STATUS_COLORS: Record<NodeStatus, string> = {
+  active: THEME.active,
+  completed: THEME.completed,
+  pending: THEME.pending,
+  // THEME has no 'rejected' key; the previous `|| THEME.text` fallback produced
+  // THEME.text at the only status-color call site, so we keep that color.
+  rejected: THEME.text,
+};
 
 // =============================================================================
 // Data Loading
@@ -429,7 +160,7 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
 // =============================================================================
 
 function GitHubLink({ type, value, repo }: { type: 'commit' | 'pr' | 'issue'; value: string; repo?: string }) {
-  const repoPath = repo || 'notactuallytreyanastasio/deciduous';
+  const repoPath = repo || DEFAULT_COMMIT_REPO;
   let url = '';
   let display = '';
 
@@ -466,20 +197,21 @@ function GitHubLink({ type, value, repo }: { type: 'commit' | 'pr' | 'issue'; va
 
 interface TreeRowProps {
   treeNode: TreeNode;
-  isSelected: boolean;
+  selectedNodeId: number | null;
   expandedNodes: Set<number>;
   onSelect: (id: number) => void;
   onToggle: (id: number) => void;
   edges: DecisionEdge[];
 }
 
-function TreeRow({ treeNode, isSelected, expandedNodes, onSelect, onToggle, edges }: TreeRowProps) {
+function TreeRow({ treeNode, selectedNodeId, expandedNodes, onSelect, onToggle, edges }: TreeRowProps) {
   const { node, children, depth } = treeNode;
   const hasChildren = children.length > 0;
   const isExpanded = expandedNodes.has(node.id);
+  const isSelected = node.id === selectedNodeId;
 
   const confidence = getConfidence(node);
-  const typeColor = THEME[node.node_type as keyof typeof THEME] || THEME.text;
+  const typeColor = NODE_TYPE_COLORS[node.node_type];
   const confColor = confidence !== null
     ? confidence >= 70 ? THEME.confHigh : confidence >= 40 ? THEME.confMed : THEME.confLow
     : THEME.textDim;
@@ -561,7 +293,7 @@ function TreeRow({ treeNode, isSelected, expandedNodes, onSelect, onToggle, edge
         <TreeRow
           key={child.node.id}
           treeNode={child}
-          isSelected={isSelected}
+          selectedNodeId={selectedNodeId}
           expandedNodes={expandedNodes}
           onSelect={onSelect}
           onToggle={onToggle}
@@ -582,7 +314,7 @@ interface NarrativeCardProps {
 }
 
 function NarrativeCard({ narrative, onClick }: NarrativeCardProps) {
-  const typeColor = THEME[narrative.root.node_type as keyof typeof THEME] || THEME.text;
+  const typeColor = NODE_TYPE_COLORS[narrative.root.node_type];
 
   return (
     <div
@@ -669,7 +401,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
         height: '100%',
       }}>
         <div style={{
-          color: THEME[narrative.root.node_type as keyof typeof THEME],
+          color: NODE_TYPE_COLORS[narrative.root.node_type],
           fontSize: '11px',
           fontWeight: 600,
           letterSpacing: '1px',
@@ -713,7 +445,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
             COMPOSITION
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-            {(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'] as NodeType[]).map(type => {
+            {NODE_TYPES.map(type => {
               const count = narrative.nodes.filter(n => n.node_type === type).length;
               if (count === 0) return null;
               return (
@@ -723,7 +455,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
                   borderRadius: '4px',
                   fontSize: '12px',
                 }}>
-                  <span style={{ color: THEME[type] }}>{TYPE_ABBREV[type]}</span>
+                  <span style={{ color: NODE_TYPE_COLORS[type] }}>{TYPE_ABBREV[type]}</span>
                   <span style={{ color: THEME.textMuted, marginLeft: '4px' }}>{count}</span>
                 </span>
               );
@@ -746,10 +478,10 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
   const incoming = getIncomingEdges(node.id, edges);
   const outgoing = getOutgoingEdges(node.id, edges);
 
-  const typeColor = THEME[node.node_type as keyof typeof THEME] || THEME.text;
+  const typeColor = NODE_TYPE_COLORS[node.node_type];
   const nodeById = (id: number) => nodes.find(n => n.id === id);
 
-  const repo = graphData?.config?.github?.commit_repo || 'notactuallytreyanastasio/deciduous';
+  const repo = graphData?.config?.github?.commit_repo || DEFAULT_COMMIT_REPO;
 
   return (
     <div style={{
@@ -817,7 +549,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
         </span>
 
         <span style={{ color: THEME.textMuted }}>Status</span>
-        <span style={{ color: THEME[node.status as keyof typeof THEME] || THEME.text }}>
+        <span style={{ color: STATUS_COLORS[node.status] }}>
           {node.status}
         </span>
 
@@ -1082,7 +814,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
                       backgroundColor: THEME.bgLight,
                     }}
                   >
-                    <span style={{ color: THEME[fromNode.node_type as keyof typeof THEME] }}>
+                    <span style={{ color: NODE_TYPE_COLORS[fromNode.node_type] }}>
                       {TYPE_ABBREV[fromNode.node_type]}
                     </span>
                     <span style={{ color: THEME.textMuted, margin: '0 8px' }}>#{fromNode.id}</span>
@@ -1118,7 +850,7 @@ function DetailPanel({ node, narrative, edges, nodes, graphData, onSelectNode }:
                       backgroundColor: THEME.bgLight,
                     }}
                   >
-                    <span style={{ color: THEME[toNode.node_type as keyof typeof THEME] }}>
+                    <span style={{ color: NODE_TYPE_COLORS[toNode.node_type] }}>
                       {TYPE_ABBREV[toNode.node_type]}
                     </span>
                     <span style={{ color: THEME.textMuted, margin: '0 8px' }}>#{toNode.id}</span>
@@ -1242,9 +974,10 @@ function D3Graph({ narrative, selectedNodeId, onSelectNode }: D3GraphProps) {
     // Assign depths via BFS from roots
     const depths = new Map<number, number>();
     const queue: Array<{ id: number; depth: number }> = roots.map(r => ({ id: r.id, depth: 0 }));
+    let head = 0;
 
-    while (queue.length > 0) {
-      const { id, depth } = queue.shift()!;
+    while (head < queue.length) {
+      const { id, depth } = queue[head++];
       if (depths.has(id)) continue;
       depths.set(id, depth);
 
@@ -1395,7 +1128,7 @@ function D3Graph({ narrative, selectedNodeId, onSelectNode }: D3GraphProps) {
     const nodeGroup = g.append('g');
 
     for (const ln of layoutNodes) {
-      const typeColor = THEME[ln.node.node_type as keyof typeof THEME] || THEME.text;
+      const typeColor = NODE_TYPE_COLORS[ln.node.node_type];
 
       const nodeG = nodeGroup.append('g')
         .attr('transform', `translate(${ln.x}, ${ln.y})`)
@@ -1515,7 +1248,7 @@ function D3Graph({ narrative, selectedNodeId, onSelectNode }: D3GraphProps) {
     // Update all node groups
     svg.selectAll<SVGGElement, unknown>('g[data-node-id]').each(function() {
       const nodeG = d3.select(this);
-      const nodeId = parseInt(this.getAttribute('data-node-id') || '0');
+      const nodeId = parseInt(this.getAttribute('data-node-id') || '0', 10);
       const isSelected = nodeId === selectedNodeId;
 
       // Remove old shimmer
@@ -1572,13 +1305,13 @@ function D3Graph({ narrative, selectedNodeId, onSelectNode }: D3GraphProps) {
         gap: '8px',
         maxWidth: '60%',
       }}>
-        {(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'] as NodeType[]).map(type => (
+        {NODE_TYPES.map(type => (
           <span key={type} style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <span style={{
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              backgroundColor: THEME[type],
+              backgroundColor: NODE_TYPE_COLORS[type],
             }} />
             <span>{TYPE_ABBREV[type]}</span>
           </span>
@@ -1710,7 +1443,7 @@ function SearchResults({ results, selectedNodeId, onSelectNode }: SearchResultsP
         {results.length} RESULTS (newest first)
       </div>
       {results.map(node => {
-        const typeColor = THEME[node.node_type as keyof typeof THEME] || THEME.text;
+        const typeColor = NODE_TYPE_COLORS[node.node_type];
         const confidence = getConfidence(node);
         const isSelected = node.id === selectedNodeId;
         const date = new Date(node.created_at);
@@ -1903,9 +1636,9 @@ function Header({ mode, onModeChange, focusedNarrative, onBack, narrativeCount, 
 
         {/* Type filter buttons */}
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-          {(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'] as NodeType[]).map(type => {
+          {NODE_TYPES.map(type => {
             const isActive = searchTypes.has(type);
-            const typeColor = THEME[type];
+            const typeColor = NODE_TYPE_COLORS[type];
             return (
               <button
                 key={type}
@@ -2352,7 +2085,7 @@ export function App() {
   const [expandedNodes, setExpandedNodes] = useState<Set<number>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [searchTypes, setSearchTypes] = useState<Set<NodeType>>(
-    new Set(['goal', 'decision', 'action', 'outcome', 'observation', 'option', 'revisit'])
+    new Set(NODE_TYPES)
   );
   const [themeFilter, setThemeFilter] = useState<string | null>(null);
 
@@ -2830,7 +2563,7 @@ export function App() {
                   .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                   .map(node => {
                     const commit = getCommit(node);
-                    const typeColor = THEME[node.node_type as keyof typeof THEME] || THEME.text;
+                    const typeColor = NODE_TYPE_COLORS[node.node_type];
                     const isSelected = selectedNodeId === node.id;
                     return (
                       <div
@@ -2841,7 +2574,7 @@ export function App() {
                           borderBottom: `1px solid ${THEME.border}22`,
                           cursor: 'pointer',
                           backgroundColor: isSelected ? THEME.bgSelected : 'transparent',
-                          borderLeft: `3px solid ${typeColor as string}`,
+                          borderLeft: `3px solid ${typeColor}`,
                         }}
                       >
                         <div style={{
@@ -2850,7 +2583,7 @@ export function App() {
                           gap: '6px',
                         }}>
                           <span style={{
-                            color: typeColor as string,
+                            color: typeColor,
                             fontSize: '9px',
                             fontWeight: 700,
                             fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
@@ -2950,7 +2683,7 @@ export function App() {
               </div>
               <TreeRow
                 treeNode={focusedNarrative.tree}
-                isSelected={selectedNodeId === focusedNarrative.tree.node.id}
+                selectedNodeId={selectedNodeId}
                 expandedNodes={expandedNodes}
                 onSelect={setSelectedNodeId}
                 onToggle={handleToggle}
@@ -3003,7 +2736,7 @@ export function App() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {narrativesContainingNode.map(n => {
-                    const typeColor = THEME[n.root.node_type as keyof typeof THEME] || THEME.text;
+                    const typeColor = NODE_TYPE_COLORS[n.root.node_type];
                     return (
                       <div
                         key={n.id}
