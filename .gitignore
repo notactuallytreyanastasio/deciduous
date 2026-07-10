@@ -21,7 +21,8 @@ web/node_modules/
 # Databases (local state, never committed)
 *.db
 
-# Deciduous local state - but track patches and config for sharing
+# Deciduous local state - but track patches, config, and sync events for sharing
 .deciduous/*
 !.deciduous/patches/
 !.deciduous/config.toml
+!.deciduous/sync/
