@@ -52,6 +52,19 @@ jobs:
       - name: Run Type Validation
         run: ./scripts/validate-types.sh --verbose
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check Generated TypeScript Bindings
+        run: |
+          cargo run --bin gen_types --features ts-rs
+          # Fail if regeneration changed tracked files or produced untracked ones
+          git add -N bindings/ web/src/types/generated/
+          git diff --exit-code bindings/ web/src/types/generated/
+
       - name: Summary
         if: success()
         run: |

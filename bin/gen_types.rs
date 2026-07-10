@@ -1,6 +1,8 @@
+use deciduous::db::{QaInteraction, QaSearchResult};
 use deciduous::{
-    CommandLog, DecisionContext, DecisionEdge, DecisionNode, DecisionSession, RoadmapConflict,
-    RoadmapItem, RoadmapSyncState,
+    CheckboxState, CommandLog, DecisionContext, DecisionEdge, DecisionNode, DecisionSession,
+    GitHubIssueCache, NodeDocument, NodeTheme, RoadmapConflict, RoadmapItem, RoadmapSyncState,
+    Theme,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -36,5 +38,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     fs::write(&output_file, content)?;
 
     println!("Generated TypeScript definitions at {:?}", output_file);
+
+    // Export per-type binding files (one .ts file per #[ts(export)] type) to
+    // bindings/. This covers every type that derives TS, not just the subset
+    // bundled into schema.ts above. CI regenerates these and fails on drift.
+    let bindings_dir = PathBuf::from("bindings");
+    DecisionNode::export_all_to(&bindings_dir)?;
+    DecisionEdge::export_all_to(&bindings_dir)?;
+    DecisionContext::export_all_to(&bindings_dir)?;
+    DecisionSession::export_all_to(&bindings_dir)?;
+    CommandLog::export_all_to(&bindings_dir)?;
+    CheckboxState::export_all_to(&bindings_dir)?;
+    RoadmapItem::export_all_to(&bindings_dir)?;
+    RoadmapSyncState::export_all_to(&bindings_dir)?;
+    RoadmapConflict::export_all_to(&bindings_dir)?;
+    GitHubIssueCache::export_all_to(&bindings_dir)?;
+    QaInteraction::export_all_to(&bindings_dir)?;
+    QaSearchResult::export_all_to(&bindings_dir)?;
+    NodeDocument::export_all_to(&bindings_dir)?;
+    Theme::export_all_to(&bindings_dir)?;
+    NodeTheme::export_all_to(&bindings_dir)?;
+
+    println!("Generated per-type bindings at {:?}", bindings_dir);
     Ok(())
 }

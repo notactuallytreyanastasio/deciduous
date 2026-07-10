@@ -16,6 +16,23 @@ fn run_deciduous(args: &[&str], db_path: &PathBuf) -> std::process::Output {
         .expect("Failed to execute deciduous")
 }
 
+/// Helper to run deciduous CLI with a specific database path and working directory
+///
+/// Some commands (init, doc attach) resolve paths relative to the current
+/// directory, so tests for them must run inside an isolated temp dir.
+fn run_deciduous_in(
+    args: &[&str],
+    db_path: &PathBuf,
+    cwd: &std::path::Path,
+) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(args)
+        .env("DECIDUOUS_DB_PATH", db_path)
+        .current_dir(cwd)
+        .output()
+        .expect("Failed to execute deciduous")
+}
+
 /// Helper to get stdout as string
 fn stdout(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stdout).to_string()
@@ -1066,4 +1083,325 @@ fn test_supersede_node() {
     let output = run_deciduous(&["show", "1", "--json"], &db_path);
     let out = stdout(&output);
     assert!(out.contains("superseded"));
+}
+
+// =============================================================================
+// Init Tests
+// =============================================================================
+
+#[test]
+fn test_init_creates_project_scaffold() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project = temp_dir.path();
+    let db_path = project.join(".deciduous").join("deciduous.db");
+
+    let output = run_deciduous_in(&["init"], &db_path, project);
+    assert!(output.status.success(), "init failed: {}", stderr(&output));
+
+    // Core infrastructure
+    assert!(project.join(".deciduous").is_dir());
+    assert!(project.join(".deciduous/documents").is_dir());
+    assert!(project.join(".deciduous/config.toml").is_file());
+    assert!(project.join(".deciduous/.version").is_file());
+
+    // Claude Code integration (default assistant)
+    assert!(project.join(".claude/commands/decision.md").is_file());
+    assert!(project.join(".claude/commands/recover.md").is_file());
+    assert!(project.join(".claude/settings.json").is_file());
+    assert!(project.join(".claude/skills/pulse.md").is_file());
+
+    // CLAUDE.md gets the workflow section
+    let claude_md =
+        std::fs::read_to_string(project.join("CLAUDE.md")).expect("init should create CLAUDE.md");
+    assert!(claude_md.contains("## Decision Graph Workflow"));
+
+    // GitHub Pages scaffold
+    assert!(project.join("docs/index.html").is_file());
+    assert!(project.join("docs/graph-data.json").is_file());
+
+    // .deciduous is gitignored
+    let gitignore =
+        std::fs::read_to_string(project.join(".gitignore")).expect("init should create .gitignore");
+    assert!(gitignore.contains(".deciduous/"));
+}
+
+#[test]
+fn test_init_twice_is_idempotent() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project = temp_dir.path();
+    let db_path = project.join(".deciduous").join("deciduous.db");
+
+    let output = run_deciduous_in(&["init"], &db_path, project);
+    assert!(
+        output.status.success(),
+        "first init failed: {}",
+        stderr(&output)
+    );
+
+    // Put user content in config to verify init doesn't clobber existing files
+    let config_path = project.join(".deciduous/config.toml");
+    let user_config = "# user-modified config\n[branch]\nmain_branches = [\"trunk\"]\n";
+    std::fs::write(&config_path, user_config).expect("Failed to write config");
+
+    let output = run_deciduous_in(&["init"], &db_path, project);
+    assert!(
+        output.status.success(),
+        "second init failed: {}",
+        stderr(&output)
+    );
+
+    // User config preserved
+    let config = std::fs::read_to_string(&config_path).expect("config should still exist");
+    assert_eq!(config, user_config, "init must not clobber existing config");
+
+    // CLAUDE.md workflow section not duplicated
+    let claude_md =
+        std::fs::read_to_string(project.join("CLAUDE.md")).expect("CLAUDE.md should exist");
+    let occurrences = claude_md.matches("## Decision Graph Workflow").count();
+    assert_eq!(
+        occurrences, 1,
+        "workflow section should appear exactly once after re-init"
+    );
+}
+
+// =============================================================================
+// Document Attachment Tests
+// =============================================================================
+
+#[test]
+fn test_doc_attach_list_show_detach() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project = temp_dir.path();
+    let db_path = project.join("test.db");
+
+    // Create a node to attach to
+    let output = run_deciduous_in(&["add", "goal", "Doc Goal"], &db_path, project);
+    assert!(output.status.success(), "add failed: {}", stderr(&output));
+
+    // Create a small file to attach
+    let file_path = project.join("note.txt");
+    std::fs::write(&file_path, "design sketch contents").expect("Failed to write temp file");
+
+    // Attach with a description
+    let output = run_deciduous_in(
+        &[
+            "doc",
+            "attach",
+            "1",
+            file_path.to_str().unwrap(),
+            "-d",
+            "Design sketch",
+        ],
+        &db_path,
+        project,
+    );
+    assert!(
+        output.status.success(),
+        "doc attach failed: {}",
+        stderr(&output)
+    );
+    assert!(stdout(&output).contains("Attached"));
+
+    // File is stored under .deciduous/documents/ (relative to cwd)
+    let docs_dir = project.join(".deciduous/documents");
+    assert!(docs_dir.is_dir(), "documents dir should be created");
+    assert!(
+        std::fs::read_dir(&docs_dir).unwrap().count() == 1,
+        "attached file should be copied into documents dir"
+    );
+
+    // List shows the document
+    let output = run_deciduous_in(&["doc", "list"], &db_path, project);
+    assert!(
+        output.status.success(),
+        "doc list failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("note.txt"));
+    assert!(out.contains("Design sketch"));
+
+    // List scoped to the node also shows it
+    let output = run_deciduous_in(&["doc", "list", "1"], &db_path, project);
+    assert!(stdout(&output).contains("note.txt"));
+
+    // Show displays details
+    let output = run_deciduous_in(&["doc", "show", "1"], &db_path, project);
+    assert!(
+        output.status.success(),
+        "doc show failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("note.txt"));
+    assert!(out.contains("Design sketch"));
+
+    // Detach soft-deletes
+    let output = run_deciduous_in(&["doc", "detach", "1"], &db_path, project);
+    assert!(
+        output.status.success(),
+        "doc detach failed: {}",
+        stderr(&output)
+    );
+    assert!(stdout(&output).contains("Detached"));
+
+    // Default list no longer shows it
+    let output = run_deciduous_in(&["doc", "list"], &db_path, project);
+    assert!(
+        !stdout(&output).contains("note.txt"),
+        "detached document should not appear in default list"
+    );
+
+    // But it is recoverable via --include-detached
+    let output = run_deciduous_in(&["doc", "list", "--include-detached"], &db_path, project);
+    assert!(
+        stdout(&output).contains("note.txt"),
+        "detached document should appear with --include-detached"
+    );
+}
+
+#[test]
+fn test_doc_attach_missing_file_fails() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project = temp_dir.path();
+    let db_path = project.join("test.db");
+
+    run_deciduous_in(&["add", "goal", "Doc Goal"], &db_path, project);
+
+    let output = run_deciduous_in(
+        &["doc", "attach", "1", "does-not-exist.txt"],
+        &db_path,
+        project,
+    );
+    assert!(
+        !output.status.success(),
+        "attaching a nonexistent file should fail"
+    );
+}
+
+// =============================================================================
+// Theme and Tag Tests
+// =============================================================================
+
+#[test]
+fn test_themes_create_and_tag_node() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create a theme
+    let output = run_deciduous(
+        &[
+            "themes",
+            "create",
+            "backend",
+            "-c",
+            "#ef4444",
+            "-d",
+            "Backend work",
+        ],
+        &db_path,
+    );
+    assert!(
+        output.status.success(),
+        "themes create failed: {}",
+        stderr(&output)
+    );
+    assert!(stdout(&output).contains("backend"));
+
+    // Theme appears in list
+    let output = run_deciduous(&["themes", "list"], &db_path);
+    assert!(
+        output.status.success(),
+        "themes list failed: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("backend"));
+    assert!(out.contains("#ef4444"));
+
+    // Tag a node with the theme
+    run_deciduous(&["add", "goal", "Themed Goal"], &db_path);
+    let output = run_deciduous(&["tag", "add", "1", "backend"], &db_path);
+    assert!(
+        output.status.success(),
+        "tag add failed: {}",
+        stderr(&output)
+    );
+    assert!(stdout(&output).contains("Tagged"));
+
+    // Tag appears on the node
+    let output = run_deciduous(&["tag", "list", "1"], &db_path);
+    assert!(
+        output.status.success(),
+        "tag list failed: {}",
+        stderr(&output)
+    );
+    assert!(stdout(&output).contains("backend"));
+
+    // Remove the tag
+    let output = run_deciduous(&["tag", "remove", "1", "backend"], &db_path);
+    assert!(
+        output.status.success(),
+        "tag remove failed: {}",
+        stderr(&output)
+    );
+
+    let output = run_deciduous(&["tag", "list", "1"], &db_path);
+    assert!(
+        !stdout(&output).contains("backend"),
+        "removed tag should not appear"
+    );
+}
+
+#[test]
+fn test_tag_add_unknown_theme_fails() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    run_deciduous(&["add", "goal", "Goal"], &db_path);
+
+    // Tagging with a theme that was never created should fail
+    let output = run_deciduous(&["tag", "add", "1", "nonexistent-theme"], &db_path);
+    assert!(
+        !output.status.success(),
+        "tagging with unknown theme should fail, stdout: {}",
+        stdout(&output)
+    );
+}
+
+// =============================================================================
+// Migrate Tests
+// =============================================================================
+
+#[test]
+fn test_migrate_is_idempotent() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create some data first
+    run_deciduous(&["add", "goal", "Migrate Goal"], &db_path);
+
+    // First migrate succeeds
+    let output = run_deciduous(&["migrate"], &db_path);
+    assert!(
+        output.status.success(),
+        "migrate failed: {}",
+        stderr(&output)
+    );
+
+    // Second migrate is a safe no-op
+    let output = run_deciduous(&["migrate"], &db_path);
+    assert!(
+        output.status.success(),
+        "second migrate failed: {}",
+        stderr(&output)
+    );
+    assert!(
+        stdout(&output).contains("no migration needed"),
+        "re-running migrate should report nothing to do"
+    );
+
+    // Data survives migration
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(stdout(&output).contains("Migrate Goal"));
 }
