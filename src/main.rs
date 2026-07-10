@@ -1079,31 +1079,7 @@ fn main() {
             });
 
             // Parse date parameter into RFC3339 format
-            let effective_date = date.as_ref().map(|d| {
-                // Try parsing as RFC3339 first
-                if chrono::DateTime::parse_from_rfc3339(d).is_ok() {
-                    d.clone()
-                }
-                // Try "YYYY-MM-DD HH:MM:SS" format
-                else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M:%S")
-                {
-                    chrono::Local.from_local_datetime(&dt).unwrap().to_rfc3339()
-                }
-                // Try "YYYY-MM-DD" format (set to start of day)
-                else if let Ok(date) = chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d") {
-                    let dt = date.and_hms_opt(0, 0, 0).unwrap();
-                    chrono::Local.from_local_datetime(&dt).unwrap().to_rfc3339()
-                }
-                // Fallback: use as-is and hope for the best
-                else {
-                    eprintln!(
-                        "{} Could not parse date '{}'. Use RFC3339 or YYYY-MM-DD format.",
-                        "Warning:".yellow(),
-                        d
-                    );
-                    d.clone()
-                }
-            });
+            let effective_date = date.as_ref().map(|d| parse_backdate(d));
 
             match db.create_node_full(
                 &node_type,
@@ -1122,7 +1098,7 @@ fn main() {
                         .unwrap_or_default();
                     let commit_str = effective_commit
                         .as_ref()
-                        .map(|c| format!(" [commit: {}]", &c[..7.min(c.len())]))
+                        .map(|c| format!(" [commit: {}]", c.chars().take(7).collect::<String>()))
                         .unwrap_or_default();
                     let prompt_str = effective_prompt
                         .as_ref()
@@ -1241,9 +1217,12 @@ fn main() {
         },
 
         Command::Unlink { from, to } => {
-            // Get node info before deletion for event emission
+            // Get node and edge info before deletion for event emission.
+            // delete_edge removes ALL edges between the pair, so capture every
+            // edge's type to emit matching DeleteEdge events.
             let from_node = db.get_node(from).ok().flatten();
             let to_node = db.get_node(to).ok().flatten();
+            let deleted_edges = db.get_edges_between(from, to).unwrap_or_default();
 
             match db.delete_edge(from, to) {
                 Ok(()) => {
@@ -1257,20 +1236,28 @@ fn main() {
                             if let Ok(event_log) =
                                 EventLog::new(&PathBuf::from(".deciduous"), author.clone())
                             {
-                                // We need to figure out the edge_type for the edge_id
-                                // For now, use "leads_to" as default since we don't have the edge info
-                                let edge_id = generate_edge_id(
-                                    &from_n.change_id,
-                                    &to_n.change_id,
-                                    "leads_to",
-                                );
-                                let event = Event::DeleteEdge {
-                                    edge_id,
-                                    timestamp: chrono::Utc::now(),
-                                    author,
-                                };
-                                if let Err(e) = event_log.append(event) {
-                                    eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
+                                // Emit one DeleteEdge per deleted edge, using each
+                                // edge's real type so the edge_id matches the one
+                                // emitted when the edge was created
+                                let mut emitted_ids: Vec<String> = Vec::new();
+                                for edge in &deleted_edges {
+                                    let edge_id = generate_edge_id(
+                                        &from_n.change_id,
+                                        &to_n.change_id,
+                                        &edge.edge_type,
+                                    );
+                                    if emitted_ids.contains(&edge_id) {
+                                        continue;
+                                    }
+                                    emitted_ids.push(edge_id.clone());
+                                    let event = Event::DeleteEdge {
+                                        edge_id,
+                                        timestamp: chrono::Utc::now(),
+                                        author: author.clone(),
+                                    };
+                                    if let Err(e) = event_log.append(event) {
+                                        eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
+                                    }
                                 }
                             }
                         }
@@ -1494,11 +1481,7 @@ fn main() {
                             };
                             if n.node_type == "observation" {
                                 if let Some(ref desc) = n.description {
-                                    let truncated = if desc.len() > 80 {
-                                        format!("{}...", &desc[..77])
-                                    } else {
-                                        desc.clone()
-                                    };
+                                    let truncated = truncate(desc, 80);
                                     println!(
                                         "{:<5} {:<12} {:<10} {}",
                                         n.id, type_colored, n.status, n.title
@@ -4548,6 +4531,41 @@ fn generate_ai_description(filename: &str, file_path: &std::path::Path) -> Optio
     }
 }
 
+/// Parse a `--date` value into RFC3339, accepting RFC3339, "YYYY-MM-DD HH:MM:SS",
+/// or "YYYY-MM-DD" (start of day). Local times that don't exist (DST gaps) or are
+/// ambiguous resolve via `earliest()` instead of panicking; unparseable input is
+/// passed through as-is with a warning.
+fn parse_backdate(d: &str) -> String {
+    // Try parsing as RFC3339 first
+    if chrono::DateTime::parse_from_rfc3339(d).is_ok() {
+        return d.to_string();
+    }
+
+    // Try "YYYY-MM-DD HH:MM:SS" format
+    let naive = chrono::NaiveDateTime::parse_from_str(d, "%Y-%m-%d %H:%M:%S")
+        .ok()
+        // Try "YYYY-MM-DD" format (set to start of day)
+        .or_else(|| {
+            chrono::NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                .ok()
+                .and_then(|date| date.and_hms_opt(0, 0, 0))
+        });
+
+    if let Some(dt) = naive {
+        if let Some(local) = chrono::Local.from_local_datetime(&dt).earliest() {
+            return local.to_rfc3339();
+        }
+    }
+
+    // Fallback: use as-is and hope for the best
+    eprintln!(
+        "{} Could not parse date '{}'. Use RFC3339 or YYYY-MM-DD format.",
+        "Warning:".yellow(),
+        d
+    );
+    d.to_string()
+}
+
 fn truncate(s: &str, max_len: usize) -> String {
     if s.chars().count() <= max_len {
         s.to_string()
@@ -4835,5 +4853,88 @@ mod tests {
             "Real example should have high match, got {}",
             score
         );
+    }
+
+    // === truncate Tests ===
+
+    #[test]
+    fn test_truncate_short_string_unchanged() {
+        assert_eq!(truncate("hello", 80), "hello");
+    }
+
+    #[test]
+    fn test_truncate_long_ascii() {
+        let s = "a".repeat(100);
+        let result = truncate(&s, 80);
+        assert_eq!(result.chars().count(), 80);
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_multibyte_at_boundary() {
+        // Regression test: byte-slicing `&desc[..77]` panicked when a
+        // multi-byte character straddled the boundary. Cyrillic chars are
+        // 2 bytes each, so every odd byte index is mid-character.
+        let s = "\u{0434}".repeat(100); // "д" x 100 (200 bytes)
+        let result = truncate(&s, 80);
+        assert_eq!(result.chars().count(), 80);
+        assert!(result.ends_with("..."));
+    }
+
+    #[test]
+    fn test_truncate_emoji_description() {
+        // 4-byte emoji near the boundary must not panic
+        let s = format!("{}{}", "x".repeat(76), "\u{1F600}".repeat(10));
+        let result = truncate(&s, 80);
+        assert_eq!(result.chars().count(), 80);
+        assert!(result.ends_with("..."));
+    }
+
+    // === parse_backdate Tests ===
+
+    #[test]
+    fn test_parse_backdate_rfc3339_passthrough() {
+        let input = "2025-01-15T10:30:00+00:00";
+        assert_eq!(parse_backdate(input), input);
+    }
+
+    #[test]
+    fn test_parse_backdate_date_only() {
+        let result = parse_backdate("2025-01-15");
+        let parsed = chrono::DateTime::parse_from_rfc3339(&result)
+            .expect("date-only input should produce valid RFC3339");
+        assert!(result.starts_with("2025-01-15"), "got {}", result);
+        let _ = parsed;
+    }
+
+    #[test]
+    fn test_parse_backdate_datetime() {
+        let result = parse_backdate("2025-01-15 10:30:00");
+        assert!(
+            chrono::DateTime::parse_from_rfc3339(&result).is_ok(),
+            "datetime input should produce valid RFC3339, got {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_parse_backdate_dst_gap_does_not_panic() {
+        // Regression test: 2:30 AM on 2025-03-09 does not exist in US
+        // timezones (DST spring-forward). The old code called .unwrap() on
+        // from_local_datetime and panicked. Depending on the host timezone
+        // this either resolves to a valid RFC3339 time or falls back to
+        // passing the input through -- but it must never panic.
+        let input = "2025-03-09 02:30:00";
+        let result = parse_backdate(input);
+        assert!(
+            result == input || chrono::DateTime::parse_from_rfc3339(&result).is_ok(),
+            "expected passthrough or valid RFC3339, got {}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_parse_backdate_garbage_passthrough() {
+        assert_eq!(parse_backdate("not a date"), "not a date");
     }
 }

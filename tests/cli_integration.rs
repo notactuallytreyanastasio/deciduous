@@ -232,6 +232,68 @@ fn test_add_all_node_types() {
     }
 }
 
+#[test]
+fn test_nodes_with_multibyte_observation_description() {
+    // Regression test: `deciduous nodes` truncated long observation
+    // descriptions by byte index, panicking when a multi-byte character
+    // straddled the 77-byte boundary.
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Description well over 80 chars, made entirely of 4-byte emoji so any
+    // byte-index truncation lands mid-character
+    let long_desc = "\u{1F600}".repeat(100);
+    let output = run_deciduous(
+        &["add", "observation", "Emoji Observation", "-d", &long_desc],
+        &db_path,
+    );
+    assert!(
+        output.status.success(),
+        "add observation failed: {}",
+        stderr(&output)
+    );
+
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(
+        output.status.success(),
+        "nodes panicked or failed on multibyte description: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("Emoji Observation"));
+    assert!(out.contains("..."), "long description should be truncated");
+}
+
+#[test]
+fn test_add_node_with_dst_gap_date() {
+    // Regression test: --date with a local time that does not exist in the
+    // process timezone (DST spring-forward gap) panicked on .unwrap().
+    // 2:30 AM on 2025-03-09 does not exist in America/New_York.
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let output = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args([
+            "add",
+            "goal",
+            "DST Gap Goal",
+            "--date",
+            "2025-03-09 02:30:00",
+        ])
+        .env("DECIDUOUS_DB_PATH", &db_path)
+        .env("TZ", "America/New_York")
+        .output()
+        .expect("Failed to execute deciduous");
+    assert!(
+        output.status.success(),
+        "add with DST-gap date failed: {}",
+        stderr(&output)
+    );
+
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(stdout(&output).contains("DST Gap Goal"));
+}
+
 // =============================================================================
 // Edge Tests
 // =============================================================================
@@ -320,6 +382,20 @@ fn test_update_node_status() {
     // Verify status changed
     let output = run_deciduous(&["nodes"], &db_path);
     assert!(stdout(&output).contains("completed"));
+}
+
+#[test]
+fn test_update_status_nonexistent_node_fails() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // No nodes exist - updating status must fail, not silently succeed
+    let output = run_deciduous(&["status", "42", "completed"], &db_path);
+    assert!(
+        !output.status.success(),
+        "status update on nonexistent node should fail, stdout: {}",
+        stdout(&output)
+    );
 }
 
 // =============================================================================
@@ -550,6 +626,35 @@ fn test_unlink_nodes() {
         output.status.success(),
         "unlink failed: {}",
         stderr(&output)
+    );
+}
+
+#[test]
+fn test_unlink_non_leads_to_edge() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    // Create nodes linked with a non-default edge type
+    run_deciduous(&["add", "option", "Option A"], &db_path);
+    run_deciduous(&["add", "decision", "Decision"], &db_path);
+    run_deciduous(&["link", "1", "2", "-t", "rejected"], &db_path);
+
+    // Verify the typed edge exists
+    let output = run_deciduous(&["edges"], &db_path);
+    assert!(stdout(&output).contains("rejected"));
+
+    // Unlink removes it
+    let output = run_deciduous(&["unlink", "1", "2"], &db_path);
+    assert!(
+        output.status.success(),
+        "unlink failed: {}",
+        stderr(&output)
+    );
+
+    let output = run_deciduous(&["edges"], &db_path);
+    assert!(
+        !stdout(&output).contains("rejected"),
+        "typed edge should be removed"
     );
 }
 
