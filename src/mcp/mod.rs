@@ -16,7 +16,8 @@ pub mod tools;
 use crate::db::Database;
 use protocol::{
     build_initialize_result, error_response, parse_request, success_response, tool_result_error,
-    JsonRpcErrorResponse, ToolCallParams, ToolListResult, METHOD_NOT_FOUND,
+    JsonRpcErrorResponse, ToolCallParams, ToolListResult, INTERNAL_ERROR, INVALID_PARAMS,
+    METHOD_NOT_FOUND,
 };
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
@@ -75,9 +76,9 @@ impl McpServer {
         };
 
         let result = match request.method.as_str() {
-            "initialize" => handle_initialize(request.params),
-            "tools/list" => handle_tools_list(),
-            "tools/call" => self.handle_tools_call(request.params),
+            "initialize" => handle_initialize(&id, request.params),
+            "tools/list" => handle_tools_list(&id),
+            "tools/call" => self.handle_tools_call(&id, request.params),
             "ping" => Ok(json!({})),
             method => Err(error_to_value(error_response(
                 id.clone(),
@@ -92,13 +93,17 @@ impl McpServer {
         })
     }
 
-    fn handle_tools_call(&mut self, params: Option<Value>) -> Result<Value, Value> {
+    fn handle_tools_call(&mut self, id: &Value, params: Option<Value>) -> Result<Value, Value> {
         let params = params.ok_or_else(|| {
-            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32602,"message":"Missing params"}})
+            error_to_value(error_response(id.clone(), INVALID_PARAMS, "Missing params"))
         })?;
 
         let call: ToolCallParams = serde_json::from_value(params).map_err(|e| {
-            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32602,"message":format!("Invalid params: {e}")}})
+            error_to_value(error_response(
+                id.clone(),
+                INVALID_PARAMS,
+                format!("Invalid params: {e}"),
+            ))
         })?;
 
         if !tools::is_valid_tool(&call.name) {
@@ -106,13 +111,13 @@ impl McpServer {
                 "Unknown tool: {}. Use tools/list to see available tools.",
                 call.name
             ));
-            return serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}));
+            return serde_json::to_value(result).map_err(|e| serialization_error(id, &e));
         }
 
         let args = call.arguments.unwrap_or(json!({}));
         if let Err(msg) = tools::validate_tool_args(&call.name, &args) {
             let result = tool_result_error(msg);
-            return serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}));
+            return serde_json::to_value(result).map_err(|e| serialization_error(id, &e));
         }
 
         // Session lifecycle tools need mutable access to server state
@@ -148,7 +153,7 @@ impl McpServer {
             }
         };
 
-        serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}))
+        serde_json::to_value(result).map_err(|e| serialization_error(id, &e))
     }
 
     fn handle_start_session(&mut self, args: &Value) -> protocol::ToolCallResult {
@@ -254,13 +259,9 @@ impl McpServer {
 
         // Reopen if it was ended
         if session.ended_at.is_some() {
-            // Clear ended_at to reactivate
-            if let Err(e) = self.db.end_session(session_id, None) {
+            if let Err(e) = self.db.reactivate_session(session_id) {
                 return protocol::tool_result_error(format!("Failed to reopen session: {e}"));
             }
-            // end_session sets ended_at, but we want to clear it — use raw update
-            // For now, just create a fresh session that continues the tree
-            eprintln!("deciduous-mcp: note - session #{session_id} was ended, resuming anyway");
         }
 
         self.active_session_id = Some(session_id);
@@ -384,9 +385,11 @@ fn load_session_from_disk(db: &Database) -> Option<i32> {
     }
 }
 
-/// Persist active session ID to disk.
+/// Persist active session ID to disk. Non-fatal on failure, but logged.
 fn save_session_to_disk(session_id: i32) {
-    let _ = std::fs::write(SESSION_FILE, session_id.to_string());
+    if let Err(e) = std::fs::write(SESSION_FILE, session_id.to_string()) {
+        eprintln!("deciduous-mcp: failed to persist session #{session_id} to {SESSION_FILE}: {e}");
+    }
 }
 
 /// Remove the session file from disk.
@@ -452,7 +455,7 @@ fn handle_notification(method: &str) {
     }
 }
 
-fn handle_initialize(params: Option<Value>) -> Result<Value, Value> {
+fn handle_initialize(id: &Value, params: Option<Value>) -> Result<Value, Value> {
     if let Some(ref p) = params {
         if let Some(info) = p.get("clientInfo") {
             let name = info
@@ -464,13 +467,22 @@ fn handle_initialize(params: Option<Value>) -> Result<Value, Value> {
     }
 
     let result = build_initialize_result();
-    serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}))
+    serde_json::to_value(result).map_err(|e| serialization_error(id, &e))
 }
 
-fn handle_tools_list() -> Result<Value, Value> {
-    let tools = tools::all_tool_definitions();
+fn handle_tools_list(id: &Value) -> Result<Value, Value> {
+    let tools = tools::tool_definitions().to_vec();
     let result = ToolListResult { tools };
-    serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}))
+    serde_json::to_value(result).map_err(|e| serialization_error(id, &e))
+}
+
+/// Build a proper JSON-RPC error envelope for a serialization failure.
+fn serialization_error(id: &Value, e: &serde_json::Error) -> Value {
+    error_to_value(error_response(
+        id.clone(),
+        INTERNAL_ERROR,
+        format!("Serialization error: {e}"),
+    ))
 }
 
 fn error_to_value(err: JsonRpcErrorResponse) -> Value {
@@ -705,6 +717,76 @@ mod tests {
         server.handle_message(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"add_node","arguments":{"node_type":"action","title":"After resume"}}}"#);
         let nodes = server.db.get_session_nodes(session_id).unwrap();
         assert!(nodes.iter().any(|n| n.title == "After resume"));
+    }
+
+    #[test]
+    fn test_resume_ended_session_reactivates_and_preserves_summary() {
+        let mut server = test_server();
+
+        // Start a session, then end it WITH a summary
+        server.handle_message(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"start_session","arguments":{"name":"reopen test","goal_title":"Reopen me"}}}"#);
+        let session_id = server.active_session_id.unwrap();
+        server.handle_message(r#"{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"end_session","arguments":{"summary":"Important summary"}}}"#);
+
+        // Sanity: session is ended with the summary saved
+        let session = server.db.get_session(session_id).unwrap().unwrap();
+        assert!(session.ended_at.is_some());
+        assert_eq!(session.summary.as_deref(), Some("Important summary"));
+
+        // Resume it
+        let msg = format!(
+            r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"resume_session","arguments":{{"session_id":{session_id}}}}}}}"#
+        );
+        server.handle_message(&msg).unwrap();
+
+        // ended_at must be cleared, summary must be preserved
+        let session = server.db.get_session(session_id).unwrap().unwrap();
+        assert!(
+            session.ended_at.is_none(),
+            "resume must clear ended_at so the session reads as active"
+        );
+        assert_eq!(
+            session.summary.as_deref(),
+            Some("Important summary"),
+            "resume must not wipe the saved summary"
+        );
+
+        // And the get_session tool should report it as active with the summary intact
+        let resp = server.handle_message(r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"get_session","arguments":{}}}"#).unwrap();
+        let text = resp["result"]["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("\"is_active\": true"));
+        assert!(text.contains("Important summary"));
+    }
+
+    #[test]
+    fn test_tools_call_missing_params_echoes_request_id() {
+        let mut server = test_server();
+
+        // tools/call with no params at all
+        let msg = r#"{"jsonrpc":"2.0","id":42,"method":"tools/call"}"#;
+        let resp = server.handle_message(msg).unwrap();
+        assert_eq!(resp["id"], 42, "error response must echo the request id");
+        assert_eq!(
+            resp["error"]["code"].as_i64().unwrap(),
+            protocol::INVALID_PARAMS
+        );
+    }
+
+    #[test]
+    fn test_tools_call_invalid_params_shape_echoes_request_id() {
+        let mut server = test_server();
+
+        // params present but missing the required "name" field
+        let msg = r#"{"jsonrpc":"2.0","id":"req-7","method":"tools/call","params":{"bogus":true}}"#;
+        let resp = server.handle_message(msg).unwrap();
+        assert_eq!(
+            resp["id"], "req-7",
+            "error response must echo the request id"
+        );
+        assert_eq!(
+            resp["error"]["code"].as_i64().unwrap(),
+            protocol::INVALID_PARAMS
+        );
     }
 
     #[test]
