@@ -231,6 +231,49 @@ pub struct DecisionNode {
     pub metadata_json: Option<String>,
 }
 
+impl DecisionNode {
+    /// Parse `metadata_json` into a JSON value (None if absent or malformed)
+    pub fn metadata(&self) -> Option<serde_json::Value> {
+        self.metadata_json
+            .as_ref()
+            .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+    }
+
+    /// Extract the branch name from metadata
+    pub fn branch(&self) -> Option<String> {
+        self.metadata().and_then(|v| {
+            v.get("branch")
+                .and_then(|b| b.as_str())
+                .map(|s| s.to_string())
+        })
+    }
+
+    /// Extract the confidence from metadata (clamped to 100, matching build_metadata_json)
+    pub fn confidence(&self) -> Option<u8> {
+        self.metadata()
+            .and_then(|v| v.get("confidence").and_then(|c| c.as_u64()))
+            .map(|c| c.min(100) as u8)
+    }
+
+    /// Extract the commit hash from metadata
+    pub fn commit(&self) -> Option<String> {
+        self.metadata().and_then(|v| {
+            v.get("commit")
+                .and_then(|c| c.as_str())
+                .map(|s| s.to_string())
+        })
+    }
+
+    /// Extract the stored prompt from metadata
+    pub fn prompt(&self) -> Option<String> {
+        self.metadata().and_then(|v| {
+            v.get("prompt")
+                .and_then(|p| p.as_str())
+                .map(|s| s.to_string())
+        })
+    }
+}
+
 /// Summary of what was deleted by delete_node
 #[derive(Debug)]
 pub struct DeleteSummary {
@@ -698,6 +741,61 @@ impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
     }
 }
 
+/// Check whether the `change_id` column exists on decision_nodes
+fn has_node_change_id_column(conn: &mut SqliteConnection) -> bool {
+    let columns: Vec<PragmaTableInfo> = diesel::sql_query("PRAGMA table_info(decision_nodes)")
+        .load(conn)
+        .unwrap_or_default();
+    columns.iter().any(|c| c.name == "change_id")
+}
+
+/// Backfill NULL node change_ids with fresh UUIDs. Returns the number of rows backfilled.
+fn backfill_null_node_change_ids(conn: &mut SqliteConnection) -> Result<usize> {
+    let nodes: Vec<NodeIdOnly> =
+        diesel::sql_query("SELECT id FROM decision_nodes WHERE change_id IS NULL")
+            .load(conn)
+            .unwrap_or_default();
+
+    let count = nodes.len();
+    for node in nodes {
+        let change_id = Uuid::new_v4().to_string();
+        diesel::sql_query(format!(
+            "UPDATE decision_nodes SET change_id = '{}' WHERE id = {}",
+            change_id, node.id
+        ))
+        .execute(conn)?;
+    }
+    Ok(count)
+}
+
+/// Add from_change_id/to_change_id columns to decision_edges and backfill them
+/// from node change_ids. Returns true if the columns were added, false if they
+/// already existed.
+fn add_edge_change_id_columns(conn: &mut SqliteConnection) -> Result<bool> {
+    let edge_columns: Vec<PragmaTableInfo> = diesel::sql_query("PRAGMA table_info(decision_edges)")
+        .load(conn)
+        .unwrap_or_default();
+
+    let has_from_change_id = edge_columns.iter().any(|c| c.name == "from_change_id");
+
+    if has_from_change_id {
+        return Ok(false);
+    }
+
+    diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN from_change_id TEXT").execute(conn)?;
+    diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN to_change_id TEXT").execute(conn)?;
+
+    // Backfill edge change_ids from node change_ids
+    diesel::sql_query(
+        "UPDATE decision_edges SET
+            from_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.from_node_id),
+            to_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.to_node_id)"
+    )
+    .execute(conn)?;
+
+    Ok(true)
+}
+
 impl Database {
     /// Get the database path that will be used
     pub fn db_path() -> std::path::PathBuf {
@@ -753,12 +851,7 @@ impl Database {
             return Ok(false); // Table doesn't exist yet, init_schema will create it
         }
 
-        // Check if change_id column exists in decision_nodes
-        let columns: Vec<PragmaTableInfo> = diesel::sql_query("PRAGMA table_info(decision_nodes)")
-            .load(&mut conn)
-            .unwrap_or_default();
-
-        let has_change_id = columns.iter().any(|c| c.name == "change_id");
+        let has_change_id = has_node_change_id_column(&mut conn);
 
         if !has_change_id {
             // Add change_id column to decision_nodes
@@ -767,46 +860,14 @@ impl Database {
         }
 
         // Always backfill any NULL change_ids (handles both new columns and stragglers)
-        let nodes: Vec<NodeIdOnly> =
-            diesel::sql_query("SELECT id FROM decision_nodes WHERE change_id IS NULL")
-                .load(&mut conn)
-                .unwrap_or_default();
+        let backfilled = backfill_null_node_change_ids(&mut conn)?;
 
-        if nodes.is_empty() && has_change_id {
+        if backfilled == 0 && has_change_id {
             return Ok(false); // Already fully migrated
         }
 
-        for node in nodes {
-            let change_id = Uuid::new_v4().to_string();
-            diesel::sql_query(format!(
-                "UPDATE decision_nodes SET change_id = '{}' WHERE id = {}",
-                change_id, node.id
-            ))
-            .execute(&mut conn)?;
-        }
-
         // Check if edge columns need migration
-        let edge_columns: Vec<PragmaTableInfo> =
-            diesel::sql_query("PRAGMA table_info(decision_edges)")
-                .load(&mut conn)
-                .unwrap_or_default();
-
-        let has_from_change_id = edge_columns.iter().any(|c| c.name == "from_change_id");
-
-        if !has_from_change_id {
-            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN from_change_id TEXT")
-                .execute(&mut conn)?;
-            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN to_change_id TEXT")
-                .execute(&mut conn)?;
-
-            // Backfill edge change_ids
-            diesel::sql_query(
-                "UPDATE decision_edges SET
-                    from_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.from_node_id),
-                    to_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.to_node_id)"
-            )
-            .execute(&mut conn)?;
-        }
+        add_edge_change_id_columns(&mut conn)?;
 
         Ok(true) // Migration performed
     }
@@ -1231,15 +1292,7 @@ impl Database {
     pub fn migrate_add_change_ids(&self) -> Result<bool> {
         let mut conn = self.get_conn()?;
 
-        // Check if change_id column exists in decision_nodes
-        let columns: Vec<(String,)> = diesel::sql_query("PRAGMA table_info(decision_nodes)")
-            .load::<PragmaTableInfo>(&mut conn)
-            .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
-            .unwrap_or_default();
-
-        let has_change_id = columns.iter().any(|(name,)| name == "change_id");
-
-        if has_change_id {
+        if has_node_change_id_column(&mut conn) {
             return Ok(false); // Already migrated
         }
 
@@ -1248,47 +1301,14 @@ impl Database {
             .execute(&mut conn)?;
 
         // Backfill change_id with UUIDs for existing nodes
-        let nodes: Vec<(i32,)> =
-            diesel::sql_query("SELECT id FROM decision_nodes WHERE change_id IS NULL")
-                .load::<NodeIdOnly>(&mut conn)
-                .map(|rows| rows.into_iter().map(|r| (r.id,)).collect())
-                .unwrap_or_default();
-
-        for (node_id,) in nodes {
-            let change_id = Uuid::new_v4().to_string();
-            diesel::sql_query(format!(
-                "UPDATE decision_nodes SET change_id = '{}' WHERE id = {}",
-                change_id, node_id
-            ))
-            .execute(&mut conn)?;
-        }
+        backfill_null_node_change_ids(&mut conn)?;
 
         // Create unique index on change_id
         diesel::sql_query("CREATE UNIQUE INDEX IF NOT EXISTS idx_nodes_change_id_unique ON decision_nodes(change_id)")
             .execute(&mut conn)?;
 
         // Add from_change_id and to_change_id columns to decision_edges
-        let edge_columns: Vec<(String,)> = diesel::sql_query("PRAGMA table_info(decision_edges)")
-            .load::<PragmaTableInfo>(&mut conn)
-            .map(|rows| rows.into_iter().map(|r| (r.name,)).collect())
-            .unwrap_or_default();
-
-        let has_from_change_id = edge_columns.iter().any(|(name,)| name == "from_change_id");
-
-        if !has_from_change_id {
-            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN from_change_id TEXT")
-                .execute(&mut conn)?;
-            diesel::sql_query("ALTER TABLE decision_edges ADD COLUMN to_change_id TEXT")
-                .execute(&mut conn)?;
-
-            // Backfill edge change_ids from node change_ids
-            diesel::sql_query(
-                "UPDATE decision_edges SET
-                    from_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.from_node_id),
-                    to_change_id = (SELECT change_id FROM decision_nodes WHERE id = decision_edges.to_node_id)"
-            )
-            .execute(&mut conn)?;
-
+        if add_edge_change_id_columns(&mut conn)? {
             // Create indexes
             diesel::sql_query("CREATE INDEX IF NOT EXISTS idx_edges_from_change ON decision_edges(from_change_id)")
                 .execute(&mut conn)?;
@@ -1800,19 +1820,7 @@ impl Database {
 
     /// Get full graph as JSON-serializable structure
     pub fn get_graph(&self) -> Result<DecisionGraph> {
-        let nodes = self.get_all_nodes()?;
-        let edges = self.get_all_edges()?;
-        let themes = self.get_all_themes().unwrap_or_default();
-        let node_themes = self.get_all_node_themes().unwrap_or_default();
-        let documents = self.get_node_documents(None, false).unwrap_or_default();
-        Ok(DecisionGraph {
-            nodes,
-            edges,
-            config: None,
-            themes,
-            node_themes,
-            documents,
-        })
+        self.get_graph_with_config(None)
     }
 
     /// Get full graph with config included (for export)
@@ -3294,6 +3302,102 @@ mod tests {
         assert_eq!(json.get("prompt").unwrap(), "User prompt");
         assert_eq!(json.get("branch").unwrap(), "main");
         assert!(json.get("files").unwrap().as_array().is_some());
+    }
+
+    // === DecisionNode Metadata Accessor Tests ===
+
+    fn node_with_metadata(metadata_json: Option<&str>) -> DecisionNode {
+        DecisionNode {
+            id: 1,
+            change_id: "test-change-id".to_string(),
+            node_type: "goal".to_string(),
+            title: "Test node".to_string(),
+            description: None,
+            status: "active".to_string(),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+            metadata_json: metadata_json.map(|s| s.to_string()),
+        }
+    }
+
+    #[test]
+    fn test_node_accessors_absent_metadata() {
+        let node = node_with_metadata(None);
+        assert!(node.metadata().is_none());
+        assert_eq!(node.branch(), None);
+        assert_eq!(node.confidence(), None);
+        assert_eq!(node.commit(), None);
+        assert_eq!(node.prompt(), None);
+    }
+
+    #[test]
+    fn test_node_accessors_malformed_metadata() {
+        let node = node_with_metadata(Some("not json"));
+        assert!(node.metadata().is_none());
+        assert_eq!(node.branch(), None);
+        assert_eq!(node.confidence(), None);
+        assert_eq!(node.commit(), None);
+        assert_eq!(node.prompt(), None);
+    }
+
+    #[test]
+    fn test_node_accessors_missing_fields() {
+        let node = node_with_metadata(Some(r#"{"files":["a.rs"]}"#));
+        assert!(node.metadata().is_some());
+        assert_eq!(node.branch(), None);
+        assert_eq!(node.confidence(), None);
+        assert_eq!(node.commit(), None);
+        assert_eq!(node.prompt(), None);
+    }
+
+    #[test]
+    fn test_node_branch_accessor() {
+        let node = node_with_metadata(Some(r#"{"branch":"feature-x"}"#));
+        assert_eq!(node.branch(), Some("feature-x".to_string()));
+    }
+
+    #[test]
+    fn test_node_confidence_accessor() {
+        let node = node_with_metadata(Some(r#"{"confidence":85}"#));
+        assert_eq!(node.confidence(), Some(85));
+    }
+
+    #[test]
+    fn test_node_confidence_accessor_clamps_to_100() {
+        // Matches build_metadata_json's clamp behavior
+        let node = node_with_metadata(Some(r#"{"confidence":150}"#));
+        assert_eq!(node.confidence(), Some(100));
+    }
+
+    #[test]
+    fn test_node_confidence_accessor_non_numeric() {
+        let node = node_with_metadata(Some(r#"{"confidence":"high"}"#));
+        assert_eq!(node.confidence(), None);
+    }
+
+    #[test]
+    fn test_node_commit_accessor() {
+        let node = node_with_metadata(Some(r#"{"commit":"abc1234"}"#));
+        assert_eq!(node.commit(), Some("abc1234".to_string()));
+    }
+
+    #[test]
+    fn test_node_prompt_accessor() {
+        let node = node_with_metadata(Some(r#"{"prompt":"User asked: do X"}"#));
+        assert_eq!(node.prompt(), Some("User asked: do X".to_string()));
+    }
+
+    #[test]
+    fn test_node_metadata_accessor_full() {
+        let node = node_with_metadata(Some(
+            r#"{"confidence":90,"commit":"def456","prompt":"P","branch":"main"}"#,
+        ));
+        let meta = node.metadata().unwrap();
+        assert_eq!(meta.get("confidence").unwrap(), 90);
+        assert_eq!(node.branch(), Some("main".to_string()));
+        assert_eq!(node.confidence(), Some(90));
+        assert_eq!(node.commit(), Some("def456".to_string()));
+        assert_eq!(node.prompt(), Some("P".to_string()));
     }
 
     // === DecisionSchema Tests ===

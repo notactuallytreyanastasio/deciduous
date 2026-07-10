@@ -144,13 +144,11 @@ fn node_to_json(node: &crate::db::DecisionNode) -> Value {
     }
 
     // Unpack metadata_json into top-level fields for easier consumption
-    if let Some(ref meta_str) = node.metadata_json {
-        if let Ok(meta) = serde_json::from_str::<Value>(meta_str) {
-            if let Some(obj_mut) = obj.as_object_mut() {
-                if let Some(m) = meta.as_object() {
-                    for (k, v) in m {
-                        obj_mut.insert(k.clone(), v.clone());
-                    }
+    if let Some(meta) = node.metadata() {
+        if let Some(obj_mut) = obj.as_object_mut() {
+            if let Some(m) = meta.as_object() {
+                for (k, v) in m {
+                    obj_mut.insert(k.clone(), v.clone());
                 }
             }
         }
@@ -315,15 +313,7 @@ fn handle_list_nodes(db: &Database, args: &Value) -> HandlerResult {
         .filter(|n| {
             // Branch filter: check metadata_json for branch field
             if let Some(branch) = branch_filter {
-                if let Some(ref meta_str) = n.metadata_json {
-                    if let Ok(meta) = serde_json::from_str::<Value>(meta_str) {
-                        if meta.get("branch").and_then(Value::as_str) != Some(branch) {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
-                } else {
+                if n.branch().as_deref() != Some(branch) {
                     return false;
                 }
             }
@@ -455,19 +445,8 @@ fn handle_search_nodes(db: &Database, args: &Value) -> HandlerResult {
                 .map(|d| d.to_lowercase().contains(&query_lower))
                 .unwrap_or(false);
             let prompt_match = n
-                .metadata_json
-                .as_ref()
-                .map(|m| {
-                    serde_json::from_str::<Value>(m)
-                        .ok()
-                        .and_then(|v| {
-                            v.get("prompt")
-                                .and_then(Value::as_str)
-                                .map(|p| p.to_lowercase().contains(&query_lower))
-                        })
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false);
+                .prompt()
+                .is_some_and(|p| p.to_lowercase().contains(&query_lower));
 
             let text_match = title_match || desc_match || prompt_match;
             if !text_match {
@@ -483,15 +462,7 @@ fn handle_search_nodes(db: &Database, args: &Value) -> HandlerResult {
 
             // Optional branch filter
             if let Some(branch) = branch_filter {
-                if let Some(ref meta_str) = n.metadata_json {
-                    if let Ok(meta) = serde_json::from_str::<Value>(meta_str) {
-                        if meta.get("branch").and_then(Value::as_str) != Some(branch) {
-                            return false;
-                        }
-                    } else {
-                        return false;
-                    }
-                } else {
+                if n.branch().as_deref() != Some(branch) {
                     return false;
                 }
             }

@@ -3,6 +3,7 @@
 //! Provides DOT graph export and PR writeup generation.
 
 use crate::db::{DecisionEdge, DecisionGraph, DecisionNode};
+use crate::util::truncate;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
@@ -107,17 +108,6 @@ fn escape_dot(s: &str) -> String {
         .replace('\n', "\\n")
 }
 
-/// Truncate a string to max length (Unicode-safe)
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.chars().count() <= max_len {
-        s.to_string()
-    } else {
-        let char_len = max_len.saturating_sub(3);
-        let truncated: String = s.chars().take(char_len).collect();
-        format!("{}...", truncated)
-    }
-}
-
 /// Extract confidence from metadata_json
 fn extract_confidence(metadata: &Option<String>) -> Option<u8> {
     metadata.as_ref().and_then(|m| {
@@ -125,18 +115,6 @@ fn extract_confidence(metadata: &Option<String>) -> Option<u8> {
             .ok()
             .and_then(|v| v.get("confidence").and_then(|c| c.as_u64()))
             .map(|c| c as u8)
-    })
-}
-
-/// Extract commit hash from metadata_json
-fn extract_commit(metadata: &Option<String>) -> Option<String> {
-    metadata.as_ref().and_then(|m| {
-        serde_json::from_str::<serde_json::Value>(m)
-            .ok()
-            .and_then(|v| {
-                v.get("commit")
-                    .and_then(|c| c.as_str().map(|s| s.to_string()))
-            })
     })
 }
 
@@ -441,10 +419,10 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         wln!(writeup, "## Implementation\n");
 
         for action in &actions {
-            let commit = extract_commit(&action.metadata_json);
+            let commit = action.commit();
             let commit_badge = commit
                 .as_ref()
-                .map(|c| format!(" `{}`", &c[..7.min(c.len())]))
+                .map(|c| format!(" `{}`", c.chars().take(7).collect::<String>()))
                 .unwrap_or_default();
 
             wln!(writeup, "- {}{}", action.title, commit_badge);
@@ -681,8 +659,23 @@ mod tests {
 
     #[test]
     fn test_extract_commit() {
-        let meta = Some(r#"{"commit":"abc1234"}"#.to_string());
-        assert_eq!(extract_commit(&meta), Some("abc1234".to_string()));
+        // Commit extraction now uses the DecisionNode::commit accessor
+        let node = node_with_metadata(Some(r#"{"commit":"abc1234"}"#.to_string()));
+        assert_eq!(node.commit(), Some("abc1234".to_string()));
+    }
+
+    fn node_with_metadata(metadata_json: Option<String>) -> DecisionNode {
+        DecisionNode {
+            id: 1,
+            change_id: "test-change-id".to_string(),
+            node_type: "action".to_string(),
+            title: "Test".to_string(),
+            description: None,
+            status: "pending".to_string(),
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-01T00:00:00Z".to_string(),
+            metadata_json,
+        }
     }
 
     // === Additional Helper Function Tests ===
@@ -835,8 +828,8 @@ mod tests {
 
     #[test]
     fn test_extract_commit_invalid_json() {
-        let meta = Some("not json".to_string());
-        assert_eq!(extract_commit(&meta), None);
+        let node = node_with_metadata(Some("not json".to_string()));
+        assert_eq!(node.commit(), None);
     }
 
     // === Writeup Config Tests ===

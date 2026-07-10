@@ -65,31 +65,14 @@ pub struct CoverageGap {
 }
 
 fn node_to_ref(node: &DecisionNode) -> NodeRef {
-    let confidence = node
-        .metadata_json
-        .as_ref()
-        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| v.get("confidence").and_then(|c| c.as_u64()))
-        .map(|c| c.min(100) as u8);
     NodeRef {
         id: node.id,
         node_type: node.node_type.clone(),
         title: node.title.clone(),
         status: node.status.clone(),
-        confidence,
+        confidence: node.confidence(),
         created_at: node.created_at.clone(),
     }
-}
-
-fn get_branch(node: &DecisionNode) -> Option<String> {
-    node.metadata_json
-        .as_ref()
-        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| {
-            v.get("branch")
-                .and_then(|b| b.as_str())
-                .map(|s| s.to_string())
-        })
 }
 
 /// Generate the full pulse report
@@ -105,7 +88,7 @@ pub fn generate_pulse(
     let nodes: Vec<&DecisionNode> = if let Some(br) = branch {
         all_nodes
             .iter()
-            .filter(|n| get_branch(n).as_deref() == Some(br))
+            .filter(|n| n.branch().as_deref() == Some(br))
             .collect()
     } else {
         all_nodes.iter().collect()
