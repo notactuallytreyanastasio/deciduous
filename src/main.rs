@@ -2332,158 +2332,37 @@ fn main() {
                                 state.edges.len()
                             );
 
-                            if dry_run {
-                                println!();
-                                println!(
-                                    "{} Dry run - no changes made to database",
-                                    "Info:".cyan()
-                                );
-                            } else {
-                                // Apply to database
-                                // For now, we'll use the existing patch apply mechanism
-                                // by creating nodes with specific change_ids
-                                let mut nodes_created = 0;
-                                let mut nodes_skipped = 0;
-                                let mut edges_created = 0;
-                                let mut edges_failed = 0;
-
-                                // Get existing nodes
-                                let existing_nodes = db.get_all_nodes().unwrap_or_default();
-                                let existing_change_ids: std::collections::HashSet<String> =
-                                    existing_nodes.iter().map(|n| n.change_id.clone()).collect();
-
-                                // Create nodes
-                                for node in state.nodes.values() {
-                                    if existing_change_ids.contains(&node.change_id) {
-                                        nodes_skipped += 1;
-                                        continue;
-                                    }
-
-                                    // Parse metadata from the stored JSON
-                                    let meta = node.metadata_json.as_ref().and_then(|m| {
-                                        serde_json::from_str::<serde_json::Value>(m).ok()
-                                    });
-
-                                    let confidence = meta
-                                        .as_ref()
-                                        .and_then(|m| m.get("confidence"))
-                                        .and_then(|c| c.as_u64())
-                                        .map(|c| c as u8);
-                                    let commit = meta
-                                        .as_ref()
-                                        .and_then(|m| m.get("commit"))
-                                        .and_then(|c| c.as_str());
-                                    let prompt = meta
-                                        .as_ref()
-                                        .and_then(|m| m.get("prompt"))
-                                        .and_then(|p| p.as_str());
-                                    let files =
-                                        meta.as_ref().and_then(|m| m.get("files")).and_then(|f| {
-                                            f.as_array().map(|arr| {
-                                                arr.iter()
-                                                    .filter_map(|v| v.as_str())
-                                                    .collect::<Vec<_>>()
-                                                    .join(",")
-                                            })
-                                        });
-                                    let branch = meta
-                                        .as_ref()
-                                        .and_then(|m| m.get("branch"))
-                                        .and_then(|b| b.as_str());
-
-                                    match db.create_node_with_change_id(
-                                        &node.change_id,
-                                        &node.node_type,
-                                        &node.title,
-                                        node.description.as_deref(),
-                                        confidence,
-                                        commit,
-                                        prompt,
-                                        files.as_deref(),
-                                        branch,
-                                    ) {
-                                        Ok(_) => nodes_created += 1,
-                                        Err(e) => {
-                                            eprintln!(
-                                                "  Warning: Failed to create node {}: {}",
-                                                node.change_id, e
-                                            );
-                                        }
+                            match db.rebuild_from_state(&state, dry_run) {
+                                Ok(result) => {
+                                    println!();
+                                    if dry_run {
+                                        println!(
+                                            "{} Dry run - would create {} nodes, update {}, delete {}; create {} edges, delete {} ({} unresolvable)",
+                                            "Info:".cyan(),
+                                            result.nodes_created,
+                                            result.nodes_updated,
+                                            result.nodes_deleted,
+                                            result.edges_created,
+                                            result.edges_deleted,
+                                            result.edges_failed
+                                        );
+                                    } else {
+                                        println!(
+                                            "{} Created {} nodes, updated {}, deleted {}; created {} edges, deleted {} ({} failed)",
+                                            "Done:".green(),
+                                            result.nodes_created,
+                                            result.nodes_updated,
+                                            result.nodes_deleted,
+                                            result.edges_created,
+                                            result.edges_deleted,
+                                            result.edges_failed
+                                        );
                                     }
                                 }
-
-                                // Refresh node list to get local IDs
-                                let all_nodes = db.get_all_nodes().unwrap_or_default();
-                                let change_id_to_local_id: std::collections::HashMap<String, i32> =
-                                    all_nodes
-                                        .iter()
-                                        .map(|n| (n.change_id.clone(), n.id))
-                                        .collect();
-
-                                // Get existing edges
-                                let existing_edges = db.get_all_edges().unwrap_or_default();
-                                let existing_edge_keys: std::collections::HashSet<(
-                                    String,
-                                    String,
-                                    String,
-                                )> = existing_edges
-                                    .iter()
-                                    .filter_map(|e| match (&e.from_change_id, &e.to_change_id) {
-                                        (Some(from), Some(to)) => {
-                                            Some((from.clone(), to.clone(), e.edge_type.clone()))
-                                        }
-                                        _ => None,
-                                    })
-                                    .collect();
-
-                                // Create edges
-                                for edge in state.edges.values() {
-                                    let edge_key = (
-                                        edge.from_change_id.clone(),
-                                        edge.to_change_id.clone(),
-                                        edge.edge_type.clone(),
-                                    );
-
-                                    if existing_edge_keys.contains(&edge_key) {
-                                        continue;
-                                    }
-
-                                    let from_id = change_id_to_local_id.get(&edge.from_change_id);
-                                    let to_id = change_id_to_local_id.get(&edge.to_change_id);
-
-                                    match (from_id, to_id) {
-                                        (Some(&from), Some(&to)) => {
-                                            match db.create_edge(
-                                                from,
-                                                to,
-                                                &edge.edge_type,
-                                                edge.rationale.as_deref(),
-                                            ) {
-                                                Ok(_) => edges_created += 1,
-                                                Err(e) => {
-                                                    eprintln!(
-                                                        "  Warning: Failed to create edge: {}",
-                                                        e
-                                                    );
-                                                    edges_failed += 1;
-                                                }
-                                            }
-                                        }
-                                        _ => {
-                                            edges_failed += 1;
-                                        }
-                                    }
+                                Err(e) => {
+                                    eprintln!("{} Rebuild: {}", "Error:".red(), e);
+                                    std::process::exit(1);
                                 }
-
-                                println!();
-                                println!(
-                                    "{} Created {} nodes ({} skipped), {} edges ({} failed)",
-                                    "Done:".green(),
-                                    nodes_created,
-                                    nodes_skipped,
-                                    edges_created,
-                                    edges_failed
-                                );
                             }
                         }
                         Err(e) => {
