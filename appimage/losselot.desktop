@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Losselot
-Comment=Detect lossless audio files created from lossy sources
-Exec=losselot
-Icon=losselot
-Type=Application
-Categories=AudioVideo;Audio;
-Terminal=false

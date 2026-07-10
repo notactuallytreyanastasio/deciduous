@@ -1,4 +1,4 @@
-.PHONY: build release debug test test-verbose clean install uninstall serve analyze gen-test-files fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
+.PHONY: build release debug test test-verbose clean install uninstall serve fmt lint check help db-nodes db-edges db-graph db-commands db-backup db-view goal decision option action outcome obs link status dot writeup sync-graph deploy publish publish-dry release-patch web-install web-dev web-build web-typecheck web-test web-preview
 
 # Default target
 all: release
@@ -36,44 +36,10 @@ lint:
 check:
 	cargo check
 
-# Run the analyzer
-analyze:
-	@test -n "$(FILE)" || (echo "Usage: make analyze FILE=path/to/file" && exit 1)
-	cargo run --release -- $(FILE)
-
-analyze-dir:
-	@test -n "$(DIR)" || (echo "Usage: make analyze-dir DIR=path/to/directory" && exit 1)
-	cargo run --release -- $(DIR)
-
-analyze-no-spectral:
-	@test -n "$(FILE)" || (echo "Usage: make analyze-no-spectral FILE=path/to/file" && exit 1)
-	cargo run --release -- --no-spectral $(FILE)
-
-# Generate reports
-report-html:
-	@test -n "$(FILE)" || (echo "Usage: make report-html FILE=path/to/file" && exit 1)
-	cargo run --release -- -o report.html $(FILE)
-
-report-json:
-	@test -n "$(FILE)" || (echo "Usage: make report-json FILE=path/to/file" && exit 1)
-	cargo run --release -- -o report.json $(FILE)
-
 # Interactive web UI
 serve:
-	@echo "Starting web UI at http://localhost:3000"
-	cargo run --release -- serve $(or $(DIR),.) --port $(or $(PORT),3000)
-
-# Generate test files (requires ffmpeg, lame, sox)
-gen-test-files:
-	@command -v ffmpeg >/dev/null || (echo "Error: ffmpeg not found" && exit 1)
-	@command -v lame >/dev/null || (echo "Error: lame not found" && exit 1)
-	@command -v sox >/dev/null || (echo "Error: sox not found" && exit 1)
-	./examples/generate_test_files.sh
-
-# Analyze demo files
-demo:
-	@test -d examples/demo_files || (echo "Run 'make gen-test-files' first" && exit 1)
-	cargo run --release -- examples/demo_files/
+	@echo "Starting web UI at http://localhost:$(or $(PORT),3000)"
+	cargo run --release -- serve --port $(or $(PORT),3000)
 
 # Installation
 install: release
@@ -86,10 +52,7 @@ uninstall:
 clean:
 	cargo clean
 
-clean-reports:
-	rm -f report.html report.json report.csv
-
-clean-all: clean clean-reports
+clean-all: clean
 
 # Documentation
 doc:
@@ -99,11 +62,6 @@ doc:
 watch:
 	@command -v cargo-watch >/dev/null || (echo "Install cargo-watch: cargo install cargo-watch" && exit 1)
 	cargo watch -x test
-
-bench:
-	@test -n "$(FILE)" || (echo "Usage: make bench FILE=path/to/file" && exit 1)
-	@echo "Timing analysis..."
-	time cargo run --release -- $(FILE)
 
 # ============ Decision Graph ============
 
@@ -228,23 +186,9 @@ help:
 	@echo "  make lint         Run clippy linter"
 	@echo "  make check        Quick compile check"
 	@echo ""
-	@echo "Analyze:"
-	@echo "  make analyze FILE=path           Analyze a file"
-	@echo "  make analyze-dir DIR=path        Analyze a directory"
-	@echo "  make analyze-no-spectral FILE=path  Fast binary-only analysis"
-	@echo "  make demo                        Analyze demo files"
-	@echo ""
-	@echo "Reports:"
-	@echo "  make report-html FILE=path       Generate HTML report"
-	@echo "  make report-json FILE=path       Generate JSON report"
-	@echo ""
 	@echo "Server:"
 	@echo "  make serve                       Start web UI on port 3000"
-	@echo "  make serve DIR=path PORT=8080    Custom directory and port"
-	@echo ""
-	@echo "Test Files:"
-	@echo "  make gen-test-files              Generate test audio files"
-	@echo "                                   (requires ffmpeg, lame, sox)"
+	@echo "  make serve PORT=8080             Custom port"
 	@echo ""
 	@echo "Install:"
 	@echo "  make install      Install to /usr/local/bin"
@@ -252,12 +196,9 @@ help:
 	@echo ""
 	@echo "Clean:"
 	@echo "  make clean        Remove build artifacts"
-	@echo "  make clean-reports Remove generated reports"
-	@echo "  make clean-all    Remove everything"
 	@echo ""
 	@echo "Dev:"
 	@echo "  make watch        Auto-run tests on change (needs cargo-watch)"
-	@echo "  make bench FILE=path  Time analysis of a file"
 	@echo "  make doc          Build and open documentation"
 	@echo ""
 	@echo "Decision Graph:"
