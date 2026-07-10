@@ -5,11 +5,21 @@
 
 use crate::mcp::protocol::ToolDefinition;
 use serde_json::{json, Value};
+use std::sync::OnceLock;
+
+/// Cached tool definitions — built once on first access, reused across requests.
+static TOOLS: OnceLock<Vec<ToolDefinition>> = OnceLock::new();
+
+/// Get the cached tool definitions, building them on first access.
+pub fn tool_definitions() -> &'static [ToolDefinition] {
+    TOOLS.get_or_init(all_tool_definitions)
+}
 
 /// Build the complete list of tool definitions for `tools/list`.
 ///
 /// Each tool has a name, description, and JSON Schema for its parameters.
-/// This is a pure function — returns fresh data each call.
+/// This is a pure function — returns fresh data each call. Prefer
+/// [`tool_definitions`] for lookups; it caches the result.
 pub fn all_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         // -----------------------------------------------------------------
@@ -636,25 +646,28 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
 
 /// Look up a tool definition by name. Returns None if not found.
 pub fn find_tool(name: &str) -> Option<ToolDefinition> {
-    all_tool_definitions().into_iter().find(|t| t.name == name)
+    tool_definitions().iter().find(|t| t.name == name).cloned()
 }
 
 /// Get all tool names as a sorted list.
 pub fn tool_names() -> Vec<String> {
-    let mut names: Vec<String> = all_tool_definitions().into_iter().map(|t| t.name).collect();
+    let mut names: Vec<String> = tool_definitions().iter().map(|t| t.name.clone()).collect();
     names.sort();
     names
 }
 
 /// Validate that a tool name exists in the registry.
 pub fn is_valid_tool(name: &str) -> bool {
-    all_tool_definitions().iter().any(|t| t.name == name)
+    tool_definitions().iter().any(|t| t.name == name)
 }
 
 /// Validate tool arguments against the tool's input schema.
 /// Returns Ok(()) if valid, Err(message) if invalid.
 pub fn validate_tool_args(tool_name: &str, args: &Value) -> Result<(), String> {
-    let tool = find_tool(tool_name).ok_or_else(|| format!("Unknown tool: {tool_name}"))?;
+    let tool = tool_definitions()
+        .iter()
+        .find(|t| t.name == tool_name)
+        .ok_or_else(|| format!("Unknown tool: {tool_name}"))?;
 
     let schema = &tool.input_schema;
 
@@ -681,6 +694,17 @@ pub fn validate_tool_args(tool_name: &str, args: &Value) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_tool_definitions_cache_matches_all_tool_definitions() {
+        let cached: Vec<&str> = tool_definitions().iter().map(|t| t.name.as_str()).collect();
+        let fresh = all_tool_definitions();
+        let fresh_names: Vec<&str> = fresh.iter().map(|t| t.name.as_str()).collect();
+        assert_eq!(
+            cached, fresh_names,
+            "cached tool definitions must not drift from all_tool_definitions()"
+        );
+    }
 
     #[test]
     fn test_all_tools_have_valid_schemas() {

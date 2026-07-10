@@ -533,7 +533,7 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
         std::fs::read(path).map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
 
     let hash = format!("{:x}", Sha256::digest(&file_bytes));
-    let hash_prefix = &hash[..8];
+    let hash_prefix = hash.get(..8).unwrap_or(hash.as_str());
     let storage_filename = format!("{original_filename}.{hash_prefix}");
     let file_size = file_bytes.len() as i32;
 

@@ -269,7 +269,14 @@ pub fn get_pulse(graph: &DecisionGraph, branch: Option<&str>, recent_count: usiz
         *nodes_by_status.entry(n.status.clone()).or_insert(0) += 1;
     }
 
-    let orphan_nodes = find_orphans(graph);
+    // Apply the same branch filter to orphans so the report is internally consistent
+    let orphan_nodes: Vec<OrphanNode> = find_orphans(graph)
+        .into_iter()
+        .filter(|o| match branch {
+            Some(b) => node_has_branch(&o.node, b),
+            None => true,
+        })
+        .collect();
     let orphan_count = orphan_nodes.len();
 
     let active_goals: Vec<DecisionNode> = filtered_nodes
@@ -310,38 +317,31 @@ pub struct OrphanNode {
 /// Goals are valid orphans (root nodes). Other types should have parents.
 pub fn find_orphans(graph: &DecisionGraph) -> Vec<OrphanNode> {
     let nodes_with_incoming: HashSet<i32> = graph.edges.iter().map(|e| e.to_node_id).collect();
-    let nodes_with_outgoing: HashSet<i32> = graph.edges.iter().map(|e| e.from_node_id).collect();
 
     graph
         .nodes
         .iter()
         .filter_map(|n| {
-            let has_incoming = nodes_with_incoming.contains(&n.id);
-            let has_outgoing = nodes_with_outgoing.contains(&n.id);
-
             // Goals are valid root nodes — skip them
             if n.node_type == "goal" {
                 return None;
             }
 
-            if !has_incoming {
-                Some(OrphanNode {
-                    node: n.clone(),
-                    reason: match n.node_type.as_str() {
-                        "outcome" => "Outcome without parent action".to_string(),
-                        "action" => "Action without parent decision".to_string(),
-                        "decision" => "Decision without parent option".to_string(),
-                        "option" => "Option without parent goal".to_string(),
-                        "observation" => "Observation not linked to any node".to_string(),
-                        _ => format!("{} without incoming edges", n.node_type),
-                    },
-                })
-            } else if !has_outgoing && n.node_type != "outcome" && n.node_type != "observation" {
-                // Leaf nodes: outcomes and observations are fine without outgoing edges
-                None
-            } else {
-                None
+            if nodes_with_incoming.contains(&n.id) {
+                return None;
             }
+
+            Some(OrphanNode {
+                node: n.clone(),
+                reason: match n.node_type.as_str() {
+                    "outcome" => "Outcome without parent action".to_string(),
+                    "action" => "Action without parent decision".to_string(),
+                    "decision" => "Decision without parent option".to_string(),
+                    "option" => "Option without parent goal".to_string(),
+                    "observation" => "Observation not linked to any node".to_string(),
+                    _ => format!("{} without incoming edges", n.node_type),
+                },
+            })
         })
         .collect()
 }
@@ -765,6 +765,37 @@ mod tests {
         let graph = sample_graph();
         let report = get_pulse(&graph, Some("nonexistent"), 10);
         assert_eq!(report.total_nodes, 0);
+    }
+
+    #[test]
+    fn test_pulse_branch_filter_orphans_consistent() {
+        // Orphan action on branch-a; connected goal -> action on branch-b
+        let graph = DecisionGraph {
+            nodes: vec![
+                make_node(1, "action", "Dangling on a", Some("branch-a")),
+                make_node(2, "goal", "Goal on b", Some("branch-b")),
+                make_node(3, "action", "Action on b", Some("branch-b")),
+            ],
+            edges: vec![make_edge(1, 2, 3, "leads_to")],
+            config: None,
+            themes: vec![],
+            node_themes: vec![],
+            documents: vec![],
+        };
+
+        // Branch B has no orphans — the branch-a orphan must not leak in
+        let report_b = get_pulse(&graph, Some("branch-b"), 10);
+        assert_eq!(report_b.orphan_count, 0);
+        assert!(report_b.orphan_nodes.is_empty());
+
+        // Branch A reports exactly its own orphan
+        let report_a = get_pulse(&graph, Some("branch-a"), 10);
+        assert_eq!(report_a.orphan_count, 1);
+        assert_eq!(report_a.orphan_nodes[0].node.id, 1);
+
+        // No filter still sees the orphan
+        let report_all = get_pulse(&graph, None, 10);
+        assert_eq!(report_all.orphan_count, 1);
     }
 
     // -- orphan tests --
