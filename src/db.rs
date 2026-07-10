@@ -679,6 +679,25 @@ impl From<diesel::r2d2::Error> for DbError {
 
 pub type Result<T> = std::result::Result<T, DbError>;
 
+/// r2d2 connection customizer that sets a busy timeout on every acquired
+/// connection so concurrent writers (CLI + serve + MCP) wait instead of
+/// failing immediately with SQLITE_BUSY "database is locked".
+#[derive(Debug)]
+struct BusyTimeoutCustomizer;
+
+impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error>
+    for BusyTimeoutCustomizer
+{
+    fn on_acquire(
+        &self,
+        conn: &mut SqliteConnection,
+    ) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::connection::SimpleConnection;
+        conn.batch_execute("PRAGMA busy_timeout = 5000;")
+            .map_err(diesel::r2d2::Error::QueryError)
+    }
+}
+
 impl Database {
     /// Get the database path that will be used
     pub fn db_path() -> std::path::PathBuf {
@@ -708,6 +727,7 @@ impl Database {
         let manager = ConnectionManager::<SqliteConnection>::new(&path_str);
         let pool = Pool::builder()
             .max_size(5)
+            .connection_customizer(Box::new(BusyTimeoutCustomizer))
             .build(manager)
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
@@ -1459,14 +1479,18 @@ impl Database {
             created_at: &now,
         };
 
-        diesel::insert_into(decision_edges::table)
-            .values(&new_edge)
-            .execute(&mut conn)?;
+        let id = conn.transaction::<i32, DbError, _>(|conn| {
+            diesel::insert_into(decision_edges::table)
+                .values(&new_edge)
+                .execute(conn)?;
 
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+
+            Ok(id)
+        })?;
 
         Ok(id)
     }
@@ -1480,6 +1504,16 @@ impl Database {
         rationale: Option<&str>,
     ) -> Result<i32> {
         self.create_edge(from_id, to_id, edge_type, rationale)
+    }
+
+    /// Get all edges between two nodes (there may be multiple with different edge types)
+    pub fn get_edges_between(&self, from_id: i32, to_id: i32) -> Result<Vec<DecisionEdge>> {
+        let mut conn = self.get_conn()?;
+        let edges = decision_edges::table
+            .filter(decision_edges::from_node_id.eq(from_id))
+            .filter(decision_edges::to_node_id.eq(to_id))
+            .load::<DecisionEdge>(&mut conn)?;
+        Ok(edges)
     }
 
     /// Delete an edge between two nodes
@@ -1566,44 +1600,48 @@ impl Database {
             return Ok(summary);
         }
 
-        // Delete in order to respect foreign key constraints:
+        // Delete in order to respect foreign key constraints, atomically so a
+        // failure partway through cannot leave orphaned rows behind:
+        conn.transaction::<(), DbError, _>(|conn| {
+            // 1. Delete edges connected to this node
+            diesel::delete(
+                decision_edges::table.filter(
+                    decision_edges::from_node_id
+                        .eq(node_id)
+                        .or(decision_edges::to_node_id.eq(node_id)),
+                ),
+            )
+            .execute(conn)?;
 
-        // 1. Delete edges connected to this node
-        diesel::delete(
-            decision_edges::table.filter(
-                decision_edges::from_node_id
-                    .eq(node_id)
-                    .or(decision_edges::to_node_id.eq(node_id)),
-            ),
-        )
-        .execute(&mut conn)?;
+            // 2. Delete context entries for this node
+            diesel::delete(decision_context::table.filter(decision_context::node_id.eq(node_id)))
+                .execute(conn)?;
 
-        // 2. Delete context entries for this node
-        diesel::delete(decision_context::table.filter(decision_context::node_id.eq(node_id)))
-            .execute(&mut conn)?;
+            // 3. Delete session_nodes entries for this node
+            diesel::delete(session_nodes::table.filter(session_nodes::node_id.eq(node_id)))
+                .execute(conn)?;
 
-        // 3. Delete session_nodes entries for this node
-        diesel::delete(session_nodes::table.filter(session_nodes::node_id.eq(node_id)))
-            .execute(&mut conn)?;
+            // 4. Set nullable foreign keys to NULL
+            diesel::update(
+                decision_sessions::table.filter(decision_sessions::root_node_id.eq(node_id)),
+            )
+            .set(decision_sessions::root_node_id.eq::<Option<i32>>(None))
+            .execute(conn)?;
 
-        // 4. Set nullable foreign keys to NULL
-        diesel::update(
-            decision_sessions::table.filter(decision_sessions::root_node_id.eq(node_id)),
-        )
-        .set(decision_sessions::root_node_id.eq::<Option<i32>>(None))
-        .execute(&mut conn)?;
+            diesel::update(command_log::table.filter(command_log::decision_node_id.eq(node_id)))
+                .set(command_log::decision_node_id.eq::<Option<i32>>(None))
+                .execute(conn)?;
 
-        diesel::update(command_log::table.filter(command_log::decision_node_id.eq(node_id)))
-            .set(command_log::decision_node_id.eq::<Option<i32>>(None))
-            .execute(&mut conn)?;
+            diesel::update(roadmap_items::table.filter(roadmap_items::outcome_node_id.eq(node_id)))
+                .set(roadmap_items::outcome_node_id.eq::<Option<i32>>(None))
+                .execute(conn)?;
 
-        diesel::update(roadmap_items::table.filter(roadmap_items::outcome_node_id.eq(node_id)))
-            .set(roadmap_items::outcome_node_id.eq::<Option<i32>>(None))
-            .execute(&mut conn)?;
+            // 5. Finally delete the node itself
+            diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .execute(conn)?;
 
-        // 5. Finally delete the node itself
-        diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .execute(&mut conn)?;
+            Ok(())
+        })?;
 
         Ok(summary)
     }
@@ -1613,12 +1651,19 @@ impl Database {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::status.eq(status),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+        let rows_updated =
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set((
+                    decision_nodes::status.eq(status),
+                    decision_nodes::updated_at.eq(&now),
+                ))
+                .execute(&mut conn)?;
+
+        if rows_updated == 0 {
+            // Match update_node_prompt/update_node_commit, which surface a
+            // NotFound query error when the node doesn't exist
+            return Err(DbError::Query(diesel::result::Error::NotFound));
+        }
 
         Ok(())
     }
@@ -3661,5 +3706,148 @@ mod tests {
         let json = serde_json::to_string(&graph).unwrap();
         assert!(json.contains("\"documents\""));
         assert!(json.contains("file.txt"));
+    }
+
+    // === delete_node cascade Tests ===
+
+    #[test]
+    fn test_delete_node_cascades_edges_and_sessions() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let a = db.create_node("goal", "Parent", None, None, None).unwrap();
+        let b = db.create_node("action", "Child", None, None, None).unwrap();
+        let c = db
+            .create_node("outcome", "Result", None, None, None)
+            .unwrap();
+        db.create_edge(a, b, "leads_to", Some("parent-child"))
+            .unwrap();
+        db.create_edge(b, c, "leads_to", None).unwrap();
+
+        // Session rows referencing the node
+        let session_id = db.create_session(Some("s"), Some(b)).unwrap();
+        db.add_node_to_session(session_id, b).unwrap();
+
+        let summary = db.delete_node(b, false).unwrap();
+        assert_eq!(summary.edges_deleted, 2);
+
+        // Node is gone
+        assert!(db.get_node(b).unwrap().is_none());
+
+        // All edges touching the node are gone
+        let edges = db.get_all_edges().unwrap();
+        assert!(edges
+            .iter()
+            .all(|e| e.from_node_id != b && e.to_node_id != b));
+        assert!(db.get_edges_between(a, b).unwrap().is_empty());
+        assert!(db.get_edges_between(b, c).unwrap().is_empty());
+
+        // Session root is nulled and session membership removed
+        let session = db.get_session(session_id).unwrap().unwrap();
+        assert_eq!(session.root_node_id, None);
+        assert!(db.get_session_nodes(session_id).unwrap().is_empty());
+
+        // Other nodes are untouched
+        assert!(db.get_node(a).unwrap().is_some());
+        assert!(db.get_node(c).unwrap().is_some());
+    }
+
+    #[test]
+    fn test_delete_node_dry_run_keeps_everything() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let a = db.create_node("goal", "Parent", None, None, None).unwrap();
+        let b = db.create_node("action", "Child", None, None, None).unwrap();
+        db.create_edge(a, b, "leads_to", None).unwrap();
+
+        let summary = db.delete_node(b, true).unwrap();
+        assert_eq!(summary.edges_deleted, 1);
+
+        assert!(db.get_node(b).unwrap().is_some());
+        assert_eq!(db.get_edges_between(a, b).unwrap().len(), 1);
+    }
+
+    // === update_node_status Tests ===
+
+    #[test]
+    fn test_update_node_status_nonexistent_returns_err() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let result = db.update_node_status(9999, "completed");
+        assert!(
+            result.is_err(),
+            "updating a nonexistent node should be an error"
+        );
+    }
+
+    #[test]
+    fn test_update_node_status_existing_node() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let id = db.create_node("goal", "G", None, None, None).unwrap();
+        db.update_node_status(id, "completed").unwrap();
+        assert_eq!(db.get_node(id).unwrap().unwrap().status, "completed");
+    }
+
+    // === get_edges_between / unlink edge_id Tests ===
+
+    #[test]
+    fn test_get_edges_between_returns_real_edge_type() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let a = db
+            .create_node("option", "Option A", None, None, None)
+            .unwrap();
+        let b = db
+            .create_node("decision", "Decision", None, None, None)
+            .unwrap();
+        db.create_edge(a, b, "rejected", Some("not chosen"))
+            .unwrap();
+
+        let edges = db.get_edges_between(a, b).unwrap();
+        assert_eq!(edges.len(), 1);
+        assert_eq!(edges[0].edge_type, "rejected");
+
+        // No edge in the other direction
+        assert!(db.get_edges_between(b, a).unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_unlink_edge_id_matches_creation_edge_id() {
+        // Regression test: DeleteEdge events must use the edge's REAL type so
+        // the edge_id matches the one emitted by AddEdge at creation time.
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
+
+        let a = db
+            .create_node("option", "Option A", None, None, None)
+            .unwrap();
+        let b = db
+            .create_node("decision", "Decision", None, None, None)
+            .unwrap();
+        db.create_edge(a, b, "rejected", None).unwrap();
+
+        let from = db.get_node(a).unwrap().unwrap();
+        let to = db.get_node(b).unwrap().unwrap();
+
+        // The id emitted when the edge was created (link path)
+        let created_id =
+            crate::events::generate_edge_id(&from.change_id, &to.change_id, "rejected");
+
+        // The id the unlink path now derives from the actual stored edge
+        let edge = &db.get_edges_between(a, b).unwrap()[0];
+        let deleted_id =
+            crate::events::generate_edge_id(&from.change_id, &to.change_id, &edge.edge_type);
+
+        assert_eq!(created_id, deleted_id);
+
+        // The previously hardcoded "leads_to" id would NOT have matched
+        let hardcoded_id =
+            crate::events::generate_edge_id(&from.change_id, &to.change_id, "leads_to");
+        assert_ne!(deleted_id, hardcoded_id);
     }
 }
