@@ -2723,11 +2723,7 @@ impl Database {
     // ========================================================================
 
     /// Create a new session with an optional name and root goal node.
-    pub fn create_session(
-        &self,
-        name: Option<&str>,
-        root_node_id: Option<i32>,
-    ) -> Result<i32> {
+    pub fn create_session(&self, name: Option<&str>, root_node_id: Option<i32>) -> Result<i32> {
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 

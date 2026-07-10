@@ -42,7 +42,6 @@ jobs:
   validate-types:
     name: Validate Type Synchronization
     runs-on: ubuntu-latest
-    needs: format-check
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -60,7 +59,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "All type definitions are in sync across:" >> $GITHUB_STEP_SUMMARY
           echo "- \`src/db.rs\` (Rust backend)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`src/tui/types.rs\` (Rust TUI)" >> $GITHUB_STEP_SUMMARY
           echo "- \`web/src/types/graph.ts\` (TypeScript web)" >> $GITHUB_STEP_SUMMARY
           echo "- \`schema/decision-graph.schema.json\` (Canonical schema)" >> $GITHUB_STEP_SUMMARY
 
@@ -73,7 +71,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Please ensure all type definitions match across:" >> $GITHUB_STEP_SUMMARY
           echo "- \`src/db.rs\` (Rust backend)" >> $GITHUB_STEP_SUMMARY
-          echo "- \`src/tui/types.rs\` (Rust TUI)" >> $GITHUB_STEP_SUMMARY
           echo "- \`web/src/types/graph.ts\` (TypeScript web)" >> $GITHUB_STEP_SUMMARY
           echo "- \`schema/decision-graph.schema.json\` (Canonical schema)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -81,8 +78,10 @@ jobs:
 
   build-rust:
     name: Build and Test (Rust)
-    runs-on: ubuntu-latest
-    needs: validate-types
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -99,11 +98,8 @@ jobs:
       - name: Rust Integration Tests
         run: cargo test --test cli_integration
 
-      - name: Rust Property Tests (proptest)
-        run: cargo test --lib -- proptests
-
       - name: Rust Clippy
-        run: cargo clippy
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Test Summary
         if: success()
@@ -113,12 +109,11 @@ jobs:
           echo "All Rust tests passed:" >> $GITHUB_STEP_SUMMARY
           echo "- Unit tests" >> $GITHUB_STEP_SUMMARY
           echo "- Integration tests" >> $GITHUB_STEP_SUMMARY
-          echo "- Property-based tests (proptest)" >> $GITHUB_STEP_SUMMARY
+          echo "- Clippy (warnings denied)" >> $GITHUB_STEP_SUMMARY
 
   build-web:
     name: Build Web
     runs-on: ubuntu-latest
-    needs: validate-types
     steps:
       - name: Checkout
         uses: actions/checkout@v4

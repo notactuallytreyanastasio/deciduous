@@ -25,7 +25,7 @@ pub enum TraceDirection {
 }
 
 impl TraceDirection {
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "outgoing" => Self::Outgoing,
             "incoming" => Self::Incoming,
@@ -68,14 +68,8 @@ pub fn trace_chain(
         }
 
         let neighbors: Vec<i32> = match direction {
-            TraceDirection::Outgoing => outgoing
-                .get(&node_id)
-                .cloned()
-                .unwrap_or_default(),
-            TraceDirection::Incoming => incoming
-                .get(&node_id)
-                .cloned()
-                .unwrap_or_default(),
+            TraceDirection::Outgoing => outgoing.get(&node_id).cloned().unwrap_or_default(),
+            TraceDirection::Incoming => incoming.get(&node_id).cloned().unwrap_or_default(),
             TraceDirection::Both => {
                 let mut all = outgoing.get(&node_id).cloned().unwrap_or_default();
                 all.extend(incoming.get(&node_id).cloned().unwrap_or_default());
@@ -786,7 +780,9 @@ mod tests {
     #[test]
     fn test_find_orphans_disconnected_action() {
         let mut graph = sample_graph();
-        graph.nodes.push(make_node(7, "action", "Dangling action", Some("main")));
+        graph
+            .nodes
+            .push(make_node(7, "action", "Dangling action", Some("main")));
 
         let orphans = find_orphans(&graph);
         assert_eq!(orphans.len(), 1);
@@ -871,7 +867,9 @@ mod tests {
     #[test]
     fn test_orphans_to_json() {
         let mut graph = sample_graph();
-        graph.nodes.push(make_node(7, "outcome", "Lost outcome", None));
+        graph
+            .nodes
+            .push(make_node(7, "outcome", "Lost outcome", None));
         let orphans = find_orphans(&graph);
         let json = orphans_to_json(&orphans);
         assert!(json["count"].as_u64().unwrap() > 0);
@@ -901,17 +899,18 @@ mod tests {
     }
 
     #[test]
-    fn test_trace_direction_from_str() {
-        assert_eq!(TraceDirection::from_str("outgoing"), TraceDirection::Outgoing);
-        assert_eq!(TraceDirection::from_str("incoming"), TraceDirection::Incoming);
-        assert_eq!(TraceDirection::from_str("both"), TraceDirection::Both);
-        assert_eq!(TraceDirection::from_str("unknown"), TraceDirection::Both);
+    fn test_trace_direction_parse() {
+        assert_eq!(TraceDirection::parse("outgoing"), TraceDirection::Outgoing);
+        assert_eq!(TraceDirection::parse("incoming"), TraceDirection::Incoming);
+        assert_eq!(TraceDirection::parse("both"), TraceDirection::Both);
+        assert_eq!(TraceDirection::parse("unknown"), TraceDirection::Both);
     }
 
     #[test]
     fn test_node_summary_json_unpacks_metadata() {
         let mut node = make_node(1, "goal", "Test", Some("main"));
-        node.metadata_json = Some(r#"{"confidence":85,"branch":"main","commit":"abc123"}"#.to_string());
+        node.metadata_json =
+            Some(r#"{"confidence":85,"branch":"main","commit":"abc123"}"#.to_string());
         let j = node_summary_json(&node);
         assert_eq!(j["confidence"], 85);
         assert_eq!(j["branch"], "main");

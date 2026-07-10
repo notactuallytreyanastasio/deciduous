@@ -388,7 +388,9 @@ fn handle_show_node(db: &Database, args: &Value) -> HandlerResult {
     let children = db.get_node_children(node_id).unwrap_or_default();
     let parents = db.get_node_parents(node_id).unwrap_or_default();
     let themes = db.get_node_themes(node_id).unwrap_or_default();
-    let documents = db.get_node_documents(Some(node_id), false).unwrap_or_default();
+    let documents = db
+        .get_node_documents(Some(node_id), false)
+        .unwrap_or_default();
 
     let mut result = node_to_json(&node);
     if let Some(obj) = result.as_object_mut() {
@@ -402,15 +404,21 @@ fn handle_show_node(db: &Database, args: &Value) -> HandlerResult {
         );
         obj.insert(
             "themes".to_string(),
-            json!(themes.iter().map(|t| json!({"name": t.name, "color": t.color})).collect::<Vec<_>>()),
+            json!(themes
+                .iter()
+                .map(|t| json!({"name": t.name, "color": t.color}))
+                .collect::<Vec<_>>()),
         );
         obj.insert(
             "documents".to_string(),
-            json!(documents.iter().map(|d| json!({
-                "id": d.id,
-                "filename": d.original_filename,
-                "description": d.description,
-            })).collect::<Vec<_>>()),
+            json!(documents
+                .iter()
+                .map(|d| json!({
+                    "id": d.id,
+                    "filename": d.original_filename,
+                    "description": d.description,
+                }))
+                .collect::<Vec<_>>()),
         );
     }
 
@@ -446,12 +454,20 @@ fn handle_search_nodes(db: &Database, args: &Value) -> HandlerResult {
                 .as_ref()
                 .map(|d| d.to_lowercase().contains(&query_lower))
                 .unwrap_or(false);
-            let prompt_match = n.metadata_json.as_ref().map(|m| {
-                serde_json::from_str::<Value>(m)
-                    .ok()
-                    .and_then(|v| v.get("prompt").and_then(Value::as_str).map(|p| p.to_lowercase().contains(&query_lower)))
-                    .unwrap_or(false)
-            }).unwrap_or(false);
+            let prompt_match = n
+                .metadata_json
+                .as_ref()
+                .map(|m| {
+                    serde_json::from_str::<Value>(m)
+                        .ok()
+                        .and_then(|v| {
+                            v.get("prompt")
+                                .and_then(Value::as_str)
+                                .map(|p| p.to_lowercase().contains(&query_lower))
+                        })
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
 
             let text_match = title_match || desc_match || prompt_match;
             if !text_match {
@@ -513,8 +529,8 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
 
-    let file_bytes = std::fs::read(path)
-        .map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
+    let file_bytes =
+        std::fs::read(path).map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
 
     let hash = format!("{:x}", Sha256::digest(&file_bytes));
     let hash_prefix = &hash[..8];
@@ -545,7 +561,11 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
             .map_err(|e| HandlerError::from(format!("Failed to write document: {e}")))?;
     }
 
-    let desc_source = if description.is_some() { "manual" } else { "none" };
+    let desc_source = if description.is_some() {
+        "manual"
+    } else {
+        "none"
+    };
     let doc_id = db.attach_document(
         node_id,
         &hash,
@@ -668,7 +688,7 @@ fn handle_trace_chain(db: &Database, args: &Value) -> HandlerResult {
     let node_id = require_i32(args, "node_id")?;
     let max_depth = get_i32(args, "max_depth").unwrap_or(0) as usize;
     let direction = get_str(args, "direction")
-        .map(query::TraceDirection::from_str)
+        .map(query::TraceDirection::parse)
         .unwrap_or(query::TraceDirection::Both);
 
     let graph = db.get_graph()?;
@@ -788,7 +808,9 @@ fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
     };
 
     let config = crate::export::WriteupConfig {
-        title: title.map(|s| s.to_string()).unwrap_or_else(|| "Decision Graph Writeup".to_string()),
+        title: title
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| "Decision Graph Writeup".to_string()),
         root_ids: vec![],
         include_dot: !no_dot,
         include_test_plan: !no_test_plan,
@@ -995,7 +1017,9 @@ mod tests {
     #[test]
     fn test_dispatch_show_node() {
         let db = test_db();
-        let id = db.create_node("goal", "Test Goal", Some("Details here"), Some(90), None).unwrap();
+        let id = db
+            .create_node("goal", "Test Goal", Some("Details here"), Some(90), None)
+            .unwrap();
 
         let result = dispatch(&db, "show_node", json!({"node_id": id}));
         assert!(result.is_error.is_none());
@@ -1017,7 +1041,11 @@ mod tests {
         let db = test_db();
         let id = db.create_node("goal", "Goal", None, None, None).unwrap();
 
-        let result = dispatch(&db, "update_status", json!({"node_id": id, "status": "completed"}));
+        let result = dispatch(
+            &db,
+            "update_status",
+            json!({"node_id": id, "status": "completed"}),
+        );
         assert!(result.is_error.is_none());
 
         let node = db.get_node(id).unwrap().unwrap();
@@ -1027,7 +1055,9 @@ mod tests {
     #[test]
     fn test_dispatch_delete_node_dry_run() {
         let db = test_db();
-        let id = db.create_node("goal", "To delete", None, None, None).unwrap();
+        let id = db
+            .create_node("goal", "To delete", None, None, None)
+            .unwrap();
 
         let result = dispatch(&db, "delete_node", json!({"node_id": id, "dry_run": true}));
         assert!(result.is_error.is_none());
@@ -1040,7 +1070,9 @@ mod tests {
     #[test]
     fn test_dispatch_delete_node_actual() {
         let db = test_db();
-        let id = db.create_node("goal", "To delete", None, None, None).unwrap();
+        let id = db
+            .create_node("goal", "To delete", None, None, None)
+            .unwrap();
 
         let result = dispatch(&db, "delete_node", json!({"node_id": id}));
         assert!(result.is_error.is_none());
@@ -1053,9 +1085,12 @@ mod tests {
     #[test]
     fn test_dispatch_search_nodes() {
         let db = test_db();
-        db.create_node("goal", "Authentication feature", None, None, None).unwrap();
-        db.create_node("action", "Implement JWT tokens", None, None, None).unwrap();
-        db.create_node("goal", "UI redesign", None, None, None).unwrap();
+        db.create_node("goal", "Authentication feature", None, None, None)
+            .unwrap();
+        db.create_node("action", "Implement JWT tokens", None, None, None)
+            .unwrap();
+        db.create_node("goal", "UI redesign", None, None, None)
+            .unwrap();
 
         let result = dispatch(&db, "search_nodes", json!({"query": "auth"}));
         assert!(result.content[0].text.contains("\"count\": 1"));
@@ -1108,7 +1143,11 @@ mod tests {
     fn test_dispatch_create_and_list_themes() {
         let db = test_db();
 
-        let result = dispatch(&db, "create_theme", json!({"name": "auth", "color": "#ff0000"}));
+        let result = dispatch(
+            &db,
+            "create_theme",
+            json!({"name": "auth", "color": "#ff0000"}),
+        );
         assert!(result.is_error.is_none());
 
         let result = dispatch(&db, "list_themes", json!({}));

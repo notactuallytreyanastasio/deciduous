@@ -132,11 +132,11 @@ impl McpServer {
                         if result.is_error.is_none() {
                             if let Some(text) = result.content.first().map(|c| &c.text) {
                                 if let Ok(val) = serde_json::from_str::<Value>(text) {
-                                    if let Some(node_id) = val.get("node_id").and_then(Value::as_i64)
+                                    if let Some(node_id) =
+                                        val.get("node_id").and_then(Value::as_i64)
                                     {
-                                        let _ = self
-                                            .db
-                                            .add_node_to_session(session_id, node_id as i32);
+                                        let _ =
+                                            self.db.add_node_to_session(session_id, node_id as i32);
                                     }
                                 }
                             }
@@ -151,10 +151,7 @@ impl McpServer {
         serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}))
     }
 
-    fn handle_start_session(
-        &mut self,
-        args: &Value,
-    ) -> protocol::ToolCallResult {
+    fn handle_start_session(&mut self, args: &Value) -> protocol::ToolCallResult {
         let name = args
             .get("name")
             .and_then(Value::as_str)
@@ -179,7 +176,9 @@ impl McpServer {
             None,
         ) {
             Ok(id) => id,
-            Err(e) => return protocol::tool_result_error(format!("Failed to create root goal: {e}")),
+            Err(e) => {
+                return protocol::tool_result_error(format!("Failed to create root goal: {e}"))
+            }
         };
 
         // Create the session
@@ -207,10 +206,7 @@ impl McpServer {
         }))
     }
 
-    fn handle_end_session(
-        &mut self,
-        args: &Value,
-    ) -> protocol::ToolCallResult {
+    fn handle_end_session(&mut self, args: &Value) -> protocol::ToolCallResult {
         let session_id = match self.active_session_id {
             Some(id) => id,
             None => return protocol::tool_result_error("No active session to end"),
@@ -241,10 +237,7 @@ impl McpServer {
         }))
     }
 
-    fn handle_resume_session(
-        &mut self,
-        args: &Value,
-    ) -> protocol::ToolCallResult {
+    fn handle_resume_session(&mut self, args: &Value) -> protocol::ToolCallResult {
         let session_id = match args.get("session_id").and_then(Value::as_i64) {
             Some(id) => id as i32,
             None => return protocol::tool_result_error("Missing required parameter: session_id"),
@@ -290,10 +283,7 @@ impl McpServer {
         }))
     }
 
-    fn handle_get_session(
-        &self,
-        args: &Value,
-    ) -> protocol::ToolCallResult {
+    fn handle_get_session(&self, args: &Value) -> protocol::ToolCallResult {
         let session_id = args
             .get("session_id")
             .and_then(Value::as_i64)
@@ -302,12 +292,16 @@ impl McpServer {
 
         let session_id = match session_id {
             Some(id) => id,
-            None => return protocol::tool_result_error("No session ID provided and no active session"),
+            None => {
+                return protocol::tool_result_error("No session ID provided and no active session")
+            }
         };
 
         let session = match self.db.get_session(session_id) {
             Ok(Some(s)) => s,
-            Ok(None) => return protocol::tool_result_error(format!("Session {session_id} not found")),
+            Ok(None) => {
+                return protocol::tool_result_error(format!("Session {session_id} not found"))
+            }
             Err(e) => return protocol::tool_result_error(format!("Error: {e}")),
         };
 
@@ -338,10 +332,7 @@ impl McpServer {
         }))
     }
 
-    fn handle_list_sessions(
-        &self,
-        args: &Value,
-    ) -> protocol::ToolCallResult {
+    fn handle_list_sessions(&self, args: &Value) -> protocol::ToolCallResult {
         let active_only = args
             .get("active_only")
             .and_then(Value::as_bool)
@@ -565,7 +556,10 @@ mod tests {
         let resp = server.handle_message("not json at all");
         assert!(resp.is_some());
         let resp = resp.unwrap();
-        assert_eq!(resp["error"]["code"].as_i64().unwrap(), protocol::PARSE_ERROR);
+        assert_eq!(
+            resp["error"]["code"].as_i64().unwrap(),
+            protocol::PARSE_ERROR
+        );
     }
 
     #[test]
@@ -699,7 +693,9 @@ mod tests {
         assert!(server.active_session_id.is_none());
 
         // Resume it
-        let msg = format!(r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"resume_session","arguments":{{"session_id":{session_id}}}}}}}"#);
+        let msg = format!(
+            r#"{{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{{"name":"resume_session","arguments":{{"session_id":{session_id}}}}}}}"#
+        );
         let resp = server.handle_message(&msg).unwrap();
         let text = resp["result"]["content"][0]["text"].as_str().unwrap();
         assert!(text.contains("Resumed session"));
