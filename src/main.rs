@@ -5,6 +5,7 @@ use deciduous::github::{ensure_roadmap_label, GitHubClient};
 use deciduous::roadmap::{
     generate_issue_body, parse_roadmap, write_roadmap_with_metadata, RoadmapSection,
 };
+use deciduous::util::truncate;
 use deciduous::{
     filter_graph_by_ids,
     generate_edge_id,
@@ -840,6 +841,25 @@ enum TagAction {
     },
 }
 
+/// Emit sync events if multi-user sync is initialized (.deciduous/sync exists).
+///
+/// The closure receives the current author and returns the events to append.
+/// Each append failure prints a warning but does not abort.
+fn emit_sync_events(build: impl FnOnce(String) -> Vec<Event>) {
+    let sync_dir = PathBuf::from(".deciduous/sync");
+    if !sync_dir.exists() {
+        return;
+    }
+    let author = get_current_author();
+    if let Ok(event_log) = EventLog::new(&PathBuf::from(".deciduous"), author.clone()) {
+        for event in build(author) {
+            if let Err(e) = event_log.append(event) {
+                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
+            }
+        }
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -1131,29 +1151,22 @@ fn main() {
                     );
 
                     // Auto-emit event if sync is initialized
-                    let sync_dir = PathBuf::from(".deciduous/sync");
-                    if sync_dir.exists() {
+                    emit_sync_events(|author| {
                         if let Ok(Some(node)) = db.get_node(id) {
-                            let author = get_current_author();
-                            if let Ok(event_log) =
-                                EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                            {
-                                let event = Event::AddNode {
-                                    change_id: node.change_id.clone(),
-                                    node_type: node.node_type.clone(),
-                                    title: node.title.clone(),
-                                    description: node.description.clone(),
-                                    status: node.status.clone(),
-                                    metadata_json: node.metadata_json.clone(),
-                                    timestamp: chrono::Utc::now(),
-                                    author,
-                                };
-                                if let Err(e) = event_log.append(event) {
-                                    eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                                }
-                            }
+                            vec![Event::AddNode {
+                                change_id: node.change_id.clone(),
+                                node_type: node.node_type.clone(),
+                                title: node.title.clone(),
+                                description: node.description.clone(),
+                                status: node.status.clone(),
+                                metadata_json: node.metadata_json.clone(),
+                                timestamp: chrono::Utc::now(),
+                                author,
+                            }]
+                        } else {
+                            Vec::new()
                         }
-                    }
+                    });
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1179,36 +1192,29 @@ fn main() {
                 );
 
                 // Auto-emit event if sync is initialized
-                let sync_dir = PathBuf::from(".deciduous/sync");
-                if sync_dir.exists() {
+                emit_sync_events(|author| {
                     // Get change_ids for the nodes
                     let from_node = db.get_node(from).ok().flatten();
                     let to_node = db.get_node(to).ok().flatten();
 
                     if let (Some(from_n), Some(to_n)) = (from_node, to_node) {
-                        let author = get_current_author();
-                        if let Ok(event_log) =
-                            EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                        {
-                            let event = Event::AddEdge {
-                                edge_id: generate_edge_id(
-                                    &from_n.change_id,
-                                    &to_n.change_id,
-                                    &edge_type,
-                                ),
-                                from_change_id: from_n.change_id.clone(),
-                                to_change_id: to_n.change_id.clone(),
-                                edge_type: edge_type.clone(),
-                                rationale: rationale.clone(),
-                                timestamp: chrono::Utc::now(),
-                                author,
-                            };
-                            if let Err(e) = event_log.append(event) {
-                                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                            }
-                        }
+                        vec![Event::AddEdge {
+                            edge_id: generate_edge_id(
+                                &from_n.change_id,
+                                &to_n.change_id,
+                                &edge_type,
+                            ),
+                            from_change_id: from_n.change_id.clone(),
+                            to_change_id: to_n.change_id.clone(),
+                            edge_type: edge_type.clone(),
+                            rationale: rationale.clone(),
+                            timestamp: chrono::Utc::now(),
+                            author,
+                        }]
+                    } else {
+                        Vec::new()
                     }
-                }
+                });
             }
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
@@ -1229,39 +1235,32 @@ fn main() {
                     println!("{} edge ({} -> {})", "Removed".red(), from, to);
 
                     // Auto-emit event if sync is initialized
-                    let sync_dir = PathBuf::from(".deciduous/sync");
-                    if sync_dir.exists() {
+                    emit_sync_events(|author| {
+                        let mut events = Vec::new();
                         if let (Some(from_n), Some(to_n)) = (from_node, to_node) {
-                            let author = get_current_author();
-                            if let Ok(event_log) =
-                                EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                            {
-                                // Emit one DeleteEdge per deleted edge, using each
-                                // edge's real type so the edge_id matches the one
-                                // emitted when the edge was created
-                                let mut emitted_ids: Vec<String> = Vec::new();
-                                for edge in &deleted_edges {
-                                    let edge_id = generate_edge_id(
-                                        &from_n.change_id,
-                                        &to_n.change_id,
-                                        &edge.edge_type,
-                                    );
-                                    if emitted_ids.contains(&edge_id) {
-                                        continue;
-                                    }
-                                    emitted_ids.push(edge_id.clone());
-                                    let event = Event::DeleteEdge {
-                                        edge_id,
-                                        timestamp: chrono::Utc::now(),
-                                        author: author.clone(),
-                                    };
-                                    if let Err(e) = event_log.append(event) {
-                                        eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                                    }
+                            // Emit one DeleteEdge per deleted edge, using each
+                            // edge's real type so the edge_id matches the one
+                            // emitted when the edge was created
+                            let mut emitted_ids: Vec<String> = Vec::new();
+                            for edge in &deleted_edges {
+                                let edge_id = generate_edge_id(
+                                    &from_n.change_id,
+                                    &to_n.change_id,
+                                    &edge.edge_type,
+                                );
+                                if emitted_ids.contains(&edge_id) {
+                                    continue;
                                 }
+                                emitted_ids.push(edge_id.clone());
+                                events.push(Event::DeleteEdge {
+                                    edge_id,
+                                    timestamp: chrono::Utc::now(),
+                                    author: author.clone(),
+                                });
                             }
                         }
-                    }
+                        events
+                    });
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1298,24 +1297,17 @@ fn main() {
                         );
 
                         // Auto-emit event if sync is initialized
-                        let sync_dir = PathBuf::from(".deciduous/sync");
-                        if sync_dir.exists() {
+                        emit_sync_events(|author| {
                             if let Some(node) = node_info {
-                                let author = get_current_author();
-                                if let Ok(event_log) =
-                                    EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                                {
-                                    let event = Event::DeleteNode {
-                                        change_id: node.change_id.clone(),
-                                        timestamp: chrono::Utc::now(),
-                                        author,
-                                    };
-                                    if let Err(e) = event_log.append(event) {
-                                        eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                                    }
-                                }
+                                vec![Event::DeleteNode {
+                                    change_id: node.change_id.clone(),
+                                    timestamp: chrono::Utc::now(),
+                                    author,
+                                }]
+                            } else {
+                                Vec::new()
                             }
-                        }
+                        });
                     }
                 }
                 Err(e) => {
@@ -1330,28 +1322,21 @@ fn main() {
                 println!("{} node {} status to '{}'", "Updated".green(), id, status);
 
                 // Auto-emit event if sync is initialized
-                let sync_dir = PathBuf::from(".deciduous/sync");
-                if sync_dir.exists() {
+                emit_sync_events(|author| {
                     if let Ok(Some(node)) = db.get_node(id) {
-                        let author = get_current_author();
-                        if let Ok(event_log) =
-                            EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                        {
-                            let event = Event::UpdateNode {
-                                change_id: node.change_id.clone(),
-                                title: None,
-                                description: None,
-                                status: Some(status.clone()),
-                                metadata_json: None,
-                                timestamp: chrono::Utc::now(),
-                                author,
-                            };
-                            if let Err(e) = event_log.append(event) {
-                                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                            }
-                        }
+                        vec![Event::UpdateNode {
+                            change_id: node.change_id.clone(),
+                            title: None,
+                            description: None,
+                            status: Some(status.clone()),
+                            metadata_json: None,
+                            timestamp: chrono::Utc::now(),
+                            author,
+                        }]
+                    } else {
+                        Vec::new()
                     }
-                }
+                });
             }
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
@@ -1425,16 +1410,7 @@ fn main() {
                         .filter(|n| {
                             // Filter by branch if specified
                             let branch_match = match &branch {
-                                Some(b) => n.metadata_json.as_ref().is_some_and(|meta| {
-                                    serde_json::from_str::<serde_json::Value>(meta)
-                                        .ok()
-                                        .and_then(|v| {
-                                            v.get("branch")
-                                                .and_then(|br| br.as_str())
-                                                .map(|s| s.to_string())
-                                        })
-                                        .is_some_and(|node_branch| node_branch == *b)
-                                }),
+                                Some(b) => n.branch().is_some_and(|node_branch| node_branch == *b),
                                 None => true,
                             };
                             // Filter by type if specified
@@ -1581,46 +1557,43 @@ fn main() {
                         println!("{}: {}", "Updated".bold(), node.updated_at);
 
                         // Parse metadata
-                        if let Some(ref meta_str) = node.metadata_json {
-                            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_str) {
+                        if let Some(meta) = node.metadata() {
+                            println!();
+                            println!("{}", "Metadata".bold().underline());
+
+                            if let Some(conf) = meta.get("confidence").and_then(|v| v.as_i64()) {
+                                let conf_colored = if conf >= 80 {
+                                    format!("{}%", conf).green()
+                                } else if conf >= 50 {
+                                    format!("{}%", conf).yellow()
+                                } else {
+                                    format!("{}%", conf).red()
+                                };
+                                println!("  {}: {}", "Confidence".bold(), conf_colored);
+                            }
+
+                            if let Some(branch) = meta.get("branch").and_then(|v| v.as_str()) {
+                                println!("  {}: {}", "Branch".bold(), branch.cyan());
+                            }
+
+                            if let Some(commit) = meta.get("commit").and_then(|v| v.as_str()) {
+                                println!("  {}: {}", "Commit".bold(), commit.yellow());
+                            }
+
+                            if let Some(files) = meta.get("files").and_then(|v| v.as_array()) {
+                                let file_list: Vec<&str> =
+                                    files.iter().filter_map(|f| f.as_str()).collect();
+                                if !file_list.is_empty() {
+                                    println!("  {}: {}", "Files".bold(), file_list.join(", "));
+                                }
+                            }
+
+                            if let Some(prompt) = meta.get("prompt").and_then(|v| v.as_str()) {
                                 println!();
-                                println!("{}", "Metadata".bold().underline());
-
-                                if let Some(conf) = meta.get("confidence").and_then(|v| v.as_i64())
-                                {
-                                    let conf_colored = if conf >= 80 {
-                                        format!("{}%", conf).green()
-                                    } else if conf >= 50 {
-                                        format!("{}%", conf).yellow()
-                                    } else {
-                                        format!("{}%", conf).red()
-                                    };
-                                    println!("  {}: {}", "Confidence".bold(), conf_colored);
-                                }
-
-                                if let Some(branch) = meta.get("branch").and_then(|v| v.as_str()) {
-                                    println!("  {}: {}", "Branch".bold(), branch.cyan());
-                                }
-
-                                if let Some(commit) = meta.get("commit").and_then(|v| v.as_str()) {
-                                    println!("  {}: {}", "Commit".bold(), commit.yellow());
-                                }
-
-                                if let Some(files) = meta.get("files").and_then(|v| v.as_array()) {
-                                    let file_list: Vec<&str> =
-                                        files.iter().filter_map(|f| f.as_str()).collect();
-                                    if !file_list.is_empty() {
-                                        println!("  {}: {}", "Files".bold(), file_list.join(", "));
-                                    }
-                                }
-
-                                if let Some(prompt) = meta.get("prompt").and_then(|v| v.as_str()) {
-                                    println!();
-                                    println!("{}", "Prompt".bold().underline());
-                                    // Word-wrap long prompts
-                                    for line in prompt.lines() {
-                                        println!("  {}", line.italic());
-                                    }
+                                println!("{}", "Prompt".bold().underline());
+                                // Word-wrap long prompts
+                                for line in prompt.lines() {
+                                    println!("  {}", line.italic());
                                 }
                             }
                         }
@@ -3220,32 +3193,14 @@ fn main() {
                 .filter(|n| n.node_type == "action" || n.node_type == "outcome")
                 .filter(|n| {
                     // Check if already has commit
-                    !n.metadata_json
-                        .as_ref()
-                        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                        .and_then(|v| {
-                            v.get("commit")
-                                .and_then(|c| c.as_str())
-                                .map(|s| !s.is_empty())
-                        })
-                        .unwrap_or(false)
+                    !n.commit().is_some_and(|s| !s.is_empty())
                 })
                 .collect();
 
             let with_commits = nodes
                 .iter()
                 .filter(|n| n.node_type == "action" || n.node_type == "outcome")
-                .filter(|n| {
-                    n.metadata_json
-                        .as_ref()
-                        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                        .and_then(|v| {
-                            v.get("commit")
-                                .and_then(|c| c.as_str())
-                                .map(|s| !s.is_empty())
-                        })
-                        .unwrap_or(false)
-                })
+                .filter(|n| n.commit().is_some_and(|s| !s.is_empty()))
                 .count();
 
             println!(
@@ -4566,16 +4521,6 @@ fn parse_backdate(d: &str) -> String {
     d.to_string()
 }
 
-fn truncate(s: &str, max_len: usize) -> String {
-    if s.chars().count() <= max_len {
-        s.to_string()
-    } else {
-        let char_len = max_len.saturating_sub(3);
-        let truncated: String = s.chars().take(char_len).collect();
-        format!("{}...", truncated)
-    }
-}
-
 // =============================================================================
 // Audit command helpers
 // =============================================================================
@@ -4672,13 +4617,9 @@ struct GitCommit {
 fn extract_commit_hashes(nodes: &[deciduous::DecisionNode]) -> Vec<String> {
     let mut hashes = std::collections::HashSet::new();
     for node in nodes {
-        if let Some(ref meta_json) = node.metadata_json {
-            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_json) {
-                if let Some(commit) = meta.get("commit").and_then(|c| c.as_str()) {
-                    if !commit.is_empty() {
-                        hashes.insert(commit.to_string());
-                    }
-                }
+        if let Some(commit) = node.commit() {
+            if !commit.is_empty() {
+                hashes.insert(commit);
             }
         }
     }

@@ -503,20 +503,18 @@ fn node_summary_json(node: &DecisionNode) -> Value {
     }
 
     // Unpack key metadata fields
-    if let Some(ref meta_str) = node.metadata_json {
-        if let Ok(meta) = serde_json::from_str::<Value>(meta_str) {
-            if let Some(c) = meta.get("confidence").and_then(Value::as_u64) {
-                j["confidence"] = json!(c);
-            }
-            if let Some(b) = meta.get("branch").and_then(Value::as_str) {
-                j["branch"] = json!(b);
-            }
-            if let Some(commit) = meta.get("commit").and_then(Value::as_str) {
-                j["commit"] = json!(commit);
-            }
-            if let Some(prompt) = meta.get("prompt").and_then(Value::as_str) {
-                j["prompt"] = json!(prompt);
-            }
+    if let Some(meta) = node.metadata() {
+        if let Some(c) = meta.get("confidence").and_then(Value::as_u64) {
+            j["confidence"] = json!(c);
+        }
+        if let Some(b) = meta.get("branch").and_then(Value::as_str) {
+            j["branch"] = json!(b);
+        }
+        if let Some(commit) = meta.get("commit").and_then(Value::as_str) {
+            j["commit"] = json!(commit);
+        }
+        if let Some(prompt) = meta.get("prompt").and_then(Value::as_str) {
+            j["prompt"] = json!(prompt);
         }
     }
 
@@ -537,11 +535,7 @@ fn edge_summary_json(edge: &DecisionEdge) -> Value {
 }
 
 fn node_has_branch(node: &DecisionNode, branch: &str) -> bool {
-    node.metadata_json
-        .as_ref()
-        .and_then(|m| serde_json::from_str::<Value>(m).ok())
-        .and_then(|v| v.get("branch").and_then(Value::as_str).map(|b| b == branch))
-        .unwrap_or(false)
+    node.branch().is_some_and(|b| b == branch)
 }
 
 fn build_adjacency_out(edges: &[DecisionEdge]) -> HashMap<i32, Vec<i32>> {

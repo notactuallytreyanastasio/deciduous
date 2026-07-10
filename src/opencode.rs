@@ -2572,19 +2572,45 @@ fn ensure_core_infrastructure(project_root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Install OpenCode configuration and plugins
-pub fn install_opencode(project_root: &Path) -> Result<(), String> {
-    println!("\n{}", "Installing OpenCode integration...".cyan().bold());
-    println!("   Directory: {}\n", project_root.display());
+/// Command files written to .opencode/commands/ by install and update
+const OPENCODE_COMMANDS: &[(&str, &str)] = &[
+    ("work.md", COMMAND_WORK),
+    ("recover.md", COMMAND_RECOVER),
+    ("decision.md", COMMAND_DECISION),
+    ("build-test.md", COMMAND_BUILD_TEST),
+    ("serve-ui.md", COMMAND_SERVE_UI),
+    ("sync-graph.md", COMMAND_SYNC_GRAPH),
+    ("document.md", COMMAND_DOCUMENT),
+    ("sync.md", COMMAND_SYNC),
+    ("decision-graph.md", COMMAND_DECISION_GRAPH),
+];
 
-    // First, ensure core deciduous infrastructure exists
-    ensure_core_infrastructure(project_root)?;
+/// Skills written to .opencode/skills/<name>/SKILL.md by install and update
+const OPENCODE_SKILLS: &[(&str, &str)] = &[
+    ("pulse", SKILL_PULSE_OPENCODE),
+    ("narratives", SKILL_NARRATIVES_OPENCODE),
+    ("archaeology", SKILL_ARCHAEOLOGY_OPENCODE),
+];
 
-    // Migrate old singular dirs before creating anything
-    migrate_opencode_dirs(project_root)?;
+/// All plugin files, written unconditionally by update. Install gates the
+/// hook plugins on config instead (see `install_opencode`).
+const OPENCODE_PLUGINS: &[(&str, &str)] = &[
+    ("require-action-node.ts", PLUGIN_REQUIRE_ACTION_NODE),
+    ("post-commit-reminder.ts", PLUGIN_POST_COMMIT_REMINDER),
+    ("version-check.ts", PLUGIN_VERSION_CHECK),
+];
 
-    let config = Config::load();
-
+/// Write the OpenCode integration files shared by install and update:
+/// directories, plugins, commands, skills, agent, and tool.
+///
+/// `plugins` is the list of plugin files to write (install gates hook plugins
+/// behind config checks; update writes all of them). `verb` is the past-tense
+/// verb printed for each file ("Installed" or "Updated").
+fn write_opencode_integration_files(
+    project_root: &Path,
+    plugins: &[(&str, &str)],
+    verb: &str,
+) -> Result<(), String> {
     let opencode_dir = project_root.join(".opencode");
     let plugin_dir = opencode_dir.join("plugins");
     let command_dir = opencode_dir.join("commands");
@@ -2607,70 +2633,23 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         }
     }
 
-    // Install plugins (hooks)
-    if config.hooks.enabled {
-        for hook in &config.hooks.pre_tool_use {
-            if hook.enabled && hook.name == "require-action-node" {
-                let plugin_path = plugin_dir.join("require-action-node.ts");
-                fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
-                    .map_err(|e| format!("Could not write plugin: {}", e))?;
-                println!(
-                    "   {} .opencode/plugins/require-action-node.ts",
-                    "Installed".green()
-                );
-            }
-        }
-
-        for hook in &config.hooks.post_tool_use {
-            if hook.enabled && hook.name == "post-commit-reminder" {
-                let plugin_path = plugin_dir.join("post-commit-reminder.ts");
-                fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
-                    .map_err(|e| format!("Could not write plugin: {}", e))?;
-                println!(
-                    "   {} .opencode/plugins/post-commit-reminder.ts",
-                    "Installed".green()
-                );
-            }
-        }
-
-        // Always install version-check plugin (opt-in via config.toml)
-        let version_check_path = plugin_dir.join("version-check.ts");
-        fs::write(&version_check_path, PLUGIN_VERSION_CHECK)
-            .map_err(|e| format!("Could not write plugin: {}", e))?;
-        println!(
-            "   {} .opencode/plugins/version-check.ts",
-            "Installed".green()
-        );
+    // Write plugins
+    for (name, content) in plugins {
+        let plugin_path = plugin_dir.join(name);
+        fs::write(&plugin_path, content).map_err(|e| format!("Could not write plugin: {}", e))?;
+        println!("   {} .opencode/plugins/{}", verb.green(), name);
     }
 
-    // Install commands
-    let commands = [
-        ("work.md", COMMAND_WORK),
-        ("recover.md", COMMAND_RECOVER),
-        ("decision.md", COMMAND_DECISION),
-        ("build-test.md", COMMAND_BUILD_TEST),
-        ("serve-ui.md", COMMAND_SERVE_UI),
-        ("sync-graph.md", COMMAND_SYNC_GRAPH),
-        ("document.md", COMMAND_DOCUMENT),
-        ("sync.md", COMMAND_SYNC),
-        ("decision-graph.md", COMMAND_DECISION_GRAPH),
-    ];
-
-    for (name, content) in commands {
+    // Write commands
+    for (name, content) in OPENCODE_COMMANDS {
         let cmd_path = command_dir.join(name);
         fs::write(&cmd_path, content)
             .map_err(|e| format!("Could not write command {}: {}", name, e))?;
-        println!("   {} .opencode/commands/{}", "Installed".green(), name);
+        println!("   {} .opencode/commands/{}", verb.green(), name);
     }
 
-    // Install skills in proper directory structure (.opencode/skills/<name>/SKILL.md)
-    let skills = [
-        ("pulse", SKILL_PULSE_OPENCODE),
-        ("narratives", SKILL_NARRATIVES_OPENCODE),
-        ("archaeology", SKILL_ARCHAEOLOGY_OPENCODE),
-    ];
-
-    for (name, content) in skills {
+    // Write skills in proper directory structure (.opencode/skills/<name>/SKILL.md)
+    for (name, content) in OPENCODE_SKILLS {
         let skill_subdir = skill_dir.join(name);
         if !skill_subdir.exists() {
             fs::create_dir_all(&skill_subdir)
@@ -2679,22 +2658,56 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         let skill_path = skill_subdir.join("SKILL.md");
         fs::write(&skill_path, content)
             .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
-        println!(
-            "   {} .opencode/skills/{}/SKILL.md",
-            "Installed".green(),
-            name
-        );
+        println!("   {} .opencode/skills/{}/SKILL.md", verb.green(), name);
     }
 
-    // Install custom agent
+    // Write custom agent
     let agent_path = agent_dir.join("deciduous.md");
     fs::write(&agent_path, AGENT_DECIDUOUS).map_err(|e| format!("Could not write agent: {}", e))?;
-    println!("   {} .opencode/agents/deciduous.md", "Installed".green());
+    println!("   {} .opencode/agents/deciduous.md", verb.green());
 
-    // Install custom tool
+    // Write custom tool
     let tool_path = tool_dir.join("deciduous.ts");
     fs::write(&tool_path, TOOL_DECIDUOUS).map_err(|e| format!("Could not write tool: {}", e))?;
-    println!("   {} .opencode/tools/deciduous.ts", "Installed".green());
+    println!("   {} .opencode/tools/deciduous.ts", verb.green());
+
+    Ok(())
+}
+
+/// Install OpenCode configuration and plugins
+pub fn install_opencode(project_root: &Path) -> Result<(), String> {
+    println!("\n{}", "Installing OpenCode integration...".cyan().bold());
+    println!("   Directory: {}\n", project_root.display());
+
+    // First, ensure core deciduous infrastructure exists
+    ensure_core_infrastructure(project_root)?;
+
+    // Migrate old singular dirs before creating anything
+    migrate_opencode_dirs(project_root)?;
+
+    let config = Config::load();
+
+    // Install plugins (hooks) - gated on config, unlike update which writes all
+    let mut plugins: Vec<(&str, &str)> = Vec::new();
+    if config.hooks.enabled {
+        for hook in &config.hooks.pre_tool_use {
+            if hook.enabled && hook.name == "require-action-node" {
+                plugins.push(("require-action-node.ts", PLUGIN_REQUIRE_ACTION_NODE));
+            }
+        }
+
+        for hook in &config.hooks.post_tool_use {
+            if hook.enabled && hook.name == "post-commit-reminder" {
+                plugins.push(("post-commit-reminder.ts", PLUGIN_POST_COMMIT_REMINDER));
+            }
+        }
+
+        // Always install version-check plugin (opt-in via config.toml)
+        plugins.push(("version-check.ts", PLUGIN_VERSION_CHECK));
+    }
+
+    // Install directories, plugins, commands, skills, agent, and tool
+    write_opencode_integration_files(project_root, &plugins, "Installed")?;
 
     // Generate opencode.json config
     // Plugins are auto-loaded from .opencode/plugins/
@@ -2839,105 +2852,9 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
     // Migrate from old singular directory names to plural
     migrate_opencode_dirs(project_root)?;
 
-    let opencode_dir = project_root.join(".opencode");
-    let plugin_dir = opencode_dir.join("plugins");
-    let command_dir = opencode_dir.join("commands");
-    let skill_dir = opencode_dir.join("skills");
-    let agent_dir = opencode_dir.join("agents");
-    let tool_dir = opencode_dir.join("tools");
-
-    // Create directories if needed
-    for dir in [
-        &opencode_dir,
-        &plugin_dir,
-        &command_dir,
-        &skill_dir,
-        &agent_dir,
-        &tool_dir,
-    ] {
-        if !dir.exists() {
-            fs::create_dir_all(dir).map_err(|e| format!("Could not create {:?}: {}", dir, e))?;
-            println!("   {} {:?}", "Creating".green(), dir);
-        }
-    }
-
-    // Update plugins (overwrite)
-    let plugin_path = plugin_dir.join("require-action-node.ts");
-    fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
-    println!(
-        "   {} .opencode/plugins/require-action-node.ts",
-        "Updated".green()
-    );
-
-    let plugin_path = plugin_dir.join("post-commit-reminder.ts");
-    fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
-    println!(
-        "   {} .opencode/plugins/post-commit-reminder.ts",
-        "Updated".green()
-    );
-
-    let plugin_path = plugin_dir.join("version-check.ts");
-    fs::write(&plugin_path, PLUGIN_VERSION_CHECK)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
-    println!(
-        "   {} .opencode/plugins/version-check.ts",
-        "Updated".green()
-    );
-
-    // Update commands (overwrite)
-    let commands = [
-        ("work.md", COMMAND_WORK),
-        ("recover.md", COMMAND_RECOVER),
-        ("decision.md", COMMAND_DECISION),
-        ("build-test.md", COMMAND_BUILD_TEST),
-        ("serve-ui.md", COMMAND_SERVE_UI),
-        ("sync-graph.md", COMMAND_SYNC_GRAPH),
-        ("document.md", COMMAND_DOCUMENT),
-        ("sync.md", COMMAND_SYNC),
-        ("decision-graph.md", COMMAND_DECISION_GRAPH),
-    ];
-
-    for (name, content) in commands {
-        let cmd_path = command_dir.join(name);
-        fs::write(&cmd_path, content)
-            .map_err(|e| format!("Could not write command {}: {}", name, e))?;
-        println!("   {} .opencode/commands/{}", "Updated".green(), name);
-    }
-
-    // Update skills in proper directory structure
-    let skills = [
-        ("pulse", SKILL_PULSE_OPENCODE),
-        ("narratives", SKILL_NARRATIVES_OPENCODE),
-        ("archaeology", SKILL_ARCHAEOLOGY_OPENCODE),
-    ];
-
-    for (name, content) in skills {
-        let skill_subdir = skill_dir.join(name);
-        if !skill_subdir.exists() {
-            fs::create_dir_all(&skill_subdir)
-                .map_err(|e| format!("Could not create {:?}: {}", skill_subdir, e))?;
-        }
-        let skill_path = skill_subdir.join("SKILL.md");
-        fs::write(&skill_path, content)
-            .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
-        println!(
-            "   {} .opencode/skills/{}/SKILL.md",
-            "Updated".green(),
-            name
-        );
-    }
-
-    // Update agent (overwrite)
-    let agent_path = agent_dir.join("deciduous.md");
-    fs::write(&agent_path, AGENT_DECIDUOUS).map_err(|e| format!("Could not write agent: {}", e))?;
-    println!("   {} .opencode/agents/deciduous.md", "Updated".green());
-
-    // Update tool (overwrite)
-    let tool_path = tool_dir.join("deciduous.ts");
-    fs::write(&tool_path, TOOL_DECIDUOUS).map_err(|e| format!("Could not write tool: {}", e))?;
-    println!("   {} .opencode/tools/deciduous.ts", "Updated".green());
+    // Update directories, plugins, commands, skills, agent, and tool (overwrite).
+    // Unlike install, all plugins are written unconditionally.
+    write_opencode_integration_files(project_root, OPENCODE_PLUGINS, "Updated")?;
 
     // Note: We don't overwrite opencode.json or AGENTS.md as they may have user customizations
     println!(
@@ -3581,6 +3498,78 @@ mod tests {
         // Check config files
         assert!(project_root.join("opencode.json").exists());
         assert!(project_root.join("AGENTS.md").exists());
+    }
+
+    /// Recursively collect relative file paths and contents under `dir`
+    fn collect_files(
+        dir: &Path,
+        base: &Path,
+        out: &mut std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        if let Ok(entries) = fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    collect_files(&path, base, out);
+                } else {
+                    let rel = path
+                        .strip_prefix(base)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/");
+                    out.insert(rel, fs::read(&path).unwrap());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_install_update_write_identical_files() {
+        // install_opencode and update_opencode must write byte-identical
+        // command/skill/agent/tool files. Plugins are excluded from the
+        // comparison because install gates them on config while update
+        // writes all of them unconditionally.
+        let install_tmp = TempDir::new().unwrap();
+        let update_tmp = TempDir::new().unwrap();
+
+        // install_opencode needs core infrastructure config
+        let deciduous_dir = install_tmp.path().join(".deciduous");
+        fs::create_dir_all(&deciduous_dir).unwrap();
+        fs::write(deciduous_dir.join("config.toml"), "[hooks]\nenabled = true").unwrap();
+
+        install_opencode(install_tmp.path()).unwrap();
+        update_opencode(update_tmp.path()).unwrap();
+
+        for subdir in ["commands", "skills", "agents", "tools"] {
+            let install_dir = install_tmp.path().join(".opencode").join(subdir);
+            let update_dir = update_tmp.path().join(".opencode").join(subdir);
+
+            let mut installed = std::collections::BTreeMap::new();
+            collect_files(&install_dir, &install_dir, &mut installed);
+            let mut updated = std::collections::BTreeMap::new();
+            collect_files(&update_dir, &update_dir, &mut updated);
+
+            assert!(
+                !installed.is_empty(),
+                "install wrote no files under .opencode/{}",
+                subdir
+            );
+            assert_eq!(
+                installed.keys().collect::<Vec<_>>(),
+                updated.keys().collect::<Vec<_>>(),
+                "install and update wrote different file sets under .opencode/{}",
+                subdir
+            );
+            for (name, content) in &installed {
+                assert_eq!(
+                    Some(content),
+                    updated.get(name),
+                    "install and update wrote different content for .opencode/{}/{}",
+                    subdir,
+                    name
+                );
+            }
+        }
     }
 
     #[test]

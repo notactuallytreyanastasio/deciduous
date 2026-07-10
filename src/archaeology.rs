@@ -36,25 +36,6 @@ pub struct SupersededNode {
     pub title: String,
 }
 
-fn get_branch(node: &DecisionNode) -> Option<String> {
-    node.metadata_json
-        .as_ref()
-        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| {
-            v.get("branch")
-                .and_then(|b| b.as_str())
-                .map(|s| s.to_string())
-        })
-}
-
-fn get_confidence(node: &DecisionNode) -> Option<u8> {
-    node.metadata_json
-        .as_ref()
-        .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-        .and_then(|v| v.get("confidence").and_then(|c| c.as_u64()))
-        .map(|c| c.min(100) as u8)
-}
-
 /// Create a full pivot chain atomically.
 ///
 /// Performs these steps:
@@ -97,7 +78,7 @@ pub fn create_pivot(
     }
 
     // Inherit branch from the source node
-    let branch = get_branch(&from_node);
+    let branch = from_node.branch();
 
     // Step 2: Create observation node
     let obs_id = db
@@ -319,7 +300,7 @@ pub fn timeline(
 
     // Filter by branch
     if let Some(br) = branch {
-        nodes.retain(|n| get_branch(n).as_deref() == Some(br));
+        nodes.retain(|n| n.branch().as_deref() == Some(br));
     }
 
     // Sort chronologically (already sorted by created_at asc from DB, but re-sort to be safe)
@@ -346,7 +327,8 @@ pub fn print_timeline(nodes: &[DecisionNode]) {
 
     for node in nodes {
         let date = node.created_at.get(..10).unwrap_or(&node.created_at);
-        let conf = get_confidence(node)
+        let conf = node
+            .confidence()
             .map(|c| format!(" {}%", c))
             .unwrap_or_default();
         let status_color = match node.status.as_str() {

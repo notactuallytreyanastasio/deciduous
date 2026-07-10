@@ -231,13 +231,9 @@ fn get_git_history() -> Vec<GitCommit> {
     // Extract unique commit hashes from node metadata
     let mut hashes = HashSet::new();
     for node in &nodes {
-        if let Some(ref meta_json) = node.metadata_json {
-            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_json) {
-                if let Some(commit) = meta.get("commit").and_then(|c| c.as_str()) {
-                    if !commit.is_empty() {
-                        hashes.insert(commit.to_string());
-                    }
-                }
+        if let Some(commit) = node.commit() {
+            if !commit.is_empty() {
+                hashes.insert(commit);
             }
         }
     }
@@ -690,14 +686,12 @@ IMPORTANT: If information is missing or incomplete, tell the user explicitly and
                         prompt.push_str(&format!("Description: {}\n", desc));
                     }
                     // Parse metadata for additional context
-                    if let Some(meta_str) = &node.metadata_json {
-                        if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_str) {
-                            if let Some(branch) = meta.get("branch").and_then(|v| v.as_str()) {
-                                prompt.push_str(&format!("Branch: {}\n", branch));
-                            }
-                            if let Some(prompt_text) = meta.get("prompt").and_then(|v| v.as_str()) {
-                                prompt.push_str(&format!("Original prompt: {}\n", prompt_text));
-                            }
+                    if let Some(meta) = node.metadata() {
+                        if let Some(branch) = meta.get("branch").and_then(|v| v.as_str()) {
+                            prompt.push_str(&format!("Branch: {}\n", branch));
+                        }
+                        if let Some(prompt_text) = meta.get("prompt").and_then(|v| v.as_str()) {
+                            prompt.push_str(&format!("Original prompt: {}\n", prompt_text));
                         }
                     }
                     prompt.push('\n');
