@@ -220,11 +220,28 @@ enum Command {
     /// Export full graph as JSON
     Graph,
 
-    /// Start the graph viewer server
+    /// Start the graph viewer server (or the multi-graph API daemon with --api)
     Serve {
         /// Port to listen on
         #[arg(short, long, default_value = "3000")]
         port: u16,
+
+        /// Run the multi-graph JSON API daemon instead of the viewer
+        #[arg(long)]
+        api: bool,
+
+        /// API mode: data directory holding graphs/<id>/deciduous.db
+        #[arg(long)]
+        data_dir: Option<PathBuf>,
+
+        /// API mode: bearer token required on every request
+        /// (falls back to DECIDUOUS_API_TOKEN)
+        #[arg(long)]
+        token: Option<String>,
+
+        /// API mode: bind address
+        #[arg(long, default_value = "127.0.0.1")]
+        bind: String,
     },
 
     /// Export graph to JSON file
@@ -1730,15 +1747,58 @@ fn main() {
             }
         },
 
-        Command::Serve { port } => {
-            println!(
-                "{} Starting graph viewer at http://localhost:{}",
-                "Deciduous".cyan(),
-                port
-            );
-            if let Err(e) = deciduous::serve::start_graph_server(port) {
-                eprintln!("{} Server error: {}", "Error:".red(), e);
-                std::process::exit(1);
+        Command::Serve {
+            port,
+            api,
+            data_dir,
+            token,
+            bind,
+        } => {
+            if api {
+                let token = token
+                    .or_else(|| std::env::var("DECIDUOUS_API_TOKEN").ok())
+                    .filter(|t| !t.is_empty());
+                let Some(token) = token else {
+                    eprintln!(
+                        "{} API mode needs a bearer token: pass --token or set DECIDUOUS_API_TOKEN",
+                        "Error:".red()
+                    );
+                    std::process::exit(1);
+                };
+                let data_dir =
+                    data_dir.unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
+                let config = deciduous::api::ApiConfig {
+                    bind: bind.clone(),
+                    port,
+                    data_dir: data_dir.clone(),
+                    token,
+                };
+                match deciduous::api::ApiServer::bind(config) {
+                    Ok(server) => {
+                        println!(
+                            "{} API daemon on http://{}:{} (graphs in {})",
+                            "Deciduous".cyan(),
+                            bind,
+                            server.port(),
+                            data_dir.display()
+                        );
+                        server.run();
+                    }
+                    Err(e) => {
+                        eprintln!("{} API server error: {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                println!(
+                    "{} Starting graph viewer at http://localhost:{}",
+                    "Deciduous".cyan(),
+                    port
+                );
+                if let Err(e) = deciduous::serve::start_graph_server(port) {
+                    eprintln!("{} Server error: {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
             }
         }
 
