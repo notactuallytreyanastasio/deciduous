@@ -147,3 +147,102 @@ jobs:
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --no-verify
+
+  # Homebrew formula update, folded INTO the release run (needs: release) rather
+  # than a separate `on: release` workflow. Two reasons that matters:
+  #  - A release created by GITHUB_TOKEN (the `release` job's action) does NOT
+  #    trigger `on: release` workflows, so the old standalone update-homebrew.yml
+  #    never fired for automated releases (0.15.0, 0.16.0 got no run at all).
+  #  - Running after `release` guarantees checksums.txt is attached, so the
+  #    download can't race the publish (which is what failed for 0.13.x/0.14.0).
+  update-homebrew:
+    needs: [release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve version + tag
+        id: rel
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Download checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "${{ steps.rel.outputs.tag }}" \
+            --repo "${{ github.repository }}" --pattern "checksums.txt"
+          cat checksums.txt
+
+      - name: Parse checksums
+        id: sums
+        run: |
+          for p in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+            key=$(echo "$p" | tr '-' '_')
+            echo "${key}=$(grep "$p" checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+          done
+
+      - name: Generate formula
+        env:
+          VERSION: ${{ steps.rel.outputs.version }}
+          SHA_DARWIN_ARM64: ${{ steps.sums.outputs.darwin_arm64 }}
+          SHA_DARWIN_AMD64: ${{ steps.sums.outputs.darwin_amd64 }}
+          SHA_LINUX_ARM64: ${{ steps.sums.outputs.linux_arm64 }}
+          SHA_LINUX_AMD64: ${{ steps.sums.outputs.linux_amd64 }}
+        run: |
+          cat > deciduous.rb << FORMULA
+          class Deciduous < Formula
+            desc "Decision graph tooling for AI-assisted development"
+            homepage "https://notactuallytreyanastasio.github.io/deciduous/"
+            version "${VERSION}"
+            license "Apache-2.0"
+
+            on_macos do
+              on_arm do
+                url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-darwin-arm64"
+                sha256 "${SHA_DARWIN_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-darwin-amd64"
+                sha256 "${SHA_DARWIN_AMD64}"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-linux-arm64"
+                sha256 "${SHA_LINUX_ARM64}"
+              end
+              on_intel do
+                url "https://github.com/notactuallytreyanastasio/deciduous/releases/download/v#{version}/deciduous-linux-amd64"
+                sha256 "${SHA_LINUX_AMD64}"
+              end
+            end
+
+            def install
+              binary_name = Dir["deciduous-*"].first
+              bin.install binary_name => "deciduous"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/deciduous --version")
+            end
+          end
+          FORMULA
+          cat deciduous.rb
+
+      - name: Push formula to tap
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          export GIT_SSH_COMMAND="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no"
+          git clone git@github.com:notactuallytreyanastasio/homebrew-tap.git tap
+          cp deciduous.rb tap/Formula/deciduous.rb
+          cd tap
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add Formula/deciduous.rb
+          git diff --cached --quiet || git commit -m "deciduous ${{ steps.rel.outputs.version }}"
+          git push
