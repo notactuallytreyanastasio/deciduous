@@ -1,0 +1,29 @@
+# Automatic HTTPS: Caddy provisions and renews a Let's Encrypt cert for this
+# hostname (needs public port 80 + correct DNS at first boot). HTTP redirects
+# to HTTPS automatically. The daemon speaks plain HTTP on a private network
+# and is never published to the host — TLS terminates here, at the edge.
+
+deciduous.bobbby.online {
+	encode zstd gzip
+
+	# Cap request bodies at the edge (the daemon also enforces 1 MiB). Blunts
+	# graph-flood / oversized-payload abuse before it reaches the backend.
+	request_body {
+		max_size 2MB
+	}
+
+	reverse_proxy deciduous:4141 {
+		# The daemon's own unauthenticated, side-effect-free health route
+		# (added for exactly this): 200 => process alive and serving. No token
+		# needed, opens no database.
+		health_uri /health
+		health_interval 30s
+		health_timeout 5s
+		health_status 2xx
+	}
+
+	log {
+		output file /var/log/caddy/deciduous.access.log
+		format json
+	}
+}

@@ -1,0 +1,29 @@
+# Build artifacts
+target/
+.git/
+
+# Local + backup databases (never ship data into the image)
+**/*.db
+.deciduous/
+
+# Demo / doc media and prebuilt demo binaries (huge, unused by the build)
+*.png
+*.cast
+*.mov
+*.flac
+*.mp3
+deciduous_demo
+decid_demo.cast
+screencaps_of_it_in_action/
+appimage/
+examples/
+losselot-reports/
+
+# Web viewer + docs site node/build output (API mode embeds src/viewer.html only)
+web/node_modules/
+web/dist/
+docs/node_modules/
+docs/dist/
+
+# Secrets / deploy-local files
+deploy/.env

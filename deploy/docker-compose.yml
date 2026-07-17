@@ -1,0 +1,47 @@
+# Deciduous federated-memory daemon behind Caddy (auto-TLS).
+#
+# Run from this directory:  docker compose up -d --build
+# Secrets come from ./.env  (see .env.example; chmod 600, gitignored).
+
+services:
+  deciduous:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: deciduous:latest
+    restart: unless-stopped
+    environment:
+      # `:?` makes compose refuse to start if the token is unset.
+      DECIDUOUS_API_TOKEN: ${DECIDUOUS_API_TOKEN:?set DECIDUOUS_API_TOKEN in deploy/.env}
+    volumes:
+      - deciduous-data:/data
+    expose:
+      - "4141"
+    # NO `ports:` on purpose. Publishing 4141 would put the token-only,
+    # TLS-less API on the public internet. Keep it internal; Caddy is the
+    # only ingress. (Also firewall 4141 at the VM level as defense in depth.)
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      deciduous:
+        condition: service_healthy
+    # No secret here on purpose: the Caddyfile health-checks the daemon's
+    # unauthenticated /health, so the bearer token lives only in the one
+    # container that needs it (the daemon).
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data      # ACME account + issued certs (must persist!)
+      - caddy-config:/config
+      - caddy-logs:/var/log/caddy
+
+volumes:
+  deciduous-data:   # the graphs -- the whole point; back this up (backup.sh)
+  caddy-data:       # Let's Encrypt certs/keys -- persist to avoid rate limits
+  caddy-config:
+  caddy-logs:

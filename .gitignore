@@ -52,3 +52,6 @@ proptest-regressions/
 
 # Deciduous database (local)
 .deciduous/
+
+# deploy secrets (real token — never commit)
+deploy/.env
