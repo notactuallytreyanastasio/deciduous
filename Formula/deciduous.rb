@@ -2,7 +2,7 @@ class Deciduous < Formula
   desc "Decision graph tooling for AI-assisted development"
   homepage "https://notactuallytreyanastasio.github.io/deciduous/"
   version "0.13.2"
-  license "MIT"
+  license "Apache-2.0"
 
   on_macos do
     on_arm do
