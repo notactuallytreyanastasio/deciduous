@@ -128,24 +128,46 @@ impl Registry {
     }
 
     fn exists(&self, graph_id: &str) -> bool {
-        self.db_path(graph_id).exists()
+        // Validate before the id ever reaches a path join: `exists` is called
+        // from route() (for PUT) ahead of `database`'s own check, so without
+        // this an unvalidated id would reach the filesystem. An invalid id
+        // can't name a real graph anyway, so "invalid" and "absent" coincide.
+        valid_graph_id(graph_id) && self.db_path(graph_id).exists()
     }
 
     /// Open (and cache) a graph database; `create` controls whether a
     /// missing graph is initialized or reported as an error.
+    ///
+    /// The filesystem is authoritative: a cached handle is only trusted while
+    /// its `deciduous.db` still exists on disk. If the data dir was deleted
+    /// under the running daemon (backup rotation, restore, disk cleanup) the
+    /// stale handle is evicted, so we re-create the database (`create = true`)
+    /// or honestly report 404 (`create = false`) instead of returning a handle
+    /// to a file that is gone — the wedge where PUT answered 201 while every
+    /// subsequent write 404'd forever.
     fn database(&self, graph_id: &str, create: bool) -> Result<Arc<Database>, ApiError> {
         if !valid_graph_id(graph_id) {
             return Err(ApiError::bad_request(
                 "graph id must be 1-64 chars of [a-z0-9_-], starting alphanumeric",
             ));
         }
-        if !create && !self.exists(graph_id) {
+
+        let on_disk = self.exists(graph_id);
+        if !create && !on_disk {
             return Err(ApiError::not_found(&format!("no such graph: {graph_id}")));
         }
 
         let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(db) = open.get(graph_id) {
-            return Ok(Arc::clone(db));
+        if on_disk {
+            // File still present: a cached handle is trustworthy.
+            if let Some(db) = open.get(graph_id) {
+                return Ok(Arc::clone(db));
+            }
+        } else {
+            // File gone but we were asked to create: drop any stale handle so
+            // the open below re-creates the database rather than handing back a
+            // connection to a vanished file.
+            open.remove(graph_id);
         }
 
         std::fs::create_dir_all(self.graph_dir(graph_id))
@@ -165,6 +187,31 @@ fn valid_graph_id(id: &str) -> bool {
         && id
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
+}
+
+/// The tools an API caller may invoke: append and read, never destroy.
+///
+/// The full tool set (see `mcp::handlers::dispatch`) includes `delete_node`,
+/// `unlink_nodes`, `update_status`, and `update_prompt`, which are right for a
+/// human curating their own graph and wrong for a shared graph reachable by a
+/// bearer token — "many authors" must not mean "any token holder can erase
+/// what the others wrote". This list is the canonical server-side boundary;
+/// clients (e.g. party_line's Memory.Broker) mirror it, but the daemon is
+/// authoritative because a leaked token bypasses every client.
+fn tool_is_allowed(tool: &str) -> bool {
+    matches!(
+        tool,
+        "add_node"
+            | "link_nodes"
+            | "list_nodes"
+            | "list_edges"
+            | "show_node"
+            | "get_graph"
+            | "get_node_context"
+            | "search_nodes"
+            | "trace_chain"
+            | "list_themes"
+    )
 }
 
 // ── Request handling ──────────────────────────────────────────────────────
@@ -221,11 +268,20 @@ fn route(
     registry: &Registry,
     token: &str,
 ) -> Result<(u16, Value), ApiError> {
-    authorize(request, token)?;
-
     let url = request.url().to_string();
     let path = url.split('?').next().unwrap_or("");
     let segments: Vec<&str> = path.trim_matches('/').split('/').collect();
+
+    // Health is intentionally unauthenticated and side-effect free — a reverse
+    // proxy or uptime probe hits it without the bearer token. It opens no
+    // database, lists no graphs, and discloses nothing beyond "up".
+    if request.method() == &Method::Get
+        && matches!(segments.as_slice(), ["health"] | ["api", "v1", "health"])
+    {
+        return Ok((200, json!({"status": "ok"})));
+    }
+
+    authorize(request, token)?;
 
     match (request.method().clone(), segments.as_slice()) {
         (Method::Get, ["api", "v1", "graphs"]) => Ok((200, json!({"graphs": registry.list()}))),
@@ -238,6 +294,18 @@ fn route(
         }
 
         (Method::Post, ["api", "v1", "graphs", graph_id, "tools", tool_name]) => {
+            // Append and read, never destroy — enforced HERE, at the transport,
+            // not only in a well-behaved client. A leaked token, or any
+            // misbehaving caller, must not be able to erase or rewrite a
+            // shared graph's history by calling delete_node/unlink_nodes
+            // directly over HTTP. The daemon is the authoritative boundary; a
+            // client-side allowlist alone is bypassed the moment the token
+            // leaves the client. Keep this list in sync with the client's.
+            if !tool_is_allowed(tool_name) {
+                return Err(ApiError::forbidden(&format!(
+                    "tool not permitted over the API: {tool_name}"
+                )));
+            }
             let db = registry.database(graph_id, false)?;
             let args = read_json_body(request)?;
             let result = handlers::dispatch(&db, tool_name, args);

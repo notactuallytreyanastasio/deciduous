@@ -1765,8 +1765,13 @@ fn main() {
                     );
                     std::process::exit(1);
                 };
-                let data_dir =
-                    data_dir.unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
+                let data_dir = data_dir
+                    .or_else(|| {
+                        std::env::var("DECIDUOUS_API_DATA_DIR")
+                            .ok()
+                            .map(PathBuf::from)
+                    })
+                    .unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
                 let config = deciduous::api::ApiConfig {
                     bind: bind.clone(),
                     port,
