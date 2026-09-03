@@ -284,8 +284,9 @@ struct SyncStatus {
 }
 
 fn get_sync_status() -> SyncStatus {
-    let store_dir = crate::records::RecordStore::dir_for_db(&Database::db_path());
-    let Some(store) = crate::records::RecordStore::open(&store_dir) else {
+    let Some(store) = crate::records::RecordStore::dir_for_db(&Database::db_path())
+        .and_then(crate::records::RecordStore::open)
+    else {
         return SyncStatus {
             initialized: false,
             store_dir: None,

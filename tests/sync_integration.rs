@@ -201,12 +201,12 @@ fn legacy_jsonl_log_is_imported_once_then_removed() {
     fs::write(
         events.join("Alice.jsonl"),
         concat!(
-            r#"{"op":"add_node","change_id":"11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa","node_type":"goal","title":"Old goal","description":null,"status":"pending","metadata_json":"{\"confidence\":80}","timestamp":1784149119459,"author":"Alice"}"#,
-            r#"{"op":"add_node","change_id":"22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb","node_type":"action","title":"Old action","description":null,"status":"pending","metadata_json":null,"timestamp":1784149119460,"author":"Alice"}"#,
+            r#"{"op":"add_node","change_id":"aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa","node_type":"goal","title":"Old goal","description":null,"status":"pending","metadata_json":"{\"confidence\":80}","timestamp":1784149119459,"author":"Alice"}"#,
+            r#"{"op":"add_node","change_id":"bbbb2222-bbbb-4bbb-8bbb-bbbbbbbbbbbb","node_type":"action","title":"Old action","description":null,"status":"pending","metadata_json":null,"timestamp":1784149119460,"author":"Alice"}"#,
             "\n",
-            r#"{"op":"add_edge","edge_id":"edge-x","from_change_id":"11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa","to_change_id":"22222222-bbbb-4bbb-8bbb-bbbbbbbbbbbb","edge_type":"leads_to","rationale":"then","timestamp":1784149119470,"author":"Alice"}"#,
+            r#"{"op":"add_edge","edge_id":"edge-x","from_change_id":"aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa","to_change_id":"bbbb2222-bbbb-4bbb-8bbb-bbbbbbbbbbbb","edge_type":"leads_to","rationale":"then","timestamp":1784149119470,"author":"Alice"}"#,
             "\n",
-            r#"{"op":"update_node","change_id":"11111111-aaaa-4aaa-8aaa-aaaaaaaaaaaa","title":null,"description":null,"status":"completed","metadata_json":null,"timestamp":1784149119480,"author":"Alice"}"#,
+            r#"{"op":"update_node","change_id":"aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa","title":null,"description":null,"status":"completed","metadata_json":null,"timestamp":1784149119480,"author":"Alice"}"#,
             "\n",
         ),
     )
@@ -224,7 +224,7 @@ fn legacy_jsonl_log_is_imported_once_then_removed() {
     );
     assert_eq!(m.node_count(), 2);
     assert_eq!(m.edge_count(), 1);
-    let goal = m.ok(&["show", "11111111"]);
+    let goal = m.ok(&["show", "aaaa1111"]);
     assert!(goal.contains("completed"), "{goal}");
 
     // The deprecated command still answers, pointing at sync.
@@ -343,7 +343,7 @@ fn sync_repairs_conflict_markers_left_by_a_merge_without_the_driver() {
     m.ok(&["sync", "--no-pages"]);
     let nodes = m.sync.join("nodes");
     fs::write(
-        nodes.join("conflicted.json"),
+        nodes.join("c0ffee11.json"),
         concat!(
             "{\n",
             "  \"change_id\": \"c0ffee11\",\n",
@@ -366,13 +366,13 @@ fn sync_repairs_conflict_markers_left_by_a_merge_without_the_driver() {
     let (ok, out, _) = m.run(&["sync", "--check"]);
     assert!(!ok);
     assert!(
-        out.contains("Conflict:") && out.contains("conflicted.json"),
+        out.contains("Conflict:") && out.contains("c0ffee11.json"),
         "{out}"
     );
 
     let out = m.ok(&["sync", "--no-pages"]);
     assert!(
-        out.contains("Merged") && out.contains("conflicted.json"),
+        out.contains("Merged") && out.contains("c0ffee11.json"),
         "{out}"
     );
     let shown = m.ok(&["show", "c0ffee11"]);

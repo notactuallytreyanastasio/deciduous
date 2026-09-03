@@ -646,7 +646,9 @@ type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 /// it so teammates receive it through git. See [`crate::records`].
 pub struct Database {
     pool: DbPool,
-    store: Option<RecordStore>,
+    /// Attached record store, if any. Behind a lock so `deciduous sync` can
+    /// attach a store it just created without a mutable handle.
+    store: std::sync::RwLock<Option<RecordStore>>,
 }
 
 /// Error type for database operations
@@ -717,22 +719,27 @@ impl Database {
             .build(manager)
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
-        let mut db = Self { pool, store: None };
+        let db = Self {
+            pool,
+            store: std::sync::RwLock::new(None),
+        };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
-        db.store = RecordStore::open(RecordStore::dir_for_db(path.as_ref()));
+        db.set_store(RecordStore::dir_for_db(path.as_ref()).and_then(RecordStore::open));
         Ok(db)
     }
 
     /// Attach (or detach) the record store that mutations are mirrored into.
-    pub fn set_store(&mut self, store: Option<RecordStore>) {
-        self.store = store;
+    pub fn set_store(&self, store: Option<RecordStore>) {
+        if let Ok(mut slot) = self.store.write() {
+            *slot = store;
+        }
     }
 
     /// The attached record store, if sync is enabled for this database.
-    pub fn store(&self) -> Option<&RecordStore> {
-        self.store.as_ref()
+    pub fn store(&self) -> Option<RecordStore> {
+        self.store.read().ok().and_then(|s| s.clone())
     }
 
     // ------------------------------------------------------------------
@@ -747,7 +754,7 @@ impl Database {
     }
 
     fn publish_node_by_id(&self, node_id: i32) {
-        let Some(store) = &self.store else { return };
+        let Some(store) = self.store() else { return };
         match self.get_node(node_id) {
             Ok(Some(node)) => {
                 if let Err(e) = store.publish_node(&node) {
@@ -760,7 +767,7 @@ impl Database {
     }
 
     fn publish_edge_by_id(&self, edge_id: i32) {
-        let Some(store) = &self.store else { return };
+        let Some(store) = self.store() else { return };
         match self.get_edge(edge_id) {
             Ok(Some(edge)) => {
                 if let Err(e) = store.publish_edge(&edge) {
@@ -773,7 +780,7 @@ impl Database {
     }
 
     fn tombstone_edges(&self, edges: &[DecisionEdge]) {
-        let Some(store) = &self.store else { return };
+        let Some(store) = self.store() else { return };
         for edge in edges {
             if let Err(e) = store.tombstone_edge(edge) {
                 Self::store_warn("could not write edge tombstone", e);
@@ -782,7 +789,7 @@ impl Database {
     }
 
     fn publish_theme_by_id(&self, theme_id: i32) {
-        let Some(store) = &self.store else { return };
+        let Some(store) = self.store() else { return };
         match self.get_theme_by_id(theme_id) {
             Ok(Some(theme)) => {
                 if let Err(e) = store.publish_theme(&theme) {
@@ -795,7 +802,7 @@ impl Database {
     }
 
     fn publish_tag(&self, node_id: i32, theme_id: i32) {
-        let Some(store) = &self.store else { return };
+        let Some(store) = self.store() else { return };
         let node = self.get_node(node_id).ok().flatten();
         let theme = self.get_theme_by_id(theme_id).ok().flatten();
         let tag = self.get_tag(node_id, theme_id).ok().flatten();
@@ -812,7 +819,7 @@ impl Database {
     }
 
     fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) {
-        let Some(store) = &self.store else { return };
+        let Some(store) = self.store() else { return };
         if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id) {
             Self::store_warn("could not write tag tombstone", e);
         }
@@ -1632,6 +1639,16 @@ impl Database {
         Ok(())
     }
 
+    /// Give a theme a new change_id (used when two machines created the
+    /// same theme name independently and one id becomes canonical).
+    pub(crate) fn update_theme_change_id(&self, theme_id: i32, change_id: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(themes::table.filter(themes::id.eq(theme_id)))
+            .set(themes::change_id.eq(change_id))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
     /// Delete a theme and its tags without writing tombstones.
     pub(crate) fn delete_theme_local(&self, theme_id: i32) -> Result<()> {
         let mut conn = self.get_conn()?;
@@ -1680,19 +1697,14 @@ impl Database {
     /// machines; the prefix is how you point at a teammate's node.
     pub fn resolve_node_ref(&self, reference: &str) -> Result<i32> {
         let r = reference.trim().trim_start_matches('#');
-        let looks_like_prefix =
-            r.len() >= 4 && r.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+        // Digits always mean a local id, even when no such node exists:
+        // guessing a change_id prefix instead could aim a delete at the
+        // wrong node.
         if let Ok(id) = r.parse::<i32>() {
-            // An all-digit reference is an id if such a node exists; otherwise
-            // it may be a change_id prefix that happens to be numeric.
-            if self.get_node(id)?.is_some() || !looks_like_prefix {
-                return Ok(id);
-            }
-            if let Ok(found) = self.resolve_change_id_prefix(r) {
-                return Ok(found);
-            }
             return Ok(id);
         }
+        let looks_like_prefix =
+            r.len() >= 4 && r.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
         if !looks_like_prefix {
             return Err(DbError::Validation(format!(
                 "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
@@ -1724,7 +1736,7 @@ impl Database {
                         format!(
                             "#{} {} ({})",
                             n.id,
-                            &n.change_id[..12.min(n.change_id.len())],
+                            n.change_id.chars().take(12).collect::<String>(),
                             n.title
                         )
                     })
@@ -1975,6 +1987,13 @@ impl Database {
         diesel::delete(session_nodes::table.filter(session_nodes::node_id.eq(node_id)))
             .execute(&mut conn)?;
 
+        // 3b. Tags on this node (foreign keys are declared but not enforced)
+        let doomed_tags: Vec<NodeTheme> = node_themes::table
+            .filter(node_themes::node_id.eq(node_id))
+            .load(&mut conn)?;
+        diesel::delete(node_themes::table.filter(node_themes::node_id.eq(node_id)))
+            .execute(&mut conn)?;
+
         // 4. Set nullable foreign keys to NULL
         diesel::update(
             decision_sessions::table.filter(decision_sessions::root_node_id.eq(node_id)),
@@ -1996,12 +2015,17 @@ impl Database {
         drop(conn);
 
         if publish {
-            if let Some(store) = &self.store {
+            if let Some(store) = self.store() {
                 if let Err(e) = store.tombstone_node(&node) {
                     Self::store_warn("could not write node tombstone", e);
                 }
             }
             self.tombstone_edges(&doomed_edges);
+            for tag in &doomed_tags {
+                if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
+                    self.tombstone_tag(&node.change_id, &theme.change_id);
+                }
+            }
         }
 
         Ok(summary)
@@ -3010,7 +3034,7 @@ impl Database {
             diesel::delete(themes::table.filter(themes::id.eq(theme.id))).execute(&mut conn)?;
             drop(conn);
 
-            if let Some(store) = &self.store {
+            if let Some(store) = self.store() {
                 for t in &tagged {
                     if let Ok(Some(node)) = self.get_node(t.node_id) {
                         self.tombstone_tag(&node.change_id, &theme.change_id);
@@ -4116,6 +4140,8 @@ mod tests {
 
         let err = db.resolve_node_ref("zz").unwrap_err().to_string();
         assert!(err.contains("not a node id"), "{err}");
+        // Digits are always an id, never a change_id guess.
+        assert_eq!(db.resolve_node_ref("99999").unwrap(), 99999);
         let err = db
             .resolve_node_ref("ffffffff-0000")
             .unwrap_err()

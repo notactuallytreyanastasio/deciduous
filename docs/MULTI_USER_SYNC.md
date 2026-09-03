@@ -143,6 +143,24 @@ Edges import once both endpoints exist locally. An edge whose endpoint has not
 arrived yet is reported as pending and imports on a later sync. An edge that points
 at a tombstoned node is skipped.
 
+Three details keep this honest:
+
+- On an `updated_at` tie the store wins if the content differs. A merge-driver
+  result keeps the winning side's `updated_at` but carries fields from both
+  sides, and the database only has ours.
+- A record file that exists but does not parse is reported and never written
+  over. Export only creates files that are missing.
+- A record the database refuses (a constraint violation, say) is listed under
+  "the database refused a record" and the rest of the run still completes.
+  Same-named themes created on two machines before syncing are folded first:
+  the smaller `change_id` becomes canonical everywhere and the other's tags
+  are re-pointed to it.
+
+Write-through follows the same rule in the other direction. When a local
+`status`, `link`, or `tag` writes its record, it merges with whatever is
+already in the file rather than replacing it, so a teammate's version that was
+pulled but not yet synced into the database keeps its fields.
+
 Nothing here depends on the order files are read, so `deciduous sync` is idempotent:
 a second run right after the first reports "already agree".
 

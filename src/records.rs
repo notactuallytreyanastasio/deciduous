@@ -45,7 +45,7 @@
 //! Files that still carry conflict markers (merged without the driver) are
 //! repaired the same way by `deciduous sync`.
 
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, TimeZone, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -53,6 +53,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 
 use crate::db::{Database, DecisionEdge, DecisionNode, NodeTheme, Theme};
 
@@ -226,6 +227,32 @@ impl TagRecord {
     }
 }
 
+/// What a record's file must be named after, so a file whose name and body
+/// disagree (a bad rename, a hand edit) is rejected instead of trusted.
+pub trait RecordIdentity {
+    fn record_stem(&self) -> String;
+}
+impl RecordIdentity for NodeRecord {
+    fn record_stem(&self) -> String {
+        self.change_id.clone()
+    }
+}
+impl RecordIdentity for EdgeRecord {
+    fn record_stem(&self) -> String {
+        self.edge_id.clone()
+    }
+}
+impl RecordIdentity for ThemeRecord {
+    fn record_stem(&self) -> String {
+        self.change_id.clone()
+    }
+}
+impl RecordIdentity for TagRecord {
+    fn record_stem(&self) -> String {
+        tag_id(&self.node_change_id, &self.theme_change_id)
+    }
+}
+
 // ============================================================================
 // Helpers
 // ============================================================================
@@ -260,15 +287,20 @@ pub fn parse_ts(s: &str) -> DateTime<Utc> {
     if let Ok(dt) = DateTime::parse_from_rfc3339(s) {
         return dt.with_timezone(&Utc);
     }
+    // Naive shapes come from `add --date`, which reads them as local time.
+    let local = |naive: chrono::NaiveDateTime| {
+        chrono::Local
+            .from_local_datetime(&naive)
+            .single()
+            .map(|d| d.with_timezone(&Utc))
+            .unwrap_or_else(|| DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc))
+    };
     for fmt in ["%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"] {
         if let Ok(naive) = chrono::NaiveDateTime::parse_from_str(s, fmt) {
-            return DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc);
+            return local(naive);
         }
         if let Ok(date) = chrono::NaiveDate::parse_from_str(s, fmt) {
-            return DateTime::<Utc>::from_naive_utc_and_offset(
-                date.and_hms_opt(0, 0, 0).unwrap_or_default(),
-                Utc,
-            );
+            return local(date.and_hms_opt(0, 0, 0).unwrap_or_default());
         }
     }
     DateTime::<Utc>::UNIX_EPOCH
@@ -381,7 +413,7 @@ impl<T> Default for StoreRead<T> {
     }
 }
 
-fn read_dir_records<T: for<'de> Deserialize<'de>>(dir: &Path) -> StoreRead<T> {
+fn read_dir_records<T: for<'de> Deserialize<'de> + RecordIdentity>(dir: &Path) -> StoreRead<T> {
     let mut out = StoreRead::default();
     let entries = match fs::read_dir(dir) {
         Ok(e) => e,
@@ -395,7 +427,24 @@ fn read_dir_records<T: for<'de> Deserialize<'de>>(dir: &Path) -> StoreRead<T> {
     for path in paths {
         match fs::read_to_string(&path) {
             Ok(text) => match serde_json::from_str::<T>(&text) {
-                Ok(rec) => out.records.push(rec),
+                Ok(rec) => {
+                    let expected = safe_stem(&rec.record_stem());
+                    let actual = path
+                        .file_stem()
+                        .map(|s| s.to_string_lossy().to_string())
+                        .unwrap_or_default();
+                    if actual == expected {
+                        out.records.push(rec);
+                    } else {
+                        out.errors.push(ReadError {
+                            path: path.display().to_string(),
+                            message: format!(
+                                "file name does not match the record inside it (expected {}.json)",
+                                expected
+                            ),
+                        });
+                    }
+                }
                 Err(e) => out.errors.push(ReadError {
                     path: path.display().to_string(),
                     message: e.to_string(),
@@ -418,17 +467,21 @@ fn read_dir_records<T: for<'de> Deserialize<'de>>(dir: &Path) -> StoreRead<T> {
 #[derive(Debug, Clone)]
 pub struct RecordStore {
     root: PathBuf,
-    author: String,
+    /// Resolved on first write (asks git), never on open: `serve` opens the
+    /// database on every request.
+    author: Arc<OnceLock<String>>,
 }
 
 impl RecordStore {
     /// Where the store lives for a given database file: a `sync/` directory
-    /// next to it (`.deciduous/deciduous.db` -> `.deciduous/sync`).
-    pub fn dir_for_db(db_path: &Path) -> PathBuf {
-        match db_path.parent() {
-            Some(parent) if !parent.as_os_str().is_empty() => parent.join(STORE_DIR_NAME),
-            _ => PathBuf::from(".deciduous").join(STORE_DIR_NAME),
-        }
+    /// next to it (`.deciduous/deciduous.db` -> `.deciduous/sync`). A bare
+    /// file name has no directory of its own and gets no store, so a scratch
+    /// database never attaches to the project's shared records.
+    pub fn dir_for_db(db_path: &Path) -> Option<PathBuf> {
+        db_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .map(|p| p.join(STORE_DIR_NAME))
     }
 
     /// Open an existing store. Returns `None` if the directory is absent,
@@ -438,7 +491,7 @@ impl RecordStore {
         if root.is_dir() {
             Some(Self {
                 root,
-                author: get_current_author(),
+                author: Arc::default(),
             })
         } else {
             None
@@ -453,13 +506,15 @@ impl RecordStore {
         }
         Ok(Self {
             root,
-            author: get_current_author(),
+            author: Arc::default(),
         })
     }
 
     /// Use a fixed author instead of asking git (tests, servers).
     pub fn with_author(mut self, author: impl Into<String>) -> Self {
-        self.author = author.into();
+        let cell = OnceLock::new();
+        let _ = cell.set(author.into());
+        self.author = Arc::new(cell);
         self
     }
 
@@ -468,7 +523,7 @@ impl RecordStore {
     }
 
     pub fn author(&self) -> &str {
-        &self.author
+        self.author.get_or_init(get_current_author).as_str()
     }
 
     fn nodes_dir(&self) -> PathBuf {
@@ -525,45 +580,77 @@ impl RecordStore {
         )
     }
 
+    /// Write a record produced by a local mutation, merged with whatever is
+    /// already on disk. The file may hold a teammate's version that was
+    /// pulled but not yet synced into the database; overwriting it would
+    /// lose their fields. A file that exists but does not parse is left
+    /// alone (reported, never clobbered) and `deciduous sync` deals with it.
+    fn write_merged<T: Serialize>(&self, path: &Path, rec: &T) -> io::Result<bool> {
+        let new_value =
+            serde_json::to_value(rec).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let merged = match fs::read_to_string(path) {
+            Ok(text) => match serde_json::from_str::<Value>(&text) {
+                Ok(existing) => merge_record_values(None, &existing, &new_value),
+                Err(e) => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "{} is not valid JSON ({}); left untouched, run `deciduous sync`",
+                            path.display(),
+                            e
+                        ),
+                    ))
+                }
+            },
+            Err(_) => new_value,
+        };
+        let mut text = serde_json::to_string_pretty(&merged)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        text.push('\n');
+        write_if_changed(path, &text)
+    }
+
     /// Publish a live node from the database.
     pub fn publish_node(&self, node: &DecisionNode) -> io::Result<bool> {
-        self.write_node(&NodeRecord::from_db(node, Some(&self.author)))
+        let rec = NodeRecord::from_db(node, Some(self.author()));
+        self.write_merged(&self.node_path(&rec.change_id), &rec)
     }
 
     /// Mark a node deleted. Keeps the last known fields so history stays
     /// readable and a later edit can resurrect it.
     pub fn tombstone_node(&self, node: &DecisionNode) -> io::Result<bool> {
-        let mut rec = NodeRecord::from_db(node, Some(&self.author));
+        let mut rec = NodeRecord::from_db(node, Some(self.author()));
         rec.deleted_at = Some(now_ts());
-        self.write_node(&rec)
+        self.write_merged(&self.node_path(&rec.change_id), &rec)
     }
 
     /// Publish a live edge. Legacy edges without change ids are skipped.
     pub fn publish_edge(&self, edge: &DecisionEdge) -> io::Result<bool> {
-        match EdgeRecord::from_db(edge, Some(&self.author)) {
-            Some(rec) => self.write_edge(&rec),
+        match EdgeRecord::from_db(edge, Some(self.author())) {
+            Some(rec) => self.write_merged(&self.edge_path(&rec.edge_id), &rec),
             None => Ok(false),
         }
     }
 
     pub fn tombstone_edge(&self, edge: &DecisionEdge) -> io::Result<bool> {
-        match EdgeRecord::from_db(edge, Some(&self.author)) {
+        match EdgeRecord::from_db(edge, Some(self.author())) {
             Some(mut rec) => {
                 rec.deleted_at = Some(now_ts());
-                self.write_edge(&rec)
+                self.write_merged(&self.edge_path(&rec.edge_id), &rec)
             }
             None => Ok(false),
         }
     }
 
     pub fn publish_theme(&self, theme: &Theme) -> io::Result<bool> {
-        self.write_theme(&ThemeRecord::from_db(theme, Some(&self.author)))
+        let rec = ThemeRecord::from_db(theme, Some(self.author()));
+        self.write_merged(&self.theme_path(&rec.change_id), &rec)
     }
 
     pub fn tombstone_theme(&self, theme: &Theme) -> io::Result<bool> {
-        let mut rec = ThemeRecord::from_db(theme, Some(&self.author));
+        let mut rec = ThemeRecord::from_db(theme, Some(self.author()));
         rec.deleted_at = Some(now_ts());
-        self.write_theme(&rec)
+        self.write_merged(&self.theme_path(&rec.change_id), &rec)
     }
 
     pub fn publish_tag(
@@ -573,14 +660,46 @@ impl RecordStore {
         source: &str,
         created_at: &str,
     ) -> io::Result<bool> {
-        self.write_tag(&TagRecord {
+        let rec = TagRecord {
             node_change_id: node_change_id.to_string(),
             theme_change_id: theme_change_id.to_string(),
             source: source.to_string(),
             created_at: created_at.to_string(),
-            author: Some(self.author.clone()),
+            author: Some(self.author().to_string()),
             deleted_at: None,
-        })
+        };
+        self.write_merged(&self.tag_path(node_change_id, theme_change_id), &rec)
+    }
+
+    /// Two people created a theme with the same name before syncing. The
+    /// smaller change_id is canonical everywhere; this retires the other:
+    /// its theme record becomes a tombstone and its tag records are rewritten
+    /// under the canonical id.
+    pub fn retire_theme_id(&self, old: &str, canonical: &str) -> io::Result<usize> {
+        let mut moved = 0;
+        if let Some(mut theme) = read_one::<ThemeRecord>(&self.theme_path(old))? {
+            if !theme.is_tombstone() {
+                theme.deleted_at = Some(now_ts());
+                theme.author = Some(self.author().to_string());
+                self.write_theme(&theme)?;
+            }
+        }
+        for tag in self.read_tags().records {
+            if tag.theme_change_id != old || tag.is_tombstone() {
+                continue;
+            }
+            let mut dead = tag.clone();
+            dead.deleted_at = Some(now_ts());
+            self.write_tag(&dead)?;
+            let mut alive = tag.clone();
+            alive.theme_change_id = canonical.to_string();
+            alive.author = Some(self.author().to_string());
+            if read_one::<TagRecord>(&self.tag_path(&alive.node_change_id, canonical))?.is_none() {
+                self.write_tag(&alive)?;
+            }
+            moved += 1;
+        }
+        Ok(moved)
     }
 
     pub fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) -> io::Result<bool> {
@@ -593,7 +712,7 @@ impl RecordStore {
             author: None,
             deleted_at: None,
         });
-        rec.author = Some(self.author.clone());
+        rec.author = Some(self.author().to_string());
         rec.deleted_at = Some(now_ts());
         self.write_tag(&rec)
     }
@@ -682,9 +801,11 @@ impl RecordStore {
             return Ok(report);
         }
 
+        let mut cutoff: Option<DateTime<Utc>> = None;
         let mut state = match read_checkpoint(&self.legacy_checkpoint_path()) {
             Ok(Some(cp)) => {
                 report.checkpoint = true;
+                cutoff = Some(cp.created_at);
                 MaterializedState::from_checkpoint(&cp)
             }
             Ok(None) => MaterializedState::default(),
@@ -694,7 +815,12 @@ impl RecordStore {
             }
         };
 
-        let (events, errors) = read_events_tolerant(&self.legacy_events_dir());
+        let (mut events, errors) = read_events_tolerant(&self.legacy_events_dir());
+        // The old rebuild replayed only events newer than the checkpoint;
+        // older ones are already folded in and would regress its state.
+        if let Some(cutoff) = cutoff {
+            events.retain(|e| e.timestamp() > cutoff);
+        }
         report.events = events.len();
         report.errors.extend(errors);
         state.replay(&events);
@@ -860,6 +986,11 @@ pub struct SyncReport {
     pub read_errors: Vec<ReadError>,
     /// One line per pending edge, for the human.
     pub pending_details: Vec<String>,
+    /// Same-named themes created on two machines that were folded into one.
+    pub themes_merged: usize,
+    /// Records the database refused (constraint violations and the like).
+    /// The rest of the run still completes.
+    pub errors: Vec<String>,
     /// Record files that carried git conflict markers: merged (or not) by
     /// this run, or (dry run) still waiting to be merged.
     pub conflicts: Vec<ConflictRepair>,
@@ -878,6 +1009,7 @@ impl SyncReport {
             + self.themes_deleted
             + self.tags_imported
             + self.tags_deleted
+            + self.themes_merged
     }
 
     /// Records pushed from the database into the store.
@@ -927,7 +1059,7 @@ pub fn reconcile(
     // ---- nodes -------------------------------------------------------------
     let node_read = store.read_nodes();
     report.read_errors.extend(node_read.errors);
-    let mut store_nodes: HashMap<String, NodeRecord> = node_read
+    let store_nodes: HashMap<String, NodeRecord> = node_read
         .records
         .into_iter()
         .map(|r| (r.change_id.clone(), r))
@@ -948,7 +1080,12 @@ pub fn reconcile(
                     tombstoned_nodes.insert(change_id.clone());
                 } else {
                     if !dry_run {
-                        db.import_node_record(rec).map_err(db_err)?;
+                        if let Err(e) = db.import_node_record(rec) {
+                            report
+                                .errors
+                                .push(format!("node {}: {}", short(change_id), e));
+                            continue;
+                        }
                     }
                     report.nodes_imported += 1;
                 }
@@ -971,7 +1108,19 @@ pub fn reconcile(
                     }
                 } else {
                     let rec_ts = parse_ts(&rec.updated_at);
-                    if rec_ts > row_ts {
+                    // On a tie the store wins: a merge driver result keeps
+                    // the winning side's updated_at but carries fields from
+                    // both sides, and the database has only ours.
+                    // created_at is never rewritten by an import and author is
+                    // attribution, so neither counts as a content difference.
+                    let same_content = {
+                        let mine = NodeRecord::from_db(row, None);
+                        let mut theirs = rec.clone();
+                        theirs.author = None;
+                        theirs.created_at = mine.created_at.clone();
+                        mine == theirs
+                    };
+                    if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
                         if !dry_run {
                             db.update_node_record(row.id, rec).map_err(db_err)?;
                         }
@@ -988,7 +1137,9 @@ pub fn reconcile(
     }
 
     for (change_id, row) in &db_by_change {
-        if !store_nodes.contains_key(change_id) {
+        // A file that exists but did not parse is in read_errors; never
+        // overwrite it with the local row.
+        if !store_nodes.contains_key(change_id) && !store.node_path(change_id).exists() {
             if !dry_run {
                 store.publish_node(row).map_err(io_err)?;
             }
@@ -1016,9 +1167,47 @@ pub fn reconcile(
             .map(|n| (n.change_id, n.id))
             .collect()
     };
-    store_nodes.retain(|_, r| !r.is_tombstone());
 
     // ---- themes ------------------------------------------------------------
+    // Theme names are unique per database. Two machines that each created
+    // "infra" before syncing hold two change_ids for one name; fold them
+    // deterministically (smaller change_id wins) before importing, or the
+    // UNIQUE constraint would abort the run every time.
+    {
+        let pre = store.read_themes();
+        let db_by_name: HashMap<String, Theme> = db
+            .get_all_themes()
+            .map_err(db_err)?
+            .into_iter()
+            .map(|t| (t.name.clone(), t))
+            .collect();
+        let known: HashSet<String> = db_by_name.values().map(|t| t.change_id.clone()).collect();
+        for rec in pre.records.iter().filter(|r| !r.is_tombstone()) {
+            let Some(local) = db_by_name.get(&rec.name) else {
+                continue;
+            };
+            if known.contains(&rec.change_id) || local.change_id == rec.change_id {
+                continue;
+            }
+            if !dry_run {
+                if rec.change_id < local.change_id {
+                    // Remote id is canonical: our row adopts it, our old
+                    // record and tag files retire.
+                    db.update_theme_change_id(local.id, &rec.change_id)
+                        .map_err(db_err)?;
+                    store
+                        .retire_theme_id(&local.change_id, &rec.change_id)
+                        .map_err(io_err)?;
+                } else {
+                    store
+                        .retire_theme_id(&rec.change_id, &local.change_id)
+                        .map_err(io_err)?;
+                }
+            }
+            report.themes_merged += 1;
+        }
+    }
+
     let theme_read = store.read_themes();
     report.read_errors.extend(theme_read.errors);
     let store_themes: HashMap<String, ThemeRecord> = theme_read
@@ -1040,7 +1229,15 @@ pub fn reconcile(
                     tombstoned_themes.insert(change_id.clone());
                 } else {
                     if !dry_run {
-                        db.import_theme_record(rec).map_err(db_err)?;
+                        if let Err(e) = db.import_theme_record(rec) {
+                            report.errors.push(format!(
+                                "theme '{}' ({}): {}",
+                                rec.name,
+                                short(change_id),
+                                e
+                            ));
+                            continue;
+                        }
                     }
                     report.themes_imported += 1;
                 }
@@ -1062,7 +1259,16 @@ pub fn reconcile(
                     }
                 } else {
                     let rec_ts = parse_ts(&rec.updated_at);
-                    if rec_ts > row_ts {
+                    // created_at is never rewritten by an import and author is
+                    // attribution, so neither counts as a content difference.
+                    let same_content = {
+                        let mine = ThemeRecord::from_db(row, None);
+                        let mut theirs = rec.clone();
+                        theirs.author = None;
+                        theirs.created_at = mine.created_at.clone();
+                        mine == theirs
+                    };
+                    if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
                         if !dry_run {
                             db.update_theme_record(row.id, rec).map_err(db_err)?;
                         }
@@ -1078,7 +1284,7 @@ pub fn reconcile(
         }
     }
     for (change_id, row) in &db_theme_by_change {
-        if !store_themes.contains_key(change_id) {
+        if !store_themes.contains_key(change_id) && !store.theme_path(change_id).exists() {
             if !dry_run {
                 store.publish_theme(row).map_err(io_err)?;
             }
@@ -1141,7 +1347,10 @@ pub fn reconcile(
                 ) {
                     (Some(&from_id), Some(&to_id)) => {
                         if !dry_run {
-                            db.import_edge_record(from_id, to_id, rec).map_err(db_err)?;
+                            if let Err(e) = db.import_edge_record(from_id, to_id, rec) {
+                                report.errors.push(format!("edge {}: {}", short(eid), e));
+                                continue;
+                            }
                         }
                         report.edges_imported += 1;
                     }
@@ -1181,7 +1390,7 @@ pub fn reconcile(
         }
     }
     for (eid, row) in &db_edge_by_key {
-        if !store_edges.contains_key(eid) {
+        if !store_edges.contains_key(eid) && !store.edge_path(eid).exists() {
             if !dry_run {
                 store.publish_edge(row).map_err(io_err)?;
             }
@@ -1225,13 +1434,15 @@ pub fn reconcile(
                     theme_ids.get(&rec.theme_change_id),
                 ) {
                     if !dry_run {
-                        db.import_tag_record(node_id, theme_id, rec)
-                            .map_err(db_err)?;
+                        if let Err(e) = db.import_tag_record(node_id, theme_id, rec) {
+                            report.errors.push(format!("tag {}: {}", key, e));
+                            continue;
+                        }
                     }
                     report.tags_imported += 1;
                 }
             }
-            Some((row, _, _)) => {
+            Some((row, node_cid, theme_cid)) => {
                 if rec.is_tombstone() {
                     let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
                     if deleted >= parse_ts(&row.created_at) {
@@ -1240,13 +1451,22 @@ pub fn reconcile(
                                 .map_err(db_err)?;
                         }
                         report.tags_deleted += 1;
+                    } else {
+                        // Tagged again after someone untagged it: the newer
+                        // tag wins and goes back out.
+                        if !dry_run {
+                            store
+                                .publish_tag(node_cid, theme_cid, &row.source, &row.created_at)
+                                .map_err(io_err)?;
+                        }
+                        report.tags_exported += 1;
                     }
                 }
             }
         }
     }
     for (key, (row, node_cid, theme_cid)) in &db_tag_by_key {
-        if !store_tags.contains_key(key) {
+        if !store_tags.contains_key(key) && !store.tag_path(node_cid, theme_cid).exists() {
             if !dry_run {
                 store
                     .publish_tag(node_cid, theme_cid, &row.source, &row.created_at)
@@ -1275,7 +1495,8 @@ fn record_ts(v: &Value) -> DateTime<Utc> {
         (Some(u), Some(d)) => u.max(d),
         (Some(u), None) => u,
         (None, Some(d)) => d,
-        (None, None) => DateTime::<Utc>::UNIX_EPOCH,
+        // Edges and tags are immutable: created_at is their version.
+        (None, None) => get("created_at").unwrap_or(DateTime::<Utc>::UNIX_EPOCH),
     }
 }
 
@@ -1579,6 +1800,228 @@ mod tests {
     }
 
     #[test]
+    fn dir_for_db_ignores_bare_file_names() {
+        assert_eq!(
+            RecordStore::dir_for_db(Path::new("/x/.deciduous/deciduous.db")),
+            Some(PathBuf::from("/x/.deciduous/sync"))
+        );
+        assert_eq!(RecordStore::dir_for_db(Path::new("scratch.db")), None);
+    }
+
+    #[test]
+    fn write_through_merges_with_a_pulled_record_instead_of_clobbering_it() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        let id = db.create_node("goal", "G", None, None, None).unwrap();
+        let row = db.get_node(id).unwrap().unwrap();
+        // Alice's version arrives via git: a description we do not have yet.
+        let mut theirs = s.read_node(&row.change_id).unwrap().unwrap();
+        theirs.description = Some("from alice".into());
+        theirs.updated_at = "2020-01-01T00:00:00+00:00".into();
+        s.write_node(&theirs).unwrap();
+        // Bob edits locally (later than Alice) before syncing.
+        db.update_node_status(id, "active").unwrap();
+        let on_disk = s.read_node(&row.change_id).unwrap().unwrap();
+        assert_eq!(on_disk.description.as_deref(), Some("from alice"));
+        assert_eq!(on_disk.status, "active");
+        // A file that does not parse is never overwritten.
+        fs::write(s.node_path(&row.change_id), "{broken").unwrap();
+        db.update_node_status(id, "completed").unwrap();
+        assert_eq!(
+            fs::read_to_string(s.node_path(&row.change_id)).unwrap(),
+            "{broken"
+        );
+    }
+
+    #[test]
+    fn reconcile_imports_on_updated_at_tie_when_content_differs() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        let id = db.create_node("goal", "G", None, Some(50), None).unwrap();
+        let row = db.get_node(id).unwrap().unwrap();
+        // The merge driver kept our updated_at but added Bob's field.
+        let mut merged = s.read_node(&row.change_id).unwrap().unwrap();
+        merged.metadata = Some(serde_json::json!({"confidence": 50, "commit": "abc123"}));
+        s.write_node(&merged).unwrap();
+        let r = reconcile(&db, &s, false).unwrap();
+        assert_eq!(r.nodes_updated, 1);
+        let row = db.get_node(id).unwrap().unwrap();
+        assert!(row.metadata_json.unwrap().contains("abc123"));
+        assert!(reconcile(&db, &s, false).unwrap().is_clean());
+    }
+
+    #[test]
+    fn reconcile_never_exports_over_an_unreadable_file() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        let id = db.create_node("goal", "G", None, None, None).unwrap();
+        let row = db.get_node(id).unwrap().unwrap();
+        fs::write(s.node_path(&row.change_id), "<<<<<<< not json").unwrap();
+        let r = reconcile(&db, &s, false).unwrap();
+        assert_eq!(r.nodes_exported, 0);
+        assert!(!r.read_errors.is_empty() || !r.conflicts.is_empty());
+        assert!(fs::read_to_string(s.node_path(&row.change_id))
+            .unwrap()
+            .starts_with("<<<<<<<"));
+    }
+
+    #[test]
+    fn reconcile_folds_same_named_themes_from_two_machines() {
+        let (dir_a, s) = store();
+        let a = db_in(dir_a.path());
+        a.set_store(None);
+        a.create_theme("infra", "#111111", None).unwrap();
+        let dir_b = TempDir::new().unwrap();
+        let b = db_in(dir_b.path());
+        b.set_store(None);
+        b.create_theme("infra", "#222222", None).unwrap();
+        let nb = b.create_node("goal", "B's", None, None, None).unwrap();
+        b.tag_node(nb, "infra", "manual").unwrap();
+
+        // Both publish, then A syncs against the union.
+        reconcile(&b, &s, false).unwrap();
+        let r = reconcile(&a, &s, false).unwrap();
+        assert_eq!(r.themes_merged, 1, "{r:?}");
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        let themes = a.get_all_themes().unwrap();
+        assert_eq!(themes.len(), 1);
+        let live: Vec<_> = s
+            .read_themes()
+            .records
+            .into_iter()
+            .filter(|t| !t.is_tombstone())
+            .collect();
+        assert_eq!(live.len(), 1);
+        assert_eq!(live[0].change_id, themes[0].change_id);
+        // B's tag followed the theme to the canonical id.
+        let imported = a
+            .get_all_nodes()
+            .unwrap()
+            .into_iter()
+            .find(|n| n.title == "B's")
+            .unwrap();
+        assert_eq!(a.get_node_themes(imported.id).unwrap().len(), 1);
+        // And B converges too.
+        let r = reconcile(&b, &s, false).unwrap();
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        assert_eq!(b.get_all_themes().unwrap().len(), 1);
+        assert_eq!(
+            b.get_all_themes().unwrap()[0].change_id,
+            themes[0].change_id
+        );
+        assert_eq!(b.get_node_themes(nb).unwrap().len(), 1);
+        // One more exchange carries the newer color across; then it is quiet.
+        reconcile(&a, &s, false).unwrap();
+        reconcile(&b, &s, false).unwrap();
+        {
+            let r = reconcile(&a, &s, false).unwrap();
+            assert!(r.is_clean(), "{r:?}");
+        }
+        assert!(reconcile(&b, &s, false).unwrap().is_clean());
+        assert_eq!(
+            a.get_all_themes().unwrap()[0].color,
+            b.get_all_themes().unwrap()[0].color
+        );
+    }
+
+    #[test]
+    fn retag_after_remote_untag_is_republished() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        db.set_store(Some(s.clone()));
+        let n = db.create_node("goal", "G", None, None, None).unwrap();
+        db.create_theme("ops", "#333333", None).unwrap();
+        let cid = db.get_node(n).unwrap().unwrap().change_id;
+        let theme_cid = db.get_all_themes().unwrap()[0].change_id.clone();
+        // Someone else untagged it a while ago.
+        s.write_tag(&TagRecord {
+            node_change_id: cid.clone(),
+            theme_change_id: theme_cid.clone(),
+            source: "manual".into(),
+            created_at: "2020-01-01T00:00:00+00:00".into(),
+            author: None,
+            deleted_at: Some("2020-01-02T00:00:00+00:00".into()),
+        })
+        .unwrap();
+        db.tag_node(n, "ops", "manual").unwrap();
+        assert!(!s
+            .read_tag(&cid, &theme_cid)
+            .unwrap()
+            .unwrap()
+            .is_tombstone());
+        // Even if the tombstone had come back afterwards, reconcile republishes.
+        s.write_tag(&TagRecord {
+            node_change_id: cid.clone(),
+            theme_change_id: theme_cid.clone(),
+            source: "manual".into(),
+            created_at: "2020-01-01T00:00:00+00:00".into(),
+            author: None,
+            deleted_at: Some("2020-01-02T00:00:00+00:00".into()),
+        })
+        .unwrap();
+        let r = reconcile(&db, &s, false).unwrap();
+        assert_eq!(r.tags_exported, 1);
+        assert!(!s
+            .read_tag(&cid, &theme_cid)
+            .unwrap()
+            .unwrap()
+            .is_tombstone());
+    }
+
+    #[test]
+    fn delete_node_tombstones_its_tags() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        db.set_store(Some(s.clone()));
+        let n = db.create_node("goal", "G", None, None, None).unwrap();
+        db.create_theme("ops", "#333333", None).unwrap();
+        db.tag_node(n, "ops", "manual").unwrap();
+        db.delete_node(n, false).unwrap();
+        let tags = s.read_tags().records;
+        assert_eq!(tags.len(), 1);
+        assert!(tags[0].is_tombstone());
+        assert!(db.get_all_node_themes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn legacy_import_ignores_events_older_than_the_checkpoint() {
+        let (_d, s) = store();
+        fs::create_dir_all(s.root().join("events")).unwrap();
+        let cp = serde_json::json!({
+            "created_at": 2_000_000,
+            "version": "1.0",
+            "nodes": [{
+                "change_id": "n1", "node_type": "goal", "title": "T",
+                "description": null, "status": "completed", "metadata_json": null,
+                "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-02T00:00:00+00:00"
+            }],
+            "edges": []
+        });
+        fs::write(s.root().join("checkpoint.json"), cp.to_string()).unwrap();
+        fs::write(
+            s.root().join("events/a.jsonl"),
+            r#"{"op":"add_node","change_id":"n1","node_type":"goal","title":"T","description":null,"status":"pending","metadata_json":null,"timestamp":1000000,"author":"a"}
+"#,
+        )
+        .unwrap();
+        let report = s.import_legacy_events().unwrap();
+        assert_eq!(report.events, 0);
+        assert_eq!(s.read_node("n1").unwrap().unwrap().status, "completed");
+    }
+
+    #[test]
+    fn mismatched_file_name_is_rejected() {
+        let (_d, s) = store();
+        s.write_node(&node("real-id", "R", "2026-01-02T00:00:00+00:00"))
+            .unwrap();
+        fs::copy(s.node_path("real-id"), s.node_path("other-id")).unwrap();
+        let read = s.read_nodes();
+        assert_eq!(read.records.len(), 1);
+        assert_eq!(read.errors.len(), 1);
+        assert!(read.errors[0].message.contains("does not match"));
+    }
+
+    #[test]
     fn edge_id_is_deterministic_and_distinct() {
         let a = edge_id("n1", "n2", "leads_to");
         assert_eq!(a, edge_id("n1", "n2", "leads_to"));
@@ -1641,7 +2084,7 @@ mod tests {
     #[test]
     fn write_through_publishes_and_tombstones() {
         let (dir, s) = store();
-        let mut db = db_in(dir.path());
+        let db = db_in(dir.path());
         db.set_store(Some(s.clone()));
 
         let g = db
@@ -1680,7 +2123,7 @@ mod tests {
     fn reconcile_imports_exports_and_is_idempotent() {
         let (dir, s) = store();
         // Bob's database has a node the store does not (created before sync was enabled).
-        let mut db = db_in(dir.path());
+        let db = db_in(dir.path());
         db.set_store(None);
         let local = db
             .create_node("goal", "Local only", None, None, None)
@@ -1819,7 +2262,7 @@ mod tests {
     #[test]
     fn reconcile_syncs_themes_and_tags() {
         let (dir, s) = store();
-        let mut db = db_in(dir.path());
+        let db = db_in(dir.path());
         db.set_store(Some(s.clone()));
         let n = db.create_node("goal", "Tagged", None, None, None).unwrap();
         db.create_theme("Infra", "#123456", Some("infra work"))

@@ -849,10 +849,9 @@ fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
-    db.store().cloned().or_else(|| {
-        crate::records::RecordStore::open(crate::records::RecordStore::dir_for_db(
-            &Database::db_path(),
-        ))
+    db.store().or_else(|| {
+        crate::records::RecordStore::dir_for_db(&Database::db_path())
+            .and_then(crate::records::RecordStore::open)
     })
 }
 
@@ -874,6 +873,7 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
         "read_errors": report.read_errors,
         "legacy_events": store.has_legacy_events(),
         "conflicts": report.conflicts,
+        "errors": report.errors,
         "message": if report.is_clean() && report.conflicts.is_empty() {
             "Database and records agree.".to_string()
         } else if !report.conflicts.is_empty() {
@@ -896,10 +896,14 @@ fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     let store = match store_for(db) {
         Some(s) => s,
         None => {
-            let dir = crate::records::RecordStore::dir_for_db(&Database::db_path());
-            crate::records::RecordStore::create(&dir).map_err(|e| {
+            let dir = crate::records::RecordStore::dir_for_db(&Database::db_path())
+                .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep records"))?;
+            let store = crate::records::RecordStore::create(&dir).map_err(|e| {
                 HandlerError::from(format!("could not create {}: {e}", dir.display()))
-            })?
+            })?;
+            // Later tool calls in this process must publish too.
+            db.set_store(Some(store.clone()));
+            store
         }
     };
     let legacy = if store.has_legacy_events() && !dry_run {

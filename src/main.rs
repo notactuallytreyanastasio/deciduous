@@ -662,8 +662,8 @@ enum ArchaeologyAction {
     ///
     /// Creates: observation -> revisit -> new_decision, marks old as superseded.
     Pivot {
-        /// Node ID of the existing approach being reconsidered
-        from_id: i32,
+        /// Existing approach being reconsidered: local id or change_id prefix
+        from_id: String,
 
         /// Observation text (what was learned that triggers the pivot)
         observation: String,
@@ -705,8 +705,8 @@ enum ArchaeologyAction {
 
     /// Mark a node as superseded, optionally cascading to descendants
     Supersede {
-        /// Node ID to mark as superseded
-        id: i32,
+        /// Node to mark as superseded: local id or change_id prefix
+        id: String,
 
         /// Also mark all descendant nodes as superseded
         #[arg(long)]
@@ -722,8 +722,8 @@ enum ArchaeologyAction {
 enum DocAction {
     /// Attach a file to a decision graph node
     Attach {
-        /// Node ID to attach the file to
-        node_id: i32,
+        /// Node: local id or change_id prefix
+        node_id: String,
 
         /// Path to the file to attach
         file: PathBuf,
@@ -739,8 +739,8 @@ enum DocAction {
 
     /// List documents attached to a node (or all nodes)
     List {
-        /// Node ID to list documents for (omit for all)
-        node_id: Option<i32>,
+        /// Node to list documents for: local id or change_id prefix (omit for all)
+        node_id: Option<String>,
 
         /// Show detached (removed) documents too
         #[arg(long)]
@@ -824,8 +824,8 @@ enum ThemesAction {
 enum TagAction {
     /// Add a theme to a node
     Add {
-        /// Node ID to tag
-        node_id: i32,
+        /// Node: local id or change_id prefix
+        node_id: String,
 
         /// Theme name
         theme: String,
@@ -833,8 +833,8 @@ enum TagAction {
 
     /// Remove a theme from a node
     Remove {
-        /// Node ID to untag
-        node_id: i32,
+        /// Node: local id or change_id prefix
+        node_id: String,
 
         /// Theme name
         theme: String,
@@ -842,14 +842,14 @@ enum TagAction {
 
     /// List themes for a node
     List {
-        /// Node ID to show themes for
-        node_id: i32,
+        /// Node: local id or change_id prefix
+        node_id: String,
     },
 
     /// Auto-suggest themes for a node based on keywords and AI
     Suggest {
-        /// Node ID to suggest themes for (omit for all untagged nodes)
-        node_id: Option<i32>,
+        /// Node to suggest themes for: local id or change_id prefix (omit for all untagged nodes)
+        node_id: Option<String>,
 
         /// Apply suggestions without confirmation
         #[arg(long)]
@@ -858,8 +858,8 @@ enum TagAction {
 
     /// Confirm a suggested theme (change from "suggested" to "manual")
     Confirm {
-        /// Node ID
-        node_id: i32,
+        /// Node: local id or change_id prefix
+        node_id: String,
 
         /// Theme name to confirm
         theme: String,
@@ -1713,7 +1713,13 @@ fn main() {
             check,
             no_pages,
         } => {
-            let store_dir = RecordStore::dir_for_db(&Database::db_path());
+            let Some(store_dir) = RecordStore::dir_for_db(&Database::db_path()) else {
+                eprintln!(
+                    "{} The database path has no directory of its own, so there is nowhere to keep records. Set DECIDUOUS_DB_PATH to a path inside a directory.",
+                    "Error:".red()
+                );
+                std::process::exit(1);
+            };
             let store = match RecordStore::open(&store_dir) {
                 Some(store) => store,
                 None if check => {
@@ -1731,6 +1737,8 @@ fn main() {
                             "Created".green(),
                             store_dir.display()
                         );
+                        // Later mutations in this process must publish too.
+                        db.set_store(Some(store.clone()));
                         store
                     }
                     Err(e) => {
@@ -2101,7 +2109,13 @@ fn main() {
                 "{} `deciduous events` is deprecated; `deciduous sync` does all of this now.",
                 "Note:".yellow()
             );
-            let store_dir = RecordStore::dir_for_db(&Database::db_path());
+            let Some(store_dir) = RecordStore::dir_for_db(&Database::db_path()) else {
+                eprintln!(
+                    "{} The database path has no directory of its own.",
+                    "Error:".red()
+                );
+                std::process::exit(1);
+            };
             match action {
                 EventsAction::Init => match RecordStore::create(&store_dir) {
                     Ok(_) => println!(
@@ -2133,6 +2147,15 @@ fn main() {
                         EventsAction::Rebuild { dry_run } => *dry_run,
                         _ => false,
                     };
+                    if !dry_run && store.has_legacy_events() {
+                        match store.import_legacy_events() {
+                            Ok(report) => print_legacy_import(&report),
+                            Err(e) => {
+                                eprintln!("{} Importing legacy events: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
                     if let EventsAction::Emit { node_id } = &action {
                         match db.get_node(*node_id) {
                             Ok(Some(node)) => {
@@ -2166,6 +2189,7 @@ fn main() {
                 description,
                 ai_describe,
             } => {
+                let node_id = resolve_node_or_exit(&db, &node_id);
                 if !file.exists() {
                     eprintln!("{} File not found: {}", "Error:".red(), file.display());
                     std::process::exit(1);
@@ -2268,7 +2292,10 @@ fn main() {
                 node_id,
                 include_detached,
                 json,
-            } => match db.get_node_documents(node_id, include_detached) {
+            } => match db.get_node_documents(
+                node_id.as_deref().map(|r| resolve_node_or_exit(&db, r)),
+                include_detached,
+            ) {
                 Ok(docs) => {
                     if json {
                         println!("{}", serde_json::to_string_pretty(&docs).unwrap());
@@ -2561,55 +2588,64 @@ fn main() {
         // Tag Commands
         // ================================================================
         Command::Tag { action } => match action {
-            TagAction::Add { node_id, theme } => match db.tag_node(node_id, &theme, "manual") {
-                Ok(()) => println!("{} theme '{}' to node {}", "Tagged".green(), theme, node_id),
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
-            },
-
-            TagAction::Remove { node_id, theme } => match db.untag_node(node_id, &theme) {
-                Ok(true) => println!(
-                    "{} theme '{}' from node {}",
-                    "Removed".red(),
-                    theme,
-                    node_id
-                ),
-                Ok(false) => {
-                    eprintln!(
-                        "{} Theme '{}' not found on node {}",
-                        "Error:".red(),
-                        theme,
-                        node_id
-                    );
-                    std::process::exit(1);
-                }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
-            },
-
-            TagAction::List { node_id } => match db.get_node_themes(node_id) {
-                Ok(themes) => {
-                    if themes.is_empty() {
-                        println!("Node {} has no themes.", node_id);
-                    } else {
-                        println!("Themes for node {}:", node_id);
-                        for t in themes {
-                            println!("  {} ({})", t.name, t.color);
-                        }
+            TagAction::Add { node_id, theme } => {
+                match db.tag_node(resolve_node_or_exit(&db, &node_id), &theme, "manual") {
+                    Ok(()) => {
+                        println!("{} theme '{}' to node {}", "Tagged".green(), theme, node_id)
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
                     }
                 }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+            }
+
+            TagAction::Remove { node_id, theme } => {
+                match db.untag_node(resolve_node_or_exit(&db, &node_id), &theme) {
+                    Ok(true) => println!(
+                        "{} theme '{}' from node {}",
+                        "Removed".red(),
+                        theme,
+                        node_id
+                    ),
+                    Ok(false) => {
+                        eprintln!(
+                            "{} Theme '{}' not found on node {}",
+                            "Error:".red(),
+                            theme,
+                            node_id
+                        );
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
                 }
-            },
+            }
+
+            TagAction::List { node_id } => {
+                match db.get_node_themes(resolve_node_or_exit(&db, &node_id)) {
+                    Ok(themes) => {
+                        if themes.is_empty() {
+                            println!("Node {} has no themes.", node_id);
+                        } else {
+                            println!("Themes for node {}:", node_id);
+                            for t in themes {
+                                println!("  {} ({})", t.name, t.color);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                }
+            }
 
             TagAction::Suggest { node_id, apply } => {
-                let nodes_to_check: Vec<deciduous::DecisionNode> = if let Some(id) = node_id {
+                let nodes_to_check: Vec<deciduous::DecisionNode> = if let Some(node_ref) = node_id {
+                    let id = resolve_node_or_exit(&db, &node_ref);
                     match db.get_node(id) {
                         Ok(Some(n)) => vec![n],
                         Ok(None) => {
@@ -2699,27 +2735,29 @@ fn main() {
                 }
             }
 
-            TagAction::Confirm { node_id, theme } => match db.confirm_tag(node_id, &theme) {
-                Ok(true) => println!(
-                    "{} theme '{}' on node {} (suggested → manual)",
-                    "Confirmed".green(),
-                    theme,
-                    node_id
-                ),
-                Ok(false) => {
-                    eprintln!(
-                        "{} Theme '{}' not found on node {}",
-                        "Error:".red(),
+            TagAction::Confirm { node_id, theme } => {
+                match db.confirm_tag(resolve_node_or_exit(&db, &node_id), &theme) {
+                    Ok(true) => println!(
+                        "{} theme '{}' on node {} (suggested → manual)",
+                        "Confirmed".green(),
                         theme,
                         node_id
-                    );
-                    std::process::exit(1);
+                    ),
+                    Ok(false) => {
+                        eprintln!(
+                            "{} Theme '{}' not found on node {}",
+                            "Error:".red(),
+                            theme,
+                            node_id
+                        );
+                        std::process::exit(1);
+                    }
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
                 }
-                Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
-            },
+            }
         },
 
         Command::Completion { .. } => unreachable!(), // Handled above
@@ -2992,6 +3030,7 @@ fn main() {
                 reason,
                 dry_run,
             } => {
+                let from_id = resolve_node_or_exit(&db, &from_id);
                 match deciduous::archaeology::create_pivot(
                     &db,
                     from_id,
@@ -3045,7 +3084,12 @@ fn main() {
                 id,
                 cascade,
                 dry_run,
-            } => match deciduous::archaeology::supersede(&db, id, cascade, dry_run) {
+            } => match deciduous::archaeology::supersede(
+                &db,
+                resolve_node_or_exit(&db, &id),
+                cascade,
+                dry_run,
+            ) {
                 Ok(result) => {
                     deciduous::archaeology::print_supersede_result(&result, dry_run);
                 }
@@ -4340,6 +4384,7 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     push(report.themes_updated, "themes updated");
     push(report.themes_deleted, "themes deleted");
     push(report.themes_exported, "themes exported");
+    push(report.themes_merged, "same-named themes folded together");
     push(report.tags_imported, "tags imported");
     push(report.tags_deleted, "tags deleted");
     push(report.tags_exported, "tags exported");
@@ -4362,6 +4407,13 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
         println!(
             "  {} edge(s) point at deleted nodes and were skipped",
             report.edges_orphaned
+        );
+    }
+    for e in &report.errors {
+        println!(
+            "  {} the database refused a record: {}",
+            "Warning:".yellow(),
+            e
         );
     }
     for c in &report.conflicts {
