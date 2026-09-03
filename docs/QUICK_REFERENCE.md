@@ -143,17 +143,20 @@ deciduous sync
 ## Multi-User Sync
 
 ```bash
-# Export your branch's decisions
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+# After git pull: import teammates' records, export yours, refresh docs/graph-data.json
+deciduous sync
 
-# Apply patches from teammates
-deciduous diff apply .deciduous/patches/*.json
+# What is pending? (exit 1 if anything)
+deciduous sync --check
 
-# Preview before applying
-deciduous diff apply --dry-run .deciduous/patches/bob.json
+# Reconcile only, skip the GitHub Pages export
+deciduous sync --no-pages
 
-# Check patch status
-deciduous diff status
+# Link to a teammate's node by change_id prefix (CHANGE column in `deciduous nodes`)
+deciduous link a1b2c3d4 42 -r "implements their goal"
+
+# Then commit the records
+git add .deciduous/sync/
 ```
 
 ---
@@ -360,7 +363,7 @@ All bootstrapped by `deciduous init` and updated by `deciduous update`.
 | `.deciduous/.version` | Binary version for update detection |
 | `.deciduous/.latest_version` | Cached latest version from crates.io |
 | `.deciduous/.last_version_check` | Timestamp of last version check |
-| `.deciduous/patches/` | Multi-user sync patches |
+| `.deciduous/sync/` | Shared graph records, one JSON file each (tracked) |
 | `.claude/hooks/` | Claude Code hooks |
 | `.claude/commands/` | Claude Code slash commands |
 | `.claude/skills/` | Claude Code skills |

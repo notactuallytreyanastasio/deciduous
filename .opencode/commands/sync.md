@@ -5,92 +5,51 @@ arguments: []
 
 # Multi-User Sync
 
-Synchronize decision graph with your team using event-based sync.
+The shared decision graph lives in `.deciduous/sync/` as one JSON file per node, edge, theme, and tag. Your SQLite database is a private cache of it. `deciduous sync` makes the two agree, in both directions.
 
-## Step 1: Pull Latest
+## Step 1: Pull
 
 ```bash
 git pull --rebase
 ```
 
-## Step 2: Check Sync Status
+## Step 2: Sync
 
 ```bash
-deciduous events status
+deciduous sync
 ```
 
-Look for:
-- **Pending events**: Events from teammates not yet in your local DB
-- **Event files**: Each teammate has their own `.jsonl` file
+This creates `.deciduous/sync/` if needed, imports the pre-0.17 JSONL event log once, imports records you do not have (teammates' nodes get *local* ids here), exports database rows that have no record yet, and regenerates `docs/graph-data.json`. "Pending" edges are waiting for a node that has not been pulled yet.
 
-## Step 3: Rebuild if Needed
+## Step 3: Link across users if needed
 
-If there are pending events:
+Local ids differ per machine. Refer to a teammate's node by the change_id prefix shown in the CHANGE column:
 
 ```bash
-# Preview what would change
-deciduous events rebuild --dry-run
-
-# Apply teammate events to your local database
-deciduous events rebuild
+deciduous nodes
+deciduous link a1b2c3d4 42 -r "our action implements their goal"
 ```
 
-## Step 4: Push Your Changes
+## Step 4: Commit and push
 
 ```bash
-# Stage sync files (events are auto-committed to your event file)
-git add .deciduous/sync/
-
-# Commit and push
-git commit -m "sync: decision graph events"
+git add .deciduous/sync/ docs/graph-data.json docs/git-history.json
+git commit -m "graph: <what was decided>"
 git push
 ```
 
-## Checkpoint (Periodic Maintenance)
+`deciduous sync --check` exits non-zero if anything is still pending, so it works as a pre-push guard.
 
-To prevent repo bloat, periodically create a checkpoint:
+## Merge conflicts
 
-```bash
-# Create checkpoint and clear old events
-deciduous events checkpoint --clear-events
-
-# Commit the checkpoint
-git add .deciduous/sync/
-git commit -m "checkpoint: compact decision graph events"
-git push
-```
-
-**When to checkpoint:**
-- After major milestones
-- When event files get large (>100KB)
-- Before releases
+- **A file under `.deciduous/sync/`**: two people edited the same record. Normally git merges it field by field through the `deciduous` merge driver, so you never see this. If a file has `<<<<<<<` markers, run `deciduous sync`: it merges the sides the same way and imports the result.
+- **`docs/graph-data.json`**: never hand-merge it. Take either side and run `deciduous sync` to regenerate.
 
 ## Troubleshooting
 
-### Events not syncing?
-
-1. Make sure `.deciduous/sync/` is tracked in git
-2. Check that `deciduous events init` was run
-3. Verify events are being emitted: `deciduous events status`
-
-### Merge conflicts in event files?
-
-Event files are append-only JSONL. Git should auto-merge them.
-If conflicts occur, accept both versions (both sets of events are valid).
-
-### Missing nodes after rebuild?
-
-Nodes reference each other by `change_id` (UUID), not local `id`.
-If edges fail, the referenced node may be in a teammate's events
-that haven't been pulled yet. Pull and rebuild again.
-
-## Quick Reference
-
-| Command | What it does |
-|---------|--------------|
-| `deciduous events status` | Show pending events, authors, file sizes |
-| `deciduous events rebuild` | Apply all events to local DB |
-| `deciduous events rebuild --dry-run` | Preview without applying |
-| `deciduous events checkpoint` | Snapshot current state |
-| `deciduous events checkpoint --clear-events` | Snapshot + delete old events |
-| `deciduous events emit <id>` | Manually emit event for a node |
+| Symptom | Fix |
+|---------|-----|
+| Teammate's nodes missing | `git pull` then `deciduous sync` |
+| "No node has a change_id starting with ..." | You have not synced their record yet |
+| Record file unreadable | `git checkout -- <file>` or fix the JSON; sync skips it and continues |
+| `.deciduous/sync/` not in git | `deciduous update` fixes `.gitignore` |

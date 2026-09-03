@@ -169,24 +169,11 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
-### Sync Graph
-- `sync` -> `deciduous sync`
-
-### Multi-User Sync (Event-Based) - RECOMMENDED
-- `events init` -> `deciduous events init` (initialize event-based sync)
-- `events status` -> `deciduous events status` (show pending events)
-- `events rebuild` -> `deciduous events rebuild` (apply teammate events)
-- `events checkpoint` -> `deciduous events checkpoint` (create snapshot)
-- `events checkpoint --clear-events` -> snapshot and clear old events
-
-### Multi-User Sync (Legacy Diff/Patch)
-- `diff export -o <file>` -> `deciduous diff export -o <file>` (export nodes as patch)
-- `diff export --nodes 1-10 -o <file>` -> export specific nodes
-- `diff export --branch feature-x -o <file>` -> export nodes from branch
-- `diff apply <file>` -> `deciduous diff apply <file>` (apply patch, idempotent)
-- `diff apply --dry-run <file>` -> preview without applying
-- `diff status` -> `deciduous diff status` (list patches in .deciduous/patches/)
-- `migrate` -> `deciduous migrate` (add change_id columns for sync)
+### Sync (teammates + GitHub Pages)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/sync/` records with the local DB both ways, then export `docs/graph-data.json`)
+- `sync --check` -> report pending changes without writing (exit 1 if any)
+- `sync --no-pages` -> reconcile only, skip the Pages export
+- Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
 
 ### Export & Visualization
 - `dot` -> `deciduous dot` (output DOT to stdout)
@@ -283,44 +270,28 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 
 ## Multi-User Sync
 
-**Problem**: Multiple users work on the same codebase, each with a local `.deciduous/deciduous.db` (gitignored). How to share decisions?
+Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/sync/`: one small JSON file per node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes its record immediately; `deciduous sync` reconciles the directory with the database in both directions.
 
-**Solution**: Event-based sync with append-only logs. Each user has their own event file that git merges automatically.
-
-### Event-Based Sync (Recommended)
-
-**Setup (once per repo):**
-```bash
-deciduous events init
-git add .deciduous/sync/
-git commit -m "feat: enable event-based sync"
-```
+**Why it merges cleanly:** two people adding records never touch the same file. Only editing the *same* node concurrently conflicts, on one tiny JSON file. There is no log to replay, no checkpoint to compact.
 
 **Daily workflow:**
 ```bash
-git pull                    # Get teammate events
-deciduous events rebuild    # Apply to local DB
-# Work normally - events auto-emit on add/link/etc.
-git add .deciduous/sync/ && git commit -m "sync" && git push
+git pull
+deciduous sync                # import teammates' records, export anything missing
+# ... work normally; records are written as you go ...
+git add .deciduous/sync/ && git commit -m "graph: <what you decided>"
+git push
 ```
 
-**Periodic maintenance:**
+**Linking to a teammate's node:** local ids differ per machine, so use the change_id prefix shown in the CHANGE column of `deciduous nodes`:
 ```bash
-deciduous events checkpoint --clear-events  # Compact old events
-git add .deciduous/sync/ && git commit -m "checkpoint"
+deciduous nodes                          # 57   a1b2c3d4  goal  ...  (a1b2c3d4 is stable everywhere)
+deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-### Legacy Patch Workflow
+**Two people edited the same record?** Git merges record files field by field through the `deciduous` merge driver (`deciduous sync` registers it in each clone), so concurrent edits of one node usually merge silently. If a file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
 
-For manual control, use the older patch system:
-
-```bash
-# Export nodes as a patch file
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
-
-# Apply patches from teammates
-deciduous diff apply .deciduous/patches/*.json
-```
+**Upgrading from the old JSONL event log:** `deciduous sync` imports `.deciduous/sync/events/` and `checkpoint.json` once, converts them to records, and removes them (only if every line parsed). `git rm` them afterwards.
 
 ## The Rule
 
@@ -328,8 +299,7 @@ deciduous diff apply .deciduous/patches/*.json
 LOG BEFORE YOU CODE, NOT AFTER.
 CONNECT EVERY NODE TO ITS PARENT.
 AUDIT FOR ORPHANS REGULARLY.
-SYNC BEFORE YOU PUSH.
-EXPORT PATCHES FOR YOUR TEAMMATES.
+SYNC AFTER PULL, SYNC BEFORE PUSH, COMMIT .deciduous/sync/.
 ```
 
 **Live graph**: https://notactuallytreyanastasio.github.io/deciduous/

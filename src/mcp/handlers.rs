@@ -80,7 +80,11 @@ pub fn dispatch(db: &Database, tool_name: &str, args: Value) -> ToolCallResult {
         // Export
         "export_dot" => handle_export_dot(db, &args),
         "generate_writeup" => handle_generate_writeup(db, &args),
-        "events_status" => handle_events_status(),
+        // Multi-user sync (record store)
+        "sync_status" => handle_sync_status(db),
+        "sync" => handle_sync(db, &args),
+        // Old name, kept so existing clients keep working
+        "events_status" => handle_sync_status(db),
         _ => Err(HandlerError {
             message: format!("Unknown tool: {tool_name}"),
         }),
@@ -119,8 +123,28 @@ fn require_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, HandlerError> 
         .ok_or_else(|| HandlerError::from(format!("Missing required parameter: {key}")))
 }
 
-fn require_i32(args: &Value, key: &str) -> Result<i32, HandlerError> {
-    get_i32(args, key)
+/// A node reference: a local integer id, or a string holding an id or a
+/// `change_id` prefix (how you name a teammate's node, since local ids
+/// differ between machines).
+fn get_node_ref(db: &Database, args: &Value, key: &str) -> Result<Option<i32>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => n
+            .as_i64()
+            .map(|v| Some(v as i32))
+            .ok_or_else(|| HandlerError::from(format!("{key} must be an integer id"))),
+        Some(Value::String(s)) => db
+            .resolve_node_ref(s)
+            .map(Some)
+            .map_err(|e| HandlerError::from(format!("{key}: {e}"))),
+        Some(_) => Err(HandlerError::from(format!(
+            "{key} must be a node id or a change_id prefix"
+        ))),
+    }
+}
+
+fn require_node_ref(db: &Database, args: &Value, key: &str) -> Result<i32, HandlerError> {
+    get_node_ref(db, args, key)?
         .ok_or_else(|| HandlerError::from(format!("Missing required parameter: {key}")))
 }
 
@@ -226,8 +250,8 @@ fn handle_add_node(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_link_nodes(db: &Database, args: &Value) -> HandlerResult {
-    let from_id = require_i32(args, "from_id")?;
-    let to_id = require_i32(args, "to_id")?;
+    let from_id = require_node_ref(db, args, "from_id")?;
+    let to_id = require_node_ref(db, args, "to_id")?;
     let rationale = get_str(args, "rationale");
     let edge_type = get_str(args, "edge_type").unwrap_or("leads_to");
 
@@ -243,8 +267,8 @@ fn handle_link_nodes(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_unlink_nodes(db: &Database, args: &Value) -> HandlerResult {
-    let from_id = require_i32(args, "from_id")?;
-    let to_id = require_i32(args, "to_id")?;
+    let from_id = require_node_ref(db, args, "from_id")?;
+    let to_id = require_node_ref(db, args, "to_id")?;
 
     db.delete_edge(from_id, to_id)?;
 
@@ -256,7 +280,7 @@ fn handle_unlink_nodes(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_delete_node(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let dry_run = get_bool(args, "dry_run").unwrap_or(false);
 
     let summary = db.delete_node(node_id, dry_run)?;
@@ -275,7 +299,7 @@ fn handle_delete_node(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_update_status(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let status = require_str(args, "status")?;
 
     db.update_node_status(node_id, status)?;
@@ -288,7 +312,7 @@ fn handle_update_status(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_update_prompt(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let prompt = require_str(args, "prompt")?;
 
     db.update_node_prompt(node_id, prompt)?;
@@ -379,7 +403,7 @@ fn handle_list_edges(db: &Database) -> HandlerResult {
 }
 
 fn handle_show_node(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
 
     let node = db
         .get_node(node_id)?
@@ -515,7 +539,7 @@ fn handle_search_nodes(db: &Database, args: &Value) -> HandlerResult {
 fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     use sha2::{Digest, Sha256};
 
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let file_path = require_str(args, "file_path")?;
     let description = get_str(args, "description");
 
@@ -587,7 +611,7 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_list_documents(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = get_i32(args, "node_id");
+    let node_id = get_node_ref(db, args, "node_id")?;
     let docs = db.get_node_documents(node_id, false).unwrap_or_default();
 
     let result: Vec<Value> = docs
@@ -650,7 +674,7 @@ fn handle_create_theme(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_tag_node(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let theme = require_str(args, "theme")?;
 
     db.tag_node(node_id, theme, "mcp")?;
@@ -663,7 +687,7 @@ fn handle_tag_node(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_untag_node(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let theme = require_str(args, "theme")?;
 
     let removed = db.untag_node(node_id, theme)?;
@@ -685,7 +709,7 @@ fn handle_untag_node(db: &Database, args: &Value) -> HandlerResult {
 // ---------------------------------------------------------------------------
 
 fn handle_trace_chain(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
     let max_depth = get_i32(args, "max_depth").unwrap_or(0) as usize;
     let direction = get_str(args, "direction")
         .map(query::TraceDirection::parse)
@@ -698,7 +722,7 @@ fn handle_trace_chain(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_get_node_context(db: &Database, args: &Value) -> HandlerResult {
-    let node_id = require_i32(args, "node_id")?;
+    let node_id = require_node_ref(db, args, "node_id")?;
 
     let graph = db.get_graph()?;
     let ctx = query::get_node_context(&graph, node_id);
@@ -824,20 +848,84 @@ fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
     Ok(tool_result_text(writeup))
 }
 
-fn handle_events_status() -> HandlerResult {
-    // Events status is file-system based, provide a summary
-    let sync_dir = std::path::Path::new(".deciduous/sync");
-    if !sync_dir.exists() {
+fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
+    db.store().cloned().or_else(|| {
+        crate::records::RecordStore::open(crate::records::RecordStore::dir_for_db(
+            &Database::db_path(),
+        ))
+    })
+}
+
+fn handle_sync_status(db: &Database) -> HandlerResult {
+    let Some(store) = store_for(db) else {
         return Ok(tool_result_json(&json!({
             "initialized": false,
-            "message": "Event sync not initialized. Run 'deciduous events init' to set up."
+            "message": "No record store yet. Call the `sync` tool (or run `deciduous sync`) to create .deciduous/sync/ and commit it."
         })));
-    }
-
+    };
+    let report = crate::records::reconcile(db, &store, true).map_err(HandlerError::from)?;
     Ok(tool_result_json(&json!({
         "initialized": true,
-        "sync_dir": sync_dir.display().to_string(),
-        "message": "Event sync is initialized. Use 'deciduous events status' CLI for full details."
+        "store_dir": store.root().display().to_string(),
+        "records": store.counts(),
+        "pending_import": report.imported(),
+        "pending_export": report.exported(),
+        "edges_pending": report.edges_pending,
+        "read_errors": report.read_errors,
+        "legacy_events": store.has_legacy_events(),
+        "conflicts": report.conflicts,
+        "message": if report.is_clean() && report.conflicts.is_empty() {
+            "Database and records agree.".to_string()
+        } else if !report.conflicts.is_empty() {
+            format!(
+                "{} record file(s) carry git conflict markers. Call `sync` to merge them field by field.",
+                report.conflicts.len()
+            )
+        } else {
+            format!(
+                "{} change(s) to import, {} to export. Call `sync` to apply.",
+                report.imported(),
+                report.exported()
+            )
+        }
+    })))
+}
+
+fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
+    let dry_run = get_bool(args, "dry_run").unwrap_or(false);
+    let store = match store_for(db) {
+        Some(s) => s,
+        None => {
+            let dir = crate::records::RecordStore::dir_for_db(&Database::db_path());
+            crate::records::RecordStore::create(&dir).map_err(|e| {
+                HandlerError::from(format!("could not create {}: {e}", dir.display()))
+            })?
+        }
+    };
+    let legacy = if store.has_legacy_events() && !dry_run {
+        Some(
+            store
+                .import_legacy_events()
+                .map_err(|e| HandlerError::from(format!("legacy import: {e}")))?,
+        )
+    } else {
+        None
+    };
+    let report = crate::records::reconcile(db, &store, dry_run).map_err(HandlerError::from)?;
+    Ok(tool_result_json(&json!({
+        "store_dir": store.root().display().to_string(),
+        "dry_run": dry_run,
+        "imported": report.imported(),
+        "exported": report.exported(),
+        "report": report,
+        "legacy_import": legacy,
+        "message": format!(
+            "{} {} record(s) into the database and {} out to {}. Commit that directory with your code.",
+            if dry_run { "Would sync" } else { "Synced" },
+            report.imported(),
+            report.exported(),
+            store.root().display()
+        )
     })))
 }
 

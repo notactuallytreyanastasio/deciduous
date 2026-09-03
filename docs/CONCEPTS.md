@@ -226,24 +226,28 @@ Every node has:
 - `id` (integer): Local primary key, different on each machine
 - `change_id` (UUID): Globally unique, stable everywhere
 
-### Patch Files
+### The Record Store
+
+`.deciduous/sync/` holds one small JSON file per node, edge, theme, and tag, and is
+committed with the code. Every `add`, `link`, `status`, and `delete` writes its
+record immediately. Records reference each other by `change_id`, never by local id,
+so they mean the same thing on every machine.
 
 ```bash
-# Export decisions as a patch
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
-
-# Apply patches from teammates (idempotent)
-deciduous diff apply .deciduous/patches/*.json
+git pull
+deciduous sync        # import teammates' records, export yours, refresh docs/graph-data.json
+git add .deciduous/sync/ && git commit -m "graph: ..." && git push
 ```
 
-Patches reference nodes by `change_id`, so they work across different local databases.
+Adding records never conflicts in git (different files). Deleting writes a tombstone
+rather than removing the file. To link to a teammate's node, use the change_id
+prefix from the CHANGE column of `deciduous nodes`:
 
-### Workflow
+```bash
+deciduous link a1b2c3d4 42 -r "our action implements their goal"
+```
 
-1. Work locally, creating nodes
-2. Export patch file
-3. Commit patch file (NOT the database) to git
-4. Teammates apply patches after pulling
+See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md) for the full design.
 
 ---
 

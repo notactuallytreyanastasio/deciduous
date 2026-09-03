@@ -232,8 +232,16 @@ pub fn init_project(
         setup_windsurf_integration(&cwd)?;
     }
 
-    // 4. Add .deciduous to .gitignore
-    add_to_gitignore(&cwd)?;
+    // 4. Track the shared record store, keep the local database private
+    ensure_gitignore(&cwd)?;
+    ensure_gitattributes(&cwd)?;
+    if ensure_merge_driver(&cwd)? {
+        println!(
+            "   {} git merge driver for graph records",
+            "Configured".green()
+        );
+    }
+    ensure_record_store(&cwd)?;
 
     // 5. Create GitHub workflows directory and workflows
     let github_dir = cwd.join(".github");
@@ -404,6 +412,20 @@ pub fn update_tooling() -> Result<(), String> {
             "Detected .windsurf directory - updating Windsurf integration...".cyan()
         );
         update_windsurf(&cwd)?;
+    }
+
+    // Make sure the record store exists and is tracked (projects initialised
+    // before 0.17 ignored all of .deciduous/)
+    ensure_gitignore(&cwd)?;
+    ensure_gitattributes(&cwd)?;
+    if ensure_merge_driver(&cwd)? {
+        println!(
+            "   {} git merge driver for graph records",
+            "Configured".green()
+        );
+    }
+    if deciduous_dir.exists() {
+        ensure_record_store(&cwd)?;
     }
 
     // Write version file for auto-update detection
@@ -936,39 +958,188 @@ fn append_config_md(path: &Path, section_content: &str, file_name: &str) -> Resu
     Ok(())
 }
 
-fn add_to_gitignore(cwd: &Path) -> Result<(), String> {
-    let gitignore_path = cwd.join(".gitignore");
-    let entry = ".deciduous/";
+/// The `.gitignore` rules deciduous needs: the SQLite file is private to a
+/// machine, the record store and config are shared through git.
+const GITIGNORE_BLOCK: &str =
+    "# Deciduous: local database stays private, shared graph records are tracked\n\
+.deciduous/*\n\
+!.deciduous/config.toml\n\
+!.deciduous/sync/\n";
 
-    if gitignore_path.exists() {
-        let existing = fs::read_to_string(&gitignore_path)
-            .map_err(|e| format!("Could not read .gitignore: {}", e))?;
+/// Lines that older versions of deciduous (or people) wrote for the same
+/// purpose. They are replaced by [`GITIGNORE_BLOCK`].
+fn is_stale_deciduous_ignore_line(line: &str) -> bool {
+    matches!(
+        line.trim(),
+        ".deciduous"
+            | ".deciduous/"
+            | "/.deciduous"
+            | "/.deciduous/"
+            | ".deciduous/*"
+            | "!.deciduous/config.toml"
+            | "!.deciduous/sync/"
+            | "!.deciduous/sync"
+            | "!.deciduous/patches/"
+            | "!.deciduous/patches"
+            | "# Deciduous database (local)"
+            | "# Deciduous database (local) - but track patches for sharing"
+            | "# Deciduous: local database stays private, shared graph records are tracked"
+    )
+}
 
-        if existing
-            .lines()
-            .any(|line| line.trim() == entry || line.trim() == ".deciduous")
-        {
-            // Already in gitignore
-            return Ok(());
-        }
-
-        // Append
-        let new_content = format!(
-            "{}\n\n# Deciduous database (local)\n{}\n",
-            existing.trim_end(),
-            entry
-        );
-        fs::write(&gitignore_path, new_content)
-            .map_err(|e| format!("Could not update .gitignore: {}", e))?;
-        println!("   {} .gitignore (added {})", "Updated".green(), entry);
+/// Ensure `.gitignore` hides the database but tracks `.deciduous/sync/`.
+///
+/// A blanket `.deciduous/` line (what pre-0.17 `init` wrote) would hide the
+/// record store, so it is replaced. Anything else in the file is left alone.
+fn ensure_gitignore(cwd: &Path) -> Result<(), String> {
+    let path = cwd.join(".gitignore");
+    let existing = if path.exists() {
+        fs::read_to_string(&path).map_err(|e| format!("Could not read .gitignore: {}", e))?
     } else {
-        // Create new
-        let content = format!("# Deciduous database (local)\n{}\n", entry);
-        fs::write(&gitignore_path, content)
-            .map_err(|e| format!("Could not create .gitignore: {}", e))?;
-        println!("   {} .gitignore", "Creating".green());
+        String::new()
+    };
+
+    let has = |needle: &str| existing.lines().any(|l| l.trim() == needle);
+    let blanket = existing.lines().any(|l| {
+        matches!(
+            l.trim(),
+            ".deciduous" | ".deciduous/" | "/.deciduous" | "/.deciduous/"
+        )
+    });
+    if has(".deciduous/*") && has("!.deciduous/config.toml") && has("!.deciduous/sync/") && !blanket
+    {
+        return Ok(());
     }
 
+    let kept: Vec<&str> = existing
+        .lines()
+        .filter(|l| !is_stale_deciduous_ignore_line(l))
+        .collect();
+    let mut content = kept.join("\n").trim_end().to_string();
+    if !content.is_empty() {
+        content.push_str("\n\n");
+    }
+    content.push_str(GITIGNORE_BLOCK);
+
+    fs::write(&path, content).map_err(|e| format!("Could not write .gitignore: {}", e))?;
+    println!(
+        "   {} .gitignore (track .deciduous/sync/, ignore the database)",
+        if existing.is_empty() {
+            "Creating".green()
+        } else {
+            "Updated".green()
+        }
+    );
+    Ok(())
+}
+
+const GITATTRIBUTES_LINE: &str = ".deciduous/sync/** merge=deciduous linguist-generated=true";
+
+/// Route record files through the `deciduous` merge driver and mark them as
+/// generated so GitHub folds them in pull request diffs. An older line for
+/// the same pattern is upgraded in place.
+pub fn ensure_gitattributes(cwd: &Path) -> Result<(), String> {
+    let path = cwd.join(".gitattributes");
+    let existing = if path.exists() {
+        fs::read_to_string(&path).map_err(|e| format!("Could not read .gitattributes: {}", e))?
+    } else {
+        String::new()
+    };
+    if existing.lines().any(|l| l.trim() == GITATTRIBUTES_LINE) {
+        return Ok(());
+    }
+    let mut lines: Vec<String> = existing
+        .lines()
+        .filter(|l| l.split_whitespace().next() != Some(".deciduous/sync/**"))
+        .map(str::to_string)
+        .collect();
+    lines.push(GITATTRIBUTES_LINE.to_string());
+    let mut content = lines.join("\n").trim_end().to_string();
+    content.push('\n');
+    fs::write(&path, content).map_err(|e| format!("Could not write .gitattributes: {}", e))?;
+    println!(
+        "   {} .gitattributes (merge graph records field by field, fold them in PR diffs)",
+        if existing.is_empty() {
+            "Creating".green()
+        } else {
+            "Updated".green()
+        }
+    );
+    Ok(())
+}
+
+const MERGE_DRIVER_COMMAND: &str = "deciduous merge-record %O %A %B";
+
+/// Register the `deciduous` merge driver in this clone's git config so two
+/// people editing the same record get a field-level merge instead of
+/// conflict markers. Git config is per clone, so this runs from `init`,
+/// `update`, and `sync`. Returns `Ok(true)` when it (re)wrote the config.
+/// Silently does nothing outside a git repository.
+pub fn ensure_merge_driver(cwd: &Path) -> Result<bool, String> {
+    let inside = std::process::Command::new("git")
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .current_dir(cwd)
+        .output();
+    match inside {
+        Ok(out) if out.status.success() => {}
+        _ => return Ok(false),
+    }
+    let current = std::process::Command::new("git")
+        .args(["config", "--get", "merge.deciduous.driver"])
+        .current_dir(cwd)
+        .output()
+        .map_err(|e| format!("git config: {}", e))?;
+    if current.status.success()
+        && String::from_utf8_lossy(&current.stdout).trim() == MERGE_DRIVER_COMMAND
+    {
+        return Ok(false);
+    }
+    for (key, value) in [
+        ("merge.deciduous.name", "deciduous decision graph record"),
+        ("merge.deciduous.driver", MERGE_DRIVER_COMMAND),
+    ] {
+        let status = std::process::Command::new("git")
+            .args(["config", key, value])
+            .current_dir(cwd)
+            .status()
+            .map_err(|e| format!("git config {}: {}", key, e))?;
+        if !status.success() {
+            return Err(format!("git config {} failed", key));
+        }
+    }
+    Ok(true)
+}
+
+const STORE_README: &str = "# Decision graph records\n\
+\n\
+Shared, git-tracked copy of this project's decision graph, one JSON file per\n\
+record. `deciduous` writes here on every change and `deciduous sync` reconciles\n\
+this directory with each machine's private SQLite database.\n\
+\n\
+- `nodes/<change_id>.json`  goals, decisions, actions, outcomes...\n\
+- `edges/<edge_id>.json`    links between nodes (by change_id, not local id)\n\
+- `themes/`, `tags/`        theme definitions and node tags\n\
+\n\
+Records with `deleted_at` are tombstones. Do not edit files by hand; run\n\
+`deciduous sync` after `git pull` and before `git push`.\n";
+
+/// Create `.deciduous/sync/` with its README so it exists in every clone.
+fn ensure_record_store(cwd: &Path) -> Result<(), String> {
+    let root = cwd.join(".deciduous").join(crate::records::STORE_DIR_NAME);
+    let existed = root.is_dir();
+    crate::records::RecordStore::create(&root)
+        .map_err(|e| format!("Could not create record store: {}", e))?;
+    let readme = root.join("README.md");
+    if !readme.exists() {
+        fs::write(&readme, STORE_README)
+            .map_err(|e| format!("Could not write record store README: {}", e))?;
+    }
+    if !existed {
+        println!(
+            "   {} .deciduous/sync/ (run `deciduous sync` to fill it, then commit it)",
+            "Creating".green()
+        );
+    }
     Ok(())
 }
 
@@ -1015,38 +1186,73 @@ mod tests {
     }
 
     #[test]
-    fn test_add_to_gitignore_new_file() {
+    fn test_ensure_gitignore_new_file() {
         let tmp = TempDir::new().unwrap();
-        add_to_gitignore(tmp.path()).unwrap();
+        ensure_gitignore(tmp.path()).unwrap();
 
         let content = fs::read_to_string(tmp.path().join(".gitignore")).unwrap();
-        assert!(content.contains(".deciduous/"));
+        assert!(content.contains(".deciduous/*"));
+        assert!(content.contains("!.deciduous/sync/"));
+        assert!(content.contains("!.deciduous/config.toml"));
     }
 
     #[test]
-    fn test_add_to_gitignore_existing() {
+    fn test_ensure_gitignore_keeps_other_rules() {
         let tmp = TempDir::new().unwrap();
         let gitignore = tmp.path().join(".gitignore");
         fs::write(&gitignore, "node_modules/\n").unwrap();
 
-        add_to_gitignore(tmp.path()).unwrap();
+        ensure_gitignore(tmp.path()).unwrap();
 
         let content = fs::read_to_string(&gitignore).unwrap();
-        assert!(content.contains("node_modules/"));
-        assert!(content.contains(".deciduous/"));
+        assert!(content.starts_with("node_modules/\n"));
+        assert!(content.contains("!.deciduous/sync/"));
     }
 
     #[test]
-    fn test_add_to_gitignore_already_present() {
+    fn test_ensure_gitignore_replaces_blanket_rule_and_is_idempotent() {
         let tmp = TempDir::new().unwrap();
         let gitignore = tmp.path().join(".gitignore");
-        fs::write(&gitignore, ".deciduous/\n").unwrap();
+        fs::write(
+            &gitignore,
+            "target/\n\n# Deciduous database (local)\n.deciduous/\n\n.deciduous/*\n!.deciduous/patches/\n",
+        )
+        .unwrap();
 
-        add_to_gitignore(tmp.path()).unwrap();
-
+        ensure_gitignore(tmp.path()).unwrap();
         let content = fs::read_to_string(&gitignore).unwrap();
-        // Should not duplicate
-        assert_eq!(content.matches(".deciduous/").count(), 1);
+        assert!(
+            !content.lines().any(|l| l.trim() == ".deciduous/"),
+            "{content}"
+        );
+        assert!(!content.contains("patches"), "{content}");
+        assert!(content.contains("target/"));
+        assert_eq!(content.matches(".deciduous/*").count(), 1);
+
+        let before = content.clone();
+        ensure_gitignore(tmp.path()).unwrap();
+        assert_eq!(fs::read_to_string(&gitignore).unwrap(), before);
+    }
+
+    #[test]
+    fn test_ensure_gitattributes_and_record_store() {
+        let tmp = TempDir::new().unwrap();
+        fs::write(
+            tmp.path().join(".gitattributes"),
+            "*.png binary\n.deciduous/sync/** linguist-generated=true\n",
+        )
+        .unwrap();
+        ensure_gitattributes(tmp.path()).unwrap();
+        ensure_gitattributes(tmp.path()).unwrap();
+        let content = fs::read_to_string(tmp.path().join(".gitattributes")).unwrap();
+        assert_eq!(content.matches("linguist-generated").count(), 1);
+        assert!(content.contains("merge=deciduous"), "{content}");
+        assert!(content.starts_with("*.png binary\n"));
+
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
+        ensure_record_store(tmp.path()).unwrap();
+        assert!(tmp.path().join(".deciduous/sync/nodes").is_dir());
+        assert!(tmp.path().join(".deciduous/sync/README.md").is_file());
     }
 
     #[test]

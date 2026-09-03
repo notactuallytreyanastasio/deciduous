@@ -285,20 +285,10 @@ If orphaned files pile up:
 
 ## Multi-User Sync
 
-Documents participate in the event-based sync system:
-
-```bash
-# Events auto-emit when you attach/detach
-deciduous doc attach 42 diagram.png -d "Architecture"
-# → AttachDocument event written to .deciduous/sync/
-
-# Teammates pull and rebuild
-git pull
-deciduous events rebuild
-# → Document metadata reconstructed in their local DB
-```
-
-**Important**: Event sync transfers *metadata* (filename, hash, description), not the file itself. The file stays in `.deciduous/documents/` which is gitignored. For sharing actual files, include them in the repo or use a shared drive.
+Documents are not part of multi-user sync yet. Attachment metadata and the files
+in `.deciduous/documents/` stay on the machine that attached them; the record store
+in `.deciduous/sync/` covers nodes, edges, themes, and tags. For sharing a file,
+include it in the repo or use a shared drive. See `docs/MULTI_USER_SYNC.md`.
 
 ---
 

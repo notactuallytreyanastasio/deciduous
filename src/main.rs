@@ -6,23 +6,8 @@ use deciduous::roadmap::{
     generate_issue_body, parse_roadmap, write_roadmap_with_metadata, RoadmapSection,
 };
 use deciduous::{
-    filter_graph_by_ids,
-    generate_edge_id,
-    generate_pr_writeup,
-    get_current_author,
-    graph_to_dot,
-    parse_node_range,
-    // Event log sync
-    Checkpoint,
-    CheckpointEdge,
-    CheckpointNode,
-    Config,
-    Database,
-    DotConfig,
-    Event,
-    EventLog,
-    MaterializedState,
-    WriteupConfig,
+    filter_graph_by_ids, generate_pr_writeup, graph_to_dot, parse_node_range, reconcile, Config,
+    Database, DotConfig, RecordStore, SyncReport, WriteupConfig,
 };
 use std::path::PathBuf;
 use std::process::Command as ProcessCommand;
@@ -137,11 +122,11 @@ enum Command {
 
     /// Add an edge between nodes
     Link {
-        /// Source node ID
-        from: i32,
+        /// Source node: local id or change_id prefix
+        from: String,
 
-        /// Target node ID
-        to: i32,
+        /// Target node: local id or change_id prefix
+        to: String,
 
         /// Rationale for this connection
         #[arg(short, long)]
@@ -154,17 +139,17 @@ enum Command {
 
     /// Remove an edge between two nodes
     Unlink {
-        /// Source node ID
-        from: i32,
+        /// Source node: local id or change_id prefix
+        from: String,
 
-        /// Target node ID
-        to: i32,
+        /// Target node: local id or change_id prefix
+        to: String,
     },
 
     /// Delete a node and all its connected edges
     Delete {
-        /// Node ID to delete
-        id: i32,
+        /// Node to delete: local id or change_id prefix
+        id: String,
 
         /// Show what would be deleted without actually deleting
         #[arg(long)]
@@ -173,8 +158,8 @@ enum Command {
 
     /// Update node status
     Status {
-        /// Node ID
-        id: i32,
+        /// Node: local id or change_id prefix
+        id: String,
 
         /// New status: pending, active, completed, rejected
         status: String,
@@ -182,8 +167,8 @@ enum Command {
 
     /// Update or add a prompt to an existing node
     Prompt {
-        /// Node ID to update
-        id: i32,
+        /// Node to update: local id or change_id prefix
+        id: String,
 
         /// The prompt text (omit to read from stdin)
         prompt: Option<String>,
@@ -209,8 +194,8 @@ enum Command {
 
     /// Show detailed information about a single node
     Show {
-        /// Node ID to display
-        id: i32,
+        /// Node to display: local id or change_id prefix
+        id: String,
 
         /// Show JSON output instead of formatted
         #[arg(long)]
@@ -244,11 +229,26 @@ enum Command {
         bind: String,
     },
 
-    /// Export graph to JSON file
+    /// Sync the decision graph: reconcile .deciduous/sync/ records with the
+    /// local database (both directions), then export docs/graph-data.json
+    ///
+    /// Run it after `git pull` to receive teammates' decisions and before
+    /// `git push` to make sure yours are written out. The record store is
+    /// created on first run; the pre-0.17 JSONL event log is imported and
+    /// removed automatically.
     Sync {
-        /// Output path (default: .deciduous/web/graph-data.json)
+        /// Path for the GitHub Pages export (default: docs/graph-data.json)
         #[arg(short, long)]
         output: Option<PathBuf>,
+
+        /// Report what would change without writing anything.
+        /// Exits 1 if anything is pending, so it works as a pre-push check.
+        #[arg(long)]
+        check: bool,
+
+        /// Skip the docs/graph-data.json (GitHub Pages) export
+        #[arg(long)]
+        no_pages: bool,
     },
 
     /// Create a database backup
@@ -334,11 +334,20 @@ enum Command {
     /// Migrate database to add change_id columns (for multi-user sync)
     Migrate,
 
-    /// Event-based multi-user sync (alternative to diff/patch workflow)
-    ///
-    /// Uses append-only event logs instead of snapshot patches.
-    /// Events are stored in .deciduous/sync/events/{user}.jsonl (git-tracked).
-    /// Each user's events are automatically merged via git.
+    /// Git merge driver for record files (registered by init/update/sync):
+    /// field-level three-way merge of .deciduous/sync/**.json
+    #[command(hide = true)]
+    MergeRecord {
+        /// Common ancestor version (%O; empty file when both sides added it)
+        base: PathBuf,
+        /// Our version (%A); the merged result is written here
+        ours: PathBuf,
+        /// Their version (%B)
+        theirs: PathBuf,
+    },
+
+    /// Deprecated: replaced by `deciduous sync` (kept so old scripts keep working)
+    #[command(hide = true)]
     Events {
         #[command(subcommand)]
         action: EventsAction,
@@ -903,6 +912,23 @@ fn main() {
         return;
     }
 
+    if let Command::MergeRecord { base, ours, theirs } = &args.command {
+        // Exit non-zero on any problem so git falls back to a normal conflict.
+        match deciduous::records::merge_record_files(base, ours, theirs) {
+            Ok(merged) => {
+                if let Err(e) = std::fs::write(ours, merged) {
+                    eprintln!("deciduous merge-record: {}", e);
+                    std::process::exit(1);
+                }
+                return;
+            }
+            Err(e) => {
+                eprintln!("deciduous merge-record: {}", e);
+                std::process::exit(1);
+            }
+        }
+    }
+
     // Handle check-update separately - just compares versions
     if let Command::CheckUpdate {} = args.command {
         let current_version = env!("CARGO_PKG_VERSION");
@@ -1024,6 +1050,7 @@ fn main() {
     match args.command {
         Command::Init { .. } => unreachable!(),   // Handled above
         Command::Update { .. } => unreachable!(), // Handled above
+        Command::MergeRecord { .. } => unreachable!(), // Handled above
         Command::CheckUpdate { .. } => unreachable!(), // Handled above
         Command::AutoUpdate { .. } => unreachable!(), // Handled above
         Command::Add {
@@ -1170,31 +1197,6 @@ fn main() {
                         branch_str,
                         date_str
                     );
-
-                    // Auto-emit event if sync is initialized
-                    let sync_dir = PathBuf::from(".deciduous/sync");
-                    if sync_dir.exists() {
-                        if let Ok(Some(node)) = db.get_node(id) {
-                            let author = get_current_author();
-                            if let Ok(event_log) =
-                                EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                            {
-                                let event = Event::AddNode {
-                                    change_id: node.change_id.clone(),
-                                    node_type: node.node_type.clone(),
-                                    title: node.title.clone(),
-                                    description: node.description.clone(),
-                                    status: node.status.clone(),
-                                    metadata_json: node.metadata_json.clone(),
-                                    timestamp: chrono::Utc::now(),
-                                    author,
-                                };
-                                if let Err(e) = event_log.append(event) {
-                                    eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                                }
-                            }
-                        }
-                    }
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1208,90 +1210,19 @@ fn main() {
             to,
             rationale,
             edge_type,
-        } => match db.create_edge(from, to, &edge_type, rationale.as_deref()) {
-            Ok(id) => {
-                println!(
-                    "{} edge {} ({} -> {} via {})",
-                    "Created".green(),
-                    id,
-                    from,
-                    to,
-                    edge_type
-                );
-
-                // Auto-emit event if sync is initialized
-                let sync_dir = PathBuf::from(".deciduous/sync");
-                if sync_dir.exists() {
-                    // Get change_ids for the nodes
-                    let from_node = db.get_node(from).ok().flatten();
-                    let to_node = db.get_node(to).ok().flatten();
-
-                    if let (Some(from_n), Some(to_n)) = (from_node, to_node) {
-                        let author = get_current_author();
-                        if let Ok(event_log) =
-                            EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                        {
-                            let event = Event::AddEdge {
-                                edge_id: generate_edge_id(
-                                    &from_n.change_id,
-                                    &to_n.change_id,
-                                    &edge_type,
-                                ),
-                                from_change_id: from_n.change_id.clone(),
-                                to_change_id: to_n.change_id.clone(),
-                                edge_type: edge_type.clone(),
-                                rationale: rationale.clone(),
-                                timestamp: chrono::Utc::now(),
-                                author,
-                            };
-                            if let Err(e) = event_log.append(event) {
-                                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                            }
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
-            }
-        },
-
-        Command::Unlink { from, to } => {
-            // Get node info before deletion for event emission
-            let from_node = db.get_node(from).ok().flatten();
-            let to_node = db.get_node(to).ok().flatten();
-
-            match db.delete_edge(from, to) {
-                Ok(()) => {
-                    println!("{} edge ({} -> {})", "Removed".red(), from, to);
-
-                    // Auto-emit event if sync is initialized
-                    let sync_dir = PathBuf::from(".deciduous/sync");
-                    if sync_dir.exists() {
-                        if let (Some(from_n), Some(to_n)) = (from_node, to_node) {
-                            let author = get_current_author();
-                            if let Ok(event_log) =
-                                EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                            {
-                                // We need to figure out the edge_type for the edge_id
-                                // For now, use "leads_to" as default since we don't have the edge info
-                                let edge_id = generate_edge_id(
-                                    &from_n.change_id,
-                                    &to_n.change_id,
-                                    "leads_to",
-                                );
-                                let event = Event::DeleteEdge {
-                                    edge_id,
-                                    timestamp: chrono::Utc::now(),
-                                    author,
-                                };
-                                if let Err(e) = event_log.append(event) {
-                                    eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                                }
-                            }
-                        }
-                    }
+        } => {
+            let from_id = resolve_node_or_exit(&db, &from);
+            let to_id = resolve_node_or_exit(&db, &to);
+            match db.create_edge(from_id, to_id, &edge_type, rationale.as_deref()) {
+                Ok(id) => {
+                    println!(
+                        "{} edge {} ({} -> {} via {})",
+                        "Created".green(),
+                        id,
+                        from_id,
+                        to_id,
+                        edge_type
+                    );
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1300,14 +1231,20 @@ fn main() {
             }
         }
 
-        Command::Delete { id, dry_run } => {
-            // Get node info before deletion for event emission
-            let node_info = if !dry_run {
-                db.get_node(id).ok().flatten()
-            } else {
-                None
-            };
+        Command::Unlink { from, to } => {
+            let from_id = resolve_node_or_exit(&db, &from);
+            let to_id = resolve_node_or_exit(&db, &to);
+            match db.delete_edge(from_id, to_id) {
+                Ok(()) => println!("{} edge ({} -> {})", "Removed".red(), from_id, to_id),
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
 
+        Command::Delete { id, dry_run } => {
+            let id = resolve_node_or_exit(&db, &id);
             match db.delete_node(id, dry_run) {
                 Ok(summary) => {
                     if dry_run {
@@ -1326,26 +1263,6 @@ fn main() {
                             summary.node_title,
                             summary.edges_deleted
                         );
-
-                        // Auto-emit event if sync is initialized
-                        let sync_dir = PathBuf::from(".deciduous/sync");
-                        if sync_dir.exists() {
-                            if let Some(node) = node_info {
-                                let author = get_current_author();
-                                if let Ok(event_log) =
-                                    EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                                {
-                                    let event = Event::DeleteNode {
-                                        change_id: node.change_id.clone(),
-                                        timestamp: chrono::Utc::now(),
-                                        author,
-                                    };
-                                    if let Err(e) = event_log.append(event) {
-                                        eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
                 Err(e) => {
@@ -1355,41 +1272,19 @@ fn main() {
             }
         }
 
-        Command::Status { id, status } => match db.update_node_status(id, &status) {
-            Ok(()) => {
-                println!("{} node {} status to '{}'", "Updated".green(), id, status);
-
-                // Auto-emit event if sync is initialized
-                let sync_dir = PathBuf::from(".deciduous/sync");
-                if sync_dir.exists() {
-                    if let Ok(Some(node)) = db.get_node(id) {
-                        let author = get_current_author();
-                        if let Ok(event_log) =
-                            EventLog::new(&PathBuf::from(".deciduous"), author.clone())
-                        {
-                            let event = Event::UpdateNode {
-                                change_id: node.change_id.clone(),
-                                title: None,
-                                description: None,
-                                status: Some(status.clone()),
-                                metadata_json: None,
-                                timestamp: chrono::Utc::now(),
-                                author,
-                            };
-                            if let Err(e) = event_log.append(event) {
-                                eprintln!("{} Sync event: {}", "Warning:".yellow(), e);
-                            }
-                        }
-                    }
+        Command::Status { id, status } => {
+            let id = resolve_node_or_exit(&db, &id);
+            match db.update_node_status(id, &status) {
+                Ok(()) => println!("{} node {} status to '{}'", "Updated".green(), id, status),
+                Err(e) => {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
                 }
             }
-            Err(e) => {
-                eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
-            }
-        },
+        }
 
         Command::Prompt { id, prompt } => {
+            let id = resolve_node_or_exit(&db, &id);
             // Read prompt from stdin if not provided as argument
             let effective_prompt = match prompt {
                 Some(p) => p,
@@ -1497,9 +1392,13 @@ fn main() {
                             None => format!("{} nodes:", filtered.len()),
                         };
                         println!("{}", header.cyan());
-                        println!("{:<5} {:<12} {:<10} TITLE", "ID", "TYPE", "STATUS");
-                        println!("{}", "-".repeat(70));
+                        println!(
+                            "{:<5} {:<9} {:<12} {:<10} TITLE",
+                            "ID", "CHANGE", "TYPE", "STATUS"
+                        );
+                        println!("{}", "-".repeat(78));
                         for n in filtered {
+                            let short_cid = n.change_id.get(..8).unwrap_or(&n.change_id).dimmed();
                             let type_colored = match n.node_type.as_str() {
                                 "goal" => n.node_type.yellow(),
                                 "decision" => n.node_type.cyan(),
@@ -1517,20 +1416,20 @@ fn main() {
                                         desc.clone()
                                     };
                                     println!(
-                                        "{:<5} {:<12} {:<10} {}",
-                                        n.id, type_colored, n.status, n.title
+                                        "{:<5} {:<9} {:<12} {:<10} {}",
+                                        n.id, short_cid, type_colored, n.status, n.title
                                     );
-                                    println!("      {:<22} {}", "", truncated.dimmed());
+                                    println!("{:<39}{}", "", truncated.dimmed());
                                 } else {
                                     println!(
-                                        "{:<5} {:<12} {:<10} {}",
-                                        n.id, type_colored, n.status, n.title
+                                        "{:<5} {:<9} {:<12} {:<10} {}",
+                                        n.id, short_cid, type_colored, n.status, n.title
                                     );
                                 }
                             } else {
                                 println!(
-                                    "{:<5} {:<12} {:<10} {}",
-                                    n.id, type_colored, n.status, n.title
+                                    "{:<5} {:<9} {:<12} {:<10} {}",
+                                    n.id, short_cid, type_colored, n.status, n.title
                                 );
                             }
                         }
@@ -1572,6 +1471,7 @@ fn main() {
         },
 
         Command::Show { id, json } => {
+            let id = resolve_node_or_exit(&db, &id);
             match db.get_node(id) {
                 Ok(Some(node)) => {
                     if json {
@@ -1611,6 +1511,7 @@ fn main() {
                         }
 
                         println!("{}: {}", "Status".bold(), node.status);
+                        println!("{}: {}", "Change ID".bold(), node.change_id.dimmed());
                         println!("{}: {}", "Created".bold(), node.created_at);
                         println!("{}: {}", "Updated".bold(), node.updated_at);
 
@@ -1807,117 +1708,91 @@ fn main() {
             }
         }
 
-        Command::Sync { output } => {
-            // Default to docs/ for GitHub Pages compatibility
-            let output_path = output.unwrap_or_else(|| PathBuf::from("docs/graph-data.json"));
+        Command::Sync {
+            output,
+            check,
+            no_pages,
+        } => {
+            let store_dir = RecordStore::dir_for_db(&Database::db_path());
+            let store = match RecordStore::open(&store_dir) {
+                Some(store) => store,
+                None if check => {
+                    eprintln!(
+                        "{} No record store at {}. Run `deciduous sync` once to create it.",
+                        "Error:".red(),
+                        store_dir.display()
+                    );
+                    std::process::exit(1);
+                }
+                None => match RecordStore::create(&store_dir) {
+                    Ok(store) => {
+                        println!(
+                            "{} record store at {} (commit this directory)",
+                            "Created".green(),
+                            store_dir.display()
+                        );
+                        store
+                    }
+                    Err(e) => {
+                        eprintln!("{} Creating record store: {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                },
+            };
 
-            // Create parent directories if needed
-            if let Some(parent) = output_path.parent() {
-                std::fs::create_dir_all(parent).ok();
+            if !check {
+                if let Ok(cwd) = std::env::current_dir() {
+                    match deciduous::init::ensure_merge_driver(&cwd) {
+                        Ok(true) => println!(
+                            "{} git merge driver for graph records (this clone)",
+                            "Configured".green()
+                        ),
+                        Ok(false) => {}
+                        Err(e) => eprintln!("{} merge driver: {}", "Warning:".yellow(), e),
+                    }
+                }
             }
 
-            // Load config and include it in export (for external repo support, etc.)
-            let config = Config::load();
-            let include_config = config.github.commit_repo.is_some();
-
-            match db.get_graph_with_config(if include_config { Some(config) } else { None }) {
-                Ok(graph) => {
-                    match serde_json::to_string_pretty(&graph) {
-                        Ok(json) => {
-                            match std::fs::write(&output_path, &json) {
-                                Ok(()) => {
-                                    println!(
-                                        "{} graph to {}",
-                                        "Exported".green(),
-                                        output_path.display()
-                                    );
-                                    println!(
-                                        "  {} nodes, {} edges",
-                                        graph.nodes.len(),
-                                        graph.edges.len()
-                                    );
-
-                                    // Also sync to docs/demo/ if it exists (for GitHub Pages demo)
-                                    let demo_path = PathBuf::from("docs/demo/graph-data.json");
-                                    if demo_path.parent().map(|p| p.exists()).unwrap_or(false) {
-                                        if let Err(e) = std::fs::write(&demo_path, &json) {
-                                            eprintln!(
-                                                "{} Also writing to demo/: {}",
-                                                "Warning:".yellow(),
-                                                e
-                                            );
-                                        }
-                                    }
-
-                                    // Export git history for linked commits
-                                    // Skip when external repo is configured (commits won't be in local git)
-                                    if !include_config {
-                                        if let Some(output_dir) = output_path.parent() {
-                                            match export_git_history(&graph.nodes, output_dir) {
-                                                Ok(count) => {
-                                                    if count > 0 {
-                                                        println!(
-                                                            "{} git-history.json ({} commits)",
-                                                            "Exported".green(),
-                                                            count
-                                                        );
-                                                    }
-                                                    // Also sync to docs/demo/ if it exists
-                                                    let demo_dir = PathBuf::from("docs/demo");
-                                                    if demo_dir.exists() {
-                                                        if let Err(e) = export_git_history(
-                                                            &graph.nodes,
-                                                            &demo_dir,
-                                                        ) {
-                                                            eprintln!("{} Also writing git history to demo/: {}", "Warning:".yellow(), e);
-                                                        }
-                                                    }
-                                                }
-                                                Err(e) => {
-                                                    // Non-fatal: git history is optional
-                                                    eprintln!(
-                                                        "{} Exporting git history: {}",
-                                                        "Warning:".yellow(),
-                                                        e
-                                                    );
-                                                }
-                                            }
-                                        }
-                                    } else {
-                                        // External repo mode: preserve existing git-history.json
-                                        if let Some(output_dir) = output_path.parent() {
-                                            let git_history_path =
-                                                output_dir.join("git-history.json");
-                                            if git_history_path.exists() {
-                                                println!(
-                                                    "{} git-history.json (external repo mode - manually managed)",
-                                                    "Preserved".cyan()
-                                                );
-                                            } else {
-                                                println!(
-                                                    "{} Create docs/git-history.json manually for external repo commits",
-                                                    "Note:".yellow()
-                                                );
-                                            }
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("{} Writing file: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            }
-                        }
+            if store.has_legacy_events() {
+                if check {
+                    println!(
+                        "{} Legacy event log present; `deciduous sync` will import it",
+                        "Note:".yellow()
+                    );
+                } else {
+                    match store.import_legacy_events() {
+                        Ok(report) => print_legacy_import(&report),
                         Err(e) => {
-                            eprintln!("{} Serializing graph: {}", "Error:".red(), e);
+                            eprintln!("{} Importing legacy events: {}", "Error:".red(), e);
                             std::process::exit(1);
                         }
                     }
                 }
+            }
+
+            let report = match reconcile(&db, &store, check) {
+                Ok(r) => r,
                 Err(e) => {
-                    eprintln!("{} {}", "Error:".red(), e);
+                    eprintln!("{} Sync: {}", "Error:".red(), e);
                     std::process::exit(1);
                 }
+            };
+            print_sync_report(&report, &store);
+
+            if check {
+                if report.is_clean() && report.conflicts.is_empty() {
+                    std::process::exit(0);
+                }
+                println!(
+                    "{} Run `deciduous sync` to apply, then commit {}",
+                    "Pending:".yellow(),
+                    store_dir.display()
+                );
+                std::process::exit(1);
+            }
+
+            if !no_pages {
+                export_pages(&db, output);
             }
         }
 
@@ -2222,344 +2097,59 @@ fn main() {
         },
 
         Command::Events { action } => {
-            // Get the .deciduous directory
-            let deciduous_dir = PathBuf::from(".deciduous");
-            if !deciduous_dir.exists() {
-                eprintln!(
-                    "{} No .deciduous directory found. Run 'deciduous init' first.",
-                    "Error:".red()
-                );
-                std::process::exit(1);
-            }
-
-            let author = get_current_author();
-
+            eprintln!(
+                "{} `deciduous events` is deprecated; `deciduous sync` does all of this now.",
+                "Note:".yellow()
+            );
+            let store_dir = RecordStore::dir_for_db(&Database::db_path());
             match action {
-                EventsAction::Init => {
-                    let sync_dir = deciduous_dir.join("sync");
-                    let events_dir = sync_dir.join("events");
-
-                    if sync_dir.exists() {
-                        println!(
-                            "{} Sync directory already exists at {}",
-                            "Info:".cyan(),
-                            sync_dir.display()
+                EventsAction::Init => match RecordStore::create(&store_dir) {
+                    Ok(_) => println!(
+                        "{} record store at {}. Run `deciduous sync` to fill it.",
+                        "Created".green(),
+                        store_dir.display()
+                    ),
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                },
+                EventsAction::Checkpoint { .. } => {
+                    println!(
+                        "Checkpoints are gone: the record store is already one file per record. Run `deciduous sync`."
+                    );
+                }
+                EventsAction::Status | EventsAction::Rebuild { .. } | EventsAction::Emit { .. } => {
+                    let Some(store) = RecordStore::open(&store_dir) else {
+                        eprintln!(
+                            "{} No record store at {}. Run `deciduous sync` to create it.",
+                            "Error:".red(),
+                            store_dir.display()
                         );
-                    } else {
-                        match std::fs::create_dir_all(&events_dir) {
-                            Ok(()) => {
-                                println!(
-                                    "{} Created sync directory at {}",
-                                    "Success:".green(),
-                                    sync_dir.display()
-                                );
-                                println!("  Events will be stored in {}", events_dir.display());
-                                println!();
-                                println!("{}", "Next steps:".cyan());
-                                println!("  1. Add .deciduous/sync/ to git tracking");
-                                println!(
-                                    "  2. Team members pull and run 'deciduous events rebuild'"
-                                );
+                        std::process::exit(1);
+                    };
+                    let dry_run = match &action {
+                        EventsAction::Status => true,
+                        EventsAction::Rebuild { dry_run } => *dry_run,
+                        _ => false,
+                    };
+                    if let EventsAction::Emit { node_id } = &action {
+                        match db.get_node(*node_id) {
+                            Ok(Some(node)) => {
+                                if let Err(e) = store.publish_node(&node) {
+                                    eprintln!("{} {}", "Error:".red(), e);
+                                    std::process::exit(1);
+                                }
+                                println!("{} record for node {}", "Wrote".green(), node_id);
                             }
-                            Err(e) => {
-                                eprintln!("{} Creating sync directory: {}", "Error:".red(), e);
+                            _ => {
+                                eprintln!("{} Node {} not found", "Error:".red(), node_id);
                                 std::process::exit(1);
                             }
                         }
                     }
-                }
-
-                EventsAction::Status => {
-                    match EventLog::new(&deciduous_dir, author.clone()) {
-                        Ok(event_log) => {
-                            println!("{} Event-based sync status", "Sync:".cyan());
-                            println!("  Author: {}", author);
-                            println!("  Sync dir: {}", event_log.sync_dir().display());
-
-                            // Check for checkpoint
-                            match event_log.load_checkpoint() {
-                                Ok(Some(cp)) => {
-                                    println!(
-                                        "  Checkpoint: {} ({} nodes, {} edges)",
-                                        cp.created_at.format("%Y-%m-%d %H:%M:%S"),
-                                        cp.nodes.len(),
-                                        cp.edges.len()
-                                    );
-                                }
-                                Ok(None) => {
-                                    println!("  Checkpoint: none");
-                                }
-                                Err(e) => {
-                                    println!("  Checkpoint: error loading ({})", e);
-                                }
-                            }
-
-                            // Count events
-                            match event_log.get_events_after_checkpoint() {
-                                Ok(events) => {
-                                    println!("  Pending events: {}", events.len());
-
-                                    // Count by author
-                                    let mut by_author: std::collections::HashMap<String, usize> =
-                                        std::collections::HashMap::new();
-                                    for event in &events {
-                                        *by_author
-                                            .entry(event.author().to_string())
-                                            .or_default() += 1;
-                                    }
-                                    if !by_author.is_empty() {
-                                        println!("  Events by author:");
-                                        for (a, count) in by_author {
-                                            println!("    {}: {}", a, count);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    println!("  Pending events: error ({})", e);
-                                }
-                            }
-
-                            // List event files
-                            let events_dir = event_log.sync_dir().join("events");
-                            if events_dir.exists() {
-                                println!("  Event files:");
-                                if let Ok(entries) = std::fs::read_dir(&events_dir) {
-                                    for entry in entries.flatten() {
-                                        let path = entry.path();
-                                        if path.extension().map(|e| e == "jsonl").unwrap_or(false) {
-                                            let size = std::fs::metadata(&path)
-                                                .map(|m| m.len())
-                                                .unwrap_or(0);
-                                            println!(
-                                                "    {} ({} bytes)",
-                                                path.file_name()
-                                                    .unwrap_or_default()
-                                                    .to_string_lossy(),
-                                                size
-                                            );
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-
-                EventsAction::Rebuild { dry_run } => {
-                    match EventLog::new(&deciduous_dir, author) {
-                        Ok(event_log) => {
-                            println!("{} Rebuilding database from events...", "Sync:".cyan());
-
-                            // Load checkpoint
-                            let checkpoint = match event_log.load_checkpoint() {
-                                Ok(cp) => cp,
-                                Err(e) => {
-                                    eprintln!("{} Loading checkpoint: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            };
-
-                            // Build materialized state
-                            let mut state = match &checkpoint {
-                                Some(cp) => {
-                                    println!(
-                                        "  Loaded checkpoint: {} nodes, {} edges",
-                                        cp.nodes.len(),
-                                        cp.edges.len()
-                                    );
-                                    MaterializedState::from_checkpoint(cp)
-                                }
-                                None => {
-                                    println!("  No checkpoint found, starting fresh");
-                                    MaterializedState::default()
-                                }
-                            };
-
-                            // Get events after checkpoint
-                            let events = match event_log.get_events_after_checkpoint() {
-                                Ok(e) => e,
-                                Err(e) => {
-                                    eprintln!("{} Reading events: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            };
-
-                            println!("  Replaying {} events...", events.len());
-                            state.replay(&events);
-
-                            println!(
-                                "  Result: {} nodes, {} edges",
-                                state.nodes.len(),
-                                state.edges.len()
-                            );
-
-                            match db.rebuild_from_state(&state, dry_run) {
-                                Ok(result) => {
-                                    println!();
-                                    if dry_run {
-                                        println!(
-                                            "{} Dry run - would create {} nodes, update {}, delete {}; create {} edges, delete {} ({} unresolvable)",
-                                            "Info:".cyan(),
-                                            result.nodes_created,
-                                            result.nodes_updated,
-                                            result.nodes_deleted,
-                                            result.edges_created,
-                                            result.edges_deleted,
-                                            result.edges_failed
-                                        );
-                                    } else {
-                                        println!(
-                                            "{} Created {} nodes, updated {}, deleted {}; created {} edges, deleted {} ({} failed)",
-                                            "Done:".green(),
-                                            result.nodes_created,
-                                            result.nodes_updated,
-                                            result.nodes_deleted,
-                                            result.edges_created,
-                                            result.edges_deleted,
-                                            result.edges_failed
-                                        );
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("{} Rebuild: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-
-                EventsAction::Checkpoint { clear_events } => {
-                    match EventLog::new(&deciduous_dir, author) {
-                        Ok(event_log) => {
-                            // Get current database state
-                            let nodes = match db.get_all_nodes() {
-                                Ok(n) => n,
-                                Err(e) => {
-                                    eprintln!("{} Getting nodes: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            };
-
-                            let edges = match db.get_all_edges() {
-                                Ok(e) => e,
-                                Err(e) => {
-                                    eprintln!("{} Getting edges: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            };
-
-                            // Convert to checkpoint format
-                            let checkpoint = Checkpoint {
-                                created_at: chrono::Utc::now(),
-                                nodes: nodes
-                                    .iter()
-                                    .map(|n| CheckpointNode {
-                                        change_id: n.change_id.clone(),
-                                        node_type: n.node_type.clone(),
-                                        title: n.title.clone(),
-                                        description: n.description.clone(),
-                                        status: n.status.clone(),
-                                        metadata_json: n.metadata_json.clone(),
-                                        created_at: n.created_at.clone(),
-                                        updated_at: n.updated_at.clone(),
-                                    })
-                                    .collect(),
-                                edges: edges
-                                    .iter()
-                                    .filter_map(|e| match (&e.from_change_id, &e.to_change_id) {
-                                        (Some(from), Some(to)) => Some(CheckpointEdge {
-                                            edge_id: generate_edge_id(from, to, &e.edge_type),
-                                            from_change_id: from.clone(),
-                                            to_change_id: to.clone(),
-                                            edge_type: e.edge_type.clone(),
-                                            rationale: e.rationale.clone(),
-                                            created_at: e.created_at.clone(),
-                                        }),
-                                        _ => None,
-                                    })
-                                    .collect(),
-                                version: "1.0".to_string(),
-                                themes: vec![],
-                                node_themes: vec![],
-                                documents: vec![],
-                            };
-
-                            match event_log.save_checkpoint(&checkpoint, clear_events) {
-                                Ok(()) => {
-                                    println!(
-                                        "{} Checkpoint created: {} nodes, {} edges",
-                                        "Success:".green(),
-                                        checkpoint.nodes.len(),
-                                        checkpoint.edges.len()
-                                    );
-                                    if clear_events {
-                                        println!("  Event logs cleared");
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("{} Saving checkpoint: {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-
-                EventsAction::Emit { node_id } => {
-                    // Get the node
-                    let node = match db.get_node(node_id) {
-                        Ok(Some(n)) => n,
-                        Ok(None) => {
-                            eprintln!("{} Node {} not found", "Error:".red(), node_id);
-                            std::process::exit(1);
-                        }
-                        Err(e) => {
-                            eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    };
-
-                    match EventLog::new(&deciduous_dir, author.clone()) {
-                        Ok(event_log) => {
-                            let event = Event::AddNode {
-                                change_id: node.change_id.clone(),
-                                node_type: node.node_type.clone(),
-                                title: node.title.clone(),
-                                description: node.description.clone(),
-                                status: node.status.clone(),
-                                metadata_json: node.metadata_json.clone(),
-                                timestamp: chrono::Utc::now(),
-                                author,
-                            };
-
-                            match event_log.append(event) {
-                                Ok(()) => {
-                                    println!(
-                                        "{} Emitted event for node {} ({})",
-                                        "Success:".green(),
-                                        node_id,
-                                        node.change_id
-                                    );
-                                }
-                                Err(e) => {
-                                    eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
-                                }
-                            }
-                        }
+                    match reconcile(&db, &store, dry_run) {
+                        Ok(report) => print_sync_report(&report, &store),
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
                             std::process::exit(1);
@@ -2569,9 +2159,6 @@ fn main() {
             }
         }
 
-        // ================================================================
-        // Document Attachment Commands
-        // ================================================================
         Command::Doc { action } => match action {
             DocAction::Attach {
                 node_id,
@@ -4685,6 +4272,225 @@ fn export_git_history(
 // =============================================================================
 // Tests
 // =============================================================================
+
+/// Turn a CLI node reference (id or change_id prefix) into a local id, or exit.
+fn resolve_node_or_exit(db: &Database, reference: &str) -> i32 {
+    match db.resolve_node_ref(reference) {
+        Ok(id) => id,
+        Err(e) => {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn print_legacy_import(report: &deciduous::LegacyImport) {
+    println!(
+        "{} legacy event log: {} events{} -> {} node records, {} edge records",
+        "Imported".green(),
+        report.events,
+        if report.checkpoint {
+            " + checkpoint"
+        } else {
+            ""
+        },
+        report.nodes,
+        report.edges
+    );
+    if report.removed {
+        println!("  Removed .deciduous/sync/events/ and checkpoint.json (git rm them too)");
+    } else {
+        println!(
+            "  {} {} line(s) could not be read, so the legacy files were kept:",
+            "Warning:".yellow(),
+            report.errors.len()
+        );
+        for e in &report.errors {
+            println!("    {}", e);
+        }
+    }
+}
+
+fn print_sync_report(report: &SyncReport, store: &RecordStore) {
+    let verb = if report.dry_run { "would" } else { "did" };
+    let counts = store.counts();
+    println!(
+        "{} {} ({} nodes, {} edges, {} themes, {} tags on disk)",
+        if report.dry_run { "Checked" } else { "Synced" }.cyan(),
+        store.root().display(),
+        counts.nodes,
+        counts.edges,
+        counts.themes,
+        counts.tags
+    );
+    let mut lines: Vec<String> = Vec::new();
+    let mut push = |n: usize, what: &str| {
+        if n > 0 {
+            lines.push(format!("{} {}", n, what));
+        }
+    };
+    push(report.nodes_imported, "nodes imported");
+    push(report.nodes_updated, "nodes updated from records");
+    push(report.nodes_deleted, "nodes deleted (tombstones)");
+    push(report.nodes_exported, "nodes exported");
+    push(report.edges_imported, "edges imported");
+    push(report.edges_deleted, "edges deleted (tombstones)");
+    push(report.edges_exported, "edges exported");
+    push(report.themes_imported, "themes imported");
+    push(report.themes_updated, "themes updated");
+    push(report.themes_deleted, "themes deleted");
+    push(report.themes_exported, "themes exported");
+    push(report.tags_imported, "tags imported");
+    push(report.tags_deleted, "tags deleted");
+    push(report.tags_exported, "tags exported");
+    if lines.is_empty() {
+        println!("  Database and records already agree");
+    } else {
+        println!("  {} {}: {}", "Changes".bold(), verb, lines.join(", "));
+    }
+    if report.edges_pending > 0 {
+        println!(
+            "  {} {} edge(s) wait for a node that has not arrived yet:",
+            "Pending:".yellow(),
+            report.edges_pending
+        );
+        for d in report.pending_details.iter().take(10) {
+            println!("    {}", d);
+        }
+    }
+    if report.edges_orphaned > 0 {
+        println!(
+            "  {} edge(s) point at deleted nodes and were skipped",
+            report.edges_orphaned
+        );
+    }
+    for c in &report.conflicts {
+        match (&c.merged, &c.message) {
+            (true, _) => println!("  {} conflict markers in {}", "Merged".green(), c.path),
+            (false, Some(m)) => println!("  {} {}: {}", "Conflict:".yellow(), c.path, m),
+            (false, None) => println!("  {} {}", "Conflict:".yellow(), c.path),
+        }
+    }
+    if !report.read_errors.is_empty() {
+        println!(
+            "  {} {} record file(s) could not be read (fix or `git checkout` them):",
+            "Warning:".yellow(),
+            report.read_errors.len()
+        );
+        for e in &report.read_errors {
+            println!("    {}", e);
+        }
+    }
+}
+
+/// Export the graph (and linked git history) for the GitHub Pages viewer.
+fn export_pages(db: &Database, output: Option<PathBuf>) {
+    // Default to docs/ for GitHub Pages compatibility
+    let output_path = output.unwrap_or_else(|| PathBuf::from("docs/graph-data.json"));
+
+    // Create parent directories if needed
+    if let Some(parent) = output_path.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    // Load config and include it in export (for external repo support, etc.)
+    let config = Config::load();
+    let include_config = config.github.commit_repo.is_some();
+
+    match db.get_graph_with_config(if include_config { Some(config) } else { None }) {
+        Ok(graph) => {
+            match serde_json::to_string_pretty(&graph) {
+                Ok(json) => {
+                    match std::fs::write(&output_path, &json) {
+                        Ok(()) => {
+                            println!("{} graph to {}", "Exported".green(), output_path.display());
+                            println!("  {} nodes, {} edges", graph.nodes.len(), graph.edges.len());
+
+                            // Also sync to docs/demo/ if it exists (for GitHub Pages demo)
+                            let demo_path = PathBuf::from("docs/demo/graph-data.json");
+                            if demo_path.parent().map(|p| p.exists()).unwrap_or(false) {
+                                if let Err(e) = std::fs::write(&demo_path, &json) {
+                                    eprintln!(
+                                        "{} Also writing to demo/: {}",
+                                        "Warning:".yellow(),
+                                        e
+                                    );
+                                }
+                            }
+
+                            // Export git history for linked commits
+                            // Skip when external repo is configured (commits won't be in local git)
+                            if !include_config {
+                                if let Some(output_dir) = output_path.parent() {
+                                    match export_git_history(&graph.nodes, output_dir) {
+                                        Ok(count) => {
+                                            if count > 0 {
+                                                println!(
+                                                    "{} git-history.json ({} commits)",
+                                                    "Exported".green(),
+                                                    count
+                                                );
+                                            }
+                                            // Also sync to docs/demo/ if it exists
+                                            let demo_dir = PathBuf::from("docs/demo");
+                                            if demo_dir.exists() {
+                                                if let Err(e) =
+                                                    export_git_history(&graph.nodes, &demo_dir)
+                                                {
+                                                    eprintln!(
+                                                        "{} Also writing git history to demo/: {}",
+                                                        "Warning:".yellow(),
+                                                        e
+                                                    );
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            // Non-fatal: git history is optional
+                                            eprintln!(
+                                                "{} Exporting git history: {}",
+                                                "Warning:".yellow(),
+                                                e
+                                            );
+                                        }
+                                    }
+                                }
+                            } else {
+                                // External repo mode: preserve existing git-history.json
+                                if let Some(output_dir) = output_path.parent() {
+                                    let git_history_path = output_dir.join("git-history.json");
+                                    if git_history_path.exists() {
+                                        println!(
+                                            "{} git-history.json (external repo mode - manually managed)",
+                                            "Preserved".cyan()
+                                        );
+                                    } else {
+                                        println!(
+                                            "{} Create docs/git-history.json manually for external repo commits",
+                                            "Note:".yellow()
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} Writing file: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("{} Serializing graph: {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {

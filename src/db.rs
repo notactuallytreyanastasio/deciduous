@@ -3,6 +3,7 @@
 //! Stores decision graphs and command logs for AI-assisted development.
 //! Uses embedded migrations for schema management.
 
+use crate::records::{EdgeRecord, NodeRecord, RecordStore, TagRecord, ThemeRecord};
 use crate::schema::*;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
@@ -638,9 +639,14 @@ struct FtsSearchRow {
 type DbPool = Pool<ConnectionManager<SqliteConnection>>;
 type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 
-/// Database connection wrapper with connection pool
+/// Database connection wrapper with connection pool.
+///
+/// When a record store is attached (automatically, if a `sync/` directory
+/// sits next to the database file), every graph mutation is mirrored into
+/// it so teammates receive it through git. See [`crate::records`].
 pub struct Database {
     pool: DbPool,
+    store: Option<RecordStore>,
 }
 
 /// Error type for database operations
@@ -711,11 +717,105 @@ impl Database {
             .build(manager)
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
-        let db = Self { pool };
+        let mut db = Self { pool, store: None };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
+        db.store = RecordStore::open(RecordStore::dir_for_db(path.as_ref()));
         Ok(db)
+    }
+
+    /// Attach (or detach) the record store that mutations are mirrored into.
+    pub fn set_store(&mut self, store: Option<RecordStore>) {
+        self.store = store;
+    }
+
+    /// The attached record store, if sync is enabled for this database.
+    pub fn store(&self) -> Option<&RecordStore> {
+        self.store.as_ref()
+    }
+
+    // ------------------------------------------------------------------
+    // Record store write-through. Failures never fail the operation: the
+    // database write already happened, and the next `deciduous sync` will
+    // export whatever is missing. They are reported on stderr so MCP/stdio
+    // transports stay clean.
+    // ------------------------------------------------------------------
+
+    fn store_warn(what: &str, e: impl std::fmt::Display) {
+        eprintln!("Warning: record store: {} ({})", what, e);
+    }
+
+    fn publish_node_by_id(&self, node_id: i32) {
+        let Some(store) = &self.store else { return };
+        match self.get_node(node_id) {
+            Ok(Some(node)) => {
+                if let Err(e) = store.publish_node(&node) {
+                    Self::store_warn("could not write node record", e);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => Self::store_warn("could not read node for publishing", e),
+        }
+    }
+
+    fn publish_edge_by_id(&self, edge_id: i32) {
+        let Some(store) = &self.store else { return };
+        match self.get_edge(edge_id) {
+            Ok(Some(edge)) => {
+                if let Err(e) = store.publish_edge(&edge) {
+                    Self::store_warn("could not write edge record", e);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => Self::store_warn("could not read edge for publishing", e),
+        }
+    }
+
+    fn tombstone_edges(&self, edges: &[DecisionEdge]) {
+        let Some(store) = &self.store else { return };
+        for edge in edges {
+            if let Err(e) = store.tombstone_edge(edge) {
+                Self::store_warn("could not write edge tombstone", e);
+            }
+        }
+    }
+
+    fn publish_theme_by_id(&self, theme_id: i32) {
+        let Some(store) = &self.store else { return };
+        match self.get_theme_by_id(theme_id) {
+            Ok(Some(theme)) => {
+                if let Err(e) = store.publish_theme(&theme) {
+                    Self::store_warn("could not write theme record", e);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => Self::store_warn("could not read theme for publishing", e),
+        }
+    }
+
+    fn publish_tag(&self, node_id: i32, theme_id: i32) {
+        let Some(store) = &self.store else { return };
+        let node = self.get_node(node_id).ok().flatten();
+        let theme = self.get_theme_by_id(theme_id).ok().flatten();
+        let tag = self.get_tag(node_id, theme_id).ok().flatten();
+        if let (Some(node), Some(theme), Some(tag)) = (node, theme, tag) {
+            if let Err(e) = store.publish_tag(
+                &node.change_id,
+                &theme.change_id,
+                &tag.source,
+                &tag.created_at,
+            ) {
+                Self::store_warn("could not write tag record", e);
+            }
+        }
+    }
+
+    fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) {
+        let Some(store) = &self.store else { return };
+        if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id) {
+            Self::store_warn("could not write tag tombstone", e);
+        }
     }
 
     /// Raw SQL migration that runs before Diesel ORM is used
@@ -1348,7 +1448,9 @@ impl Database {
             "last_insert_rowid()",
         ))
         .first(&mut conn)?;
+        drop(conn);
 
+        self.publish_node_by_id(id);
         Ok(id)
     }
 
@@ -1402,223 +1504,269 @@ impl Database {
             "last_insert_rowid()",
         ))
         .first(&mut conn)?;
+        drop(conn);
 
+        self.publish_node_by_id(id);
         Ok(id)
     }
 
-    /// Create a node verbatim from materialized event-log state, preserving
-    /// status, metadata, and timestamps exactly as recorded in the events.
-    /// Unlike `create_node_with_change_id`, nothing is defaulted or rebuilt.
-    fn create_node_verbatim(&self, node: &crate::events::MaterializedNode) -> Result<i32> {
+    // ========================================================================
+    // Record store import (used by `records::reconcile`). These write the
+    // database only; they never publish back to the store.
+    // ========================================================================
+
+    /// Insert a node exactly as recorded (timestamps, status, metadata kept).
+    pub(crate) fn import_node_record(&self, rec: &NodeRecord) -> Result<i32> {
         let mut conn = self.get_conn()?;
-        let created_at = node.created_at.to_rfc3339();
-        let updated_at = node.updated_at.to_rfc3339();
-
+        let metadata = rec.metadata_json();
         let new_node = NewDecisionNode {
-            change_id: &node.change_id,
-            node_type: &node.node_type,
-            title: &node.title,
-            description: node.description.as_deref(),
-            status: &node.status,
-            created_at: &created_at,
-            updated_at: &updated_at,
-            metadata_json: node.metadata_json.as_deref(),
+            change_id: &rec.change_id,
+            node_type: &rec.node_type,
+            title: &rec.title,
+            description: rec.description.as_deref(),
+            status: &rec.status,
+            created_at: &rec.created_at,
+            updated_at: &rec.updated_at,
+            metadata_json: metadata.as_deref(),
         };
-
         diesel::insert_into(decision_nodes::table)
             .values(&new_node)
             .execute(&mut conn)?;
-
         let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
             "last_insert_rowid()",
         ))
         .first(&mut conn)?;
-
         Ok(id)
     }
 
-    /// Update an existing node's fields verbatim from materialized event-log state.
-    fn update_node_verbatim(
-        &self,
-        node_id: i32,
-        node: &crate::events::MaterializedNode,
-    ) -> Result<()> {
+    /// Overwrite a node's fields exactly as recorded.
+    pub(crate) fn update_node_record(&self, node_id: i32, rec: &NodeRecord) -> Result<()> {
         let mut conn = self.get_conn()?;
-
+        let metadata = rec.metadata_json();
         diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
             .set((
-                decision_nodes::title.eq(&node.title),
-                decision_nodes::description.eq(node.description.as_deref()),
-                decision_nodes::status.eq(&node.status),
-                decision_nodes::metadata_json.eq(node.metadata_json.as_deref()),
-                decision_nodes::updated_at.eq(node.updated_at.to_rfc3339()),
+                decision_nodes::node_type.eq(&rec.node_type),
+                decision_nodes::title.eq(&rec.title),
+                decision_nodes::description.eq(rec.description.as_deref()),
+                decision_nodes::status.eq(&rec.status),
+                decision_nodes::metadata_json.eq(metadata.as_deref()),
+                decision_nodes::updated_at.eq(&rec.updated_at),
             ))
             .execute(&mut conn)?;
-
         Ok(())
     }
 
-    /// Reconcile the database with materialized event-log state.
-    ///
-    /// Creates missing nodes/edges, updates existing nodes whose fields differ
-    /// (title, description, status, metadata), and applies `DeleteNode` /
-    /// `DeleteEdge` tombstones. Idempotent: re-running with the same state is
-    /// a no-op. With `dry_run`, returns the same counts without mutating.
-    pub fn rebuild_from_state(
+    /// Delete a node (and its edges) without writing tombstones.
+    pub(crate) fn delete_node_local(&self, node_id: i32) -> Result<()> {
+        self.delete_node_impl(node_id, false, false).map(|_| ())
+    }
+
+    /// Insert an edge exactly as recorded.
+    pub(crate) fn import_edge_record(
         &self,
-        state: &crate::events::MaterializedState,
-        dry_run: bool,
-    ) -> Result<crate::events::RebuildResult> {
-        use std::collections::{HashMap, HashSet};
-
-        let mut result = crate::events::RebuildResult::default();
-
-        // 1. Nodes: create missing, update changed
-        let existing_nodes = self.get_all_nodes()?;
-        let nodes_by_change_id: HashMap<&str, &DecisionNode> = existing_nodes
-            .iter()
-            .map(|n| (n.change_id.as_str(), n))
-            .collect();
-
-        for node in state.nodes.values() {
-            match nodes_by_change_id.get(node.change_id.as_str()) {
-                Some(existing) => {
-                    let differs = existing.title != node.title
-                        || existing.status != node.status
-                        || existing.description != node.description
-                        || existing.metadata_json != node.metadata_json;
-                    if differs {
-                        if !dry_run {
-                            self.update_node_verbatim(existing.id, node)?;
-                        }
-                        result.nodes_updated += 1;
-                    }
-                }
-                None => {
-                    if !dry_run {
-                        if let Err(e) = self.create_node_verbatim(node) {
-                            eprintln!("  Warning: Failed to create node {}: {}", node.change_id, e);
-                            continue;
-                        }
-                    }
-                    result.nodes_created += 1;
-                }
-            }
-        }
-
-        // 2. Node deletions (tombstones); delete_node cascades connected edges
-        for change_id in &state.deleted_nodes {
-            if let Some(existing) = nodes_by_change_id.get(change_id.as_str()) {
-                if !dry_run {
-                    self.delete_node(existing.id, false)?;
-                }
-                result.nodes_deleted += 1;
-            }
-        }
-
-        // 3. Edge deletions (tombstones). Delete the specific tombstoned edge
-        //    by its primary key — matching on (from, to, edge_type) via the
-        //    deterministic edge_id, so a parallel edge between the same pair
-        //    with a different type is left intact. Read after node deletions
-        //    so edges already cascaded by delete_node are excluded.
-        let edges_after_node_deletes = self.get_all_edges()?;
-        let mut edge_ids_to_delete: Vec<i32> = Vec::new();
-        for db_edge in &edges_after_node_deletes {
-            if let (Some(from), Some(to)) = (&db_edge.from_change_id, &db_edge.to_change_id) {
-                let edge_id = crate::events::generate_edge_id(from, to, &db_edge.edge_type);
-                if state.deleted_edges.contains(&edge_id) {
-                    edge_ids_to_delete.push(db_edge.id);
-                    result.edges_deleted += 1;
-                }
-            }
-        }
-        if !dry_run && !edge_ids_to_delete.is_empty() {
-            let mut conn = self.get_conn()?;
-            diesel::delete(
-                decision_edges::table.filter(decision_edges::id.eq_any(&edge_ids_to_delete)),
-            )
+        from_id: i32,
+        to_id: i32,
+        rec: &EdgeRecord,
+    ) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let new_edge = NewDecisionEdge {
+            from_node_id: from_id,
+            to_node_id: to_id,
+            from_change_id: Some(&rec.from_change_id),
+            to_change_id: Some(&rec.to_change_id),
+            edge_type: &rec.edge_type,
+            weight: rec.weight.or(Some(1.0)),
+            rationale: rec.rationale.as_deref(),
+            created_at: &rec.created_at,
+        };
+        diesel::insert_into(decision_edges::table)
+            .values(&new_edge)
             .execute(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+        Ok(id)
+    }
+
+    /// Delete one edge row by primary key without writing a tombstone.
+    pub(crate) fn delete_edge_local(&self, edge_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::delete(decision_edges::table.filter(decision_edges::id.eq(edge_id)))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Insert a theme exactly as recorded.
+    pub(crate) fn import_theme_record(&self, rec: &ThemeRecord) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let new_theme = NewTheme {
+            change_id: &rec.change_id,
+            name: &rec.name,
+            color: &rec.color,
+            description: rec.description.as_deref(),
+            created_at: &rec.created_at,
+            updated_at: &rec.updated_at,
+        };
+        diesel::insert_into(themes::table)
+            .values(&new_theme)
+            .execute(&mut conn)?;
+        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+            "last_insert_rowid()",
+        ))
+        .first(&mut conn)?;
+        Ok(id)
+    }
+
+    /// Overwrite a theme's fields exactly as recorded.
+    pub(crate) fn update_theme_record(&self, theme_id: i32, rec: &ThemeRecord) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(themes::table.filter(themes::id.eq(theme_id)))
+            .set((
+                themes::name.eq(&rec.name),
+                themes::color.eq(&rec.color),
+                themes::description.eq(rec.description.as_deref()),
+                themes::updated_at.eq(&rec.updated_at),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Delete a theme and its tags without writing tombstones.
+    pub(crate) fn delete_theme_local(&self, theme_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::delete(node_themes::table.filter(node_themes::theme_id.eq(theme_id)))
+            .execute(&mut conn)?;
+        diesel::delete(themes::table.filter(themes::id.eq(theme_id))).execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Insert a tag exactly as recorded (no-op if already present).
+    pub(crate) fn import_tag_record(
+        &self,
+        node_id: i32,
+        theme_id: i32,
+        rec: &TagRecord,
+    ) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let new_nt = NewNodeTheme {
+            node_id,
+            theme_id,
+            source: rec.source.clone(),
+            created_at: rec.created_at.clone(),
+        };
+        diesel::insert_or_ignore_into(node_themes::table)
+            .values(&new_nt)
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Remove a tag without writing a tombstone.
+    pub(crate) fn delete_tag_local(&self, node_id: i32, theme_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::delete(
+            node_themes::table
+                .filter(node_themes::node_id.eq(node_id))
+                .filter(node_themes::theme_id.eq(theme_id)),
+        )
+        .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Resolve a node reference from the command line or an MCP call.
+    ///
+    /// Accepts a local integer id (`42`, `#42`) or a `change_id` prefix of
+    /// at least four characters (`a1b2c3d4`). Local ids differ between
+    /// machines; the prefix is how you point at a teammate's node.
+    pub fn resolve_node_ref(&self, reference: &str) -> Result<i32> {
+        let r = reference.trim().trim_start_matches('#');
+        let looks_like_prefix =
+            r.len() >= 4 && r.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+        if let Ok(id) = r.parse::<i32>() {
+            // An all-digit reference is an id if such a node exists; otherwise
+            // it may be a change_id prefix that happens to be numeric.
+            if self.get_node(id)?.is_some() || !looks_like_prefix {
+                return Ok(id);
+            }
+            if let Ok(found) = self.resolve_change_id_prefix(r) {
+                return Ok(found);
+            }
+            return Ok(id);
         }
+        if !looks_like_prefix {
+            return Err(DbError::Validation(format!(
+                "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
+                reference
+            )));
+        }
+        self.resolve_change_id_prefix(r)
+    }
 
-        // 4. Edges: create missing
-        let all_nodes = self.get_all_nodes()?;
-        let local_ids: HashMap<&str, i32> = all_nodes
-            .iter()
-            .map(|n| (n.change_id.as_str(), n.id))
-            .collect();
-
-        let existing_edges = self.get_all_edges()?;
-        let existing_edge_keys: HashSet<(&str, &str, &str)> = existing_edges
-            .iter()
-            .filter_map(|e| {
-                Some((
-                    e.from_change_id.as_deref()?,
-                    e.to_change_id.as_deref()?,
-                    e.edge_type.as_str(),
-                ))
-            })
-            .collect();
-
-        for edge in state.edges.values() {
-            let key = (
-                edge.from_change_id.as_str(),
-                edge.to_change_id.as_str(),
-                edge.edge_type.as_str(),
-            );
-            // Tombstoned edges are never in state.edges, so a present edge
-            // is never one we just deleted (or would delete in dry-run)
-            if existing_edge_keys.contains(&key) {
-                continue;
-            }
-
-            // An endpoint resolves if it will exist after reconciliation. In a
-            // real run `local_ids` was re-read after creations and deletions,
-            // so it is exact; in dry-run, predict the post-reconcile state.
-            let resolves = |change_id: &str| {
-                if dry_run {
-                    state.nodes.contains_key(change_id)
-                        || (local_ids.contains_key(change_id)
-                            && !state.deleted_nodes.contains(change_id))
-                } else {
-                    local_ids.contains_key(change_id)
-                }
-            };
-
-            if !resolves(&edge.from_change_id) || !resolves(&edge.to_change_id) {
-                result.edges_failed += 1;
-                continue;
-            }
-
-            if dry_run {
-                result.edges_created += 1;
-                continue;
-            }
-
-            match (
-                local_ids.get(edge.from_change_id.as_str()),
-                local_ids.get(edge.to_change_id.as_str()),
-            ) {
-                (Some(&from_id), Some(&to_id)) => {
-                    match self.create_edge(
-                        from_id,
-                        to_id,
-                        &edge.edge_type,
-                        edge.rationale.as_deref(),
-                    ) {
-                        Ok(_) => result.edges_created += 1,
-                        Err(e) => {
-                            eprintln!("  Warning: Failed to create edge: {}", e);
-                            result.edges_failed += 1;
-                        }
-                    }
-                }
-                _ => {
-                    result.edges_failed += 1;
-                }
+    fn resolve_change_id_prefix(&self, r: &str) -> Result<i32> {
+        let mut conn = self.get_conn()?;
+        let pattern = format!("{}%", r);
+        let matches: Vec<DecisionNode> = decision_nodes::table
+            .filter(decision_nodes::change_id.like(&pattern))
+            .order(decision_nodes::id.asc())
+            .limit(6)
+            .load(&mut conn)?;
+        match matches.len() {
+            0 => Err(DbError::Validation(format!(
+                "No node has a change_id starting with '{}'. Run 'deciduous sync' if a teammate created it.",
+                r
+            ))),
+            1 => Ok(matches[0].id),
+            _ => {
+                let list: Vec<String> = matches
+                    .iter()
+                    .take(5)
+                    .map(|n| {
+                        format!(
+                            "#{} {} ({})",
+                            n.id,
+                            &n.change_id[..12.min(n.change_id.len())],
+                            n.title
+                        )
+                    })
+                    .collect();
+                Err(DbError::Validation(format!(
+                    "'{}' matches several nodes; use more characters: {}",
+                    r,
+                    list.join("; ")
+                )))
             }
         }
+    }
 
-        Ok(result)
+    /// Get a single edge by primary key.
+    pub fn get_edge(&self, edge_id: i32) -> Result<Option<DecisionEdge>> {
+        let mut conn = self.get_conn()?;
+        let edge = decision_edges::table
+            .filter(decision_edges::id.eq(edge_id))
+            .first::<DecisionEdge>(&mut conn)
+            .optional()?;
+        Ok(edge)
+    }
+
+    /// Get a theme by primary key.
+    pub fn get_theme_by_id(&self, theme_id: i32) -> Result<Option<Theme>> {
+        let mut conn = self.get_conn()?;
+        let theme = themes::table
+            .filter(themes::id.eq(theme_id))
+            .first::<Theme>(&mut conn)
+            .optional()?;
+        Ok(theme)
+    }
+
+    /// Get one node/theme association.
+    pub fn get_tag(&self, node_id: i32, theme_id: i32) -> Result<Option<NodeTheme>> {
+        let mut conn = self.get_conn()?;
+        let tag = node_themes::table
+            .filter(node_themes::node_id.eq(node_id))
+            .filter(node_themes::theme_id.eq(theme_id))
+            .first::<NodeTheme>(&mut conn)
+            .optional()?;
+        Ok(tag)
     }
 
     /// Create an edge between nodes
@@ -1682,7 +1830,9 @@ impl Database {
             "last_insert_rowid()",
         ))
         .first(&mut conn)?;
+        drop(conn);
 
+        self.publish_edge_by_id(id);
         Ok(id)
     }
 
@@ -1732,18 +1882,34 @@ impl Database {
             }
         }
 
+        let doomed: Vec<DecisionEdge> = decision_edges::table
+            .filter(decision_edges::from_node_id.eq(from_id))
+            .filter(decision_edges::to_node_id.eq(to_id))
+            .load(&mut conn)?;
+
         diesel::delete(
             decision_edges::table
                 .filter(decision_edges::from_node_id.eq(from_id))
                 .filter(decision_edges::to_node_id.eq(to_id)),
         )
         .execute(&mut conn)?;
+        drop(conn);
 
+        self.tombstone_edges(&doomed);
         Ok(())
     }
 
     /// Delete a node and all its connected edges
     pub fn delete_node(&self, node_id: i32, dry_run: bool) -> Result<DeleteSummary> {
+        self.delete_node_impl(node_id, dry_run, true)
+    }
+
+    fn delete_node_impl(
+        &self,
+        node_id: i32,
+        dry_run: bool,
+        publish: bool,
+    ) -> Result<DeleteSummary> {
         let mut conn = self.get_conn()?;
 
         // Check if node exists
@@ -1780,6 +1946,14 @@ impl Database {
         if dry_run {
             return Ok(summary);
         }
+
+        let doomed_edges: Vec<DecisionEdge> = decision_edges::table
+            .filter(
+                decision_edges::from_node_id
+                    .eq(node_id)
+                    .or(decision_edges::to_node_id.eq(node_id)),
+            )
+            .load(&mut conn)?;
 
         // Delete in order to respect foreign key constraints:
 
@@ -1819,6 +1993,16 @@ impl Database {
         // 5. Finally delete the node itself
         diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
             .execute(&mut conn)?;
+        drop(conn);
+
+        if publish {
+            if let Some(store) = &self.store {
+                if let Err(e) = store.tombstone_node(&node) {
+                    Self::store_warn("could not write node tombstone", e);
+                }
+            }
+            self.tombstone_edges(&doomed_edges);
+        }
 
         Ok(summary)
     }
@@ -1834,7 +2018,9 @@ impl Database {
                 decision_nodes::updated_at.eq(&now),
             ))
             .execute(&mut conn)?;
+        drop(conn);
 
+        self.publish_node_by_id(node_id);
         Ok(())
     }
 
@@ -1869,7 +2055,9 @@ impl Database {
                 decision_nodes::updated_at.eq(&now),
             ))
             .execute(&mut conn)?;
+        drop(conn);
 
+        self.publish_node_by_id(node_id);
         Ok(())
     }
 
@@ -1904,7 +2092,9 @@ impl Database {
                 decision_nodes::updated_at.eq(&now),
             ))
             .execute(&mut conn)?;
+        drop(conn);
 
+        self.publish_node_by_id(node_id);
         Ok(())
     }
 
@@ -2771,7 +2961,9 @@ impl Database {
             "last_insert_rowid()",
         ))
         .first(&mut conn)?;
+        drop(conn);
 
+        self.publish_theme_by_id(id);
         Ok(id)
     }
 
@@ -2808,11 +3000,26 @@ impl Database {
             .optional()?;
 
         if let Some(theme) = theme {
+            let tagged: Vec<NodeTheme> = node_themes::table
+                .filter(node_themes::theme_id.eq(theme.id))
+                .load(&mut conn)?;
             // Delete junction entries first
             diesel::delete(node_themes::table.filter(node_themes::theme_id.eq(theme.id)))
                 .execute(&mut conn)?;
             // Delete theme
             diesel::delete(themes::table.filter(themes::id.eq(theme.id))).execute(&mut conn)?;
+            drop(conn);
+
+            if let Some(store) = &self.store {
+                for t in &tagged {
+                    if let Ok(Some(node)) = self.get_node(t.node_id) {
+                        self.tombstone_tag(&node.change_id, &theme.change_id);
+                    }
+                }
+                if let Err(e) = store.tombstone_theme(&theme) {
+                    Self::store_warn("could not write theme tombstone", e);
+                }
+            }
             Ok(true)
         } else {
             Ok(false)
@@ -2846,7 +3053,9 @@ impl Database {
         diesel::insert_or_ignore_into(node_themes::table)
             .values(&new_nt)
             .execute(&mut conn)?;
+        drop(conn);
 
+        self.publish_tag(node_id, theme.id);
         Ok(())
     }
 
@@ -2862,6 +3071,12 @@ impl Database {
                     .filter(node_themes::theme_id.eq(theme.id)),
             )
             .execute(&mut conn)?;
+            drop(conn);
+            if deleted > 0 {
+                if let Ok(Some(node)) = self.get_node(node_id) {
+                    self.tombstone_tag(&node.change_id, &theme.change_id);
+                }
+            }
             Ok(deleted > 0)
         } else {
             Ok(false)
@@ -2881,6 +3096,10 @@ impl Database {
             )
             .set(node_themes::source.eq("manual"))
             .execute(&mut conn)?;
+            drop(conn);
+            if updated > 0 {
+                self.publish_tag(node_id, theme.id);
+            }
             Ok(updated > 0)
         } else {
             Ok(false)
@@ -3879,107 +4098,39 @@ mod tests {
     }
 
     // ------------------------------------------------------------------
-    // rebuild_from_state (events rebuild reconciliation)
+    // resolve_node_ref
     // ------------------------------------------------------------------
 
-    fn rebuild_test_db() -> (tempfile::TempDir, Database) {
+    #[test]
+    fn test_resolve_node_ref_accepts_ids_and_change_id_prefixes() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
-        (dir, db)
-    }
+        let a = db.create_node("goal", "A", None, None, None).unwrap();
+        let b = db.create_node("goal", "B", None, None, None).unwrap();
+        let a_cid = db.get_node(a).unwrap().unwrap().change_id;
 
-    fn add_node_event(change_id: &str, title: &str) -> crate::events::Event {
-        crate::events::Event::AddNode {
-            change_id: change_id.to_string(),
-            node_type: "goal".to_string(),
-            title: title.to_string(),
-            description: None,
-            status: "pending".to_string(),
-            metadata_json: None,
-            timestamp: chrono::Utc::now(),
-            author: "test".to_string(),
-        }
-    }
+        assert_eq!(db.resolve_node_ref(&a.to_string()).unwrap(), a);
+        assert_eq!(db.resolve_node_ref(&format!("#{}", b)).unwrap(), b);
+        assert_eq!(db.resolve_node_ref(&a_cid).unwrap(), a);
+        assert_eq!(db.resolve_node_ref(&a_cid[..8]).unwrap(), a);
 
-    fn update_node_event(
-        change_id: &str,
-        title: Option<&str>,
-        description: Option<&str>,
-        status: Option<&str>,
-        metadata_json: Option<&str>,
-    ) -> crate::events::Event {
-        crate::events::Event::UpdateNode {
-            change_id: change_id.to_string(),
-            title: title.map(String::from),
-            description: description.map(String::from),
-            status: status.map(String::from),
-            metadata_json: metadata_json.map(String::from),
-            timestamp: chrono::Utc::now(),
-            author: "test".to_string(),
-        }
-    }
-
-    fn delete_node_event(change_id: &str) -> crate::events::Event {
-        crate::events::Event::DeleteNode {
-            change_id: change_id.to_string(),
-            timestamp: chrono::Utc::now(),
-            author: "test".to_string(),
-        }
-    }
-
-    fn add_edge_event(from: &str, to: &str, edge_type: &str) -> crate::events::Event {
-        crate::events::Event::AddEdge {
-            edge_id: crate::events::generate_edge_id(from, to, edge_type),
-            from_change_id: from.to_string(),
-            to_change_id: to.to_string(),
-            edge_type: edge_type.to_string(),
-            rationale: None,
-            timestamp: chrono::Utc::now(),
-            author: "test".to_string(),
-        }
-    }
-
-    fn delete_edge_event(from: &str, to: &str, edge_type: &str) -> crate::events::Event {
-        crate::events::Event::DeleteEdge {
-            edge_id: crate::events::generate_edge_id(from, to, edge_type),
-            timestamp: chrono::Utc::now(),
-            author: "test".to_string(),
-        }
-    }
-
-    /// Regression: a status transition recorded as an UpdateNode event must
-    /// survive a rebuild into a fresh database (was: every node came back
-    /// "pending" because rebuild only replayed node creation).
-    #[test]
-    fn test_rebuild_applies_status_transitions() {
-        let (_dir, db) = rebuild_test_db();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "Ship the feature"));
-        state.apply(&update_node_event(
-            "node-1",
-            None,
-            None,
-            Some("completed"),
-            None,
-        ));
-
-        let result = db.rebuild_from_state(&state, false).unwrap();
-
-        assert_eq!(result.nodes_created, 1);
-        let nodes = db.get_all_nodes().unwrap();
-        assert_eq!(nodes.len(), 1);
-        assert_eq!(nodes[0].status, "completed");
+        let err = db.resolve_node_ref("zz").unwrap_err().to_string();
+        assert!(err.contains("not a node id"), "{err}");
+        let err = db
+            .resolve_node_ref("ffffffff-0000")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("No node"), "{err}");
     }
 
     #[test]
-    fn test_rebuild_updates_existing_node() {
-        let (_dir, db) = rebuild_test_db();
-
+    fn test_resolve_node_ref_reports_ambiguity() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
         db.create_node_with_change_id(
-            "node-1",
+            "abcd1111-x",
             "goal",
-            "Old title",
+            "One",
             None,
             None,
             None,
@@ -3988,212 +4139,21 @@ mod tests {
             None,
         )
         .unwrap();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "Old title"));
-        state.apply(&update_node_event(
-            "node-1",
-            Some("New title"),
-            None,
-            Some("completed"),
-            None,
-        ));
-
-        let result = db.rebuild_from_state(&state, false).unwrap();
-
-        assert_eq!(result.nodes_created, 0);
-        assert_eq!(result.nodes_updated, 1);
-        let nodes = db.get_all_nodes().unwrap();
-        assert_eq!(nodes.len(), 1, "must update in place, not duplicate");
-        assert_eq!(nodes[0].title, "New title");
-        assert_eq!(nodes[0].status, "completed");
-    }
-
-    #[test]
-    fn test_rebuild_preserves_fields_verbatim() {
-        let (_dir, db) = rebuild_test_db();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "Title"));
-        state.apply(&update_node_event(
-            "node-1",
-            None,
-            Some("A description"),
-            Some("superseded"),
-            Some(r#"{"custom":"value","confidence":90}"#),
-        ));
-
-        db.rebuild_from_state(&state, false).unwrap();
-
-        let nodes = db.get_all_nodes().unwrap();
-        assert_eq!(nodes[0].description.as_deref(), Some("A description"));
-        assert_eq!(nodes[0].status, "superseded");
-        // Raw metadata is preserved, including keys the create path's
-        // field-by-field extraction would have dropped
-        assert_eq!(
-            nodes[0].metadata_json.as_deref(),
-            Some(r#"{"custom":"value","confidence":90}"#)
-        );
-    }
-
-    #[test]
-    fn test_rebuild_applies_node_deletions() {
-        let (_dir, db) = rebuild_test_db();
-
         db.create_node_with_change_id(
-            "node-1", "goal", "Doomed", None, None, None, None, None, None,
+            "abcd2222-y",
+            "goal",
+            "Two",
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
         )
         .unwrap();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "Doomed"));
-        state.apply(&delete_node_event("node-1"));
-
-        let result = db.rebuild_from_state(&state, false).unwrap();
-
-        assert_eq!(result.nodes_deleted, 1);
-        assert!(db.get_all_nodes().unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_rebuild_applies_edge_changes() {
-        let (_dir, db) = rebuild_test_db();
-
-        let a = db
-            .create_node_with_change_id("a", "goal", "A", None, None, None, None, None, None)
-            .unwrap();
-        let b = db
-            .create_node_with_change_id("b", "action", "B", None, None, None, None, None, None)
-            .unwrap();
-        db.create_edge(a, b, "leads_to", None).unwrap();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("a", "A"));
-        state.apply(&add_node_event("b", "B"));
-        state.apply(&add_node_event("c", "C"));
-        state.apply(&add_edge_event("a", "b", "leads_to"));
-        state.apply(&delete_edge_event("a", "b", "leads_to"));
-        state.apply(&add_edge_event("b", "c", "leads_to"));
-
-        let result = db.rebuild_from_state(&state, false).unwrap();
-
-        assert_eq!(result.edges_deleted, 1);
-        assert_eq!(result.edges_created, 1);
-        let edges = db.get_all_edges().unwrap();
-        assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].from_change_id.as_deref(), Some("b"));
-        assert_eq!(edges[0].to_change_id.as_deref(), Some("c"));
-    }
-
-    #[test]
-    fn test_rebuild_dry_run_does_not_mutate() {
-        let (_dir, db) = rebuild_test_db();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "One"));
-        state.apply(&add_node_event("node-2", "Two"));
-        state.apply(&add_edge_event("node-1", "node-2", "leads_to"));
-
-        let result = db.rebuild_from_state(&state, true).unwrap();
-
-        assert_eq!(result.nodes_created, 2);
-        assert_eq!(result.edges_created, 1);
-        assert!(db.get_all_nodes().unwrap().is_empty());
-        assert!(db.get_all_edges().unwrap().is_empty());
-    }
-
-    #[test]
-    fn test_rebuild_deletes_only_tombstoned_parallel_edge() {
-        // Two edges between the same node pair with different types; only one
-        // is tombstoned. The sibling must survive (edge deletion is keyed on
-        // (from, to, edge_type), not just the node pair).
-        let (_dir, db) = rebuild_test_db();
-
-        let a = db
-            .create_node_with_change_id("a", "goal", "A", None, None, None, None, None, None)
-            .unwrap();
-        let b = db
-            .create_node_with_change_id("b", "action", "B", None, None, None, None, None, None)
-            .unwrap();
-        db.create_edge(a, b, "leads_to", None).unwrap();
-        db.create_edge(a, b, "blocks", None).unwrap();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("a", "A"));
-        state.apply(&add_node_event("b", "B"));
-        state.apply(&add_edge_event("a", "b", "leads_to"));
-        state.apply(&add_edge_event("a", "b", "blocks"));
-        state.apply(&delete_edge_event("a", "b", "leads_to"));
-
-        let dry = db.rebuild_from_state(&state, true).unwrap();
-        let real = db.rebuild_from_state(&state, false).unwrap();
-
-        assert_eq!(dry.edges_deleted, real.edges_deleted);
-        assert_eq!(dry.edges_created, real.edges_created);
-        assert_eq!(real.edges_deleted, 1);
-        assert_eq!(real.edges_created, 0);
-
-        let edges = db.get_all_edges().unwrap();
-        assert_eq!(edges.len(), 1, "the non-tombstoned sibling must survive");
-        assert_eq!(edges[0].edge_type, "blocks");
-    }
-
-    #[test]
-    fn test_rebuild_dry_run_counts_match_real_run_for_deleted_targets() {
-        // An edge whose target node is tombstoned must be reported as
-        // unresolvable in BOTH dry-run and real runs (dry-run used to count
-        // it as created because the doomed node still existed locally)
-        let (_dir, db) = rebuild_test_db();
-
-        db.create_node_with_change_id("node-1", "goal", "One", None, None, None, None, None, None)
-            .unwrap();
-        db.create_node_with_change_id("node-2", "goal", "Two", None, None, None, None, None, None)
-            .unwrap();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "One"));
-        state.apply(&add_node_event("node-2", "Two"));
-        state.apply(&add_edge_event("node-1", "node-2", "leads_to"));
-        state.apply(&delete_node_event("node-2"));
-
-        let dry = db.rebuild_from_state(&state, true).unwrap();
-        let real = db.rebuild_from_state(&state, false).unwrap();
-
-        assert_eq!(dry.nodes_deleted, real.nodes_deleted);
-        assert_eq!(dry.edges_created, real.edges_created);
-        assert_eq!(dry.edges_failed, real.edges_failed);
-        assert_eq!(real.edges_failed, 1);
-        assert_eq!(real.edges_created, 0);
-    }
-
-    #[test]
-    fn test_rebuild_is_idempotent() {
-        let (_dir, db) = rebuild_test_db();
-
-        let mut state = crate::events::MaterializedState::default();
-        state.apply(&add_node_event("node-1", "One"));
-        state.apply(&add_node_event("node-2", "Two"));
-        state.apply(&update_node_event(
-            "node-1",
-            None,
-            None,
-            Some("completed"),
-            None,
-        ));
-        state.apply(&add_edge_event("node-1", "node-2", "leads_to"));
-
-        let first = db.rebuild_from_state(&state, false).unwrap();
-        assert_eq!(first.nodes_created, 2);
-        assert_eq!(first.edges_created, 1);
-
-        let second = db.rebuild_from_state(&state, false).unwrap();
-        assert_eq!(second.nodes_created, 0);
-        assert_eq!(second.nodes_updated, 0);
-        assert_eq!(second.nodes_deleted, 0);
-        assert_eq!(second.edges_created, 0);
-        assert_eq!(second.edges_deleted, 0);
-
-        assert_eq!(db.get_all_nodes().unwrap().len(), 2);
-        assert_eq!(db.get_all_edges().unwrap().len(), 1);
+        let err = db.resolve_node_ref("abcd").unwrap_err().to_string();
+        assert!(err.contains("several"), "{err}");
+        assert!(err.contains("One") && err.contains("Two"), "{err}");
+        assert_eq!(db.resolve_node_ref("abcd1").unwrap(), 1);
     }
 }
