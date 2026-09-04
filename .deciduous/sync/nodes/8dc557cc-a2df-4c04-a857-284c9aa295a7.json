@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8dc557cc-a2df-4c04-a857-284c9aa295a7",
+  "created_at": "2026-05-06T21:31:59.691208-04:00",
+  "description": "Added MCP Server feature card to the feature grid on deciduous.dev landing page. Shows a Claude Desktop demo of querying the decision graph via MCP tools (search_nodes + trace_chain). Badged 'New in v0.14'. Links to full docs at mcp.html.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "docs/index.html"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "MCP highlighted on landing page as Feature 7",
+  "updated_at": "2026-05-06T21:31:59.691208-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "218c53e9-3623-4969-a2b4-763b85092c55",
+  "created_at": "2025-12-12T03:41:25.379796-05:00",
+  "metadata": {
+    "branch": "feature/git-history-export",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Created 7 chapters: Intro, Hello World, Workflows, Viewing, Sharing, Advanced, Reference",
+  "updated_at": "2025-12-12T03:41:25.379796-05:00"
+}

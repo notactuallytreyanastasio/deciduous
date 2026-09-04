@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5aa8b839-d8fe-47fd-87e5-1a6ed7975409",
+  "created_at": "2025-12-12T17:23:01.029686-05:00",
+  "metadata": {
+    "branch": "main",
+    "prompt": "User asked to look through the decision tree and choices we made for our recent types unification work, then make a new branch and begin working on a new approach formed in my thoughts instead of Claude Opus's"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Types Unification (New Approach)",
+  "updated_at": "2025-12-12T17:23:01.029686-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "999fe22b-b4f9-4c96-ae1d-27f9decf54cd",
+  "created_at": "2025-12-05T23:32:44.048844-05:00",
+  "metadata": {
+    "commit": "d8e8e938ee3d9420b777864ed1c74c98528759e2",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fixed WASM 404 on prod - Jekyll needed explicit 'include: wasm' in _config.yml",
+  "updated_at": "2025-12-12T09:22:08.070926-05:00"
+}

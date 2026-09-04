@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3f46129c-f8be-4851-8293-6d85dbe32e6b",
+  "created_at": "2025-12-05T21:56:51.778490-05:00",
+  "node_type": "decision",
+  "status": "pending",
+  "title": "WASM UI overhaul: match native serve UI exactly with tabs, sidebar, charts, encoding chain",
+  "updated_at": "2025-12-05T21:56:51.778490-05:00"
+}

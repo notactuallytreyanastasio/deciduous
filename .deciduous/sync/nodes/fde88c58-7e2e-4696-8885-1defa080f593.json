@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "fde88c58-7e2e-4696-8885-1defa080f593",
+  "created_at": "2025-12-12T09:29:05.887080-05:00",
+  "metadata": {
+    "branch": "feature/retroactive-commit-association",
+    "confidence": 95,
+    "prompt": "User asked to implement the roadmap item about spelunking history and retroactively linking commits"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Implement retroactive commit association for decision graph",
+  "updated_at": "2025-12-12T09:29:05.887080-05:00"
+}

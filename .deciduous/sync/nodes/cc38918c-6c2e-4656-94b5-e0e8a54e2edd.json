@@ -1,0 +1,24 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "cc38918c-6c2e-4656-94b5-e0e8a54e2edd",
+  "created_at": "2026-04-07T21:44:14.826435-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85,
+    "files": [
+      "CLAUDE.md",
+      ".claude/commands/decision.md",
+      ".claude/commands/decision-graph.md",
+      ".claude/commands/document.md",
+      ".opencode/command/decision.md",
+      ".opencode/command/decision-graph.md",
+      ".opencode/command/document.md",
+      ".opencode/agents/deciduous.md",
+      "docs/CONCEPTS.md"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update all instruction and command files for observation title+description",
+  "updated_at": "2026-04-07T21:44:14.826435-04:00"
+}

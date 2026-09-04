@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-18T01:47:43.220973-04:00",
+  "edge_id": "e3d9f76e1aecdd6bf84c",
+  "edge_type": "leads_to",
+  "from_change_id": "95e875d0-b486-4a9c-b12a-b4ca763ff338",
+  "rationale": "git_guard deletion succeeded",
+  "to_change_id": "30c6b946-2099-4dec-a6c8-d46476c98441",
+  "weight": 1.0
+}

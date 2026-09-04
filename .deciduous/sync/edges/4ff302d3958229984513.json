@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-04T01:37:41.151366-05:00",
+  "edge_id": "4ff302d3958229984513",
+  "edge_type": "leads_to",
+  "from_change_id": "92662c2c-7fbb-48da-bb53-d28a64e27651",
+  "rationale": "chose OTP release locally, Burrito for CI",
+  "to_change_id": "60ae59de-ecee-4108-91b9-28ae05ae677e",
+  "weight": 1.0
+}

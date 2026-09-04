@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "cfdfcb9b-0eba-469d-a21e-173c0fd96e53",
+  "created_at": "2026-05-06T21:05:03.900587-04:00",
+  "description": "4 new tools: start_session, end_session, get_session, list_sessions. McpServer struct carries active_session_id. Nodes created via add_node auto-associate with active session. Each cowork/chat conversation gets its own scoped decision tree. 106 MCP tests, 270 total.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "src/mcp/mod.rs",
+      "src/mcp/tools.rs",
+      "src/db.rs"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Session lifecycle complete - conversations get their own decision trees",
+  "updated_at": "2026-05-06T21:05:03.900587-04:00"
+}

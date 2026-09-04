@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bfc37ff9-dfc6-4ab3-9f78-b7eb409ee7bf",
+  "created_at": "2026-03-04T01:29:23.398218-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "OTP release eval command doesn't start application tree - Ecto.Repo.Registry not available",
+  "updated_at": "2026-03-04T01:29:23.398218-05:00"
+}

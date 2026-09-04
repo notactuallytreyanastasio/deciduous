@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f3e643b7-e225-43b5-b2fc-2a0d0f8d517d",
+  "created_at": "2025-12-10T13:54:44.798331-05:00",
+  "metadata": {
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Windsurf setup now has: Always On rules, model-triggered context recovery, auto-retrieved memories",
+  "updated_at": "2025-12-10T13:54:44.798331-05:00"
+}

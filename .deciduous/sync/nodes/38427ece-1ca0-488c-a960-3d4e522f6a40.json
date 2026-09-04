@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "38427ece-1ca0-488c-a960-3d4e522f6a40",
+  "created_at": "2025-12-12T00:15:26.098370-05:00",
+  "metadata": {
+    "branch": "feature/type-unification-tui-web",
+    "confidence": 95,
+    "files": [
+      "web/src/types/graph.ts"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update TypeScript types to match Rust",
+  "updated_at": "2025-12-12T00:15:26.098370-05:00"
+}

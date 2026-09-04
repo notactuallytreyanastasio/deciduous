@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1395fb7d-31ff-43db-8e1d-d014a2fcb0be",
+  "created_at": "2026-01-12T11:59:24.647929-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "2bf92d7",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Released v0.9.2 with revisit node type",
+  "updated_at": "2026-01-12T11:59:24.647929-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T18:45:18.921713-05:00",
+  "edge_id": "972634cefdf7288329a7",
+  "edge_type": "leads_to",
+  "from_change_id": "8040b5e5-68fc-42b2-b103-85d74aaa0968",
+  "rationale": "Need to decide between two approaches",
+  "to_change_id": "97588e66-ff74-4464-b9ab-1dc6e25b69f5",
+  "weight": 1.0
+}

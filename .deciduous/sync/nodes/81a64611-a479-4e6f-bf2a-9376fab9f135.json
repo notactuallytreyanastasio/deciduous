@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "81a64611-a479-4e6f-bf2a-9376fab9f135",
+  "created_at": "2025-12-12T09:29:14.708323-05:00",
+  "metadata": {
+    "branch": "feature/retroactive-commit-association",
+    "commit": "17e9045",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Linked 35 nodes to commits, increased coverage from 31 to 66 nodes",
+  "updated_at": "2025-12-12T09:29:14.708323-05:00"
+}

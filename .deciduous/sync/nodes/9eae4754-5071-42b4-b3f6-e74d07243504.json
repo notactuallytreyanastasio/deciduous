@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9eae4754-5071-42b4-b3f6-e74d07243504",
+  "created_at": "2025-12-18T18:38:18.338076-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 95
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Architecture: Thin shell wrappers that call deciduous git-guard check <command> (CHOSEN)",
+  "updated_at": "2025-12-18T18:38:18.338076-05:00"
+}

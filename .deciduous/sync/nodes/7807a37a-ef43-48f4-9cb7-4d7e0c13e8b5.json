@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7807a37a-ef43-48f4-9cb7-4d7e0c13e8b5",
+  "created_at": "2026-01-12T22:40:09.899857-05:00",
+  "description": "Final parallelism design: work-stealing with depth-first traversal, stack-based job distribution, minimal locking. Scales well to many cores.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Efficient parallel directory traversal with minimal synchronization",
+  "updated_at": "2026-01-12T22:40:09.899857-05:00"
+}

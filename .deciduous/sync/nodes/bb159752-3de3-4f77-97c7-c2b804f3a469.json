@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bb159752-3de3-4f77-97c7-c2b804f3a469",
+  "created_at": "2025-12-11T18:17:25.493506-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 95,
+    "prompt": "User requested comprehensive maintenance PR: embody functional core/imperative shell, embrace TEA architecture, audit Rust anti-patterns, check for panics, memory safety, missing tests, rethink types, create bite-sized testable functions"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Maintenance PR: Functional Core, TEA, Rust Best Practices",
+  "updated_at": "2025-12-11T18:17:25.493506-05:00"
+}

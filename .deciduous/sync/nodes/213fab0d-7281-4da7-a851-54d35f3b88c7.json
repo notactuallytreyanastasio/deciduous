@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "213fab0d-7281-4da7-a851-54d35f3b88c7",
+  "created_at": "2025-12-12T17:42:28.244316-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "prompt": "Fix the validation script failure caused by ts-rs generating single-line structs"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fix validation script for single-line type definitions",
+  "updated_at": "2025-12-12T17:42:28.244316-05:00"
+}

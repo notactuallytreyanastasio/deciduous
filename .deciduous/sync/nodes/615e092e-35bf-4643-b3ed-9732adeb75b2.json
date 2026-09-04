@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "615e092e-35bf-4643-b3ed-9732adeb75b2",
+  "created_at": "2026-01-05T23:09:34.524290-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "189f4ff",
+    "confidence": 100
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Chain panel search and outcomes-first priority",
+  "updated_at": "2026-01-05T23:09:34.524290-05:00"
+}

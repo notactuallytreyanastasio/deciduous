@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0719baed-d6fe-4ba6-b5a3-e56344977d5f",
+  "created_at": "2025-12-18T21:25:48.547961-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Key-Value: Upsert prevents duplicates - 'set pr_body' always replaces",
+  "updated_at": "2025-12-18T21:25:48.547961-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "436861ec-0e56-46f1-941e-91ffaedf6e0b",
+  "created_at": "2026-01-05T23:13:51.841800-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "0a2e972",
+    "confidence": 100
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add 30-second auto-refresh to web viewer",
+  "updated_at": "2026-01-05T23:13:51.841800-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a71ad00d-ff01-4203-bdbe-af315c986d04",
+  "created_at": "2025-12-11T18:18:45.529242-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Branch confirmed: maintenance/functional-core-tea-refactor",
+  "updated_at": "2025-12-11T18:18:45.529242-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "74a225d0-d313-4d02-a616-cb02d78c9638",
+  "created_at": "2026-01-09T17:36:11.619153-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 100,
+    "prompt": "Feature complete and verified working.\n\nNew CLI commands:\n```\n$ deciduous unlink --help\nRemove an edge between two nodes\n\nUsage: deciduous unlink <FROM> <TO>\n\nArguments:\n  <FROM>  Source node ID\n  <TO>    Target node ID\n\n$ deciduous delete --help  \nDelete a node and all its connected edges\n\nUsage: deciduous delete [OPTIONS] <ID>\n\nArguments:\n  <ID>  Node ID to delete\n\nOptions:\n      --dry-run  Show what would be deleted without actually deleting\n```\n\nFiles modified:\n- src/main.rs: +53 lines (command definitions + handlers)\n- src/db.rs: +127 lines (DeleteSummary struct + delete_edge + delete_node)\n- src/lib.rs: +2 lines (export DeleteSummary)\n\nExample usage:\n```bash\n# Remove edge from node 5 to node 12\n$ deciduous unlink 5 12\nRemoved edge (5 -> 12)\n\n# Preview what deleting node 42 would do\n$ deciduous delete 42 --dry-run\nDry run: Would delete node 42 (Some goal title) with 3 edge(s)\n\n# Actually delete the node\n$ deciduous delete 42\nDeleted node 42 (Some goal title) and 3 edge(s)\n\n# Error case - edge doesn't exist\n$ deciduous unlink 5 99\nError: No edge from node 5 to node 99. Node 5 has edges to: 12, 15, 18\n\n# Error case - node doesn't exist\n$ deciduous delete 9999\nError: Node 9999 does not exist. Run 'deciduous nodes' to see existing nodes.\n```\n\nStatus: READY FOR COMMIT\nChanges are staged and tested. 204 tests pass. Binary built."
+  },
+  "node_type": "outcome",
+  "status": "completed",
+  "title": "Delete and Unlink commands implemented and working",
+  "updated_at": "2026-01-09T17:43:50.779730-05:00"
+}

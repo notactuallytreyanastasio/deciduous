@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a9815ae3-ef46-4ee2-a3f1-49393221a063",
+  "created_at": "2025-12-19T15:52:44.895933-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90,
+    "prompt": "User reported Claude Code session hanging. Investigation revealed:\n- Session f35c7c15 stuck for 21+ min with stop_reason: null\n- API started streaming but stopped mid-stream\n- No timeout triggered - client waits indefinitely\n- PID has CLOSED TCP connections but process still waiting\nNeed to find where streaming logic lives and add idle timeout."
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Investigate Claude Code streaming timeout issue - sessions hang when API responses stall mid-stream",
+  "updated_at": "2025-12-19T15:52:44.895933-05:00"
+}

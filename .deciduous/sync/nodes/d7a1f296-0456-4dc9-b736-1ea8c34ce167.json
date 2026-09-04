@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d7a1f296-0456-4dc9-b736-1ea8c34ce167",
+  "created_at": "2026-03-05T08:29:31.562349Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Workers not registering and shell lost on navigation between terminal/dashboard",
+  "updated_at": "2026-03-05T08:29:31.562349Z"
+}

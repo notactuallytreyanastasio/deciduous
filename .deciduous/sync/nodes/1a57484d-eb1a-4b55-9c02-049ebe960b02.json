@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1a57484d-eb1a-4b55-9c02-049ebe960b02",
+  "created_at": "2025-12-16T23:18:03.167145-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 90,
+    "files": [
+      "web/src/components/CalloutLines.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add keyboard navigation for callout cards (j/k, arrows, g/G, Enter)",
+  "updated_at": "2025-12-16T23:18:03.167145-05:00"
+}

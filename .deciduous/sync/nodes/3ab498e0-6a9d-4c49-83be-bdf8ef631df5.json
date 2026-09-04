@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3ab498e0-6a9d-4c49-83be-bdf8ef631df5",
+  "created_at": "2026-05-06T21:58:03.946358-04:00",
+  "description": "Both pages now use the same design language as index.html: centered .narrow container, .top-nav, .session-demo terminal windows with traffic-light dots for all examples. Tutorial page has real I/O in terminal demos. API ref uses tool-card grid matching the homepage's node-type cards.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "docs/mcp.html",
+      "docs/mcp-api.html"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "MCP docs match homepage aesthetic - terminal demos, centered layout, no sidebar",
+  "updated_at": "2026-05-06T21:58:03.946358-04:00"
+}

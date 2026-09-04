@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+  "created_at": "2025-12-17T17:41:29.468961-05:00",
+  "metadata": {
+    "branch": "feature/viewer-ui-improvements",
+    "confidence": 90,
+    "prompt": "This is starting to look good.\n\nJust to give an experiment\n\nmake a branch\n\nthen we are gonna look at this\n\n1. The mini map shouldnt overlay...make it be collapsible and make it so that its out of the way of that right hand side\n\n2. The right hand side list should be scrollable\n\n3. If you click an \"Action\" \"Observation\" \"Goal\" \"Outcome\" or \"Option\" node badge in the list it will open the modal for just that one record and snap to it on the graph\n\n4. Make the bottom left menu taller actually maybe even resizeable defaulting to 50% height\n\n5. Add a node filtering option....let us hide nodes not of a certain type and then draw generic lines that \"average\" the path from the child nodes being skipped from that higher level piece to another, so like if its 5 goals it goes goal to goal with a line but its generalized by traversing the nodes inside to see if they are really \"connected\"\n\n6. move jump to chain to the top bar to the right of the chain addition/subtraction buttons and make the legend tinier and have it hover very top center"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Web viewer UI improvements - minimap, filtering, layout",
+  "updated_at": "2025-12-17T17:41:29.468961-05:00"
+}

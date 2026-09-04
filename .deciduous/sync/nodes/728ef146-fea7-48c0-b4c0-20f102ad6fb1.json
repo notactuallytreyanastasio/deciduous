@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "728ef146-fea7-48c0-b4c0-20f102ad6fb1",
+  "created_at": "2025-12-10T13:53:56.353912-05:00",
+  "metadata": {
+    "commit": "78640eb0e3e250e15dc20c0c95a7b09a11b9cd2d",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Improved Windsurf rules with proper triggers and memories",
+  "updated_at": "2025-12-12T09:22:08.044347-05:00"
+}

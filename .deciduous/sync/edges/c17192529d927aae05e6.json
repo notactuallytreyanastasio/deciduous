@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-06T22:20:43.996705-05:00",
+  "edge_id": "c17192529d927aae05e6",
+  "edge_type": "leads_to",
+  "from_change_id": "de547fee-b3a9-4c7a-ab3e-63503d4ac94c",
+  "rationale": "Commit e0670c0 pushed to main",
+  "to_change_id": "165a54f5-e60d-432b-8fb9-e7882453b0ef",
+  "weight": 1.0
+}

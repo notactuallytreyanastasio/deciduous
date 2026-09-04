@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "74e828e6-0f96-4c73-8c77-6ee8d9e73985",
+  "created_at": "2025-12-05T17:11:18.722242-05:00",
+  "description": "Measures correlation between adjacent bands. Cliff = sudden drop >0.25. Works with existing FFT data structure",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Approach B detects cliff via decorrelation",
+  "updated_at": "2025-12-05T17:11:18.722242-05:00"
+}

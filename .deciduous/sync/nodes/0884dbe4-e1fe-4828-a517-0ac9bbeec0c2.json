@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0884dbe4-e1fe-4828-a517-0ac9bbeec0c2",
+  "created_at": "2016-09-30T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How should glob/ignore code be organized?",
+  "updated_at": "2016-09-30T00:00:00-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "07a7ab26-a27d-4dc1-990e-68f27ab2b0a7",
+  "created_at": "2025-12-15T02:48:32.153656-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Adding OpenCode editor support section to tutorial",
+  "updated_at": "2025-12-15T02:48:32.153656-05:00"
+}

@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4da8eb10-b429-4934-834e-3947e0ddb432",
+  "created_at": "2026-03-18T07:58:47.959379-04:00",
+  "metadata": {
+    "branch": "cleanup-phase2",
+    "confidence": 85,
+    "files": [
+      "src/main.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Analyzing main.rs command structure for extraction",
+  "updated_at": "2026-03-18T07:58:47.959379-04:00"
+}

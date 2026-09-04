@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "814c1ab0-ada1-45d1-a129-3bfccf259013",
+  "created_at": "2026-03-04T01:38:02.793071-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "OTP release eval doesn't start app tree - must Application.ensure_all_started",
+  "updated_at": "2026-03-04T01:38:02.793071-05:00"
+}

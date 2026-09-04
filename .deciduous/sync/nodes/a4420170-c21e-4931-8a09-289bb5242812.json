@@ -1,0 +1,15 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a4420170-c21e-4931-8a09-289bb5242812",
+  "created_at": "2025-12-15T22:53:18.989675-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "093ebce",
+    "confidence": 95,
+    "prompt": "PR #118: Check include_config flag, skip regeneration, print Preserved message"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement git-history preservation for external repos",
+  "updated_at": "2025-12-15T22:53:18.989675-05:00"
+}

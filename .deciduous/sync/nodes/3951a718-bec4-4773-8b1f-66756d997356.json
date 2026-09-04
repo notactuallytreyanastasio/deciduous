@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3951a718-bec4-4773-8b1f-66756d997356",
+  "created_at": "2026-03-18T01:44:28.866801-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90,
+    "files": [
+      "src/diff.rs",
+      "src/main.rs",
+      "src/lib.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Deleting diff.rs and removing Diff command from main.rs and lib.rs",
+  "updated_at": "2026-03-18T01:44:28.866801-04:00"
+}

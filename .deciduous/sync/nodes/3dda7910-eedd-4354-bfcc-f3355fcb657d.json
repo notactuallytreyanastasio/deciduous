@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3dda7910-eedd-4354-bfcc-f3355fcb657d",
+  "created_at": "2026-02-05T15:17:13.139072-05:00",
+  "metadata": {
+    "branch": "feature/event-log-sync",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Design event log data structures and module",
+  "updated_at": "2026-02-05T15:17:13.139072-05:00"
+}

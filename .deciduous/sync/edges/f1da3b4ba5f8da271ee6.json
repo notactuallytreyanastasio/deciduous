@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-05-06T12:38:58.596133-04:00",
+  "edge_id": "f1da3b4ba5f8da271ee6",
+  "edge_type": "leads_to",
+  "from_change_id": "a8c2430b-e6d1-480e-9931-6e83a744a920",
+  "rationale": "Approach B: CLI wrapper",
+  "to_change_id": "7b72ec57-3192-48ab-9582-4acb703f3bf1",
+  "weight": 1.0
+}

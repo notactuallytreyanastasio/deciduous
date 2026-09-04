@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-10T18:02:38.512831-05:00",
+  "edge_id": "f12af8b113f6927cc12a",
+  "edge_type": "leads_to",
+  "from_change_id": "86ac5dda-9ba1-4049-8d67-d1a6ba59cda8",
+  "rationale": "Goal achieved - multi-user sync system working",
+  "to_change_id": "5f03f1d8-1c44-4280-9957-9ef8b2648480",
+  "weight": 1.0
+}

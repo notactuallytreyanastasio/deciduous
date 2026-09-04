@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "267ac2e0-ebec-4d20-8064-668792908a51",
+  "created_at": "2025-12-11T01:22:14.628807-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Syntax highlighting working for commit modal and file preview",
+  "updated_at": "2025-12-11T01:22:14.628807-05:00"
+}

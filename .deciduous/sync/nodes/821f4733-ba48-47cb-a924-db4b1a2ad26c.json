@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "821f4733-ba48-47cb-a924-db4b1a2ad26c",
+  "created_at": "2026-03-05T07:50:56.033009Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 95,
+    "prompt": "Build a multi-agent coordination system where each worker (Claude CLI session) has:\n1. Their own root GOAL node - each session starts with a goal\n2. Hierarchical tree view - expandable tree showing TYPE, CONF, ID, TITLE columns\n3. Nodeset sharing via PubSub - coders receive lead's nodeset on startup\n4. Conflict detection - workers check for overlaps in modules/functions/tests before acting"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Multi-Agent Coordination with Hierarchical Decision Trees",
+  "updated_at": "2026-03-05T07:50:56.033009Z"
+}

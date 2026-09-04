@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f7c80d60-c2a8-46e1-8f26-285a68a9277f",
+  "created_at": "2025-12-12T17:32:17.299924-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Validation script now auto-generates types",
+  "updated_at": "2025-12-12T17:32:17.299924-05:00"
+}

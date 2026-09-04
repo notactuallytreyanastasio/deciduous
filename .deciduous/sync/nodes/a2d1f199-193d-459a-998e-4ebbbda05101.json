@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a2d1f199-193d-459a-998e-4ebbbda05101",
+  "created_at": "2026-01-12T22:39:00.509729-05:00",
+  "description": "Despite the general switch away from mmap, testing revealed they are still significantly faster when searching a small number of files.\n\nSources:\n- ca058d7: 'I thought plain read had usurped them, but when searching a very small number of files, mmaps can be around 20% faster on Linux. It would be really unfortunate to leave that on the table.'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Mmap still 20% faster for single-file searches on Linux",
+  "updated_at": "2026-01-12T22:39:00.509729-05:00"
+}

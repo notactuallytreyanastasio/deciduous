@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-04T02:15:29.579913-05:00",
+  "edge_id": "60ec6e7e9a604f789dfe",
+  "edge_type": "leads_to",
+  "from_change_id": "8e23c3a3-c990-43e1-97e2-6969c0dac41a",
+  "rationale": "custom checks enforce idiomatic patterns CI won't let regress",
+  "to_change_id": "ca4172e7-497f-4e19-8355-8c24669c50a6",
+  "weight": 1.0
+}

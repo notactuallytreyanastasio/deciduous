@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "97af4eb2-6be9-4b76-abed-c3938c91226c",
+  "created_at": "2025-12-10T17:48:58.106355-05:00",
+  "metadata": {
+    "branch": "feature/multi-user-graph-sync",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "jj (Jujutsu) uses change IDs vs commit IDs - change IDs are stable across rebases",
+  "updated_at": "2025-12-10T17:48:58.106355-05:00"
+}

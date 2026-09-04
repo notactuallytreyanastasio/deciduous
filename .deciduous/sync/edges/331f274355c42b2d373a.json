@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T03:41:35.836843-05:00",
+  "edge_id": "331f274355c42b2d373a",
+  "edge_type": "leads_to",
+  "from_change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+  "rationale": "Implemented chapter structure",
+  "to_change_id": "218c53e9-3623-4969-a2b4-763b85092c55",
+  "weight": 1.0
+}

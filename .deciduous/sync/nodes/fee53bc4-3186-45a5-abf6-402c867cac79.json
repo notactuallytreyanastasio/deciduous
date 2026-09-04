@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "fee53bc4-3186-45a5-abf6-402c867cac79",
+  "created_at": "2025-12-05T17:11:17.381479-05:00",
+  "description": "Need to find -20dB point in each FFT window, track frequency, calc std dev. Adds complexity but gives strong signal for variance",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Approach A requires per-window cutoff detection",
+  "updated_at": "2025-12-05T17:11:17.381479-05:00"
+}

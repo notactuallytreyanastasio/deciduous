@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "583db535-977d-4d6e-9f7a-d661146e9fee",
+  "created_at": "2016-11-20T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Create termcolor/wincolor crates - ANSI direct, Windows console API",
+  "updated_at": "2016-11-20T00:00:00-05:00"
+}

@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8216fa00-9289-4325-af8c-c1047d736cb0",
+  "created_at": "2026-01-05T19:22:17.777496-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "f2ff01c",
+    "confidence": 100,
+    "files": [
+      "src/init.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Prefixed slash commands with deciduous namespace",
+  "updated_at": "2026-01-05T19:22:17.777496-05:00"
+}

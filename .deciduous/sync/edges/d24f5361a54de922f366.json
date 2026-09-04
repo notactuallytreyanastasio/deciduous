@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-18T11:46:38.131373-04:00",
+  "edge_id": "d24f5361a54de922f366",
+  "edge_type": "leads_to",
+  "from_change_id": "4209f75b-bb15-4c38-a3ac-51ed25e9ad99",
+  "rationale": "rejected: Elixir already has ExUnit, less interesting",
+  "to_change_id": "0eb14df1-58a9-417b-98b2-68bdfcab23ab",
+  "weight": 1.0
+}

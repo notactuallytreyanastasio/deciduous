@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "221fd6c4-c381-4fa3-b56e-ee315ca03da8",
+  "created_at": "2026-09-02T19:11:09.763752-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Root causes of the live breakage: setPointerCapture retargets pointerup to the svg so e.target.closest('.decl') never matched; search only outlined hits under focus dimming. Also found by tests: empty confidence field sent 0; stale toast raced panel re-render in e2e",
+  "updated_at": "2026-09-02T19:11:09.763752-04:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-16T23:20:45.735595-05:00",
+  "edge_id": "fa5cf4b568f804f25523",
+  "edge_type": "leads_to",
+  "from_change_id": "e5b5e9ca-8d47-4c4c-b43c-c79bb4698180",
+  "rationale": "Global shortcuts for UX",
+  "to_change_id": "bbf622d9-bc3f-43a0-b203-3c7a17cd0477",
+  "weight": 1.0
+}

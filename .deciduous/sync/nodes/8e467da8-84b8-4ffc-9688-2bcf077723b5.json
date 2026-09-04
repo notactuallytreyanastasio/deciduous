@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8e467da8-84b8-4ffc-9688-2bcf077723b5",
+  "created_at": "2026-01-09T17:36:02.739476-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "files": [
+      "src/main.rs"
+    ],
+    "prompt": "Added command handlers to src/main.rs match statement (lines 628-660):\n\nLocation: After Link handler, before Status handler\nPattern: Follows existing error handling with colored output\n\nUnlink handler (lines 628-634):\n```rust\nCommand::Unlink { from, to } => match db.delete_edge(from, to) {\n    Ok(()) => println!(\"{} edge ({} -> {})\", \"Removed\".red(), from, to),\n    Err(e) => {\n        eprintln!(\"{} {}\", \"Error:\".red(), e);\n        std::process::exit(1);\n    }\n},\n```\n\nDelete handler (lines 636-660):\n```rust\nCommand::Delete { id, dry_run } => match db.delete_node(id, dry_run) {\n    Ok(summary) => {\n        if dry_run {\n            println!(\n                \"{} Would delete node {} ({}) with {} edge(s)\",\n                \"Dry run:\".yellow(),\n                id,\n                summary.node_title,\n                summary.edges_deleted\n            );\n        } else {\n            println!(\n                \"{} node {} ({}) and {} edge(s)\",\n                \"Deleted\".red(),\n                id,\n                summary.node_title,\n                summary.edges_deleted\n            );\n        }\n    }\n    Err(e) => {\n        eprintln!(\"{} {}\", \"Error:\".red(), e);\n        std::process::exit(1);\n    }\n},\n```\n\nOutput color choices:\n- \"Removed\".red() / \"Deleted\".red() - destructive actions in red\n- \"Dry run:\".yellow() - warning/preview in yellow\n- Matches existing \"Created\".green() / \"Updated\".green() pattern"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add command handlers for Unlink and Delete",
+  "updated_at": "2026-01-09T17:43:28.942686-05:00"
+}

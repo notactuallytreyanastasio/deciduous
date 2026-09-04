@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T17:11:33.926400-05:00",
+  "edge_id": "5730baf913c17cf3b45d",
+  "edge_type": "leads_to",
+  "from_change_id": "5fd7c49e-d1bd-4283-a44d-8f41ba8884b6",
+  "rationale": "Option B - CFCC approach",
+  "to_change_id": "b47d20a6-ad2e-4dd7-b917-3f9b7cada4c3",
+  "weight": 1.0
+}

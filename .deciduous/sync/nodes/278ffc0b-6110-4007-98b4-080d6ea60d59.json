@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "278ffc0b-6110-4007-98b4-080d6ea60d59",
+  "created_at": "2025-12-12T17:32:31.020289-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update web/src/types/graph.ts to use generated types",
+  "updated_at": "2025-12-12T17:32:31.020289-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ecc4a8e5-2df2-4d4c-a664-f58020e3f0cf",
+  "created_at": "2025-12-19T10:13:07.958086-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "We want to get the PR jamesbrink:feature/claude-trace good to merge and cut a minor release.\nIt will need a rebase\nInstruct how to check out what it adds for after merge\nget it right, merge, cut release and publish to cargo"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Merge PR #160 and release v0.9.0",
+  "updated_at": "2025-12-19T10:13:07.958086-05:00"
+}

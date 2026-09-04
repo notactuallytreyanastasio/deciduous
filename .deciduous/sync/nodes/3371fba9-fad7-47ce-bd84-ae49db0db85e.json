@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3371fba9-fad7-47ce-bd84-ae49db0db85e",
+  "created_at": "2025-12-16T23:48:34.375970-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 85,
+    "files": [
+      "web/src/components/CalloutLines.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement node-type hierarchy sorting and limit callout cards to entry points",
+  "updated_at": "2025-12-16T23:48:34.375970-05:00"
+}

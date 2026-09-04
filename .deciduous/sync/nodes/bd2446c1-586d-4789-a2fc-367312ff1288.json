@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bd2446c1-586d-4789-a2fc-367312ff1288",
+  "created_at": "2026-01-05T19:21:57.520808-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "13983e4",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added interactive trace linking and span navigation",
+  "updated_at": "2026-01-05T19:21:57.520808-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d436e424-c08b-4499-823b-6b83704efb7c",
+  "created_at": "2026-02-21T02:35:14.355034-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Tutorial content updates complete - 18 sidebar navs, multi-user-sync removed, brew install fixed, Q&A-first exploring page, Claude-driven narratives, revisit nodes added, recovery advice added, nav chain verified",
+  "updated_at": "2026-02-21T02:35:14.355034-05:00"
+}

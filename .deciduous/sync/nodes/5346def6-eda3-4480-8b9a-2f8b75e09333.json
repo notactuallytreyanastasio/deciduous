@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5346def6-eda3-4480-8b9a-2f8b75e09333",
+  "created_at": "2025-12-12T03:14:59.597735-05:00",
+  "metadata": {
+    "branch": "feature/git-history-export",
+    "commit": "7e3156c",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "DagView modal now shows commit messages",
+  "updated_at": "2025-12-12T03:14:59.597735-05:00"
+}

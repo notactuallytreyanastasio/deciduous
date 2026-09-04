@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T18:34:39.692225-05:00",
+  "edge_id": "1b75e7065c9b22524234",
+  "edge_type": "leads_to",
+  "from_change_id": "91123c48-8a4f-453e-9f61-180ceed407cc",
+  "rationale": "Need to decide hook implementation language",
+  "to_change_id": "f9da5529-5c50-47c6-bb64-329482c7205c",
+  "weight": 1.0
+}

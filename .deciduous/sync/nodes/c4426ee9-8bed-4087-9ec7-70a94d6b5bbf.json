@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c4426ee9-8bed-4087-9ec7-70a94d6b5bbf",
+  "created_at": "2025-12-13T18:50:35.926904-05:00",
+  "metadata": {
+    "branch": "feat/roadmap-board-system",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Phase 4+5 complete: CLI commands with sync engine implemented",
+  "updated_at": "2025-12-13T18:50:35.926904-05:00"
+}

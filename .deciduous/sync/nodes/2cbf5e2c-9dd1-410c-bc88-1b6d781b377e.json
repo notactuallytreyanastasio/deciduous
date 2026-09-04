@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2cbf5e2c-9dd1-410c-bc88-1b6d781b377e",
+  "created_at": "2026-01-06T12:26:42.652212-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "09829ff",
+    "confidence": 100
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Approach A: Side Panel First - details in persistent panel",
+  "updated_at": "2026-01-06T12:26:42.652212-05:00"
+}

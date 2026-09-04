@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T12:39:23.935501-05:00",
+  "edge_id": "8a52a669e92bf88bd427",
+  "edge_type": "leads_to",
+  "from_change_id": "c4304d93-a9b5-4ebb-8cd9-dba5e6164660",
+  "rationale": "Test verifies emoji and special chars don't cause panic",
+  "to_change_id": "f0f3be6d-9077-4496-bb9b-d5bea02b8f7a",
+  "weight": 1.0
+}

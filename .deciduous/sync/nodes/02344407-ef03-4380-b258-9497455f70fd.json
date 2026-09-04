@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "02344407-ef03-4380-b258-9497455f70fd",
+  "created_at": "2026-09-02T17:49:00.836504-04:00",
+  "metadata": {
+    "branch": "worktree-multi-user-sync",
+    "confidence": 85,
+    "files": [
+      "src/db.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Move sync write-through into Database so CLI, MCP, and HTTP API all publish records",
+  "updated_at": "2026-09-02T17:49:00.836504-04:00"
+}

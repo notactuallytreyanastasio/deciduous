@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "cbcb2f77-434b-421d-a81e-4ff068d251f6",
+  "created_at": "2025-12-09T22:10:07.784800-05:00",
+  "metadata": {
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Switched from BrowserRouter to HashRouter for static hosting compatibility",
+  "updated_at": "2025-12-09T22:10:07.784800-05:00"
+}

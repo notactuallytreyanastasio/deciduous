@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2864f656-bbdc-473d-ae79-b28988d8dfff",
+  "created_at": "2026-01-09T17:44:01.054037-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "Key insight during implementation:\n\nThe decision_nodes table has two types of foreign key references:\n\nNON-NULLABLE (must delete the referencing record):\n- decision_edges.from_node_id / to_node_id - edges can't exist without nodes\n- decision_context.node_id - context meaningless without node\n- session_nodes.node_id - junction table, just delete the association\n\nNULLABLE (set to NULL, preserve the record):\n- decision_sessions.root_node_id - session can exist without a root\n- command_log.decision_node_id - command history preserved even if node deleted\n- roadmap_items.outcome_node_id - roadmap item exists independently\n\nThis distinction matters because:\n1. Deleting edges/context/session_nodes is safe and expected\n2. Deleting sessions/commands/roadmap_items would lose important data\n3. Setting to NULL preserves the record but breaks the link\n\nThe implementation handles this correctly:\n- diesel::delete() for non-nullable references\n- diesel::update().set(column.eq::<Option<i32>>(None)) for nullable"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Foreign key handling: nullable vs non-nullable references",
+  "updated_at": "2026-01-09T17:44:01.054037-05:00"
+}

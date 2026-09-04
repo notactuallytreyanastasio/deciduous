@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e65ec808-1308-49b7-88fc-7321cdc064fe",
+  "created_at": "2026-03-05T07:56:01.263218Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update dashboard_live.ex with per-worker tree views",
+  "updated_at": "2026-03-05T07:56:01.263218Z"
+}

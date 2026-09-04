@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5669e106-2f3a-44d3-8ff2-4bcfe1d3fb8e",
+  "created_at": "2026-03-06T22:37:03.659270-05:00",
+  "metadata": {
+    "branch": "terminal-style-agent-streams",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Both projects compile, 189 tests pass, 4 new inject_feedback tests added",
+  "updated_at": "2026-03-06T22:37:03.659270-05:00"
+}

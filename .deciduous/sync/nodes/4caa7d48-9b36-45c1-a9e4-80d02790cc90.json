@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4caa7d48-9b36-45c1-a9e4-80d02790cc90",
+  "created_at": "2026-07-09T23:19:54.133658-04:00",
+  "description": "Chosen because findings overlap files across domains (query.rs, main.rs, db.rs) making independent PRs conflict-prone, while a mega-PR is unreviewable. Merge order: 1) CI+lint hygiene, 2) repo hygiene/dead-weight removal, 3) rust-core bug fixes+tests, 4) MCP server fixes+tests, 5) duplication refactor, 6) web viewer fixes+rebuilt embeds, 7) integration tests+docs. No features change, no version bump.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Ship a 7-PR stacked series of behavior-preserving fixes",
+  "updated_at": "2026-07-09T23:19:54.133658-04:00"
+}

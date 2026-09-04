@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "de3de2f2-ee49-4b03-b73a-0865df7b45a8",
+  "created_at": "2025-12-14T12:36:34.743660-05:00",
+  "metadata": {
+    "branch": "feat/web-roadmap-api",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add --skip-completed flag to roadmap sync",
+  "updated_at": "2025-12-14T12:36:34.743660-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "01524fca-4152-496d-9d6a-7d1c0cab5676",
+  "created_at": "2025-12-12T01:19:54.318274-05:00",
+  "metadata": {
+    "branch": "feature/asciinema-demo",
+    "confidence": 80
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "122 columns still too wide for page - needs horizontal scroll or narrower recording",
+  "updated_at": "2025-12-12T01:19:54.318274-05:00"
+}

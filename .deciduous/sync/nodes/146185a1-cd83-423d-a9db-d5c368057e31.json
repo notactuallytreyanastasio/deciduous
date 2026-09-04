@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "146185a1-cd83-423d-a9db-d5c368057e31",
+  "created_at": "2016-10-29T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "globset and ignore crates enable reuse by fd, tokei, and others - Fixes #9, #44, #45",
+  "updated_at": "2016-10-29T00:00:00-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "601cf99b-8193-4b4d-be7c-50a69da44b23",
+  "created_at": "2026-01-10T03:55:51.201570-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "React archaeology: 218 nodes, 330 edges - deep but manual, cherry-picked PRs/issues",
+  "updated_at": "2026-01-10T03:55:51.201570-05:00"
+}

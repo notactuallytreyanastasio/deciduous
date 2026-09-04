@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a75a0a45-01bd-4b82-aef4-17b0846d079d",
+  "created_at": "2025-12-05T23:39:33.674912-05:00",
+  "metadata": {
+    "commit": "5a2ae23",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added commit hash linking to decision graph",
+  "updated_at": "2025-12-05T23:39:33.674912-05:00"
+}

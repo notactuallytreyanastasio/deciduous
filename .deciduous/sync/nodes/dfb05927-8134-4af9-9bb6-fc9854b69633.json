@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dfb05927-8134-4af9-9bb6-fc9854b69633",
+  "created_at": "2025-12-17T14:33:28.475328-05:00",
+  "metadata": {
+    "branch": "feature/configurable-search-sort",
+    "confidence": 90,
+    "prompt": "User reported: panel shows briefly then disappears, panel too big, zoom confusing trackpad vs graph. Fixed by: moving panel outside SVG, smaller width (320px), prevent browser pinch zoom, always fullscreen mode"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fix chain panel and zoom behavior",
+  "updated_at": "2025-12-17T14:33:28.475328-05:00"
+}

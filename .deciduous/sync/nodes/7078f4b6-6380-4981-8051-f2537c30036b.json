@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7078f4b6-6380-4981-8051-f2537c30036b",
+  "created_at": "2025-12-15T18:55:27.927379-05:00",
+  "metadata": {
+    "branch": "feature/graph-explorer-approach-b",
+    "confidence": 85,
+    "prompt": "Building callouts first approach - callout lines for small nodes, visibility tracking, mini-map for off-screen indicators"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Implement Approach B: Callouts First",
+  "updated_at": "2025-12-15T18:55:27.927379-05:00"
+}

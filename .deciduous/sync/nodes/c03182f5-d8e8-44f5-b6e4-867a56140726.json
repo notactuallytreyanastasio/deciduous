@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c03182f5-d8e8-44f5-b6e4-867a56140726",
+  "created_at": "2026-03-18T01:18:08.946820-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Created GitHub issue #185: Remove or radically simplify git_guard",
+  "updated_at": "2026-03-18T01:18:08.946820-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c4bd6b88-59cf-4df9-a3d9-d84f9d1f0f89",
+  "created_at": "2025-12-14T13:06:31.764053-05:00",
+  "metadata": {
+    "branch": "roadmap/5-polish",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "PR chain rebuilt: 5 isolated PRs by layer (#87-#91)",
+  "updated_at": "2025-12-14T13:06:31.764053-05:00"
+}

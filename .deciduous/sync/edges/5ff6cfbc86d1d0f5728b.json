@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-10T03:55:57.590361-05:00",
+  "edge_id": "5ff6cfbc86d1d0f5728b",
+  "edge_type": "leads_to",
+  "from_change_id": "2405dca1-cd13-41ce-abe6-d78ac127d018",
+  "rationale": "Need to decide how the skill executes",
+  "to_change_id": "3f722d67-26bb-41e1-a6b6-3cacde6b9395",
+  "weight": 1.0
+}

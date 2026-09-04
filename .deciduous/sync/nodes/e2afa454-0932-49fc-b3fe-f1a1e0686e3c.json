@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e2afa454-0932-49fc-b3fe-f1a1e0686e3c",
+  "created_at": "2025-12-05T20:22:07.903117-05:00",
+  "description": "index.md, audio-analysis.md, decision-graph.md, claude-tooling.md, story.md",
+  "node_type": "action",
+  "status": "pending",
+  "title": "Created docs/ site structure with Jekyll config and 5 pages",
+  "updated_at": "2025-12-05T20:22:07.903117-05:00"
+}

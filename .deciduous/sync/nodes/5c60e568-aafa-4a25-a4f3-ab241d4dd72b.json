@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+  "created_at": "2025-12-12T03:41:15.395728-05:00",
+  "metadata": {
+    "branch": "feature/git-history-export",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implementing HTML tutorial site with jujutsu-style structure",
+  "updated_at": "2025-12-12T03:41:15.395728-05:00"
+}

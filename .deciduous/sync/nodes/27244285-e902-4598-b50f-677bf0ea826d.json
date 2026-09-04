@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "27244285-e902-4598-b50f-677bf0ea826d",
+  "created_at": "2026-07-09T23:27:41.548044-04:00",
+  "metadata": {
+    "branch": "improve/02-repo-hygiene",
+    "commit": "2dc9194",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "PR2 opened: https://github.com/notactuallytreyanastasio/deciduous/pull/202 - 26.5k deletions, gitignore patch-sharing fixed, fossils removed",
+  "updated_at": "2026-07-09T23:27:41.548044-04:00"
+}

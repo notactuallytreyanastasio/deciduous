@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-12T22:41:30.293109-05:00",
+  "edge_id": "a70f84c382d66b3e7703",
+  "edge_type": "leads_to",
+  "from_change_id": "08dbf01f-c608-4ad2-9ad2-cc264e8fa096",
+  "rationale": "Apply new architecture to CLI",
+  "to_change_id": "08dda13d-4af8-4073-83d0-a5b4f99f5641",
+  "weight": 1.0
+}

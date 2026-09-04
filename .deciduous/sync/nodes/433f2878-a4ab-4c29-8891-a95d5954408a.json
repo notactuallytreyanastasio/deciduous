@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "433f2878-a4ab-4c29-8891-a95d5954408a",
+  "created_at": "2025-12-12T03:41:37.694550-05:00",
+  "metadata": {
+    "branch": "feature/git-history-export",
+    "confidence": 95,
+    "prompt": "User asked: add AI generated warning banner on every page"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added AI-generated warning banner to all 23 tutorial pages",
+  "updated_at": "2025-12-12T03:41:37.694550-05:00"
+}

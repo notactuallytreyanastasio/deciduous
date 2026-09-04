@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "634597bd-36fa-4173-97b2-eb818d6b6f04",
+  "created_at": "2026-01-12T22:43:47.762771-05:00",
+  "description": "Initial ripgrep used Docopt - declarative, simple, but later revealed performance issues.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 70
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Started with Docopt for argument parsing",
+  "updated_at": "2026-01-12T22:43:47.762771-05:00"
+}

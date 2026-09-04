@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ff1e6fca-9f3e-49c4-a111-e7ba8c8943c8",
+  "created_at": "2026-03-07T00:03:47.279630-05:00",
+  "metadata": {
+    "branch": "terminal-style-agent-streams",
+    "confidence": 88
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "product_manager_deciduous graph adapter had drifted from deciduous edge types and bundled paths",
+  "updated_at": "2026-03-07T00:03:47.279630-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3bdb9047-ba72-4a29-94e5-0b88b11b61c7",
+  "created_at": "2025-12-11T18:19:49.558125-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Key Issues Found: 1) app.rs mixes I/O (git commands) with state, 2) 57 .clone() calls, 3) writeln!().unwrap() pattern in export.rs, 4) event handling returns bool but mutates state, 5) no unit tests for app.rs/events.rs/ui.rs",
+  "updated_at": "2025-12-11T18:19:49.558125-05:00"
+}

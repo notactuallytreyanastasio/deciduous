@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c2c7c5ee-38e4-4c68-a7ae-4c34cf4e22a4",
+  "created_at": "2026-07-10T08:30:41.228732-04:00",
+  "metadata": {
+    "branch": "improve/06-web-viewer",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "PR7: integration tests for init/doc/themes/tag/migrate, CHANGELOG backfill 0.4.0-0.15.0, bindings drift CI check",
+  "updated_at": "2026-07-10T08:30:41.228732-04:00"
+}

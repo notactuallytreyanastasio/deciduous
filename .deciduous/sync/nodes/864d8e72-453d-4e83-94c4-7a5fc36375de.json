@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "864d8e72-453d-4e83-94c4-7a5fc36375de",
+  "created_at": "2016-09-11T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "2b943ed",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Make file type filtering faster - use single regex with giant alternation instead of RegexSet",
+  "updated_at": "2016-09-11T00:00:00-04:00"
+}

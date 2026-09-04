@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T12:09:06.563897-05:00",
+  "edge_id": "44fe695933d7556d674f",
+  "edge_type": "leads_to",
+  "from_change_id": "277591df-ec9f-42fa-8ea0-bc0911cb9251",
+  "rationale": "Architecture planning",
+  "to_change_id": "3206ef49-7e93-4deb-a1b6-25175c51ae86",
+  "weight": 1.0
+}

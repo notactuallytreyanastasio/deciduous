@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f97829a6-247e-4d52-a209-ede9ee542c10",
+  "created_at": "2025-12-14T12:36:34.782425-05:00",
+  "metadata": {
+    "branch": "feat/web-roadmap-api",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Roadmap sync now writes issue metadata to ROADMAP.md and prevents duplicates",
+  "updated_at": "2025-12-14T12:36:34.782425-05:00"
+}

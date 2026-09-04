@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2c3f51ea-3da0-4924-9685-5c8de4f7236f",
+  "created_at": "2025-09-19T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Glob/ignore crates: mature ecosystem components reused by fd, tokei, ripgrep and many others",
+  "updated_at": "2025-09-19T00:00:00-04:00"
+}

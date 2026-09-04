@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0fecb269-f030-42a0-a70d-3888be0e9333",
+  "created_at": "2025-12-15T10:22:51.804918-05:00",
+  "metadata": {
+    "branch": "landing-page-refresh",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Removing emojis from view cards",
+  "updated_at": "2025-12-15T10:22:51.804918-05:00"
+}

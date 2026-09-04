@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "646caede-0819-480c-9331-0faa0c210c4b",
+  "created_at": "2016-09-01T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Output modes: JSON, vimgrep, stats formats",
+  "updated_at": "2016-09-01T00:00:00-04:00"
+}

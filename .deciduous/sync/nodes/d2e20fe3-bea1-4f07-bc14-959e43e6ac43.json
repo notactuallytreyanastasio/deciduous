@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d2e20fe3-bea1-4f07-bc14-959e43e6ac43",
+  "created_at": "2026-05-06T12:40:11.596718-04:00",
+  "description": "Imperative shell: stdin reader, JSON-RPC dispatch, stdout writer. Add 'deciduous mcp' subcommand. Initialize/tools_list/tools_call lifecycle.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 85,
+    "files": [
+      "src/mcp/mod.rs",
+      "src/main.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Wire server loop and CLI subcommand (mod.rs + main.rs)",
+  "updated_at": "2026-05-06T12:40:11.596718-04:00"
+}

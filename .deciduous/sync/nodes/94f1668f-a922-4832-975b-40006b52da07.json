@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "94f1668f-a922-4832-975b-40006b52da07",
+  "created_at": "2025-12-10T15:31:41.829555-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "f4d268e23ebd8b2010cf36bda11870287a6532d0",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Implemented branch-scoped decision graphs",
+  "updated_at": "2025-12-12T09:22:08.054542-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f98f06e9-b487-47f1-8377-54dee5922eef",
+  "created_at": "2025-12-17T17:43:38.207820-05:00",
+  "metadata": {
+    "branch": "feature/viewer-ui-improvements",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Minimap is now collapsible and positioned in bottom-left",
+  "updated_at": "2025-12-17T17:43:38.207820-05:00"
+}

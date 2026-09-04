@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T03:04:35.267577-05:00",
+  "edge_id": "d85cf188bb2adf7b1c33",
+  "edge_type": "leads_to",
+  "from_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+  "rationale": "Core philosophy expansion",
+  "to_change_id": "1dbda898-98f3-4e2e-8af1-59f0b80e6dba",
+  "weight": 1.0
+}

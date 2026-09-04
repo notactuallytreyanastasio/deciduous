@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "70e867ba-0dc5-48ef-8613-c75e9d24229d",
+  "created_at": "2026-01-09T17:35:45.921089-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "files": [
+      "src/main.rs"
+    ],
+    "prompt": "Added command variants to src/main.rs Command enum (lines 93-110):\n\nLocation: After Link command, before Status command\nPattern: Follows existing command structure with clap derive macros\n\nCode added:\n```rust\n/// Remove an edge between two nodes\nUnlink {\n    /// Source node ID\n    from: i32,\n\n    /// Target node ID\n    to: i32,\n},\n\n/// Delete a node and all its connected edges\nDelete {\n    /// Node ID to delete\n    id: i32,\n\n    /// Show what would be deleted without actually deleting\n    #[arg(long)]\n    dry_run: bool,\n},\n```\n\nDesign decisions in this code:\n- Unlink mirrors Link's from/to signature (not edge ID) for consistency\n- Delete takes single node ID (matches show, status commands)\n- dry_run is --dry-run flag (long only, no short) to prevent accidental use\n- Doc comments become help text automatically via clap derive"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add Delete and Unlink command variants to Command enum",
+  "updated_at": "2026-01-09T17:43:07.959112-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "39f1f463-2a97-4665-8c13-e49f1d327254",
+  "created_at": "2026-02-04T22:24:38.976072-05:00",
+  "metadata": {
+    "branch": "viz-rethink-v2",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How to structure hierarchical narrative view",
+  "updated_at": "2026-02-04T22:24:38.976072-05:00"
+}

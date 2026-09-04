@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "fb0df161-542d-410f-a926-b246d36ba502",
+  "created_at": "2025-12-12T17:38:50.297372-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 95
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Finalize refactoring",
+  "updated_at": "2025-12-12T17:38:50.297372-05:00"
+}

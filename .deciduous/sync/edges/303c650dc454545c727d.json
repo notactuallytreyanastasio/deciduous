@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-16T23:17:45.303766-05:00",
+  "edge_id": "303c650dc454545c727d",
+  "edge_type": "leads_to",
+  "from_change_id": "e5b5e9ca-8d47-4c4c-b43c-c79bb4698180",
+  "rationale": "Designing approach for hierarchical search",
+  "to_change_id": "3a76efdd-6bbb-4a50-addf-e64497f71414",
+  "weight": 1.0
+}

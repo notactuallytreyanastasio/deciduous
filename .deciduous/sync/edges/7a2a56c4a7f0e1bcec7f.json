@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T00:32:51.564994-05:00",
+  "edge_id": "7a2a56c4a7f0e1bcec7f",
+  "edge_type": "leads_to",
+  "from_change_id": "de478dc1-e40d-472f-81da-2142886607de",
+  "rationale": "Implementation to fix GH Pages stale data",
+  "to_change_id": "808c5ddd-2e6b-4ffa-aa17-3182e8345768",
+  "weight": 1.0
+}

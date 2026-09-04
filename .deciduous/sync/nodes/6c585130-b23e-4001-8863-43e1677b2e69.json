@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6c585130-b23e-4001-8863-43e1677b2e69",
+  "created_at": "2026-03-18T11:46:53.907017-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 65
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Use plain hashes for test cases — simpler, more flexible",
+  "updated_at": "2026-03-18T11:46:53.907017-04:00"
+}

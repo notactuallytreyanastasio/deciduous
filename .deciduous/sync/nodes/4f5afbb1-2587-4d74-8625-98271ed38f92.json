@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4f5afbb1-2587-4d74-8625-98271ed38f92",
+  "created_at": "2026-03-05T07:51:00.562609Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement tree_builder.ex for hierarchical tree structure",
+  "updated_at": "2026-03-05T07:51:00.562609Z"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e5a32675-b261-467e-88b3-edd142f0a54e",
+  "created_at": "2026-03-04T01:38:02.652734-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "SQLite in-memory requires shared cache + pool_size 1 for Ecto tests",
+  "updated_at": "2026-03-04T01:38:02.652734-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f2f82cdb-eab3-4424-a954-d799ca811ce2",
+  "created_at": "2025-12-05T20:30:56.264145-05:00",
+  "description": "Use Web Audio API for decoding, pass PCM to Rust WASM for spectral analysis. More compatible, proven approach",
+  "node_type": "option",
+  "status": "pending",
+  "title": "Hybrid: JS audio decode + Rust FFT in WASM",
+  "updated_at": "2025-12-05T20:30:56.264145-05:00"
+}

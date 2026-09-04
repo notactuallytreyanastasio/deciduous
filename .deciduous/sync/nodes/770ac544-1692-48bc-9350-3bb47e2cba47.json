@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "770ac544-1692-48bc-9350-3bb47e2cba47",
+  "created_at": "2025-12-05T21:35:16.882855-05:00",
+  "metadata": {
+    "commit": "5cd0e092f29416b9c88dfae67b77a548861b4ca5"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Updated CLAUDE.md and context.md with decision graph memory workflow",
+  "updated_at": "2025-12-12T09:22:08.067430-05:00"
+}

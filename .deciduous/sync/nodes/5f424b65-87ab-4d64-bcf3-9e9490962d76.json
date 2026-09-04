@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5f424b65-87ab-4d64-bcf3-9e9490962d76",
+  "created_at": "2026-01-06T17:46:05.595698-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85,
+    "files": [
+      "docs/guide.html"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Enhancing guide page with real-world examples",
+  "updated_at": "2026-01-06T17:46:05.595698-05:00"
+}

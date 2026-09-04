@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T18:38:37.416058-05:00",
+  "edge_id": "e10f2178355f57c6eb3b",
+  "edge_type": "leads_to",
+  "from_change_id": "85b32a7d-7077-41c6-abff-c234db4c200a",
+  "rationale": "Option: Thin wrappers (selected)",
+  "to_change_id": "9eae4754-5071-42b4-b3f6-e74d07243504",
+  "weight": 1.0
+}

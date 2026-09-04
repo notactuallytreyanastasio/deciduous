@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-06T00:27:44.059255-05:00",
+  "edge_id": "f98cebf8d2cb60b375a5",
+  "edge_type": "leads_to",
+  "from_change_id": "17c0e3fb-f0b1-484e-bfd7-b9a3f4de1800",
+  "rationale": "Implemented timeline approach",
+  "to_change_id": "155d3ed1-1469-4608-9586-b0729ccaa24f",
+  "weight": 1.0
+}

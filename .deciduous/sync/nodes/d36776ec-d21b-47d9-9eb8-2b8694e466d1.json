@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d36776ec-d21b-47d9-9eb8-2b8694e466d1",
+  "created_at": "2026-03-05T08:30:06.385565Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fix MultiplexLive to restore PTY sessions on mount",
+  "updated_at": "2026-03-05T08:30:06.385565Z"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "03720124-e066-4934-9b99-aa02aec5a910",
+  "created_at": "2016-09-23T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "What should the custom ignore file be named?",
+  "updated_at": "2016-09-23T00:00:00-04:00"
+}

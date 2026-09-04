@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3201078e-ae96-454b-be04-52fa26ed7184",
+  "created_at": "2026-03-03T23:16:56.037769-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Elixir nodes command reads real SQLite DB, lists 1185 nodes, matches Rust output format",
+  "updated_at": "2026-03-03T23:16:56.037769-05:00"
+}

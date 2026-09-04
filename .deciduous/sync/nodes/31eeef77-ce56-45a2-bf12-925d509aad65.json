@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "31eeef77-ce56-45a2-bf12-925d509aad65",
+  "created_at": "2025-12-15T10:28:38.628755-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90,
+    "prompt": "User wanted stats to link to decision graph"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Adding 'See the Graph' link to stats banner",
+  "updated_at": "2025-12-15T10:28:38.628755-05:00"
+}

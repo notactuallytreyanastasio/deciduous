@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-05-06T21:58:04.036530-04:00",
+  "edge_id": "2d9074d0e444ab416110",
+  "edge_type": "leads_to",
+  "from_change_id": "acbc18fc-184b-42fa-8501-fdefb8e2d924",
+  "rationale": "Aesthetic alignment complete",
+  "to_change_id": "3ab498e0-6a9d-4c49-83be-bdf8ef631df5",
+  "weight": 1.0
+}

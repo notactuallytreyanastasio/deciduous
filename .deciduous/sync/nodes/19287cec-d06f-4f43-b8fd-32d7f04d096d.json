@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "19287cec-d06f-4f43-b8fd-32d7f04d096d",
+  "created_at": "2025-09-19T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "99fe884",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add highlight type support for matching lines",
+  "updated_at": "2025-09-19T00:00:00-04:00"
+}

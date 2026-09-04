@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ac9605e5-f3d0-4573-8165-73896153d9cd",
+  "created_at": "2026-03-04T01:39:29.541502-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "commit": "8ede9fe",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Commit 2: Queries module + 5 CLI commands (nodes, edges, graph, show, commands)",
+  "updated_at": "2026-03-04T01:39:29.541502-05:00"
+}

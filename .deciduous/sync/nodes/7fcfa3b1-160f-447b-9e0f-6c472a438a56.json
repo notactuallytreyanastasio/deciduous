@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7fcfa3b1-160f-447b-9e0f-6c472a438a56",
+  "created_at": "2025-12-15T10:22:53.313443-05:00",
+  "metadata": {
+    "branch": "landing-page-refresh",
+    "confidence": 95,
+    "prompt": "User wanted demo to showcase context recovery value prop"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Starting demo with /context slash command",
+  "updated_at": "2025-12-15T10:22:53.313443-05:00"
+}

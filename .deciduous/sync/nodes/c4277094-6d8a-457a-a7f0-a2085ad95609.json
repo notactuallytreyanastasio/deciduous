@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c4277094-6d8a-457a-a7f0-a2085ad95609",
+  "created_at": "2026-01-05T23:10:37.255192-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "7684137",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "deciduous completion generates bash/zsh/fish completions",
+  "updated_at": "2026-01-05T23:10:37.255192-05:00"
+}

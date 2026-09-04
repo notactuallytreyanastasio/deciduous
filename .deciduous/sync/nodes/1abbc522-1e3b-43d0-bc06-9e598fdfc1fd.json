@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1abbc522-1e3b-43d0-bc06-9e598fdfc1fd",
+  "created_at": "2025-12-16T19:14:25.892480-05:00",
+  "metadata": {
+    "branch": "feature/subagents-roadmap-context-rename",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Successfully rebased and applied context->recover rename to all editors including Codex",
+  "updated_at": "2025-12-16T19:14:25.892480-05:00"
+}

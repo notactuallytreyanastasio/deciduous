@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T10:23:02.804801-05:00",
+  "edge_id": "fddf0264ddbab09ae8a4",
+  "edge_type": "leads_to",
+  "from_change_id": "b0202b78-6622-4a9a-979b-7096292a9fd7",
+  "rationale": "Further refinement of scroll speed",
+  "to_change_id": "9e7aeafb-a2b1-4077-a480-e182da9b27d5",
+  "weight": 1.0
+}

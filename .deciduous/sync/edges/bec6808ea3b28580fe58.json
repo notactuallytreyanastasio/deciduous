@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T22:13:29.685669-05:00",
+  "edge_id": "bec6808ea3b28580fe58",
+  "edge_type": "leads_to",
+  "from_change_id": "77cd96e6-0333-44d3-a65d-1418f44605b9",
+  "rationale": "UI overhaul enables full parity",
+  "to_change_id": "9ac2f5a9-c48f-4366-be12-5e11af3c8b04",
+  "weight": 1.0
+}

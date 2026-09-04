@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "00c72875-7507-4044-84b9-31a5e8adca4b",
+  "created_at": "2025-12-05T17:38:32.899872-05:00",
+  "description": "Used for matching detected cliffs to likely source bitrates",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Known codec cutoffs: 64-96k=10.5-12kHz, 128k=14-16.5kHz, 192k=16.5-18.5kHz, 256k=18-19.5kHz, 320k=19.5-21kHz",
+  "updated_at": "2025-12-05T17:38:32.899872-05:00"
+}

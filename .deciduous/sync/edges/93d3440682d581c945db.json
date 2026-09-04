@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T03:41:23.634057-05:00",
+  "edge_id": "93d3440682d581c945db",
+  "edge_type": "chosen",
+  "from_change_id": "784f4d63-9a15-4d4b-b8a6-d766488408b4",
+  "rationale": "User requested it be part of GH Pages site, matches jujutsu tutorial format",
+  "to_change_id": "5c60e568-aafa-4a25-a4f3-ab241d4dd72b",
+  "weight": 1.0
+}

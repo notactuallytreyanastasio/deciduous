@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bd6d55be-9349-4332-b61f-b2968e2d7f6c",
+  "created_at": "2025-12-18T18:38:52.140490-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Thin wrapper approach: shell script just calls 'deciduous git-guard check' with args, all logic in Rust",
+  "updated_at": "2025-12-18T18:38:52.140490-05:00"
+}

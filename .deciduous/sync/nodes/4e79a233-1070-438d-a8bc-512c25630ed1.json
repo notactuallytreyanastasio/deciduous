@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4e79a233-1070-438d-a8bc-512c25630ed1",
+  "created_at": "2025-12-12T17:40:30.600727-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Need to check if generated types include from_change_id/to_change_id",
+  "updated_at": "2025-12-12T17:40:30.600727-05:00"
+}

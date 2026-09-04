@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a16292f1-842c-4b00-858f-c4da48ccf2a5",
+  "created_at": "2025-12-11T00:29:13.692410-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "2f46078",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "TUI v0.7.0 released with Timeline view, vim navigation, auto-refresh",
+  "updated_at": "2025-12-11T00:29:13.692410-05:00"
+}

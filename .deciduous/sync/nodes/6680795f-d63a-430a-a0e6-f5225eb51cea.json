@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6680795f-d63a-430a-a0e6-f5225eb51cea",
+  "created_at": "2026-03-18T11:58:48.690437-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90
+  },
+  "node_type": "revisit",
+  "status": "pending",
+  "title": "Reconsidering nested hash tree — switching to flat array with path prefixes",
+  "updated_at": "2026-03-18T11:58:48.690437-04:00"
+}

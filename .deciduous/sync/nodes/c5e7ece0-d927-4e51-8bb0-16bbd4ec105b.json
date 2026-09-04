@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c5e7ece0-d927-4e51-8bb0-16bbd4ec105b",
+  "created_at": "2025-12-10T17:51:32.528339-05:00",
+  "metadata": {
+    "branch": "feature/multi-user-graph-sync",
+    "confidence": 90,
+    "files": [
+      "docs/MULTI_USER_SYNC.md"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Design document created: MULTI_USER_SYNC.md",
+  "updated_at": "2025-12-10T17:51:32.528339-05:00"
+}

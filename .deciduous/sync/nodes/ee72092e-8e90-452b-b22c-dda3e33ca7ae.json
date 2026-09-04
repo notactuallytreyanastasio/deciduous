@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ee72092e-8e90-452b-b22c-dda3e33ca7ae",
+  "created_at": "2025-12-18T21:03:28.026033-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-keyval",
+    "confidence": 40
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Extend existing metadata_json column",
+  "updated_at": "2025-12-18T21:03:28.026033-05:00"
+}

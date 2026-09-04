@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "fe64d54d-f57b-48ef-bded-338bea5e6012",
+  "created_at": "2025-12-11T16:34:02.166274-05:00",
+  "metadata": {
+    "branch": "fix/unicode-truncate-panic",
+    "confidence": 95,
+    "files": [
+      "src/diff.rs"
+    ]
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Bug: diff.rs line 193 uses OR - exports edges when either endpoint is in patch, but apply needs both",
+  "updated_at": "2025-12-11T16:34:02.166274-05:00"
+}

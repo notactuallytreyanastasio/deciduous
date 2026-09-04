@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "91324ff9-9d71-4d5b-a52d-1e87e64728e1",
+  "created_at": "2026-01-05T23:13:36.535256-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "0e20a91",
+    "confidence": 100,
+    "files": [
+      ".windsurf/"
+    ]
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add Windsurf editor support",
+  "updated_at": "2026-01-05T23:13:36.535256-05:00"
+}

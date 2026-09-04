@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a9a09706-5bf4-47de-9b50-61d8a724bf48",
+  "created_at": "2026-01-12T22:44:31.945484-05:00",
+  "description": "Result: smaller dependency tree, correct flag accumulation semantics (--type ordering fixed), path for future boolean matching. Master of ripgrep's destiny.\n\nSources:\n- 082245d: 'rg regex-automata -Tlock -ttoml would not return results in Cargo.lock... But with this migration, -ttoml now correctly overrides -Tlock... Fixes #884, Fixes #1648, Fixes #1701, Fixes #1814, Fixes #1966'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Full control over argument parsing with minimal dependencies",
+  "updated_at": "2026-01-12T22:44:31.945484-05:00"
+}

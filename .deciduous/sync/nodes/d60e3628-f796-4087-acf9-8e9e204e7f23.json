@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d60e3628-f796-4087-acf9-8e9e204e7f23",
+  "created_at": "2026-01-05T19:20:53.999280-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "c71aa8d",
+    "confidence": 100,
+    "files": [
+      "web/src/components/AskResponseModal.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added AskResponseModal for Claude interactions in web viewer",
+  "updated_at": "2026-01-05T19:20:53.999280-05:00"
+}

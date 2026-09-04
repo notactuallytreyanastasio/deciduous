@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "fdc62968-1fb3-4302-8e32-e76984dc378e",
+  "created_at": "2025-12-15T02:43:56.586915-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "f2ef1d9",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Main page OG image updated to dark style matching other pages",
+  "updated_at": "2025-12-15T02:43:56.586915-05:00"
+}

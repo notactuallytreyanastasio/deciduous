@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "269ee121-2365-4cc1-9a59-95fe8736e5fb",
+  "created_at": "2018-02-10T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "2d68054",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Support ANSI escape codes in Windows 10 via VT100 mode - preferred over console APIs as its the future",
+  "updated_at": "2018-02-10T00:00:00-05:00"
+}

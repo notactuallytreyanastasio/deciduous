@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T17:43:50.902081-05:00",
+  "edge_id": "15b3b2e3bf7023333b68",
+  "edge_type": "leads_to",
+  "from_change_id": "6158471a-1de7-49d1-92d8-bf3498ae31dc",
+  "rationale": "Fixing pre-commit error",
+  "to_change_id": "40ac9d9e-e6d8-412e-a391-371acf05a5cf",
+  "weight": 1.0
+}

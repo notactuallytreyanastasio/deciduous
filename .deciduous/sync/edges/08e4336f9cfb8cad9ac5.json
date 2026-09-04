@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-06T17:28:29.994058-05:00",
+  "edge_id": "08e4336f9cfb8cad9ac5",
+  "edge_type": "leads_to",
+  "from_change_id": "a7471cd0-b81e-4859-9995-c811e8ea9fe8",
+  "rationale": "Continuation - make hooks available via init",
+  "to_change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+  "weight": 1.0
+}

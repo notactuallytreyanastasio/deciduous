@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "87efe7cb-6d88-4f95-a760-bfaa57435b9b",
+  "created_at": "2025-12-10T17:50:46.768696-05:00",
+  "metadata": {
+    "branch": "feature/multi-user-graph-sync",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Current schema uses auto-increment integer ids - not suitable for multi-user. Need to add change_id UUID column",
+  "updated_at": "2025-12-10T17:50:46.768696-05:00"
+}

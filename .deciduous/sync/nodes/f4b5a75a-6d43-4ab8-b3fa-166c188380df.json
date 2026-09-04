@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f4b5a75a-6d43-4ab8-b3fa-166c188380df",
+  "created_at": "2025-12-15T18:47:12.368270-05:00",
+  "metadata": {
+    "branch": "feature/graph-explorer-approach-a",
+    "confidence": 90,
+    "files": [
+      "web/src/hooks/useNodeVisibility.ts"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Created useNodeVisibility hook",
+  "updated_at": "2025-12-15T18:47:12.368270-05:00"
+}

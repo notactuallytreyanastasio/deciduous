@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "61ee81e0-8fb4-453a-a9e4-291cfcc3486d",
+  "created_at": "2025-12-16T01:10:08.501118-05:00",
+  "metadata": {
+    "branch": "fix-callout-layout",
+    "confidence": 90,
+    "prompt": "User showed screenshot of overlapping callout thumbnails and asked: they should come out to the right hand side and they should not go over top anything, and be a little bigger, make them nice and rich but separated. This feature shouldnt exist on mobile. Think of another way to display the decision results on mobile"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Fix callout card layout in web viewer",
+  "updated_at": "2025-12-16T01:10:08.501118-05:00"
+}

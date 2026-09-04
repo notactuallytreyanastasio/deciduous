@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d87c8714-c67c-48dd-8ae6-f3606fa470f5",
+  "created_at": "2016-02-01T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Color/terminal output: Platform-agnostic colorized output",
+  "updated_at": "2016-02-01T00:00:00-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3cd5a50c-fd59-4213-9cda-4cf6d1050208",
+  "created_at": "2025-12-12T18:00:44.335452-05:00",
+  "metadata": {
+    "branch": "main",
+    "prompt": "Patch release pushed to main with new OpenCode features"
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "v0.8.10 released",
+  "updated_at": "2025-12-12T18:00:44.335452-05:00"
+}

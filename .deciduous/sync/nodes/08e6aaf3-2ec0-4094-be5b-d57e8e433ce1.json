@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "08e6aaf3-2ec0-4094-be5b-d57e8e433ce1",
+  "created_at": "2026-01-12T10:08:53.961297-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 80
+  },
+  "node_type": "revisit",
+  "status": "pending",
+  "title": "Test revisit node",
+  "updated_at": "2026-01-12T10:08:53.961297-05:00"
+}

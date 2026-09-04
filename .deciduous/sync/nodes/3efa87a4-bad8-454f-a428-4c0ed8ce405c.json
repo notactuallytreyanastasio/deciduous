@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3efa87a4-bad8-454f-a428-4c0ed8ce405c",
+  "created_at": "2026-05-06T13:30:43.982980-04:00",
+  "description": "Full tool registry: 6 CRUD, 5 Query, 6 Analysis, 2 Docs, 4 Themes, 3 Export. JSON Schema for all params. Validation, lookup, and dispatch helpers. 17 tests.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "src/mcp/tools.rs"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "tools.rs complete - 26 tools defined, 17 tests passing",
+  "updated_at": "2026-05-06T13:30:43.982980-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8b9ed44a-304a-4455-a206-0e70a93131c0",
+  "created_at": "2026-07-10T08:55:13.990671-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "DB restored: 1,410 nodes, 1,250 edges, zero dangling refs. Graph now has a durable git-tracked copy (.deciduous/sync/checkpoint.json) so events rebuild works from a fresh clone",
+  "updated_at": "2026-07-10T08:55:13.990671-04:00"
+}

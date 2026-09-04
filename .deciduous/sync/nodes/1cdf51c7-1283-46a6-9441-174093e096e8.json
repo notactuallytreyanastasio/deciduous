@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1cdf51c7-1283-46a6-9441-174093e096e8",
+  "created_at": "2026-01-09T17:35:30.106103-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 60,
+    "prompt": "REJECTED: Strict delete (require edges removed first)\n\nWhy this was rejected:\n- User is already frustrated by inability to fix mistakes\n- Adding MORE steps (delete each edge individually) compounds frustration\n- Error message \"cannot delete node with edges\" doesn't help user\n- Would require users to run: deciduous edges | grep <node_id> \n  then delete each edge one by one before deleting the node\n- Against the goal of making mistake correction easy\n\nWhen strict might make sense (but not here):\n- Multi-user systems where cascade could break others' work\n- Audit requirements where every deletion must be explicit\n- Complex systems where cascade side effects are non-obvious\n\nFor deciduous (single-user local tool), cascade is clearly better UX."
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Strict delete: require all edges removed before node deletion",
+  "updated_at": "2026-01-09T17:42:59.066914-05:00"
+}

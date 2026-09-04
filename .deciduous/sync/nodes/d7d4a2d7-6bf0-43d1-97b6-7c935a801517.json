@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d7d4a2d7-6bf0-43d1-97b6-7c935a801517",
+  "created_at": "2025-12-18T21:06:25.404063-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-attachments",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Choose metadata storage model",
+  "updated_at": "2025-12-18T21:06:25.404063-05:00"
+}

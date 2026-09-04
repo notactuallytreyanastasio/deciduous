@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T02:50:07.831523-05:00",
+  "edge_id": "9acc70be58e9111f0ba6",
+  "edge_type": "leads_to",
+  "from_change_id": "49a619f3-0c2a-4b93-9cd8-4e0757d8e175",
+  "rationale": "Adding OpenCode support",
+  "to_change_id": "07a7ab26-a27d-4dc1-990e-68f27ab2b0a7",
+  "weight": 1.0
+}

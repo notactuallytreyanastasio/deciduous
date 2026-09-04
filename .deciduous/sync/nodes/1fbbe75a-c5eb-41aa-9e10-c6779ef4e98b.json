@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1fbbe75a-c5eb-41aa-9e10-c6779ef4e98b",
+  "created_at": "2026-03-04T01:40:34.240085-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "commit": "f685f98",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Commit 5: Makefile beta targets + OTP release wrapper script",
+  "updated_at": "2026-03-04T01:40:34.240085-05:00"
+}

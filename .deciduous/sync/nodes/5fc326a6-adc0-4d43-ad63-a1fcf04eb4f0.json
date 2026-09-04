@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5fc326a6-adc0-4d43-ad63-a1fcf04eb4f0",
+  "created_at": "2025-12-12T17:38:15.036676-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "TS errors: export type required for isolatedModules",
+  "updated_at": "2025-12-12T17:38:15.036676-05:00"
+}

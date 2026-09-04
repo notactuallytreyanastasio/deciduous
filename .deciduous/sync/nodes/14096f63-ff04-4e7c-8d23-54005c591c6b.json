@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "14096f63-ff04-4e7c-8d23-54005c591c6b",
+  "created_at": "2026-05-06T13:28:29.523110-04:00",
+  "description": "JSON-RPC 2.0 types, MCP initialize/tools/call types, pure constructor helpers, comprehensive test suite. All pure functions, zero IO.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "src/mcp/protocol.rs",
+      "src/mcp/mod.rs",
+      "src/lib.rs"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "protocol.rs complete - 18 tests passing",
+  "updated_at": "2026-05-06T13:28:29.523110-04:00"
+}

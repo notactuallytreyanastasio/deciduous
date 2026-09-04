@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9c81414c-0fca-4559-b233-9954dcd4ca73",
+  "created_at": "2026-01-06T17:25:28.970374-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Show command implemented and tested",
+  "updated_at": "2026-01-06T17:25:28.970374-05:00"
+}

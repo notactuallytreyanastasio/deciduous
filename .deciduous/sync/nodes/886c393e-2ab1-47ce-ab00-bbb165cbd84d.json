@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "886c393e-2ab1-47ce-ab00-bbb165cbd84d",
+  "created_at": "2026-09-02T20:12:46.640173-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Importer bug found while annotating: the HTML check was any '<' so LaTeX statements like i<n were dropped; now detects real tags. Chapter-to-chapter spine links made every late theorem's why chain include all earlier chapters, so chapters hang off the goal only",
+  "updated_at": "2026-09-02T20:12:46.640173-04:00"
+}

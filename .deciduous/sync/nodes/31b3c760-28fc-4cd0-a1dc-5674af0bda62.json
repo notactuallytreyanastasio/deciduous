@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "31b3c760-28fc-4cd0-a1dc-5674af0bda62",
+  "created_at": "2026-09-02T17:33:30.844325-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 80
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add src/lean.rs: import, walk, why, audit + CLI 'deciduous lean'",
+  "updated_at": "2026-09-02T17:33:30.844325-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5e47b88d-2165-492d-9a65-57a5a4fefafd",
+  "created_at": "2026-07-10T08:55:13.965-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Restored graph from docs/graph-data.json export: originals back at ids 1-1394, session nodes renumbered 1400-1419; initialized events sync; committed 1,410-node checkpoint + .gitignore sync negation to PR #202",
+  "updated_at": "2026-07-10T08:55:13.965-04:00"
+}

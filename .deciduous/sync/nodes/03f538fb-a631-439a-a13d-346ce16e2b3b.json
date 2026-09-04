@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "03f538fb-a631-439a-a13d-346ce16e2b3b",
+  "created_at": "2025-12-12T17:43:17.339998-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "prompt": "Fixed script to look in correct files for constants vs structs"
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Validation script fixed and passing",
+  "updated_at": "2025-12-12T17:43:17.339998-05:00"
+}

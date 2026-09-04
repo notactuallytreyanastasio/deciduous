@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8040b5e5-68fc-42b2-b103-85d74aaa0968",
+  "created_at": "2025-12-15T18:45:08.077679-05:00",
+  "metadata": {
+    "branch": "feature/graph-explorer-planning",
+    "confidence": 90,
+    "prompt": "User asked: build out graph explorer with magnifier for small nodes, floating results panel for non-visible matches, focus mode, and lazy loading for large graphs"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Build graph explorer with enhanced search",
+  "updated_at": "2025-12-15T18:45:08.077679-05:00"
+}

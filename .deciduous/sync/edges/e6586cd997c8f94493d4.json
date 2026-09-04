@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T20:18:19.408356-05:00",
+  "edge_id": "e6586cd997c8f94493d4",
+  "edge_type": "leads_to",
+  "from_change_id": "920f748d-339a-491f-9f0c-d0fb5e1f354c",
+  "rationale": "Understanding value proposition",
+  "to_change_id": "f5d01bff-634e-4572-b555-63ff7c7f2311",
+  "weight": 1.0
+}

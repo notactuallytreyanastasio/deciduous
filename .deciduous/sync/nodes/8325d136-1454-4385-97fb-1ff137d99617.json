@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8325d136-1454-4385-97fb-1ff137d99617",
+  "created_at": "2026-01-06T17:28:24.121747-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90,
+    "prompt": "make examples of the hooks and have them prepared to be put in when someone does deciduous init. we also need to make sure that if they are not detected in a project with deciduous already it creates them. \n\nWe also should make a docs \"index\" page that shows all your commands, all the ways we commonly use you (logging things, asking about the DAG itself to learn, actually working through problems with plans and making real decisions) and have it go through a \"real\" exercise like a todo list that keeps getting expanded for that part"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add hook templates to init and create docs index page",
+  "updated_at": "2026-01-06T17:28:24.121747-05:00"
+}

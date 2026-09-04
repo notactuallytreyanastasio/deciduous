@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5a70f981-5f33-43df-a322-15d521a0c2e9",
+  "created_at": "2026-05-06T13:41:15.492092-04:00",
+  "description": "Imperative shell: stdin/stdout JSON-RPC loop. 'deciduous mcp' subcommand added. Initialize/tools_list/tools_call/ping/notifications all working. Full round-trip smoke test with release binary confirmed. 100 MCP tests + 37 existing tests + 1 doctest = 138 total.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "src/mcp/mod.rs",
+      "src/main.rs"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Server loop and CLI integration complete - 100 MCP tests + smoke test passing",
+  "updated_at": "2026-05-06T13:41:15.492092-04:00"
+}

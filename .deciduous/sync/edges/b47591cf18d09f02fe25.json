@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-02-04T22:24:39.609965-05:00",
+  "edge_id": "b47591cf18d09f02fe25",
+  "edge_type": "leads_to",
+  "from_change_id": "8c848515-a0ce-41ee-9d8d-e76591fc5204",
+  "rationale": "Key design decision for viz rethink",
+  "to_change_id": "39f1f463-2a97-4665-8c13-e49f1d327254",
+  "weight": 1.0
+}

@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e814efde-34ee-4368-b799-a36832af746b",
+  "created_at": "2025-12-05T21:50:54.560137-05:00",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Context compaction caused confusion - analyzer IS working. Must always reload graph state after compaction.",
+  "updated_at": "2025-12-05T21:50:54.560137-05:00"
+}

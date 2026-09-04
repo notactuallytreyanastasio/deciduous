@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "97dfddf3-94ea-48db-89c7-cf643fbecc82",
+  "created_at": "2026-01-05T19:16:05.507088-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "9400091",
+    "confidence": 100,
+    "files": [
+      "Cargo.toml"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Bumped version 0.8.21 to 0.8.22",
+  "updated_at": "2026-01-05T19:16:05.507088-05:00"
+}

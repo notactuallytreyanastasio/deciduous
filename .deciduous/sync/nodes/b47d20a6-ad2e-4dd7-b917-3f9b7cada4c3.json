@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b47d20a6-ad2e-4dd7-b917-3f9b7cada4c3",
+  "created_at": "2025-12-05T17:11:03.792233-05:00",
+  "description": "Measure correlation between adjacent frequency bands. MP3=sudden decorrelation at cliff. Tape=gradual decorrelation",
+  "node_type": "option",
+  "status": "pending",
+  "title": "Approach B: Cross-Frequency Coherence (CFCC)",
+  "updated_at": "2025-12-05T17:11:03.792233-05:00"
+}

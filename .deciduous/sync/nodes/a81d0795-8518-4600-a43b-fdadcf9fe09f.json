@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a81d0795-8518-4600-a43b-fdadcf9fe09f",
+  "created_at": "2025-12-15T02:11:00.125916-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Creating story.html standalone page with OG tags",
+  "updated_at": "2025-12-15T02:11:00.125916-05:00"
+}

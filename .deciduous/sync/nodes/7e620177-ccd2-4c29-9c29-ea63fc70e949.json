@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7e620177-ccd2-4c29-9c29-ea63fc70e949",
+  "created_at": "2025-12-11T01:06:12.411733-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "commit": "40894d9",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "'o' key in modals opens file in editor (suspends TUI)",
+  "updated_at": "2025-12-11T01:06:12.411733-05:00"
+}

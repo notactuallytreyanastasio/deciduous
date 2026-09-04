@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "05e31bb0-f548-4c03-9bc8-73ace5e20bff",
+  "created_at": "2025-12-18T21:26:19.509315-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Attachments: Titles provide context - 'PR #105: URL State' vs just 'pr_body'",
+  "updated_at": "2025-12-18T21:26:19.509315-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T22:29:09.732435-05:00",
+  "edge_id": "31d1879b977ed65c28ab",
+  "edge_type": "leads_to",
+  "from_change_id": "b8807727-c03d-4bc4-bf82-033ab57136e1",
+  "rationale": "Implementation of cargo fmt requirement",
+  "to_change_id": "60d47331-67d0-4686-a992-fc03491be5ec",
+  "weight": 1.0
+}

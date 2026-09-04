@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b5f5dffe-2380-4a05-b69b-aa052832e3ad",
+  "created_at": "2026-03-03T23:16:45.339345-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Use mix release - escripts can't bundle NIFs (exqlite), release includes ERTS",
+  "updated_at": "2026-03-03T23:16:45.339345-05:00"
+}

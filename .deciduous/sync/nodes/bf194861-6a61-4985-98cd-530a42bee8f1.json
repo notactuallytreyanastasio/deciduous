@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bf194861-6a61-4985-98cd-530a42bee8f1",
+  "created_at": "2026-01-06T17:50:25.681732-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "c34e3ba",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Guide enhanced with real-world e-commerce scenario",
+  "updated_at": "2026-01-06T17:50:25.681732-05:00"
+}

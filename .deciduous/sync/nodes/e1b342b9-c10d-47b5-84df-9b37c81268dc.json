@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e1b342b9-c10d-47b5-84df-9b37c81268dc",
+  "created_at": "2026-07-10T08:30:41.203722-04:00",
+  "metadata": {
+    "branch": "improve/06-web-viewer",
+    "commit": "4ce3a6c",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "PR6 opened: https://github.com/notactuallytreyanastasio/deciduous/pull/206 - web viewer fixes, 18 vitest tests, npm test/lint repaired, stale init viewer rebuilt",
+  "updated_at": "2026-07-10T08:30:41.203722-04:00"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "91f3a696-25a5-46ba-9ea5-52e62013db4b",
+  "created_at": "2025-12-05T22:37:22.241712-05:00",
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Add decision modal to each feature page showing how that feature came to be - click button, see chain",
+  "updated_at": "2025-12-05T22:37:22.241712-05:00"
+}

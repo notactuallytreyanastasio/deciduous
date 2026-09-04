@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0c92c5bb-dbd5-402b-a756-a92a9fb663fd",
+  "created_at": "2026-01-12T22:39:37.735097-05:00",
+  "description": "Basic approach: threads pull from shared work queue. Requires synchronization on every item.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 70
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Simple thread pool with shared queue",
+  "updated_at": "2026-01-12T22:39:37.735097-05:00"
+}

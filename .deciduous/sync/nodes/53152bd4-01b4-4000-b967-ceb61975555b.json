@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "53152bd4-01b4-4000-b967-ceb61975555b",
+  "created_at": "2026-01-09T17:36:11.531701-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 100,
+    "prompt": "Test results after implementation:\n\n$ cargo test\n   Compiling deciduous v0.8.24\n   Finished `test` profile in 11.04s\n\nRunning unittests src/lib.rs - 174 tests passed\n  - db::tests::* - all database tests pass\n  - export::tests::* - export functionality unaffected\n  - tui::* - TUI tests unaffected\n  - diff::tests::* - patch/sync tests unaffected\n\nRunning unittests src/main.rs - 9 tests passed\n  - keyword matching tests unaffected\n\nRunning tests/cli_integration.rs - 20 tests passed\n  - test_add_and_list_nodes\n  - test_link_nodes  \n  - test_link_nonexistent_nodes\n  - test_update_node_status\n  - etc.\n\nDoc-tests deciduous - 1 test passed\n\nTotal: 204 tests passed, 0 failed\n\nBuild verification:\n$ cargo build --release\n   Compiling deciduous v0.8.24\n   Finished `release` profile [optimized] in 41.07s\n\nBinary size: unchanged (same dependencies)\nNo new warnings from cargo clippy (not run, but no new code patterns that would trigger)\n\nNote: No new tests added for delete/unlink - could be added as follow-up.\nIntegration tests would verify:\n- delete nonexistent node -> helpful error\n- unlink nonexistent edge -> helpful error with suggestions\n- delete node with edges -> cascade works\n- delete --dry-run -> no mutations"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "All 204 tests pass - no regressions from delete/unlink implementation",
+  "updated_at": "2026-01-09T17:43:40.523435-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "19902d09-d3c0-4bb8-8e50-3060e84201cc",
+  "created_at": "2026-07-09T23:19:54.159008-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Analysis findings: clippy gate broken (from_str in mcp/query.rs); UTF-8 panic in nodes truncation (main.rs:1497); unlink emits wrong edge_id breaking multi-user sync of edge deletions; no DB transactions anywhere; resume_session wipes summary and never clears ended_at; JSON-RPC errors return id:null; ~25MB unreferenced binaries at repo root; .gitignore blanket rule breaks patch-sharing; make install references old losselot binary; pages_viewer.html scaffolded by init is 5 releases stale; web TreeRow selection highlight broken; npm test/lint both broken; CHANGELOG stuck at 0.3.5 vs 0.15.0",
+  "updated_at": "2026-07-09T23:19:54.159008-04:00"
+}

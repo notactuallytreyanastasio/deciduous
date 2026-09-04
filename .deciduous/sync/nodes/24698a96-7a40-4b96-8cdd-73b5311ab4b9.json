@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "24698a96-7a40-4b96-8cdd-73b5311ab4b9",
+  "created_at": "2025-12-09T12:53:50.300968-05:00",
+  "metadata": {
+    "commit": "3937619",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Rewrote homepage as standalone HTML - removed Jekyll sidebar, cleaner layout",
+  "updated_at": "2025-12-09T12:53:50.300968-05:00"
+}

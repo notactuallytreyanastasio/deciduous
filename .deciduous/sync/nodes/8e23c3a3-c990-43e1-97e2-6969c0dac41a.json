@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8e23c3a3-c990-43e1-97e2-6969c0dac41a",
+  "created_at": "2026-03-04T02:15:17.880431-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 90
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Use Credo built-in + custom AST checks for case/if nesting",
+  "updated_at": "2026-03-04T02:15:17.880431-05:00"
+}

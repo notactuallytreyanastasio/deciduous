@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4f9f4955-0bd2-4b63-9f1f-d4ed9d7c7e74",
+  "created_at": "2026-01-12T22:45:46.165396-05:00",
+  "description": "Implemented OSC 8 hyperlinks for file paths in output. Users can click to open files directly.\n\nSources:\n- 1a50324: 'printer: add hyperlinks - This commit represents the initial work to get hyperlinks working'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added hyperlink support for terminal output",
+  "updated_at": "2026-01-12T22:45:46.165396-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f7e7c584-567f-4c54-a8db-cb058e28ea10",
+  "created_at": "2025-12-15T02:50:55.378646-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "794136e",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Tutorial updated with OpenCode support and viewer improvements",
+  "updated_at": "2025-12-15T02:50:55.378646-05:00"
+}

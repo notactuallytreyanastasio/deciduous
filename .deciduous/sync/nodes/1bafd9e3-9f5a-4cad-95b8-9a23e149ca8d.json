@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1bafd9e3-9f5a-4cad-95b8-9a23e149ca8d",
+  "created_at": "2026-01-06T17:22:35.067024-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "files": [
+      ".claude/hooks/require-action-node.sh",
+      ".claude/hooks/post-commit-reminder.sh",
+      ".claude/commands/work.md",
+      ".claude/settings.local.json"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implemented PreToolUse and PostToolUse hooks with /work skill",
+  "updated_at": "2026-01-06T17:22:35.067024-05:00"
+}

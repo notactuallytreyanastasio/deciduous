@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e3a73b3d-5812-4920-a6ea-1d5a541ad03f",
+  "created_at": "2025-12-12T01:53:28.879866-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "80c5988",
+    "confidence": 95,
+    "files": [
+      "docs/index.html"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Reorganize landing page sections",
+  "updated_at": "2025-12-12T01:53:28.879866-05:00"
+}

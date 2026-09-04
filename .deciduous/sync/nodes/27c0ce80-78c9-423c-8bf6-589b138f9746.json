@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "27c0ce80-78c9-423c-8bf6-589b138f9746",
+  "created_at": "2025-12-16T01:32:58.799289-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "a2733c9",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Released v0.8.15 to crates.io and GitHub",
+  "updated_at": "2025-12-16T01:32:58.799289-05:00"
+}

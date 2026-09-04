@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T17:58:47.267843-05:00",
+  "edge_id": "4891b3ee695eb676ade6",
+  "edge_type": "leads_to",
+  "from_change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+  "rationale": "Stash restored",
+  "to_change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+  "weight": 1.0
+}

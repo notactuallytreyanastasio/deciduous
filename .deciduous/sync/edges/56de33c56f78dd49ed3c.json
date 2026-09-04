@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T02:26:55.856569-05:00",
+  "edge_id": "56de33c56f78dd49ed3c",
+  "edge_type": "leads_to",
+  "from_change_id": "fcf62642-471a-4521-9b65-b31db7d68679",
+  "rationale": "Rust utilities for TUI",
+  "to_change_id": "d8635b08-e330-416c-a3c3-1f0f34e9c59c",
+  "weight": 1.0
+}

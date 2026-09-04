@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T17:44:28.854751-05:00",
+  "edge_id": "d1f7a141d2db5738cab2",
+  "edge_type": "leads_to",
+  "from_change_id": "6158471a-1de7-49d1-92d8-bf3498ae31dc",
+  "rationale": "Explaining the hook failure",
+  "to_change_id": "9074885f-b165-4597-a881-ed460cc7e20e",
+  "weight": 1.0
+}

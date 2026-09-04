@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "812b8459-60e8-41a5-98bf-d25db2ea2549",
+  "created_at": "2025-12-16T23:17:46.749618-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 90,
+    "files": [
+      "web/src/components/SearchBar.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement hierarchical search grouping in SearchBar",
+  "updated_at": "2025-12-16T23:17:46.749618-05:00"
+}

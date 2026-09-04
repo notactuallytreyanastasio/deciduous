@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "80e50ca2-4afa-448f-835c-765d875b0840",
+  "created_at": "2025-12-09T22:10:15.295988-05:00",
+  "metadata": {
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Runtime detection of localhost vs GitHub Pages determines data source - /api/graph for local, ./graph-data.json for static",
+  "updated_at": "2025-12-09T22:10:15.295988-05:00"
+}

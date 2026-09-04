@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "129c28fa-db2d-4704-b64d-85a5cec85afe",
+  "created_at": "2026-01-06T12:27:43.326326-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "598b370",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added --png flag to writeup for seamless PR graphs",
+  "updated_at": "2026-01-06T12:27:43.326326-05:00"
+}

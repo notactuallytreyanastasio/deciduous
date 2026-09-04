@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1b1d1a65-f74b-46a7-8f2e-f79167895a9e",
+  "created_at": "2026-03-04T11:24:09.246747-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 90,
+    "prompt": "so now lets get to templating, we should get that into elixir using heex too, for all the claude/opencode/windsurf file generation"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Elixir template extraction from Rust",
+  "updated_at": "2026-03-04T11:24:09.246747-05:00"
+}

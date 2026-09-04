@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "27f1b7ef-c1ae-489a-aa8f-1d1a1b341de4",
+  "created_at": "2025-12-12T17:38:42.906228-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Web types fully validated",
+  "updated_at": "2025-12-12T17:38:42.906228-05:00"
+}

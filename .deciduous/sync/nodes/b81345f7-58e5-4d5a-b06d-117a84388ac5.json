@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b81345f7-58e5-4d5a-b06d-117a84388ac5",
+  "created_at": "2026-03-04T01:31:34.336895-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "All 5 Elixir-delegated commands working via OTP release: nodes, edges, show, graph, commands",
+  "updated_at": "2026-03-04T01:31:34.336895-05:00"
+}

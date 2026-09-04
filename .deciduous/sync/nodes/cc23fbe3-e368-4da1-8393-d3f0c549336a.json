@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "cc23fbe3-e368-4da1-8393-d3f0c549336a",
+  "created_at": "2026-09-02T18:54:16.958678-04:00",
+  "description": "Caddy block lives in ~/code/blog/Caddyfile; mount is /opt/deciduous-site:/srv/deciduous:ro in ~/code/blog/docker-compose.yml. The site copy on the host dates from May 13, so a full docs/ rsync would change other pages too; only proof-map/ was pushed.",
+  "metadata": {
+    "branch": "spike-lean-stuff"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "deciduous.dev is a static site: Caddy in the blog repo's compose serves /opt/deciduous-site (a copy of this repo's docs/) at deciduous.dev; deploy is rsync over the hetzner SSH alias. 'deciduous lean import' now accepts the proof guide URL and reads the embedded blueprint-data script.",
+  "updated_at": "2026-09-02T18:54:16.958678-04:00"
+}

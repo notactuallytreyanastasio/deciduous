@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "29695165-478e-4b50-8de4-b87ab683a14d",
+  "created_at": "2026-01-05T23:11:46.491096-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "b84cde4",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "OpenCode editor now supported for deciduous integration",
+  "updated_at": "2026-01-05T23:11:46.491096-05:00"
+}

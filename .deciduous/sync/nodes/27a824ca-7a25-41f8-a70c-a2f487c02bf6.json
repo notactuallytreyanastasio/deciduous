@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "27a824ca-7a25-41f8-a70c-a2f487c02bf6",
+  "created_at": "2026-03-17T19:18:43.868562-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85,
+    "files": [
+      "src/init/templates.rs",
+      ".claude/hooks/version-check.sh"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update shell hook template with always-on + semver messaging",
+  "updated_at": "2026-03-17T19:18:43.868562-04:00"
+}

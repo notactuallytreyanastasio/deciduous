@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "47a0d96e-bb99-45b9-9cbc-40c286ccea6e",
+  "created_at": "2025-12-12T00:15:02.154276-05:00",
+  "metadata": {
+    "branch": "feature/type-unification-tui-web",
+    "confidence": 95,
+    "prompt": "User selected Option C from roadmap: unify types between TUI and Web, then improve web UI based on TUI features"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Type Unification TUI + Web",
+  "updated_at": "2025-12-12T00:15:02.154276-05:00"
+}

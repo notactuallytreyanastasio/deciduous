@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "33f7afc8-17ac-4cdf-8703-142d555aa56b",
+  "created_at": "2025-12-12T17:58:00.746865-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "prompt": "Roadmap and AGENTS.md now included in PR #21"
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Docs merged to refactor branch",
+  "updated_at": "2025-12-12T17:58:00.746865-05:00"
+}

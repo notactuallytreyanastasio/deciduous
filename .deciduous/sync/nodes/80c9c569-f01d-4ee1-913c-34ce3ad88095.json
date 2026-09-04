@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "80c9c569-f01d-4ee1-913c-34ce3ad88095",
+  "created_at": "2026-09-02T17:44:56.287618-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 90,
+    "files": [
+      "src/lean.rs",
+      "src/main.rs",
+      "src/db.rs"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "deciduous lean import/walk/why/audit/list work on Dan's real 188-declaration export: 280 edges, 14 themes, 0.6s, idempotent re-import",
+  "updated_at": "2026-09-02T17:44:56.287618-04:00"
+}

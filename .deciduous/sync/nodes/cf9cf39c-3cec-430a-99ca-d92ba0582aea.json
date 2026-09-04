@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "cf9cf39c-3cec-430a-99ca-d92ba0582aea",
+  "created_at": "2025-12-18T21:27:01.160324-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 70
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "HYBRID: Could have both - meta for single values, attach for collections",
+  "updated_at": "2025-12-18T21:27:01.160324-05:00"
+}

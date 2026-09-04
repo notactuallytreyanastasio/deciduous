@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "12edc0e7-e115-482c-a848-eff582ecbad5",
+  "created_at": "2025-12-05T21:28:39.705888-05:00",
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fixed JSON path references in demo/index.html",
+  "updated_at": "2025-12-05T21:28:39.705888-05:00"
+}

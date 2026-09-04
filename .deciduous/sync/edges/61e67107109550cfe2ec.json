@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-04T01:37:40.993074-05:00",
+  "edge_id": "61e67107109550cfe2ec",
+  "edge_type": "leads_to",
+  "from_change_id": "9d209620-f4ec-405c-aa5a-f0cf379fd44a",
+  "rationale": "chose Ecto over raw exqlite",
+  "to_change_id": "60ae59de-ecee-4108-91b9-28ae05ae677e",
+  "weight": 1.0
+}

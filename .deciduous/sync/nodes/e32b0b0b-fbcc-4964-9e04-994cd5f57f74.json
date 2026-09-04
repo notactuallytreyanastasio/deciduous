@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e32b0b0b-fbcc-4964-9e04-994cd5f57f74",
+  "created_at": "2026-09-02T18:54:16.904266-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 90,
+    "files": [
+      "docs/proof-map/index.html"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Proof map for Conway's refinement live at https://deciduous.dev/proof-map/ (static export, rsynced to /opt/deciduous-site/proof-map on the Hetzner box; also checked into docs/proof-map/index.html)",
+  "updated_at": "2026-09-02T18:54:16.904266-04:00"
+}

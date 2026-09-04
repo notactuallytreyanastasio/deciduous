@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b1711d0e-f1a8-4b73-a484-35f7d31472c8",
+  "created_at": "2025-12-05T17:38:32.892469-05:00",
+  "description": "Cliff threshold >0.25 drop in correlation between adjacent bands",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "CFCC scoring: +25 cfcc_cliff, +15 decorrelation_spike, -15 lofi_safe_natural_rolloff",
+  "updated_at": "2025-12-05T17:38:32.892469-05:00"
+}

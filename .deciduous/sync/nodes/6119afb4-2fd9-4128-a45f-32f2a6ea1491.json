@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6119afb4-2fd9-4128-a45f-32f2a6ea1491",
+  "created_at": "2016-02-01T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 70
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": ".rgignore (tool-specific)",
+  "updated_at": "2016-02-01T00:00:00-05:00"
+}

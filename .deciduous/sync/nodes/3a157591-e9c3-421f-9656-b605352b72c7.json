@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3a157591-e9c3-421f-9656-b605352b72c7",
+  "created_at": "2025-12-18T18:34:53.624572-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 100,
+    "prompt": "User feedback: \"we arent introducing python. Nonstarter.\""
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Python rejected by user - introduces external dependency, not acceptable",
+  "updated_at": "2025-12-18T18:34:53.624572-05:00"
+}

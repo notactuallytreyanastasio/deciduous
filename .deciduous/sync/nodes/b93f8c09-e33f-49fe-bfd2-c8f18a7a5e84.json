@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b93f8c09-e33f-49fe-bfd2-c8f18a7a5e84",
+  "created_at": "2025-12-11T00:49:11.618345-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "confidence": 85
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Use syntect for syntax highlighting (Sublime Text grammars)",
+  "updated_at": "2025-12-11T00:49:11.618345-05:00"
+}

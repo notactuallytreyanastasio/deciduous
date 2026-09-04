@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "01b940b8-c779-43e8-98cc-fedc98e6f576",
+  "created_at": "2025-12-11T01:53:24.311832-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "User prompt: do not just do some half-assed hacked together syntax highlighter based on file type",
+  "updated_at": "2025-12-11T01:53:24.311832-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2095af45-f83d-4876-b281-75910910d1aa",
+  "created_at": "2026-03-05T07:52:29.065581Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement tree_component.ex for LiveView",
+  "updated_at": "2026-03-05T07:52:29.065581Z"
+}

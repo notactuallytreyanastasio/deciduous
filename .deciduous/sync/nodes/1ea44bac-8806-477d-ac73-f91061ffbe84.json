@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1ea44bac-8806-477d-ac73-f91061ffbe84",
+  "created_at": "2025-12-15T22:27:12.084069-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "files": [
+      "src/init.rs",
+      "docs/index.html",
+      "docs/story.html",
+      "web/src/views/StoryView.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Updated /context to /recover across entire codebase",
+  "updated_at": "2025-12-15T22:27:12.084069-05:00"
+}

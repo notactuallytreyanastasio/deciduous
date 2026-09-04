@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T00:16:13.793370-05:00",
+  "edge_id": "bbf5a39a825340478a5e",
+  "edge_type": "leads_to",
+  "from_change_id": "f384c155-f835-4673-820c-e42aaf14c433",
+  "rationale": "CI enforces on PRs",
+  "to_change_id": "47ed69e0-1e9e-4aee-b46f-d44d31510747",
+  "weight": 1.0
+}

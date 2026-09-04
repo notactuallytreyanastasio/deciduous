@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-12T22:39:52.102461-05:00",
+  "edge_id": "45b383d04a48c544f5fb",
+  "edge_type": "leads_to",
+  "from_change_id": "690348fb-c6ee-4c63-84a7-1462aced3993",
+  "rationale": "Parallelism triggered mmap performance discovery",
+  "to_change_id": "28f6b329-41e8-4911-9c0b-fe246cc9cd0c",
+  "weight": 1.0
+}

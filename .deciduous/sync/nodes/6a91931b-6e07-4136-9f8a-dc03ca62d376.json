@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6a91931b-6e07-4136-9f8a-dc03ca62d376",
+  "created_at": "2026-09-02T17:33:30.755116-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 80
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Import LeanArchitect-style blueprint JSON as tagged outcome/observation nodes; phases become themes; deps become enables/requires edges; deterministic change_id per blueprint id",
+  "updated_at": "2026-09-02T17:33:30.755116-04:00"
+}

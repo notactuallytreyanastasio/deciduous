@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ca954682-7c64-4b2f-af5b-70a3e09196b9",
+  "created_at": "2026-03-02T19:40:19.977562-05:00",
+  "metadata": {
+    "branch": "init-rs-monster",
+    "confidence": 90,
+    "prompt": "I am thinking we need to break up some of this monolithing code. It is becoming unmanageable. We also are probably missing test coverage at this point.\n\nCan we launch subagents, each with their own worktree but knowing to write back to THIS deciduous database. We want to identify where we dont have test coverage. From there, launch a subagent to write tests for that portion and make a branch that handles them. Use stacked git to manage the series of patches. We will have these agents coherently get the tests in each piece we need done, and then we will write up a document that tells us about the lack of coverage and what we got. That will become the base for Phase 2, which is going to be some separation of concerns.\n\nRemember to use best practices here. Pretend you are steve klabnik and brian cantrill combined. be super thorough and produce good rust code using proper idioms, and avoid things like panic and unwrap so that we have clean, maintainable pure functions that push complexity to the edges of the application where IO is involved to keep things sane.\n\nTo start, though, do not touch any application code wherever possible. We want just tests in this beginning round."
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Test coverage improvement - Phase 1",
+  "updated_at": "2026-03-02T19:40:19.977562-05:00"
+}

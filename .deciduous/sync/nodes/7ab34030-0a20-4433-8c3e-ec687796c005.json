@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7ab34030-0a20-4433-8c3e-ec687796c005",
+  "created_at": "2026-05-06T21:33:09.678407-04:00",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 90,
+    "prompt": "the MCP tutorial/docs are all out of whack.\n\nstart with:\n\nquick start for cowork\nquick start for claude desktop\nquick start for clade code\n\nthen go into the functionalities with _real world examples_ that you get input/output from using deciduous itself's graph.\n\nThe key here is hands on. \n\nThen in a separate link under the MCP tab, have an API reference page that resembles what we have right now"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Rewrite MCP docs: quickstarts first, real examples, separate API ref",
+  "updated_at": "2026-05-06T21:33:09.678407-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "75bad24b-db71-40ab-9c3a-c9dd831e88f7",
+  "created_at": "2025-12-16T23:48:18.051675-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Callout cards too noisy - need hierarchy by node type: goal > decision > action > outcome > observation",
+  "updated_at": "2025-12-16T23:48:18.051675-05:00"
+}

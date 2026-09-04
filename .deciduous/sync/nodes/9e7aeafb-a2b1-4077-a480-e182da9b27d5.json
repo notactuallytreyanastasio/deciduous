@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9e7aeafb-a2b1-4077-a480-e182da9b27d5",
+  "created_at": "2025-12-15T10:23:02.794435-05:00",
+  "metadata": {
+    "branch": "landing-page-refresh",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Slowing top demo scroll 15% (800ms to 920ms)",
+  "updated_at": "2025-12-15T10:23:02.794435-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4e202db0-0ffd-4361-89f2-eb8b8e990127",
+  "created_at": "2026-01-06T12:25:04.893282-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "b8bf840",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Expanded session demo to full realistic dialogue (~40s)",
+  "updated_at": "2026-01-06T12:25:04.893282-05:00"
+}

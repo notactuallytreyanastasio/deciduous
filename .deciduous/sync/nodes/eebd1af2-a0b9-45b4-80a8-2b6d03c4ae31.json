@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "eebd1af2-a0b9-45b4-80a8-2b6d03c4ae31",
+  "created_at": "2025-12-15T02:54:45.677840-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90,
+    "prompt": "User wants to add roadmap item for Story page componentization and rich context batches"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add Story componentization to roadmap",
+  "updated_at": "2025-12-15T02:54:45.677840-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "90734c15-0188-426a-bfd2-a600ae6f836b",
+  "created_at": "2026-01-05T23:12:13.719693-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "294a811",
+    "confidence": 100
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Show commit messages in web UI via git-history.json",
+  "updated_at": "2026-01-05T23:12:13.719693-05:00"
+}

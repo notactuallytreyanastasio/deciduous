@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a533199a-ad1b-4d02-aca0-178017630e82",
+  "created_at": "2025-12-15T10:22:48.030150-05:00",
+  "metadata": {
+    "branch": "landing-page-refresh",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Adding terminal scrolling to session demo",
+  "updated_at": "2025-12-15T10:22:48.030150-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "16f8114a-3380-45bd-853d-3f484e7300c9",
+  "created_at": "2026-01-10T03:56:15.270756-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Data sources: git log (commits), gh pr list, gh issue list, gh release list, code reading",
+  "updated_at": "2026-01-10T03:56:15.270756-05:00"
+}

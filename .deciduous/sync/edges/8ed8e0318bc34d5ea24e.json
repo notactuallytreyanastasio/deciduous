@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-09T22:10:28.923766-05:00",
+  "edge_id": "8ed8e0318bc34d5ea24e",
+  "edge_type": "leads_to",
+  "from_change_id": "407a130c-cb32-4410-a960-518832e97b7f",
+  "rationale": "Both builds need HashRouter",
+  "to_change_id": "cbcb2f77-434b-421d-a81e-4ff068d251f6",
+  "weight": 1.0
+}

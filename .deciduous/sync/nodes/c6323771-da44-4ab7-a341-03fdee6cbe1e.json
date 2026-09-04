@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c6323771-da44-4ab7-a341-03fdee6cbe1e",
+  "created_at": "2026-01-05T23:09:38.132186-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "1c575a6",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Search results can be sorted newest or oldest first",
+  "updated_at": "2026-01-05T23:09:38.132186-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-18T01:19:26.027450-04:00",
+  "edge_id": "3e99f7f7adfe20e5e47c",
+  "edge_type": "leads_to",
+  "from_change_id": "1fbc91bc-a55c-423e-b9cf-1c90d84fb04a",
+  "rationale": "Phase 2 issue",
+  "to_change_id": "2c696ec8-5166-4cc6-ba45-cbfc75aa7915",
+  "weight": 1.0
+}

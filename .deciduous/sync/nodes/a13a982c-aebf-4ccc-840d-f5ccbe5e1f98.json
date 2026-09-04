@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a13a982c-aebf-4ccc-840d-f5ccbe5e1f98",
+  "created_at": "2025-12-12T03:13:23.404816-05:00",
+  "metadata": {
+    "branch": "feature/git-history-export",
+    "confidence": 90,
+    "prompt": "User: I see the link but no commit message\\! We need that message."
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fix DagView modal to show commit messages - modal doesn't use DetailPanel",
+  "updated_at": "2025-12-12T03:13:23.404816-05:00"
+}

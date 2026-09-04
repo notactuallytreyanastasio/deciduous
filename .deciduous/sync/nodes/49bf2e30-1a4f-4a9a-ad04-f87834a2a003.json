@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "49bf2e30-1a4f-4a9a-ad04-f87834a2a003",
+  "created_at": "2026-01-12T22:45:36.967964-05:00",
+  "description": "Implemented transcoding from any encoding to UTF-8 before searching. Auto-detection for UTF-16 BOM. Trade-off: transcoding path loses literal optimizations but maintains correctness.\n\nSources:\n- 8bbe58d: 'This feature works by transcoding the files to be searched from their source encoding to UTF-8... The fundamental problem with transcoding everything first is that literal optimizations are nearly negated... Fixes #1'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added encoding support via encoding_rs with auto-detection",
+  "updated_at": "2026-01-12T22:45:36.967964-05:00"
+}

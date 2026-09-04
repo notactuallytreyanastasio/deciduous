@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "18dd00f5-803a-4977-bc14-40d986d16aa6",
+  "created_at": "2025-12-16T23:56:29.163315-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Card shows incoming(1) but visual has 10+ lines - need to show full ancestry path/breadcrumb",
+  "updated_at": "2025-12-16T23:56:29.163315-05:00"
+}

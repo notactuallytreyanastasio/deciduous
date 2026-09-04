@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f025b7fe-b7b5-41a2-b8eb-6a8d57e69376",
+  "created_at": "2025-12-18T21:07:02.890915-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-attachments",
+    "confidence": 80
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "MIME type tracking enables proper rendering in TUI/web",
+  "updated_at": "2025-12-18T21:07:02.890915-05:00"
+}

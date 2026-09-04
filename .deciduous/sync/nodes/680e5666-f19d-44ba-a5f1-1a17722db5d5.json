@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "680e5666-f19d-44ba-a5f1-1a17722db5d5",
+  "created_at": "2026-07-10T06:05:12.494087-04:00",
+  "metadata": {
+    "branch": "improve/05-dedup",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "PR6: web viewer - TreeRow selection bug, branch-mode tree consistency, O(n^2) BFS fix, dead type files removed, THEME typed maps, vitest tests + eslint config, rebuild embedded viewers (fixes 5-release-stale pages_viewer.html from init)",
+  "updated_at": "2026-07-10T06:05:12.494087-04:00"
+}

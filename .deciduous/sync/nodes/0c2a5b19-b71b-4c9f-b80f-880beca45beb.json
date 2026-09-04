@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0c2a5b19-b71b-4c9f-b80f-880beca45beb",
+  "created_at": "2026-05-06T21:25:48.086243-04:00",
+  "description": "README: concise MCP section with setup for Claude Code and Desktop, tool category table, link to full docs. Website: full standalone page at deciduous.dev/mcp with sidebar nav, tabbed setup instructions (Code project/user, Desktop, Cowork), complete tool reference for all 31 tools, 4 tutorials (Desktop standalone, CLI+MCP, Cowork sessions, Querying), architecture diagram, full CLI mapping table.",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 95,
+    "files": [
+      "README.md",
+      "docs/mcp.html",
+      "docs/index.html"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "MCP docs complete - README section + full docs/mcp.html page",
+  "updated_at": "2026-05-06T21:25:48.086243-04:00"
+}

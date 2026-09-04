@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "90004c23-aaf9-4eba-984b-3c63cc36bd84",
+  "created_at": "2025-12-12T02:40:10.947404-05:00",
+  "metadata": {
+    "branch": "feature/dag-lazy-loading",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Redesign DAG view - prominent top bar, 3 default chains, modal detail",
+  "updated_at": "2025-12-12T02:40:10.947404-05:00"
+}

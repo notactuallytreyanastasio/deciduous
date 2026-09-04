@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-13T18:30:05.950791-05:00",
+  "edge_id": "b61433007ea463a6a33b",
+  "edge_type": "leads_to",
+  "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+  "rationale": "Issue mapping decision for roadmap board",
+  "to_change_id": "fc46b430-4fe8-41ef-a966-3ebb81e44b68",
+  "weight": 1.0
+}

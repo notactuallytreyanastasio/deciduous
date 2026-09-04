@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "904c3d95-4840-4112-a4f6-524ccff1f81a",
+  "created_at": "2025-12-16T23:17:55.571237-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 90,
+    "files": [
+      "web/src/views/DagView.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Pass edges prop to SearchBar from DagView",
+  "updated_at": "2025-12-16T23:17:55.571237-05:00"
+}

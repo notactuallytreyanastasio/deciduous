@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T12:53:47.344148-05:00",
+  "edge_id": "1d05e37b39de617af2e9",
+  "edge_type": "leads_to",
+  "from_change_id": "525eaacd-74b1-4c97-b984-857189182b77",
+  "rationale": "Implementation plan for hybrid approach",
+  "to_change_id": "91123c48-8a4f-453e-9f61-180ceed407cc",
+  "weight": 1.0
+}

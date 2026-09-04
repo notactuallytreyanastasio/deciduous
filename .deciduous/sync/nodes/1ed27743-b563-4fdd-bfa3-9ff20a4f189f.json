@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1ed27743-b563-4fdd-bfa3-9ff20a4f189f",
+  "created_at": "2026-03-04T01:49:32.148925-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 90
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add Credo strict + Dialyxir + refactor Elixir to be idiomatic",
+  "updated_at": "2026-03-04T01:49:32.148925-05:00"
+}

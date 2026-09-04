@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7e219094-267c-4bb2-bed6-c630f9e1753e",
+  "created_at": "2025-12-05T22:39:44.489096-05:00",
+  "metadata": {
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Test makefile confidence",
+  "updated_at": "2025-12-05T22:39:44.489096-05:00"
+}

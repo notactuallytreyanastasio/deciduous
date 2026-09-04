@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7b5d1e72-cc29-481a-b33a-a449b3c627e8",
+  "created_at": "2026-01-05T23:09:48.471673-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "e0a41a9",
+    "confidence": 100,
+    "files": [
+      ".claude/agents.toml"
+    ]
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add subagent definitions for domain-specific work",
+  "updated_at": "2026-01-05T23:09:48.471673-05:00"
+}

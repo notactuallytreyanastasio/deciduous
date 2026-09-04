@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "337f04aa-c598-4ecf-bbce-1d049e94c00f",
+  "created_at": "2026-01-12T22:43:47.922626-05:00",
+  "description": "Performance became urgent issue when ripgrep used with tools that pass many arguments. Also poor error messages compared to alternatives.\n\nSources:\n- 92dc402: 'Performance. Docopt does poorly when the argv becomes large, which is a reasonable common use case for search tools. (e.g., use with xargs)... Better failure modes. Clap knows a lot more about how a particular argv might be invalid, and can therefore provide much clearer error messages.'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Docopt performs poorly with large argv (common with xargs)",
+  "updated_at": "2026-01-12T22:43:47.922626-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "717b61de-5a6f-4e94-ac9c-fdad94b5820c",
+  "created_at": "2025-12-18T21:04:22.866818-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-keyval",
+    "commit": "e3c3bde",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added meta subcommand with set/get/list/delete/keys commands",
+  "updated_at": "2025-12-18T21:04:22.866818-05:00"
+}

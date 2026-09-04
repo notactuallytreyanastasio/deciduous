@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e5969728-1a42-4971-b3f1-8884010f484f",
+  "created_at": "2025-12-12T17:24:37.858337-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Create tests/ts_gen.rs",
+  "updated_at": "2025-12-12T17:24:37.858337-05:00"
+}

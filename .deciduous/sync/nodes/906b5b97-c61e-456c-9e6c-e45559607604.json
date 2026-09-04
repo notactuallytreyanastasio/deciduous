@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "906b5b97-c61e-456c-9e6c-e45559607604",
+  "created_at": "2026-01-05T23:10:52.630168-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "5a0b09e",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "OpenCode CLI now has deciduous slash commands like Claude Code",
+  "updated_at": "2026-01-05T23:10:52.630168-05:00"
+}

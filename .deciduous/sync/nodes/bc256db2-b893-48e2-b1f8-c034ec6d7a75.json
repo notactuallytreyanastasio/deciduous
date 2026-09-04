@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bc256db2-b893-48e2-b1f8-c034ec6d7a75",
+  "created_at": "2026-09-02T17:44:56.332267-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 80,
+    "files": [
+      "web/src/App.tsx",
+      "src/viewer.html"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Viewer shows λ badge and a Lean section (declaration, source link, proof uses, used by, why)",
+  "updated_at": "2026-09-02T17:44:56.332267-04:00"
+}

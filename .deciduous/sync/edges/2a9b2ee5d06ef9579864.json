@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-12T22:40:15.116617-05:00",
+  "edge_id": "2a9b2ee5d06ef9579864",
+  "edge_type": "leads_to",
+  "from_change_id": "b14294b2-7b41-45d7-bff9-4335051b1277",
+  "rationale": "Binary handling affects user experience",
+  "to_change_id": "779e4407-2cac-451c-a864-32d7a1d7b246",
+  "weight": 1.0
+}

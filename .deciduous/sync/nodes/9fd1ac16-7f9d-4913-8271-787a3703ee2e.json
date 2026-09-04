@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9fd1ac16-7f9d-4913-8271-787a3703ee2e",
+  "created_at": "2025-12-10T15:55:29.588216-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "313b360cffed5f2ce78bacf8cdb6b4222948f9c0",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Released v0.5.2 with graph integrity auditing",
+  "updated_at": "2025-12-12T09:22:08.052681-05:00"
+}

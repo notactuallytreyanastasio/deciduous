@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c05ea657-4987-484d-90be-3115ee0ab201",
+  "created_at": "2025-12-11T12:39:11.361156-05:00",
+  "metadata": {
+    "branch": "fix/unicode-truncate-panic",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Use character-based indexing instead of byte-based",
+  "updated_at": "2025-12-11T12:39:11.361156-05:00"
+}

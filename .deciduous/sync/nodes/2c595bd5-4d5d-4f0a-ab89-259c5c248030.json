@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2c595bd5-4d5d-4f0a-ab89-259c5c248030",
+  "created_at": "2026-01-06T12:23:29.944631-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "5f0cdcb",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Trace interceptor had noisy debug output that needed silencing",
+  "updated_at": "2026-01-06T12:23:29.944631-05:00"
+}

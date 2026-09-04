@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bf39537d-7b0f-42b8-b5f7-a952f8fa9a4f",
+  "created_at": "2025-12-18T18:39:01.491328-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Shell wrappers needed: pre-commit, pre-push, pre-rebase for git; JSON stdin handlers for Claude/Windsurf",
+  "updated_at": "2025-12-18T18:39:01.491328-05:00"
+}

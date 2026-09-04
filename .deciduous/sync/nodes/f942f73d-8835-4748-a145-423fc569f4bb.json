@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f942f73d-8835-4748-a145-423fc569f4bb",
+  "created_at": "2025-12-12T17:32:24.412821-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Clean up manual definitions",
+  "updated_at": "2025-12-12T17:32:24.412821-05:00"
+}

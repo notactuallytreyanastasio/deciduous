@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a3fa3194-7bb9-4aa0-887b-0de099baa3e2",
+  "created_at": "2025-12-12T02:27:04.756652-05:00",
+  "metadata": {
+    "branch": "feature/dag-lazy-loading",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Refactor: default to 1 chain, +1 button with ... expand input",
+  "updated_at": "2025-12-12T02:27:04.756652-05:00"
+}

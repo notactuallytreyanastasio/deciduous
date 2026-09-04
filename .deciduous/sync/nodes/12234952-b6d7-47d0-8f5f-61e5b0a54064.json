@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "12234952-b6d7-47d0-8f5f-61e5b0a54064",
+  "created_at": "2023-07-08T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "f30a308",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add type aliases (py/python, md/markdown, ts/typescript) - easier to read/write/remember",
+  "updated_at": "2023-07-08T00:00:00-04:00"
+}

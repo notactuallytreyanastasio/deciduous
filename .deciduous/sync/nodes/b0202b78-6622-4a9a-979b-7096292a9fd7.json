@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b0202b78-6622-4a9a-979b-7096292a9fd7",
+  "created_at": "2025-12-15T10:22:50.505718-05:00",
+  "metadata": {
+    "branch": "landing-page-refresh",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Slowing scroll animation for better readability",
+  "updated_at": "2025-12-15T10:22:50.505718-05:00"
+}

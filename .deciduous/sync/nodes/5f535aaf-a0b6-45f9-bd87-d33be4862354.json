@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5f535aaf-a0b6-45f9-bd87-d33be4862354",
+  "created_at": "2026-05-06T20:58:55.753817-04:00",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 88,
+    "files": [
+      ".claude/commands/query.md"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Create /query skill for natural language decision graph reports",
+  "updated_at": "2026-05-06T20:58:55.753817-04:00"
+}

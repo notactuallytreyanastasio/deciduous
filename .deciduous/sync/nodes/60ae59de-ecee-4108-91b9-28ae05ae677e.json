@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "60ae59de-ecee-4108-91b9-28ae05ae677e",
+  "created_at": "2026-03-04T01:37:34.812742-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Adopt Ecto + OTP release for read commands, defer Burrito to CI",
+  "updated_at": "2026-03-04T01:37:34.812742-05:00"
+}

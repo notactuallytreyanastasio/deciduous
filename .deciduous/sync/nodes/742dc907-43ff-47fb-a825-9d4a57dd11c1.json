@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "742dc907-43ff-47fb-a825-9d4a57dd11c1",
+  "created_at": "2025-12-14T12:36:34.764274-05:00",
+  "metadata": {
+    "branch": "feat/web-roadmap-api",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add database lookup for existing issue numbers in sync",
+  "updated_at": "2025-12-14T12:36:34.764274-05:00"
+}

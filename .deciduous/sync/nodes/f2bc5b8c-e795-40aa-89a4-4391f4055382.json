@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f2bc5b8c-e795-40aa-89a4-4391f4055382",
+  "created_at": "2026-01-12T22:40:00.610976-05:00",
+  "description": "Traversal order affects memory usage and cache behavior. BFS uses more memory, DFS is more cache-friendly.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 80
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Breadth-first or depth-first directory traversal?",
+  "updated_at": "2026-01-12T22:40:00.610976-05:00"
+}

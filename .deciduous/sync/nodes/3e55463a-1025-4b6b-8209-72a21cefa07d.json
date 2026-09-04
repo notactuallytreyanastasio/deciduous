@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3e55463a-1025-4b6b-8209-72a21cefa07d",
+  "created_at": "2026-01-12T22:44:31.790592-05:00",
+  "description": "Major refactor: lexopt for parsing, hand-rolled shell completions, help output, and man page generation. Trade-off: more code to maintain but full control and smaller dependencies.\n\nSources:\n- 082245d: 'This did require... I had to write my own logic for how arguments are combined into one single state object... my own shell completion generator... my own -h/--help output generator... my own man page generator... While this is definitely a fair bit of extra work, it overall only cost me a couple days. IMO, that is a good trade off given that this code is unlikely to change again in any substantial way.'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Replaced Clap with lexopt and custom help/completion generators",
+  "updated_at": "2026-01-12T22:44:31.790592-05:00"
+}

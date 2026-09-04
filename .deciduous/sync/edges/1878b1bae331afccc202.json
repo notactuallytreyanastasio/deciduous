@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T18:39:17.222352-05:00",
+  "edge_id": "1878b1bae331afccc202",
+  "edge_type": "leads_to",
+  "from_change_id": "9eae4754-5071-42b4-b3f6-e74d07243504",
+  "rationale": "How thin wrappers work",
+  "to_change_id": "bd6d55be-9349-4332-b61f-b2968e2d7f6c",
+  "weight": 1.0
+}

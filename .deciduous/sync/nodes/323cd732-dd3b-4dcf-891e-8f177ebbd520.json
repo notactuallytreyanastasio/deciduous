@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "323cd732-dd3b-4dcf-891e-8f177ebbd520",
+  "created_at": "2026-01-05T19:21:12.978540-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "e049bae",
+    "confidence": 100,
+    "files": [
+      "flake.nix",
+      "flake.lock"
+    ]
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add Nix flake for reproducible builds",
+  "updated_at": "2026-01-05T19:21:12.978540-05:00"
+}

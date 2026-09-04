@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T22:13:26.540331-05:00",
+  "edge_id": "0bc71689101b46504e35",
+  "edge_type": "leads_to",
+  "from_change_id": "79b8cf1a-8aa4-43f4-b970-f98886ef1792",
+  "rationale": "Decision to add binary parsing led to this implementation",
+  "to_change_id": "6356b118-fbe4-42b4-bd43-d364b9e7f6d8",
+  "weight": 1.0
+}

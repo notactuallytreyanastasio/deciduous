@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "07219eb0-7593-4db2-9b48-32f8e96d69f3",
+  "created_at": "2025-12-16T01:22:31.258668-05:00",
+  "metadata": {
+    "branch": "fix-callout-layout",
+    "confidence": 90,
+    "prompt": "User searched 'roadmap' and got 16 matches, but the main GOAL #476 'Implement roadmap board system' didn't appear in callout cards despite clearly containing 'roadmap' in its title"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Search callout bug: GOAL node matching search term not appearing in callouts",
+  "updated_at": "2025-12-16T01:22:31.258668-05:00"
+}

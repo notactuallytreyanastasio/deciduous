@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "86ac5dda-9ba1-4049-8d67-d1a6ba59cda8",
+  "created_at": "2025-12-10T17:47:59.603521-05:00",
+  "metadata": {
+    "branch": "feature/multi-user-graph-sync",
+    "confidence": 85,
+    "prompt": "User wants multiple users writing to local copies, pushing diffs to central repo, handling references to existing nodes, integrating with PR process"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Design multi-user graph sync with diff/patch model for PR workflow",
+  "updated_at": "2025-12-10T17:47:59.603521-05:00"
+}

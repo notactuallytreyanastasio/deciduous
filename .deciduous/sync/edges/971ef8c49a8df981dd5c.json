@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-09-02T18:48:00.551457-04:00",
+  "edge_id": "971ef8c49a8df981dd5c",
+  "edge_type": "leads_to",
+  "from_change_id": "6a91931b-6e07-4136-9f8a-dc03ca62d376",
+  "rationale": "user asked for a from-scratch viewer that incorporates all deciduous data",
+  "to_change_id": "6e2c2aab-76e4-4777-a8f3-84cf8d7fe4c5",
+  "weight": 1.0
+}

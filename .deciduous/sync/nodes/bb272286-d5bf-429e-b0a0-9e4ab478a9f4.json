@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bb272286-d5bf-429e-b0a0-9e4ab478a9f4",
+  "created_at": "2025-12-12T03:04:36.630191-05:00",
+  "metadata": {
+    "branch": "feature/git-history-export",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add Who Uses It section for dev/AI/team perspectives",
+  "updated_at": "2025-12-12T03:04:36.630191-05:00"
+}

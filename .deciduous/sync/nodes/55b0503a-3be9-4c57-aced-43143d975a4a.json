@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "55b0503a-3be9-4c57-aced-43143d975a4a",
+  "created_at": "2025-12-11T18:28:55.171350-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fixing writeln!().unwrap() anti-pattern in export.rs",
+  "updated_at": "2025-12-11T18:28:55.171350-05:00"
+}

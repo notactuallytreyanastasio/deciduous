@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-09-02T17:33:30.813134-04:00",
+  "edge_id": "9747b55ccd63c9a49868",
+  "edge_type": "leads_to",
+  "from_change_id": "2c7066a2-68ee-4db7-80a9-2d49f95149f2",
+  "rationale": "rejected: deps are inferred by Lean, not visible in source",
+  "to_change_id": "6a91931b-6e07-4136-9f8a-dc03ca62d376",
+  "weight": 1.0
+}

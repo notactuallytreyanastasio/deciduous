@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+  "created_at": "2026-01-06T22:07:08.513686-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "User requested: \"go through and really demonstrate, with full terminal examples like we have on the landing page, the process of working with you throughout the tutorial. The deciduous serve main landing page from GH pages at the root of the site. Those terminal examples animating in there are awesome and we should use them in the tutorial (and they should have a pause button that fills them completely and stops cycling for easy reference too) This wants to be a visually rich experience that really shows the look and feel of the workflow and the terminals themselves being in there are stylistically nice but also very professional looking\""
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add animated terminal demos to tutorial",
+  "updated_at": "2026-01-06T22:07:08.513686-05:00"
+}

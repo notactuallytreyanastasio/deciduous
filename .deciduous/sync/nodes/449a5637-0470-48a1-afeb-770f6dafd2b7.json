@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "449a5637-0470-48a1-afeb-770f6dafd2b7",
+  "created_at": "2025-12-09T17:27:35.786215-05:00",
+  "metadata": {
+    "confidence": 85
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Web viewer architecture: No WASM needed, use React+TypeScript or vanilla JS with D3",
+  "updated_at": "2025-12-09T17:27:35.786215-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7e79bff2-0696-48d0-8325-2a8ed207ad30",
+  "created_at": "2025-12-17T00:12:53.722362-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Need stacking navigation model - each drill-in is a new plane/layer that zooms the view, not a popover overlay",
+  "updated_at": "2025-12-17T00:12:53.722362-05:00"
+}

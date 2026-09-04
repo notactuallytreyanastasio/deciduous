@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T00:50:16.336760-05:00",
+  "edge_id": "c5d21809861e77ac506b",
+  "edge_type": "chosen",
+  "from_change_id": "b93f8c09-e33f-49fe-bfd2-c8f18a7a5e84",
+  "rationale": "Best integration with ratatui",
+  "to_change_id": "45943ec2-650e-4df3-b302-a160d9120353",
+  "weight": 1.0
+}

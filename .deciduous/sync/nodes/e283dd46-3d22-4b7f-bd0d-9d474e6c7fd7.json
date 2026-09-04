@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e283dd46-3d22-4b7f-bd0d-9d474e6c7fd7",
+  "created_at": "2025-12-18T21:27:06.658358-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 75
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "HYBRID RISK: Two systems to learn, maintain, and keep in sync",
+  "updated_at": "2025-12-18T21:27:06.658358-05:00"
+}

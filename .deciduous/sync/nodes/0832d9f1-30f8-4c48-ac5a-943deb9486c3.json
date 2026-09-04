@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0832d9f1-30f8-4c48-ac5a-943deb9486c3",
+  "created_at": "2025-12-19T15:21:41.051230-05:00",
+  "metadata": {
+    "branch": "feat/story-0.9.0-update",
+    "confidence": 90,
+    "prompt": "create a git worktree. symlink .deciduous/deciduous.db so you write decisions to its graph\n\nUSE YOUR SKILLS, YOUR COMMANDS, deciduous CLI, AND THE TRACER WE HAVE TO LOG EVERY DECISION\n\nYou want to include the traces as nodes on the graph, and EVERYTHING else, all options|actions|goals|outcomes|observations\n\nOnce you have this all running, we want to update your @docs/story.html to tell the rest of the buildup to 0.9.0\n\nMake sure to reference the decision graph to figure out what/how to write it up\n\nuse your own history to build the rest of the tale, its a demo of yourself so really make it nice. Reference the rest to see the flow/style\n\nWork on a branch, make a PR, make sure it builds for GH pages so that I can see that build in the PR preview and check things out beyond locally"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Update story.html to document v0.9.0 development journey",
+  "updated_at": "2025-12-19T15:21:41.051230-05:00"
+}

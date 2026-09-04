@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1db1b0a9-1f5d-4805-bbd9-08d8871eb8a9",
+  "created_at": "2026-09-02T18:11:40.057008-04:00",
+  "description": "src/records.rs (store, tombstones, legacy import, reconcile), write-through in Database, 'deciduous sync' with --check/--no-pages, change_id prefixes accepted in CLI and MCP (32 tools now: sync, sync_status), init/update fix .gitignore and add .gitattributes, templates and docs rewritten, dead patch files removed, version 0.17.0.",
+  "metadata": {
+    "branch": "worktree-multi-user-sync",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Record store implemented; 235 unit + 57 integration tests pass, clippy clean",
+  "updated_at": "2026-09-02T18:11:40.057008-04:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a039e333-b4de-41d2-bed8-c8b144056171",
+  "created_at": "2026-01-12T22:39:09.107395-05:00",
+  "description": "Mmap was brought back as an optimization for searching few files. Without context support initially (kept simple).\n\nSources:\n- ca058d7: 'Add support for memory maps... Mmap searching does not support contexts yet, but we probably do not really care. And duplicating that logic does not sound fun. Without contexts, mmap searching is delightfully simple.'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Re-added mmap support for single-file searches",
+  "updated_at": "2026-01-12T22:39:09.107395-05:00"
+}

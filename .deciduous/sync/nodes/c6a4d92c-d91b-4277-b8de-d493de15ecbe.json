@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c6a4d92c-d91b-4277-b8de-d493de15ecbe",
+  "created_at": "2026-03-18T11:59:08.214928-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90,
+    "files": [
+      "lib/tester/dsl.rb",
+      "lib/tester/runner.rb"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Refactor DSL to flat array with setup inheritance, simplify runner",
+  "updated_at": "2026-03-18T11:59:08.214928-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8cffea99-d173-440b-81ed-07dbdbe5ffb4",
+  "created_at": "2025-12-12T17:28:39.281625-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update tests/ts_gen.rs to use actual structs",
+  "updated_at": "2025-12-12T17:28:39.281625-05:00"
+}

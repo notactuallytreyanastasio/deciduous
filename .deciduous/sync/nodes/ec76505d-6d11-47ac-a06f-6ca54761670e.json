@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ec76505d-6d11-47ac-a06f-6ca54761670e",
+  "created_at": "2025-12-10T13:47:12.835479-05:00",
+  "metadata": {
+    "commit": "77af7312c86f25170622cd70fdc8d7c091eb1ac3",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implemented --claude and --windsurf flags for init command",
+  "updated_at": "2025-12-12T09:22:08.042780-05:00"
+}

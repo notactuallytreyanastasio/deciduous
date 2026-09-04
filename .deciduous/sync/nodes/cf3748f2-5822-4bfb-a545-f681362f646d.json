@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "cf3748f2-5822-4bfb-a545-f681362f646d",
+  "created_at": "2026-03-04T09:31:29.347297-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "commit": "f153a6e",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement serve command with Plug router",
+  "updated_at": "2026-03-04T09:31:29.347297-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-07-15T16:22:13.148956-04:00",
+  "edge_id": "29c6c1e5cd52e0d56e2e",
+  "edge_type": "leads_to",
+  "from_change_id": "94d1dc63-d620-4cf9-9ff7-61b0d4841870",
+  "rationale": "chosen: reuses transport-agnostic router",
+  "to_change_id": "8073c66c-f192-49bb-af44-77b843e6b8ba",
+  "weight": 1.0
+}

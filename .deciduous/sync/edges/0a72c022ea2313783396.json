@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T18:35:22.127911-05:00",
+  "edge_id": "0a72c022ea2313783396",
+  "edge_type": "leads_to",
+  "from_change_id": "a1dd05b5-c74c-4e61-97da-5aca801d7eb8",
+  "rationale": "Bash tradeoffs",
+  "to_change_id": "f1b32964-a769-449b-a282-b2629141fff0",
+  "weight": 1.0
+}

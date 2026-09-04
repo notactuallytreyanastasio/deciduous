@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ca4172e7-497f-4e19-8355-8c24669c50a6",
+  "created_at": "2026-03-04T02:15:25.169261-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 95
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Custom Credo checks + full alias/nesting refactor",
+  "updated_at": "2026-03-04T02:15:25.169261-05:00"
+}

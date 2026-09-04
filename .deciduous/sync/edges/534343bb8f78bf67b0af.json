@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T03:07:03.642361-05:00",
+  "edge_id": "534343bb8f78bf67b0af",
+  "edge_type": "leads_to",
+  "from_change_id": "dc955a4d-8aee-44d2-be3b-5c5f200444a9",
+  "rationale": "git-history.json export enables showing commit messages in web UI",
+  "to_change_id": "297d3a98-a550-4d98-85d0-ee89c043a0c4",
+  "weight": 1.0
+}

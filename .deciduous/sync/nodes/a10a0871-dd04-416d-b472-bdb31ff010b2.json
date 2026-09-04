@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a10a0871-dd04-416d-b472-bdb31ff010b2",
+  "created_at": "2026-01-09T17:35:15.486598-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "User reported frustration in screenshot showing:\n\n$ deciduous --help | grep -i \"delete\\|remove\\|unlink\"\nNo matches found\n\nThe workflow that exposed this limitation:\n1. Created initial graph structure\n2. Validation error: \"goal has too many children\"  \n3. Tried to remove edges to fix the mistake\n4. Discovered no delete/unlink commands exist\n5. Attempted direct SQLite manipulation as workaround (failed due to foreign keys)\n\nThis is a fundamental usability gap. Users cannot fix mistakes in their decision graphs. \nThe only workaround documented was \"plan carefully since there's no undo\" - unacceptable UX.\n\nUser's exact words: \"This is stupid, we should totally add this\"\n\nScope: Add ability to delete nodes and remove edges from the decision graph."
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add delete and unlink commands to CLI",
+  "updated_at": "2026-01-09T17:42:29.577395-05:00"
+}

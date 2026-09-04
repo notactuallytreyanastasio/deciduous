@@ -1,0 +1,23 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "38bed08f-2534-4d82-8f7b-9a9b4666e91c",
+  "created_at": "2026-09-02T19:11:09.675745-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 90,
+    "files": [
+      "web/src/proofmap/model.ts",
+      "web/src/proofmap/layout.ts",
+      "web/src/proofmap/render.ts",
+      "web/src/proofmap/api.ts",
+      "web/src/proofmap/app.ts",
+      "web/proofmap.html",
+      "web/e2e/proofmap.e2e.ts",
+      "tests/serve_endpoints_test.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Audit and harden the proof map page: port inline JS to typed modules (model/layout/render/api/app) with payload validation, safe-URL and escaping guarantees, iterative ranking, pointer-capture fix, search-first visibility; ESLint config; unit tests (vitest+jsdom), browser e2e (puppeteer against real deciduous serve), Rust endpoint contract test",
+  "updated_at": "2026-09-02T19:11:09.675745-04:00"
+}

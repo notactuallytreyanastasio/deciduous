@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-13T18:30:08.690609-05:00",
+  "edge_id": "2b777fc626d8f428e5bc",
+  "edge_type": "leads_to",
+  "from_change_id": "04a5a9c2-b3b0-4955-bace-b81d38986c93",
+  "rationale": "Rejected: less GitHub visibility",
+  "to_change_id": "614fc23b-f794-43fd-a71f-55b94bedc7f2",
+  "weight": 1.0
+}

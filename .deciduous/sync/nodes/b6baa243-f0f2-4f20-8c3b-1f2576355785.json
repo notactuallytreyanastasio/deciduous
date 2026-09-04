@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b6baa243-f0f2-4f20-8c3b-1f2576355785",
+  "created_at": "2025-12-10T14:38:47.848040-05:00",
+  "metadata": {
+    "confidence": 90
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add auto-refresh to bundled React viewer",
+  "updated_at": "2025-12-10T14:38:47.848040-05:00"
+}

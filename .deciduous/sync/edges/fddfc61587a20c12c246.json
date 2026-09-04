@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-09T17:36:19.305278-05:00",
+  "edge_id": "fddfc61587a20c12c246",
+  "edge_type": "leads_to",
+  "from_change_id": "70e867ba-0dc5-48ef-8613-c75e9d24229d",
+  "rationale": "Command defs need handlers",
+  "to_change_id": "8e467da8-84b8-4ffc-9688-2bcf077723b5",
+  "weight": 1.0
+}

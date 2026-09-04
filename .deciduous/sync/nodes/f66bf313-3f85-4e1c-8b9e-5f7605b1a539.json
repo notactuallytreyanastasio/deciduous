@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f66bf313-3f85-4e1c-8b9e-5f7605b1a539",
+  "created_at": "2026-02-05T15:25:17.671943-05:00",
+  "metadata": {
+    "branch": "feature/event-log-sync",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add auto-emit events for add/link/status commands",
+  "updated_at": "2026-02-05T15:25:17.671943-05:00"
+}

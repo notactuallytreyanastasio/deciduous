@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a1d8e9ad-994f-4314-9451-84a840ca9c17",
+  "created_at": "2025-12-15T14:46:29.063749-05:00",
+  "metadata": {
+    "branch": "fix/tui-open-issue-keystroke",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Auditing TUI keystrokes for discrepancies between msg.rs and events.rs",
+  "updated_at": "2025-12-15T14:46:29.063749-05:00"
+}

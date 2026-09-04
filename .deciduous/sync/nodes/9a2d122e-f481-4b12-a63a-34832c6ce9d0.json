@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9a2d122e-f481-4b12-a63a-34832c6ce9d0",
+  "created_at": "2025-12-11T02:14:56.880364-05:00",
+  "metadata": {
+    "branch": "feature/prompt-tracking",
+    "commit": "04ad71307753eca39477069cc48fbf6b4da0bdae",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "PR #6 created for prompt display in TUI detail panel",
+  "updated_at": "2025-12-12T09:22:08.060071-05:00"
+}

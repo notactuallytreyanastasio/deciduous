@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b1a6d494-7288-43f3-a049-4c708135c2f1",
+  "created_at": "2025-12-05T20:33:46.386491-05:00",
+  "description": "CI workflow compiles wasm-analyzer, commits to gh-pages branch. Local dev doesn't need rustup",
+  "node_type": "option",
+  "status": "pending",
+  "title": "GitHub Actions builds WASM",
+  "updated_at": "2025-12-05T20:33:46.386491-05:00"
+}

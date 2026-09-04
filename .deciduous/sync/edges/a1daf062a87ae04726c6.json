@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-02-05T15:17:04.512508-05:00",
+  "edge_id": "a1daf062a87ae04726c6",
+  "edge_type": "leads_to",
+  "from_change_id": "6f28cdcf-cb94-45df-9f84-f6f262e5d070",
+  "rationale": "Refined goal - event log approach chosen",
+  "to_change_id": "fad11b57-1a8d-4639-889e-e92d33d1a8fd",
+  "weight": 1.0
+}

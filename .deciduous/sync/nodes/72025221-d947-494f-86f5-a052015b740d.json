@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "72025221-d947-494f-86f5-a052015b740d",
+  "created_at": "2026-03-04T01:37:48.040351-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Create Queries module with 6 Ecto query functions",
+  "updated_at": "2026-03-04T01:37:48.040351-05:00"
+}

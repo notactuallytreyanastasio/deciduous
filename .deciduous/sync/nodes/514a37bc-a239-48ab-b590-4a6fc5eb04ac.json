@@ -1,0 +1,15 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "514a37bc-a239-48ab-b590-4a6fc5eb04ac",
+  "created_at": "2025-12-11T02:10:39.377792-05:00",
+  "metadata": {
+    "branch": "feature/prompt-tracking",
+    "commit": "04ad71307753eca39477069cc48fbf6b4da0bdae",
+    "confidence": 85,
+    "prompt": "Go to main, make a new branch, begin work trying to get the prompt tracking baked into how we view things. You want to have the prompts with this be richly shown in the UI with the big piece they were associated with"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add prompt display to TUI detail panel",
+  "updated_at": "2025-12-12T09:22:08.051846-05:00"
+}

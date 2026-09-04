@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b04b1e1e-2c10-457b-a19f-b0a999280209",
+  "created_at": "2025-12-05T22:39:15.966328-05:00",
+  "metadata": {
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Testing confidence weight system",
+  "updated_at": "2025-12-05T22:39:15.966328-05:00"
+}

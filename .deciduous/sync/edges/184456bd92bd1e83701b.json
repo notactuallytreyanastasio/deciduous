@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T02:38:00.746963-05:00",
+  "edge_id": "184456bd92bd1e83701b",
+  "edge_type": "leads_to",
+  "from_change_id": "39716fa5-70c6-47d7-acf6-9696873d0e5b",
+  "rationale": "Implementing solution for template sync",
+  "to_change_id": "30cd2c8b-ea2a-4a91-8abd-812faf205cae",
+  "weight": 1.0
+}

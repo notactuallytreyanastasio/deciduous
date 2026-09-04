@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "47688034-e918-4e11-93d7-4da549c0f050",
+  "created_at": "2025-12-14T12:36:28.304930-05:00",
+  "metadata": {
+    "branch": "feat/web-roadmap-api",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fix roadmap sync to write issue numbers back to ROADMAP.md",
+  "updated_at": "2025-12-14T12:36:28.304930-05:00"
+}

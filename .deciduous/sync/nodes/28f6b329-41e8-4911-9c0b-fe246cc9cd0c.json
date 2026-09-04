@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "28f6b329-41e8-4911-9c0b-fe246cc9cd0c",
+  "created_at": "2026-01-12T22:38:41.588740-05:00",
+  "description": "When parallelism was added, mmap performance suffered significantly. Lock-free data structures and per-worker buffers became necessary.\n\nSources:\n- c809679: 'Memory maps appear to degrade quite a bit in the presence of multithreading. Also, switch to lock free data structures for synchronization. Give each worker an input and output buffer which require no synchronization.'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Memory maps degrade with multithreading",
+  "updated_at": "2026-01-12T22:38:41.588740-05:00"
+}

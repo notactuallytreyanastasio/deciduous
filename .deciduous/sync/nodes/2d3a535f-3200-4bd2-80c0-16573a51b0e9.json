@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2d3a535f-3200-4bd2-80c0-16573a51b0e9",
+  "created_at": "2026-03-05T02:05:37.175303Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "commit": "2ab89c73e7d1f9ab5a967c241cf75302a7c65a69",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add Hex package with Mix tasks",
+  "updated_at": "2026-03-05T02:05:37.175303Z"
+}

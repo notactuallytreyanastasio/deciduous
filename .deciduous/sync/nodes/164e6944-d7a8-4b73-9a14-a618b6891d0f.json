@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "164e6944-d7a8-4b73-9a14-a618b6891d0f",
+  "created_at": "2025-12-15T18:45:18.946476-05:00",
+  "metadata": {
+    "branch": "feature/graph-explorer-planning",
+    "confidence": 75
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Approach A: Side Panel First",
+  "updated_at": "2025-12-15T18:45:18.946476-05:00"
+}

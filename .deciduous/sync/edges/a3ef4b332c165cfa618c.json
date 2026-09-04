@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T22:19:11.792054-05:00",
+  "edge_id": "a3ef4b332c165cfa618c",
+  "edge_type": "leads_to",
+  "from_change_id": "efe9de60-50b2-446e-9941-687e98eaadbf",
+  "rationale": "Decision to implement clustering led to this implementation",
+  "to_change_id": "1e123df6-ae62-4849-8e05-33a2d46d35bc",
+  "weight": 1.0
+}

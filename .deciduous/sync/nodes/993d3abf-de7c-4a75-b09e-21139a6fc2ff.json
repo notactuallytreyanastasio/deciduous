@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "993d3abf-de7c-4a75-b09e-21139a6fc2ff",
+  "created_at": "2026-01-09T17:35:23.491616-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85,
+    "prompt": "Codebase exploration revealed key constraints:\n\n1. DATABASE SCHEMA (migrations/00000000000002_decision_graph/up.sql):\n   - Foreign keys defined WITHOUT CASCADE DELETE\n   - SQLite defaults to RESTRICT (blocks deletion if references exist)\n   - Tables referencing decision_nodes:\n     * decision_edges.from_node_id, to_node_id (NOT NULL)\n     * decision_context.node_id (NOT NULL)\n     * session_nodes.node_id (NOT NULL)\n     * decision_sessions.root_node_id (NULLABLE)\n     * command_log.decision_node_id (NULLABLE)\n     * roadmap_items.outcome_node_id (NULLABLE)\n\n2. EXISTING DELETE PATTERNS (src/db.rs):\n   - delete_roadmap_item() at line 1959: simple diesel::delete with filter\n   - clear_roadmap_items() at line 1654: bulk delete\n   - cache_github_issue() at line 2001: delete-then-insert upsert pattern\n   - All use: diesel::delete(table.filter(column.eq(value))).execute(&mut conn)?\n\n3. CLI PATTERNS (src/main.rs):\n   - Link command uses from/to node IDs (not edge ID)\n   - Commands return colored output: \"Created\".green(), \"Error:\".red()\n   - Error handling: eprintln! + std::process::exit(1)\n\nDesign questions:\n- Cascade vs strict? User wants to fix mistakes easily -> cascade\n- Edge ID vs from/to? Mirror link command -> from/to\n- Confirmation required? Add --dry-run for safety without friction"
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Design delete/unlink behavior",
+  "updated_at": "2026-01-09T17:42:41.639219-05:00"
+}

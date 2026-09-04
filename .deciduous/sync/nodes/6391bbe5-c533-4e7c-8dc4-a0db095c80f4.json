@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6391bbe5-c533-4e7c-8dc4-a0db095c80f4",
+  "created_at": "2025-12-17T17:58:09.246901-05:00",
+  "metadata": {
+    "branch": "feature/mobile-responsive",
+    "confidence": 90
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Hide desktop panels on mobile, use bottom sheets and stacked layouts",
+  "updated_at": "2025-12-17T17:58:09.246901-05:00"
+}

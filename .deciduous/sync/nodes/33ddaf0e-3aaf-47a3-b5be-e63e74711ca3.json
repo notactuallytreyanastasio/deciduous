@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "33ddaf0e-3aaf-47a3-b5be-e63e74711ca3",
+  "created_at": "2026-01-12T22:38:34.865176-05:00",
+  "description": "Early ripgrep used memory maps for file searching.\n\nSources:\n- c809679: 'removal of memory maps for searching' (implies they existed before)",
+  "metadata": {
+    "branch": "main",
+    "confidence": 80
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implemented initial mmap-based search",
+  "updated_at": "2026-01-12T22:38:34.865176-05:00"
+}

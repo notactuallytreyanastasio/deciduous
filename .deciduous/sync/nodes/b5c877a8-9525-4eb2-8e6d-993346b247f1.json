@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b5c877a8-9525-4eb2-8e6d-993346b247f1",
+  "created_at": "2026-09-02T19:11:09.720169-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Proof map hardened: 51 unit tests, 18 browser e2e tests, 1 Rust contract test all green; live page redeployed and verified with real clicks",
+  "updated_at": "2026-09-02T19:11:09.720169-04:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "993a4dee-1125-4f67-8101-538595bd19de",
+  "created_at": "2025-12-12T17:57:26.569863-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "prompt": "Moving changes to a new branch later"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Stash OpenCode changes",
+  "updated_at": "2025-12-12T17:57:26.569863-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6871ad90-0c11-40c5-961e-552218c1d486",
+  "created_at": "2026-05-06T21:21:24.865844-04:00",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 88,
+    "prompt": "now lets write setup instructions for claude code and claude desktop/cowork. we will have them both in the README.md and on the https://deciduous.dev website (deployed via @../blog/ I believe? or maybe the keys are in here for that) It should be a section that emphasizes it works on both the claude code level and on the level of the desktop apps. and it should have a separate tab that goes in-depth on the entirety of the MCP structure and feature set with its own tutorial for using with desktop + CLI on their own individually"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Write MCP setup docs for README + deciduous.dev",
+  "updated_at": "2026-05-06T21:21:24.865844-04:00"
+}

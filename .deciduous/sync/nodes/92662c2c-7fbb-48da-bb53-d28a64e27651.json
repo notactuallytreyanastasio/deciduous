@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "92662c2c-7fbb-48da-bb53-d28a64e27651",
+  "created_at": "2026-03-04T00:54:32.050552-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 85
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Use Burrito for standalone binary packaging",
+  "updated_at": "2026-03-04T00:54:32.050552-05:00"
+}

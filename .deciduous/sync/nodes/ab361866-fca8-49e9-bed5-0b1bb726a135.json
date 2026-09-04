@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ab361866-fca8-49e9-bed5-0b1bb726a135",
+  "created_at": "2025-12-11T00:36:28.836951-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "confidence": 90,
+    "files": [
+      "src/tui/app.rs",
+      "src/tui/ui.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add commit modal with full git show output",
+  "updated_at": "2025-12-11T00:36:28.836951-05:00"
+}

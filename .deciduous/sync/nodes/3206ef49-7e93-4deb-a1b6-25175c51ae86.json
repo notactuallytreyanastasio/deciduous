@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3206ef49-7e93-4deb-a1b6-25175c51ae86",
+  "created_at": "2025-12-15T12:09:06.556132-05:00",
+  "metadata": {
+    "branch": "feature/graph-search",
+    "confidence": 85
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Design search component architecture",
+  "updated_at": "2025-12-15T12:09:06.556132-05:00"
+}

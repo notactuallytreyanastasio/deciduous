@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dcdc4717-04f3-402d-9d1a-6ff8920fdd24",
+  "created_at": "2026-03-03T23:16:56.223989-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Removed Burrito dep - requires Zig, unnecessary complexity for now",
+  "updated_at": "2026-03-03T23:16:56.223989-05:00"
+}

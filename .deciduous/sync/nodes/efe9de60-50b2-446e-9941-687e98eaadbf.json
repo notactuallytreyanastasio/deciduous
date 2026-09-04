@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "efe9de60-50b2-446e-9941-687e98eaadbf",
+  "created_at": "2025-12-05T22:16:33.461990-05:00",
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Implement clustering for decision graph view - group nodes by chains of thought, show flow on right side",
+  "updated_at": "2025-12-05T22:16:33.461990-05:00"
+}

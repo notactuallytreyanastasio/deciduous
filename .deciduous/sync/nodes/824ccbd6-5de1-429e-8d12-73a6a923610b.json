@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "824ccbd6-5de1-429e-8d12-73a6a923610b",
+  "created_at": "2025-12-13T19:05:49.511725-05:00",
+  "metadata": {
+    "branch": "feat/roadmap-board-system",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Phase 8 complete: Types unified across Rust/TUI/Web via ts-rs type generator",
+  "updated_at": "2025-12-13T19:05:49.511725-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "277591df-ec9f-42fa-8ea0-bc0911cb9251",
+  "created_at": "2025-12-15T12:07:24.797223-05:00",
+  "metadata": {
+    "branch": "feature/graph-search",
+    "confidence": 90,
+    "prompt": "User requested: search across commit messages, node content, titles/descriptions. Search box with live filtering, highlighting, and dropdown results for mobile+desktop"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add search functionality to web UI DAG viewer",
+  "updated_at": "2025-12-15T12:07:24.797223-05:00"
+}

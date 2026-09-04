@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c9161d92-056d-4b97-8359-244ab42b7833",
+  "created_at": "2025-12-12T02:16:00.561689-05:00",
+  "metadata": {
+    "branch": "feature/dag-lazy-loading",
+    "confidence": 90,
+    "prompt": "User wants DAG to only show most recent 3-4 clusters by default, with ability to expand/load more with button clicks. Currently loads all 349 nodes which is overwhelming."
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "DAG view lazy loading - show recent clusters first",
+  "updated_at": "2025-12-12T02:16:00.561689-05:00"
+}

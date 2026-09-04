@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b2ecacb7-9346-45d8-9fe4-5698b3ca4b25",
+  "created_at": "2026-03-04T02:16:43.787885-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Plan iterative Rust→Elixir migration with stacked PRs",
+  "updated_at": "2026-03-04T02:16:43.787885-05:00"
+}

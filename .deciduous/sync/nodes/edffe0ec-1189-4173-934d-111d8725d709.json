@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "edffe0ec-1189-4173-934d-111d8725d709",
+  "created_at": "2026-01-06T12:23:13.814097-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "df68ee7",
+    "confidence": 100,
+    "files": [
+      "web/src/views/TraceView.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Redesigned TraceView with inline expandable hierarchy",
+  "updated_at": "2026-01-06T12:23:13.814097-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-05-06T21:00:34.250024-04:00",
+  "edge_id": "fb446d47fd404fa78891",
+  "edge_type": "leads_to",
+  "from_change_id": "a8c2430b-e6d1-480e-9931-6e83a744a920",
+  "rationale": "Extension of MCP server scope",
+  "to_change_id": "f28c99d2-6904-4deb-94c4-9d8e7c12d05e",
+  "weight": 1.0
+}

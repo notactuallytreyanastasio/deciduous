@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "64211a51-34be-4bd5-8386-06c9bccb49ad",
+  "created_at": "2025-12-05T17:38:32.883600-05:00",
+  "description": "Core insight: MP3 encoders apply same filter everywhere, analog rolloff is content-dependent",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "MP3 vs Tape: MP3 has brick-wall cutoff at fixed freq, tape has gradual rolloff that varies with dynamics",
+  "updated_at": "2025-12-05T17:38:32.883600-05:00"
+}

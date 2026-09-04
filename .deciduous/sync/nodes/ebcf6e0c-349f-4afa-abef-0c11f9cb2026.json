@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ebcf6e0c-349f-4afa-abef-0c11f9cb2026",
+  "created_at": "2026-03-18T11:52:17.131483-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Previous session built Ruby files but they were deleted (git status shows D). Starting completely fresh — only prompt.md exists in tester/",
+  "updated_at": "2026-03-18T11:52:17.131483-04:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "91ed37d3-f407-4bc8-a607-712cffe5df5c",
+  "created_at": "2025-12-05T20:30:54.746421-05:00",
+  "description": "Compile entire analyzer with symphonia+rustfft to wasm32-unknown-unknown. Symphonia may have issues with no-std",
+  "node_type": "option",
+  "status": "pending",
+  "title": "Full Rust to WASM (wasm-pack)",
+  "updated_at": "2025-12-05T20:30:54.746421-05:00"
+}

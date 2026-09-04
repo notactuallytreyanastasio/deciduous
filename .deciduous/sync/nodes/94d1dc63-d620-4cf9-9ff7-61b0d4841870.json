@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "94d1dc63-d620-4cf9-9ff7-61b0d4841870",
+  "created_at": "2026-07-15T16:22:03.151706-04:00",
+  "metadata": {
+    "branch": "feat/api-server",
+    "confidence": 85
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Wrap the MCP dispatch router (mcp::handlers::dispatch) behind a tiny_http daemon - one command router, three transports (CLI/MCP/HTTP)",
+  "updated_at": "2026-07-15T16:22:03.151706-04:00"
+}

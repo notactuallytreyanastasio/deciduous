@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b1e3bd68-bb89-4259-9acd-a048cbd851e3",
+  "created_at": "2025-12-12T01:19:45.782847-05:00",
+  "metadata": {
+    "branch": "feature/asciinema-demo",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Convert v3 to v2 format with absolute timestamps",
+  "updated_at": "2025-12-12T01:19:45.782847-05:00"
+}

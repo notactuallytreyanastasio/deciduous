@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5a56a6be-4fcc-4bab-9705-9b119edb47cc",
+  "created_at": "2025-12-15T20:51:40.997589-05:00",
+  "metadata": {
+    "branch": "feature/subagents-roadmap-context-rename",
+    "confidence": 95,
+    "prompt": "User asked to add subagents system to roadmap and fix /context naming collision"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add subagents roadmap and fix context command collision",
+  "updated_at": "2025-12-15T20:51:40.997589-05:00"
+}

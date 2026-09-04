@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a62b9ae1-1212-4e81-9204-8bd747315c2a",
+  "created_at": "2026-01-12T22:40:44.349004-05:00",
+  "description": "Need to balance smart filtering with user transparency. Silent behavior causes confusion but grep-style dumps binary garbage.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "revisit",
+  "status": "pending",
+  "title": "Reconsidering binary file UX",
+  "updated_at": "2026-01-12T22:40:44.349004-05:00"
+}

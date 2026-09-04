@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8cd6e8a6-ae33-494a-98c1-8cd1c882e1ac",
+  "created_at": "2026-01-12T22:39:17.734961-05:00",
+  "description": "Mmap performance differs by OS. Linux benefits, macOS does not, Windows behavior inconsistent.\n\nSources:\n- a44735a: 'do not automatically pick memory maps on darwin, ever. They appear slower than standard read calls.'\n- 5a9883d: 'Try to use memory maps more aggressively on Windows... However, it is probably slower in a VM. Let us prioritize native users.'\n- d06f84c: 'Get rid of special mmap decision on Windows'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Platform-specific mmap behavior varies significantly",
+  "updated_at": "2026-01-12T22:39:17.734961-05:00"
+}

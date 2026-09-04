@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ac9be81a-ff39-4849-b0f0-5bbad872f78e",
+  "created_at": "2026-01-05T23:10:19.952654-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "f2ddcb2",
+    "confidence": 100,
+    "files": [
+      "web/src/components/CalloutCards.tsx"
+    ]
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Redesign callout cards with right-side panel",
+  "updated_at": "2026-01-05T23:10:19.952654-05:00"
+}

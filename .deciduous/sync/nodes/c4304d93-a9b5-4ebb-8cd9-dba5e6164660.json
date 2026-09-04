@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c4304d93-a9b5-4ebb-8cd9-dba5e6164660",
+  "created_at": "2025-12-11T12:39:17.425374-05:00",
+  "metadata": {
+    "branch": "fix/unicode-truncate-panic",
+    "confidence": 95,
+    "files": [
+      "src/tui/types.rs",
+      "src/tui/views/timeline.rs",
+      "src/export.rs",
+      "src/main.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fixed 4 truncate functions: tui/types.rs, timeline.rs, export.rs, main.rs",
+  "updated_at": "2025-12-11T12:39:17.425374-05:00"
+}

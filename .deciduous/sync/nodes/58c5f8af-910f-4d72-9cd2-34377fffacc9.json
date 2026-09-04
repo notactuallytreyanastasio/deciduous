@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "58c5f8af-910f-4d72-9cd2-34377fffacc9",
+  "created_at": "2026-02-05T15:27:36.153818-05:00",
+  "metadata": {
+    "branch": "feature/event-log-sync",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Auto-emit events working for add/link/status/delete/unlink commands",
+  "updated_at": "2026-02-05T15:27:36.153818-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "047162a1-a3a0-4c6f-acac-b9154350058f",
+  "created_at": "2026-03-18T11:46:12.667961-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90,
+    "prompt": "check out @prompt.md and get started -- were testing off a new deciduous to be thorough and use every feature\n\n---\nprompt.md contents:\n\nBegin building a testing framework library.\n\nWe are replacing ExUnit in Elixir with our own testing framework, built from scratch.\nUse ExUnit initially to test your own framework's assertions, then self-host.\n\nBuild it in this directory using either `rust`, `elixir` or `ruby`, you pick\n\n## Scope\n\nThe framework should support:\n- `assert`, `refute`, `assert_raise`, `assert_receive` (or equivalent)\n- Test modules with setup/teardown\n- Describe blocks and test blocks\n- Colored pass/fail output\n- A runner that collects and reports results\n\nBuild a real library alongside it that uses YOUR framework to test itself.\nKeep to pure functions with just data — no macros, no GenServers, no magic.\n\n## Work Style\n\n- Keep commits logical, small, and reasonable\n- Each commit must be linked to the decision graph with `--commit HEAD`\n- Work iteratively: get one thing working, commit, move to the next\n\n## Deciduous Requirements — THIS IS THE REAL TEST\n\nYou MUST exercise the full decision graph workflow. This means:\n\n1. Start with /work to create the root goal node with the full prompt\n2. Log at least 2 options before making your first design decision\n3. Create a decision node only when you choose between options\n4. Log every action before writing code — BEFORE, not after\n5. Log outcomes after each commit with --commit HEAD\n6. Add at least 2 observations about things you notice along the way\n7. Make at least 1 deliberate architectural mistake early on\n8. Come back to the mistake later and revisit/supersede\n9. Use deciduous link immediately after every node creation\n10. Run deciduous edges at least once mid-session to audit connections\n\n## Expected Graph Shape\n\nBy the end, your graph should have AT MINIMUM:\n- 1 root goal (with verbatim prompt via --prompt-stdin)\n- 2+ options leading to 1+ decisions\n- 4+ actions linked to decisions/goals\n- 4+ outcomes linked to actions (with --commit HEAD)\n- 2+ observations attached to relevant nodes\n- 1 revisit node with edges to both old and new decisions\n- 1 superseded node"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Build testing framework library from scratch",
+  "updated_at": "2026-03-18T11:46:12.667961-04:00"
+}

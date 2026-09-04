@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ad003d0f-2d08-46d9-be81-4ed0868d1b53",
+  "created_at": "2025-12-15T20:09:29.027729-05:00",
+  "metadata": {
+    "branch": "feature/web-url-state",
+    "confidence": 90,
+    "prompt": "User asked to parameterize selections and state in the web UI"
+  },
+  "node_type": "goal",
+  "status": "completed",
+  "title": "Parameterize web UI state in URL for deep linking and sharing",
+  "updated_at": "2025-12-15T20:38:54.088855-05:00"
+}

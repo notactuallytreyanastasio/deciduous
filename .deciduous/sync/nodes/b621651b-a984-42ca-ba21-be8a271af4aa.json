@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b621651b-a984-42ca-ba21-be8a271af4aa",
+  "created_at": "2026-01-05T23:10:22.288547-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "3aaf1dd",
+    "confidence": 100,
+    "files": [
+      "src/init.rs"
+    ]
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add Codex CLI support for deciduous initialization",
+  "updated_at": "2026-01-05T23:10:22.288547-05:00"
+}

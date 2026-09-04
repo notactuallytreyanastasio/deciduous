@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T02:26:55.900206-05:00",
+  "edge_id": "b605f090dec9e58fc02e",
+  "edge_type": "leads_to",
+  "from_change_id": "7d06b119-f17a-4fa1-878e-49f2251923a9",
+  "rationale": "Rust implementation complete",
+  "to_change_id": "fb51ecdd-86e6-45a2-87d5-bd28b29083ec",
+  "weight": 1.0
+}

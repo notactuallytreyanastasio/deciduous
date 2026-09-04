@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "67c7536a-5431-4291-83d1-253a6e91a477",
+  "created_at": "2025-12-13T18:29:56.295882-05:00",
+  "metadata": {
+    "branch": "feat/roadmap-board-system",
+    "confidence": 75
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "CLI+TUI first (rejected)",
+  "updated_at": "2025-12-13T18:29:56.295882-05:00"
+}

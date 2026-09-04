@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b213c91c-7926-418d-948a-c3d668e23352",
+  "created_at": "2025-12-06T00:23:49.548064-05:00",
+  "metadata": {
+    "confidence": 75
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Spike B: Graph Explorer - force-directed graph with code diff panel, click nodes to see related commits, trace paths through history",
+  "updated_at": "2025-12-06T00:23:49.548064-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "87baf0fe-afba-4134-bf90-451746959ed5",
+  "created_at": "2026-02-05T15:09:17.583144-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 80
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How to make multi-user sync seamless",
+  "updated_at": "2026-02-05T15:09:17.583144-05:00"
+}

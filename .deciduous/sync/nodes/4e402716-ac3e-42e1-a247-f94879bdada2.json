@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4e402716-ac3e-42e1-a247-f94879bdada2",
+  "created_at": "2025-12-11T00:50:16.394814-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "confidence": 80,
+    "files": [
+      "src/tui/app.rs",
+      "src/tui/ui.rs",
+      "Cargo.toml"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Integrate syntect-tui for file preview syntax highlighting",
+  "updated_at": "2025-12-11T00:50:16.394814-05:00"
+}

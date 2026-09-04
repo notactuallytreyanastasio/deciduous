@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-05-06T21:21:28.209486-04:00",
+  "edge_id": "434857116a37d32fa321",
+  "edge_type": "leads_to",
+  "from_change_id": "a8c2430b-e6d1-480e-9931-6e83a744a920",
+  "rationale": "Documentation for MCP server",
+  "to_change_id": "6871ad90-0c11-40c5-961e-552218c1d486",
+  "weight": 1.0
+}

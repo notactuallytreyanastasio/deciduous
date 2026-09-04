@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "f28c99d2-6904-4deb-94c4-9d8e7c12d05e",
+  "created_at": "2026-05-06T21:00:29.793160-04:00",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 85,
+    "prompt": "make sure that the MCP also makes it so that conversations in cowork and general chat get their own deciduous trees too"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "MCP server auto-creates decision trees for each conversation",
+  "updated_at": "2026-05-06T21:00:29.793160-04:00"
+}

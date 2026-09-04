@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "32c66005-ae92-435f-807e-e75aca625f43",
+  "created_at": "2025-12-11T02:11:50.261135-05:00",
+  "metadata": {
+    "branch": "feature/prompt-tracking",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Prompt display implemented in TUI detail panel - word-wrapped, light blue, italic styling",
+  "updated_at": "2025-12-11T02:11:50.261135-05:00"
+}

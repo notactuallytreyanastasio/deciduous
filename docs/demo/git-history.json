@@ -1,51 +1,91 @@
 [
   {
-    "hash": "c06a5daceecd678f62783df8424c197e1a8f87d0",
-    "short_hash": "c06a5da",
-    "author": "Robert Grayson",
-    "date": "2026-04-08T07:28:20-04:00",
-    "message": "chore: update deciduous tooling to v0.14.0\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-    "files_changed": 33
+    "hash": "47b71e640f9c9c11df3592479b9cc331caef74a2",
+    "short_hash": "47b71e6",
+    "author": "Bobby Grayson",
+    "date": "2026-09-03T12:09:21-04:00",
+    "message": "fix: address review findings on the record store\n\n- Reconcile: on an updated_at tie the store wins when content differs, so a\n  merge-driver result reaches the machine whose timestamp won\n- Write-through merges with the record already on disk instead of\n  overwriting a teammate's pulled-but-unsynced version; a file that does not\n  parse is left alone\n- Same-named themes created on two machines are folded (smaller change_id\n  is canonical, tags re-pointed); database-refused records are reported and\n  the run continues instead of aborting\n- Export never overwrites a record file that exists but failed to parse\n- resolve_node_ref: digits always mean a local id, never a change_id guess\n- `sync` (CLI and MCP) attaches the store it just created to the open\n  Database so later writes in the same process publish\n- Legacy import replays only events newer than the checkpoint again\n- Tags: record_ts uses created_at, and a tag re-applied after a remote untag\n  is republished rather than stranded\n- dir_for_db returns None for a bare file name, so a scratch database never\n  attaches to the project's store\n- delete_node tombstones the node's tags and removes node_themes rows\n- Remaining node-id arguments (doc attach/list, tag add/remove/list/\n  suggest/confirm, pivot, supersede) accept change_id prefixes\n- Record files whose name does not match the record inside are rejected;\n  non-ASCII change_ids no longer panic in the ambiguity message; naive\n  --date timestamps are read as local time; git author is resolved lazily;\n  `events` alias runs the legacy import; pre-push hook warns about\n  uncommitted records; AGENTS.md updated\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01TxzaZcRNhdEpT2iNcSNcVw",
+    "files_changed": 9
   },
   {
-    "hash": "93bea7f3a28e089a155bfada47b9113fa2e7a1e9",
-    "short_hash": "93bea7f",
-    "author": "Robert Grayson",
-    "date": "2026-03-18T12:00:54-04:00",
-    "message": "refactor(tester): replace nested hash tree with flat array + setup inheritance\n\nSupersedes the over-engineered recursive hash tree approach.\nDSL now collects tests into a flat array with path-prefix names.\nSetup/teardown inherited via stack — parent setups propagate to children.\nRunner simplified: no more recursive tree walking.\nFixed Ruby gotcha: [nil].any? returns false, use .empty? instead.\n30 tests passing across 3 suites.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-    "files_changed": 3
+    "hash": "a021aa1409c16ad57c94dd3c93b877d0a1d29e78",
+    "short_hash": "a021aa1",
+    "author": "Bobby Grayson",
+    "date": "2026-09-03T11:20:18-04:00",
+    "message": "feat: one multi-user sync mechanism, a git-native record store (v0.17.0)\n\nReplace the JSONL event log + checkpoint, the dead diff/patch export, and the\nad-hoc graph-data snapshot with a single mechanism: .deciduous/sync/ holds one\nJSON file per node, edge, theme, and tag, tracked in git. The database layer\nwrites a record on every mutation, so CLI, MCP, and the HTTP API all publish.\n`deciduous sync` reconciles both ways (newer updated_at wins, deletes are\ntombstones, edges import once both endpoints exist) and then exports\ndocs/graph-data.json as before.\n\nConcurrent edits of the same record merge field by field: `deciduous\nmerge-record` is registered as a git merge driver by init/update/sync, and\n`deciduous sync` repairs files left with conflict markers the same way.\n\n- src/records.rs: store, tombstones, tolerant legacy JSONL import, reconcile,\n  field-level 3-way merge, conflict-marker repair\n- src/db.rs: store attached automatically when .deciduous/sync exists;\n  write-through on create/update/delete of nodes, edges, themes, tags;\n  resolve_node_ref accepts change_id prefixes\n- src/main.rs: `sync --check/--no-pages`, hidden `merge-record` driver,\n  `events` kept as a deprecated alias, CHANGE column in `nodes`\n- src/mcp: node ids accept change_id prefixes; new `sync` and `sync_status`\n  tools (events_status kept as an alias)\n- src/init: .gitignore now tracks .deciduous/sync/ and config.toml only,\n  .gitattributes routes records through the merge driver, git config is\n  registered per clone\n- src/events.rs: reduced to a forgiving reader for the old log (splits lines\n  where concurrent appends glued two objects together)\n- templates, CLAUDE.md, docs rewritten; .deciduous/patches removed\n\nCo-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_01TxzaZcRNhdEpT2iNcSNcVw",
+    "files_changed": 37
   },
   {
-    "hash": "18949d9c03c39c8327a2c4926f02d7f64cf065d6",
-    "short_hash": "18949d9",
-    "author": "Robert Grayson",
-    "date": "2026-03-18T11:58:18-04:00",
-    "message": "feat(tester): add multi-suite runner and split tests into separate files\n\nRunner.run_all aggregates results across multiple suites.\nSplit smoke_test into assertion_test, mailbox_test, dsl_test.\nrun_all.rb as entry point. 28 tests across 3 suites.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "hash": "34e58b4d9777cc938c23680fbd6219669eeaa035",
+    "short_hash": "34e58b4",
+    "author": "Bobby Grayson",
+    "date": "2026-07-17T14:58:27-04:00",
+    "message": "ci: fold Homebrew update into the release run, fix its two breakages\n\nThe standalone update-homebrew.yml never worked reliably:\n  - It triggered on `release: published`, but the release is created by the\n    `release` job using GITHUB_TOKEN, and GitHub does not fire `on: release`\n    workflows for releases made by that token — so it never ran at all for\n    0.15.0 or 0.16.0 (the tap sat at 0.13.15).\n  - When it did run (0.13.x, 0.14.0) it failed at \"Download checksums\": the\n    published event raced the asset upload, so checksums.txt wasn't there yet.\n\nFolding it into release.yml as `update-homebrew` (needs: [release]) fixes both:\nit runs in the same workflow (no cross-workflow trigger, no GITHUB_TOKEN\nlimitation) and only after the release job has attached checksums.txt (no race).\nLicense is Apache-2.0 to match the crate. The formula body is byte-for-byte the\none already in the tap. Deletes the superseded standalone workflow.\n\nCo-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>",
+    "files_changed": 2
+  },
+  {
+    "hash": "fa3f08f1e4524e6809c6574f2d662285aa72605b",
+    "short_hash": "fa3f08f",
+    "author": "Bobby Grayson",
+    "date": "2026-07-15T17:04:40-04:00",
+    "message": "feat: multi-graph HTTP API daemon (serve --api)\n\n- file-per-graph tenancy under --data-dir (graphs/<id>/deciduous.db)\n- routes wrap mcp::handlers::dispatch — CLI/MCP/HTTP share one router\n- bearer-token auth; explicit branch args for git-less remote clients\n- SELECT-only /query endpoint (rusqlite read-only + query_only + stmt.readonly)\n- 7 integration tests over a real socket\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
     "files_changed": 6
   },
   {
-    "hash": "ad799d2b435227d1cc033563c119bee1f7557b9c",
-    "short_hash": "ad799d2",
-    "author": "Robert Grayson",
-    "date": "2026-03-18T11:56:17-04:00",
-    "message": "feat(tester): add assert_receive/refute_receive with mailbox pattern\n\nPure data mailbox: send messages, receive by exact match or regex.\nassert_receive pulls matching message from queue.\nrefute_receive verifies no match exists.\n25 self-hosting tests passing.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-    "files_changed": 4
+    "hash": "a30719c74cc001d2171b1a1e71944b458cb18df9",
+    "short_hash": "a30719c",
+    "author": "Bobby Grayson",
+    "date": "2026-07-10T08:40:54-04:00",
+    "message": "test+docs: integration tests for untested subcommands, CHANGELOG backfill, bindings drift gate\n\n- 7 new integration tests covering subcommands that had zero black-box\n  coverage: init scaffold + idempotency (preserves user-modified\n  config.toml), doc attach/list/show/detach round-trip, doc attach\n  missing-file error, themes create + tag/untag round-trip, tag with\n  unknown theme fails, migrate idempotency. cli_integration: 41 -> 48\n- CHANGELOG.md was stuck at 0.3.5 while the crate is 0.15.0; backfilled\n  12 minor-version entries (0.4.0-0.15.0) from the embedded\n  src/changelog.rs RELEASES array and git tag dates\n- bindings/ drift fix + CI gate: the committed generated TS bindings\n  were stale and incomplete - only 2 of 15 #[ts(export)] types were\n  committed, User.ts matched no type in the codebase, and nothing in CI\n  regenerated them. gen_types now exports all 15 to bindings/ (schema.ts\n  output byte-identical); regenerated the set; validate-types CI job now\n  runs the generator and fails on git diff, so bindings can't drift\n  silently again\n\n314 tests pass, clippy -D warnings clean (incl. --features ts-rs).\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "files_changed": 20
   },
   {
-    "hash": "fccd25dfe5698d2f1baa1225a3585b78e184fb68",
-    "short_hash": "fccd25d",
-    "author": "Robert Grayson",
-    "date": "2026-03-18T11:54:51-04:00",
-    "message": "feat(tester): scaffold Ruby testing framework with nested hash tree\n\nCore assertions: assert, refute, assert_equal, refute_equal,\nassert_raise, assert_match, assert_includes.\n\nDSL with describe/test/setup/teardown blocks using nested hash tree\nstructure (deliberate over-engineering — will revisit).\n\nRunner with colored output and recursive tree walking.\n19 self-hosting tests passing.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
+    "hash": "4ce3a6c765ef3b65ec4176b61cb8d167bc686049",
+    "short_hash": "4ce3a6c",
+    "author": "Bobby Grayson",
+    "date": "2026-07-10T08:30:06-04:00",
+    "message": "fix(web): tree selection highlight, branch-mode consistency, tests, rebuilt stale init viewer\n\nBug fixes:\n- TreeRow passed its own isSelected down to every child, so selecting\n  the root highlighted the whole tree and selecting a descendant\n  highlighted nothing; selectedNodeId now flows down and each row\n  compares itself\n- Branch-mode narratives built trees from the GLOBAL adjacency, letting\n  a branch tree leak other branches' nodes while counts/layout were\n  branch-scoped; trees now use a branch-local adjacency\n- parseInt without radix in the D3 selection handler\n\nMaintainability/perf:\n- Extracted pure graph logic (buildNarratives/buildTree/\n  calculateTreeSize/buildAdjacencyLists) from the 3,095-line App.tsx\n  into web/src/utils/graphProcessing.ts, unchanged except the fixes\n- BFS queues use head-index pointers instead of O(n) Array.shift()\n- Deleted dead web/src/types/qa.ts and archaeology.ts (unimported) and\n  20 unused helper functions from graph.ts; kept everything\n  validate-types.sh greps (NODE_TYPES/EDGE_TYPES/NODE_STATUSES,\n  interfaces, generated schema)\n- App.tsx imports NODE_TYPES/DEFAULT_COMMIT_REPO instead of\n  re-literaling them; typed NODE_TYPE_COLORS/STATUS_COLORS maps replace\n  14 unchecked THEME casts (rejected status now has an explicit entry\n  matching the old fallback color)\n\nTooling that was broken:\n- npm test exited non-zero (zero test files): now 18 vitest tests over\n  the pure graph functions incl. cycle safety, multi-parent, and a\n  regression test for the branch-leakage fix\n- npm run lint errored (no eslint config): added .eslintrc.cjs matching\n  the installed eslint 8 + @typescript-eslint 6; passes clean\n\nEmbedded artifacts rebuilt from source:\n- src/viewer.html + docs/demo/index.html (npm run build)\n- src/pages_viewer.html + web/dist-embed (npm run build:embed) - this\n  file was 5 releases stale (v0.9.2), so 'deciduous init' scaffolded a\n  viewer missing themes, documents, and the narrative redesign\n\nAll verification green: tsc --noEmit, 18/18 vitest, eslint, vite\nbuilds, validate-types.sh, cargo test (307), cargo build --release.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "files_changed": 11
+  },
+  {
+    "hash": "818ddee971c3ef568b0a68353fbfdfe3efbbda70",
+    "short_hash": "818ddee",
+    "author": "Bobby Grayson",
+    "date": "2026-07-10T06:04:44-04:00",
+    "message": "refactor: remove ~600 lines of duplication - shared tables, metadata accessors, event helper\n\nZero behavior change, verified by diffing old-vs-new binary outputs\n(opencode install/update file trees, nodes, show, graph, dot, writeup,\npulse, audit) - all byte-identical.\n\n- opencode.rs: install_opencode and update_opencode duplicated the\n  command/skill/plugin tables and file-writing logic (~200 lines,\n  byte-for-byte). Extracted OPENCODE_COMMANDS/SKILLS/PLUGINS consts and\n  a shared write_opencode_integration_files(); install keeps its\n  config-gated plugin selection. Adding a command now touches one table\n  instead of two. Parity test locks install/update in sync\n- db.rs: DecisionNode gains metadata()/branch()/confidence()/commit()/\n  prompt() accessors; migrated ~20 hand-rolled metadata_json parse\n  sites across main.rs, pulse.rs, archaeology.rs, serve.rs, export.rs,\n  mcp/query.rs, mcp/handlers.rs. Sites with deliberately different\n  semantics (unclamped confidence in extract_confidence/node_summary_json,\n  signed confidence in show) kept their exact behavior\n- util.rs: single canonical Unicode-safe truncate() (main.rs and\n  export.rs had identical copies)\n- db.rs: get_graph() delegates to get_graph_with_config(None);\n  migrate_add_change_ids and migrate_add_change_ids_raw share extracted\n  column-check/backfill helpers while keeping their distinct\n  index-creation and early-return semantics\n- main.rs: emit_sync_events() helper replaces five copy-pasted\n  ~30-line sync event blocks (Add/Link/Unlink/Delete/Status)\n- export.rs: writeup commit badge no longer byte-slices a\n  user-supplied commit value (same class as the PR3 UTF-8 fixes)\n\n11 new tests (accessor edge cases incl. clamping/malformed JSON,\ninstall/update parity). 307 tests pass, clippy -D warnings clean.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "files_changed": 11
+  },
+  {
+    "hash": "e84cf6693384dbd6e9718d9a70b18ea188c9b18c",
+    "short_hash": "e84cf66",
+    "author": "Bobby Grayson",
+    "date": "2026-07-09T23:49:23-04:00",
+    "message": "fix(mcp): resume_session data loss, JSON-RPC id echo, pulse orphan consistency, tool caching\n\n- resume_session called end_session(id, None) to 'reopen' an ended\n  session, which re-stamped ended_at and overwrote the saved summary\n  with NULL - the session stayed inactive in every query and its summary\n  was destroyed. New Database::reactivate_session() clears only ended_at\n- tools/call param errors returned id:null instead of echoing the\n  request id, so JSON-RPC clients could not correlate the error with\n  their request. handle_tools_call/handle_initialize/handle_tools_list\n  now receive the id; serialization-failure fallbacks emit proper\n  error envelopes via a serialization_error() helper instead of bare\n  {\"error\": ...} objects\n- get_pulse with a branch filter reported branch-scoped totals but\n  computed orphans on the unfiltered graph; orphans now respect the\n  same branch predicate\n- find_orphans: removed the dead has_outgoing arms (both returned None)\n- Tool definitions (31 of them) were rebuilt on every request, at least\n  twice per tools/call; now cached in a OnceLock (MSRV-safe) behind\n  tool_definitions()\n- save_session_to_disk no longer swallows write errors silently\n- attach_document uses a non-panicking hash prefix slice\n\n5 new tests including a regression test that ends a session with a\nsummary, resumes it, and asserts ended_at cleared + summary preserved.\n296 tests pass, clippy clean.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
     "files_changed": 5
   },
   {
-    "hash": "741a3f6d510bc7f97a57cf6b230564bed081e731",
-    "short_hash": "741a3f6",
-    "author": "Robert Grayson",
-    "date": "2026-03-18T11:48:39-04:00",
-    "message": "feat(tester): scaffold Ruby testing framework with hash-based test cases\n\nCore assertions (assert, refute, assert_equal, assert_raise), DSL with\ndescribe/test/setup/teardown blocks, and a runner with colored output.\nDeliberately using plain hashes for test case representation.\n\nCo-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>",
-    "files_changed": 6
+    "hash": "1e289b1574abe9d4d919136a3c6c0dac893cb826",
+    "short_hash": "1e289b1",
+    "author": "Bobby Grayson",
+    "date": "2026-07-09T23:42:19-04:00",
+    "message": "fix: five core bug fixes - UTF-8 panic, unlink sync divergence, atomicity, false success, DST panic\n\n- nodes: observation descriptions were truncated with a raw byte slice\n  (&desc[..77]) which panics on multi-byte UTF-8 at the boundary; use the\n  Unicode-safe truncate() helper. Same fix for user-supplied --commit\n  values displayed with &c[..7]\n- unlink: the DeleteEdge sync event hardcoded edge_type \"leads_to\" when\n  computing edge_id, so deleting rejected/blocks/chosen edges emitted an\n  id that never matched the AddEdge id - teammates' graphs silently kept\n  the edge on events rebuild. Now fetches the real edges via new\n  Database::get_edges_between() and emits one correctly-typed event per\n  deleted edge\n- db: delete_node's 7-statement cascade and create_edge's insert+rowid\n  now run inside transactions so a mid-sequence failure can't leave a\n  partially-deleted graph\n- db: update_node_status returned Ok even when the node doesn't exist\n  ('deciduous status 99999 done' claimed success); now returns NotFound,\n  matching update_node_prompt/update_node_commit\n- add --date: chrono from_local_datetime().unwrap() panicked on DST-gap\n  local times; extracted parse_backdate() using earliest() with the\n  existing warn-and-passthrough fallback\n- db: PRAGMA busy_timeout=5000 on every pooled connection so concurrent\n  writers (CLI + serve + MCP) wait instead of failing with SQLITE_BUSY\n\n19 new regression tests (6 db, 9 main, 4 integration), including a true\nDST regression test that panicked before the fix. 291 tests pass, clippy\nclean with -D warnings.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "files_changed": 3
+  },
+  {
+    "hash": "2dc9194f4f4798e7e8fd4bc3891479ced379c77e",
+    "short_hash": "2dc9194",
+    "author": "Bobby Grayson",
+    "date": "2026-07-09T23:27:03-04:00",
+    "message": "chore: remove ~25MB of unreferenced binaries and losselot-era fossils\n\nRemovals (all verified unreferenced by any md/html/rs/ts/yml):\n- deciduous_demo (13MB committed executable), decid_demo.cast (9.4MB),\n  knowledge_graph.png (2.1MB), action/decision/goal/outcome.png (~700KB)\n- appimage/ (losselot .desktop and .svg; nothing builds an AppImage)\n- examples/ (audio test-file generator + committed mp3 from the audio era)\n- tester/ (unrelated scratch prompt committed by accident)\n- Formula/deciduous.rb (stale copy; update-homebrew.yml generates the\n  formula inline and pushes it to the homebrew-tap repo)\n\nUntracked local state that should never have been committed:\n- .deciduous/deciduous.db.backup (binary db backup)\n- .deciduous/web/graph-data.json (generated export)\n\n.gitignore rewrite:\n- The trailing blanket '.deciduous/' rule overrode the earlier\n  '!.deciduous/patches/' negation, so new patch files could not be\n  git-added - silently breaking the documented patch-sharing workflow.\n  Verified with git check-ignore before/after.\n- Pruned dead audio-era rules (*.flac, sus.mp3, losselot-reports/, etc.)\n  and duplicate db rules.\n\nMakefile:\n- Deleted dead audio targets (analyze*, report-*, gen-test-files, demo,\n  bench, clean-reports) that invoked the pre-rename CLI and cannot work\n- Fixed 'make serve': it passed a '.' positional that 'deciduous serve'\n  rejects\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "files_changed": 17
+  },
+  {
+    "hash": "0d14ca6ccbb735e28a8738a6c5ac7ba90c423507",
+    "short_hash": "0d14ca6",
+    "author": "Bobby Grayson",
+    "date": "2026-07-09T23:24:16-04:00",
+    "message": "ci: make lint gates real - clippy -D warnings, cargo fmt, drop dead proptest step\n\n- Rename TraceDirection::from_str to parse (clippy should_implement_trait\n  was failing the entire clippy run since [lints.clippy] all = deny)\n- Run cargo fmt across the repo; format-check CI job was red on main\n- CI: gate clippy with --all-targets -- -D warnings (Makefile lint already\n  did this; CI was weaker)\n- CI: run format-check/validate-types/build jobs in parallel instead of\n  serial needs-chaining\n- CI: add macOS to the build-rust matrix (releases ship macOS binaries but\n  CI only tested Linux)\n- CI: remove the proptest step and stale src/tui/types.rs summary lines;\n  there are no proptest tests and no tui module. Drop unused proptest\n  dev-dependency\n- Makefile: make install/uninstall copy the deciduous binary instead of\n  the old losselot name (make install was broken)\n\nNo behavior changes; all 272 tests pass.\n\nCo-Authored-By: Claude Fable 5 <noreply@anthropic.com>",
+    "files_changed": 11
   },
   {
     "hash": "02cd9607a6dfc919a7eb78280161efd8aa79f07c",
@@ -264,44 +304,12 @@
     "files_changed": 41
   },
   {
-    "hash": "f91256f86f3af246df1646c7b67dacc3a183b631",
-    "short_hash": "f91256f",
-    "author": "Robert Grayson",
-    "date": "2026-02-16T21:45:11-05:00",
-    "message": "release: v0.12.1 - bootstrap all slash commands via init/update\n\nAdd 6 new slash commands to the deciduous bootstrap system so they're\ncreated by `deciduous init` and updated by `deciduous update`:\n\n- /document - comprehensive documentation generator\n- /build-test - build and run test suite\n- /serve-ui - start decision graph web viewer\n- /sync-graph - export graph to GitHub Pages\n- /decision-graph - build decision graph from commit history\n- /sync - multi-user event-based sync workflow\n\nUpdated documentation across CLAUDE.md, README.md, QUICK_REFERENCE.md,\nand the CLAUDE_MD_SECTION template with full command/skill reference tables.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
-    "files_changed": 8
-  },
-  {
-    "hash": "8563cf07aead7cb658a13d5174b61aba22ef2c02",
-    "short_hash": "8563cf0",
-    "author": "--replace-all",
-    "date": "2026-02-05T21:47:08-05:00",
-    "message": "feat: add event log sync system for async teams\n\nAppend-only event logs per user (.deciduous/sync/events/{user}.jsonl)\nreplace snapshot patches for multi-user sync. Auto-emits events on\nadd/link/status/delete/unlink. CLI: deciduous events init/status/emit/\nrebuild/checkpoint. Includes /api/sync-status endpoint and /sync skill.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
-    "files_changed": 7
-  },
-  {
-    "hash": "f634ec5e63ed61d2eba9480953a9e91b97b051c4",
-    "short_hash": "f634ec5",
-    "author": "--replace-all",
-    "date": "2026-02-05T21:46:52-05:00",
-    "message": "feat: enforce canonical node flow (goal -> options -> decision -> actions -> outcomes)\n\nEstablish rigorous node typing and edge rules across all documentation,\ntemplates, skills, and hooks. Options come from goals, decisions choose\nbetween options, actions implement decisions, outcomes result from actions.\n\nCo-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>",
-    "files_changed": 13
-  },
-  {
     "hash": "156f6be708c7dfea19adad9fc9384deb6e26e0bb",
     "short_hash": "156f6be",
     "author": "--replace-all",
     "date": "2026-02-05T13:15:46-05:00",
     "message": "release: v0.12.0 - redesigned web viewer with hierarchical narrative view\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
     "files_changed": 3
-  },
-  {
-    "hash": "19cea5153c27f827e919b315d41507778b3372aa",
-    "short_hash": "19cea51",
-    "author": "--replace-all",
-    "date": "2026-02-05T13:14:07-05:00",
-    "message": "feat: redesign web viewer with hierarchical narrative view\n\nComplete rewrite of the React web viewer with:\n- Smart narrative detection (filters to 10+ node trees)\n- D3 DAG flowchart visualization (hierarchical left-to-right layout)\n- Full-text search with type filter buttons\n- Resizable panels (drag to resize all sections)\n- Gold shimmer effect for selected node highlighting\n- Automatic graph loading when clicking search results\n- Edge type legend in graph view\n- Removed unused status column (98% were \"pending\")\n\nDeleted old components, hooks, utils, and views in favor of\na single unified App.tsx (~2000 LOC vs ~24K scattered).\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>",
-    "files_changed": 48
   },
   {
     "hash": "62c155133eedf36cc73d5445a3f1258ad635f9b0",

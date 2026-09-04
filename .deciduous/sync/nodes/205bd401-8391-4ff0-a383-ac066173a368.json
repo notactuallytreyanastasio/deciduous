@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "205bd401-8391-4ff0-a383-ac066173a368",
+  "created_at": "2025-12-12T17:57:42.392696-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "prompt": "Roadmap updates can go in current branch/main, they are documentation"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Commit Roadmap and AGENTS.md updates directly to branch",
+  "updated_at": "2025-12-12T17:57:42.392696-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "305fd98a-7f3a-4163-a283-76bcc026a9ed",
+  "created_at": "2025-12-18T21:14:21.268256-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "commit": "5eb887f",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Created PR #166 with full decision graph details",
+  "updated_at": "2025-12-18T21:14:21.268256-05:00"
+}

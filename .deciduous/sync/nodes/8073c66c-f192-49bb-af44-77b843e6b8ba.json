@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "8073c66c-f192-49bb-af44-77b843e6b8ba",
+  "created_at": "2026-07-15T16:22:13.131752-04:00",
+  "metadata": {
+    "branch": "feat/api-server",
+    "confidence": 85
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "serve --api: tiny_http daemon wrapping mcp dispatch; file-per-graph under --data-dir; bearer token auth; SELECT-only /query via rusqlite read-only connection",
+  "updated_at": "2026-07-15T16:22:13.131752-04:00"
+}

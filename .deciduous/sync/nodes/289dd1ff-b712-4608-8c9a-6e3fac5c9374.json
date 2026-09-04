@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "289dd1ff-b712-4608-8c9a-6e3fac5c9374",
+  "created_at": "2025-12-12T17:25:44.636090-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Compiler errors: dead code warnings in test structs",
+  "updated_at": "2025-12-12T17:25:44.636090-05:00"
+}

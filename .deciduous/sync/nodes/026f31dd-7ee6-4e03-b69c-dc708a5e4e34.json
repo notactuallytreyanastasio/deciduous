@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "026f31dd-7ee6-4e03-b69c-dc708a5e4e34",
+  "created_at": "2026-03-06T23:55:17.988869-05:00",
+  "metadata": {
+    "branch": "terminal-style-agent-streams",
+    "confidence": 89
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Choose vendored snapshot workspace with compatibility manifest",
+  "updated_at": "2026-03-06T23:55:17.988869-05:00"
+}

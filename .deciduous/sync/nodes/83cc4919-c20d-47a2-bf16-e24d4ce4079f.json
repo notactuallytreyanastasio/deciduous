@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "83cc4919-c20d-47a2-bf16-e24d4ce4079f",
+  "created_at": "2026-03-18T01:18:16.082091-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "User confirmed OpenCode must be kept — adjusted strategy to remove only Windsurf",
+  "updated_at": "2026-03-18T01:18:16.082091-04:00"
+}

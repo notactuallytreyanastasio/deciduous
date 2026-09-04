@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-12T22:40:00.873274-05:00",
+  "edge_id": "f2fdba633213185e356e",
+  "edge_type": "leads_to",
+  "from_change_id": "244f3c29-5807-46d9-b6d5-4d0d56ab91d0",
+  "rationale": "Parallel traversal needs ordering strategy",
+  "to_change_id": "f2bc5b8c-e795-40aa-89a4-4391f4055382",
+  "weight": 1.0
+}

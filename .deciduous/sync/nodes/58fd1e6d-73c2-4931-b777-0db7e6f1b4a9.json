@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "58fd1e6d-73c2-4931-b777-0db7e6f1b4a9",
+  "created_at": "2025-12-05T20:33:31.780638-05:00",
+  "description": "wasm-pack requires wasm32-unknown-unknown target which isn't in Homebrew's Rust sysroot",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Homebrew Rust lacks wasm32 target - need rustup or manual install",
+  "updated_at": "2025-12-05T20:33:31.780638-05:00"
+}

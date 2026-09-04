@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-10T15:45:13.390902-05:00",
+  "edge_id": "3daab08f3475ab06945b",
+  "edge_type": "leads_to",
+  "from_change_id": "1b9f5146-a939-4aab-bd07-6d02a86f13e4",
+  "rationale": "Graph integrity auditing implemented in all tooling",
+  "to_change_id": "4186a1a9-9be4-4abf-a5dc-8865532033c5",
+  "weight": 1.0
+}

@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "922fe12e-b981-443d-90c7-e69cb0045bb6",
+  "created_at": "2026-03-04T11:34:21.728084-05:00",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "confidence": 95,
+    "files": [
+      "src/main.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fix beta release update warning",
+  "updated_at": "2026-03-04T11:34:21.728084-05:00"
+}

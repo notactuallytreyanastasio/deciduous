@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-09T17:36:19.273627-05:00",
+  "edge_id": "5a7dbba07503ddf3f191",
+  "edge_type": "leads_to",
+  "from_change_id": "5fbc475f-979b-43b4-a68f-a269fde6900d",
+  "rationale": "Implementing cascade approach",
+  "to_change_id": "70e867ba-0dc5-48ef-8613-c75e9d24229d",
+  "weight": 1.0
+}

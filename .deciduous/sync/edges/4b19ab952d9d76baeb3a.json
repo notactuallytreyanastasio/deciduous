@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-13T18:42:58.694156-05:00",
+  "edge_id": "4b19ab952d9d76baeb3a",
+  "edge_type": "leads_to",
+  "from_change_id": "3befd1cf-d683-4ebc-a2ec-90c013131f80",
+  "rationale": "Phase 3 GitHub integration complete",
+  "to_change_id": "39eaa7bc-0641-4aea-9370-1088403606eb",
+  "weight": 1.0
+}

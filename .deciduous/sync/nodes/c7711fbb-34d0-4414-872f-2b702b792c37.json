@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c7711fbb-34d0-4414-872f-2b702b792c37",
+  "created_at": "2025-12-12T17:29:11.429018-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Missing re-exports in lib.rs for DecisionContext/Session",
+  "updated_at": "2025-12-12T17:29:11.429018-05:00"
+}

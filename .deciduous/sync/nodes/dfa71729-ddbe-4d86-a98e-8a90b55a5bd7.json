@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dfa71729-ddbe-4d86-a98e-8a90b55a5bd7",
+  "created_at": "2026-01-05T19:21:26.291183-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "95ed15b",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Nix flake provides reproducible builds across platforms",
+  "updated_at": "2026-01-05T19:21:26.291183-05:00"
+}

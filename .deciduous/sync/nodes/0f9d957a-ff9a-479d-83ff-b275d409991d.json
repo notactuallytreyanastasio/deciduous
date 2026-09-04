@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0f9d957a-ff9a-479d-83ff-b275d409991d",
+  "created_at": "2025-12-05T17:09:17.953137-05:00",
+  "metadata": {
+    "prompt": "Test prompt content for verification"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Test lo-fi detection on charlie.flac",
+  "updated_at": "2026-01-05T16:17:38.673335-05:00"
+}

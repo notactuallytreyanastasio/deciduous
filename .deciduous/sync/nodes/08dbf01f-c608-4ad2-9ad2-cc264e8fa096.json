@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "08dbf01f-c608-4ad2-9ad2-cc264e8fa096",
+  "created_at": "2026-01-12T22:41:19.820501-05:00",
+  "description": "Major architectural refactor introducing separate crates:\n- grep-matcher: Matcher trait for pattern matching engines\n- grep-regex: Rust regex implementation of Matcher\n- grep-pcre2: PCRE2 implementation of Matcher  \n- grep-searcher: Searches files using a Matcher\n- grep-printer: Sink trait for output formatting\n- grep-cli: CLI utilities\n\nThree distinct phases decoupled by traits:\n1. Pattern matching (Matcher trait)\n2. Searching (uses Matcher)\n3. Printing (Sink trait)\n\nSources:\n- d9ca529: 'libripgrep is not any one library, but rather, a collection of libraries that roughly separate the following key distinct phases in a grep implementation: 1. Pattern matching (e.g., by a regex engine). 2. Searching a file using a pattern matcher. 3. Printing results... Closes #162'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Created libripgrep: decoupled crate collection",
+  "updated_at": "2026-01-12T22:41:19.820501-05:00"
+}

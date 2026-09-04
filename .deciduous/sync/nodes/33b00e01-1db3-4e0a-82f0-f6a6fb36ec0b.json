@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "33b00e01-1db3-4e0a-82f0-f6a6fb36ec0b",
+  "created_at": "2025-12-16T19:09:00.023562-05:00",
+  "metadata": {
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Resolve merge conflicts by applying context->recover rename to main's Codex additions",
+  "updated_at": "2025-12-16T19:09:00.023562-05:00"
+}

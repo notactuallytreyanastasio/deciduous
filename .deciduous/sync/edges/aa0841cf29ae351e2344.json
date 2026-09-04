@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-05-06T21:12:00.066257-04:00",
+  "edge_id": "aa0841cf29ae351e2344",
+  "edge_type": "leads_to",
+  "from_change_id": "dfdcfbe8-0d6c-457c-9652-6f9807295c5e",
+  "rationale": "Approach to fix session persistence",
+  "to_change_id": "50fdb762-de8d-4077-933a-b963660d6315",
+  "weight": 1.0
+}

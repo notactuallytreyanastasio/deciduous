@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "43bc440b-395d-4f8b-a6b6-3e9711fa0f1b",
+  "created_at": "2026-09-02T18:48:00.656995-04:00",
+  "description": "Symptom: pillTouches threw on NaN ids, aborting applyState before scrollTo, so selecting a node never panned the map. Separately, the title placeholder collided with the JS global of the same name in the exported file; the export now replaces only the <title> element.",
+  "metadata": {
+    "branch": "spike-lean-stuff"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "A shared CSS class between the sidebar mode badge and the SVG reasoning pills broke selection scrolling and search; scoping selectors to g.pill fixed both",
+  "updated_at": "2026-09-02T18:48:00.656995-04:00"
+}

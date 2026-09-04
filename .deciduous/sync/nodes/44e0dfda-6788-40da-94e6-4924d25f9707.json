@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "44e0dfda-6788-40da-94e6-4924d25f9707",
+  "created_at": "2026-09-02T17:44:56.372460-04:00",
+  "description": "Verified: alice and bob each ran 'lean import' on the same export, bob had an extra node so local ids differed, bob replayed alice's events: 193 nodes / 284 edges exactly as expected, no duplicate declarations, alice's decision attached to bob's thm:conway-refinement.",
+  "metadata": {
+    "branch": "spike-lean-stuff"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Deterministic change_id per blueprint id makes Lean collaboration free: two users import independently, exchange only reasoning events, and decisions land on the same declarations",
+  "updated_at": "2026-09-02T17:44:56.372460-04:00"
+}

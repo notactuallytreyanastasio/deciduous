@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2b589796-ef1d-49af-9f9f-f59fe788224e",
+  "created_at": "2026-05-06T21:12:09.998198-04:00",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 92
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Persist sessions to disk with auto-resume",
+  "updated_at": "2026-05-06T21:12:09.998198-04:00"
+}

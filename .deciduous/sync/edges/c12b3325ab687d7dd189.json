@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T17:11:33.941841-05:00",
+  "edge_id": "c12b3325ab687d7dd189",
+  "edge_type": "leads_to",
+  "from_change_id": "b47d20a6-ad2e-4dd7-b917-3f9b7cada4c3",
+  "rationale": "Technical analysis of Approach B",
+  "to_change_id": "74e828e6-0f96-4c73-8c77-6ee8d9e73985",
+  "weight": 1.0
+}

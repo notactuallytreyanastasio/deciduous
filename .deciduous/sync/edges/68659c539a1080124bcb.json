@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T01:34:46.307322-05:00",
+  "edge_id": "68659c539a1080124bcb",
+  "edge_type": "leads_to",
+  "from_change_id": "267ac2e0-ebec-4d20-8064-668792908a51",
+  "rationale": "Fix performance issue caused by syntax highlighting on every frame",
+  "to_change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+  "weight": 1.0
+}

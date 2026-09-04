@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "13bd35be-41a5-4cab-9db3-41e15fc98f2c",
+  "created_at": "2026-03-04T19:56:35.117875Z",
+  "metadata": {
+    "branch": "elixir-ecto-read-commands",
+    "commit": "6058855ca1c3a40ca5234d3a4eaacaf55e0b6eb0",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Removed Rust CLI, Elixir-only v0.14.0-beta.1",
+  "updated_at": "2026-03-04T19:56:35.117875Z"
+}

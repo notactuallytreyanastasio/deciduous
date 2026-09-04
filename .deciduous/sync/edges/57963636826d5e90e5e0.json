@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T01:40:45.911693-05:00",
+  "edge_id": "57963636826d5e90e5e0",
+  "edge_type": "leads_to",
+  "from_change_id": "2a9075c0-3155-42dd-9b3a-df782184ca27",
+  "rationale": "Re-add highlighting that was lost in performance fix",
+  "to_change_id": "85d028f5-1550-4d37-817a-094b92622e52",
+  "weight": 1.0
+}

@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a78700fc-d955-47ca-aca1-1a76f5b3b07d",
+  "created_at": "2026-04-07T21:43:18.137505-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85,
+    "files": [
+      "src/main.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Update CLI to warn on observation without description and show description in nodes list",
+  "updated_at": "2026-04-07T21:43:18.137505-04:00"
+}

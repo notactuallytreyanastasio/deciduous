@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5cefb8b6-c00e-4d21-8bd1-cb08bf2b6b40",
+  "created_at": "2025-12-11T18:17:37.346427-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Plan maintenance audit approach",
+  "updated_at": "2025-12-11T18:17:37.346427-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1f24a957-9e2d-4837-8ecc-1327e0306470",
+  "created_at": "2026-01-12T22:44:59.182502-05:00",
+  "description": "Core optimization: analyze regex pattern, extract required literal substrings, use Aho-Corasick multi-pattern matcher or memchr to quickly identify candidate lines, then verify with full regex engine. This is why ripgrep beats grep on many workloads.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implemented inner literal extraction for fast pre-filtering",
+  "updated_at": "2026-01-12T22:44:59.182502-05:00"
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "696b8859-d56f-4ad8-9314-cdea3f60b8f8",
+  "created_at": "2025-12-14T10:25:38.915493-05:00",
+  "metadata": {
+    "branch": "feat/roadmap-board-system",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Refactoring TUI roadmap view - hide completed, add detail modal, TEA pattern",
+  "updated_at": "2025-12-14T10:25:38.915493-05:00"
+}

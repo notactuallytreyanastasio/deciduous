@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "26d46762-ad2f-4af9-9459-5aeafd91d730",
+  "created_at": "2025-12-10T17:48:11.012439-05:00",
+  "metadata": {
+    "branch": "feature/multi-user-graph-sync",
+    "confidence": 75,
+    "prompt": "Core problem: multiple users have local .deciduous/deciduous.db, need to sync changes to shared repo without conflicts"
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How to handle multi-user graph sync",
+  "updated_at": "2025-12-10T17:48:11.012439-05:00"
+}

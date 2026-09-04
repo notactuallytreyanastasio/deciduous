@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-09T17:26:56.878972-05:00",
+  "edge_id": "3e40934e86837bda8315",
+  "edge_type": "leads_to",
+  "from_change_id": "02915131-ce0b-4da7-8b8e-9967aeab0f8f",
+  "rationale": "Goal requires this decision about Claude integration",
+  "to_change_id": "61f128cf-96d1-41ff-9254-a6bce7056a35",
+  "weight": 1.0
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "28e9232a-00d8-4aac-b4d6-8d44de17bdb5",
+  "created_at": "2025-12-01T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "File types are a community-driven effort - 132+ commits adding types over 9 years, 363 lines in default_types.rs",
+  "updated_at": "2025-12-01T00:00:00-05:00"
+}

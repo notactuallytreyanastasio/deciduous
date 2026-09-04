@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "824fff50-53d2-4d37-9c8f-e4273116e978",
+  "created_at": "2026-09-02T18:32:38.927137-04:00",
+  "description": "The VCS already hands a merge driver the common ancestor, which is exactly the fingerprint needed to tell 'only one side changed this field' from a true collision. Field-level rules: one-sided change wins; metadata merges key-wise; same-field collisions go to the later updated_at; a delete loses to an edit made after it. Per-field files would explode file counts; a stored parent hash duplicates what the VCS knows.",
+  "metadata": {
+    "branch": "worktree-multi-user-sync",
+    "confidence": 85
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Merge driver + field-level 3-way merge, with conflict-marker repair in 'deciduous sync' as the no-config fallback",
+  "updated_at": "2026-09-02T18:32:38.927137-04:00"
+}

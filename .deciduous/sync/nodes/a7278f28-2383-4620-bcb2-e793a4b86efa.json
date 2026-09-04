@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a7278f28-2383-4620-bcb2-e793a4b86efa",
+  "created_at": "2025-12-12T00:15:31.298256-05:00",
+  "metadata": {
+    "branch": "feature/type-unification-tui-web",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Web types missing change_id, from_change_id, to_change_id",
+  "updated_at": "2025-12-12T00:15:31.298256-05:00"
+}

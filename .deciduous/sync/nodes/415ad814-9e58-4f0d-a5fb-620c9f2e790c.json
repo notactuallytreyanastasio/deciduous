@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "415ad814-9e58-4f0d-a5fb-620c9f2e790c",
+  "created_at": "2025-12-18T21:26:50.104116-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "USE CASE: PR/issue body is typically ONE per node → Key-Value fits",
+  "updated_at": "2025-12-18T21:26:50.104116-05:00"
+}

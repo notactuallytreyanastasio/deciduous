@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "39304d8c-ac9c-4edf-89bb-9954c642efc1",
+  "created_at": "2026-07-10T08:55:13.935556-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "now why arent we using the jsonl files to build teh deciduous db? those nodes are too low an ID it means I lost the original DB"
+  },
+  "node_type": "goal",
+  "status": "completed",
+  "title": "Recover original decision graph DB (1,390 nodes) lost before this session",
+  "updated_at": "2026-07-10T08:55:14.037971-04:00"
+}

@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e34f1a81-87d0-4915-b17c-c524b402d5eb",
+  "created_at": "2025-12-15T10:05:57.474267-05:00",
+  "metadata": {
+    "branch": "landing-page-refresh",
+    "confidence": 90,
+    "files": [
+      "docs/index.html"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Expanded session demo to full ~40s realistic dialogue",
+  "updated_at": "2025-12-15T10:05:57.474267-05:00"
+}

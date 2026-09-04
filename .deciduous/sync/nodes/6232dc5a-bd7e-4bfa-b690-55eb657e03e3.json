@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6232dc5a-bd7e-4bfa-b690-55eb657e03e3",
+  "created_at": "2025-12-18T12:50:26.049787-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Windsurf: Cascade hooks in .windsurf/hooks.json, pre_run_command event, exit code 2 blocks",
+  "updated_at": "2025-12-18T12:50:26.049787-05:00"
+}

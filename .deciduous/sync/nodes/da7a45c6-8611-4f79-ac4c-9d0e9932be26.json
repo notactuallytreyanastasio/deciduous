@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "da7a45c6-8611-4f79-ac4c-9d0e9932be26",
+  "created_at": "2025-12-11T18:36:22.511873-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Reviewing db.rs for testability improvements",
+  "updated_at": "2025-12-11T18:36:22.511873-05:00"
+}

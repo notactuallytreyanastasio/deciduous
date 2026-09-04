@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "85db057f-88f3-40f7-8010-c3f630896601",
+  "created_at": "2026-01-05T23:12:45.381680-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "0999589",
+    "confidence": 100
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add asciinema demo player to GitHub Pages",
+  "updated_at": "2026-01-05T23:12:45.381680-05:00"
+}

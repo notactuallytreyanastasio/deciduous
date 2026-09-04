@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4a82d2d6-6cf6-4c7b-9a3f-b97d6b0988d5",
+  "created_at": "2025-12-12T17:57:12.667582-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "prompt": "User request: merge opencode, merge roadmap, cut patch release"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Release OpenCode support and Roadmap updates",
+  "updated_at": "2025-12-12T17:57:12.667582-05:00"
+}

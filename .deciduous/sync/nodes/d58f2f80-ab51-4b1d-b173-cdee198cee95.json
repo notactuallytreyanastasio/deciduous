@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d58f2f80-ab51-4b1d-b173-cdee198cee95",
+  "created_at": "2026-09-02T17:49:00.814105-04:00",
+  "metadata": {
+    "branch": "worktree-multi-user-sync",
+    "confidence": 85,
+    "files": [
+      "src/records.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement records.rs: per-record JSON store, tombstones, legacy JSONL import, bidirectional reconcile",
+  "updated_at": "2026-09-02T17:49:00.814105-04:00"
+}

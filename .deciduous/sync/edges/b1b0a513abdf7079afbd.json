@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-12T22:41:19.887121-05:00",
+  "edge_id": "b1b0a513abdf7079afbd",
+  "edge_type": "leads_to",
+  "from_change_id": "5f0bb7a8-c271-43c7-9b77-9cb3f9901dc6",
+  "rationale": "Address user demand with proper library design",
+  "to_change_id": "08dbf01f-c608-4ad2-9ad2-cc264e8fa096",
+  "weight": 1.0
+}

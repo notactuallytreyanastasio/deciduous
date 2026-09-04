@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a68cda6b-8d74-439e-bc06-97ef89a0c5ff",
+  "created_at": "2026-09-02T18:40:10.181401-04:00",
+  "description": "merge_record_values does a field-level 3-way merge (one-sided change wins, metadata unions, same-field collision -> later updated_at, edit-after-delete resurrects). 'deciduous merge-record' is registered as a merge driver by init/update/sync via .gitattributes and merge.deciduous.driver. A real two-branch merge of one record file (status change vs metadata.commit) merged cleanly with no markers. 'deciduous sync' repairs files that still carry <<<<<<< markers; --check exits 1 while any remain. 242 unit + 59 integration tests pass, clippy clean.",
+  "metadata": {
+    "branch": "worktree-multi-user-sync",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Same-record edits now merge: driver + marker repair verified end to end",
+  "updated_at": "2026-09-02T18:40:10.181401-04:00"
+}

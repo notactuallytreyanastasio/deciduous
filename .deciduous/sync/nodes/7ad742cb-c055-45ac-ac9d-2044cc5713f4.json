@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7ad742cb-c055-45ac-ac9d-2044cc5713f4",
+  "created_at": "2025-12-12T17:39:39.080879-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Validation script checks graph.ts which re-exports generated types",
+  "updated_at": "2025-12-12T17:39:39.080879-05:00"
+}

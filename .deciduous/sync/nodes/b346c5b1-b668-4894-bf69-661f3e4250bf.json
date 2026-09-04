@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b346c5b1-b668-4894-bf69-661f3e4250bf",
+  "created_at": "2026-09-02T17:44:56.413016-04:00",
+  "description": "Source: https://gaearon.github.io/conway-refinement/ (built from aa860765). LeanArchitect upstream exports via 'lake build :blueprintJson' to .lake/build/blueprint; the importer accepts both 'dependencies/proofDependencies' and 'uses/proofUses' field names.",
+  "metadata": {
+    "branch": "spike-lean-stuff"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Dan's site embeds BlueprintData JSON in a <script id=blueprint-data> tag; no standalone nodes.json is published. Statements are pre-rendered MathJax HTML, so the importer skips HTML statements",
+  "updated_at": "2026-09-02T17:44:56.413016-04:00"
+}

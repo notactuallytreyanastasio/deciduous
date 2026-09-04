@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-17T17:42:19.839050-05:00",
+  "edge_id": "b719402d4e407f23bf01",
+  "edge_type": "leads_to",
+  "from_change_id": "7de48042-3e47-4d68-901a-2c9594a86154",
+  "rationale": "Deciding on implementation approach for UI changes",
+  "to_change_id": "5459538b-5009-4f98-acfe-02f96364cee4",
+  "weight": 1.0
+}

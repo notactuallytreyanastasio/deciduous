@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6ecb21f0-892b-4919-931b-18fddef5bf66",
+  "created_at": "2026-03-18T01:19:25.849087-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Created GitHub issue #187: Decompose db.rs into focused modules",
+  "updated_at": "2026-03-18T01:19:25.849087-04:00"
+}

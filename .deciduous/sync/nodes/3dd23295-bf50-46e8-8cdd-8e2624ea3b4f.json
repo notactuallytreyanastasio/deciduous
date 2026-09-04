@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3dd23295-bf50-46e8-8cdd-8e2624ea3b4f",
+  "created_at": "2025-12-05T20:33:44.925684-05:00",
+  "description": "Options: install rustup locally, use GitHub Actions CI, or pure JS fallback",
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How to get WASM built without local rustup",
+  "updated_at": "2025-12-05T20:33:44.925684-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7784a565-0e6b-40ad-b103-a75d3da26338",
+  "created_at": "2026-01-05T23:11:56.872165-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "de4d4ad",
+    "confidence": 100
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Apply light theme to graph viewer",
+  "updated_at": "2026-01-05T23:11:56.872165-05:00"
+}

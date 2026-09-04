@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e49d4bf8-ba14-4121-9c40-9940ceb05fe7",
+  "created_at": "2026-03-18T11:58:39.450696-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "The nested hash tree structure forces recursive tree-walking in the runner, makes setup inheritance impossible (parent setup doesn't propagate to child describes), and the SuiteContext with instance_eval prevents accessing outer local variables. A flat array with path-prefix names would be simpler and more capable.",
+  "updated_at": "2026-03-18T11:58:39.450696-04:00"
+}

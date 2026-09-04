@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "244f3c29-5807-46d9-b6d5-4d0d56ab91d0",
+  "created_at": "2026-01-12T22:39:52.371755-05:00",
+  "description": "Created parallel walker for directory traversal, moving parallelism into the ignore crate for reusability.\n\nSources:\n- b272be2: 'Add parallel recursive directory iterator'\n- 5b73dcc: 'Rework parallelism in directory iterator'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added parallel directory iterator to ignore crate",
+  "updated_at": "2026-01-12T22:39:52.371755-05:00"
+}

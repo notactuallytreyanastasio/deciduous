@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "82549c66-805b-4c78-927b-6768c9f84441",
+  "created_at": "2025-12-16T23:17:54.433883-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 90,
+    "files": [
+      "web/src/components/SearchBar.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add search mode selector UI (All/Roots/Grouped)",
+  "updated_at": "2025-12-16T23:17:54.433883-05:00"
+}

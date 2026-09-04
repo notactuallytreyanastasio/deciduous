@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "906905bc-8b46-474a-bbfa-f01115a6d5c3",
+  "created_at": "2025-12-11T18:18:05.769779-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Found 47 unwrap() calls in src/, most in export.rs for writeln!/write! macros",
+  "updated_at": "2025-12-11T18:18:05.769779-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4e978116-71e2-4ae8-81b5-c9bce3edca4b",
+  "created_at": "2026-01-12T22:39:24.915583-05:00",
+  "description": "Final approach: use mmap for single-file Linux searches, avoid on macOS, handle platform edge cases. Subsequent refinements included 32-bit handling.\n\nSources:\n- fdfc418: 'searcher: disable mmap searching on non-64 bit'\n- 803c447: 'searcher: re-enable mmap on 32-bit architectures'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Hybrid strategy: conditional mmap based on workload and platform",
+  "updated_at": "2026-01-12T22:39:24.915583-05:00"
+}

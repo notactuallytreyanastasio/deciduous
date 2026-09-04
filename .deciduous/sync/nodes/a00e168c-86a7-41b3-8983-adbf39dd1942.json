@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a00e168c-86a7-41b3-8983-adbf39dd1942",
+  "created_at": "2025-12-17T00:05:37.703260-05:00",
+  "metadata": {
+    "branch": "spike/search-ux-improvements",
+    "confidence": 85,
+    "files": [
+      "web/src/components/CalloutLines.tsx"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Make +N below badge clickable with grouped descendant popover",
+  "updated_at": "2025-12-17T00:05:37.703260-05:00"
+}

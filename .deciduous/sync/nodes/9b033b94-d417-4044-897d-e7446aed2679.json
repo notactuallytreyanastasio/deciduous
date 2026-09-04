@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9b033b94-d417-4044-897d-e7446aed2679",
+  "created_at": "2025-12-18T18:35:09.004410-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Rust subcommand pros: zero deps (deciduous already installed), native TOML/JSON, fast, cross-platform. Cons: requires deciduous binary in PATH",
+  "updated_at": "2025-12-18T18:35:09.004410-05:00"
+}

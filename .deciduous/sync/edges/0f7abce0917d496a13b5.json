@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-02T19:40:44.034819-05:00",
+  "edge_id": "0f7abce0917d496a13b5",
+  "edge_type": "leads_to",
+  "from_change_id": "ca954682-7c64-4b2f-af5b-70a3e09196b9",
+  "rationale": "approach for parallel test writing",
+  "to_change_id": "9ecbaba6-fb4c-4587-935b-4c39b50e0ba4",
+  "weight": 1.0
+}

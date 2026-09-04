@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7e25ab8e-f6ec-4a71-896b-3a2b1d509c11",
+  "created_at": "2026-01-05T23:09:35.710531-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "189f4ff",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Chain panel now searchable with outcomes shown first",
+  "updated_at": "2026-01-05T23:09:35.710531-05:00"
+}

@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e839cfb4-6556-4680-a458-990e1cc88ca8",
+  "created_at": "2025-12-09T18:02:25.373688-05:00",
+  "metadata": {
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Starting Phase C: Remove audio/WASM code from deciduous, keep decision graph",
+  "updated_at": "2025-12-09T18:02:25.373688-05:00"
+}

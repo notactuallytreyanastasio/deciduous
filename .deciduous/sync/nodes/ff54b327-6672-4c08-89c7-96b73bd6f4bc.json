@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ff54b327-6672-4c08-89c7-96b73bd6f4bc",
+  "created_at": "2026-03-18T01:40:30.011659-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90,
+    "prompt": "give phase 1 a shot and as you go write tons of regression tests to start things"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Phase 1: Delete dead code — remove diff.rs and git_guard, with regression tests",
+  "updated_at": "2026-03-18T01:40:30.011659-04:00"
+}

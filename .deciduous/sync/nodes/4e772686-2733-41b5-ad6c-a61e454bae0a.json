@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4e772686-2733-41b5-ad6c-a61e454bae0a",
+  "created_at": "2025-12-18T21:52:23.599614-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "REJECTED 736: Single blob loses queryability - can't find all nodes with pr_body, no key-based access",
+  "updated_at": "2025-12-18T21:52:23.599614-05:00"
+}

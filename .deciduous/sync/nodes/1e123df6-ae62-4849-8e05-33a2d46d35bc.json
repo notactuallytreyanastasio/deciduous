@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1e123df6-ae62-4849-8e05-33a2d46d35bc",
+  "created_at": "2025-12-05T22:19:06.860051-05:00",
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implemented clustering for decision graph: chain detection via BFS from root nodes, session grouping by 4hr time proximity, 3-view sidebar (Chains/Sessions/All), vertical flow timeline on right panel",
+  "updated_at": "2025-12-05T22:19:06.860051-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3de3939e-bb68-4049-9f76-23aad9873da5",
+  "created_at": "2026-03-06T23:55:17.481879-05:00",
+  "metadata": {
+    "branch": "terminal-style-agent-streams",
+    "confidence": 92,
+    "prompt": "the deciduous project and the product_manager_deciduous project, through experiment, have ended up deeply tied together and need another repo spun off that contains both of them. there are a multitude of reasons for this. With no modifying actions to either original folder, create a new project that bundles together both the deciduous source code (including its dot directories etc) and the product_manager_deciduous source code (including its dot directories etc) and create one new repo -- call it ida -- named after a famous lighthouse keeper.\n\nwe are going to take some ideas from both and try to get to building what my initial vision was.\n\nFirst, just get us a project that can build them together and makes sure they maintain API synchronization because there are specific commits that work with one another from each repo. then we will analyze the code at a high level to assess what it does. then I will dialogue with you in order to figure out how to build v2 now that I have explored some ideas using this scratchpad"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Create ida combined workspace",
+  "updated_at": "2026-03-06T23:55:17.481879-05:00"
+}

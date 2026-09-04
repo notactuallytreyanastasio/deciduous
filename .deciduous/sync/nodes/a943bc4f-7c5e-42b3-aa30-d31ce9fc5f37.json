@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a943bc4f-7c5e-42b3-aa30-d31ce9fc5f37",
+  "created_at": "2025-12-15T00:33:48.161231-05:00",
+  "metadata": {
+    "branch": "fix/gh-pages-decision-nodes",
+    "commit": "85ad24a",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "PR #94 created: pre-push hook now ensures GH Pages has current graph data",
+  "updated_at": "2025-12-15T00:33:48.161231-05:00"
+}

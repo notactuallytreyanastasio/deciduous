@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ce17b0be-0418-427e-87bd-b61a0482d527",
+  "created_at": "2025-12-11T18:21:23.789783-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Creating src/tui/state.rs - pure state transformation module (functional core)",
+  "updated_at": "2025-12-11T18:21:23.789783-05:00"
+}

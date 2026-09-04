@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dd7832d8-da84-4664-8e34-fede9eae29e7",
+  "created_at": "2025-12-12T00:15:37.483336-05:00",
+  "metadata": {
+    "branch": "feature/type-unification-tui-web",
+    "commit": "c75fa8ebc83ff8d758e917d261860d1c94b91bb2",
+    "confidence": 95,
+    "files": [
+      "web/src/types/graph.ts"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add filter functions to TypeScript",
+  "updated_at": "2025-12-12T09:22:08.075924-05:00"
+}

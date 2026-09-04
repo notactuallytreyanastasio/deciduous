@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "06ccb80c-708c-4de8-9123-49bd6da3c6f8",
+  "created_at": "2026-03-18T01:17:54.328547-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Elixir rewrite achieves full CRUD+traversal+CLI in ~4,800 LOC vs 25,384 LOC in Rust",
+  "updated_at": "2026-03-18T01:17:54.328547-04:00"
+}

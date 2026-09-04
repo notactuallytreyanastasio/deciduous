@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3f80d4c0-db31-4f63-a1ce-06bf6d4e9b11",
+  "created_at": "2023-08-21T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Naive stack-behind-mutex causes sub-optimal work distribution - workers get uneven work by chance and remain idle",
+  "updated_at": "2023-08-21T00:00:00-04:00"
+}

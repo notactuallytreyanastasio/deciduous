@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-05T21:29:33.627858-05:00",
+  "edge_id": "ab514a8c46eec614bd65",
+  "edge_type": "leads_to",
+  "from_change_id": "ab8de1da-c880-4841-b20e-c067966741a8",
+  "rationale": "Jekyll fix deployed",
+  "to_change_id": "7aa71fc4-1f6c-41fa-ab8c-1b57eca5d8f1",
+  "weight": 1.0
+}

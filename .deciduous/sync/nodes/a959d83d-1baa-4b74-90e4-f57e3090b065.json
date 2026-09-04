@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a959d83d-1baa-4b74-90e4-f57e3090b065",
+  "created_at": "2026-01-06T12:23:45.987266-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "8d0e082",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added span highlighting and scroll-to-span for trace deep links",
+  "updated_at": "2026-01-06T12:23:45.987266-05:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "815265ff-e312-4d70-b659-74949c5cbb53",
+  "created_at": "2016-10-29T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "d79add3",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Move all gitignore matching to separate ignore crate - reusable component with parallel directory iterator",
+  "updated_at": "2016-10-29T00:00:00-04:00"
+}

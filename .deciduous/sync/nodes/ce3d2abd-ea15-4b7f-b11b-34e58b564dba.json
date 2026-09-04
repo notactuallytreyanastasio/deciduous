@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ce3d2abd-ea15-4b7f-b11b-34e58b564dba",
+  "created_at": "2025-12-12T00:16:04.230453-05:00",
+  "metadata": {
+    "branch": "feature/type-unification-tui-web",
+    "confidence": 95,
+    "files": [
+      "scripts/install-hooks.sh"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Create git hooks installer",
+  "updated_at": "2025-12-12T00:16:04.230453-05:00"
+}

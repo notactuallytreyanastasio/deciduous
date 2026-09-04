@@ -1,0 +1,16 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "153fddc3-b19d-4a02-992d-5a6a1712ef8c",
+  "created_at": "2025-12-18T12:49:21.832946-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 85,
+    "files": [
+      "src/init.rs"
+    ]
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Choose enforcement architecture for git-guard",
+  "updated_at": "2025-12-18T12:49:21.832946-05:00"
+}

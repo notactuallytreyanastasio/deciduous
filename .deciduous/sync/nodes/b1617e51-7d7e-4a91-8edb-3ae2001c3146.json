@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b1617e51-7d7e-4a91-8edb-3ae2001c3146",
+  "created_at": "2026-05-06T12:38:35.049238-04:00",
+  "description": "User explicitly requested that the MCP server follow the same values as the rest of deciduous: a functional core (pure functions, data in/data out) and an imperative shell (IO at the edges). Heavy test coverage is mandatory.",
+  "metadata": {
+    "branch": "add-mcp-server"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Architecture constraint: functional core, imperative shell, lots of tests",
+  "updated_at": "2026-05-06T12:38:35.049238-04:00"
+}

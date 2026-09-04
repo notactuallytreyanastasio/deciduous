@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "614ab118-d4f8-4780-a05f-1c22ce871475",
+  "created_at": "2025-12-11T18:18:59.882809-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Architecture refactor plan: Separate functional core from imperative shell",
+  "updated_at": "2025-12-11T18:18:59.882809-05:00"
+}

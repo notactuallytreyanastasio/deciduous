@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9424b1b4-4968-4c20-ae7c-02af13bf4c1a",
+  "created_at": "2025-12-05T22:44:14.779317-05:00",
+  "metadata": {
+    "commit": "5561ea212c1872f80c804177a1c60fec076a6410",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Simplified landing page - minimal design, clear links, less clutter",
+  "updated_at": "2025-12-12T09:22:08.055760-05:00"
+}

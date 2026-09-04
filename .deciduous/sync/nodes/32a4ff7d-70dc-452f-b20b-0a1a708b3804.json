@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "32a4ff7d-70dc-452f-b20b-0a1a708b3804",
+  "created_at": "2025-12-18T12:50:20.561813-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Claude Code: PreToolUse hooks in settings.json, exit code 2 blocks, JSON stdin with tool_input.command",
+  "updated_at": "2025-12-18T12:50:20.561813-05:00"
+}

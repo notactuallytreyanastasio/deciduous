@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ee1b8340-6ad0-4439-b410-b340708de01a",
+  "created_at": "2026-01-05T23:13:53.001237-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "0a2e972",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Web viewer auto-refreshes when running deciduous serve",
+  "updated_at": "2026-01-05T23:13:53.001237-05:00"
+}

@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1a73be6a-2462-4c99-b395-5db39113d6dd",
+  "created_at": "2025-12-15T20:17:20.368748-05:00",
+  "metadata": {
+    "branch": "feature/web-url-state",
+    "confidence": 90,
+    "files": [
+      "web/src/views/DagView.tsx",
+      "web/src/components/SearchBar.tsx",
+      "web/src/hooks/useUrlState.ts"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Integrated URL state into DagView and SearchBar",
+  "updated_at": "2025-12-15T20:17:20.368748-05:00"
+}

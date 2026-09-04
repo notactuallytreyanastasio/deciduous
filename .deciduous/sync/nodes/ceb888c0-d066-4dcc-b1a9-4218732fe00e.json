@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ceb888c0-d066-4dcc-b1a9-4218732fe00e",
+  "created_at": "2025-12-15T22:53:18.956598-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "Preserve existing file, show helpful message"
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Skip export_git_history when external repo configured (chosen)",
+  "updated_at": "2025-12-15T22:53:18.956598-05:00"
+}

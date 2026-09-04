@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ea6c0cfb-7d3a-43f1-adf6-2fb2add84679",
+  "created_at": "2025-12-12T17:40:02.227309-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Validation hanging or incomplete output?",
+  "updated_at": "2025-12-12T17:40:02.227309-05:00"
+}

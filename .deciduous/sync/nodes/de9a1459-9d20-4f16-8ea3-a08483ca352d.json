@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "de9a1459-9d20-4f16-8ea3-a08483ca352d",
+  "created_at": "2026-01-06T12:24:24.194870-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "5d705aa",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Increased minimum readable size threshold for callouts",
+  "updated_at": "2026-01-06T12:24:24.194870-05:00"
+}

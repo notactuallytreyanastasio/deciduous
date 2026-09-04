@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "96c41c18-ed5a-4488-9333-c47afd4a9b1b",
+  "created_at": "2026-07-09T23:19:40.924218-04:00",
+  "description": "Each PR branches from main. Clean in theory but the findings overlap files (mcp/query.rs, main.rs, db.rs) so merges would conflict.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 50
+  },
+  "node_type": "option",
+  "status": "pending",
+  "title": "Independent PRs off main per domain",
+  "updated_at": "2026-07-09T23:19:40.924218-04:00"
+}

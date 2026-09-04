@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0b8bd117-2bcd-430e-b0e7-923263fb6ce4",
+  "created_at": "2025-12-13T18:29:23.742988-05:00",
+  "metadata": {
+    "branch": "feat/roadmap-board-system",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Choose sync architecture for roadmap board",
+  "updated_at": "2025-12-13T18:29:23.742988-05:00"
+}

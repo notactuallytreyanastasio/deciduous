@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a7471cd0-b81e-4859-9995-c811e8ea9fe8",
+  "created_at": "2026-01-06T17:22:25.931615-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "prompt": "what can I do to ACTUALLY MAKE YOU RELIABLY LOG ALL YOUR ACTIONS in the looping work we do with deciduous?\n\nI have it in your CLAUDE.md, I have commands for doing all of it right there, its inside every directive that you get to work with this and do it this way. But I constantly have to remind you to do it.\n\nIs the answer a hook that runs after you do _anything_?\n\nIs the answer a skill of some sort?\n\nIs it somethin else?\n\nI need you to use your knowledge of yourself to help me with this, because using the typical strategies to get this done...I'm not getting good results from you"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add enforcement hooks for decision logging",
+  "updated_at": "2026-01-06T17:22:25.931615-05:00"
+}

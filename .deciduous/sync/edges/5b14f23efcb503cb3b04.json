@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-15T02:17:03.052633-05:00",
+  "edge_id": "5b14f23efcb503cb3b04",
+  "edge_type": "leads_to",
+  "from_change_id": "d37f5df1-2949-43b3-8d41-9eb8ba4be370",
+  "rationale": "Story page now live on GitHub Pages",
+  "to_change_id": "fb30b61f-e0a0-4a35-af96-b7afbc258b8e",
+  "weight": 1.0
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b96697bb-27c1-486c-99e5-db19d14d0798",
+  "created_at": "2025-12-05T17:15:24.716327-05:00",
+  "description": "ui.html, graph_ui.html, spectral.rs are getting large. May want to modularize: separate CSS, split analysis components, use proper build tooling",
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Code organization: consider splitting large files",
+  "updated_at": "2025-12-05T17:15:24.716327-05:00"
+}

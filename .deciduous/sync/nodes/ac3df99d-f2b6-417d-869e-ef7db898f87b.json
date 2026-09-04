@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ac3df99d-f2b6-417d-869e-ef7db898f87b",
+  "created_at": "2025-12-09T22:09:58.262524-05:00",
+  "metadata": {
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Dual build strategy for React viewer",
+  "updated_at": "2025-12-09T22:09:58.262524-05:00"
+}

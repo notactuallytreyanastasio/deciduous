@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-09-02T18:32:49.368649-04:00",
+  "edge_id": "0c2960d4921e5b3a039d",
+  "edge_type": "leads_to",
+  "from_change_id": "51e08fd5-b500-4af5-85d9-da4dae230800",
+  "rationale": "rejected: duplicates the merge base the VCS already provides",
+  "to_change_id": "824fff50-53d2-4d37-9c8f-e4273116e978",
+  "weight": 1.0
+}

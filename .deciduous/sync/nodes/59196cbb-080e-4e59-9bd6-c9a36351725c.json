@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "59196cbb-080e-4e59-9bd6-c9a36351725c",
+  "created_at": "2026-03-04T01:37:48.182655-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Convert nodes command from raw exqlite to Ecto",
+  "updated_at": "2026-03-04T01:37:48.182655-05:00"
+}

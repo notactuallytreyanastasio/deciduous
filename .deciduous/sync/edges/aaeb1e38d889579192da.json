@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-06T22:07:15.748966-05:00",
+  "edge_id": "aaeb1e38d889579192da",
+  "edge_type": "leads_to",
+  "from_change_id": "0907c6fe-4cf6-4b93-9c9b-9860746c18b1",
+  "rationale": "Animated demos enhance tutorial visual experience",
+  "to_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+  "weight": 1.0
+}

@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "09cf14f8-4a17-4623-aeba-c48774a3466b",
+  "created_at": "2025-12-12T17:58:47.259687-05:00",
+  "metadata": {
+    "branch": "feat/opencode-support",
+    "prompt": "Changes applied from stash to feat/opencode-support"
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "OpenCode support committed to new branch",
+  "updated_at": "2025-12-12T17:58:47.259687-05:00"
+}

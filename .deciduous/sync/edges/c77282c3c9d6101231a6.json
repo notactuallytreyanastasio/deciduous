@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-06T17:22:38.421371-05:00",
+  "edge_id": "c77282c3c9d6101231a6",
+  "edge_type": "leads_to",
+  "from_change_id": "a7471cd0-b81e-4859-9995-c811e8ea9fe8",
+  "rationale": "Implementation of enforcement hooks",
+  "to_change_id": "1bafd9e3-9f5a-4cad-95b8-9a23e149ca8d",
+  "weight": 1.0
+}

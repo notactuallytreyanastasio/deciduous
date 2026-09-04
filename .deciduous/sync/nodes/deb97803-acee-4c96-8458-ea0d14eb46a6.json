@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "deb97803-acee-4c96-8458-ea0d14eb46a6",
+  "created_at": "2025-12-18T12:48:54.756360-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 90,
+    "prompt": "lets rewrite all core git operations to have new rules that are very-set-in-stone\n\nMaybe we leverage something different than claude.md or whatever here, and we think of a hooks or skills based approach? or maybe even a subagent? what do you think. The core directive is THESE RULES ALWAYS APPLY IF RUNNING CERTAIN GIT OPERATIONS and THEY WONT BE FORGOTTEN, IDEALLY THEY ARE RUNTIME-ENFORCED and NOT LLM-enforced, we want it to be like 'if you run git commit, this now becomes interactive and YOU DO NOT PUSH' and things like 'NO DESTRUCTIVE ACTIONS' and a list of banned shell commands. Things like this\n\nAlso: this should be customizable for new users on init. This init should apply across ALL envs (opencode, claude, windsurf, codex) and be appropriate for each ones \"quirks\" with regard to how this runs"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Git Guard: Runtime-enforced git safety rules",
+  "updated_at": "2025-12-18T12:48:54.756360-05:00"
+}

@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1057d194-2633-4463-b1f4-10ccc13f0922",
+  "created_at": "2025-12-11T00:38:07.249961-05:00",
+  "metadata": {
+    "branch": "feature/tui-enhancements",
+    "confidence": 85,
+    "files": [
+      "src/tui/app.rs",
+      "src/tui/views/detail.rs",
+      "src/tui/events.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add interactive file browser in detail panel with preview/diff",
+  "updated_at": "2025-12-11T00:38:07.249961-05:00"
+}

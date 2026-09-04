@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b13e71cb-4989-4eb5-b254-b5fd391b6980",
+  "created_at": "2025-12-12T02:26:45.836122-05:00",
+  "metadata": {
+    "branch": "feature/dag-lazy-loading",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement getChainLastUpdated() for sorting",
+  "updated_at": "2025-12-12T02:26:45.836122-05:00"
+}

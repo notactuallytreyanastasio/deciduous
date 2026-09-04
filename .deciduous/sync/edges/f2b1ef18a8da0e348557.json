@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-16T23:17:53.517214-05:00",
+  "edge_id": "f2b1ef18a8da0e348557",
+  "edge_type": "leads_to",
+  "from_change_id": "3a76efdd-6bbb-4a50-addf-e64497f71414",
+  "rationale": "Implementing chosen grouping approach",
+  "to_change_id": "812b8459-60e8-41a5-98bf-d25db2ea2549",
+  "weight": 1.0
+}

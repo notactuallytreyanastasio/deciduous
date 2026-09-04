@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "946d30d7-a844-4e73-94b0-00ee687be7e5",
+  "created_at": "2025-12-12T17:39:06.988651-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Pre-commit hook failed: TS types missing edge change_id fields",
+  "updated_at": "2025-12-12T17:39:06.988651-05:00"
+}

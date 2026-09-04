@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "5981dbc1-2feb-4ad7-9165-5b965349f78f",
+  "created_at": "2025-12-11T18:17:46.358755-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Scanning for unwrap(), expect(), panic!() calls",
+  "updated_at": "2025-12-11T18:17:46.358755-05:00"
+}

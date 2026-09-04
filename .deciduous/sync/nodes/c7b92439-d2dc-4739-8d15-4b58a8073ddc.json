@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c7b92439-d2dc-4739-8d15-4b58a8073ddc",
+  "created_at": "2026-01-05T19:21:51.834996-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "75031c8",
+    "confidence": 100
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Claude API trace capture for debugging and analysis",
+  "updated_at": "2026-01-05T19:21:51.834996-05:00"
+}

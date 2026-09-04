@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "97588e66-ff74-4464-b9ab-1dc6e25b69f5",
+  "created_at": "2025-12-15T18:45:12.641339-05:00",
+  "metadata": {
+    "branch": "feature/graph-explorer-planning",
+    "confidence": 80
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Choose implementation approach for graph explorer",
+  "updated_at": "2025-12-15T18:45:12.641339-05:00"
+}

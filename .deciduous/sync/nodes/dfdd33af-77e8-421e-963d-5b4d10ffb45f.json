@@ -1,0 +1,9 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dfdd33af-77e8-421e-963d-5b4d10ffb45f",
+  "created_at": "2025-12-05T22:37:22.962173-05:00",
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Add confidence weights to decisions - track how right we think something is, compare with hindsight later",
+  "updated_at": "2025-12-05T22:37:22.962173-05:00"
+}

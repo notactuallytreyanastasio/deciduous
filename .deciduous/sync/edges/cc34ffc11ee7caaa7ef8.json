@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T18:37:45.960210-05:00",
+  "edge_id": "cc34ffc11ee7caaa7ef8",
+  "edge_type": "leads_to",
+  "from_change_id": "3d418868-2b0a-4f59-9c63-751df2749ac6",
+  "rationale": "Why rebase is dangerous",
+  "to_change_id": "adbc44a1-d306-430d-8197-978e3d91fdcf",
+  "weight": 1.0
+}

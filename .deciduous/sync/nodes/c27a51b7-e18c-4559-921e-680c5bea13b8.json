@@ -1,0 +1,15 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "c27a51b7-e18c-4559-921e-680c5bea13b8",
+  "created_at": "2026-09-03T12:10:11.055403-04:00",
+  "description": "Real bugs found: updated_at tie dropped merge-driver results; write-through clobbered pulled records; same-name theme collision wedged sync permanently; unreadable files got overwritten on export; numeric refs could resolve to the wrong node; store created by sync was not attached to the open Database; legacy import replayed pre-checkpoint events; re-tag after untag stranded; bare DB filename attached to the project store; delete_node left tag records. Deferred: a transaction around reconcile.",
+  "metadata": {
+    "branch": "feat/record-store-sync",
+    "commit": "47b71e6",
+    "confidence": 90
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Adversarial review of PR #212: 19 confirmed findings; all 10 ranked plus 9 minor ones fixed in 47b71e6",
+  "updated_at": "2026-09-03T12:10:11.055403-04:00"
+}

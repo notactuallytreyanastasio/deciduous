@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bc1e620b-fc94-4f30-afb3-7eeba6fcbbad",
+  "created_at": "2026-02-05T15:17:23.560183-05:00",
+  "metadata": {
+    "branch": "feature/event-log-sync",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Event logs will balloon repo - need compaction/checkpointing",
+  "updated_at": "2026-02-05T15:17:23.560183-05:00"
+}

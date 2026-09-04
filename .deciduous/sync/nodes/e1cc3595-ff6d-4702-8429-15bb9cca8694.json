@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e1cc3595-ff6d-4702-8429-15bb9cca8694",
+  "created_at": "2025-12-05T23:42:37.782623-05:00",
+  "metadata": {
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Rewrote README with collapsible sections - tells full project story",
+  "updated_at": "2025-12-05T23:42:37.782623-05:00"
+}

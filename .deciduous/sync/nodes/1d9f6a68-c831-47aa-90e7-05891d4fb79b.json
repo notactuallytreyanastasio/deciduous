@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "1d9f6a68-c831-47aa-90e7-05891d4fb79b",
+  "created_at": "2025-12-11T18:42:18.010149-05:00",
+  "metadata": {
+    "branch": "maintenance/functional-core-tea-refactor",
+    "commit": "07e36cd3c4c4866317328ff6436c514df96047d9",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Added 16 CLI integration tests - total test count now 105",
+  "updated_at": "2025-12-12T09:22:08.075240-05:00"
+}

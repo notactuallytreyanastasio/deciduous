@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "fe61a3c6-58c7-495a-b049-ae1ddb041c5b",
+  "created_at": "2026-01-05T23:13:02.630977-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "cddaaab",
+    "confidence": 100,
+    "files": [
+      "src/tui/mod.rs"
+    ]
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "TUI enhancements - rich detail panel, syntax highlighting, modals",
+  "updated_at": "2026-01-05T23:13:02.630977-05:00"
+}

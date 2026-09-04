@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-09-02T17:33:30.775002-04:00",
+  "edge_id": "27ddfd6774254994cf20",
+  "edge_type": "leads_to",
+  "from_change_id": "c5f3e6b5-7f2a-49ce-a190-c326fb53304e",
+  "rationale": "chosen: no schema churn, viewer/themes/chains already fit; a first-class type can come later",
+  "to_change_id": "6a91931b-6e07-4136-9f8a-dc03ca62d376",
+  "weight": 1.0
+}

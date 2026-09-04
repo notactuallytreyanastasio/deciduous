@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-03-18T11:49:03.048212-04:00",
+  "edge_id": "cd892694637751b83d6a",
+  "edge_type": "leads_to",
+  "from_change_id": "0eb14df1-58a9-417b-98b2-68bdfcab23ab",
+  "rationale": "adding mailbox assertion to Ruby framework",
+  "to_change_id": "3dbe1e29-dbd6-4b2c-bd2f-ce88c8cced89",
+  "weight": 1.0
+}

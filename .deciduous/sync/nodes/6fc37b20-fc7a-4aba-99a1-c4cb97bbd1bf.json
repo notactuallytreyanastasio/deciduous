@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+  "created_at": "2025-12-13T14:34:54.613013-05:00",
+  "metadata": {
+    "branch": "feat/roadmap-board-system",
+    "confidence": 85,
+    "prompt": "User requested: Turn ROADMAP.md into a fully functioning board with GitHub Issues sync, TUI/web browsing, decision graph linking, and completion detection"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Implement roadmap board system with GitHub Issues integration",
+  "updated_at": "2025-12-13T14:34:54.613013-05:00"
+}

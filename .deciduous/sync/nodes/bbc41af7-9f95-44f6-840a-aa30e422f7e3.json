@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "bbc41af7-9f95-44f6-840a-aa30e422f7e3",
+  "created_at": "2025-12-12T01:19:38.522089-05:00",
+  "metadata": {
+    "branch": "feature/asciinema-demo",
+    "confidence": 90,
+    "prompt": "User asked to add deciduous_demo file as playable asciinema on the site"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add asciinema demo to GitHub Pages",
+  "updated_at": "2025-12-12T01:19:38.522089-05:00"
+}

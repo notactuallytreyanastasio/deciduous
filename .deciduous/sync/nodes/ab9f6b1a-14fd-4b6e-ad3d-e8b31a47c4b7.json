@@ -1,0 +1,19 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ab9f6b1a-14fd-4b6e-ad3d-e8b31a47c4b7",
+  "created_at": "2026-09-02T20:12:46.587061-04:00",
+  "metadata": {
+    "branch": "spike-lean-stuff",
+    "confidence": 90,
+    "files": [
+      "docs/proof-map/index.html",
+      "src/lean.rs",
+      "web/src/proofmap/model.ts",
+      "web/src/proofmap/render.ts"
+    ]
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Public demo annotated from Dan's own material: LaTeX statements and proof sketches on all 186 annotated declarations, 14 chapter narratives as actions, root goal with the README's account as prompt, two recorded design decisions with alternatives, the LeanArchitect/subverso fork as a revisit; 59 of 188 declarations explained; live at deciduous.dev/proof-map",
+  "updated_at": "2026-09-02T20:12:46.587061-04:00"
+}

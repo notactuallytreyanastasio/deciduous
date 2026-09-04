@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d7fa0556-e001-4f3c-b933-7dfef88afb14",
+  "created_at": "2026-04-07T21:59:04.051485-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Observation title+description support complete",
+  "updated_at": "2026-04-07T21:59:04.051485-04:00"
+}

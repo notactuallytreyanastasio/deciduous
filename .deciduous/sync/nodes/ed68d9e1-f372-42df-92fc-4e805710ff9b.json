@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "ed68d9e1-f372-42df-92fc-4e805710ff9b",
+  "created_at": "2026-02-04T22:10:16.021342-05:00",
+  "metadata": {
+    "branch": "viz-rethink-v2",
+    "confidence": 85
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Initial beads-style hierarchical list view",
+  "updated_at": "2026-02-04T22:10:16.021342-05:00"
+}

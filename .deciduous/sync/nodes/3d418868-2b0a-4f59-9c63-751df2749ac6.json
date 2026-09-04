@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3d418868-2b0a-4f59-9c63-751df2749ac6",
+  "created_at": "2025-12-18T18:36:25.925167-05:00",
+  "metadata": {
+    "branch": "feature/git-guard",
+    "confidence": 95
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How to handle git rebase - destructive operation",
+  "updated_at": "2025-12-18T18:36:25.925167-05:00"
+}

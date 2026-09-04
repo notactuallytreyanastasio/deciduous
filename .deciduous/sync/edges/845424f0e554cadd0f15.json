@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-18T18:35:22.137209-05:00",
+  "edge_id": "845424f0e554cadd0f15",
+  "edge_type": "leads_to",
+  "from_change_id": "d13caa2c-5963-4437-aed2-a9b3729ed0b8",
+  "rationale": "Rust subcommand tradeoffs",
+  "to_change_id": "9b033b94-d417-4044-897d-e7446aed2679",
+  "weight": 1.0
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7f3949dd-60a3-4331-9bac-c5869c08751b",
+  "created_at": "2026-01-06T12:24:02.088221-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "2f3edd3",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fixed nix to use writeShellScriptBin for direnv/zsh compatibility",
+  "updated_at": "2026-01-06T12:24:02.088221-05:00"
+}

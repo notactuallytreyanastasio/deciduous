@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a4439a42-50ce-4292-9d5a-a18a904eaf2c",
+  "created_at": "2026-01-06T12:27:16.238734-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "eae341c",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added roadmap API and React integration",
+  "updated_at": "2026-01-06T12:27:16.238734-05:00"
+}

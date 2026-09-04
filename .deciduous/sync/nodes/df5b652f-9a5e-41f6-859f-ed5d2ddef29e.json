@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "df5b652f-9a5e-41f6-859f-ed5d2ddef29e",
+  "created_at": "2026-03-18T11:55:14.372808-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 80,
+    "files": [
+      "lib/tester/mailbox.rb",
+      "lib/tester/assertions.rb"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Add assert_receive with mailbox pattern for message-passing tests",
+  "updated_at": "2026-03-18T11:55:14.372808-04:00"
+}

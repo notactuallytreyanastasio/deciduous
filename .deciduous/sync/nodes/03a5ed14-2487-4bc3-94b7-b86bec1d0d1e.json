@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "03a5ed14-2487-4bc3-94b7-b86bec1d0d1e",
+  "created_at": "2026-02-04T23:04:37.229425-05:00",
+  "metadata": {
+    "branch": "viz-rethink-v2",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Graph analysis revealed 130 orphan goals but only ~25 goals with 10+ node trees - these are the real narratives",
+  "updated_at": "2026-02-04T23:04:37.229425-05:00"
+}

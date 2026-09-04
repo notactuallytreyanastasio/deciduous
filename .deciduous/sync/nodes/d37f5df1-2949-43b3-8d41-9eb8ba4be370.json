@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d37f5df1-2949-43b3-8d41-9eb8ba4be370",
+  "created_at": "2025-12-15T02:10:58.875784-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90,
+    "prompt": "User asked: make a nice rich media og tags etc preview for the timeline, standalone page with link at top"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add standalone Story page with OG tags to GH Pages",
+  "updated_at": "2025-12-15T02:10:58.875784-05:00"
+}

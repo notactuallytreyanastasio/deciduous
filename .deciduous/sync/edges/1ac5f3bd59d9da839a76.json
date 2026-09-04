@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-06T22:07:26.030653-05:00",
+  "edge_id": "1ac5f3bd59d9da839a76",
+  "edge_type": "leads_to",
+  "from_change_id": "00eb3b67-2582-4225-829a-151d493b9cea",
+  "rationale": "JavaScript animation controller with pause/resume/replay",
+  "to_change_id": "f9cbb117-5438-4ec3-a514-9348ea403349",
+  "weight": 1.0
+}

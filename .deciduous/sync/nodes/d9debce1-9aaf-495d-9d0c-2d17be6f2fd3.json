@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "d9debce1-9aaf-495d-9d0c-2d17be6f2fd3",
+  "created_at": "2026-01-09T17:35:54.481711-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95,
+    "files": [
+      "src/db.rs",
+      "src/lib.rs"
+    ],
+    "prompt": "Implemented in src/db.rs (lines 1299-1422):\n\n1. DeleteSummary struct (line 231-236):\n   - Moved outside impl block (Rust requirement)\n   - Fields: node_title (String), edges_deleted (usize)\n   - Added to lib.rs exports for use in main.rs\n\n2. delete_edge(from_id, to_id) -> Result<()> (lines 1299-1345):\n   - Uses .optional()? pattern to check existence without panic\n   - On missing edge, queries outgoing edges from source node\n   - Returns helpful error: \"Node X has edges to: Y, Z\" or \"has no outgoing edges\"\n   - Deletes with: diesel::delete(table.filter(from.eq()).filter(to.eq()))\n\n3. delete_node(node_id, dry_run) -> Result<DeleteSummary> (lines 1347-1422):\n   - Validates node exists with helpful error message\n   - Counts edges with: .filter(from.eq(id).or(to.eq(id))).count()\n   - Early return on dry_run with summary (no mutations)\n   - Cascade delete order:\n     a. decision_edges (both directions)\n     b. decision_context\n     c. session_nodes\n     d. UPDATE decision_sessions SET root_node_id = NULL\n     e. UPDATE command_log SET decision_node_id = NULL\n     f. UPDATE roadmap_items SET outcome_node_id = NULL\n     g. DELETE decision_nodes WHERE id = node_id\n\nKey Diesel patterns used:\n- .optional()? for existence checks\n- .or() for compound filters\n- diesel::update().set(column.eq::<Option<i32>>(None)) for nullable FK cleanup"
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement delete_node() and delete_edge() in db.rs",
+  "updated_at": "2026-01-09T17:43:19.942391-05:00"
+}

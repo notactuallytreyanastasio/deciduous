@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "12145cde-889f-42a9-a8b5-81f22e9e197f",
+  "created_at": "2026-01-09T17:44:17.327252-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90,
+    "prompt": "UX pattern implemented for delete_edge error handling:\n\nBEFORE (typical approach):\n  Error: Edge from 5 to 99 does not exist.\n\nAFTER (helpful approach):\n  Error: No edge from node 5 to node 99. Node 5 has edges to: 12, 15, 18\n\nWhy this matters:\n1. User doesn't have to run separate command to find valid targets\n2. Reduces frustration when making typos in node IDs\n3. Guides user toward correct action immediately\n4. Follows existing pattern in create_edge validation\n\nImplementation:\n```rust\nlet outgoing: Vec<DecisionEdge> = decision_edges::table\n    .filter(decision_edges::from_node_id.eq(from_id))\n    .load(&mut conn)?;\n\nif outgoing.is_empty() {\n    return Err(DbError::Validation(format!(\n        \"No edge from node {} to node {}. Node {} has no outgoing edges.\",\n        from_id, to_id, from_id\n    )));\n} else {\n    let targets: Vec<String> = outgoing.iter()\n        .map(|e| e.to_node_id.to_string()).collect();\n    return Err(DbError::Validation(format!(\n        \"No edge from node {} to node {}. Node {} has edges to: {}\",\n        from_id, to_id, from_id, targets.join(\", \")\n    )));\n}\n```"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Helpful error messages pattern: show what exists, not just what's wrong",
+  "updated_at": "2026-01-09T17:44:17.327252-05:00"
+}

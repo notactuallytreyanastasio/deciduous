@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-01-12T22:43:55.943857-05:00",
+  "edge_id": "8648b110a1e164b73613",
+  "edge_type": "leads_to",
+  "from_change_id": "4123319d-0d89-495b-8bf5-9e67f44f5941",
+  "rationale": "Clap worked well",
+  "to_change_id": "12b18849-0eed-45cf-95ee-5ba0e37fed20",
+  "weight": 1.0
+}

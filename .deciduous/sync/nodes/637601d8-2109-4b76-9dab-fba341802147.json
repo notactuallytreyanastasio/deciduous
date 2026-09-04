@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "637601d8-2109-4b76-9dab-fba341802147",
+  "created_at": "2025-12-17T17:57:41.902199-05:00",
+  "metadata": {
+    "branch": "feature/mobile-responsive",
+    "confidence": 85,
+    "prompt": "now make another branch off this branch that makes this all nice on mobile...just spike it, figure it out"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Mobile responsive viewer improvements",
+  "updated_at": "2025-12-17T17:57:41.902199-05:00"
+}

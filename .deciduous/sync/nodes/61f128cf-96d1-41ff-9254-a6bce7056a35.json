@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "61f128cf-96d1-41ff-9254-a6bce7056a35",
+  "created_at": "2025-12-09T17:26:55.987050-05:00",
+  "metadata": {
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Include full Claude tooling in deciduous init: slash commands, CLAUDE.md workflow section, Makefile shortcuts",
+  "updated_at": "2025-12-09T17:26:55.987050-05:00"
+}

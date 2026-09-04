@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b8a7a641-31e0-49be-90b0-a2021d5cdc5e",
+  "created_at": "2025-12-10T14:49:38.356605-05:00",
+  "metadata": {
+    "commit": "cc1903d92afea3c05c21fcac86364ca435d636f4",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Implemented --prompt and --files flags for node metadata",
+  "updated_at": "2025-12-12T09:22:08.045894-05:00"
+}

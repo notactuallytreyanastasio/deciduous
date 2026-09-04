@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "2615b34d-4071-46cf-a8d0-88ca3052d45f",
+  "created_at": "2025-12-18T21:04:40.041471-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-keyval",
+    "commit": "e3c3bde",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "All 238 tests pass including new metadata functionality",
+  "updated_at": "2025-12-18T21:04:40.041471-05:00"
+}

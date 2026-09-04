@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dd3a88d4-b67f-4298-aeb3-c4583ad96a94",
+  "created_at": "2026-03-04T00:54:35.358702-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Adopt Ecto + Burrito, convert read commands first, remove roadmap",
+  "updated_at": "2026-03-04T00:54:35.358702-05:00"
+}

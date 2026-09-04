@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2026-05-06T21:11:48.185257-04:00",
+  "edge_id": "742eceec5728f65c139c",
+  "edge_type": "leads_to",
+  "from_change_id": "f28c99d2-6904-4deb-94c4-9d8e7c12d05e",
+  "rationale": "Identifying gap in session design",
+  "to_change_id": "dfdcfbe8-0d6c-457c-9652-6f9807295c5e",
+  "weight": 1.0
+}

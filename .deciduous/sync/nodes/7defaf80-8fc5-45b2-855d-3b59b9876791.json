@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "7defaf80-8fc5-45b2-855d-3b59b9876791",
+  "created_at": "2025-12-12T17:40:42.259310-05:00",
+  "metadata": {
+    "branch": "refactor/types-unification-ts-rs",
+    "confidence": 100
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Fields exist in generated schema, why did validation fail?",
+  "updated_at": "2025-12-12T17:40:42.259310-05:00"
+}

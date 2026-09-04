@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b66899f9-af54-42ed-b81a-db06910b8a0b",
+  "created_at": "2016-02-01T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "File type system: Filter files by programming language/type",
+  "updated_at": "2016-02-01T00:00:00-05:00"
+}

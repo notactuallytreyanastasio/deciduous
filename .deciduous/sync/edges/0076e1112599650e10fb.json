@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-13T18:29:34.737736-05:00",
+  "edge_id": "0076e1112599650e10fb",
+  "edge_type": "leads_to",
+  "from_change_id": "6fc37b20-fc7a-4aba-99a1-c4cb97bbd1bf",
+  "rationale": "Architecture decision for roadmap board goal",
+  "to_change_id": "0b8bd117-2bcd-430e-b0e7-923263fb6ce4",
+  "weight": 1.0
+}

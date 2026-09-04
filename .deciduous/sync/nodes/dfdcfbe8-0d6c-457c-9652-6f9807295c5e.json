@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "dfdcfbe8-0d6c-457c-9652-6f9807295c5e",
+  "created_at": "2026-05-06T21:11:42.594667-04:00",
+  "description": "Cowork spawns multiple agents that may run for hours/days. MCP server lifetime = conversation lifetime. If the MCP server process dies and restarts, active_session_id is lost (it's in-process memory). Need to handle: 1) server restart mid-conversation, 2) multiple cowork agents sharing one project's graph, 3) long gaps between tool calls.",
+  "metadata": {
+    "branch": "add-mcp-server"
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Question: does session model work for long-running cowork under a project?",
+  "updated_at": "2026-05-06T21:11:42.594667-04:00"
+}

@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4ca1353f-6fe2-4119-a1bd-8e1837c965dd",
+  "created_at": "2026-01-06T12:27:18.184337-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "ff263a4",
+    "confidence": 100
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Aligned web RoadmapView with TUI completion logic",
+  "updated_at": "2026-01-06T12:27:18.184337-05:00"
+}

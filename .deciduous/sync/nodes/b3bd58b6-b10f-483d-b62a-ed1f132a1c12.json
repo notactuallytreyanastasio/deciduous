@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "b3bd58b6-b10f-483d-b62a-ed1f132a1c12",
+  "created_at": "2026-09-02T18:31:46.225798-04:00",
+  "metadata": {
+    "branch": "worktree-multi-user-sync",
+    "confidence": 85,
+    "prompt": "> .deciduous/sync/ now holds nodes/<change_id>.json, edges/<edge_id>.json, themes/, and tags/, committed with the code. Two people adding records never touch the same file, so git merges without conflicts. Editing the same node concurrently conflicts on one small JSON file, which is a real conflict worth a look. Deletes are tombstones. The newer updated_at wins per record, so there is no log to replay, no checkpoint, no compaction. Records reference each other only by change_id. Local integer ids stay per-machine aliases.\n\nCan we fingerprint this so that impacts on the same file(s) between users are merged"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Merge concurrent edits to the same record instead of conflicting",
+  "updated_at": "2026-09-02T18:31:46.225798-04:00"
+}

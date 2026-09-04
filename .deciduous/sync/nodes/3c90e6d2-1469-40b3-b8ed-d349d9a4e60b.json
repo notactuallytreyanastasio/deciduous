@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3c90e6d2-1469-40b3-b8ed-d349d9a4e60b",
+  "created_at": "2026-03-03T23:21:42.579181-05:00",
+  "metadata": {
+    "branch": "try-elixir-stuff",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Full integration working: Rust finds Elixir via relative path or DECIDUEX_PATH, falls back to Rust if not found",
+  "updated_at": "2026-03-03T23:21:42.579181-05:00"
+}

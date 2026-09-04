@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3c51ae4a-4420-4a0c-82a2-d5fb75a20d9d",
+  "created_at": "2016-02-01T00:00:00-05:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Context handling: Show lines around matches (-A/-B/-C)",
+  "updated_at": "2016-02-01T00:00:00-05:00"
+}

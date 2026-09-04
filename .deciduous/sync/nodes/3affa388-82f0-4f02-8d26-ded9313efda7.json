@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "3affa388-82f0-4f02-8d26-ded9313efda7",
+  "created_at": "2025-12-17T17:46:20.686618-05:00",
+  "metadata": {
+    "branch": "feature/viewer-ui-improvements",
+    "confidence": 80
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Adding node type filtering with hidden node traversal",
+  "updated_at": "2025-12-17T17:46:20.686618-05:00"
+}

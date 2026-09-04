@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-12T03:04:32.106463-05:00",
+  "edge_id": "ad772598018f66aad14f",
+  "edge_type": "leads_to",
+  "from_change_id": "5f70cc68-41fa-4cf9-9afb-d899222d4e1f",
+  "rationale": "Key structural decision",
+  "to_change_id": "132b8a1d-facc-4ee8-8bbc-8e0a496c5465",
+  "weight": 1.0
+}

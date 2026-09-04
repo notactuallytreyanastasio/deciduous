@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0513bba2-494c-434e-a243-3db58c6bba2f",
+  "created_at": "2026-01-12T22:45:09.836450-05:00",
+  "description": "Created new extractor based on regex-syntax prefix literal extractor but with better heuristics. Tracks whether literals are prefixes, continues searching for 'best' literals.\n\nSources:\n- ca740d9: 'This new extractor should be a lot more robust than the old one. We actually will keep going through the regex to try and find the best literals to search for (according to some heuristic).'\n- 3ac4541: 'regex: remove old inner literal extractor'",
+  "metadata": {
+    "branch": "main",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Rewrote inner literal extractor for robustness",
+  "updated_at": "2026-01-12T22:45:09.836450-05:00"
+}

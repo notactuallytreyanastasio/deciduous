@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "55a0b9ac-bf3d-4724-a002-68b818b59f31",
+  "created_at": "2025-12-18T21:26:12.856779-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Attachments: Multiple items per type - can have 5 notes on one node",
+  "updated_at": "2025-12-18T21:26:12.856779-05:00"
+}

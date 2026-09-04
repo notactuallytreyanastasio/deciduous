@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "82e56e10-d89f-4910-ae09-0110d18ba80a",
+  "created_at": "2026-03-18T11:51:45.999405-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 90
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "Choose Ruby with hash-based test cases",
+  "updated_at": "2026-03-18T11:51:45.999405-04:00"
+}

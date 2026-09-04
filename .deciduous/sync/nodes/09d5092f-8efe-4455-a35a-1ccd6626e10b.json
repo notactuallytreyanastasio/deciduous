@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "09d5092f-8efe-4455-a35a-1ccd6626e10b",
+  "created_at": "2025-12-18T21:25:53.706560-05:00",
+  "metadata": {
+    "branch": "analysis/node-metadata-comparison",
+    "confidence": 90
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Key-Value LIMITATION: Cannot have multiple notes - each key is unique",
+  "updated_at": "2025-12-18T21:25:53.706560-05:00"
+}

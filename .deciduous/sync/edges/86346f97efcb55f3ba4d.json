@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T01:56:21.340674-05:00",
+  "edge_id": "86346f97efcb55f3ba4d",
+  "edge_type": "leads_to",
+  "from_change_id": "eca6c55b-0223-4dd0-a198-9bb59576f94c",
+  "rationale": "Goal drove split-view design",
+  "to_change_id": "39b0e2c5-1c92-4d8a-83e0-d873f565b269",
+  "weight": 1.0
+}

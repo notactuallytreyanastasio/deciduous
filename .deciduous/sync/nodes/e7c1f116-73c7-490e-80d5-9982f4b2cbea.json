@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e7c1f116-73c7-490e-80d5-9982f4b2cbea",
+  "created_at": "2025-12-15T12:08:46.968948-05:00",
+  "metadata": {
+    "branch": "feature/graph-search",
+    "confidence": 95
+  },
+  "node_type": "observation",
+  "status": "pending",
+  "title": "Web UI uses React 18 + D3/Dagre, inline styles, no component library. DagView.tsx is main viewer with existing controls panel. Data flows via useGraphData hook.",
+  "updated_at": "2025-12-15T12:08:46.968948-05:00"
+}

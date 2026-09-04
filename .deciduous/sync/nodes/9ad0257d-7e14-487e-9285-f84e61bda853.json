@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "9ad0257d-7e14-487e-9285-f84e61bda853",
+  "created_at": "2026-05-06T21:12:10.202369-04:00",
+  "metadata": {
+    "branch": "add-mcp-server",
+    "confidence": 88,
+    "files": [
+      "src/mcp/mod.rs",
+      "src/mcp/tools.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implement session persistence and resume",
+  "updated_at": "2026-05-06T21:12:10.202369-04:00"
+}

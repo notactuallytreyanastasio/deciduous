@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "e832580b-7227-4fea-b9eb-1f2215bbcb2b",
+  "created_at": "2025-12-16T01:21:28.106287-05:00",
+  "metadata": {
+    "branch": "fix-callout-layout",
+    "commit": "e80d20f",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Enhanced callout cards with connection info",
+  "updated_at": "2025-12-16T01:21:28.106287-05:00"
+}

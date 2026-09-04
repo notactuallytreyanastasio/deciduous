@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "72191282-f071-44f6-b2a3-6946dbf97782",
+  "created_at": "2025-12-17T17:49:26.610367-05:00",
+  "metadata": {
+    "branch": "feature/viewer-ui-improvements",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Node type filtering with transitive edges complete",
+  "updated_at": "2025-12-17T17:49:26.610367-05:00"
+}

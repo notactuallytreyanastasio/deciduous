@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a6e970d1-edcf-43ae-94ab-1eff4e3400f4",
+  "created_at": "2026-01-12T22:41:02.501915-05:00",
+  "description": "Core functionality in reusable crates with trait abstractions. CLI becomes argument translation layer.",
+  "metadata": {
+    "branch": "main",
+    "confidence": 85
+  },
+  "node_type": "option",
+  "status": "completed",
+  "title": "Library-first with thin CLI wrapper",
+  "updated_at": "2026-01-12T22:41:35.255435-05:00"
+}

@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-10T18:00:12.909407-05:00",
+  "edge_id": "8b48b71c65d5ea3b977a",
+  "edge_type": "leads_to",
+  "from_change_id": "e91bdc87-c988-4751-a1d3-32672555735d",
+  "rationale": "Schema migration decision led to implementation",
+  "to_change_id": "a2834f3f-0d68-4d1b-960d-2f26367a83dd",
+  "weight": 1.0
+}

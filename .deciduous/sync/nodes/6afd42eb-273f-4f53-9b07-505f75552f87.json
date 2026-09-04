@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "6afd42eb-273f-4f53-9b07-505f75552f87",
+  "created_at": "2026-01-05T19:16:13.405897-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "9400091",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "v0.8.22 released successfully",
+  "updated_at": "2026-01-05T19:16:13.405897-05:00"
+}

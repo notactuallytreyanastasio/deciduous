@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "0556211b-7c34-44a7-a4a4-21ae571036bb",
+  "created_at": "2026-02-05T16:29:26.010966-05:00",
+  "metadata": {
+    "branch": "feature/event-log-sync",
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "/sync skill created, /recover updated, API endpoint /api/sync-status added",
+  "updated_at": "2026-02-05T16:29:26.010966-05:00"
+}

@@ -1,0 +1,12 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "558c2983-1a50-4747-b516-88dac1f3cd55",
+  "created_at": "2025-12-09T18:13:35.897568-05:00",
+  "metadata": {
+    "confidence": 95
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Deciduous builds successfully - audio code removed, CLI restructured",
+  "updated_at": "2025-12-09T18:13:35.897568-05:00"
+}

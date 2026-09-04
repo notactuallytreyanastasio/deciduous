@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "40f49e6f-b94d-4a7c-90f1-6f6f2aaf124c",
+  "created_at": "2016-09-01T00:00:00-04:00",
+  "metadata": {
+    "branch": "main",
+    "confidence": 95
+  },
+  "node_type": "decision",
+  "status": "pending",
+  "title": "How to handle terminal coloring cross-platform?",
+  "updated_at": "2016-09-01T00:00:00-04:00"
+}

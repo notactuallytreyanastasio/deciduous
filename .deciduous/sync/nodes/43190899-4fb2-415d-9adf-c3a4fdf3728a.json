@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "43190899-4fb2-415d-9adf-c3a4fdf3728a",
+  "created_at": "2025-12-06T00:19:35.916144-05:00",
+  "metadata": {
+    "commit": "7b137de",
+    "confidence": 90
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Fixed homepage layout - pure HTML to avoid Jekyll mangling",
+  "updated_at": "2025-12-06T00:19:35.916144-05:00"
+}

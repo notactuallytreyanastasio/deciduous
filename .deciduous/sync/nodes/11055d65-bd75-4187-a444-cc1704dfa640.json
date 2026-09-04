@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "11055d65-bd75-4187-a444-cc1704dfa640",
+  "created_at": "2025-12-18T21:06:09.966919-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-attachments",
+    "confidence": 95,
+    "prompt": "We want to make some changes. First make a worktree with the deciduous db symlinked in .deciduous/deciduous.db so that its writing to the same db for all its choices as the top level project and get a new branch going based off main\n\nthen, once there, I want you to start working on the idea of adding \"metadata\" to a node\n\nThis could be pull request writeups, issue bodies and commentary, things you come up with you want to keep accessible, or more\n\nBe flexible with it to start? We can just make a generic shape that is really flexible but not allow like, arbitrary nesting or anything\n\nThe best way to test it would be to look through the nodes that are completed in the roadmap and going to add PR body context to them as this metadata, or the original issue writeup being part of the goal at the beginning\n\nI want you to take two stabs at this, make a separate branch/PR for each and dont reference the other when building ecah out, original approaches"
+  },
+  "node_type": "goal",
+  "status": "pending",
+  "title": "Add node metadata system (Attachments approach)",
+  "updated_at": "2025-12-18T21:06:09.966919-05:00"
+}

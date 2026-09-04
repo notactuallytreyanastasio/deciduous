@@ -1,0 +1,10 @@
+{
+  "author": "Bobby Grayson",
+  "created_at": "2025-12-11T18:18:55.549310-05:00",
+  "edge_id": "95a1435ef15d5fe53dd7",
+  "edge_type": "leads_to",
+  "from_change_id": "5981dbc1-2feb-4ad7-9165-5b965349f78f",
+  "rationale": "Key finding from panic audit",
+  "to_change_id": "1426ad46-371d-471d-9a29-fc5c46ba9be8",
+  "weight": 1.0
+}

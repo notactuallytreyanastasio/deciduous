@@ -1,0 +1,13 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "63d17d46-48a9-463f-8f4b-76f1ccd48789",
+  "created_at": "2025-12-15T20:38:48.227723-05:00",
+  "metadata": {
+    "branch": "feature/web-url-state",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "completed",
+  "title": "PR #105 merged - URL state feature complete",
+  "updated_at": "2025-12-15T20:38:54.096320-05:00"
+}

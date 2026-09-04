@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "4be07dfc-a8d2-403f-aa71-846946e3f455",
+  "created_at": "2026-01-06T12:27:30.192289-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "ff263a4",
+    "confidence": 100
+  },
+  "node_type": "outcome",
+  "status": "pending",
+  "title": "Web viewer has roadmap view matching TUI functionality",
+  "updated_at": "2026-01-06T12:27:30.192289-05:00"
+}

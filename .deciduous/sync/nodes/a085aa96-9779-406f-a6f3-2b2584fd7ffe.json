@@ -1,0 +1,17 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "a085aa96-9779-406f-a6f3-2b2584fd7ffe",
+  "created_at": "2026-01-05T23:10:06.205209-05:00",
+  "metadata": {
+    "branch": "main",
+    "commit": "49e9acf",
+    "confidence": 100,
+    "files": [
+      "src/main.rs"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Added --prompt-stdin flag for multi-line prompts",
+  "updated_at": "2026-01-05T23:10:06.205209-05:00"
+}

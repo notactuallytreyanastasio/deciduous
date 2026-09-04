@@ -1,0 +1,18 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "eee8e82a-a13f-4698-9242-77af0c4f4ebe",
+  "created_at": "2026-03-18T11:47:29.449489-04:00",
+  "metadata": {
+    "branch": "cleanup",
+    "confidence": 85,
+    "files": [
+      "tester/lib/tester.rb",
+      "tester/lib/tester/assertions.rb",
+      "tester/Gemfile"
+    ]
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Scaffold Ruby project: core assertions with hash-based test cases",
+  "updated_at": "2026-03-18T11:47:29.449489-04:00"
+}

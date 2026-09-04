@@ -1,0 +1,14 @@
+{
+  "author": "Bobby Grayson",
+  "change_id": "766ea4bb-429f-40d2-948f-f85a0a9f3c8c",
+  "created_at": "2025-12-18T21:07:25.708740-05:00",
+  "metadata": {
+    "branch": "feature/node-metadata-attachments",
+    "commit": "0231b1a",
+    "confidence": 95
+  },
+  "node_type": "action",
+  "status": "pending",
+  "title": "Implemented attachment CRUD methods in db.rs",
+  "updated_at": "2025-12-18T21:07:25.708740-05:00"
+}
