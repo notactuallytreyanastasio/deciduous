@@ -4129,8 +4129,35 @@ mod tests {
     fn test_resolve_node_ref_accepts_ids_and_change_id_prefixes() {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
-        let a = db.create_node("goal", "A", None, None, None).unwrap();
-        let b = db.create_node("goal", "B", None, None, None).unwrap();
+        // Fixed change_ids: a random UUID's first 8 hex characters are all
+        // digits about 2% of the time, and digits always resolve as a local
+        // id, so a random prefix would make this test flaky.
+        let a = db
+            .create_node_with_change_id(
+                "a1b2c3d4-1111-4111-8111-111111111111",
+                "goal",
+                "A",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
+        let b = db
+            .create_node_with_change_id(
+                "f9e8d7c6-2222-4222-8222-222222222222",
+                "goal",
+                "B",
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            .unwrap();
         let a_cid = db.get_node(a).unwrap().unwrap().change_id;
 
         assert_eq!(db.resolve_node_ref(&a.to_string()).unwrap(), a);
