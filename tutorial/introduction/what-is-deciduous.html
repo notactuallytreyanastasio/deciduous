@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What is Deciduous? - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title active">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html" class="active">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <div class="info-box">
+                <strong>Disclaimer:</strong> This tutorial was written by deciduous using itself, with no human guidance during the process. It was given one starting prompt and left to go for the entire thing.
+            </div>
+
+            <h1>What is Deciduous and Why Should I Care?</h1>
+
+            <p>Here's a scenario you've probably experienced:</p>
+
+            <p>You're three months into a project. Someone asks why you chose PostgreSQL over MongoDB. You vaguely remember there was a good reason, something about transactions and the data model, but the specifics? Gone. The Claude session where you worked through the tradeoffs? Long compacted. The Slack thread? Buried. You shrug and say "it made sense at the time."</p>
+
+            <p>This is the <em>decision evaporation problem</em>, and it's gotten dramatically worse with AI-assisted development.</p>
+
+            <h2>The Story We'll Follow</h2>
+
+            <p>Let me tell you about <a href="https://github.com/pepsico-ecommerce/snowflex">snowflex</a>, an Elixir library for connecting to Snowflake databases. It started as a simple ODBC wrapper&mdash;one module, one connection. Over 130 commits and two years, it evolved through five major architectural shifts: single connections to pools, pools to module-based APIs, ODBC to HTTP REST, single-auth to flexible key management. Each pivot was driven by real production pain. In this tutorial, you'll reconstruct that entire story using deciduous&mdash;then add a new chapter by working on a real open issue.</p>
+
+            <p>snowflex is the perfect subject because it's small enough to understand completely, but rich enough to have real decision history. Every project has this story buried in its git log. Most never get it told.</p>
+
+            <h2>The AI Context Problem</h2>
+
+            <p>When you work with Claude (or any LLM), you make dozens of decisions per session. Claude might explore three authentication approaches, reject two, and implement one. It considers error handling strategies, weighs library choices, evaluates architectural patterns. All of this reasoning happens, informs your code, and then... disappears when the context window compacts or the session ends.</p>
+
+            <p>You're left with:</p>
+            <ul>
+                <li>Code that works (hopefully)</li>
+                <li>No record of what was considered</li>
+                <li>No memory of why alternatives were rejected</li>
+                <li>No way to recover context in a new session</li>
+            </ul>
+
+            <p><strong>Deciduous solves this.</strong></p>
+
+            <h2>What Deciduous Does</h2>
+
+            <p>Deciduous is a decision graph tool that captures every goal, decision, option, action, outcome, and revisit as you work. It stores them in a queryable SQLite database that survives session boundaries. When Claude's context compacts, the graph remains. When you start a new session six months later, you can query "what did we decide about connection pooling?" and get the full reasoning back.</p>
+
+            <p>But here's what makes it genuinely useful: <strong>Deciduous is designed to be operated BY your AI assistant.</strong> You tell Claude to <code>/decision-graph</code> on your repo, or <code>/work</code> on an issue, and Claude handles the logging. You get to focus on the work.</p>
+
+            <p>This means:</p>
+
+            <ul>
+                <li><strong>Context survives compaction.</strong> When Claude runs <code>/recover</code> at session start, it queries the graph and recovers reasoning it never saw.</li>
+                <li><strong>PRs explain themselves.</strong> Generate decision visualizations and writeups directly from the graph.</li>
+                <li><strong>Institutional knowledge persists.</strong> Six months later, anyone can trace why things were built the way they were.</li>
+                <li><strong>LLM output becomes reviewable.</strong> Instead of just seeing code, you see the decision flow that produced it.</li>
+            </ul>
+
+            <h2>Two Ways to Use Deciduous</h2>
+
+            <p>There are two main workflows, and most projects use both:</p>
+
+            <h3>1. Archaeology (Existing Projects)</h3>
+
+            <p>Got an existing project with months or years of history? Point Claude at the repo and let it reconstruct the story:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session &mdash; Archaeology</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; /decision-graph</span>
+
+I'll analyze snowflex's git history to reconstruct its decision graph. Let me start by understanding the commit history.
+
+<span class="command">git log --oneline --reverse | head -20</span>
+<span class="output">a1b2c3d Initial commit - basic ODBC connection
+d4e5f6g Add query/2 function
+7h8i9j0 Add connection pooling with DBConnection
+k1l2m3n Refactor: module-based API pattern
+...</span>
+
+I can see several major architectural shifts here. Let me map them out.
+
+<span class="command">deciduous add goal "snowflex architecture evolution" -c 95</span>
+<span class="output">Created node #1: goal "snowflex architecture evolution"</span>
+
+<span class="command">deciduous add option "Direct ODBC connections" -c 90</span>
+<span class="command">deciduous add option "DBConnection pooling" -c 90</span>
+<span class="command">deciduous link 1 2 -r "initial approach"</span>
+<span class="command">deciduous link 1 3 -r "scaling response"</span>
+                </div>
+            </div>
+
+            <p>Claude reads the git log, identifies pivots, and builds the decision graph. You get months of architectural history mapped in minutes.</p>
+
+            <h3>2. Forward Logging (New Work)</h3>
+
+            <p>When you start new work, Claude logs decisions in real-time as it goes:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Claude Code Session &mdash; Forward Logging</div>
+                <div class="terminal-body">
+<span class="user-input">&gt; /work Fix issue #93 - connection timeout handling</span>
+
+I'll start by logging this as a goal and exploring the issue.
+
+<span class="command">deciduous add goal "Fix connection timeout handling" -c 90 --prompt-stdin &lt;&lt; 'EOF'
+Fix issue #93 - connection timeout handling
+EOF</span>
+<span class="output">Created node #42: goal "Fix connection timeout handling"</span>
+
+<span class="command">deciduous add option "Add retry with exponential backoff" -c 80</span>
+<span class="command">deciduous add option "Implement circuit breaker pattern" -c 70</span>
+<span class="command">deciduous link 42 43 -r "simpler approach"</span>
+<span class="command">deciduous link 42 44 -r "more resilient but complex"</span>
+
+<em>[Claude evaluates options, implements chosen approach, commits...]</em>
+
+<span class="command">deciduous add action "Implemented retry with backoff" --commit HEAD</span>
+<span class="command">deciduous add outcome "Timeout errors reduced 95% in test suite" -c 95</span>
+                </div>
+            </div>
+
+            <p>Each decision is captured as it happens. The reasoning is fresh, the context is complete. You didn't have to type a single deciduous command.</p>
+
+            <h2>A Quick Example</h2>
+
+            <p>Here's what a decision flow looks like in deciduous:</p>
+
+            <pre style="line-height: 1.8;">
+                ┌────────────────────┐
+                │ goal: Fix timeout  │
+                │ handling (#93)     │
+                └─────────┬──────────┘
+                          │
+            ┌─────────────┼─────────────┐
+            ▼                           ▼
+     ┌──────────────┐          ┌──────────────┐
+     │ option:      │          │ option:      │
+     │ Retry with   │          │ Circuit      │
+     │ backoff      │          │ breaker      │
+     └──────┬───────┘          └──────────────┘
+            │
+            ▼
+     ┌──────────────┐
+     │ decision:    │
+     │ Use retry    │──── "simpler, sufficient
+     │ approach     │      for this case"
+     └──────┬───────┘
+            │
+            ▼
+     ┌──────────────┐
+     │ action:      │
+     │ Implement    │──── commit: abc123
+     │ retry logic  │
+     └──────┬───────┘
+            │
+            ▼
+     ┌──────────────┐
+     │ outcome:     │
+     │ Timeouts     │
+     │ reduced 95%  │
+     └──────────────┘</pre>
+
+            <p>Now this decision chain is permanently recorded. Anyone can query the graph to understand not just <em>what</em> was built, but <em>why</em>.</p>
+
+            <h2>The Core Insight</h2>
+
+            <p>The insight behind deciduous is simple:</p>
+
+            <div class="info-box tip">
+                <strong>Decisions are more valuable than documentation.</strong>
+                <p>Documentation describes what exists. A decision graph captures <em>why</em> it exists, what alternatives were considered, and what tradeoffs were made. This is the knowledge that actually helps future developers (and future AI sessions).</p>
+            </div>
+
+            <p>When an AI assistant logs decisions in real-time, you get documentation as a side effect of the development process&mdash;not as an afterthought.</p>
+
+            <h2>What You'll Get</h2>
+
+            <p>After setting up deciduous, you'll have:</p>
+
+            <ul>
+                <li><strong>A queryable history</strong> of every major decision</li>
+                <li><strong>A conversational Q&amp;A interface</strong> &mdash; ask your AI assistant questions about past decisions and get answers grounded in the graph</li>
+                <li><strong>Informed AI decisions</strong> &mdash; once the graph has history, your AI uses it to make better choices, avoiding approaches that were already tried and rejected</li>
+                <li><strong>Automatic context recovery</strong> when Claude starts new sessions</li>
+                <li><strong>Visual decision graphs</strong> for PRs and documentation</li>
+                <li><strong>Git commit integration</strong> linking decisions to code</li>
+                <li><strong>A web viewer</strong> for browsing the graph interactively</li>
+            </ul>
+
+            <h2>Why "Deciduous"?</h2>
+
+            <p>Deciduous trees shed their leaves seasonally but their structure persists. Like Claude's context, the leaves (working memory) fall away&mdash;but the decision graph (trunk and branches) remains, ready to support new growth.</p>
+
+            <div class="page-nav">
+                <a href="../index.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Introduction</span>
+                </a>
+                <a href="how-to-read.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">How to Read This Tutorial</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

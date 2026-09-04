@@ -1,0 +1,51 @@
+digraph DecisionGraph {
+  rankdir=TB;
+  node [fontname="Arial" fontsize=10];
+  edge [fontname="Arial" fontsize=9];
+
+  1442 [label="[1442] Replace multi-user sync with a git-na...\\n(90%)" shape="house" fillcolor="#FFE4B5" style="filled"];
+  1443 [label="[1443] Four overlapping sync mechanisms exis...\\n(95%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  1444 [label="[1444] One JSON file per record under .decid...\\n(85%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  1445 [label="[1445] Keep JSONL but partition per author+b...\\n(40%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  1446 [label="[1446] Commit the SQLite DB or a CRDT log\\n(10%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  1447 [label="[1447] Choose per-record files as the single...\\n(85%)" shape="diamond" fillcolor="#E6E6FA" style="filled"];
+  1448 [label="[1448] Implement records.rs: per-record JSON...\\n(85%)" shape="box" fillcolor="#90EE90" style="filled"];
+  1449 [label="[1449] Move sync write-through into Database...\\n(85%)" shape="box" fillcolor="#90EE90" style="filled"];
+  1450 [label="[1450] Fold events/checkpoint/patch commands...\\n(80%)" shape="box" fillcolor="#90EE90" style="filled"];
+  1451 [label="[1451] Rewrite init gitignore rules, templat...\\n(80%)" shape="box" fillcolor="#90EE90" style="filled"];
+  1452 [label="[1452] Record store implemented; 235 unit + ...\\n(90%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  1453 [label="[1453] Real corrupted JSONL log imported cle...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  1454 [label="[1454] Merge concurrent edits to the same re...\\n(85%)" shape="house" fillcolor="#FFE4B5" style="filled"];
+  1455 [label="[1455] Custom merge driver: 3-way field-leve...\\n(85%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  1456 [label="[1456] Store a parent-content fingerprint in...\\n(40%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  1457 [label="[1457] Split records into per-field files so...\\n(20%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  1458 [label="[1458] Merge driver + field-level 3-way merg...\\n(85%)" shape="diamond" fillcolor="#E6E6FA" style="filled"];
+  1459 [label="[1459] Implement merge_record_values, confli...\\n(85%)" shape="box" fillcolor="#90EE90" style="filled"];
+  1460 [label="[1460] Same-record edits now merge: driver +...\\n(90%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+
+  1442 -> 1443 [style="solid" color="#333333" label="context"];
+  1442 -> 1444 [style="solid" color="#333333" label="possible_approach"];
+  1442 -> 1445 [style="solid" color="#333333" label="possible_approach"];
+  1442 -> 1446 [style="solid" color="#333333" label="possible_approach"];
+  1444 -> 1447 [style="solid" color="#333333" label="chosen"];
+  1445 -> 1447 [style="solid" color="#333333" label="rejected: still conflicts o..."];
+  1446 -> 1447 [style="solid" color="#333333" label="rejected: binary conflicts ..."];
+  1447 -> 1448 [style="solid" color="#333333" label="implementation"];
+  1447 -> 1449 [style="solid" color="#333333" label="implementation"];
+  1447 -> 1450 [style="solid" color="#333333" label="implementation"];
+  1447 -> 1451 [style="solid" color="#333333" label="implementation"];
+  1448 -> 1452 [style="solid" color="#333333" label="result"];
+  1449 -> 1452 [style="solid" color="#333333" label="result"];
+  1450 -> 1452 [style="solid" color="#333333" label="result"];
+  1451 -> 1452 [style="solid" color="#333333" label="result"];
+  1448 -> 1453 [style="solid" color="#333333" label="verified against real data"];
+  1447 -> 1454 [style="solid" color="#333333" label="follow-up: same-record conf..."];
+  1454 -> 1455 [style="solid" color="#333333" label="possible_approach"];
+  1454 -> 1456 [style="solid" color="#333333" label="possible_approach"];
+  1454 -> 1457 [style="solid" color="#333333" label="possible_approach"];
+  1455 -> 1458 [style="solid" color="#333333" label="chosen"];
+  1456 -> 1458 [style="solid" color="#333333" label="rejected: duplicates the me..."];
+  1457 -> 1458 [style="solid" color="#333333" label="rejected: file explosion"];
+  1458 -> 1459 [style="solid" color="#333333" label="implementation"];
+  1459 -> 1460 [style="solid" color="#333333" label="result"];
+}

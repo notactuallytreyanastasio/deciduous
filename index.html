@@ -1,0 +1,1193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Deciduous - Your AI Assistant Remembers Every Decision</title>
+
+    <!-- Primary Meta Tags -->
+    <meta
+      name="title"
+      content="Deciduous - Your AI Assistant Remembers Every Decision"
+    />
+    <meta
+      name="description"
+      content="Decision graph tooling for AI-assisted development. Build decision graphs from existing git history. Track goals, decisions, and outcomes as you work. Recover context across sessions."
+    />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta
+      property="og:url"
+      content="https://deciduous.dev/"
+    />
+    <meta
+      property="og:title"
+      content="Deciduous - Your AI Assistant Remembers Every Decision"
+    />
+    <meta
+      property="og:description"
+      content="Build decision graphs from existing git history. Track goals, decisions, and outcomes as you work. Recover context across sessions."
+    />
+    <meta
+      property="og:image"
+      content="https://deciduous.dev/og-image.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta
+      property="twitter:url"
+      content="https://deciduous.dev/"
+    />
+    <meta
+      property="twitter:title"
+      content="Deciduous - Your AI Assistant Remembers Every Decision"
+    />
+    <meta
+      property="twitter:description"
+      content="Build decision graphs from existing git history. Track goals, decisions, and outcomes as you work."
+    />
+    <meta
+      property="twitter:image"
+      content="https://deciduous.dev/og-image.png"
+    />
+
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #ffffff;
+        color: #24292f;
+        line-height: 1.6;
+      }
+      .container { max-width: 1400px; margin: 0 auto; padding: 60px 20px; }
+      .narrow { max-width: 900px; margin: 0 auto; }
+
+      /* Navigation */
+      .top-nav {
+        display: flex; justify-content: center; gap: 30px;
+        margin-bottom: 30px; padding-bottom: 20px;
+        border-bottom: 1px solid #d0d7de;
+      }
+      .top-nav a { color: #57606a; text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
+      .top-nav a:hover { color: #0969da; }
+
+      /* Header */
+      header { text-align: center; margin-bottom: 20px; }
+      header h1 { font-size: 3.5rem; font-weight: 700; color: #24292f; margin-bottom: 15px; letter-spacing: -1px; }
+      .tagline { font-size: 1.15rem; color: #57606a; margin-bottom: 8px; max-width: 720px; margin-left: auto; margin-right: auto; }
+
+      /* Terminal window */
+      .session-demo {
+        background: #1e1e1e; border-radius: 12px; overflow: hidden;
+        margin: 30px 0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+      }
+      .feature-grid .session-demo { margin: 15px 0 0 0; }
+      .session-header {
+        background: #2d2d2d; padding: 12px 16px;
+        display: flex; align-items: center; gap: 8px;
+      }
+      .session-dot { width: 12px; height: 12px; border-radius: 50%; }
+      .session-dot.red { background: #ff5f56; }
+      .session-dot.yellow { background: #ffbd2e; }
+      .session-dot.green { background: #27c93f; }
+      .session-title { color: #888; font-size: 0.85rem; margin-left: 8px; }
+      .replay-btn {
+        margin-left: auto; background: #374151; color: #9ca3af;
+        border: none; padding: 4px 12px; border-radius: 4px;
+        font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
+      }
+      .replay-btn:hover { background: #4b5563; color: #e5e7eb; }
+      .session-content {
+        padding: 20px;
+        font-family: "SF Mono", Monaco, "Courier New", monospace;
+        font-size: 0.9rem; line-height: 1.6;
+        max-height: 440px; overflow-y: auto; scroll-behavior: smooth;
+      }
+      .feature-grid .session-content { font-size: 0.82rem; padding: 14px; max-height: 420px; }
+      .feature-grid .step-recovery-output { font-size: 0.8rem; padding: 10px; }
+      .feature-grid .session-header { padding: 10px 14px; }
+      .feature-grid .session-dot { width: 10px; height: 10px; }
+      .session-content::-webkit-scrollbar { width: 8px; }
+      .session-content::-webkit-scrollbar-track { background: #2d2d2d; }
+      .session-content::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+
+      /* Animation steps */
+      .session-step { opacity: 0; transform: translateY(10px); margin-bottom: 16px; }
+      .session-step:last-child { margin-bottom: 0; }
+      .session-demo.animate .session-step,
+      .session-demo.hero-demo .session-step {
+        animation: fadeInStep 0.5s ease forwards;
+        animation-delay: var(--delay);
+      }
+      @keyframes fadeInStep { to { opacity: 1; transform: translateY(0); } }
+
+      /* Step labels */
+      .step-label { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; }
+      .step-label.user { background: #3b82f6; color: #fff; }
+      .step-label.claude { background: #d97706; color: #fff; }
+      .step-content { color: #e5e5e5; padding-left: 4px; }
+      .step-content.code { color: #7ee787; }
+      .step-output { color: #8b949e; font-size: 0.85rem; margin-top: 4px; padding-left: 4px; }
+      .step-files { color: #f97583; font-size: 0.85rem; margin-top: 4px; padding-left: 4px; }
+      .step-recovery-output {
+        background: #1a3a1a; border: 1px solid #22543d; border-radius: 6px;
+        padding: 12px; margin-top: 8px; color: #86efac; font-size: 0.85rem;
+      }
+      .step-recovery-output strong { color: #4ade80; }
+
+      /* Sections */
+      h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 10px; }
+      section { margin-top: 50px; padding-top: 30px; border-top: 1px solid #d0d7de; }
+      .narrow > section:first-child { margin-top: 40px; }
+      section p { color: #57606a; margin-bottom: 15px; }
+      section a { color: #0969da; text-decoration: none; }
+      section a:hover { text-decoration: underline; }
+
+      /* Feature grid — 2 per row on desktop */
+      .feature-grid {
+        display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 30px;
+        margin-top: 50px; padding-top: 30px; border-top: 1px solid #d0d7de;
+      }
+      @media (max-width: 1000px) { .feature-grid { grid-template-columns: 1fr; } }
+
+      /* Feature sections */
+      .feature-section { display: flex; flex-direction: column; }
+      .feature-section .session-demo { flex: 1; display: flex; flex-direction: column; }
+      .feature-section .session-content { flex: 1; }
+      .feature-section h2 { border: none; padding-bottom: 0; margin-bottom: 6px; font-size: 1.25rem; }
+      .feature-desc { color: #57606a; margin-bottom: 20px; font-size: 0.95rem; }
+      .feature-desc code { background: #e6ffec; color: #1a7f37; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+      .feature-badge {
+        display: inline-block; padding: 3px 10px; border-radius: 12px;
+        font-size: 0.8rem; font-weight: 600; margin-bottom: 12px;
+      }
+      .feature-badge.command { background: #dbeafe; color: #1e40af; }
+      .feature-badge.skill { background: #f3e8ff; color: #6b21a8; }
+      .feature-badge.popular { background: #fef3c7; color: #92400e; }
+      .feature-badge.new { background: #dcfce7; color: #166534; }
+      .feature-grid .feature-badge { font-size: 0.75rem; margin-bottom: 8px; }
+      .feature-grid .feature-desc { font-size: 0.9rem; margin-bottom: 12px; }
+
+      /* Buttons */
+      .buttons { display: flex; justify-content: center; gap: 15px; margin: 40px 0; flex-wrap: wrap; }
+      .btn { padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 1rem; transition: all 0.15s; }
+      .btn-primary { background: #2da44e; color: #fff; }
+      .btn-primary:hover { background: #238636; }
+      .btn-secondary { background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }
+      .btn-secondary:hover { background: #eaeef2; }
+
+      /* Editor badges */
+      .editor-badges { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+      .editor-badge {
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 10px 16px; background: #f6f8fa; border: 1px solid #d0d7de;
+        border-radius: 8px; font-weight: 500; color: #24292f;
+      }
+      .editor-badge code { background: #e6e6e6; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
+
+      /* View cards */
+      .view-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 25px; }
+      @media (max-width: 700px) { .view-cards { grid-template-columns: 1fr; } }
+      .view-card {
+        background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px;
+        padding: 20px; text-decoration: none; transition: all 0.15s;
+      }
+      .view-card:hover { border-color: #0969da; background: #ffffff; }
+      .view-card h3 { color: #24292f; font-size: 1rem; margin-bottom: 8px; }
+      .view-card p { font-size: 0.85rem; margin: 0; color: #57606a; }
+
+      /* Node types */
+      .node-types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
+      @media (max-width: 700px) { .node-types { grid-template-columns: repeat(2, 1fr); } }
+      @media (max-width: 450px) { .node-types { grid-template-columns: 1fr; } }
+      .node-type { background: #f6f8fa; padding: 12px 15px; border-radius: 8px; border: 1px solid #d0d7de; }
+      .node-type h3 { color: #24292f; font-size: 0.9rem; margin-bottom: 3px; }
+      .node-type p { font-size: 0.8rem; margin: 0; color: #57606a; }
+      .node-type.goal h3 { color: #d29922; }
+      .node-type.option h3 { color: #8250df; }
+      .node-type.decision h3 { color: #0969da; }
+      .node-type.action h3 { color: #2da44e; }
+      .node-type.outcome h3 { color: #1f6feb; }
+      .node-type.observation h3 { color: #bf3989; }
+      .node-type.revisit h3 { color: #cf222e; }
+
+      /* Quickstart */
+      .quickstart-step { margin-bottom: 25px; }
+      .quickstart-step-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 12px; }
+      .quickstart-num {
+        flex-shrink: 0; width: 32px; height: 32px; background: #2da44e; color: #fff;
+        border-radius: 50%; display: flex; align-items: center; justify-content: center;
+        font-weight: 700; font-size: 1rem;
+      }
+      .quickstart-info h3 { color: #24292f; font-size: 1.1rem; margin: 0 0 4px 0; }
+      .quickstart-info p { color: #57606a; font-size: 0.9rem; margin: 0; }
+      .quickstart-terminal { background: #1e1e1e; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
+      .quickstart-content { padding: 16px 20px; font-family: "SF Mono", Monaco, "Courier New", monospace; font-size: 0.85rem; line-height: 1.7; }
+      .qs-prompt { color: #7ee787; margin-right: 8px; }
+      .qs-cmd { color: #e5e5e5; }
+      .qs-output { color: #8b949e; padding-left: 20px; }
+      .qs-success { color: #7ee787; padding-left: 20px; }
+
+      /* Command reference table */
+      .cmd-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
+      .cmd-table th { text-align: left; padding: 10px 12px; background: #f6f8fa; border: 1px solid #d0d7de; font-weight: 600; color: #24292f; }
+      .cmd-table td { padding: 10px 12px; border: 1px solid #d0d7de; color: #57606a; }
+      .cmd-table code { background: #e6ffec; color: #1a7f37; padding: 1px 5px; border-radius: 3px; font-size: 0.85em; }
+      .cmd-table .type-badge {
+        display: inline-block; padding: 1px 6px; border-radius: 8px;
+        font-size: 0.7rem; font-weight: 600;
+      }
+      .cmd-table .type-command { background: #dbeafe; color: #1e40af; }
+      .cmd-table .type-skill { background: #f3e8ff; color: #6b21a8; }
+
+      /* Install section */
+      .install-section {
+        max-width: 900px; margin: 50px auto 0; padding-top: 30px;
+        border-top: 1px solid #d0d7de; text-align: center;
+      }
+      .install-section h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 20px; }
+      .install-options {
+        display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
+        margin-bottom: 16px; text-align: left;
+      }
+      @media (max-width: 600px) { .install-options { grid-template-columns: 1fr; } }
+      .install-alt { color: #57606a; font-size: 0.9rem; }
+      .install-alt a { color: #0969da; text-decoration: none; }
+      .install-alt a:hover { text-decoration: underline; }
+
+      /* Footer */
+      footer { text-align: center; padding: 40px 0; margin-top: 40px; color: #6e7781; font-size: 0.9rem; }
+      footer a { color: #0969da; text-decoration: none; }
+      footer a:hover { text-decoration: underline; }
+
+      .story-link { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 20px; margin-top: 20px; }
+      .story-link p { font-size: 0.95rem; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="narrow">
+        <nav class="top-nav">
+          <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
+          <a href="mcp.html">MCP</a>
+          <a href="story.html">Story</a>
+          <a href="demo/">Live Graph</a>
+          <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+          <a href="#install">Install</a>
+        </nav>
+
+        <header>
+          <h1>DECIDUOUS</h1>
+          <p class="tagline">
+            A living decision graph for your codebase. Build one retroactively from git history.
+            Keep it alive as you work. Recover full context when sessions end.
+            Ask it questions. Attach evidence. Share it with your team.
+          </p>
+        </header>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- HERO: /decision-graph — the breakout feature                 -->
+      <!-- ============================================================ -->
+      <div class="narrow">
+      <div class="session-demo hero-demo" id="hero-demo">
+        <div class="session-header">
+          <span class="session-dot red"></span>
+          <span class="session-dot yellow"></span>
+          <span class="session-dot green"></span>
+          <span class="session-title">Claude Code &mdash; entering an existing project</span>
+          <button class="replay-btn" onclick="replayDemo('hero-demo')">Replay</button>
+        </div>
+        <div class="session-content">
+          <div class="session-step" style="--delay: 0s">
+            <div class="step-label user">You</div>
+            <div class="step-content">/decision-graph ../snowflex</div>
+          </div>
+          <div class="session-step" style="--delay: 1.2s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content">Building a decision graph from the snowflex commit history. Let me analyze the repo...</div>
+          </div>
+          <div class="session-step" style="--delay: 2.5s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content code">git -C ../snowflex log --oneline --after="2024-01-01" | wc -l</div>
+            <div class="step-output">347 commits found</div>
+          </div>
+          <div class="session-step" style="--delay: 4s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content">I see 347 commits across 8 months. Let me trace the major narratives &mdash; I'll collect commits into stories before building the graph...</div>
+          </div>
+          <div class="session-step" style="--delay: 5.5s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content code">deciduous add goal "Query engine evolution" -c 95 --date "2024-01-15"</div>
+            <div class="step-output">Created node 1 (type: goal) [confidence: 95%] [branch: main]</div>
+          </div>
+          <div class="session-step" style="--delay: 7s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content code">deciduous add action "Initial SQL parser with hand-rolled tokenizer" --date "2024-01-20" --commit a3f8c12</div>
+            <div class="step-output">Created node 2 (type: action) [commit: a3f8c12]</div>
+          </div>
+          <div class="session-step" style="--delay: 8.5s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content code">deciduous add observation "Hand-rolled parser can't handle nested subqueries &mdash; 3 bug reports in March" --date "2024-03-10"</div>
+            <div class="step-output">Created node 3 (type: observation)</div>
+          </div>
+          <div class="session-step" style="--delay: 10s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content code">deciduous archaeology pivot 2 "Parser can't handle nested subqueries" "Switch to sqlparser-rs crate" -c 90 -r "Hand-rolled parser too fragile"</div>
+            <div class="step-output">Created observation #4, revisit #5, decision #6<br>Linked: 2 &rarr; 4 &rarr; 5 &rarr; 6<br>Marked node 2 as superseded</div>
+          </div>
+          <div class="session-step" style="--delay: 12s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content code">deciduous status 2 superseded</div>
+            <div class="step-output">Updated node 2 status: pending &rarr; superseded</div>
+          </div>
+          <div class="session-step" style="--delay: 13.5s">
+            <div class="step-label claude">Claude</div>
+            <div class="step-content">
+              Built graph from 347 commits: 28 nodes, 31 edges, 3 pivot points.<br><br>
+              Key narratives discovered:<br>
+              &nbsp;&nbsp;1. Query engine evolution (8 nodes, 2 pivots)<br>
+              &nbsp;&nbsp;2. Connection pooling strategy (6 nodes, 1 pivot)<br>
+              &nbsp;&nbsp;3. Auth middleware redesign (5 nodes)<br><br>
+              Run <span style="color: #7ee787">deciduous serve</span> to explore, or <span style="color: #7ee787">deciduous pulse</span> to see the summary.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      </div><!-- /.narrow (hero) -->
+
+      <!-- ============================================================ -->
+      <!-- Feature Grid: 2 per row on desktop                           -->
+      <!-- ============================================================ -->
+      <div class="feature-grid">
+
+      <!-- ============================================================ -->
+      <!-- Feature 1: /decision-graph — Retroactive History Discovery   -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge popular">Breakout Feature</span>
+        <h2>/decision-graph &mdash; Build a Graph from Git History</h2>
+        <p class="feature-desc">
+          Point it at any repository. Claude reads every commit, traces the narratives &mdash; what got built, what got replaced, where the pivots happened &mdash; and builds a connected decision graph. Grounded entirely in what's in the repo. No speculation.
+        </p>
+
+        <div class="session-demo" id="demo-decision-graph">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Code &mdash; analyzing 14 months of commits</span>
+            <button class="replay-btn" onclick="replayDemo('demo-decision-graph')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">/decision-graph</div>
+            </div>
+            <div class="session-step" style="--delay: 1s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">I'll analyze the commit history and build narratives first, then construct the graph. Let me start with the full log...</div>
+            </div>
+            <div class="session-step" style="--delay: 2.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">git log --oneline --after="2024-01-01" -- src/</div>
+              <div class="step-output">Reading 847 commits... tracing key identifiers across their full lifecycle...</div>
+            </div>
+            <div class="session-step" style="--delay: 4.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Found 4 major narratives. Writing to narratives.md before building the graph:</div>
+            </div>
+            <div class="session-step" style="--delay: 5.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>## Cache Strategy</strong><br>
+                Concepts: cache, LRUCache, cacheTimeout, invalidate<br><br>
+                Lifecycle:<br>
+                - cache: introduced (a1b2c3d), changed (e4f5g6h), renamed to LRUCache (x1y2z3)<br>
+                - cacheTimeout: introduced (e4f5g6h), removed (i7j8k9l) &larr; switch to Redis TTL<br><br>
+                <span style="color: #f97583">PIVOT: In-memory LRU &rarr; Redis (memory pressure at scale)</span>
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 8s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add goal "Caching strategy" -c 95 --date "2024-02-01"</div>
+              <div class="step-output">Created node 1 (type: goal) [backdated: 2024-02-01]</div>
+            </div>
+            <div class="session-step" style="--delay: 9s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add action "In-memory LRU cache" -d "Initial cache. Sources: a1b2c3d 'Add in-memory cache for hot queries'" --date "2024-02-15" --commit a1b2c3d</div>
+              <div class="step-output">Created node 2 (type: action) [commit: a1b2c3d]</div>
+            </div>
+            <div class="session-step" style="--delay: 10.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous archaeology pivot 2 "Memory pressure at 10k RPM &mdash; LRU consuming 1.2GB" "Switch to Redis with TTL-based invalidation" -c 90 -r "In-memory cache doesn't scale"</div>
+              <div class="step-output">Created observation #3, revisit #4, decision #5<br>Linked: 2 &rarr; 3 &rarr; 4 &rarr; 5<br>Marked node 2 as superseded</div>
+            </div>
+            <div class="session-step" style="--delay: 12.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">
+                Graph built. Every action cites a real commit SHA. Every observation comes from commit messages or code.<br><br>
+                Run <span style="color: #7ee787">deciduous pulse</span> to see the summary, or <span style="color: #7ee787">deciduous serve</span> to explore visually.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 2: Document attachments + Q&A                        -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge new">New in v0.13</span>
+        <h2>Attach Evidence &amp; Ask Your Graph Questions</h2>
+        <p class="feature-desc">
+          Attach screenshots, PDFs, and architecture diagrams to decision nodes. Then ask questions &mdash; the built-in Q&amp;A interface grounds answers in your actual decision history with full-text search across all stored interactions.
+        </p>
+
+        <div class="session-demo" id="demo-docs-qa">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Code Session</span>
+            <button class="replay-btn" onclick="replayDemo('demo-docs-qa')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">Here's the architecture diagram for the new caching layer</div>
+              <div class="step-files">[Attached: cache-architecture.png]</div>
+            </div>
+            <div class="session-step" style="--delay: 1.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">I'll attach that to the caching goal node with an AI-generated description.</div>
+            </div>
+            <div class="session-step" style="--delay: 3s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous doc attach 1 /tmp/cache-architecture.png --ai-describe</div>
+              <div class="step-output">Attached document 1 to node 1 (goal: Caching strategy)</div>
+            </div>
+            <div class="session-step" style="--delay: 4.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>AI Description:</strong> Architecture diagram showing Redis cache layer between API gateway and PostgreSQL, with TTL-based invalidation and write-through strategy for user profiles. Hot path latency annotated as &lt;12ms p95.
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 6.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Attached and described. Now future sessions can see this diagram when recovering context. The description makes it searchable via the Q&amp;A interface too.</div>
+            </div>
+            <div class="session-step" style="--delay: 8s">
+              <div class="step-label user">You</div>
+              <div class="step-content">Why did we switch from in-memory caching to Redis?</div>
+            </div>
+            <div class="session-step" style="--delay: 9.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous nodes --type revisit</div>
+            </div>
+            <div class="session-step" style="--delay: 10.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>Revisit #4:</strong> Reconsider caching strategy<br>
+                &nbsp;&nbsp;Reason: "In-memory cache doesn't scale"<br>
+                &nbsp;&nbsp;Observation #3: "Memory pressure at 10k RPM &mdash; LRU consuming 1.2GB"<br>
+                &nbsp;&nbsp;New decision #5: "Switch to Redis with TTL-based invalidation"<br><br>
+                <strong>Document:</strong> cache-architecture.png attached to Goal #1<br>
+                <strong>Grounded in:</strong> commit a1b2c3d, commit i7j8k9l
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 13s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">The in-memory LRU cache was consuming 1.2GB at 10k requests/minute. The pivot to Redis with TTL invalidation is captured in revisit node #4, with the architecture diagram attached to the caching goal.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 3: Keeping the pulse — ongoing logging as you work   -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge skill">Skill: pulse</span>
+        <h2>Keep the Pulse &mdash; Log Decisions as You Work</h2>
+        <p class="feature-desc">
+          The pulse skill is what makes deciduous a living document. As you work, Claude logs goals before implementing, tracks which options you considered, records what you chose and why, and links outcomes to commits. Run <code>deciduous pulse</code> anytime to see the health of your graph.
+        </p>
+
+        <div class="session-demo" id="demo-pulse">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Code &mdash; normal development session</span>
+            <button class="replay-btn" onclick="replayDemo('demo-pulse')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">Add rate limiting to the API endpoints</div>
+            </div>
+            <div class="session-step" style="--delay: 1.2s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">I'll add rate limiting. Let me log this goal first and map the options.</div>
+            </div>
+            <div class="session-step" style="--delay: 2.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add goal "Add API rate limiting" -c 90 --prompt-stdin &lt;&lt; 'EOF'
+Add rate limiting to the API endpoints
+EOF</div>
+              <div class="step-output">Created node 42 (type: goal) [confidence: 90%] [branch: main]</div>
+            </div>
+            <div class="session-step" style="--delay: 4s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add option "Token bucket per user" -c 85
+deciduous add option "Sliding window counter" -c 75
+deciduous link 42 43 -r "possible_approach"
+deciduous link 42 44 -r "possible_approach"</div>
+              <div class="step-output">Created nodes 43, 44 (options)<br>Created edges 42 &rarr; 43, 42 &rarr; 44</div>
+            </div>
+            <div class="session-step" style="--delay: 6s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Token bucket is simpler and battle-tested. Going with that.</div>
+            </div>
+            <div class="session-step" style="--delay: 7s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add decision "Token bucket &mdash; simpler, proven at scale" -c 90
+deciduous link 43 45 -r "chosen"</div>
+              <div class="step-output">Created node 45 (type: decision)</div>
+            </div>
+            <div class="session-step" style="--delay: 8.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add action "Implement token bucket middleware" -c 85 -f "src/middleware/rate_limit.rs"
+deciduous link 45 46 -r "implementation"</div>
+              <div class="step-output">Created node 46 (type: action) [files: src/middleware/rate_limit.rs]</div>
+            </div>
+            <div class="session-step" style="--delay: 10s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Implementing rate limit middleware...</div>
+              <div class="step-files">Writing: src/middleware/rate_limit.rs</div>
+            </div>
+            <div class="session-step" style="--delay: 11.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add outcome "Rate limiting working &mdash; 100 req/min per user" -c 95 --commit HEAD
+deciduous link 46 47 -r "implementation complete"</div>
+              <div class="step-output">Created node 47 (type: outcome) [commit: c8d3e2f]</div>
+            </div>
+            <div class="session-step" style="--delay: 13s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous pulse</div>
+            </div>
+            <div class="session-step" style="--delay: 14s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>=== PULSE ===</strong><br><br>
+                Summary:<br>
+                &nbsp;&nbsp;Nodes: 47 | Edges: 52<br>
+                &nbsp;&nbsp;Types: goal(6) option(8) decision(5) action(14) outcome(10) observation(4)<br><br>
+                Active Goals:<br>
+                &nbsp;&nbsp;#42 [goal] Add API rate limiting [90%]<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #43 [option] Token bucket per user (chosen)<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #44 [option] Sliding window counter<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #45 [decision] Token bucket &mdash; simpler, proven<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472;&#9472; #47 [outcome] Rate limiting working [commit: c8d3e2f]
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 4: /recover — Context Recovery                       -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge command">Command</span>
+        <h2>/recover &mdash; Pick Up Where You Left Off</h2>
+        <p class="feature-desc">
+          New session? Context compacted? <code>/recover</code> reads the decision graph, checks attached documents, audits for disconnected nodes, and gives Claude full context &mdash; far richer than what compaction preserves.
+        </p>
+
+        <div class="session-demo" id="demo-recover">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Code &mdash; new session, context was compacted</span>
+            <button class="replay-btn" onclick="replayDemo('demo-recover')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">/recover</div>
+            </div>
+            <div class="session-step" style="--delay: 1s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Recovering context from decision graph...</div>
+            </div>
+            <div class="session-step" style="--delay: 2s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous nodes --branch main
+deciduous edges
+deciduous commands
+deciduous doc list
+git log --oneline -10</div>
+            </div>
+            <div class="session-step" style="--delay: 4s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>Branch:</strong> main<br><br>
+                <strong>Active Goals:</strong><br>
+                &nbsp;&nbsp;#42 [goal] Add API rate limiting [90%] <span style="color: #4ade80">&check; completed</span><br>
+                &nbsp;&nbsp;#48 [goal] Add WebSocket support [85%] <span style="color: #fbbf24">in progress</span><br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&#8627; #49 [decision] Use tokio-tungstenite [90%]<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&#8627; #50 [action] Implementing WS handler [85%]<br><br>
+                <strong>Attached documents (1):</strong><br>
+                &nbsp;&nbsp;cache-architecture.png on Goal #1 (Caching strategy)<br><br>
+                <strong>Last 3 commits:</strong><br>
+                &nbsp;&nbsp;c8d3e2f feat: add rate limiting middleware<br>
+                &nbsp;&nbsp;a1b7f3c feat: websocket connection handler (WIP)<br>
+                &nbsp;&nbsp;e9d4c2a test: rate limit integration tests
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 7s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">
+                Rate limiting is done (commit c8d3e2f). You're mid-implementation on WebSocket support &mdash;
+                the WS handler exists but isn't complete (node 50). You chose tokio-tungstenite for the implementation.
+                Want me to continue the WebSocket work?
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 5: /work — Work Transactions                         -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge command">Command</span>
+        <h2>/work &mdash; Start a Work Transaction</h2>
+        <p class="feature-desc">
+          Before any implementation, <code>/work</code> creates the goal node with your verbatim request, then tracks actions and outcomes as Claude writes code. Commits get linked to the graph automatically.
+        </p>
+
+        <div class="session-demo" id="demo-work">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Code Session</span>
+            <button class="replay-btn" onclick="replayDemo('demo-work')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">/work Add email verification to the signup flow</div>
+            </div>
+            <div class="session-step" style="--delay: 1.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add goal "Add email verification to signup" -c 90 --prompt-stdin &lt;&lt; 'EOF'
+Add email verification to the signup flow
+EOF</div>
+              <div class="step-output">Created node 51 (type: goal) [confidence: 90%]</div>
+            </div>
+            <div class="session-step" style="--delay: 3s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Goal #51 created. I'll implement email verification and track each step.</div>
+            </div>
+            <div class="session-step" style="--delay: 4s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add action "Implement verification token generation and email sending" -c 85 -f "src/auth/verify.rs,src/email/templates.rs"
+deciduous link 51 52 -r "implementation step"</div>
+              <div class="step-output">Created node 52 (type: action) [files: src/auth/verify.rs, src/email/templates.rs]</div>
+            </div>
+            <div class="session-step" style="--delay: 5.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Implementing...</div>
+              <div class="step-files">Writing: src/auth/verify.rs, src/email/templates.rs, src/routes/verify.rs</div>
+            </div>
+            <div class="session-step" style="--delay: 7s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous add outcome "Email verification working" -c 95 --commit HEAD
+deciduous link 52 53 -r "implementation complete"
+deciduous sync</div>
+              <div class="step-output">Created node 53 (type: outcome) [commit: f2a8b1c]<br>Exported graph: 53 nodes, 58 edges</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 6: Skills — Narratives + Archaeology                 -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge skill">Skills</span>
+        <h2>Narratives &amp; Archaeology &mdash; Maintain the Story</h2>
+        <p class="feature-desc">
+          The <strong>narratives</strong> skill helps maintain a living document (<code>.deciduous/narratives.md</code>) tracking how each subsystem evolved and where it pivoted.
+          The <strong>archaeology</strong> skill transforms those narratives into queryable graph structure &mdash; creating revisit nodes, superseding old approaches, and connecting the timeline.
+        </p>
+
+        <div class="session-demo" id="demo-narratives">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Code &mdash; maintaining decision history</span>
+            <button class="replay-btn" onclick="replayDemo('demo-narratives')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">The auth system has changed a lot. Can you trace the narrative and structure it in the graph?</div>
+            </div>
+            <div class="session-step" style="--delay: 1.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous narratives init</div>
+              <div class="step-output">Created .deciduous/narratives.md with 6 active goal titles</div>
+            </div>
+            <div class="session-step" style="--delay: 3s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">I'll read the code and fill in the auth narrative. Looking for signs of pivots &mdash; two approaches coexisting, comments about "we used to do X", deprecation warnings...</div>
+            </div>
+            <div class="session-step" style="--delay: 5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>## Auth Strategy</strong><br>
+                &gt; How users authenticate with the API<br><br>
+                <strong>Current state:</strong> JWT with refresh rotation, httpOnly cookies<br><br>
+                <strong>Evolution:</strong><br>
+                1. Session-based auth (Jan 2024) &mdash; simple, worked for monolith<br>
+                2. <span style="color: #f97583">PIVOT:</span> Sessions don't scale across microservices (Jun 2024)<br>
+                3. JWT with refresh rotation (Jun 2024) &mdash; stateless, horizontal scaling<br><br>
+                <strong>Evidence:</strong> commits abc1234, def5678<br>
+                <strong>Status:</strong> active
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 8s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Now I'll structure this in the graph using archaeology commands...</div>
+            </div>
+            <div class="session-step" style="--delay: 9s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous archaeology pivot 12 "Sessions don't scale across microservices" "JWT with refresh rotation" -c 90 -r "Monolith to microservices"</div>
+              <div class="step-output">Created observation #14, revisit #15, decision #16<br>Linked: 12 &rarr; 14 &rarr; 15 &rarr; 16<br>Marked node 12 as superseded</div>
+            </div>
+            <div class="session-step" style="--delay: 11s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">deciduous narratives pivots</div>
+              <div class="step-output">1 pivot chain found:<br>&nbsp;&nbsp;#12 (session auth) &rarr; #14 (scaling issues) &rarr; #15 (revisit) &rarr; #16 (JWT)</div>
+            </div>
+            <div class="session-step" style="--delay: 13s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">Auth narrative is structured. The pivot from sessions to JWT is captured with the observation that drove it. Run <span style="color: #7ee787">deciduous archaeology timeline</span> to see everything chronologically.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================ -->
+      <!-- Feature 7: MCP Server — Direct AI Access                     -->
+      <!-- ============================================================ -->
+      <div class="feature-section">
+        <span class="feature-badge new">New in v0.14</span>
+        <h2>MCP Server &mdash; Direct AI Access to the Graph</h2>
+        <p class="feature-desc">
+          Give Claude (Code or Desktop) direct structured access to your decision graph via the <a href="https://modelcontextprotocol.io/">Model Context Protocol</a>. 31 tools for creating, querying, analyzing, and reporting on decisions &mdash; no shell commands needed. Each conversation gets its own decision tree. <em>(Cowork support coming soon &mdash; <a href="https://github.com/anthropics/claude-code/issues/48909">tracking issue</a>.)</em>
+        </p>
+
+        <div class="session-demo" id="demo-mcp">
+          <div class="session-header">
+            <span class="session-dot red"></span>
+            <span class="session-dot yellow"></span>
+            <span class="session-dot green"></span>
+            <span class="session-title">Claude Desktop &mdash; querying decisions via MCP</span>
+            <button class="replay-btn" onclick="replayDemo('demo-mcp')">Replay</button>
+          </div>
+          <div class="session-content">
+            <div class="session-step" style="--delay: 0s">
+              <div class="step-label user">You</div>
+              <div class="step-content">Why did we switch from in-memory caching to Redis? Show me the full decision chain.</div>
+            </div>
+            <div class="session-step" style="--delay: 1.5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">search_nodes({ query: "cache" })</div>
+              <div class="step-output">Found 4 nodes matching "cache"</div>
+            </div>
+            <div class="session-step" style="--delay: 3s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content code">trace_chain({ node_id: 1, direction: "outgoing" })</div>
+              <div class="step-output">{ node_count: 6, edge_count: 5, nodes: [...] }</div>
+            </div>
+            <div class="session-step" style="--delay: 5s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-recovery-output">
+                <strong>Decision Chain: Caching Strategy</strong><br><br>
+                Goal #1: "Caching strategy" [95%]<br>
+                &nbsp;&nbsp;&#9500;&#9472; Action #2: "In-memory LRU cache" <span style="color: #f97583">[superseded]</span><br>
+                &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Observation #3: "Memory pressure at 10k RPM"<br>
+                &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Revisit #4: "Reconsider caching"<br>
+                &nbsp;&nbsp;&#9492;&#9472; Decision #5: "Switch to Redis with TTL" [90%]<br>
+                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Outcome #6: "Redis deployed, p95 &lt;12ms"<br><br>
+                <strong>Rationale:</strong> In-memory LRU consuming 1.2GB at scale. Redis TTL gives horizontal scaling without memory pressure.
+              </div>
+            </div>
+            <div class="session-step" style="--delay: 8s">
+              <div class="step-label claude">Claude</div>
+              <div class="step-content">
+                The switch happened because the in-memory LRU was consuming 1.2GB at 10k requests/min.
+                Decision #5 chose Redis with TTL-based invalidation. The outcome (node #6) confirmed p95 latency under 12ms.
+                The full pivot chain is: Goal #1 &rarr; Action #2 (superseded) &rarr; Observation #3 &rarr; Revisit #4 &rarr; Decision #5 &rarr; Outcome #6.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 12px; font-size: 0.9rem;">
+          <strong>Works with:</strong> Claude Code &middot; Claude Desktop &middot; Any MCP client (Cowork coming soon)<br>
+          <strong>Setup:</strong> Add <code>{"mcpServers": {"deciduous": {"command": "deciduous", "args": ["mcp"]}}}</code> to your config<br>
+          <a href="mcp.html" style="color: #0969da; font-weight: 600;">Full MCP documentation &rarr;</a>
+        </div>
+      </div>
+
+      </div><!-- /.feature-grid -->
+
+      <!-- ============================================================ -->
+      <!-- Install                                                       -->
+      <!-- ============================================================ -->
+      <div class="install-section" id="install">
+        <h2>Install</h2>
+        <div class="install-options">
+          <div class="install-option">
+            <div class="quickstart-terminal">
+              <div class="session-header">
+                <span class="session-dot red"></span>
+                <span class="session-dot yellow"></span>
+                <span class="session-dot green"></span>
+                <span class="session-title">Homebrew</span>
+              </div>
+              <div class="quickstart-content">
+                <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew tap notactuallytreyanastasio/tap</span></div>
+                <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew install deciduous</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="install-option">
+            <div class="quickstart-terminal">
+              <div class="session-header">
+                <span class="session-dot red"></span>
+                <span class="session-dot yellow"></span>
+                <span class="session-dot green"></span>
+                <span class="session-title">Cargo</span>
+              </div>
+              <div class="quickstart-content">
+                <div><span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <p class="install-alt">Or download <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a> for macOS, Linux, and Windows.</p>
+      </div>
+
+      <div class="narrow">
+      <!-- ============================================================ -->
+      <!-- Web Viewer                                                    -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Explore Your Graph</h2>
+        <p>Deploy to GitHub Pages with <code>deciduous sync</code> or run locally with <code>deciduous serve</code>.</p>
+
+        <div class="view-cards">
+          <a href="demo/" class="view-card">
+            <h3>Live Graph</h3>
+            <p>Browse the actual graph from building deciduous &mdash; 1,100+ nodes across DAG, timeline, and archaeology views.</p>
+          </a>
+          <div class="view-card">
+            <h3>Q&amp;A Interface</h3>
+            <p>Ask questions in plain English via <code>POST /api/ask</code>. Answers grounded in your graph. Full-text search with FTS5.</p>
+          </div>
+          <div class="view-card">
+            <h3>Archaeology View</h3>
+            <p>Navigate narratives as card stacks. Keyboard navigation (j/k/g/G/Space). See pivots and superseded approaches.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- Editor Integration                                            -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Works With Your Editor</h2>
+        <p>One command creates slash commands, skills, and project instructions that teach your AI assistant the workflow.</p>
+
+        <div class="editor-badges">
+          <div class="editor-badge">Claude Code <code>deciduous init</code></div>
+          <div class="editor-badge">Windsurf <code>deciduous init --windsurf</code></div>
+          <div class="editor-badge">OpenCode <code>deciduous init --opencode</code></div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- Node Types                                                    -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Seven Node Types</h2>
+        <p>A vocabulary for how software actually gets built: <strong>goal &rarr; options &rarr; decision &rarr; actions &rarr; outcomes</strong>. Observations attach anywhere. Revisits connect old approaches to new.</p>
+
+        <div class="node-types">
+          <div class="node-type goal"><h3>Goal</h3><p>What to achieve</p></div>
+          <div class="node-type option"><h3>Option</h3><p>Approaches considered</p></div>
+          <div class="node-type decision"><h3>Decision</h3><p>Choice made</p></div>
+          <div class="node-type action"><h3>Action</h3><p>Work implemented</p></div>
+          <div class="node-type outcome"><h3>Outcome</h3><p>Result observed</p></div>
+          <div class="node-type observation"><h3>Observation</h3><p>Insight captured</p></div>
+          <div class="node-type revisit"><h3>Revisit</h3><p>Pivot point</p></div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- Quickstart                                                    -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>Get Started in 60 Seconds</h2>
+
+        <div class="quickstart-step">
+          <div class="quickstart-step-header">
+            <span class="quickstart-num">1</span>
+            <div class="quickstart-info">
+              <h3>Install</h3>
+              <p>Via Homebrew, Cargo, or <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a>.</p>
+            </div>
+          </div>
+          <div class="quickstart-terminal">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">Terminal</span>
+            </div>
+            <div class="quickstart-content">
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew tap notactuallytreyanastasio/tap</span></div>
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew install deciduous</span></div>
+              <div style="color: #57606a; margin: 4px 0;">or</div>
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="quickstart-step">
+          <div class="quickstart-step-header">
+            <span class="quickstart-num">2</span>
+            <div class="quickstart-info">
+              <h3>Initialize in your project</h3>
+              <p>Creates 9 slash commands, 3 skills, and project instructions.</p>
+            </div>
+          </div>
+          <div class="quickstart-terminal">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">Terminal</span>
+            </div>
+            <div class="quickstart-content">
+              <div><span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project && deciduous init</span></div>
+              <div><span class="qs-output">Created .deciduous/deciduous.db</span></div>
+              <div><span class="qs-output">Created .claude/commands/ (9 slash commands)</span></div>
+              <div><span class="qs-output">Created .claude/skills/ (pulse, narratives, archaeology)</span></div>
+              <div><span class="qs-output">Created CLAUDE.md (project instructions)</span></div>
+              <div><span class="qs-success">Ready! Run /decision-graph to graph existing history, or just start working.</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="quickstart-step">
+          <div class="quickstart-step-header">
+            <span class="quickstart-num">3</span>
+            <div class="quickstart-info">
+              <h3>Graph your history, then keep going</h3>
+              <p>
+                Use <code>/decision-graph</code> to build from existing commits.
+                Then just work normally &mdash; Claude logs decisions as you go.
+                Use <code>/recover</code> at the start of every new session.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top: 30px; text-align: center;">
+          <a href="https://github.com/notactuallytreyanastasio/deciduous"><img src="https://img.shields.io/github/stars/notactuallytreyanastasio/deciduous?style=social" alt="GitHub"></a>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- All Commands & Skills Reference                               -->
+      <!-- ============================================================ -->
+      <section>
+        <h2>All Commands &amp; Skills</h2>
+        <p>Everything <code>deciduous init</code> installs. Commands are slash commands (<code>/recover</code>). Skills are contextual guides Claude follows.</p>
+
+        <table class="cmd-table">
+          <thead>
+            <tr><th>Name</th><th>Type</th><th>What It Does</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/decision-graph</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Build a decision graph from an existing repo's commit history. Analyzes commits, traces narratives, creates backdated nodes grounded in real evidence.</td>
+            </tr>
+            <tr>
+              <td><code>/recover</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Recover context at session start. Queries nodes, edges, documents, commands, and git state. Audits for disconnected nodes. Reports what's active and what's next.</td>
+            </tr>
+            <tr>
+              <td><code>/work</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Start a work transaction. Creates goal node with verbatim prompt before any code is written. Tracks actions and outcomes through to commit.</td>
+            </tr>
+            <tr>
+              <td><code>/decision</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Full decision graph management. Add nodes, link edges, manage documents, sync with teammates, export DOT/PNG, generate PR writeups.</td>
+            </tr>
+            <tr>
+              <td><code>/document</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Generate comprehensive documentation for a file or directory. Shakes the tree &mdash; traces callers, finds tests, maps dependencies.</td>
+            </tr>
+            <tr>
+              <td><code>/sync</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Multi-user sync. Pull teammate events, rebuild local DB, push your changes. Event-based, append-only, git-mergeable.</td>
+            </tr>
+            <tr>
+              <td><code>/serve-ui</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Start the web viewer at localhost:3000. Auto-refreshes. DAG, timeline, chains, archaeology, and Q&amp;A views.</td>
+            </tr>
+            <tr>
+              <td><code>/sync-graph</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Export graph to <code>docs/graph-data.json</code> for GitHub Pages deployment.</td>
+            </tr>
+            <tr>
+              <td><code>/build-test</code></td>
+              <td><span class="type-badge type-command">command</span></td>
+              <td>Build the project and run the test suite.</td>
+            </tr>
+            <tr>
+              <td><code>pulse</code></td>
+              <td><span class="type-badge type-skill">skill</span></td>
+              <td>Map the current state as decisions. Pick a scope, read the code, ask "what decisions define this?", build goal &rarr; options &rarr; decisions. <code>deciduous pulse</code> shows the summary.</td>
+            </tr>
+            <tr>
+              <td><code>narratives</code></td>
+              <td><span class="type-badge type-skill">skill</span></td>
+              <td>Maintain <code>.deciduous/narratives.md</code> &mdash; evolution stories for each subsystem. Identify pivots, track current state vs history, find evidence in commits.</td>
+            </tr>
+            <tr>
+              <td><code>archaeology</code></td>
+              <td><span class="type-badge type-skill">skill</span></td>
+              <td>Transform narratives into graph structure. Create backdated goals, use <code>archaeology pivot</code> to atomically create pivot chains, mark superseded paths, review timeline.</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- Tutorial + Story -->
+      <section>
+        <div class="story-link" style="margin-bottom: 15px;">
+          <p>New to deciduous? The tutorial walks through building a real decision graph from scratch, with live examples. <a href="tutorial/introduction/what-is-deciduous.html">Start the tutorial &rarr;</a></p>
+        </div>
+        <div class="story-link">
+          <p>Deciduous was built with itself &mdash; 1,100+ decisions tracking its own development. <a href="story.html">Read the full story &rarr;</a></p>
+        </div>
+      </section>
+
+      <footer>
+        <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
+        <a href="https://crates.io/crates/deciduous">crates.io</a> |
+        MIT License
+      </footer>
+      </div><!-- /.narrow (bottom sections) -->
+    </div>
+
+    <script>
+      // Auto-scroll within a terminal as steps appear
+      function setupAutoScroll(demoEl) {
+        const content = demoEl.querySelector(".session-content");
+        if (!content) return;
+        const steps = content.querySelectorAll(".session-step");
+        steps.forEach((step) => {
+          const delay = parseFloat(getComputedStyle(step).getPropertyValue("--delay")) * 1000;
+          setTimeout(() => {
+            const targetScroll = step.offsetTop - content.offsetTop - 20;
+            smoothScrollTo(content, targetScroll, 800);
+          }, delay + 400);
+        });
+      }
+
+      function smoothScrollTo(element, target, duration) {
+        const start = element.scrollTop;
+        const distance = target - start;
+        let startTime = null;
+        function animation(currentTime) {
+          if (!startTime) startTime = currentTime;
+          const elapsed = currentTime - startTime;
+          const progress = Math.min(elapsed / duration, 1);
+          const ease = 1 - Math.pow(1 - progress, 3);
+          element.scrollTop = start + distance * ease;
+          if (progress < 1) requestAnimationFrame(animation);
+        }
+        requestAnimationFrame(animation);
+      }
+
+      // Replay a specific demo
+      function replayDemo(demoId) {
+        const demo = document.getElementById(demoId);
+        const content = demo.querySelector(".session-content");
+        const steps = demo.querySelectorAll(".session-step");
+        if (content) content.scrollTop = 0;
+        demo.classList.remove("animate");
+        demo.classList.remove("hero-demo");
+        steps.forEach((step) => {
+          step.style.animation = "none";
+          step.offsetHeight;
+          step.style.animation = null;
+        });
+        requestAnimationFrame(() => {
+          demo.classList.add("animate");
+          setupAutoScroll(demo);
+        });
+      }
+
+      // IntersectionObserver for scroll-triggered animations
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("animate");
+              setupAutoScroll(entry.target);
+              observer.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.2 },
+      );
+
+      // Observe all feature demos (not the hero)
+      document.querySelectorAll(".session-demo:not(.hero-demo)").forEach((demo) => {
+        observer.observe(demo);
+      });
+
+      // Hero animates on page load
+      setupAutoScroll(document.getElementById("hero-demo"));
+    </script>
+  </body>
+</html>

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hooks - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title active">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html" class="active">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Hooks for Enforcement</h1>
+
+            <p class="lead">Hooks enforce the "log before you code" rule by checking for decision graph activity before allowing commits.</p>
+
+            <p>The decision graph works best when it is populated in real time&mdash;before and during implementation, not after. Hooks turn this best practice into a hard requirement by integrating with git's pre-commit mechanism.</p>
+
+            <h2>Configuration</h2>
+
+            <p>Hooks are configured in <code>.deciduous/config.toml</code>. The hooks section defines what checks run before a commit is allowed:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">.deciduous/config.toml</div>
+                <div class="terminal-body"><span class="output">[hooks]
+# Require at least one active goal before committing
+require_active_goal = true
+
+# Require a recent deciduous command (within last 30 minutes)
+require_recent_activity = true
+recent_activity_minutes = 30
+
+# Require an action node linked to HEAD commit
+require_commit_link = false
+
+# Branches where hooks are enforced (empty = all branches)
+enforced_branches = []
+
+# Branches where hooks are skipped
+skip_branches = ["main", "master"]</span></div>
+            </div>
+
+            <p>The most common configuration requires an active goal and recent deciduous activity. This catches the case where a developer starts coding without first creating a goal node. The <code>skip_branches</code> setting exempts main/master, where merge commits should not be blocked.</p>
+
+            <h2>Installing Hooks</h2>
+
+            <p>The <code>deciduous hooks install</code> command generates git hook scripts and places them in <code>.git/hooks/</code>:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Installing hooks</div>
+                <div class="terminal-body"><span class="command">deciduous hooks install</span>
+<span class="output">Installed pre-commit hook: .git/hooks/pre-commit
+  - Check: require active goal node
+  - Check: require recent deciduous activity (30 min)
+Hook is executable and ready.</span></div>
+            </div>
+
+            <p>The generated hook script calls <code>deciduous</code> to check the configured conditions. If any check fails, the commit is blocked with a message explaining what is needed.</p>
+
+            <h2>What a Blocked Commit Looks Like</h2>
+
+            <p>When you try to commit without meeting the hook requirements:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Blocked commit</div>
+                <div class="terminal-body"><span class="command">git commit -m "feat: add CI workflow"</span>
+<span class="output">deciduous pre-commit check failed:
+
+  No recent deciduous activity found.
+  Last command was 2 hours ago.
+
+  Before committing, log what you're about to do:
+    deciduous add goal "Add CI workflow" -c 90
+    deciduous add action "Implementing CI workflow" -c 85
+
+  To skip this check (not recommended):
+    git commit --no-verify</span></div>
+            </div>
+
+            <p>The error message is actionable&mdash;it tells you exactly what commands to run. After creating the goal and action nodes, the commit will succeed:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">After logging the decision</div>
+                <div class="terminal-body"><span class="command">deciduous add goal "Add CI pipelines for snowflex" -c 90</span>
+<span class="output">Created node #57: goal "Add CI pipelines for snowflex"</span>
+
+<span class="command">deciduous add action "Implement unit test CI workflow" -c 85</span>
+<span class="output">Created node #60: action "Implement unit test CI workflow"</span>
+
+<span class="command">git commit -m "feat: add CI workflow"</span>
+<span class="output">[ci-pipelines abc1234] feat: add CI workflow
+ 2 files changed, 45 insertions(+)</span></div>
+            </div>
+
+            <h2>Checking Hook Status</h2>
+
+            <p>See what hooks are currently installed and their configuration:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous hooks status</div>
+                <div class="terminal-body"><span class="command">deciduous hooks status</span>
+<span class="output">Hooks status:
+  Installed: yes (.git/hooks/pre-commit)
+  Configuration: .deciduous/config.toml
+
+  Active checks:
+    require_active_goal: yes
+    require_recent_activity: yes (30 min window)
+    require_commit_link: no
+
+  Skip branches: main, master
+  Current branch: ci-pipelines (enforced)</span></div>
+            </div>
+
+            <h2>Uninstalling Hooks</h2>
+
+            <p>Remove the deciduous hooks without affecting other git hooks:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Uninstalling hooks</div>
+                <div class="terminal-body"><span class="command">deciduous hooks uninstall</span>
+<span class="output">Removed pre-commit hook: .git/hooks/pre-commit</span></div>
+            </div>
+
+            <h2>When to Use Hooks</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Situation</th>
+                        <th>Recommendation</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Solo developer, AI assistant handles logging</td>
+                        <td>Hooks are optional&mdash;the assistant follows CLAUDE.md rules</td>
+                    </tr>
+                    <tr>
+                        <td>Team where some members forget to log</td>
+                        <td>Enable <code>require_active_goal</code></td>
+                    </tr>
+                    <tr>
+                        <td>Strict traceability requirements</td>
+                        <td>Enable all checks including <code>require_commit_link</code></td>
+                    </tr>
+                    <tr>
+                        <td>Quick prototyping or spike work</td>
+                        <td>Disable hooks or use <code>skip_branches</code> for spike branches</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-box tip">
+                <strong>Hooks are local</strong>
+                <p>Git hooks are not committed to the repository (they live in <code>.git/hooks/</code>, which is not tracked). Each developer must run <code>deciduous hooks install</code> on their own machine. The configuration in <code>.deciduous/config.toml</code> is committed, so the hook behavior is consistent once installed.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="themes-and-tags.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Themes &amp; Tags</span>
+                </a>
+                <a href="multi-assistant.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Multi-Assistant</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

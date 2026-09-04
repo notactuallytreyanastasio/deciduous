@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#22c55e"/>
+      <stop offset="100%" style="stop-color:#3b82f6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+
+  <!-- Code/terminal illustration on left -->
+  <g transform="translate(80, 140)">
+    <!-- Terminal window -->
+    <rect x="0" y="0" width="400" height="350" rx="12" fill="#1e3a5f" opacity="0.8"/>
+    <rect x="0" y="0" width="400" height="35" rx="12" fill="#334155"/>
+    <rect x="0" y="23" width="400" height="12" fill="#334155"/>
+    <circle cx="20" cy="17" r="6" fill="#ef4444"/>
+    <circle cx="42" cy="17" r="6" fill="#f59e0b"/>
+    <circle cx="64" cy="17" r="6" fill="#22c55e"/>
+
+    <!-- Terminal content -->
+    <text x="20" y="70" font-family="ui-monospace, monospace" font-size="14" fill="#22c55e">$ deciduous init</text>
+    <text x="20" y="100" font-family="ui-monospace, monospace" font-size="14" fill="#94a3b8">Initialized deciduous in ./</text>
+    <text x="20" y="130" font-family="ui-monospace, monospace" font-size="14" fill="#94a3b8">Created .deciduous/</text>
+
+    <text x="20" y="170" font-family="ui-monospace, monospace" font-size="14" fill="#22c55e">$ deciduous add goal "Add auth"</text>
+    <text x="20" y="200" font-family="ui-monospace, monospace" font-size="14" fill="#94a3b8">Created node 1 (type: goal)</text>
+
+    <text x="20" y="240" font-family="ui-monospace, monospace" font-size="14" fill="#22c55e">$ deciduous add decision "OAuth vs JWT"</text>
+    <text x="20" y="270" font-family="ui-monospace, monospace" font-size="14" fill="#94a3b8">Created node 2 (type: decision)</text>
+
+    <text x="20" y="310" font-family="ui-monospace, monospace" font-size="14" fill="#22c55e">$ deciduous link 1 2 -r "approach"</text>
+    <text x="20" y="340" font-family="ui-monospace, monospace" font-size="14" fill="#94a3b8">Created edge 1 (1 -> 2)</text>
+  </g>
+
+  <!-- Main content -->
+  <text x="750" y="140" font-family="system-ui, -apple-system, sans-serif" font-size="20" fill="#94a3b8" text-anchor="middle" letter-spacing="0.15em">LEARN DECIDUOUS</text>
+
+  <text x="750" y="220" font-family="system-ui, -apple-system, sans-serif" font-size="64" font-weight="800" fill="#f8fafc" text-anchor="middle">The Tutorial</text>
+
+  <text x="750" y="290" font-family="system-ui, -apple-system, sans-serif" font-size="24" fill="#94a3b8" text-anchor="middle">From zero to decision graphs in 15 minutes</text>
+
+  <!-- Feature pills -->
+  <g transform="translate(550, 340)">
+    <rect x="0" y="0" width="140" height="40" rx="20" fill="#1e3a5f"/>
+    <text x="70" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#22c55e" text-anchor="middle">Installation</text>
+  </g>
+  <g transform="translate(710, 340)">
+    <rect x="0" y="0" width="140" height="40" rx="20" fill="#1e3a5f"/>
+    <text x="70" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#3b82f6" text-anchor="middle">First Nodes</text>
+  </g>
+  <g transform="translate(550, 395)">
+    <rect x="0" y="0" width="140" height="40" rx="20" fill="#1e3a5f"/>
+    <text x="70" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#8b5cf6" text-anchor="middle">Workflows</text>
+  </g>
+  <g transform="translate(710, 395)">
+    <rect x="0" y="0" width="140" height="40" rx="20" fill="#1e3a5f"/>
+    <text x="70" y="26" font-family="system-ui, sans-serif" font-size="14" fill="#f59e0b" text-anchor="middle">Viewing</text>
+  </g>
+
+  <!-- DECIDUOUS branding -->
+  <text x="750" y="540" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="700" fill="#64748b" text-anchor="middle" letter-spacing="0.15em">DECIDUOUS</text>
+  <text x="750" y="575" font-family="system-ui, -apple-system, sans-serif" font-size="16" fill="#475569" text-anchor="middle">Decision graph tooling for AI-assisted development</text>
+
+  <!-- Decorative elements -->
+  <circle cx="1100" cy="100" r="60" fill="#22c55e" opacity="0.1"/>
+  <circle cx="1050" cy="500" r="100" fill="#3b82f6" opacity="0.08"/>
+</svg>

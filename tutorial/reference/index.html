@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CLI Reference - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title active">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Complete CLI Reference</h1>
+
+            <p class="lead">Every deciduous command, flag, node type, and configuration option in one place.</p>
+
+            <h2>Command Overview</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Command</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>init</code></td><td>Initialize deciduous in a project</td></tr>
+                    <tr><td><code>update</code></td><td>Update integration files to current version</td></tr>
+                    <tr><td><code>check-update</code></td><td>Check if integration files need updating</td></tr>
+                    <tr><td><code>auto-update</code></td><td>Toggle automatic version checking (on/off)</td></tr>
+                    <tr><td><code>add</code></td><td>Add a node to the decision graph</td></tr>
+                    <tr><td><code>link</code></td><td>Create an edge between two nodes</td></tr>
+                    <tr><td><code>unlink</code></td><td>Remove an edge between two nodes</td></tr>
+                    <tr><td><code>edit</code></td><td>Edit an existing node's title or metadata</td></tr>
+                    <tr><td><code>delete</code></td><td>Delete a node from the graph</td></tr>
+                    <tr><td><code>status</code></td><td>Update a node's status</td></tr>
+                    <tr><td><code>prompt</code></td><td>Set or update a node's verbatim prompt</td></tr>
+                    <tr><td><code>nodes</code></td><td>List all nodes (with optional filters)</td></tr>
+                    <tr><td><code>edges</code></td><td>List all edges</td></tr>
+                    <tr><td><code>show</code></td><td>Show detailed information for a single node</td></tr>
+                    <tr><td><code>graph</code></td><td>Export full graph as JSON to stdout</td></tr>
+                    <tr><td><code>commands</code></td><td>Show recent command log</td></tr>
+                    <tr><td><code>backup</code></td><td>Create a timestamped database backup</td></tr>
+                    <tr><td><code>serve</code></td><td>Start the web viewer</td></tr>
+                    <tr><td><code>sync</code></td><td>Export graph to JSON for static hosting</td></tr>
+                    <tr><td><code>dot</code></td><td>Export graph as DOT format (optionally PNG)</td></tr>
+                    <tr><td><code>writeup</code></td><td>Generate a PR writeup in markdown</td></tr>
+                    <tr><td><code>migrate</code></td><td>Add change_id columns for multi-user sync</td></tr>
+                    <tr><td><code>pulse</code></td><td>Show graph health report</td></tr>
+                </tbody>
+            </table>
+
+            <h3>Subcommands</h3>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Parent</th>
+                        <th>Subcommand</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td><code>diff</code></td><td><code>export</code></td><td>Export nodes/edges as a shareable patch</td></tr>
+                    <tr><td><code>diff</code></td><td><code>apply</code></td><td>Apply patches from teammates</td></tr>
+                    <tr><td><code>diff</code></td><td><code>status</code></td><td>List available patches and their apply status</td></tr>
+                    <tr><td><code>doc</code></td><td><code>attach</code></td><td>Attach a file to a node</td></tr>
+                    <tr><td><code>doc</code></td><td><code>list</code></td><td>List attached documents (all or per-node)</td></tr>
+                    <tr><td><code>doc</code></td><td><code>show</code></td><td>Show document details</td></tr>
+                    <tr><td><code>doc</code></td><td><code>describe</code></td><td>Set or update document description</td></tr>
+                    <tr><td><code>doc</code></td><td><code>open</code></td><td>Open document in default application</td></tr>
+                    <tr><td><code>doc</code></td><td><code>detach</code></td><td>Soft-delete a document attachment</td></tr>
+                    <tr><td><code>doc</code></td><td><code>gc</code></td><td>Garbage collect orphaned document files</td></tr>
+                    <tr><td><code>events</code></td><td><code>status</code></td><td>Show event-based sync status</td></tr>
+                    <tr><td><code>events</code></td><td><code>rebuild</code></td><td>Rebuild database from event files</td></tr>
+                    <tr><td><code>events</code></td><td><code>checkpoint</code></td><td>Compact events into a checkpoint</td></tr>
+                    <tr><td><code>narratives</code></td><td><code>init</code></td><td>Scaffold narratives.md from active goals</td></tr>
+                    <tr><td><code>narratives</code></td><td><code>show</code></td><td>Display narratives document</td></tr>
+                    <tr><td><code>narratives</code></td><td><code>pivots</code></td><td>Show pivot chains from revisit nodes</td></tr>
+                    <tr><td><code>archaeology</code></td><td><code>pivot</code></td><td>Create a revisit node from an observation</td></tr>
+                    <tr><td><code>archaeology</code></td><td><code>timeline</code></td><td>Show chronological node timeline</td></tr>
+                    <tr><td><code>archaeology</code></td><td><code>supersede</code></td><td>Mark nodes as superseded by newer ones</td></tr>
+                    <tr><td><code>themes</code></td><td><code>create</code></td><td>Create a new theme</td></tr>
+                    <tr><td><code>themes</code></td><td><code>list</code></td><td>List all themes</td></tr>
+                    <tr><td><code>themes</code></td><td><code>delete</code></td><td>Delete a theme and its tag associations</td></tr>
+                    <tr><td><code>tag</code></td><td><code>add</code></td><td>Tag a node with a theme</td></tr>
+                    <tr><td><code>tag</code></td><td><code>remove</code></td><td>Remove a theme tag from a node</td></tr>
+                    <tr><td><code>tag</code></td><td><code>list</code></td><td>List themes for a node</td></tr>
+                    <tr><td><code>tag</code></td><td><code>suggest</code></td><td>AI-suggest theme assignments</td></tr>
+                    <tr><td><code>tag</code></td><td><code>confirm</code></td><td>Confirm and apply AI suggestions</td></tr>
+                    <tr><td><code>hooks</code></td><td><code>install</code></td><td>Install git pre-commit hooks</td></tr>
+                    <tr><td><code>hooks</code></td><td><code>status</code></td><td>Show hook installation status</td></tr>
+                    <tr><td><code>hooks</code></td><td><code>uninstall</code></td><td>Remove deciduous git hooks</td></tr>
+                    <tr><td><code>opencode</code></td><td><code>install</code></td><td>Install OpenCode integration files</td></tr>
+                    <tr><td><code>opencode</code></td><td><code>status</code></td><td>Check OpenCode integration status</td></tr>
+                    <tr><td><code>opencode</code></td><td><code>uninstall</code></td><td>Remove OpenCode integration</td></tr>
+                </tbody>
+            </table>
+
+            <h2>Core Commands</h2>
+
+            <h3><code>deciduous init [OPTIONS]</code></h3>
+            <p>Initialize deciduous in the current directory. Creates <code>.deciduous/</code>, <code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>CLAUDE.md</code>, and <code>docs/</code>.</p>
+            <pre>Options:
+  --opencode         Also create OpenCode integration (AGENTS.md)
+  --windsurf         Also create Windsurf integration (.windsurf/)
+  --no-auto-update   Disable automatic version checking (enabled by default)</pre>
+
+            <h3><code>deciduous update</code></h3>
+            <p>Update integration files to the current binary version. Auto-detects installed assistants. Overwrites <code>.claude/commands/</code>, <code>.claude/skills/</code>, <code>.claude/hooks/</code>, <code>.claude/agents.toml</code>, and the deciduous section of <code>CLAUDE.md</code>.</p>
+            <p>Not touched: <code>.claude/settings.json</code>, <code>.deciduous/config.toml</code>, <code>docs/</code>.</p>
+
+            <h3><code>deciduous check-update</code></h3>
+            <p>Compare <code>.deciduous/.version</code> with current binary version. Exit code 0 if up to date, 1 if update needed.</p>
+
+            <h3><code>deciduous auto-update &lt;on|off&gt;</code></h3>
+            <p>Toggle automatic version checking. When enabled (the default for new projects), a hook checks <a href="https://crates.io/crates/deciduous">crates.io</a> once per 24 hours for newer versions. Your AI assistant will inform you conversationally when an update is available.</p>
+            <pre>deciduous auto-update on     # Enable automatic checking
+deciduous auto-update off    # Disable automatic checking
+deciduous init --no-auto-update  # Opt out during initialization</pre>
+            <p>The check is rate-limited (once per 24h), has a 3-second timeout, and never blocks your workflow. The setting is stored as <code>auto_check</code> in <code>.deciduous/config.toml</code> under the <code>[updates]</code> section.</p>
+
+            <h3><code>deciduous add &lt;TYPE&gt; &lt;TITLE&gt; [OPTIONS]</code></h3>
+            <p>Add a node to the decision graph.</p>
+            <pre>Arguments:
+  TYPE     goal | option | decision | action | outcome | observation | revisit
+  TITLE    Title of the node (quoted string)
+
+Options:
+  -d, --description &lt;TEXT&gt;    Optional description
+  -c, --confidence &lt;0-100&gt;    Confidence level
+  -p, --prompt &lt;TEXT&gt;         User prompt that triggered this node
+  --prompt-stdin              Read prompt from stdin (for multi-line)
+  -f, --files &lt;LIST&gt;         Associated files (comma-separated)
+  -b, --branch &lt;NAME&gt;        Git branch (default: auto-detected)
+  --no-branch                 Skip branch auto-detection
+  --commit &lt;HASH|HEAD&gt;       Link to a git commit
+  --date &lt;DATE&gt;              Backdate node (YYYY-MM-DD or RFC3339)</pre>
+
+            <p>Example:</p>
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous add</div>
+                <div class="terminal-body"><span class="command">deciduous add goal "Add CI pipelines for snowflex" -c 90 --commit HEAD</span>
+<span class="output">Created node #57: goal "Add CI pipelines for snowflex"</span></div>
+            </div>
+
+            <h3><code>deciduous link &lt;FROM&gt; &lt;TO&gt; [OPTIONS]</code></h3>
+            <p>Create a directed edge between two nodes.</p>
+            <pre>Arguments:
+  FROM    Source node ID (integer)
+  TO      Target node ID (integer)
+
+Options:
+  -r, --rationale &lt;TEXT&gt;     Reason for the connection
+  -t, --edge-type &lt;TYPE&gt;    Edge type (default: leads_to)</pre>
+
+            <h3><code>deciduous unlink &lt;FROM&gt; &lt;TO&gt;</code></h3>
+            <p>Remove the edge between two nodes.</p>
+
+            <h3><code>deciduous edit &lt;ID&gt; [OPTIONS]</code></h3>
+            <p>Edit an existing node's title, description, or metadata.</p>
+            <pre>Arguments:
+  ID    Node ID to edit
+
+Options:
+  --title &lt;TEXT&gt;              New title
+  --description &lt;TEXT&gt;        New description
+  -c, --confidence &lt;0-100&gt;   New confidence level
+  -f, --files &lt;LIST&gt;         New associated files</pre>
+
+            <h3><code>deciduous delete &lt;ID&gt;</code></h3>
+            <p>Delete a node and all its edges from the graph.</p>
+
+            <h3><code>deciduous status &lt;ID&gt; &lt;STATUS&gt;</code></h3>
+            <p>Update a node's status.</p>
+            <pre>Arguments:
+  ID       Node ID
+  STATUS   pending | active | completed | superseded | abandoned | rejected</pre>
+
+            <h3><code>deciduous prompt &lt;ID&gt; [TEXT]</code></h3>
+            <p>Set or update the verbatim user prompt on a node. If <code>TEXT</code> is omitted, reads from stdin.</p>
+            <pre>Arguments:
+  ID      Node ID
+  TEXT    The prompt text (optional; reads stdin if omitted)</pre>
+
+            <h2>Query Commands</h2>
+
+            <h3><code>deciduous nodes [OPTIONS]</code></h3>
+            <p>List all nodes with optional filtering.</p>
+            <pre>Options:
+  -b, --branch &lt;NAME&gt;       Filter by git branch
+  -t, --node-type &lt;TYPE&gt;    Filter by node type
+  --status &lt;STATUS&gt;         Filter by status</pre>
+
+            <h3><code>deciduous edges</code></h3>
+            <p>List all edges with their types and rationales.</p>
+
+            <h3><code>deciduous show &lt;ID&gt; [OPTIONS]</code></h3>
+            <p>Show detailed information for a single node, including metadata, prompt, and all connected edges.</p>
+            <pre>Arguments:
+  ID    Node ID to display
+
+Options:
+  --json    Output as JSON</pre>
+
+            <h3><code>deciduous graph</code></h3>
+            <p>Export the full graph as JSON to stdout.</p>
+
+            <h3><code>deciduous commands</code></h3>
+            <p>Show the recent deciduous command log.</p>
+
+            <h3><code>deciduous pulse</code></h3>
+            <p>Show a health report: node/edge counts by type, status breakdown, orphan detection, and last activity timestamp.</p>
+
+            <h2>Export Commands</h2>
+
+            <h3><code>deciduous sync</code></h3>
+            <p>Export graph to <code>docs/graph-data.json</code> and <code>docs/git-history.json</code> for static hosting on GitHub Pages.</p>
+
+            <h3><code>deciduous dot [OPTIONS]</code></h3>
+            <p>Export graph as DOT format for Graphviz visualization.</p>
+            <pre>Options:
+  -o, --output &lt;FILE&gt;       Output file (default: stdout)
+  -r, --roots &lt;IDS&gt;         Root node IDs for BFS traversal (comma-separated)
+  -n, --nodes &lt;SPEC&gt;        Specific nodes (e.g., "1-11" or "1,3,5-10")
+  -t, --title &lt;TITLE&gt;       Graph title
+  --rankdir &lt;DIR&gt;           Graph direction: TB (top-bottom) or LR (left-right)
+  --png                     Generate PNG file (requires graphviz)
+  --auto                    Branch-specific filenames</pre>
+
+            <h3><code>deciduous writeup [OPTIONS]</code></h3>
+            <p>Generate a markdown PR writeup from graph nodes.</p>
+            <pre>Options:
+  -t, --title &lt;TITLE&gt;       PR title
+  -r, --roots &lt;IDS&gt;         Root node IDs (BFS traversal)
+  -n, --nodes &lt;SPEC&gt;        Specific node IDs or ranges
+  -o, --output &lt;FILE&gt;       Output file (default: stdout)
+  --png &lt;FILENAME&gt;          PNG file to embed
+  --auto                    Auto-detect branch-specific PNG
+  --no-dot                  Skip DOT graph section
+  --no-test-plan            Skip test plan section</pre>
+
+            <h3><code>deciduous backup</code></h3>
+            <p>Create a timestamped copy of the database in <code>.deciduous/backups/</code>.</p>
+
+            <h2>Multi-User Sync Commands</h2>
+
+            <h3><code>deciduous migrate</code></h3>
+            <p>Add <code>change_id</code> (UUID) columns to nodes and edges for multi-user sync. One-time operation for databases created before v0.10.</p>
+
+            <h3><code>deciduous diff export [OPTIONS]</code></h3>
+            <pre>Options:
+  -o, --output &lt;FILE&gt;       Output patch file (required)
+  -b, --branch &lt;NAME&gt;       Filter by branch
+  -n, --nodes &lt;SPEC&gt;        Specific node IDs or ranges
+  --author &lt;NAME&gt;           Author name in the patch</pre>
+
+            <h3><code>deciduous diff apply [OPTIONS] &lt;FILES...&gt;</code></h3>
+            <pre>Arguments:
+  FILES    Patch file(s) to apply (supports glob patterns)
+
+Options:
+  --dry-run    Preview changes without applying</pre>
+
+            <h3><code>deciduous diff status</code></h3>
+            <p>List patches in <code>.deciduous/patches/</code> and their apply status.</p>
+
+            <h3><code>deciduous events status</code></h3>
+            <p>Show event-based sync status: author, sync directory, checkpoint info, pending event count.</p>
+
+            <h3><code>deciduous events rebuild</code></h3>
+            <p>Rebuild the local database from event files (after <code>git pull</code>).</p>
+
+            <h3><code>deciduous events checkpoint [OPTIONS]</code></h3>
+            <p>Compact events into a single checkpoint file.</p>
+            <pre>Options:
+  --clear-events    Remove event files after checkpointing</pre>
+
+            <h2>Document Commands</h2>
+
+            <h3><code>deciduous doc attach &lt;NODE_ID&gt; &lt;FILE&gt; [OPTIONS]</code></h3>
+            <pre>Options:
+  -d, --description &lt;TEXT&gt;    Description of the document
+  --ai-describe               Generate description using AI</pre>
+
+            <h3><code>deciduous doc list [NODE_ID]</code></h3>
+            <p>List all documents, or documents attached to a specific node.</p>
+
+            <h3><code>deciduous doc show &lt;DOC_ID&gt;</code></h3>
+            <p>Show detailed information about a document.</p>
+
+            <h3><code>deciduous doc describe &lt;DOC_ID&gt; [TEXT]</code></h3>
+            <pre>Options:
+  --ai    Generate description using AI</pre>
+
+            <h3><code>deciduous doc open &lt;DOC_ID&gt;</code></h3>
+            <p>Open the document in the default application.</p>
+
+            <h3><code>deciduous doc detach &lt;DOC_ID&gt;</code></h3>
+            <p>Soft-delete a document attachment (recoverable).</p>
+
+            <h3><code>deciduous doc gc</code></h3>
+            <p>Garbage collect orphaned document files from <code>.deciduous/documents/</code>.</p>
+
+            <h2>Narrative &amp; Archaeology Commands</h2>
+
+            <h3><code>deciduous narratives init</code></h3>
+            <p>Scaffold <code>.deciduous/narratives.md</code> from active goal node titles.</p>
+
+            <h3><code>deciduous narratives show</code></h3>
+            <p>Display the narratives document.</p>
+
+            <h3><code>deciduous narratives pivots</code></h3>
+            <p>Show pivot chains: outcome &rarr; observation &rarr; revisit &rarr; new decision.</p>
+
+            <h3><code>deciduous archaeology pivot &lt;OUTCOME_ID&gt; &lt;REASON&gt;</code></h3>
+            <p>Create a revisit node from an outcome, linking through an observation.</p>
+
+            <h3><code>deciduous archaeology timeline [OPTIONS]</code></h3>
+            <pre>Options:
+  --limit &lt;N&gt;               Maximum nodes to display
+  --node-type &lt;TYPE&gt;        Filter by node type</pre>
+
+            <h3><code>deciduous archaeology supersede &lt;OLD_ID&gt; &lt;NEW_ID&gt;</code></h3>
+            <p>Mark old node as superseded and link to its replacement.</p>
+
+            <h2>Theme &amp; Tag Commands</h2>
+
+            <h3><code>deciduous themes create &lt;NAME&gt; [OPTIONS]</code></h3>
+            <pre>Options:
+  --color &lt;HEX&gt;              Theme color (e.g., "#3b82f6")
+  -d, --description &lt;TEXT&gt;   Theme description</pre>
+
+            <h3><code>deciduous themes list</code></h3>
+            <p>List all themes with name, color, and description.</p>
+
+            <h3><code>deciduous themes delete &lt;NAME&gt;</code></h3>
+            <p>Delete a theme and remove all its tag associations.</p>
+
+            <h3><code>deciduous tag add &lt;NODE_ID&gt; &lt;THEME&gt;</code></h3>
+            <p>Tag a node with a theme.</p>
+
+            <h3><code>deciduous tag remove &lt;NODE_ID&gt; &lt;THEME&gt;</code></h3>
+            <p>Remove a theme tag from a node.</p>
+
+            <h3><code>deciduous tag list &lt;NODE_ID&gt;</code></h3>
+            <p>List all themes assigned to a node.</p>
+
+            <h3><code>deciduous tag suggest</code></h3>
+            <p>AI-analyze node titles and suggest theme assignments.</p>
+
+            <h3><code>deciduous tag confirm</code></h3>
+            <p>Apply the most recent AI suggestions from <code>tag suggest</code>.</p>
+
+            <h2>Hook Commands</h2>
+
+            <h3><code>deciduous hooks install</code></h3>
+            <p>Generate and install git pre-commit hook scripts based on <code>.deciduous/config.toml</code> settings.</p>
+
+            <h3><code>deciduous hooks status</code></h3>
+            <p>Show hook installation status, active checks, and branch configuration.</p>
+
+            <h3><code>deciduous hooks uninstall</code></h3>
+            <p>Remove deciduous hooks from <code>.git/hooks/</code>.</p>
+
+            <h2>Assistant Integration Commands</h2>
+
+            <h3><code>deciduous opencode install</code></h3>
+            <p>Install OpenCode integration files (<code>AGENTS.md</code>).</p>
+
+            <h3><code>deciduous opencode status</code></h3>
+            <p>Check OpenCode integration status and version.</p>
+
+            <h3><code>deciduous opencode uninstall</code></h3>
+            <p>Remove OpenCode integration files.</p>
+
+            <h3><code>deciduous serve [OPTIONS]</code></h3>
+            <pre>Options:
+  -p, --port &lt;PORT&gt;    Port number (default: 3000)</pre>
+
+            <h2>Node Types</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Purpose</th>
+                        <th>Snowflex Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="node-goal">goal</span></td>
+                        <td>High-level objective or feature request</td>
+                        <td>"Create an Elixir library for querying Snowflake"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-option">option</span></td>
+                        <td>Possible approach to explore</td>
+                        <td>"Use Erlang ODBC driver to connect to Snowflake"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-decision">decision</span></td>
+                        <td>Choosing which option to pursue</td>
+                        <td>"How to connect Elixir to Snowflake?"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-action">action</span></td>
+                        <td>Implementation step</td>
+                        <td>"Implement initial ODBC wrapper with single connection"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-outcome">outcome</span></td>
+                        <td>Result of an action</td>
+                        <td>"Working single-connection ODBC wrapper"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-observation">observation</span></td>
+                        <td>Discovery, insight, or problem noticed</td>
+                        <td>"Snowflake ODBC sessions expire after 4 hours idle"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-revisit">revisit</span></td>
+                        <td>Reconsidering a previous approach</td>
+                        <td>"Reconsider ODBC as transport - switch to HTTP REST API"</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>The Canonical Flow</h3>
+            <pre>goal &rarr; option(s) &rarr; decision &rarr; action(s) &rarr; outcome(s)
+                                                    &uarr;
+                                              observations attach anywhere
+                                              revisits connect old &rarr; new</pre>
+
+            <h2>Edge Types</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Meaning</th>
+                        <th>Typical Usage</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>leads_to</code></td>
+                        <td>Natural progression</td>
+                        <td>Default for most connections</td>
+                    </tr>
+                    <tr>
+                        <td><code>chosen</code></td>
+                        <td>Selected option</td>
+                        <td>decision &rarr; chosen option</td>
+                    </tr>
+                    <tr>
+                        <td><code>rejected</code></td>
+                        <td>Option not selected</td>
+                        <td>decision &rarr; rejected option (with reason)</td>
+                    </tr>
+                    <tr>
+                        <td><code>requires</code></td>
+                        <td>Dependency relationship</td>
+                        <td>When one thing needs another first</td>
+                    </tr>
+                    <tr>
+                        <td><code>blocks</code></td>
+                        <td>Preventing progress</td>
+                        <td>When something is blocked by another</td>
+                    </tr>
+                    <tr>
+                        <td><code>enables</code></td>
+                        <td>Makes possible</td>
+                        <td>When one thing unlocks another</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Node Statuses</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Status</th>
+                        <th>Meaning</th>
+                        <th>When to Use</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>pending</code></td>
+                        <td>Not yet started</td>
+                        <td>Node created but work has not begun</td>
+                    </tr>
+                    <tr>
+                        <td><code>active</code></td>
+                        <td>Current truth</td>
+                        <td>Default for most nodes; represents current state</td>
+                    </tr>
+                    <tr>
+                        <td><code>completed</code></td>
+                        <td>Finished successfully</td>
+                        <td>Actions and outcomes that are done</td>
+                    </tr>
+                    <tr>
+                        <td><code>superseded</code></td>
+                        <td>Replaced by a newer approach</td>
+                        <td>Old decisions replaced after a revisit</td>
+                    </tr>
+                    <tr>
+                        <td><code>abandoned</code></td>
+                        <td>Tried and given up</td>
+                        <td>Approaches that were attempted but dropped</td>
+                    </tr>
+                    <tr>
+                        <td><code>rejected</code></td>
+                        <td>Considered and not chosen</td>
+                        <td>Options evaluated but explicitly not selected</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Metadata Flags</h2>
+
+            <p>These flags are available on <code>deciduous add</code> and some on <code>deciduous edit</code>:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flag</th>
+                        <th>Short</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>--confidence</code></td>
+                        <td><code>-c</code></td>
+                        <td>Confidence level 0&ndash;100 (displayed color-coded in viewers)</td>
+                    </tr>
+                    <tr>
+                        <td><code>--prompt</code></td>
+                        <td><code>-p</code></td>
+                        <td>Verbatim user prompt that triggered this node</td>
+                    </tr>
+                    <tr>
+                        <td><code>--files</code></td>
+                        <td><code>-f</code></td>
+                        <td>Comma-separated list of associated files</td>
+                    </tr>
+                    <tr>
+                        <td><code>--branch</code></td>
+                        <td><code>-b</code></td>
+                        <td>Git branch name (default: auto-detected)</td>
+                    </tr>
+                    <tr>
+                        <td><code>--commit</code></td>
+                        <td></td>
+                        <td>Git commit hash or <code>HEAD</code> to link</td>
+                    </tr>
+                    <tr>
+                        <td><code>--date</code></td>
+                        <td></td>
+                        <td>Backdate node creation (YYYY-MM-DD or RFC3339)</td>
+                    </tr>
+                    <tr>
+                        <td><code>--no-branch</code></td>
+                        <td></td>
+                        <td>Skip automatic branch detection</td>
+                    </tr>
+                    <tr>
+                        <td><code>--prompt-stdin</code></td>
+                        <td></td>
+                        <td>Read prompt text from stdin (for multi-line prompts)</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Configuration</h2>
+
+            <p>Configuration lives in <code>.deciduous/config.toml</code>:</p>
+
+            <pre>[branch]
+<span class="comment"># Branches NOT considered feature branches</span>
+main_branches = ["main", "master", "develop"]
+
+<span class="comment"># Auto-detect git branch when creating nodes</span>
+auto_detect = true
+
+[updates]
+<span class="comment"># Automatically check crates.io for new versions (once per 24h)</span>
+<span class="comment"># Your AI assistant will inform you when an update is available</span>
+<span class="comment"># Toggle with: deciduous auto-update on/off</span>
+auto_check = true
+
+[hooks]
+<span class="comment"># Require an active goal before committing</span>
+require_active_goal = true
+
+<span class="comment"># Require recent deciduous activity</span>
+require_recent_activity = true
+recent_activity_minutes = 30
+
+<span class="comment"># Require commit linked to an action node</span>
+require_commit_link = false
+
+<span class="comment"># Branches where hooks are enforced (empty = all)</span>
+enforced_branches = []
+
+<span class="comment"># Branches where hooks are skipped</span>
+skip_branches = ["main", "master"]</pre>
+
+            <h2>Environment Variables</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Variable</th>
+                        <th>Purpose</th>
+                        <th>Default</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>EDITOR</code></td>
+                        <td>Editor for TUI file opening (<kbd>o</kbd> key)</td>
+                        <td><code>vim</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>File Locations</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Purpose</th>
+                        <th>In Git?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>.deciduous/deciduous.db</code></td>
+                        <td>SQLite database (decision graph)</td>
+                        <td>No (gitignored)</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/config.toml</code></td>
+                        <td>Project configuration</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/.version</code></td>
+                        <td>Installed deciduous version</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/documents/</code></td>
+                        <td>Attached document files</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/patches/</code></td>
+                        <td>Shareable patch files</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/sync/</code></td>
+                        <td>Event files for continuous sync</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/backups/</code></td>
+                        <td>Timestamped database backups</td>
+                        <td>No (gitignored)</td>
+                    </tr>
+                    <tr>
+                        <td><code>.deciduous/narratives.md</code></td>
+                        <td>Narrative evolution document</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>CLAUDE.md</code></td>
+                        <td>Claude Code behavioral instructions</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>AGENTS.md</code></td>
+                        <td>OpenCode behavioral instructions</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.windsurfrules</code></td>
+                        <td>Windsurf behavioral instructions</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.claude/commands/</code></td>
+                        <td>Slash command definitions</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>.claude/skills/</code></td>
+                        <td>Skill definitions (pulse, narratives, archaeology)</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>docs/graph-data.json</code></td>
+                        <td>Exported graph for web viewer</td>
+                        <td>Yes</td>
+                    </tr>
+                    <tr>
+                        <td><code>docs/git-history.json</code></td>
+                        <td>Commit info for linked nodes</td>
+                        <td>Yes</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="hero-box" style="margin-top: 40px;">
+                <p><strong>You have completed the tutorial.</strong></p>
+                <p>You now know how to use deciduous for persistent decision memory in AI-assisted development. Start logging decisions, and they will survive context loss forever.</p>
+                <p style="margin-bottom: 0;"><a href="../../demo/">Browse the live graph</a> to see deciduous tracking its own development.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="../advanced/multi-assistant.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Multi-Assistant</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

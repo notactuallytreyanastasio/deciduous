@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The PR Workflow - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title active">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html" class="active">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>The Complete PR Workflow</h1>
+
+            <p class="lead">From implementation to pull request to teammate adoption&mdash;here is the full end-to-end workflow for sharing decisions through your PR process.</p>
+
+            <p>This page walks through every step using the snowflex CI pipeline work (nodes 57&ndash;61) as a running example. By the end, your PR will include a decision graph visualization, a structured writeup, and a patch file that teammates can apply after merge.</p>
+
+            <h2>Step 1: Generate the Visualization</h2>
+
+            <p>After your implementation work is complete and the decision graph has been populated, start by generating a branch-specific visualization:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Generate graph PNG</div>
+                <div class="terminal-body"><span class="command">deciduous dot --auto --nodes 57-61 --png --title "CI Pipeline Decisions"</span>
+<span class="output">Wrote docs/decision-graph-ci-pipelines.dot
+Wrote docs/decision-graph-ci-pipelines.png (5 nodes, 4 edges)</span></div>
+            </div>
+
+            <p>The <code>--auto</code> flag uses the current branch name in the filename. This is important: if you and a teammate both generate decision graphs on separate branches, the files will not conflict at merge time.</p>
+
+            <h2>Step 2: Export the Patch</h2>
+
+            <p>Export the decision nodes so teammates can import them into their local databases:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Export the patch</div>
+                <div class="terminal-body"><span class="command">deciduous diff export --nodes 57-61 -o .deciduous/patches/ci-feature.json --author alice</span>
+<span class="output">Success: Exported 5 nodes and 4 edges to .deciduous/patches/ci-feature.json</span></div>
+            </div>
+
+            <h2>Step 3: Commit and Push</h2>
+
+            <p>Stage the visualization, patch file, and any code changes, then push:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Commit and push</div>
+                <div class="terminal-body"><span class="comment"># Stage files explicitly - never use git add -A</span>
+<span class="command">git add docs/decision-graph-ci-pipelines.dot docs/decision-graph-ci-pipelines.png</span>
+<span class="command">git add .deciduous/patches/ci-feature.json</span>
+<span class="command">git commit -m "docs: add decision graph and patch for CI pipelines"</span>
+<span class="command">git push origin ci-pipelines</span></div>
+            </div>
+
+            <h2>Step 4: Create the PR</h2>
+
+            <p>Use <code>deciduous writeup</code> to generate the PR body, then create the PR with the GitHub CLI:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Create the PR</div>
+                <div class="terminal-body"><span class="command">gh pr create --title "Add CI pipelines for snowflex" \
+  --body "$(deciduous writeup -t 'Add CI Pipelines' --nodes 57-61 --auto)"</span>
+<span class="output">Creating pull request for ci-pipelines into main
+
+https://github.com/pepsico-ecommerce/snowflex/pull/97</span></div>
+            </div>
+
+            <p>The PR body generated by <code>deciduous writeup</code> includes:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Generated PR body</div>
+                <div class="terminal-body"><span class="output">## Summary
+**Goal:** Add CI pipelines for snowflex
+
+## Key Decisions
+### Use separate workflow files - clearer separation, easier contributor onboarding
+
+## Implementation
+- Implement unit test CI workflow
+
+## Test Plan
+- [ ] Verify implementation
+- [ ] Run test suite
+
+## Decision Graph Reference
+This PR corresponds to deciduous nodes: 57, 58, 59, 60, 61</span></div>
+            </div>
+
+            <p>When the <code>--auto</code> flag detects a branch-specific PNG file, it embeds an image link in the writeup so reviewers see the graph visualization directly in the PR.</p>
+
+            <h2>Step 5: Update an Existing PR</h2>
+
+            <p>If the decision graph evolves during code review, regenerate and update:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Update the PR</div>
+                <div class="terminal-body"><span class="command">deciduous dot --auto --nodes 57-61 --png --title "CI Pipeline Decisions"</span>
+<span class="command">deciduous diff export --nodes 57-61 -o .deciduous/patches/ci-feature.json --author alice</span>
+<span class="command">git add docs/decision-graph-ci-pipelines.dot docs/decision-graph-ci-pipelines.png .deciduous/patches/ci-feature.json</span>
+<span class="command">git commit -m "docs: update decision graph after review"</span>
+<span class="command">git push origin ci-pipelines</span>
+
+<span class="comment"># Update the PR body</span>
+<span class="command">gh pr edit 97 --body "$(deciduous writeup -t 'Add CI Pipelines' --nodes 57-61 --auto)"</span></div>
+            </div>
+
+            <h2>Step 6: Teammate Applies the Patch</h2>
+
+            <p>After the PR is merged, teammates pull the changes and apply the patch to get the decision nodes in their local database:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Teammate applies after merge</div>
+                <div class="terminal-body"><span class="command">git pull origin main</span>
+<span class="output">Updating abc123..def456
+ .deciduous/patches/ci-feature.json  | 42 +++++++
+ ...</span>
+
+<span class="command">deciduous diff apply .deciduous/patches/ci-feature.json</span>
+<span class="output">Applied: 5 nodes (5 new, 0 updated), 4 edges (4 new)</span></div>
+            </div>
+
+            <p>Because patches are idempotent, teammates who already applied the patch during review will not get duplicates.</p>
+
+            <h2>The Full Timeline</h2>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>When</th>
+                        <th>Who</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Day 1</td>
+                        <td>Alice</td>
+                        <td>Creates nodes 57&ndash;61 while implementing CI pipelines</td>
+                    </tr>
+                    <tr>
+                        <td>Day 2</td>
+                        <td>Alice</td>
+                        <td>Exports patch, generates PNG, opens PR with writeup</td>
+                    </tr>
+                    <tr>
+                        <td>Day 2</td>
+                        <td>Bob</td>
+                        <td>Reviews PR, applies patch to understand decision context</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>Alice</td>
+                        <td>Addresses review, updates patch and PR body</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>Bob</td>
+                        <td>Re-applies patch (idempotent), approves PR</td>
+                    </tr>
+                    <tr>
+                        <td>Day 3</td>
+                        <td>&mdash;</td>
+                        <td>PR merges to main</td>
+                    </tr>
+                    <tr>
+                        <td>Day 4</td>
+                        <td>Carol</td>
+                        <td>Pulls main, applies all patches, has full context</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="info-box tip">
+                <strong>Cleanup happens automatically</strong>
+                <p>The GitHub Action created by <code>deciduous init</code> at <code>.github/workflows/cleanup-decision-graphs.yml</code> automatically removes branch-specific PNG and DOT files after a PR is merged, keeping your repository clean.</p>
+            </div>
+
+            <div class="info-box warning">
+                <strong>Always stage files explicitly</strong>
+                <p>Never use <code>git add -A</code> or <code>git add .</code> when working with deciduous. The database file (<code>.deciduous/deciduous.db</code>) is gitignored, but broad staging commands can pick up other unintended files. Always name the specific files you are staging.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="../real-work/editing-and-fixing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Editing the Graph</span>
+                </a>
+                <a href="exporting-your-work.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Exporting Your Work</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

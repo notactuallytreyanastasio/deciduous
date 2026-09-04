@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Telling the Story - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title active">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html" class="active">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Telling the Story with Narratives</h1>
+
+            <p class="lead">The graph captures structure. Narratives capture the human-readable story.</p>
+
+            <p>A decision graph with 56 nodes and 66 edges is a powerful data structure, but it's not something you hand to a new team member and say "read this." Narratives are the layer on top&mdash;prose documents that explain the evolution of a system in plain language, grounded in the graph's structure.</p>
+
+            <h2>Generating Narratives</h2>
+
+            <p>After the archaeology session has built the graph, you ask Claude to tell the story. Claude scaffolds a narrative document, fills it in from the graph, and saves it for future reference.</p>
+
+            <div class="session-demo" id="narratives-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; Building the narrative</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Tell me the story of how snowflex evolved.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Let me scaffold a narrative document from the graph's goal nodes, then fill it in.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous narratives init</div>
+                        <div class="step-output">Created .deciduous/narratives.md with 3 active goal titles:<br>  - Create an Elixir library for querying Snowflake<br>  - Transport layer evolution<br>  - Authentication and key management</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 4.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Now let me trace the decision chains and write the full story.</div>
+                        <div class="step-output" style="font-size: 0.85em; opacity: 0.8;">[Claude queries nodes #1&ndash;56, traces edges, reads observations and revisits,<br>writes prose connecting the evolution story to specific graph nodes]</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 6.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Here's the snowflex evolution story:<br><br><strong>Snowflex started in June 2019</strong> as a thin wrapper around Erlang's ODBC driver (nodes #1&ndash;5). It worked for single connections but couldn't handle concurrency, leading to the ConnectionPool era (nodes #6&ndash;9). The pool solved concurrency but the API was cumbersome (node #10), so the team adopted a module-based API modeled after Ecto.Repo (nodes #11&ndash;14).<br><br><strong>The big pivot came in early 2021</strong> (revisit #34). ODBC had accumulated four problems: session expiry, UTF-16 corruption, Apple Silicon incompatibility, and memory issues. The team chose HTTP REST with a transport behavior pattern (#37) over a rigid direct client (#38), producing v1.0 &mdash; a modern adapter with no native dependencies.<br><br>I've written the full narrative to <code>.deciduous/narratives.md</code> with node references throughout.</div>
+                    </div>
+                </div>
+            </div>
+
+            <p>The narrative references specific node IDs so readers can cross-reference with the graph. This is intentional&mdash;the narrative is the story, the graph is the evidence.</p>
+
+            <h2>Finding Pivot Points</h2>
+
+            <p>The most architecturally significant moments in any project are the pivots &mdash; where the team changed direction. Claude can surface these instantly:</p>
+
+            <div class="session-demo" id="pivots-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; Finding pivots</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">Where were the major pivot points?</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous narratives pivots</div>
+                        <div class="step-output">Pivot chains:<br><br>  #34: Reconsider ODBC as transport - switch to HTTP REST API<br>    32 (outcome) &rarr; 33 (observation) &rarr; 34 (revisit) &rarr; 36 (decision)<br>    Reason: ODBC too fragile for production<br><br>  #46: Reconsider single-key auth - support multiple key formats<br>    44 (outcome) &rarr; 45 (observation) &rarr; 46 (revisit) &rarr; 48 (decision)<br>    Reason: Enterprise customers need key rotation</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 3.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">Two major pivots. The ODBC-to-HTTP pivot in March 2021 was the larger one &mdash; it drove the v1.0 rewrite. The auth pivot in August 2021 was more contained, switching from single-key to multi-key support after enterprise customers needed key rotation.</div>
+                    </div>
+                </div>
+            </div>
+
+            <p>Each pivot chain traces the path from an old outcome, through the observation that revealed the problem, through the revisit that reconsidered the approach, to the new decision that replaced it.</p>
+
+            <h2>Archaeology Timeline</h2>
+
+            <p>For a chronological view, Claude can pull a timeline of the graph:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous archaeology timeline</div>
+                <div class="terminal-body"><span class="command">deciduous archaeology timeline --limit 10</span>
+<span class="output">Timeline (10 of 56 nodes):
+
+2019-06-15  #1  goal         Create an Elixir library for querying Snowflake
+2019-06-15  #2  option       Use Erlang ODBC driver to connect to Snowflake
+2019-06-20  #3  decision     How to connect Elixir to Snowflake?
+2019-06-25  #4  action       Implement initial ODBC wrapper with single connection
+2019-07-01  #5  outcome      Working single-connection ODBC wrapper
+2019-08-15  #6  decision     How to support multiple Snowflake connections?
+2019-08-15  #7  option       Explicit ConnectionPool in supervision tree
+2019-09-01  #8  action       Implement ConnectionPool-based multi-connection support
+2019-09-15  #9  outcome      Multi-connection support via ConnectionPool (v0.1)
+2019-10-01  #10 observation  ConnectionPool API is cumbersome vs Ecto.Repo pattern</span></div>
+            </div>
+
+            <p>The timeline gives you the "when" that complements the graph's "what" and "why." Combined with narratives and pivot chains, you have a complete picture of a project's evolution.</p>
+
+            <div class="info-box tip">
+                <strong>Two audiences, two formats</strong>
+                <p>Narratives bridge the gap between the structured graph and human understanding. The graph is for machines to query; narratives are for humans to read. Use the graph when you need precision and traceability. Use narratives when you need to onboard a teammate or write a design document.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="exploring-the-graph.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Exploring the Graph</span>
+                </a>
+                <a href="../real-work/starting-work.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Starting Work</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

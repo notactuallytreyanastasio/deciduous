@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Documentation - Deciduous</title>
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="Deciduous Developer Documentation">
+    <meta name="description" content="Architecture, concepts, and reference documentation for deciduous - decision graph tooling for AI-assisted development.">
+
+    <link rel="stylesheet" href="../tutorial/style.css">
+    <style>
+        /* Additional styles for documentation page */
+        .doc-nav {
+            position: sticky;
+            top: 48px;
+            background: var(--bg-secondary);
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            z-index: 100;
+        }
+        .doc-nav ul {
+            display: flex;
+            gap: 20px;
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            flex-wrap: wrap;
+        }
+        .doc-nav a {
+            color: var(--text-secondary);
+            font-weight: 500;
+            font-size: 0.9rem;
+        }
+        .doc-nav a:hover {
+            color: var(--accent-blue);
+        }
+
+        .doc-section {
+            padding: 40px 0;
+            border-bottom: 2px solid var(--border-color);
+        }
+        .doc-section:last-child {
+            border-bottom: none;
+        }
+
+        .wip-badge {
+            display: inline-block;
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        .diagram-box {
+            background: var(--bg-code);
+            color: #f6f8fa;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            margin: 20px 0;
+        }
+
+        .quick-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin: 30px 0;
+        }
+        .quick-link {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            text-decoration: none;
+            transition: all 0.15s;
+        }
+        .quick-link:hover {
+            border-color: var(--accent-blue);
+            transform: translateY(-2px);
+        }
+        .quick-link h3 {
+            margin: 0 0 8px 0;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+        .quick-link p {
+            margin: 0;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .back-to-top {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: var(--accent-green);
+            color: white;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .back-to-top.visible {
+            opacity: 1;
+        }
+        .back-to-top:hover {
+            background: #238636;
+        }
+
+        /* Override sidebar for single-page doc */
+        .sidebar {
+            display: none;
+        }
+        .content {
+            margin-left: 0;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        body {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="ai-warning-banner">
+        Work in Progress - Developer documentation being fleshed out
+        <a href="../tutorial/">View Tutorial</a> | <a href="../demo/">View Graph Demo</a>
+    </div>
+
+    <nav class="doc-nav">
+        <ul>
+            <li><a href="#architecture">Architecture</a></li>
+            <li><a href="#concepts">Concepts</a></li>
+            <li><a href="#web-viewer">Web Viewer</a></li>
+            <li><a href="#quick-reference">Quick Reference</a></li>
+        </ul>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Developer Documentation <span class="wip-badge">WIP</span></h1>
+            <p class="lead">Architecture, concepts, and implementation details for deciduous.</p>
+
+            <div class="quick-links">
+                <a href="#architecture" class="quick-link">
+                    <h3>Architecture</h3>
+                    <p>How the system fits together</p>
+                </a>
+                <a href="#concepts" class="quick-link">
+                    <h3>Concepts</h3>
+                    <p>Mental models and patterns</p>
+                </a>
+                <a href="#web-viewer" class="quick-link">
+                    <h3>Web Viewer</h3>
+                    <p>React app and algorithms</p>
+                </a>
+                <a href="#quick-reference" class="quick-link">
+                    <h3>Quick Reference</h3>
+                    <p>Commands and patterns</p>
+                </a>
+            </div>
+
+            <!-- ARCHITECTURE SECTION -->
+            <section id="architecture" class="doc-section">
+                <h1>Architecture</h1>
+                <p class="lead">Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning.</p>
+
+                <h2>The Core Problem</h2>
+                <p>AI assistants have <strong>context limits</strong>. When you work on a complex feature across multiple sessions:</p>
+                <ol>
+                    <li><strong>Context compaction</strong> - The AI summarizes to fit limits, losing nuance</li>
+                    <li><strong>Session boundaries</strong> - New sessions start fresh with no memory</li>
+                    <li><strong>Decision amnesia</strong> - Why did we choose approach A over B? Lost.</li>
+                    <li><strong>Pivot confusion</strong> - We changed direction, but the old code remains. Why?</li>
+                </ol>
+                <p><strong>Deciduous solves this by externalizing the AI's reasoning into a queryable graph.</strong></p>
+
+                <h2>System Goals</h2>
+
+                <h3>1. Survive Context Loss</h3>
+                <p>When an AI session ends or context is compacted, all the reasoning is gone. Deciduous captures decisions <strong>in real-time</strong> so they persist beyond any single session.</p>
+                <pre>Session 1: "Let's use JWT tokens" → logged to graph
+Session 2: "What auth approach did we choose?" → query the graph</pre>
+
+                <h3>2. Track Design Evolution</h3>
+                <p>Codebases evolve. Decisions get revisited. Deciduous captures <strong>pivots</strong> - when and why you changed direction:</p>
+                <pre>[Old Decision: JWT] → [Observation: Too large for mobile] → [REVISIT] → [New Decision: Session cookies]</pre>
+
+                <h3>3. Enable Context Recovery</h3>
+                <p>Start a new session with <code>/recover</code> and the AI can rebuild its understanding from the graph:</p>
+                <pre>deciduous nodes        # What decisions exist?
+deciduous edges        # How are they connected?
+deciduous show 42      # What was the reasoning for node 42?</pre>
+
+                <h3>4. Enforce Discipline</h3>
+                <p>Through hooks, Deciduous <strong>blocks</strong> the AI from making code changes without first logging what it's doing.</p>
+
+                <h2>How It All Fits Together</h2>
+                <div class="diagram-box"><pre>┌─────────────────────────────────────────────────────────────────────────────┐
+│                           USER + AI ASSISTANT                                │
+│                                                                              │
+│  User: "Add authentication"                                                 │
+│  AI:   Creates goal node → deciduous add goal "Add auth" --prompt "..."     │
+│  AI:   Logs decision → deciduous add decision "JWT vs sessions"             │
+│  AI:   Links them → deciduous link 1 2                                      │
+│  AI:   Makes code changes                                                   │
+│  AI:   Logs outcome → deciduous add outcome "Auth implemented"              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              HOOKS LAYER                                     │
+│                                                                              │
+│  Pre-Tool-Use Hooks:                                                        │
+│  ├── require-action-node.sh                                                 │
+│  │   "Before Edit/Write, verify recent action node exists"                  │
+│  │   Blocks: "You must log what you're doing first!"                        │
+│                                                                              │
+│  Post-Tool-Use Hooks:                                                       │
+│  └── post-commit-reminder.sh                                                │
+│      "After Bash commit, remind to link commit to graph"                    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            DECIDUOUS CLI                                     │
+│                                                                              │
+│  Commands:                                                                  │
+│  ├── add &lt;type&gt; &lt;title&gt;   → Create nodes (goal/decision/action/outcome)     │
+│  ├── link &lt;from&gt; &lt;to&gt;     → Connect nodes with rationale                    │
+│  ├── nodes/edges/graph    → Query the graph                                 │
+│  ├── serve                → Start web viewer                                │
+│  ├── sync                 → Export for GitHub Pages                         │
+│  └── diff export/apply    → Multi-user sync                                 │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           SQLITE DATABASE                                    │
+│                                                                              │
+│  .deciduous/deciduous.db                                                    │
+│  ├── decision_nodes      → All nodes with types, titles, metadata           │
+│  ├── decision_edges      → Connections with rationale                       │
+│  ├── command_log         → CLI operation history                            │
+│  └── roadmap_items       → ROADMAP.md sync state                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+         ┌─────────────────┐  ┌───────────┐  ┌──────────────────┐
+         │   WEB VIEWER    │  │    TUI    │  │  GITHUB PAGES    │
+         │                 │  │           │  │                  │
+         │ React app with  │  │ Ratatui   │  │ Static export    │
+         │ multiple views: │  │ terminal  │  │ via sync         │
+         │ - Archaeology   │  │ interface │  │                  │
+         │ - DAG          │  │           │  │ docs/             │
+         │ - Chains       │  │           │  │ ├── index.html    │
+         │ - Timeline     │  │           │  │ ├── graph.json    │
+         │ - Roadmap      │  │           │  │ └── git-history   │
+         └─────────────────┘  └───────────┘  └──────────────────┘</pre></div>
+
+                <h2>Node Types and Their Meaning</h2>
+                <table>
+                    <thead>
+                        <tr><th>Type</th><th>Shape</th><th>Purpose</th><th>Example</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>goal</strong></td><td>House</td><td>What you're trying to achieve</td><td>"Add user authentication"</td></tr>
+                        <tr><td><strong>decision</strong></td><td>Diamond</td><td>A choice point with options</td><td>"How to identify users?"</td></tr>
+                        <tr><td><strong>option</strong></td><td>Box</td><td>Possible choice for a decision</td><td>"Use JWT tokens"</td></tr>
+                        <tr><td><strong>action</strong></td><td>Rounded box</td><td>Work being done</td><td>"Implementing auth middleware"</td></tr>
+                        <tr><td><strong>outcome</strong></td><td>Ellipse</td><td>Result of work</td><td>"Auth working in staging"</td></tr>
+                        <tr><td><strong>observation</strong></td><td>Note</td><td>Something noticed</td><td>"Sessions scale better for mobile"</td></tr>
+                        <tr><td><strong>revisit</strong></td><td>Octagon</td><td>Reconsidering past decisions</td><td>"Rethinking token strategy"</td></tr>
+                    </tbody>
+                </table>
+
+                <h2>Source Code Organization</h2>
+                <pre>src/
+├── main.rs           # CLI command dispatcher (clap)
+├── lib.rs            # Public API exports
+├── db.rs             # SQLite database (Diesel ORM)
+├── schema.rs         # Database table definitions
+├── config.rs         # .deciduous/config.toml loader
+├── init/             # deciduous init
+│   ├── mod.rs        # Project initialization
+│   └── templates.rs  # File templates (CLAUDE.md, hooks, etc.)
+├── serve.rs          # HTTP server for web viewer
+├── export.rs         # DOT export, PR writeup generation
+├── diff.rs           # Multi-user sync patches
+├── hooks.rs          # Claude Code hook management
+├── opencode.rs       # OpenCode integration
+├── github.rs         # GitHub API client
+├── roadmap.rs        # ROADMAP.md parsing and sync
+├── changelog.rs      # Embedded release notes
+└── tui/              # Terminal UI
+    ├── mod.rs        # Event loop, file watcher
+    ├── app.rs        # Application state
+    ├── msg.rs        # TEA messages
+    ├── update.rs     # State transitions
+    ├── state.rs      # Pure state transformations
+    ├── ui.rs         # Rendering
+    ├── events.rs     # Keyboard/mouse handling
+    └── views/        # Timeline, DAG, Roadmap views
+
+web/                  # React/TypeScript web viewer
+├── src/
+│   ├── App.tsx       # Router setup, data loading
+│   ├── types/        # TypeScript interfaces
+│   ├── utils/        # Graph algorithms
+│   ├── hooks/        # React custom hooks
+│   ├── components/   # Reusable UI components
+│   └── views/        # Browsing mode views
+└── vite.config.ts    # Build configuration</pre>
+            </section>
+
+            <!-- CONCEPTS SECTION -->
+            <section id="concepts" class="doc-section">
+                <h1>Concepts</h1>
+                <p class="lead">Mental models behind deciduous - why it exists and how to think about it.</p>
+
+                <h2>The Context Problem</h2>
+                <p>AI assistants are powerful but forgetful. Every session:</p>
+                <ol>
+                    <li><strong>Starts fresh</strong> - no memory of past work</li>
+                    <li><strong>Gets compacted</strong> - long conversations get summarized, losing detail</li>
+                    <li><strong>Loses nuance</strong> - "we tried X but it didn't work" becomes just "we did Y"</li>
+                </ol>
+
+                <div class="info-box warning">
+                    <strong>The Result:</strong>
+                    <p>Repeated mistakes, lost reasoning, pivot confusion. The code uses approach A, but WHY? Gone.</p>
+                </div>
+
+                <h2>Real-Time Logging</h2>
+                <p>The key insight: <strong>Log BEFORE you do, not after.</strong></p>
+                <pre>BAD (retroactive):
+  1. Write code
+  2. Commit
+  3. "Oh I should log that"  ← Often forgotten, context lost
+
+GOOD (real-time):
+  1. deciduous add action "Implementing X"  ← What you're ABOUT to do
+  2. Write code
+  3. deciduous add outcome "X complete"  ← What happened
+  4. deciduous link &lt;action&gt; &lt;outcome&gt;  ← Connect them</pre>
+
+                <h2>The Revisit Pattern (Pivots)</h2>
+                <p>When you change direction, capture the <strong>pivot</strong>:</p>
+                <div class="diagram-box"><pre>Old Approach                          New Approach
+────────────                          ────────────
+[Decision: Use JWT]                   [Decision: Use sessions]
+      │                                     ▲
+      ▼                                     │
+[Option: JWT chosen]                  [Option: Sessions chosen]
+      │                                     │
+      ▼                                     │
+[Action: Implement JWT]               ┌─────┘
+      │                               │
+      ▼                               │
+[Outcome: Working but...]             │
+      │                               │
+      ▼                               │
+[Observation: JWT too large]──────────┤
+      │                               │
+      └─────►[REVISIT]────────────────┘
+             "Reconsidering token strategy"</pre></div>
+
+                <p>The <strong>revisit</strong> node:</p>
+                <ol>
+                    <li>Links to observations that caused the rethink</li>
+                    <li>Links to the old decision being superseded</li>
+                    <li>Leads to the new decision</li>
+                </ol>
+                <p>This captures <strong>WHY</strong> we changed, not just <strong>WHAT</strong> changed.</p>
+
+                <h2>The Prompt Field</h2>
+                <p>The most important field for context recovery. When a user asks for something, capture their <strong>exact words</strong>:</p>
+                <pre># BAD - summary loses context
+deciduous add goal "Add auth" -p "User wants login"
+
+# GOOD - verbatim prompt enables full recovery
+deciduous add goal "Add auth" --prompt-stdin &lt;&lt; 'EOF'
+I need to add user authentication to the app. Users should be able to sign up
+with email/password, and we need OAuth support for Google and GitHub. The auth
+should use JWT tokens with refresh token rotation.
+EOF</pre>
+
+                <h2>Multi-User Sync</h2>
+                <p>The database is local and gitignored. How do teams share?</p>
+
+                <h3>The Dual-ID Model</h3>
+                <p>Every node has:</p>
+                <ul>
+                    <li><code>id</code> (integer): Local primary key, different on each machine</li>
+                    <li><code>change_id</code> (UUID): Globally unique, stable everywhere</li>
+                </ul>
+
+                <h3>Patch Workflow</h3>
+                <pre># Export decisions as a patch
+deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
+
+# Apply patches from teammates (idempotent)
+deciduous diff apply .deciduous/patches/*.json</pre>
+
+                <h2>Hook Enforcement</h2>
+                <p>Hooks make logging <strong>mandatory</strong>, not optional.</p>
+                <pre>[hooks]
+enabled = true
+
+[[hooks.pre_tool_use]]
+name = "require-action-node"
+matcher = "Edit|Write"
+description = "Block code edits without recent action node"
+enabled = true</pre>
+                <p>When the AI tries to edit code:</p>
+                <ol>
+                    <li>Hook script runs</li>
+                    <li>Checks: Is there an action node in the last 15 minutes?</li>
+                    <li>No? <strong>Blocks the edit</strong> with a message telling the AI to log first</li>
+                </ol>
+            </section>
+
+            <!-- WEB VIEWER SECTION -->
+            <section id="web-viewer" class="doc-section">
+                <h1>Web Viewer</h1>
+                <p class="lead">React/TypeScript application with multiple visualization modes.</p>
+
+                <h2>Access Methods</h2>
+                <pre># Local development server
+deciduous serve --port 3000
+
+# Static export for GitHub Pages
+deciduous sync
+git add docs/ && git commit -m "Update graph" && git push</pre>
+
+                <h2>Views</h2>
+                <table>
+                    <thead>
+                        <tr><th>View</th><th>Question It Answers</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><strong>Archaeology</strong></td><td>How did this system evolve? (default)</td></tr>
+                        <tr><td><strong>DAG</strong></td><td>What's connected to what?</td></tr>
+                        <tr><td><strong>Chains</strong></td><td>Show me everything related to X.</td></tr>
+                        <tr><td><strong>Timeline</strong></td><td>What happened when?</td></tr>
+                        <tr><td><strong>Story</strong></td><td>What's the full context for this goal?</td></tr>
+                        <tr><td><strong>Graph</strong></td><td>I want to explore freely.</td></tr>
+                        <tr><td><strong>Roadmap</strong></td><td>What work is planned?</td></tr>
+                        <tr><td><strong>Log</strong></td><td>What commands were run?</td></tr>
+                    </tbody>
+                </table>
+
+                <h2>Key Algorithms</h2>
+
+                <h3>Chain Building</h3>
+                <p><code>web/src/utils/graphProcessing.ts</code></p>
+                <ol>
+                    <li>Find root nodes: all <code>goal</code> nodes + nodes with no incoming edges</li>
+                    <li>Sort roots: goals first, then by creation time</li>
+                    <li>BFS from each root following <strong>both</strong> outgoing and incoming edges</li>
+                    <li>No node limit (shows full connected components)</li>
+                </ol>
+
+                <h3>Session Grouping</h3>
+                <ol>
+                    <li>Sort all nodes by creation time</li>
+                    <li>Gap threshold: 4 hours</li>
+                    <li>New session when gap detected</li>
+                </ol>
+
+                <h3>Pivot Detection</h3>
+                <ol>
+                    <li>Find all <code>revisit</code> nodes</li>
+                    <li>Get incoming edges → observations, old decisions</li>
+                    <li>Get outgoing edges → new decisions</li>
+                    <li>Build pivot context (before/after/why)</li>
+                </ol>
+
+                <h2>Data Sources</h2>
+                <table>
+                    <thead>
+                        <tr><th>Local Server</th><th>Static Files</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>/api/graph</code></td><td><code>./graph-data.json</code></td></tr>
+                        <tr><td><code>/api/git-history</code></td><td><code>./git-history.json</code></td></tr>
+                        <tr><td><code>/api/roadmap</code></td><td><code>./roadmap-items.json</code></td></tr>
+                    </tbody>
+                </table>
+
+                <h2>URL Structure</h2>
+                <pre>/           → Archaeology (default)
+/dag        → DAG view
+/dag/:nodeId → DAG with node selected
+/chains     → Chains view
+/timeline   → Timeline view
+/graph      → Force-directed graph
+/roadmap    → Roadmap view
+/story      → Story view</pre>
+            </section>
+
+            <!-- QUICK REFERENCE SECTION -->
+            <section id="quick-reference" class="doc-section">
+                <h1>Quick Reference</h1>
+                <p class="lead">Fast lookup for common operations.</p>
+
+                <h2>Initialize</h2>
+                <pre>deciduous init                    # Claude Code (default)
+deciduous init --opencode         # OpenCode
+deciduous init --windsurf         # Windsurf
+deciduous init --both             # Claude Code + OpenCode</pre>
+
+                <h2>Add Nodes</h2>
+                <pre># Basic
+deciduous add goal "Add auth"
+deciduous add decision "How to store sessions?"
+deciduous add action "Implementing middleware"
+deciduous add outcome "Auth working"
+deciduous add observation "Redis adds complexity"
+deciduous add revisit "Rethinking approach"
+
+# With metadata
+deciduous add action "Implementing X" \
+  -c 85 \                           # Confidence 0-100
+  --commit HEAD \                   # Link to current commit
+  -f "src/auth.rs,src/session.rs" \ # Associated files
+  -b feature-auth                   # Git branch
+
+# With verbatim prompt
+deciduous add goal "Title" --prompt-stdin &lt;&lt; 'EOF'
+The full user message here...
+EOF</pre>
+
+                <h2>Link Nodes</h2>
+                <pre>deciduous link 1 2                  # Default: leads_to
+deciduous link 1 2 -r "Rationale"   # With reason
+deciduous link 1 2 -t chosen        # Edge type: chosen/rejected/requires</pre>
+
+                <h2>Query Graph</h2>
+                <pre>deciduous nodes                     # List all
+deciduous nodes --branch main       # Filter by branch
+deciduous nodes --type goal         # Filter by type
+deciduous edges                     # List connections
+deciduous show 42                   # Node details
+deciduous graph                     # Full JSON</pre>
+
+                <h2>Visualize</h2>
+                <pre>deciduous serve                     # Web viewer
+deciduous tui                       # Terminal UI
+deciduous dot --png -o graph.png    # Export PNG</pre>
+
+                <h2>Export & Sync</h2>
+                <pre>deciduous sync                      # Export for GitHub Pages
+
+# Multi-user sync
+deciduous diff export --branch feature-x -o .deciduous/patches/my.json
+deciduous diff apply .deciduous/patches/*.json</pre>
+
+                <h2>Document Attachments</h2>
+                <pre>deciduous doc attach &lt;node_id&gt; &lt;file&gt;           # Attach file to node
+deciduous doc attach &lt;node_id&gt; &lt;file&gt; -d "..."  # With description
+deciduous doc attach &lt;node_id&gt; &lt;file&gt; --ai-describe  # AI description
+deciduous doc list [node_id]                     # List documents
+deciduous doc show &lt;id&gt;                          # Document details
+deciduous doc describe &lt;id&gt; "text"               # Set description
+deciduous doc open &lt;id&gt;                          # Open in default app
+deciduous doc detach &lt;id&gt;                        # Soft-delete
+deciduous doc gc                                 # Clean orphaned files</pre>
+
+                <h2>Common Patterns</h2>
+
+                <h3>Start New Feature</h3>
+                <pre>deciduous add goal "Feature name" --prompt-stdin &lt;&lt; 'EOF'
+User's full request here...
+EOF
+deciduous add decision "Key design question" -c 85
+deciduous link &lt;goal_id&gt; &lt;decision_id&gt; -r "Design question for feature"</pre>
+
+                <h3>Record a Pivot</h3>
+                <pre>deciduous add observation "Problem with current approach"
+deciduous add revisit "Reconsidering X"
+deciduous link &lt;observation_id&gt; &lt;revisit_id&gt; -r "Caused rethinking"
+deciduous link &lt;revisit_id&gt; &lt;new_decision_id&gt; -r "New approach"
+deciduous status &lt;old_decision_id&gt; superseded</pre>
+
+                <h3>After Committing Code</h3>
+                <pre>git commit -m "feat: add auth"
+deciduous add action "Implemented auth" -c 90 --commit HEAD
+deciduous link &lt;goal_id&gt; &lt;action_id&gt; -r "Implementation"</pre>
+
+                <h2>File Locations</h2>
+                <table>
+                    <thead>
+                        <tr><th>Path</th><th>Purpose</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>.deciduous/deciduous.db</code></td><td>SQLite database (gitignored)</td></tr>
+                        <tr><td><code>.deciduous/config.toml</code></td><td>Configuration</td></tr>
+                        <tr><td><code>.deciduous/.version</code></td><td>Binary version</td></tr>
+                        <tr><td><code>.deciduous/documents/</code></td><td>Content-hash named document attachments</td></tr>
+                        <tr><td><code>.deciduous/patches/</code></td><td>Multi-user sync patches</td></tr>
+                        <tr><td><code>.claude/hooks/</code></td><td>Claude Code hooks</td></tr>
+                        <tr><td><code>.claude/commands/</code></td><td>Slash commands</td></tr>
+                        <tr><td><code>docs/graph-data.json</code></td><td>Exported graph</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <div class="page-nav" style="margin-top: 60px;">
+                <a href="../tutorial/" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Tutorial</span>
+                </a>
+                <a href="../demo/" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Live Demo</span>
+                </a>
+            </div>
+
+        </article>
+    </main>
+
+    <a href="#" class="back-to-top" title="Back to top">↑</a>
+
+    <script>
+        // Back to top button visibility
+        const backToTop = document.querySelector('.back-to-top');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 500) {
+                backToTop.classList.add('visible');
+            } else {
+                backToTop.classList.remove('visible');
+            }
+        });
+
+        // Smooth scroll for anchor links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+digraph DecisionGraph {
+  rankdir=TB;
+  node [fontname="Arial" fontsize=10];
+  edge [fontname="Arial" fontsize=9];
+
+  562 [label="[562] Add search functionality to web UI DA...\\n(90%)" shape="house" fillcolor="#FFE4B5" style="filled"];
+  563 [label="[563] Web UI uses React 18 + D3/Dagre, inli...\\n(95%)" shape="note" fillcolor="#DDA0DD" style="filled"];
+  564 [label="[564] Design search component architecture\\n(85%)" shape="diamond" fillcolor="#E6E6FA" style="filled"];
+  565 [label="[565] Place search in top bar - always visi...\\n(80%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  566 [label="[566] Place search in side controls panel -...\\n(60%)" shape="parallelogram" fillcolor="#E0FFFF" style="filled"];
+  567 [label="[567] Implement search in top bar with drop...\\n(90%)" shape="box" fillcolor="#90EE90" style="filled"];
+  568 [label="[568] SearchBar component working - builds ...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+  569 [label="[569] Preparing commit and PR for graph sea...\\n(90%)" shape="box" fillcolor="#90EE90" style="filled"];
+  570 [label="[570] Commit created: feat(web): add search...\\n(95%)" shape="ellipse" fillcolor="#87CEEB" style="filled"];
+
+  562 -> 563 [style="solid" color="#333333" label="Architecture discovery"];
+  562 -> 564 [style="solid" color="#333333" label="Architecture planning"];
+  564 -> 565 [style="solid" color="#333333" label="Option A: Top bar placement"];
+  564 -> 566 [style="solid" color="#333333" label="Option B: Side panel placement"];
+  565 -> 567 [style="solid" color="#333333" label="Chosen approach: top bar pl..."];
+  567 -> 568 [style="solid" color="#333333" label="Implementation complete"];
+  568 -> 569 [style="solid" color="#333333" label="Finalizing feature"];
+  569 -> 570 [style="solid" color="#333333" label="Feature committed"];
+}

@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>What Your AI Assistant Gets - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title active">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html" class="active">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>What Your AI Assistant Gets</h1>
+
+            <p class="lead">When you run <code>deciduous init</code>, your AI assistant gains a complete decision-tracking workflow. Here is what it learns.</p>
+
+            <p>The files created during initialization are not just configuration. They form a layered instruction set that teaches your AI assistant <em>when</em> to log decisions, <em>what</em> to log, and <em>how</em> to connect everything into a coherent graph. Let's look at each layer.</p>
+
+            <h2>CLAUDE.md &mdash; The Behavioral Contract</h2>
+
+            <p>CLAUDE.md is read by Claude Code at the start of every session. The deciduous section teaches it a specific set of behavioral rules for decision tracking. The two most important rules are:</p>
+
+            <div class="hero-box">
+                <p><strong>"Log BEFORE you code, not after."</strong></p>
+                <p>Before implementing anything, the assistant creates a goal node capturing what it is about to do and why. This ensures decisions are recorded while the reasoning is fresh, not reconstructed after the fact when details have been lost.</p>
+            </div>
+
+            <div class="hero-box">
+                <p><strong>"Connect immediately &mdash; link every node to its parent."</strong></p>
+                <p>Every node in the graph must be connected to its parent as soon as it is created. Orphaned nodes without connections lose their context. The graph's value is in its edges, not just its nodes.</p>
+            </div>
+
+            <p>Beyond these core rules, CLAUDE.md defines a set of behavioral triggers. When the assistant encounters one of these situations, it knows to create the corresponding node type:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Trigger</th>
+                        <th>Node Type</th>
+                        <th>Example</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>User asks for a new feature</td>
+                        <td><span class="node-goal"><strong>goal</strong></span></td>
+                        <td>"Add dark mode support"</td>
+                    </tr>
+                    <tr>
+                        <td>Exploring possible approaches</td>
+                        <td><span class="node-option"><strong>option</strong></span></td>
+                        <td>"Use CSS variables for theming"</td>
+                    </tr>
+                    <tr>
+                        <td>Choosing between approaches</td>
+                        <td><span class="node-decision"><strong>decision</strong></span></td>
+                        <td>"Choose theming strategy"</td>
+                    </tr>
+                    <tr>
+                        <td>About to write or edit code</td>
+                        <td><span class="node-action"><strong>action</strong></span></td>
+                        <td>"Implementing CSS variable system"</td>
+                    </tr>
+                    <tr>
+                        <td>Something worked or failed</td>
+                        <td><span class="node-outcome"><strong>outcome</strong></span></td>
+                        <td>"Dark mode renders correctly"</td>
+                    </tr>
+                    <tr>
+                        <td>Noticed something interesting</td>
+                        <td><span class="node-observation"><strong>observation</strong></span></td>
+                        <td>"Existing styles use hardcoded colors"</td>
+                    </tr>
+                    <tr>
+                        <td>Reconsidering a past approach</td>
+                        <td><span class="node-revisit"><strong>revisit</strong></span></td>
+                        <td>"Reconsider CSS-in-JS &mdash; switch to CSS variables"</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>The assistant also learns the canonical flow through the graph: goals lead to options, options lead to decisions, decisions lead to actions, and actions lead to outcomes. Observations attach anywhere relevant, and revisit nodes mark when the team reconsiders a past decision, connecting old approaches to new ones. This structure ensures the graph is consistent and navigable regardless of which session created it.</p>
+
+            <h2>Slash Commands</h2>
+
+            <p>The slash commands give your AI assistant specific entry points for common workflows. You invoke them by typing the command name in your Claude Code session, and the assistant follows the instructions defined in each command file.</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Command</th>
+                        <th>Purpose</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>/recover</code></td>
+                        <td>Recover context from the decision graph at session start. Reads existing nodes, edges, and recent commands to rebuild understanding of the project state.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/work</code></td>
+                        <td>Start a work transaction. Creates a goal node before any implementation begins, ensuring the "log before you code" rule is followed.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/decision</code></td>
+                        <td>Full decision graph management. Add nodes, create links, update statuses, and query the graph.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/decision-graph</code></td>
+                        <td>Build a decision graph from existing git history. Analyzes commits, PRs, and patterns to reconstruct past decisions.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/build-test</code></td>
+                        <td>Build the project and run the test suite. Used to verify changes before committing.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/serve-ui</code></td>
+                        <td>Start the decision graph web viewer on a local port for interactive exploration.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/sync-graph</code></td>
+                        <td>Export the decision graph to JSON and update the GitHub Pages viewer.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/sync</code></td>
+                        <td>Multi-user sync. Pull teammate events, rebuild the local database, and push your own events.</td>
+                    </tr>
+                    <tr>
+                        <td><code>/document</code></td>
+                        <td>Generate comprehensive documentation for a file or directory in the project.</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Skills</h2>
+
+            <p>Skills are higher-level than slash commands. Where a slash command is a specific action ("create a node", "start the viewer"), a skill is a strategy for approaching a category of work.</p>
+
+            <h3><code>/pulse</code> &mdash; Map Current Design</h3>
+
+            <p>Take the pulse of a system as it exists today. The assistant examines the codebase and maps the current design as a set of decisions: what patterns are in use, what libraries were chosen, what architectural boundaries exist. This is "Now mode" &mdash; understanding the present without worrying about how it got this way.</p>
+
+            <h3><code>/narratives</code> &mdash; Understand Evolution</h3>
+
+            <p>Look at the current system and ask "how did this get this way?" The assistant identifies evolution stories: the database was originally MongoDB but migrated to PostgreSQL, the auth system started with sessions and switched to JWTs, the frontend was rewritten from jQuery to React. These narratives are tracked in <code>.deciduous/narratives.md</code>.</p>
+
+            <h3><code>/archaeology</code> &mdash; Transform into Queryable Graph</h3>
+
+            <p>Take the narratives identified by <code>/narratives</code> and structure them as decision graph nodes with proper connections. Each narrative becomes a chain of goals, options, decisions, and outcomes. Pivots &mdash; where the team changed direction &mdash; become <strong>revisit</strong> nodes that connect old approaches to new ones.</p>
+
+            <h2>The Key Point</h2>
+
+            <div class="info-box tip">
+                <strong>You do not need to memorize any deciduous CLI commands.</strong>
+                <p>Your AI assistant reads CLAUDE.md, understands the workflow, and runs the right commands at the right time. You say "add rate limiting to the API" and the assistant handles the goal creation, option exploration, decision logging, and commit linking automatically. The rest of this tutorial shows you what happens during those sessions so you understand the system &mdash; but in practice, the assistant drives it.</p>
+            </div>
+
+            <p>Now that you understand what deciduous installs and how your AI assistant uses it, let's see the system in action. The next section walks through reconstructing a decision graph from an existing project's git history.</p>
+
+            <div class="page-nav">
+                <a href="initializing.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">Initializing on a Project</span>
+                </a>
+                <a href="../archaeology/the-decision-graph-skill.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Building from Git</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>
