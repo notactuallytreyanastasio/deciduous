@@ -4,6 +4,12 @@ on:
   pull_request:
     types: [closed]
 
+# The default GITHUB_TOKEN is read-only for this repository, so the job must ask
+# for what it needs: pushing the cleanup branch and opening the PR.
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   cleanup:
     # Only run if PR was merged (not just closed)
