@@ -12,6 +12,12 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.17.1",
+        highlights: &[
+            "Fix: `deciduous nodes` panicked on observations whose description contains multibyte characters (e.g. an ellipsis)",
+        ],
+    },
+    Release {
         version: "0.17.0",
         highlights: &[
             "One multi-user sync mechanism: .deciduous/sync/ holds one JSON record per node/edge/theme/tag, tracked in git",

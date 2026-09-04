@@ -1410,11 +1410,9 @@ fn main() {
                             };
                             if n.node_type == "observation" {
                                 if let Some(ref desc) = n.description {
-                                    let truncated = if desc.len() > 80 {
-                                        format!("{}...", &desc[..77])
-                                    } else {
-                                        desc.clone()
-                                    };
+                                    // Character-aware: a byte slice panics on
+                                    // multibyte text such as an ellipsis.
+                                    let truncated = truncate(desc, 80);
                                     println!(
                                         "{:<5} {:<9} {:<12} {:<10} {}",
                                         n.id, short_cid, type_colored, n.status, n.title

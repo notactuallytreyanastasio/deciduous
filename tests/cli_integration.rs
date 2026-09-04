@@ -962,3 +962,41 @@ fn test_supersede_node() {
     let out = stdout(&output);
     assert!(out.contains("superseded"));
 }
+
+/// `deciduous nodes` used to slice observation descriptions by byte index and
+/// panic on multibyte characters ("byte index 77 is not a char boundary").
+#[test]
+fn test_nodes_listing_survives_multibyte_titles_and_descriptions() {
+    let temp = tempfile::tempdir().unwrap();
+    let db_path = temp.path().join("test.db");
+
+    let long_multibyte: String = "…".repeat(100); // 300 bytes, 100 chars: over the 80-char limit
+    let output = run_deciduous(
+        &[
+            "add",
+            "observation",
+            "Naïve title with an ellipsis …",
+            "-d",
+            &long_multibyte,
+        ],
+        &db_path,
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(
+        output.status.success(),
+        "nodes panicked: {}",
+        stderr(&output)
+    );
+    let out = stdout(&output);
+    assert!(out.contains("Naïve title with an ellipsis …"), "{out}");
+    assert!(
+        out.contains("…………"),
+        "description should be shown truncated: {out}"
+    );
+    assert!(
+        out.contains("..."),
+        "long description should end with an ellipsis marker: {out}"
+    );
+}
