@@ -493,21 +493,14 @@ SESSION END -> Final audit
 
 ## Multi-User Sync
 
-If working in a team, sync decision graphs automatically via events:
+Teammates' decisions arrive as records in `.deciduous/sync/` (one JSON file each). After `git pull`, pull them into your database:
 
 ```bash
-# Check sync status
-deciduous events status
-
-# Apply teammate events (after git pull)
-deciduous events rebuild
-
-# Periodic maintenance (compact old events)
-deciduous events checkpoint --clear-events
+deciduous sync            # import their records, export yours, refresh docs/graph-data.json
+deciduous sync --check    # just report what is pending
 ```
 
-Events are auto-emitted when you use `add`, `link`, `status`, etc.
-Git handles merging everyone's event files automatically.
+Every `add`, `link`, `status`, `delete` writes its record at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/sync/` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id. Concurrent edits of one record merge field by field through a git merge driver; leftover conflict markers are merged by `deciduous sync`.
 
 ## Why This Matters
 
@@ -674,24 +667,11 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
-### Sync Graph
-- `sync` -> `deciduous sync`
-
-### Multi-User Sync (Event-Based) - RECOMMENDED
-- `events init` -> `deciduous events init` (initialize event-based sync)
-- `events status` -> `deciduous events status` (show pending events)
-- `events rebuild` -> `deciduous events rebuild` (apply teammate events)
-- `events checkpoint` -> `deciduous events checkpoint` (create snapshot)
-- `events checkpoint --clear-events` -> snapshot and clear old events
-
-### Multi-User Sync (Legacy Diff/Patch)
-- `diff export -o <file>` -> `deciduous diff export -o <file>` (export nodes as patch)
-- `diff export --nodes 1-10 -o <file>` -> export specific nodes
-- `diff export --branch feature-x -o <file>` -> export nodes from branch
-- `diff apply <file>` -> `deciduous diff apply <file>` (apply patch, idempotent)
-- `diff apply --dry-run <file>` -> preview without applying
-- `diff status` -> `deciduous diff status` (list patches in .deciduous/patches/)
-- `migrate` -> `deciduous migrate` (add change_id columns for sync)
+### Sync (teammates + GitHub Pages)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/sync/` records with the local DB both ways, then export `docs/graph-data.json`)
+- `sync --check` -> report pending changes without writing (exit 1 if any)
+- `sync --no-pages` -> reconcile only, skip the Pages export
+- Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
 
 ### Export & Visualization
 - `dot` -> `deciduous dot` (output DOT to stdout)
@@ -788,44 +768,23 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 
 ## Multi-User Sync
 
-**Problem**: Multiple users work on the same codebase, each with a local `.deciduous/deciduous.db` (gitignored). How to share decisions?
-
-**Solution**: Event-based sync with append-only logs. Each user has their own event file that git merges automatically.
-
-### Event-Based Sync (Recommended)
-
-**Setup (once per repo):**
-```bash
-deciduous events init
-git add .deciduous/sync/
-git commit -m "feat: enable event-based sync"
-```
+Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/sync/`: one small JSON file per node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes its record immediately; `deciduous sync` reconciles the directory with the database in both directions.
 
 **Daily workflow:**
 ```bash
-git pull                    # Get teammate events
-deciduous events rebuild    # Apply to local DB
-# Work normally - events auto-emit on add/link/etc.
-git add .deciduous/sync/ && git commit -m "sync" && git push
+git pull
+deciduous sync                # import teammates' records, export anything missing
+# ... work normally; records are written as you go ...
+git add .deciduous/sync/ && git commit -m "graph: <what you decided>"
+git push
 ```
 
-**Periodic maintenance:**
+**Linking to a teammate's node:** local ids differ per machine, so use the change_id prefix shown in the CHANGE column of `deciduous nodes`:
 ```bash
-deciduous events checkpoint --clear-events  # Compact old events
-git add .deciduous/sync/ && git commit -m "checkpoint"
+deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-### Legacy Patch Workflow
-
-For manual control, use the older patch system:
-
-```bash
-# Export nodes as a patch file
-deciduous diff export --branch feature-x -o .deciduous/patches/my-feature.json
-
-# Apply patches from teammates
-deciduous diff apply .deciduous/patches/*.json
-```
+**Two people edited the same record?** Git merges record files field by field through the `deciduous` merge driver (`deciduous sync` registers it in each clone). If a file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
 
 ## The Rule
 
@@ -1269,95 +1228,54 @@ arguments: []
 
 # Multi-User Sync
 
-Synchronize decision graph with your team using event-based sync.
+The shared decision graph lives in `.deciduous/sync/` as one JSON file per node, edge, theme, and tag. Your SQLite database is a private cache of it. `deciduous sync` makes the two agree, in both directions.
 
-## Step 1: Pull Latest
+## Step 1: Pull
 
 ```bash
 git pull --rebase
 ```
 
-## Step 2: Check Sync Status
+## Step 2: Sync
 
 ```bash
-deciduous events status
+deciduous sync
 ```
 
-Look for:
-- **Pending events**: Events from teammates not yet in your local DB
-- **Event files**: Each teammate has their own `.jsonl` file
+This creates `.deciduous/sync/` if needed, imports the pre-0.17 JSONL event log once, imports records you do not have (teammates' nodes get *local* ids here), exports database rows that have no record yet, and regenerates `docs/graph-data.json`. "Pending" edges are waiting for a node that has not been pulled yet.
 
-## Step 3: Rebuild if Needed
+## Step 3: Link across users if needed
 
-If there are pending events:
+Local ids differ per machine. Refer to a teammate's node by the change_id prefix shown in the CHANGE column:
 
 ```bash
-# Preview what would change
-deciduous events rebuild --dry-run
-
-# Apply teammate events to your local database
-deciduous events rebuild
+deciduous nodes
+deciduous link a1b2c3d4 42 -r "our action implements their goal"
 ```
 
-## Step 4: Push Your Changes
+## Step 4: Commit and push
 
 ```bash
-# Stage sync files (events are auto-committed to your event file)
-git add .deciduous/sync/
-
-# Commit and push
-git commit -m "sync: decision graph events"
+git add .deciduous/sync/ docs/graph-data.json docs/git-history.json
+git commit -m "graph: <what was decided>"
 git push
 ```
 
-## Checkpoint (Periodic Maintenance)
+`deciduous sync --check` exits non-zero if anything is still pending, so it works as a pre-push guard.
 
-To prevent repo bloat, periodically create a checkpoint:
+## Merge conflicts
 
-```bash
-# Create checkpoint and clear old events
-deciduous events checkpoint --clear-events
-
-# Commit the checkpoint
-git add .deciduous/sync/
-git commit -m "checkpoint: compact decision graph events"
-git push
-```
-
-**When to checkpoint:**
-- After major milestones
-- When event files get large (>100KB)
-- Before releases
+- **A file under `.deciduous/sync/`**: two people edited the same record. Normally git merges it field by field through the `deciduous` merge driver, so you never see this. If a file has `<<<<<<<` markers, run `deciduous sync`: it merges the sides the same way and imports the result.
+- **`docs/graph-data.json`**: never hand-merge it. Take either side and run `deciduous sync` to regenerate.
 
 ## Troubleshooting
 
-### Events not syncing?
-
-1. Make sure `.deciduous/sync/` is tracked in git
-2. Check that `deciduous events init` was run
-3. Verify events are being emitted: `deciduous events status`
-
-### Merge conflicts in event files?
-
-Event files are append-only JSONL. Git should auto-merge them.
-If conflicts occur, accept both versions (both sets of events are valid).
-
-### Missing nodes after rebuild?
-
-Nodes reference each other by `change_id` (UUID), not local `id`.
-If edges fail, the referenced node may be in a teammate's events
-that haven't been pulled yet. Pull and rebuild again.
-
-## Quick Reference
-
-| Command | What it does |
-|---------|--------------|
-| `deciduous events status` | Show pending events, authors, file sizes |
-| `deciduous events rebuild` | Apply all events to local DB |
-| `deciduous events rebuild --dry-run` | Preview without applying |
-| `deciduous events checkpoint` | Snapshot current state |
-| `deciduous events checkpoint --clear-events` | Snapshot + delete old events |
-| `deciduous events emit <id>` | Manually emit event for a node |
+| Symptom | Fix |
+|---------|-----|
+| Teammate's nodes missing | `git pull` then `deciduous sync` |
+| "No node has a change_id starting with ..." | You have not synced their record yet |
+| Record file unreadable | `git checkout -- <file>` or fix the JSON; sync skips it and continues |
+| `.deciduous/sync/` not in git | `deciduous update` fixes `.gitignore` |
 "#;
 
 /// OpenCode command template: /decision-graph
@@ -3128,20 +3046,15 @@ deciduous sync    # Export for static hosting
 
 ### Multi-User Sync
 
-Sync decisions with teammates via event logs:
+The graph is shared through `.deciduous/sync/`: one JSON record per node/edge, committed with the code. Records are written automatically on every change.
 
 ```bash
-# Check sync status
-deciduous events status
-
-# Apply teammate events (after git pull)
-deciduous events rebuild
-
-# Compact old events periodically
-deciduous events checkpoint --clear-events
+deciduous sync            # after git pull: import teammates' records, export yours
+deciduous sync --check    # what is pending? (exit 1 if anything)
+git add .deciduous/sync/  # before git push
 ```
 
-Events auto-emit on add/link/status commands. Git merges event files automatically.
+Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits of one record merge field by field through a git merge driver; if a record file ever shows conflict markers, `deciduous sync` merges it.
 
 ### Session Start Checklist
 
@@ -3242,9 +3155,9 @@ deciduous doc show <doc_id>
 ### Multi-User Sync
 
 ```bash
-deciduous events status           # Check sync status
-deciduous events rebuild          # Apply teammate events
-deciduous events checkpoint --clear-events  # Compact old events
+deciduous sync                    # After git pull: import teammates' records, export yours
+deciduous sync --check            # Anything pending? (exit 1 if so)
+deciduous link a1b2c3d4 <id>      # Link to a teammate's node by change_id prefix
 ```
 
 ### Session Start Checklist

@@ -270,72 +270,59 @@ fn get_git_history() -> Vec<GitCommit> {
 #[derive(Serialize)]
 struct SyncStatus {
     initialized: bool,
-    pending_events: usize,
-    events_by_author: HashMap<String, usize>,
-    checkpoint_time: Option<String>,
-    checkpoint_nodes: Option<usize>,
-    checkpoint_edges: Option<usize>,
+    store_dir: Option<String>,
+    /// Records on disk, by kind
+    records: Option<crate::records::StoreCounts>,
+    /// Records the database has not applied yet (run `deciduous sync`)
+    pending_import: usize,
+    /// Database rows not yet written to the store
+    pending_export: usize,
+    /// Live node records by author
+    nodes_by_author: HashMap<String, usize>,
+    /// Legacy JSONL event log still present
+    legacy_events: bool,
 }
 
 fn get_sync_status() -> SyncStatus {
-    let deciduous_dir = std::path::PathBuf::from(".deciduous");
-    let sync_dir = deciduous_dir.join("sync");
-
-    if !sync_dir.exists() {
+    let Some(store) = crate::records::RecordStore::dir_for_db(&Database::db_path())
+        .and_then(crate::records::RecordStore::open)
+    else {
         return SyncStatus {
             initialized: false,
-            pending_events: 0,
-            events_by_author: HashMap::new(),
-            checkpoint_time: None,
-            checkpoint_nodes: None,
-            checkpoint_edges: None,
+            store_dir: None,
+            records: None,
+            pending_import: 0,
+            pending_export: 0,
+            nodes_by_author: HashMap::new(),
+            legacy_events: false,
         };
-    }
-
-    let author = crate::events::get_current_author();
-    let event_log = match crate::events::EventLog::new(&deciduous_dir, author) {
-        Ok(log) => log,
-        Err(_) => {
-            return SyncStatus {
-                initialized: true,
-                pending_events: 0,
-                events_by_author: HashMap::new(),
-                checkpoint_time: None,
-                checkpoint_nodes: None,
-                checkpoint_edges: None,
-            };
-        }
     };
 
-    // Get events after checkpoint
-    let events = event_log.get_events_after_checkpoint().unwrap_or_default();
-    let pending_events = events.len();
-
-    // Count by author
-    let mut events_by_author: HashMap<String, usize> = HashMap::new();
-    for event in &events {
-        *events_by_author
-            .entry(event.author().to_string())
-            .or_default() += 1;
+    let mut nodes_by_author: HashMap<String, usize> = HashMap::new();
+    for rec in store.read_nodes().records {
+        if rec.deleted_at.is_none() {
+            *nodes_by_author
+                .entry(rec.author.unwrap_or_else(|| "unknown".to_string()))
+                .or_default() += 1;
+        }
     }
 
-    // Get checkpoint info
-    let (checkpoint_time, checkpoint_nodes, checkpoint_edges) = match event_log.load_checkpoint() {
-        Ok(Some(cp)) => (
-            Some(cp.created_at.to_rfc3339()),
-            Some(cp.nodes.len()),
-            Some(cp.edges.len()),
-        ),
-        _ => (None, None, None),
+    let (pending_import, pending_export) = match Database::open() {
+        Ok(db) => match crate::records::reconcile(&db, &store, true) {
+            Ok(report) => (report.imported(), report.exported()),
+            Err(_) => (0, 0),
+        },
+        Err(_) => (0, 0),
     };
 
     SyncStatus {
         initialized: true,
-        pending_events,
-        events_by_author,
-        checkpoint_time,
-        checkpoint_nodes,
-        checkpoint_edges,
+        store_dir: Some(store.root().display().to_string()),
+        records: Some(store.counts()),
+        pending_import,
+        pending_export,
+        nodes_by_author,
+        legacy_events: store.has_legacy_events(),
     }
 }
 

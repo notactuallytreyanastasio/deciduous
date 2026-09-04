@@ -98,8 +98,7 @@ Through hooks, Deciduous **blocks** the AI from making code changes without firs
 │  ├── nodes/edges/graph    → Query the graph                                 │
 │  ├── doc attach/list/show → Document attachments on nodes                   │
 │  ├── serve                → Start web viewer                                │
-│  ├── sync                 → Export for GitHub Pages                         │
-│  └── diff export/apply    → Multi-user sync                                 │
+│  └── sync                → Multi-user sync + GitHub Pages export            │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
                                      │
@@ -225,23 +224,23 @@ Every node has two IDs:
 - **`id`** (integer): Local database primary key, different on each machine
 - **`change_id`** (UUID): Globally unique, stable across all machines
 
-### Patch Workflow
+### The Record Store
+
+`.deciduous/sync/` is a directory of one JSON file per record (`nodes/`, `edges/`,
+`themes/`, `tags/`), committed with the code. The database layer writes a record on
+every mutation, so the CLI, the MCP server, and the HTTP API all publish.
+`deciduous sync` reconciles the directory with the local database in both
+directions; the newer `updated_at` wins per record, deletions are tombstones, and
+edges import once both endpoints exist locally.
 
 ```bash
-# Alice exports her branch's decisions
-deciduous diff export --branch feature-auth -o .deciduous/patches/alice-auth.json
-
-# Bob applies Alice's patch (idempotent - safe to re-apply)
-deciduous diff apply .deciduous/patches/alice-auth.json
-
-# Merge conflicts? Patches use change_id, not local IDs
+git pull && deciduous sync          # receive
+git add .deciduous/sync/ && git push  # share
 ```
 
-**PR Workflow:**
-1. Export patch file
-2. Commit patch file to repo (NOT the database)
-3. Open PR
-4. Teammates pull and apply patches
+Records only ever reference `change_id`s. Two people adding records touch different
+files, so git merges without conflict; only concurrent edits of the *same* record
+conflict, on one small file. See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md).
 
 ---
 
@@ -402,7 +401,8 @@ src/
 │   └── templates.rs  # File templates (CLAUDE.md, hooks, etc.)
 ├── serve.rs          # HTTP server for web viewer
 ├── export.rs         # DOT export, PR writeup generation
-├── diff.rs           # Multi-user sync patches
+├── records.rs        # Multi-user sync: per-record JSON store + reconcile
+├── events.rs         # Reader for the pre-0.17 JSONL event log (migration only)
 ├── hooks.rs          # Claude Code hook management
 ├── opencode.rs       # OpenCode integration
 ├── github.rs         # GitHub API client
@@ -480,7 +480,7 @@ Deciduous is **external memory for AI-assisted development**. It:
 2. **Enforces discipline** through hooks that block unlogged work
 3. **Enables recovery** by providing a queryable graph of past reasoning
 4. **Tracks evolution** by capturing pivots when direction changes
-5. **Enables collaboration** through patch-based multi-user sync
+5. **Enables collaboration** through the git-tracked record store in `.deciduous/sync/`
 6. **Visualizes everything** through web and terminal interfaces
 
 The system works because it's integrated at the workflow level - AI assistants are trained (via CLAUDE.md) to use deciduous commands, and hooks prevent them from skipping the logging step.

@@ -52,6 +52,7 @@ pub mod mcp;
 pub mod narratives;
 pub mod opencode;
 pub mod pulse;
+pub mod records;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
@@ -63,11 +64,7 @@ pub use db::{
     DecisionSession, DeleteSummary, GitHubIssueCache, NodeDocument, NodeTheme, RoadmapConflict,
     RoadmapItem, RoadmapSyncState, Theme, CURRENT_SCHEMA,
 };
-pub use events::{
-    generate_edge_id, get_current_author, Checkpoint, CheckpointDocument, CheckpointEdge,
-    CheckpointNode, CheckpointNodeTheme, CheckpointTheme, Event, EventLog, EventLogError,
-    MaterializedState, RebuildResult,
-};
+pub use events::{Checkpoint, Event, MaterializedState};
 pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
     parse_node_range, DotConfig, WriteupConfig,
@@ -76,6 +73,11 @@ pub use hooks::{hooks_status, install_hooks, integration_status, uninstall_hooks
 pub use narratives::PivotChain;
 pub use opencode::{install_opencode, opencode_status, uninstall_opencode, update_opencode};
 pub use pulse::PulseReport;
+pub use records::{
+    edge_id, get_current_author, merge_record_files, merge_record_values, reconcile,
+    split_conflict_markers, ConflictRepair, EdgeRecord, LegacyImport, NodeRecord, RecordStore,
+    StoreCounts, SyncReport, TagRecord, ThemeRecord,
+};
 
 // Re-export TS trait for downstream use
 #[cfg(feature = "ts-rs")]

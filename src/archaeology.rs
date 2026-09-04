@@ -6,7 +6,6 @@
 //! - `supersede`: Mark nodes as superseded with optional cascade
 
 use crate::db::{build_metadata_json, Database, DecisionNode};
-use crate::events::{maybe_emit_add_edge, maybe_emit_add_node, maybe_emit_status_update};
 use colored::Colorize;
 use serde::Serialize;
 use std::collections::{HashSet, VecDeque};
@@ -114,26 +113,11 @@ pub fn create_pivot(
         )
         .map_err(|e| e.to_string())?;
 
-    // Emit sync event for observation
-    if let Ok(Some(obs_node)) = db.get_node(obs_id) {
-        maybe_emit_add_node(&obs_node);
-    }
-
     // Step 3: Link from_id → observation
     let reason_str = reason.unwrap_or("Discovery");
     let _edge1 = db
         .create_edge(from_id, obs_id, "leads_to", Some(reason_str))
         .map_err(|e| e.to_string())?;
-
-    // Emit sync event for edge
-    if let Ok(Some(obs_node)) = db.get_node(obs_id) {
-        maybe_emit_add_edge(
-            &from_node.change_id,
-            &obs_node.change_id,
-            "leads_to",
-            Some(reason_str),
-        );
-    }
 
     // Step 4: Create revisit node
     let revisit_id = db
@@ -150,25 +134,10 @@ pub fn create_pivot(
         )
         .map_err(|e| e.to_string())?;
 
-    if let Ok(Some(revisit_node)) = db.get_node(revisit_id) {
-        maybe_emit_add_node(&revisit_node);
-    }
-
     // Step 5: Link observation → revisit
     let _edge2 = db
         .create_edge(obs_id, revisit_id, "leads_to", Some("Forced rethinking"))
         .map_err(|e| e.to_string())?;
-
-    if let (Ok(Some(obs_node)), Ok(Some(revisit_node))) =
-        (db.get_node(obs_id), db.get_node(revisit_id))
-    {
-        maybe_emit_add_edge(
-            &obs_node.change_id,
-            &revisit_node.change_id,
-            "leads_to",
-            Some("Forced rethinking"),
-        );
-    }
 
     // Step 6: Create new decision node
     let metadata = build_metadata_json(confidence, None, None, None, branch.as_deref());
@@ -186,30 +155,14 @@ pub fn create_pivot(
         )
         .map_err(|e| e.to_string())?;
 
-    if let Ok(Some(decision_node)) = db.get_node(decision_id) {
-        maybe_emit_add_node(&decision_node);
-    }
-
     // Step 7: Link revisit → new decision
     let _edge3 = db
         .create_edge(revisit_id, decision_id, "leads_to", Some("New direction"))
         .map_err(|e| e.to_string())?;
 
-    if let (Ok(Some(revisit_node)), Ok(Some(decision_node))) =
-        (db.get_node(revisit_id), db.get_node(decision_id))
-    {
-        maybe_emit_add_edge(
-            &revisit_node.change_id,
-            &decision_node.change_id,
-            "leads_to",
-            Some("New direction"),
-        );
-    }
-
     // Step 8: Mark from_id as superseded
     db.update_node_status(from_id, "superseded")
         .map_err(|e| e.to_string())?;
-    maybe_emit_status_update(&from_node.change_id, "superseded");
 
     // Suppress unused variable warning
     let _ = metadata;
@@ -417,10 +370,6 @@ pub fn supersede(
         for s in &to_supersede {
             db.update_node_status(s.id, "superseded")
                 .map_err(|e| e.to_string())?;
-            // Emit sync event
-            if let Ok(Some(n)) = db.get_node(s.id) {
-                maybe_emit_status_update(&n.change_id, "superseded");
-            }
         }
     }
 

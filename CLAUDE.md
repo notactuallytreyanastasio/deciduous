@@ -127,7 +127,6 @@ deciduous nodes --type revisit
 ---
 
 <!-- deciduous:start -->
-<!-- deciduous:start -->
 ## Decision Graph Workflow
 
 **THIS IS MANDATORY. Log decisions IN REAL-TIME, not retroactively.**
@@ -400,20 +399,15 @@ git status                # Current state
 
 ### Multi-User Sync
 
-Sync decisions with teammates via event logs:
+The graph is shared through `.deciduous/sync/`: one JSON record per node/edge, committed with the code. Records are written automatically on every change.
 
 ```bash
-# Check sync status
-deciduous events status
-
-# Apply teammate events (after git pull)
-deciduous events rebuild
-
-# Compact old events periodically
-deciduous events checkpoint --clear-events
+deciduous sync            # after git pull: import teammates' records, export yours
+deciduous sync --check    # what is pending? (exit 1 if anything)
+git add .deciduous/sync/  # before git push
 ```
 
-Events auto-emit on add/link/status commands. Git merges event files automatically.
+Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits of one record merge field by field through a git merge driver; if a record file ever shows conflict markers, `deciduous sync` merges it.
 <!-- deciduous:end -->
 ## Session Start Checklist
 
@@ -507,6 +501,7 @@ src/
 ├── schema.rs            # Diesel table definitions
 ├── init.rs              # Project initialization (deciduous init)
 ├── serve.rs             # HTTP server for web UI
+├── records.rs           # Multi-user sync: per-record JSON store + reconcile
 └── export.rs            # DOT export and PR writeup generation
 
 web/                     # React/TypeScript web viewer source
@@ -522,7 +517,7 @@ web/                     # React/TypeScript web viewer source
 ├── deciduous.db         # SQLite database (decision graph)
 ├── documents/           # Content-hash named document attachments
 ├── config.toml          # Branch/feature configuration
-├── sync/                # Event-based multi-user sync files
+├── sync/                # Shared graph records, one JSON file each (tracked in git)
 └── narratives.md        # Narrative tracking
 ```
 
@@ -584,12 +579,10 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous commands` | Show recent command log |
 | `deciduous backup` | Create database backup |
 | `deciduous serve` | Start web viewer |
-| `deciduous sync` | Export graph to JSON file |
+| `deciduous sync` | Reconcile `.deciduous/sync/` records with the local DB, then export `docs/graph-data.json` |
 | `deciduous dot` | Export graph as DOT format |
 | `deciduous writeup` | Generate PR writeup markdown |
-| `deciduous diff export` | Export nodes as a shareable patch |
-| `deciduous diff apply` | Apply patches from teammates |
-| `deciduous diff status` | List available patches |
+| `deciduous sync --check` | Report pending sync changes, exit 1 if any |
 | `deciduous migrate` | Add change_id columns for sync |
 | `deciduous doc attach <node_id> <file>` | Attach file to a decision node |
 | `deciduous doc list [node_id]` | List attached documents (all or per-node) |
@@ -660,51 +653,21 @@ The database contains the decision graph. If you need to clear data:
 
 ## Multi-User Sync
 
-**Problem**: Multiple users work on the same codebase, each with a local `.deciduous/deciduous.db` (gitignored). How to share decisions?
-
-**Solution**: jj-inspired dual-ID model. Each node has:
-- `id` (integer): Local database primary key, different per machine
-- `change_id` (UUID): Globally unique, stable across all databases
-
-### Export/Apply Workflow
+Each machine keeps a private `.deciduous/deciduous.db` (gitignored). The shared truth is `.deciduous/sync/`: one JSON file per node, edge, theme, and tag, committed with the code. The database layer writes a record on every mutation, so CLI, MCP, and HTTP API all publish. `deciduous sync` reconciles both ways (newer `updated_at` wins; deletes are tombstones; edges import once both endpoints exist).
 
 ```bash
-# Export your branch's decisions as a patch
-deciduous diff export --branch feature-x -o .deciduous/patches/alice-feature.json
-
-# Export specific node IDs
-deciduous diff export --nodes 172-188 -o .deciduous/patches/feature.json --author alice
-
-# Apply patches from teammates (idempotent - safe to re-apply)
-deciduous diff apply .deciduous/patches/*.json
-
-# Preview what would change
-deciduous diff apply --dry-run .deciduous/patches/bob-refactor.json
-
-# Check patch status
-deciduous diff status
+git pull
+deciduous sync                       # import theirs, export yours, refresh docs/graph-data.json
+git add .deciduous/sync/ docs/graph-data.json
+git commit -m "graph: ..." && git push
 ```
 
-### PR Workflow
+- Node references anywhere: local id **or** change_id prefix (`deciduous link a1b2c3d4 58`).
+- Two people editing the same record: git merges it field by field via the `deciduous` merge driver (`.gitattributes` + `merge.deciduous.driver`, registered by init/update/sync). Leftover `<<<<<<<` markers are merged by `deciduous sync`.
+- `docs/graph-data.json` conflicts: take either side, rerun `deciduous sync`.
+- `deciduous events …` is a deprecated alias; `.deciduous/patches/` is dead.
 
-1. Create nodes locally while working
-2. Export: `deciduous diff export --branch my-feature -o .deciduous/patches/my-feature.json`
-3. Commit the patch file (NOT the database)
-4. Open PR with patch file included
-5. Teammates pull and apply: `deciduous diff apply .deciduous/patches/my-feature.json`
-6. **Idempotent**: Same patch applied twice = no duplicates
-
-### Patch Format (JSON)
-
-```json
-{
-  "version": "1.0",
-  "author": "alice",
-  "branch": "feature/auth",
-  "nodes": [{ "change_id": "uuid...", "title": "...", ... }],
-  "edges": [{ "from_change_id": "uuid1", "to_change_id": "uuid2", ... }]
-}
-```
+Full design: `docs/MULTI_USER_SYNC.md`.
 
 ---
 

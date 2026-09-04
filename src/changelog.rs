@@ -12,6 +12,19 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.17.0",
+        highlights: &[
+            "One multi-user sync mechanism: .deciduous/sync/ holds one JSON record per node/edge/theme/tag, tracked in git",
+            "Adds never conflict, deletes are tombstones, newer updated_at wins per record; no event log, checkpoint, or patches",
+            "Records are written by the database layer, so CLI, MCP, and HTTP API all publish automatically",
+            "`deciduous sync` reconciles both ways then exports docs/graph-data.json; `--check` exits 1 if anything is pending",
+            "Node references accept a change_id prefix everywhere (CLI and MCP) for linking to teammates' nodes",
+            "Concurrent edits of one record merge field by field: a git merge driver (`deciduous merge-record`) is registered by init/update/sync, and `deciduous sync` repairs files left with conflict markers",
+            "Legacy JSONL event logs are imported once (tolerating corrupted lines) and removed; `deciduous events` is a deprecated alias",
+            "Run `deciduous update` to fix .gitignore (it used to hide all of .deciduous/) and refresh templates",
+        ],
+    },
+    Release {
         version: "0.15.0",
         highlights: &[
             "Built-in MCP server: `deciduous mcp` exposes 31 tools over Model Context Protocol",

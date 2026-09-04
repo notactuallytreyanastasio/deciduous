@@ -162,37 +162,30 @@
 ### Automated Graph Sync Workflow
 <!-- roadmap:section id="ce8a9922-4b5b-498e-8467-175eb1600f6f" -->
 *Multi-user state management should be seamless*
-- [ ] **Default to diff/patch workflow for multi-user state management**
+- [x] **One sync mechanism: the record store** (v0.17.0)
   <!-- roadmap:item id="f91ec3e1-6bcf-4b32-a985-7bf31d82b66d" outcome_change_id="" -->
-  - With multiple users coming, graph database sync should be automated by the AI
-  - AI should automatically export patches when committing decision-related work
-  - AI should automatically apply patches when pulling/syncing
-  - Remove the manual friction of remembering to export/apply
-- [ ] **Auto-export on commit**
+  - `.deciduous/sync/` holds one JSON file per node/edge/theme/tag, tracked in git
+  - Replaced JSONL event logs + checkpoint, and the diff/patch export
+  - Adds never conflict; deletes are tombstones; newer `updated_at` wins per record
+- [x] **Auto-export on write** (v0.17.0)
   <!-- roadmap:item id="bb7d6ee1-5ef7-471a-b679-357767acfbbb" outcome_change_id="" -->
-  - Before any commit that touched decision-related code, auto-run `deciduous diff export`
-  - Use branch-specific patch files (e.g., `.deciduous/patches/$(whoami)-$(branch).json`)
-  - Include patch file in the commit automatically
-- [ ] **Auto-apply on pull**
+  - Records are written by the database layer, so CLI, MCP, and HTTP API all publish
+- [x] **Import on `deciduous sync`** (v0.17.0)
   <!-- roadmap:item id="be5d6235-15d9-48bd-a756-787e0ee2a116" outcome_change_id="" -->
-  - After `git pull`, detect new `.deciduous/patches/*.json` files
-  - Automatically apply them (idempotent - safe to re-apply)
-  - Report: "Applied 3 patches from teammates: alice-feature.json, bob-fix.json, carol-refactor.json"
+  - Bidirectional reconcile; `--check` reports pending work and exits 1
+  - Legacy JSONL logs are imported once, tolerantly, and removed
 - [ ] **Git hooks for automation**
   <!-- roadmap:item id="b52f95ab-cdfc-4b20-82e0-e2c951148c63" outcome_change_id="" -->
-  - `post-commit` hook: auto-export current branch's decisions
-  - `post-merge` hook: auto-apply any new patches
-  - `pre-push` hook: ensure graph is synced and patches are committed
-- [ ] **Claude Code workflow updates**
+  - `post-merge` hook: run `deciduous sync`
+  - `pre-push` hook: `deciduous sync --check`
+- [x] **Claude Code workflow updates** (v0.17.0)
   <!-- roadmap:item id="2f9ee8ee-b6a9-440e-8231-00b10b6dd085" outcome_change_id="" -->
-  - Update tooling templates to include auto-sync behavior
-  - AI should do this automatically, not wait for user to ask
-  - "Before pushing, I'll sync the decision graph..." should be default behavior
+  - `/sync`, `/recover`, `/decision` templates describe the record store
+  - Assistants link to teammates' nodes by change_id prefix
 - [ ] **Conflict resolution**
   <!-- roadmap:item id="60ea1123-20f1-4c37-81ac-e959a9682227" outcome_change_id="" -->
-  - When patches have conflicting nodes, use change_id to merge intelligently
-  - Prefer latest timestamp when edges conflict
-  - Interactive resolution mode if needed: `deciduous diff resolve`
+  - `deciduous sync` could offer to resolve a conflicted record file (pick newer side)
+  - Sync document attachments (`.deciduous/documents/`) alongside records
 
 ### GitHub Pages Site Fixes
 *Get the hosted web viewer working properly*

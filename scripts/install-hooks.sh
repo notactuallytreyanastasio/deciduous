@@ -209,6 +209,13 @@ while read local_ref local_sha remote_ref remote_sha; do
         if command -v deciduous &> /dev/null; then
             deciduous sync > /dev/null 2>&1 || true
 
+            # Graph records are how teammates receive decisions; pushing without them is a silent loss
+            if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- .deciduous/sync 2>/dev/null)" ]; then
+                echo ""
+                echo "WARNING: .deciduous/sync/ has uncommitted graph records."
+                echo "  git add .deciduous/sync && git commit -m 'graph: sync records'"
+            fi
+
             # Check if graph files have uncommitted changes
             GRAPH_FILES="docs/graph-data.json docs/demo/graph-data.json docs/git-history.json docs/demo/git-history.json"
             CHANGED_FILES=""

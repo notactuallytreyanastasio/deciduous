@@ -68,11 +68,11 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "from_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Source node ID"
                     },
                     "to_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Target node ID"
                     },
                     "rationale": {
@@ -97,11 +97,11 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "from_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Source node ID"
                     },
                     "to_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Target node ID"
                     }
                 },
@@ -116,7 +116,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "ID of the node to delete"
                     },
                     "dry_run": {
@@ -136,7 +136,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to update"
                     },
                     "status": {
@@ -156,7 +156,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to update"
                     },
                     "prompt": {
@@ -213,7 +213,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to display"
                     }
                 },
@@ -263,7 +263,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Starting node ID for the trace"
                     },
                     "max_depth": {
@@ -289,7 +289,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to get context for"
                     }
                 },
@@ -372,7 +372,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to attach the file to"
                     },
                     "file_path": {
@@ -395,7 +395,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to list documents for (omit for all)"
                     }
                 }
@@ -445,7 +445,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to tag"
                     },
                     "theme": {
@@ -464,7 +464,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                 "type": "object",
                 "properties": {
                     "node_id": {
-                        "type": "integer",
+                        "type": ["integer", "string"],
                         "description": "Node ID to untag"
                     },
                     "theme": {
@@ -624,11 +624,26 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
         },
 
         ToolDefinition {
-            name: "events_status".to_string(),
-            description: "Show the status of event-based multi-user sync: pending events, last checkpoint, teammate activity.".to_string(),
+            name: "sync_status".to_string(),
+            description: "Show multi-user sync status: whether the .deciduous/sync/ record store exists, how many records it holds, and how many changes are pending in each direction. Node ids are local; records are shared by change_id.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
+            }),
+        },
+
+        ToolDefinition {
+            name: "sync".to_string(),
+            description: "Reconcile the local database with the .deciduous/sync/ record store in both directions. Run after `git pull` to receive teammates' decisions (they get local ids here) and before `git push` so your decisions are written out. Creates the store on first use.".to_string(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "dry_run": {
+                        "type": "boolean",
+                        "description": "Only report what would change",
+                        "default": false
+                    }
+                }
             }),
         },
     ]
@@ -721,8 +736,8 @@ mod tests {
     #[test]
     fn test_tool_count() {
         let tools = all_tool_definitions();
-        // 6 CRUD + 5 Query + 6 Analysis + 2 Docs + 4 Themes + 5 Sessions + 3 Export = 31
-        assert_eq!(tools.len(), 31, "Expected 31 tools, got {}", tools.len());
+        // 6 CRUD + 5 Query + 6 Analysis + 2 Docs + 4 Themes + 5 Sessions + 2 Export + 2 Sync = 32
+        assert_eq!(tools.len(), 32, "Expected 32 tools, got {}", tools.len());
     }
 
     #[test]

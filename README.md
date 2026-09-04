@@ -159,7 +159,7 @@ deciduous init --both --windsurf   # All three
 
 ### MCP Server
 
-Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 31 tools for managing and querying the decision graph.
+Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph.
 
 > **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
 
@@ -257,7 +257,8 @@ deciduous doc attach 5 docs/redis-arch.png --ai-describe
 deciduous add outcome "Rate limiting working in prod" -c 95
 deciduous link 5 6 -r "Implementation complete"
 
-# Export the graph
+# Share it: records in .deciduous/sync/ are written as you go;
+# sync imports teammates' records and refreshes docs/graph-data.json
 deciduous sync
 ```
 
@@ -655,8 +656,9 @@ deciduous commands           # Recent command log
 deciduous serve              # Web viewer
 deciduous dot --png          # Generate PNG (requires graphviz)
 
-# Export
-deciduous sync               # Export to docs/
+# Sync + export
+deciduous sync               # Reconcile .deciduous/sync/ with the DB, export to docs/
+deciduous sync --check       # Anything pending? (exit 1 if so)
 deciduous writeup -t "Title" # Generate PR writeup
 deciduous backup             # Create database backup
 
@@ -702,7 +704,7 @@ deciduous completion fish
 - Attach relevant documents (diagrams, screenshots, specs) to decision nodes
 
 **Your team:**
-- Share decision context via patch files
+- Share decision context through `.deciduous/sync/`, one git-tracked JSON record per decision; concurrent edits of the same record merge field by field
 - Review PRs with full visibility into reasoning
 - Build institutional knowledge that survives turnover
 - Search past Q&A interactions to find answers that were already given
