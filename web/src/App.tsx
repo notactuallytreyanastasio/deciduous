@@ -2899,7 +2899,7 @@ export function App() {
       <div style={{
         display: 'flex',
         flex: 1,
-        overflow: 'hidden',
+        overflow: 'auto',
       }}>
         {/* Left Panel: Search Results, Narrative List, or Tree */}
         <div style={{
