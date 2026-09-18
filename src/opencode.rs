@@ -493,14 +493,14 @@ SESSION END -> Final audit
 
 ## Multi-User Sync
 
-Teammates' decisions arrive as records in `.deciduous/sync/` (one JSON file each). After `git pull`, pull them into your database:
+Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
 
 ```bash
 deciduous sync            # import their records, export yours, refresh docs/graph-data.json
 deciduous sync --check    # just report what is pending
 ```
 
-Every `add`, `link`, `status`, `delete` writes its record at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/sync/` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id. Concurrent edits of one record merge field by field through a git merge driver; leftover conflict markers are merged by `deciduous sync`.
+Every `add`, `link`, `status`, `delete` writes the file at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/graph.json` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id. Concurrent edits merge record by record through a git merge driver; leftover conflict markers are merged by `deciduous sync`.
 
 ## Why This Matters
 
@@ -668,7 +668,7 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
 ### Sync (teammates + GitHub Pages)
-- `sync` -> `deciduous sync` (reconcile `.deciduous/sync/` records with the local DB both ways, then export `docs/graph-data.json`)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways, then export `docs/graph-data.json`)
 - `sync --check` -> report pending changes without writing (exit 1 if any)
 - `sync --no-pages` -> reconcile only, skip the Pages export
 - Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
@@ -768,14 +768,14 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 
 ## Multi-User Sync
 
-Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/sync/`: one small JSON file per node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes its record immediately; `deciduous sync` reconciles the directory with the database in both directions.
+Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/graph.json`: one JSON file holding every node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes into it immediately; `deciduous sync` reconciles the file with the database in both directions.
 
 **Daily workflow:**
 ```bash
 git pull
 deciduous sync                # import teammates' records, export anything missing
 # ... work normally; records are written as you go ...
-git add .deciduous/sync/ && git commit -m "graph: <what you decided>"
+git add .deciduous/graph.json && git commit -m "graph: <what you decided>"
 git push
 ```
 
@@ -784,7 +784,7 @@ git push
 deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-**Two people edited the same record?** Git merges record files field by field through the `deciduous` merge driver (`deciduous sync` registers it in each clone). If a file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
+**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
 
 ## The Rule
 
@@ -1228,7 +1228,7 @@ arguments: []
 
 # Multi-User Sync
 
-The shared decision graph lives in `.deciduous/sync/` as one JSON file per node, edge, theme, and tag. Your SQLite database is a private cache of it. `deciduous sync` makes the two agree, in both directions.
+The shared decision graph lives in one file, `.deciduous/graph.json`, holding every node, edge, theme, and tag. Your SQLite database is a private cache of it. `deciduous sync` makes the two agree, in both directions.
 
 ## Step 1: Pull
 
@@ -1242,7 +1242,7 @@ git pull --rebase
 deciduous sync
 ```
 
-This creates `.deciduous/sync/` if needed, imports the pre-0.17 JSONL event log once, imports records you do not have (teammates' nodes get *local* ids here), exports database rows that have no record yet, and regenerates `docs/graph-data.json`. "Pending" edges are waiting for a node that has not been pulled yet.
+This creates `.deciduous/graph.json` if needed, folds in a 0.17 `.deciduous/sync/` directory or a pre-0.17 JSONL event log once, imports records you do not have (teammates' nodes get *local* ids here), exports database rows that have no record yet, and regenerates `docs/graph-data.json`. "Pending" edges are waiting for a node that has not been pulled yet.
 
 ## Step 3: Link across users if needed
 
@@ -1256,7 +1256,7 @@ deciduous link a1b2c3d4 42 -r "our action implements their goal"
 ## Step 4: Commit and push
 
 ```bash
-git add .deciduous/sync/ docs/graph-data.json docs/git-history.json
+git add .deciduous/graph.json docs/graph-data.json docs/git-history.json
 git commit -m "graph: <what was decided>"
 git push
 ```
@@ -1265,7 +1265,7 @@ git push
 
 ## Merge conflicts
 
-- **A file under `.deciduous/sync/`**: two people edited the same record. Normally git merges it field by field through the `deciduous` merge driver, so you never see this. If a file has `<<<<<<<` markers, run `deciduous sync`: it merges the sides the same way and imports the result.
+- **`.deciduous/graph.json`**: two people changed the graph. Normally git merges it record by record through the `deciduous` merge driver, so you never see this. If it has `<<<<<<<` markers, run `deciduous sync`: it merges the sides the same way and imports the result.
 - **`docs/graph-data.json`**: never hand-merge it. Take either side and run `deciduous sync` to regenerate.
 
 ## Troubleshooting
@@ -1275,7 +1275,7 @@ git push
 | Teammate's nodes missing | `git pull` then `deciduous sync` |
 | "No node has a change_id starting with ..." | You have not synced their record yet |
 | Record file unreadable | `git checkout -- <file>` or fix the JSON; sync skips it and continues |
-| `.deciduous/sync/` not in git | `deciduous update` fixes `.gitignore` |
+| `.deciduous/graph.json` not in git | `deciduous update` fixes `.gitignore` |
 "#;
 
 /// OpenCode command template: /decision-graph
@@ -3046,15 +3046,15 @@ deciduous sync    # Export for static hosting
 
 ### Multi-User Sync
 
-The graph is shared through `.deciduous/sync/`: one JSON record per node/edge, committed with the code. Records are written automatically on every change.
+The graph is shared through one file, `.deciduous/graph.json`, committed with the code. It is written automatically on every change.
 
 ```bash
 deciduous sync            # after git pull: import teammates' records, export yours
 deciduous sync --check    # what is pending? (exit 1 if anything)
-git add .deciduous/sync/  # before git push
+git add .deciduous/graph.json  # before git push
 ```
 
-Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits of one record merge field by field through a git merge driver; if a record file ever shows conflict markers, `deciduous sync` merges it.
+Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits merge record by record through a git merge driver; if the file ever shows conflict markers, `deciduous sync` merges it.
 
 ### Session Start Checklist
 

@@ -224,23 +224,25 @@ Every node has two IDs:
 - **`id`** (integer): Local database primary key, different on each machine
 - **`change_id`** (UUID): Globally unique, stable across all machines
 
-### The Record Store
+### The Graph File
 
-`.deciduous/sync/` is a directory of one JSON file per record (`nodes/`, `edges/`,
-`themes/`, `tags/`), committed with the code. The database layer writes a record on
-every mutation, so the CLI, the MCP server, and the HTTP API all publish.
-`deciduous sync` reconciles the directory with the local database in both
-directions; the newer `updated_at` wins per record, deletions are tombstones, and
-edges import once both endpoints exist locally.
+`.deciduous/graph.json` holds the whole shared graph — `nodes`, `edges`, `themes`,
+and `tags`, each a map keyed by `change_id` — and is committed with the code. The
+database layer writes it on every mutation, so the CLI, the MCP server, and the
+HTTP API all publish. `deciduous sync` reconciles the file with the local database
+in both directions; the newer `updated_at` wins per record, deletions are
+tombstones, and edges import once both endpoints exist locally.
 
 ```bash
 git pull && deciduous sync          # receive
-git add .deciduous/sync/ && git push  # share
+git add .deciduous/graph.json && git push  # share
 ```
 
-Records only ever reference `change_id`s. Two people adding records touch different
-files, so git merges without conflict; only concurrent edits of the *same* record
-conflict, on one small file. See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md).
+Records only ever reference `change_id`s. Because everyone writes one file, git
+sees a conflict on every concurrent change and hands both versions to the
+`deciduous merge-record` driver, which merges the document record by record: an
+addition from either side survives, and a record both sides changed merges field by
+field. See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md).
 
 ---
 
@@ -480,7 +482,7 @@ Deciduous is **external memory for AI-assisted development**. It:
 2. **Enforces discipline** through hooks that block unlogged work
 3. **Enables recovery** by providing a queryable graph of past reasoning
 4. **Tracks evolution** by capturing pivots when direction changes
-5. **Enables collaboration** through the git-tracked record store in `.deciduous/sync/`
+5. **Enables collaboration** through the git-tracked graph file `.deciduous/graph.json`
 6. **Visualizes everything** through web and terminal interfaces
 
 The system works because it's integrated at the workflow level - AI assistants are trained (via CLAUDE.md) to use deciduous commands, and hooks prevent them from skipping the logging step.

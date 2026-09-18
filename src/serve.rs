@@ -270,7 +270,7 @@ fn get_git_history() -> Vec<GitCommit> {
 #[derive(Serialize)]
 struct SyncStatus {
     initialized: bool,
-    store_dir: Option<String>,
+    store_path: Option<String>,
     /// Records on disk, by kind
     records: Option<crate::records::StoreCounts>,
     /// Records the database has not applied yet (run `deciduous sync`)
@@ -284,12 +284,12 @@ struct SyncStatus {
 }
 
 fn get_sync_status() -> SyncStatus {
-    let Some(store) = crate::records::RecordStore::dir_for_db(&Database::db_path())
+    let Some(store) = crate::records::RecordStore::path_for_db(&Database::db_path())
         .and_then(crate::records::RecordStore::open)
     else {
         return SyncStatus {
             initialized: false,
-            store_dir: None,
+            store_path: None,
             records: None,
             pending_import: 0,
             pending_export: 0,
@@ -317,7 +317,7 @@ fn get_sync_status() -> SyncStatus {
 
     SyncStatus {
         initialized: true,
-        store_dir: Some(store.root().display().to_string()),
+        store_path: Some(store.path().display().to_string()),
         records: Some(store.counts()),
         pending_import,
         pending_export,

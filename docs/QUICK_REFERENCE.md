@@ -156,7 +156,7 @@ deciduous sync --no-pages
 deciduous link a1b2c3d4 42 -r "implements their goal"
 
 # Then commit the records
-git add .deciduous/sync/
+git add .deciduous/graph.json
 ```
 
 ---
@@ -363,7 +363,7 @@ All bootstrapped by `deciduous init` and updated by `deciduous update`.
 | `.deciduous/.version` | Binary version for update detection |
 | `.deciduous/.latest_version` | Cached latest version from crates.io |
 | `.deciduous/.last_version_check` | Timestamp of last version check |
-| `.deciduous/sync/` | Shared graph records, one JSON file each (tracked) |
+| `.deciduous/graph.json` | The shared graph: every node, edge, theme, and tag (tracked) |
 | `.claude/hooks/` | Claude Code hooks |
 | `.claude/commands/` | Claude Code slash commands |
 | `.claude/skills/` | Claude Code skills |

@@ -162,9 +162,9 @@
 ### Automated Graph Sync Workflow
 <!-- roadmap:section id="ce8a9922-4b5b-498e-8467-175eb1600f6f" -->
 *Multi-user state management should be seamless*
-- [x] **One sync mechanism: the record store** (v0.17.0)
+- [x] **One sync mechanism: a git-tracked record store** (v0.17.0, superseded by v0.18.0)
   <!-- roadmap:item id="f91ec3e1-6bcf-4b32-a985-7bf31d82b66d" outcome_change_id="" -->
-  - `.deciduous/sync/` holds one JSON file per node/edge/theme/tag, tracked in git
+  - `.deciduous/sync/` held one JSON file per node/edge/theme/tag, tracked in git
   - Replaced JSONL event logs + checkpoint, and the diff/patch export
   - Adds never conflict; deletes are tombstones; newer `updated_at` wins per record
 - [x] **Auto-export on write** (v0.17.0)
@@ -180,7 +180,7 @@
   - `pre-push` hook: `deciduous sync --check`
 - [x] **Claude Code workflow updates** (v0.17.0)
   <!-- roadmap:item id="2f9ee8ee-b6a9-440e-8231-00b10b6dd085" outcome_change_id="" -->
-  - `/sync`, `/recover`, `/decision` templates describe the record store
+  - `/sync`, `/recover`, `/decision` templates describe the shared graph
   - Assistants link to teammates' nodes by change_id prefix
 - [ ] **Conflict resolution**
   <!-- roadmap:item id="60ea1123-20f1-4c37-81ac-e959a9682227" outcome_change_id="" -->

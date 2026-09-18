@@ -84,7 +84,7 @@ All slash commands are bootstrapped by `deciduous init` and updated by `deciduou
 | `/serve-ui` | Start the decision graph web viewer |
 | `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history (archaeology) |
-| `/sync` | Multi-user sync - reconcile .deciduous/sync/ records with the local database |
+| `/sync` | Multi-user sync - reconcile .deciduous/graph.json with the local database |
 
 ---
 
@@ -148,7 +148,7 @@ deciduous nodes --type revisit
 | `/serve-ui` | Start the decision graph web viewer |
 | `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Multi-user sync - reconcile .deciduous/sync/ records with the local database |
+| `/sync` | Multi-user sync - reconcile .deciduous/graph.json with the local database |
 
 ### Available Skills
 
@@ -380,15 +380,15 @@ git status                # Current state
 
 ### Multi-User Sync
 
-The graph is shared through `.deciduous/sync/`: one JSON record per node/edge, committed with the code. Records are written automatically on every change.
+The graph is shared through one file, `.deciduous/graph.json`, committed with the code. It is written automatically on every change.
 
 ```bash
 deciduous sync            # after git pull: import teammates' records, export yours
 deciduous sync --check    # what is pending? (exit 1 if anything)
-git add .deciduous/sync/  # before git push
+git add .deciduous/graph.json  # before git push
 ```
 
-Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits of one record merge field by field through a git merge driver; if a record file ever shows conflict markers, `deciduous sync` merges it.
+Local node ids differ per machine. To link to a teammate's node, use its change_id prefix (the CHANGE column in `deciduous nodes`): `deciduous link a1b2c3d4 <id> -r "..."`. Concurrent edits merge record by record through a git merge driver; if the file ever shows conflict markers, `deciduous sync` merges it.
 <!-- deciduous:end -->
 ## Session Start Checklist
 
@@ -558,7 +558,7 @@ This ensures viewing a single chain shows the entire decision tree, not a trunca
 | `deciduous commands` | Show recent command log |
 | `deciduous backup` | Create database backup |
 | `deciduous serve` | Start web viewer |
-| `deciduous sync` | Reconcile `.deciduous/sync/` records with the local DB, then export `docs/graph-data.json` |
+| `deciduous sync` | Reconcile `.deciduous/graph.json` with the local DB, then export `docs/graph-data.json` |
 | `deciduous dot` | Export graph as DOT format |
 | `deciduous writeup` | Generate PR writeup markdown |
 | `deciduous sync --check` | Report pending sync changes, exit 1 if any |
@@ -632,19 +632,19 @@ The database contains the decision graph. If you need to clear data:
 
 ## Multi-User Sync
 
-Each machine keeps a private `.deciduous/deciduous.db` (gitignored). The shared truth is `.deciduous/sync/`: one JSON file per node, edge, theme, and tag, committed with the code. The database layer writes a record on every mutation, so CLI, MCP, and HTTP API all publish. `deciduous sync` reconciles both ways (newer `updated_at` wins; deletes are tombstones; edges import once both endpoints exist).
+Each machine keeps a private `.deciduous/deciduous.db` (gitignored). The shared truth is `.deciduous/graph.json`: one file holding every node, edge, theme, and tag, committed with the code. The database layer writes it on every mutation, so CLI, MCP, and HTTP API all publish. `deciduous sync` reconciles both ways (newer `updated_at` wins; deletes are tombstones; edges import once both endpoints exist).
 
 ```bash
 git pull
 deciduous sync                       # import theirs, export yours, refresh docs/graph-data.json
-git add .deciduous/sync/ docs/graph-data.json
+git add .deciduous/graph.json docs/graph-data.json
 git commit -m "graph: ..." && git push
 ```
 
 - Node references anywhere: local id **or** change_id prefix (`deciduous link a1b2c3d4 58`).
-- Two people editing the same record: git merges it field by field via the `deciduous` merge driver (`.gitattributes` + `merge.deciduous.driver`, registered by init/update/sync). Leftover `<<<<<<<` markers are merged by `deciduous sync`.
+- Two people editing the graph: git merges the file record by record via the `deciduous` merge driver (`.gitattributes` + `merge.deciduous.driver`, registered by init/update/sync) — both sides' additions survive, and a record both changed merges field by field. Leftover `<<<<<<<` markers are merged by `deciduous sync`.
 - `docs/graph-data.json` conflicts: take either side, rerun `deciduous sync`.
-- `deciduous events …` is a deprecated alias; `.deciduous/patches/` is dead.
+- `deciduous events …` is a deprecated alias; `.deciduous/patches/` is dead. A 0.17 `.deciduous/sync/` directory is folded into `graph.json` on the next `sync`, `init`, or `update`.
 
 Full design: `docs/MULTI_USER_SYNC.md`.
 

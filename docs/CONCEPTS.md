@@ -226,22 +226,23 @@ Every node has:
 - `id` (integer): Local primary key, different on each machine
 - `change_id` (UUID): Globally unique, stable everywhere
 
-### The Record Store
+### The Graph File
 
-`.deciduous/sync/` holds one small JSON file per node, edge, theme, and tag, and is
-committed with the code. Every `add`, `link`, `status`, and `delete` writes its
-record immediately. Records reference each other by `change_id`, never by local id,
-so they mean the same thing on every machine.
+`.deciduous/graph.json` holds every node, edge, theme, and tag, and is committed
+with the code. Every `add`, `link`, `status`, and `delete` writes it immediately.
+Records reference each other by `change_id`, never by local id, so they mean the
+same thing on every machine.
 
 ```bash
 git pull
 deciduous sync        # import teammates' records, export yours, refresh docs/graph-data.json
-git add .deciduous/sync/ && git commit -m "graph: ..." && git push
+git add .deciduous/graph.json && git commit -m "graph: ..." && git push
 ```
 
-Adding records never conflicts in git (different files). Deleting writes a tombstone
-rather than removing the file. To link to a teammate's node, use the change_id
-prefix from the CHANGE column of `deciduous nodes`:
+Concurrent changes always conflict in git — it is one file — and are always merged
+by the `deciduous` merge driver, record by record, so both sides' additions survive.
+Deleting writes a tombstone rather than dropping the record. To link to a teammate's
+node, use the change_id prefix from the CHANGE column of `deciduous nodes`:
 
 ```bash
 deciduous link a1b2c3d4 42 -r "our action implements their goal"
