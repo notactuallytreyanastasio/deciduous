@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP API Reference - Deciduous</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #24292f; line-height: 1.6; }
+      .container { max-width: 1400px; margin: 0 auto; padding: 60px 20px; }
+      .narrow { max-width: 900px; margin: 0 auto; }
+      .top-nav { display: flex; justify-content: center; gap: 30px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #d0d7de; }
+      .top-nav a { color: #57606a; text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
+      .top-nav a:hover { color: #0969da; }
+      .top-nav a.active { color: #0969da; }
+      header { text-align: center; margin-bottom: 40px; }
+      header h1 { font-size: 2.4rem; font-weight: 700; color: #24292f; margin-bottom: 8px; letter-spacing: -0.5px; }
+      .tagline { font-size: 1rem; color: #57606a; }
+      section { margin-top: 40px; padding-top: 30px; border-top: 1px solid #d0d7de; }
+      h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 16px; }
+      p { color: #57606a; margin-bottom: 10px; font-size: 0.93rem; }
+      a { color: #0969da; text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      code { background: #f6f8fa; padding: 2px 5px; border-radius: 3px; font-family: "SF Mono", Consolas, monospace; font-size: 0.85em; }
+      ul { margin: 8px 0 12px 20px; color: #57606a; font-size: 0.92rem; }
+      li { margin-bottom: 4px; }
+
+      /* Tool cards */
+      .tool-card { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 10px; padding: 16px 20px; margin: 12px 0; }
+      .tool-name { font-family: "SF Mono", Consolas, monospace; font-size: 0.95rem; font-weight: 700; color: #0969da; }
+      .tool-desc { color: #57606a; font-size: 0.88rem; margin: 4px 0 0; }
+      .tool-params { margin-top: 10px; }
+      .tool-params table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+      .tool-params th { text-align: left; padding: 6px 10px; background: #eaeef2; border: 1px solid #d0d7de; font-weight: 600; color: #24292f; }
+      .tool-params td { padding: 6px 10px; border: 1px solid #d0d7de; color: #57606a; }
+      .tool-params code { font-size: 0.85em; }
+      .tag { display: inline-block; font-size: 0.68rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
+      .tag-cli { background: #dbeafe; color: #1e40af; }
+      .tag-mcp { background: #dcfce7; color: #166534; }
+
+      /* Grid for compact tools */
+      .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+      @media (max-width: 700px) { .tool-grid { grid-template-columns: 1fr; } }
+
+      /* Architecture table */
+      .arch-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.88rem; }
+      .arch-table th { text-align: left; padding: 8px 12px; background: #f6f8fa; border: 1px solid #d0d7de; font-weight: 600; }
+      .arch-table td { padding: 8px 12px; border: 1px solid #d0d7de; color: #57606a; }
+
+      footer { text-align: center; padding: 40px 0; margin-top: 40px; color: #6e7781; font-size: 0.9rem; }
+      footer a { color: #0969da; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+      <div class="narrow">
+        <nav class="top-nav">
+          <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
+          <a href="mcp.html" class="active">MCP</a>
+          <a href="story.html">Story</a>
+          <a href="demo/">Live Graph</a>
+          <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+        </nav>
+
+        <header>
+          <h1>MCP API Reference</h1>
+          <p class="tagline">All 31 tools. Parameters, types, CLI equivalents.<br><a href="mcp.html">&larr; Back to Quick Start &amp; Tutorial</a></p>
+        </header>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Graph CRUD</h2>
+
+          <div class="tool-card">
+            <span class="tool-name">add_node</span><span class="tag tag-cli">deciduous add</span>
+            <p class="tool-desc">Create a node in the decision graph.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+              <tr><td><code>node_type</code></td><td>string</td><td>Yes</td><td>goal, decision, option, action, outcome, observation, revisit</td></tr>
+              <tr><td><code>title</code></td><td>string</td><td>Yes</td><td>Node title</td></tr>
+              <tr><td><code>description</code></td><td>string</td><td></td><td>Longer description</td></tr>
+              <tr><td><code>confidence</code></td><td>int</td><td></td><td>0-100</td></tr>
+              <tr><td><code>prompt</code></td><td>string</td><td></td><td>Verbatim user prompt</td></tr>
+              <tr><td><code>files</code></td><td>string</td><td></td><td>Comma-separated file paths</td></tr>
+              <tr><td><code>branch</code></td><td>string</td><td></td><td>Git branch (auto-detected)</td></tr>
+              <tr><td><code>commit</code></td><td>string</td><td></td><td>Commit hash or "HEAD"</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-name">link_nodes</span><span class="tag tag-cli">deciduous link</span>
+            <p class="tool-desc">Create an edge between two nodes.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+              <tr><td><code>from_id</code></td><td>int</td><td>Yes</td><td>Source node ID</td></tr>
+              <tr><td><code>to_id</code></td><td>int</td><td>Yes</td><td>Target node ID</td></tr>
+              <tr><td><code>rationale</code></td><td>string</td><td></td><td>Why this connection exists</td></tr>
+              <tr><td><code>edge_type</code></td><td>string</td><td></td><td>leads_to, requires, chosen, rejected, blocks, enables</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">unlink_nodes</span><span class="tag tag-cli">deciduous unlink</span><p class="tool-desc">Remove an edge. Params: <code>from_id</code>, <code>to_id</code> (both required)</p></div>
+            <div class="tool-card"><span class="tool-name">delete_node</span><span class="tag tag-cli">deciduous delete</span><p class="tool-desc">Delete a node + edges. Params: <code>node_id</code> (req), <code>dry_run</code> (bool)</p></div>
+            <div class="tool-card"><span class="tool-name">update_status</span><span class="tag tag-cli">deciduous status</span><p class="tool-desc">Change status. Params: <code>node_id</code>, <code>status</code> (both required)</p></div>
+            <div class="tool-card"><span class="tool-name">update_prompt</span><span class="tag tag-cli">deciduous prompt</span><p class="tool-desc">Set prompt text. Params: <code>node_id</code>, <code>prompt</code> (both required)</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Querying</h2>
+
+          <div class="tool-card">
+            <span class="tool-name">list_nodes</span><span class="tag tag-cli">deciduous nodes</span>
+            <p class="tool-desc">List nodes with optional filters.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Description</th></tr>
+              <tr><td><code>branch</code></td><td>string</td><td>Filter by git branch</td></tr>
+              <tr><td><code>node_type</code></td><td>string</td><td>Filter by type</td></tr>
+              <tr><td><code>status</code></td><td>string</td><td>Filter by status</td></tr>
+              <tr><td><code>theme</code></td><td>string</td><td>Filter by theme name</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-name">search_nodes</span><span class="tag tag-mcp">MCP-only</span>
+            <p class="tool-desc">Full-text search across titles, descriptions, and prompts.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+              <tr><td><code>query</code></td><td>string</td><td>Yes</td><td>Search text</td></tr>
+              <tr><td><code>node_type</code></td><td>string</td><td></td><td>Filter results by type</td></tr>
+              <tr><td><code>branch</code></td><td>string</td><td></td><td>Filter results by branch</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">list_edges</span><span class="tag tag-cli">deciduous edges</span><p class="tool-desc">All edges. No params.</p></div>
+            <div class="tool-card"><span class="tool-name">show_node</span><span class="tag tag-cli">deciduous show</span><p class="tool-desc">Detailed node view. Param: <code>node_id</code> (req)</p></div>
+            <div class="tool-card"><span class="tool-name">get_graph</span><span class="tag tag-cli">deciduous graph</span><p class="tool-desc">Full graph JSON. No params.</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Analysis</h2>
+
+          <div class="tool-card">
+            <span class="tool-name">trace_chain</span><span class="tag tag-mcp">MCP-only</span>
+            <p class="tool-desc">BFS traversal from a node. Returns full connected subgraph with depth.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+              <tr><td><code>node_id</code></td><td>int</td><td>Yes</td><td>Start node</td></tr>
+              <tr><td><code>max_depth</code></td><td>int</td><td></td><td>0 = unlimited</td></tr>
+              <tr><td><code>direction</code></td><td>string</td><td></td><td>both, outgoing, incoming</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-name">get_node_context</span><span class="tag tag-mcp">MCP-only</span>
+            <p class="tool-desc">Node's full neighborhood: parents, children, siblings, edges.</p>
+            <div class="tool-params"><table><tr><th>Param</th><th>Type</th><th>Required</th></tr><tr><td><code>node_id</code></td><td>int</td><td>Yes</td></tr></table></div>
+          </div>
+
+          <div class="tool-card">
+            <span class="tool-name">get_timeline</span><span class="tag tag-cli">deciduous archaeology timeline</span>
+            <p class="tool-desc">Chronological view, newest first.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Description</th></tr>
+              <tr><td><code>limit</code></td><td>int</td><td>Max nodes (default 50, 0=all)</td></tr>
+              <tr><td><code>node_type</code></td><td>string</td><td>Filter by type</td></tr>
+              <tr><td><code>branch</code></td><td>string</td><td>Filter by branch</td></tr>
+              <tr><td><code>since</code></td><td>string</td><td>YYYY-MM-DD cutoff</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">get_pulse</span><span class="tag tag-cli">deciduous pulse</span><p class="tool-desc">Graph health: counts, active goals, orphans. Param: <code>branch</code></p></div>
+            <div class="tool-card"><span class="tool-name">find_orphans</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">Nodes violating connection rules. No params.</p></div>
+            <div class="tool-card"><span class="tool-name">get_branch_summary</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">All nodes on a branch, by type. Param: <code>branch</code> (req)</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Sessions</h2>
+
+          <div class="tool-card">
+            <span class="tool-name">start_session</span><span class="tag tag-mcp">MCP-only</span>
+            <p class="tool-desc">Begin a conversation session. Creates root goal; all add_node calls auto-associate.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
+              <tr><td><code>name</code></td><td>string</td><td>Yes</td><td>Session name ("cowork: auth refactor")</td></tr>
+              <tr><td><code>goal_title</code></td><td>string</td><td>Yes</td><td>Root goal title</td></tr>
+              <tr><td><code>goal_prompt</code></td><td>string</td><td></td><td>Original user prompt (verbatim)</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">end_session</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">Close active session. Param: <code>summary</code> (optional)</p></div>
+            <div class="tool-card"><span class="tool-name">resume_session</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">Reconnect to a previous session. Param: <code>session_id</code> (req)</p></div>
+            <div class="tool-card"><span class="tool-name">get_session</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">View session + nodes. Param: <code>session_id</code> (omit = current)</p></div>
+            <div class="tool-card"><span class="tool-name">list_sessions</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">All sessions. Param: <code>active_only</code> (bool)</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Documents &amp; Themes</h2>
+
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">attach_document</span><span class="tag tag-cli">deciduous doc attach</span><p class="tool-desc">Attach file to node. Params: <code>node_id</code>, <code>file_path</code> (req), <code>description</code></p></div>
+            <div class="tool-card"><span class="tool-name">list_documents</span><span class="tag tag-cli">deciduous doc list</span><p class="tool-desc">List attachments. Param: <code>node_id</code> (omit = all)</p></div>
+            <div class="tool-card"><span class="tool-name">create_theme</span><span class="tag tag-cli">deciduous themes create</span><p class="tool-desc">Create theme. Params: <code>name</code> (req), <code>color</code>, <code>description</code></p></div>
+            <div class="tool-card"><span class="tool-name">list_themes</span><span class="tag tag-cli">deciduous themes list</span><p class="tool-desc">All themes. No params.</p></div>
+            <div class="tool-card"><span class="tool-name">tag_node</span><span class="tag tag-cli">deciduous tag add</span><p class="tool-desc">Tag a node. Params: <code>node_id</code>, <code>theme</code> (both req)</p></div>
+            <div class="tool-card"><span class="tool-name">untag_node</span><span class="tag tag-cli">deciduous tag remove</span><p class="tool-desc">Untag a node. Params: <code>node_id</code>, <code>theme</code> (both req)</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Export</h2>
+
+          <div class="tool-card">
+            <span class="tool-name">export_dot</span><span class="tag tag-cli">deciduous dot</span>
+            <p class="tool-desc">Export graph as DOT format for Graphviz visualization.</p>
+            <div class="tool-params"><table>
+              <tr><th>Param</th><th>Type</th><th>Description</th></tr>
+              <tr><td><code>roots</code></td><td>string</td><td>Root node IDs (comma-separated, traverses children)</td></tr>
+              <tr><td><code>nodes</code></td><td>string</td><td>Specific IDs or ranges ("1-11", "1,3,5")</td></tr>
+              <tr><td><code>title</code></td><td>string</td><td>Graph title</td></tr>
+              <tr><td><code>rankdir</code></td><td>string</td><td>TB or LR</td></tr>
+            </table></div>
+          </div>
+
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">generate_writeup</span><span class="tag tag-cli">deciduous writeup</span><p class="tool-desc">PR writeup. Params: <code>title</code>, <code>roots</code>, <code>nodes</code>, <code>no_dot</code>, <code>no_test_plan</code></p></div>
+            <div class="tool-card"><span class="tool-name">events_status</span><span class="tag tag-cli">deciduous events status</span><p class="tool-desc">Multi-user sync status. No params.</p></div>
+          </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Architecture</h2>
+          <p>Functional core, imperative shell. Everything except the server loop is testable without IO.</p>
+
+          <table class="arch-table">
+            <tr><th>Module</th><th>Role</th><th>IO</th></tr>
+            <tr><td><code>protocol.rs</code></td><td>JSON-RPC 2.0 + MCP message types, parsing, constructors</td><td>None</td></tr>
+            <tr><td><code>tools.rs</code></td><td>31 tool definitions with JSON Schema parameters</td><td>None</td></tr>
+            <tr><td><code>handlers.rs</code></td><td>Tool dispatch: (Database, Value) &rarr; Result&lt;Value&gt;</td><td>Database</td></tr>
+            <tr><td><code>query.rs</code></td><td>BFS, node context, timeline, pulse, orphans (pure)</td><td>None</td></tr>
+            <tr><td><code>mod.rs</code></td><td>Stdin/stdout loop, session state, MCP lifecycle</td><td>Stdin/stdout</td></tr>
+          </table>
+
+          <p>108 MCP-specific tests. 272 total across the codebase.</p>
+        </section>
+
+        <footer>
+          <a href="mcp.html">&larr; MCP Tutorial</a> &middot; <a href="index.html">Home</a> &middot; <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+        </footer>
+      </div>
+    </div>
+</body>
+</html>
