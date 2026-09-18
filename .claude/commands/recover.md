@@ -164,14 +164,14 @@ SESSION END -> Final audit
 
 ## Multi-User Sync
 
-Teammates' decisions arrive as records in `.deciduous/sync/` (one JSON file each). After `git pull`, pull them into your database:
+Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
 
 ```bash
 deciduous sync            # import their records, export yours, refresh docs/graph-data.json
 deciduous sync --check    # just report what is pending
 ```
 
-Every `add`, `link`, `status`, `delete` writes its record at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/sync/` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id.
+Every `add`, `link`, `status`, `delete` writes the file at once, so the only discipline needed is: `deciduous sync` after pull, commit `.deciduous/graph.json` before push. To link to a teammate's node use its change_id prefix (CHANGE column in `deciduous nodes`), not its local id.
 
 ## Why This Matters
 
@@ -179,4 +179,4 @@ Every `add`, `link`, `status`, `delete` writes its record at once, so the only d
 - The graph survives - query it early, query it often
 - Retroactive logging misses details - log in the moment
 - The user sees the graph live - show your work
-- Records in `.deciduous/sync/` share reasoning with teammates through ordinary git
+- `.deciduous/graph.json` shares reasoning with teammates through ordinary git

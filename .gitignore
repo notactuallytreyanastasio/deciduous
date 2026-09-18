@@ -50,7 +50,7 @@ proptest-regressions/
 # deploy secrets (real token — never commit)
 deploy/.env
 
-# Deciduous: local database stays private, shared graph records are tracked
+# Deciduous: local database stays private, the shared graph is tracked
 .deciduous/*
 !.deciduous/config.toml
-!.deciduous/sync/
+!.deciduous/graph.json

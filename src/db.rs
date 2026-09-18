@@ -641,12 +641,12 @@ type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 
 /// Database connection wrapper with connection pool.
 ///
-/// When a record store is attached (automatically, if a `sync/` directory
+/// When a graph file is attached (automatically, if `graph.json` sits
 /// sits next to the database file), every graph mutation is mirrored into
 /// it so teammates receive it through git. See [`crate::records`].
 pub struct Database {
     pool: DbPool,
-    /// Attached record store, if any. Behind a lock so `deciduous sync` can
+    /// Attached graph file, if any. Behind a lock so `deciduous sync` can
     /// attach a store it just created without a mutable handle.
     store: std::sync::RwLock<Option<RecordStore>>,
 }
@@ -726,18 +726,18 @@ impl Database {
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
-        db.set_store(RecordStore::dir_for_db(path.as_ref()).and_then(RecordStore::open));
+        db.set_store(RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open));
         Ok(db)
     }
 
-    /// Attach (or detach) the record store that mutations are mirrored into.
+    /// Attach (or detach) the graph file that mutations are mirrored into.
     pub fn set_store(&self, store: Option<RecordStore>) {
         if let Ok(mut slot) = self.store.write() {
             *slot = store;
         }
     }
 
-    /// The attached record store, if sync is enabled for this database.
+    /// The attached graph file, if sync is enabled for this database.
     pub fn store(&self) -> Option<RecordStore> {
         self.store.read().ok().and_then(|s| s.clone())
     }
@@ -750,7 +750,7 @@ impl Database {
     // ------------------------------------------------------------------
 
     fn store_warn(what: &str, e: impl std::fmt::Display) {
-        eprintln!("Warning: record store: {} ({})", what, e);
+        eprintln!("Warning: graph file: {} ({})", what, e);
     }
 
     fn publish_node_by_id(&self, node_id: i32) {

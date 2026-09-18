@@ -1,7 +1,8 @@
 //! End-to-end multi-user sync through the CLI.
 //!
-//! Two "machines" each have their own database. The record store directory
-//! is copied between them by hand, standing in for `git push` / `git pull`.
+//! Two "machines" each have their own database. Their graph files are merged
+//! into each other by hand, standing in for `git push` / `git pull` — which
+//! is what git does too, by calling `deciduous merge-record`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,19 +12,31 @@ use tempfile::TempDir;
 struct Machine {
     _dir: TempDir,
     db: PathBuf,
-    sync: PathBuf,
+    graph: PathBuf,
+    /// Where the 0.17 per-record directory would sit, for migration tests.
+    legacy: PathBuf,
 }
 
 impl Machine {
     fn new() -> Self {
         let dir = TempDir::new().unwrap();
         let db = dir.path().join("deciduous.db");
-        let sync = dir.path().join("sync");
+        let graph = dir.path().join("graph.json");
+        let legacy = dir.path().join("sync");
         Self {
             _dir: dir,
             db,
-            sync,
+            graph,
+            legacy,
         }
+    }
+
+    fn doc(&self) -> serde_json::Value {
+        serde_json::from_str(&fs::read_to_string(&self.graph).unwrap()).unwrap()
+    }
+
+    fn records(&self, kind: &str) -> serde_json::Map<String, serde_json::Value> {
+        self.doc()[kind].as_object().cloned().unwrap_or_default()
     }
 
     fn run(&self, args: &[&str]) -> (bool, String, String) {
@@ -57,22 +70,28 @@ impl Machine {
         self.graph()["edges"].as_array().unwrap().len()
     }
 
-    /// Simulate `git pull` from another machine: copy its records over ours.
+    /// Simulate `git pull` from another machine. With one shared file this
+    /// is a merge, not a copy, and it goes through the same code path git
+    /// calls: `deciduous merge-record <base> <ours> <theirs>`.
     fn pull_from(&self, other: &Machine) {
-        copy_records(&other.sync, &self.sync);
-    }
-}
-
-fn copy_records(from: &Path, to: &Path) {
-    for sub in ["nodes", "edges", "themes", "tags"] {
-        let src = from.join(sub);
-        let dst = to.join(sub);
-        fs::create_dir_all(&dst).unwrap();
-        if let Ok(entries) = fs::read_dir(&src) {
-            for entry in entries.flatten() {
-                fs::copy(entry.path(), dst.join(entry.file_name())).unwrap();
-            }
+        if !self.graph.exists() {
+            fs::copy(&other.graph, &self.graph).unwrap();
+            return;
         }
+        let base = self.graph.with_extension("base.json");
+        fs::write(&base, "").unwrap(); // no known ancestor
+        let out = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+            .args(["merge-record"])
+            .arg(&base)
+            .arg(&self.graph)
+            .arg(&other.graph)
+            .output()
+            .expect("failed to run deciduous merge-record");
+        assert!(
+            out.status.success(),
+            "merge-record failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
     }
 }
 
@@ -97,21 +116,14 @@ fn two_machines_share_a_graph_and_link_across_it() {
     let out = alice.ok(&["sync", "--no-pages"]);
     assert!(out.contains("Created"), "{out}");
     assert!(out.contains("1 nodes exported"), "{out}");
-    assert!(alice.sync.join("nodes").is_dir());
-    assert_eq!(fs::read_dir(alice.sync.join("nodes")).unwrap().count(), 1);
+    assert!(alice.graph.is_file());
+    assert_eq!(alice.records("nodes").len(), 1);
 
-    // Once the store exists, writes publish immediately (no sync needed).
+    // Once the file exists, writes publish immediately (no sync needed).
     alice.ok(&["status", &goal_id.to_string(), "active"]);
-    let rec = fs::read_to_string(
-        fs::read_dir(alice.sync.join("nodes"))
-            .unwrap()
-            .next()
-            .unwrap()
-            .unwrap()
-            .path(),
-    )
-    .unwrap();
-    assert!(rec.contains("\"status\": \"active\""), "{rec}");
+    let nodes = alice.records("nodes");
+    let rec = nodes.values().next().unwrap();
+    assert_eq!(rec["status"], "active", "{rec}");
 
     // Bob pulls and syncs: he gets Alice's goal under his own local id.
     bob.pull_from(&alice);
@@ -195,7 +207,7 @@ fn ambiguous_or_unknown_prefix_is_a_clear_error() {
 #[test]
 fn legacy_jsonl_log_is_imported_once_then_removed() {
     let m = Machine::new();
-    let events = m.sync.join("events");
+    let events = m.legacy.join("events");
     fs::create_dir_all(&events).unwrap();
     // Two objects glued on one line, as the old appender could produce.
     fs::write(
@@ -255,15 +267,40 @@ fn git(repo: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&out.stdout).to_string()
 }
 
+fn node_json(change_id: &str, title: &str, status: &str, updated: &str) -> serde_json::Value {
+    serde_json::json!({
+        "change_id": change_id,
+        "node_type": "goal",
+        "title": title,
+        "status": status,
+        "metadata": {"confidence": 80},
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": updated,
+    })
+}
+
+fn write_doc(path: &Path, nodes: serde_json::Value) {
+    let doc = serde_json::json!({"version": 1, "nodes": nodes, "edges": {}});
+    fs::write(
+        path,
+        format!("{}\n", serde_json::to_string_pretty(&doc).unwrap()),
+    )
+    .unwrap();
+}
+
+/// The whole reason one shared file is workable: git hands both versions to
+/// `deciduous merge-record`, which merges the document record by record.
+/// Two people adding different nodes must both keep theirs, and the one
+/// record they both edited must merge field by field.
 #[test]
-fn git_merges_concurrent_edits_of_one_record_through_the_driver() {
+fn git_merges_concurrent_edits_of_the_graph_file_through_the_driver() {
     let dir = TempDir::new().unwrap();
     let repo = dir.path();
     git(repo, &["init", "-q", "-b", "main"]);
     // What `deciduous init`/`update`/`sync` write, but pointing at this test binary.
     fs::write(
         repo.join(".gitattributes"),
-        ".deciduous/sync/** merge=deciduous linguist-generated=true\n",
+        ".deciduous/graph.json merge=deciduous linguist-generated=true\n",
     )
     .unwrap();
     git(
@@ -275,61 +312,52 @@ fn git_merges_concurrent_edits_of_one_record_through_the_driver() {
         ],
     );
 
-    let rec_dir = repo.join(".deciduous/sync/nodes");
-    fs::create_dir_all(&rec_dir).unwrap();
-    let rec = rec_dir.join("n1.json");
-    let base = concat!(
-        "{\n",
-        "  \"change_id\": \"n1\",\n",
-        "  \"created_at\": \"2026-01-01T00:00:00+00:00\",\n",
-        "  \"metadata\": {\n    \"confidence\": 80\n  },\n",
-        "  \"node_type\": \"goal\",\n",
-        "  \"status\": \"pending\",\n",
-        "  \"title\": \"Goal\",\n",
-        "  \"updated_at\": \"2026-01-01T00:00:00+00:00\"\n",
-        "}\n"
+    fs::create_dir_all(repo.join(".deciduous")).unwrap();
+    let graph = repo.join(".deciduous/graph.json");
+    write_doc(
+        &graph,
+        serde_json::json!({
+            "n1": node_json("n1", "Goal", "pending", "2026-01-01T00:00:00+00:00")
+        }),
     );
-    fs::write(&rec, base).unwrap();
     git(repo, &["add", "."]);
     git(repo, &["commit", "-q", "-m", "base"]);
 
-    // Alice, on main: status -> active.
-    fs::write(
-        &rec,
-        base.replace("\"pending\"", "\"active\"").replace(
-            "2026-01-01T00:00:00+00:00\"\n}",
-            "2026-01-03T00:00:00+00:00\"\n}",
-        ),
-    )
-    .unwrap();
-    git(repo, &["commit", "-q", "-am", "alice: activate"]);
+    // Alice, on main: activates n1 and adds a node of her own.
+    write_doc(
+        &graph,
+        serde_json::json!({
+            "n1": node_json("n1", "Goal", "active", "2026-01-03T00:00:00+00:00"),
+            "alice": node_json("alice", "Alice's node", "pending", "2026-01-03T00:00:00+00:00"),
+        }),
+    );
+    git(repo, &["commit", "-q", "-am", "alice: activate + add"]);
 
-    // Bob, on a branch from base: attach a commit hash in metadata.
+    // Bob, on a branch from base: renames n1 and adds a node of his own.
     git(repo, &["checkout", "-q", "-b", "bob", "HEAD~1"]);
-    fs::write(
-        &rec,
-        base.replace(
-            "\"confidence\": 80\n",
-            "\"commit\": \"abc123\",\n    \"confidence\": 80\n",
-        )
-        .replace(
-            "2026-01-01T00:00:00+00:00\"\n}",
-            "2026-01-02T00:00:00+00:00\"\n}",
-        ),
-    )
-    .unwrap();
-    git(repo, &["commit", "-q", "-am", "bob: link commit"]);
+    write_doc(
+        &graph,
+        serde_json::json!({
+            "n1": node_json("n1", "Goal, renamed", "pending", "2026-01-02T00:00:00+00:00"),
+            "bob": node_json("bob", "Bob's node", "pending", "2026-01-02T00:00:00+00:00"),
+        }),
+    );
+    git(repo, &["commit", "-q", "-am", "bob: rename + add"]);
 
-    // Merge Alice's branch into Bob's: same file changed on both sides.
+    // Merge Alice's branch into Bob's: the one file changed on both sides.
     git(repo, &["merge", "-q", "--no-edit", "main"]);
 
-    let merged = fs::read_to_string(&rec).unwrap();
+    let merged = fs::read_to_string(&graph).unwrap();
     assert!(!merged.contains("<<<<<<<"), "{merged}");
     let v: serde_json::Value = serde_json::from_str(&merged).unwrap();
-    assert_eq!(v["status"], "active", "{merged}");
-    assert_eq!(v["metadata"]["commit"], "abc123", "{merged}");
-    assert_eq!(v["metadata"]["confidence"], 80);
-    assert_eq!(v["updated_at"], "2026-01-03T00:00:00+00:00");
+    // Neither side's addition is lost.
+    assert_eq!(v["nodes"]["alice"]["title"], "Alice's node", "{merged}");
+    assert_eq!(v["nodes"]["bob"]["title"], "Bob's node", "{merged}");
+    // The record both touched merges field by field: Alice is newer, so her
+    // status wins; Bob's rename is the only change to the title, so it stays.
+    assert_eq!(v["nodes"]["n1"]["status"], "active", "{merged}");
+    assert_eq!(v["nodes"]["n1"]["title"], "Goal, renamed", "{merged}");
+    assert_eq!(v["nodes"]["n1"]["updated_at"], "2026-01-03T00:00:00+00:00");
     assert!(
         git(repo, &["status", "--porcelain"]).trim().is_empty(),
         "merge should have committed cleanly"
@@ -339,25 +367,32 @@ fn git_merges_concurrent_edits_of_one_record_through_the_driver() {
 #[test]
 fn sync_repairs_conflict_markers_left_by_a_merge_without_the_driver() {
     let m = Machine::new();
-    m.ok(&["add", "goal", "Seed"]); // creates the store on first write? no: sync creates it
+    m.ok(&["add", "goal", "Seed"]);
     m.ok(&["sync", "--no-pages"]);
-    let nodes = m.sync.join("nodes");
+
+    // A clone without `merge.deciduous.driver` configured gets this instead.
     fs::write(
-        nodes.join("c0ffee11.json"),
+        &m.graph,
         concat!(
             "{\n",
-            "  \"change_id\": \"c0ffee11\",\n",
-            "  \"created_at\": \"2026-01-01T00:00:00+00:00\",\n",
-            "  \"node_type\": \"action\",\n",
+            "  \"edges\": {},\n",
+            "  \"nodes\": {\n",
+            "    \"c0ffee11\": {\n",
+            "      \"change_id\": \"c0ffee11\",\n",
+            "      \"created_at\": \"2026-01-01T00:00:00+00:00\",\n",
+            "      \"node_type\": \"action\",\n",
             "<<<<<<< HEAD\n",
-            "  \"status\": \"completed\",\n",
-            "  \"title\": \"Do the thing\",\n",
-            "  \"updated_at\": \"2026-01-04T00:00:00+00:00\"\n",
+            "      \"status\": \"completed\",\n",
+            "      \"title\": \"Do the thing\",\n",
+            "      \"updated_at\": \"2026-01-04T00:00:00+00:00\"\n",
             "=======\n",
-            "  \"status\": \"pending\",\n",
-            "  \"title\": \"Do the thing, carefully\",\n",
-            "  \"updated_at\": \"2026-01-02T00:00:00+00:00\"\n",
+            "      \"status\": \"pending\",\n",
+            "      \"title\": \"Do the thing, carefully\",\n",
+            "      \"updated_at\": \"2026-01-02T00:00:00+00:00\"\n",
             ">>>>>>> theirs\n",
+            "    }\n",
+            "  },\n",
+            "  \"version\": 1\n",
             "}\n"
         ),
     )
@@ -366,13 +401,13 @@ fn sync_repairs_conflict_markers_left_by_a_merge_without_the_driver() {
     let (ok, out, _) = m.run(&["sync", "--check"]);
     assert!(!ok);
     assert!(
-        out.contains("Conflict:") && out.contains("c0ffee11.json"),
+        out.contains("Conflict:") && out.contains("graph.json"),
         "{out}"
     );
 
     let out = m.ok(&["sync", "--no-pages"]);
     assert!(
-        out.contains("Merged") && out.contains("c0ffee11.json"),
+        out.contains("Merged") && out.contains("graph.json"),
         "{out}"
     );
     let shown = m.ok(&["show", "c0ffee11"]);
@@ -380,4 +415,41 @@ fn sync_repairs_conflict_markers_left_by_a_merge_without_the_driver() {
     assert!(shown.contains("Do the thing"), "{shown}");
     let (ok, out, _) = m.run(&["sync", "--check"]);
     assert!(ok, "{out}");
+}
+
+/// Upgrading from 0.17: the directory of per-record files is folded into the
+/// graph file and removed.
+#[test]
+fn a_0_17_record_directory_is_migrated_on_sync() {
+    let m = Machine::new();
+    fs::create_dir_all(m.legacy.join("nodes")).unwrap();
+    fs::create_dir_all(m.legacy.join("edges")).unwrap();
+    for (id, title) in [
+        ("aaaa1111-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "Old goal"),
+        ("bbbb2222-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "Old action"),
+    ] {
+        fs::write(
+            m.legacy.join("nodes").join(format!("{id}.json")),
+            serde_json::to_string_pretty(&node_json(
+                id,
+                title,
+                "pending",
+                "2026-01-01T00:00:00+00:00",
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+    }
+
+    let out = m.ok(&["sync", "--no-pages"]);
+    assert!(out.contains("Folded"), "{out}");
+    assert!(out.contains("2 nodes"), "{out}");
+    assert!(!m.legacy.exists(), "the 0.17 directory should be removed");
+    assert_eq!(m.records("nodes").len(), 2);
+    assert_eq!(m.node_count(), 2);
+
+    // And it is a one-time thing: a second sync has nothing to do.
+    let (ok, out, _) = m.run(&["sync", "--check"]);
+    assert!(ok, "{out}");
+    assert!(out.contains("already agree"), "{out}");
 }

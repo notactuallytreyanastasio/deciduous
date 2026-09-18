@@ -257,7 +257,7 @@ deciduous doc attach 5 docs/redis-arch.png --ai-describe
 deciduous add outcome "Rate limiting working in prod" -c 95
 deciduous link 5 6 -r "Implementation complete"
 
-# Share it: records in .deciduous/sync/ are written as you go;
+# Share it: .deciduous/graph.json is written as you go;
 # sync imports teammates' records and refreshes docs/graph-data.json
 deciduous sync
 ```
@@ -657,7 +657,7 @@ deciduous serve              # Web viewer
 deciduous dot --png          # Generate PNG (requires graphviz)
 
 # Sync + export
-deciduous sync               # Reconcile .deciduous/sync/ with the DB, export to docs/
+deciduous sync               # Reconcile .deciduous/graph.json with the DB, export to docs/
 deciduous sync --check       # Anything pending? (exit 1 if so)
 deciduous writeup -t "Title" # Generate PR writeup
 deciduous backup             # Create database backup
@@ -704,7 +704,7 @@ deciduous completion fish
 - Attach relevant documents (diagrams, screenshots, specs) to decision nodes
 
 **Your team:**
-- Share decision context through `.deciduous/sync/`, one git-tracked JSON record per decision; concurrent edits of the same record merge field by field
+- Share decision context through `.deciduous/graph.json`, one git-tracked file; concurrent edits merge record by record
 - Review PRs with full visibility into reasoning
 - Build institutional knowledge that survives turnover
 - Search past Q&A interactions to find answers that were already given

@@ -75,8 +75,9 @@ pub use opencode::{install_opencode, opencode_status, uninstall_opencode, update
 pub use pulse::PulseReport;
 pub use records::{
     edge_id, get_current_author, merge_record_files, merge_record_values, reconcile,
-    split_conflict_markers, ConflictRepair, EdgeRecord, LegacyImport, NodeRecord, RecordStore,
-    StoreCounts, SyncReport, TagRecord, ThemeRecord,
+    split_conflict_markers, ConflictRepair, EdgeRecord, GraphDoc, LegacyImport, NodeRecord,
+    ReadError, RecordStore, StoreCounts, SyncReport, TagRecord, ThemeRecord, DOC_VERSION,
+    STORE_FILE_NAME,
 };
 
 // Re-export TS trait for downstream use

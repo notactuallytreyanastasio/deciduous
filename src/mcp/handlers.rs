@@ -80,7 +80,7 @@ pub fn dispatch(db: &Database, tool_name: &str, args: Value) -> ToolCallResult {
         // Export
         "export_dot" => handle_export_dot(db, &args),
         "generate_writeup" => handle_generate_writeup(db, &args),
-        // Multi-user sync (record store)
+        // Multi-user sync (the shared graph file)
         "sync_status" => handle_sync_status(db),
         "sync" => handle_sync(db, &args),
         // Old name, kept so existing clients keep working
@@ -850,7 +850,7 @@ fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
 
 fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
     db.store().or_else(|| {
-        crate::records::RecordStore::dir_for_db(&Database::db_path())
+        crate::records::RecordStore::path_for_db(&Database::db_path())
             .and_then(crate::records::RecordStore::open)
     })
 }
@@ -859,13 +859,13 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
     let Some(store) = store_for(db) else {
         return Ok(tool_result_json(&json!({
             "initialized": false,
-            "message": "No record store yet. Call the `sync` tool (or run `deciduous sync`) to create .deciduous/sync/ and commit it."
+            "message": "No graph file yet. Call the `sync` tool (or run `deciduous sync`) to create .deciduous/graph.json and commit it."
         })));
     };
     let report = crate::records::reconcile(db, &store, true).map_err(HandlerError::from)?;
     Ok(tool_result_json(&json!({
         "initialized": true,
-        "store_dir": store.root().display().to_string(),
+        "store_path": store.path().display().to_string(),
         "records": store.counts(),
         "pending_import": report.imported(),
         "pending_export": report.exported(),
@@ -878,8 +878,13 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
             "Database and records agree.".to_string()
         } else if !report.conflicts.is_empty() {
             format!(
-                "{} record file(s) carry git conflict markers. Call `sync` to merge them field by field.",
-                report.conflicts.len()
+                "{} carries git conflict markers. Call `sync` to merge the two sides record by record.",
+                report
+                    .conflicts
+                    .iter()
+                    .map(|c| c.path.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         } else {
             format!(
@@ -896,10 +901,10 @@ fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     let store = match store_for(db) {
         Some(s) => s,
         None => {
-            let dir = crate::records::RecordStore::dir_for_db(&Database::db_path())
-                .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep records"))?;
-            let store = crate::records::RecordStore::create(&dir).map_err(|e| {
-                HandlerError::from(format!("could not create {}: {e}", dir.display()))
+            let path = crate::records::RecordStore::path_for_db(&Database::db_path())
+                .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep the graph file"))?;
+            let store = crate::records::RecordStore::create(&path).map_err(|e| {
+                HandlerError::from(format!("could not create {}: {e}", path.display()))
             })?;
             // Later tool calls in this process must publish too.
             db.set_store(Some(store.clone()));
@@ -917,18 +922,18 @@ fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     };
     let report = crate::records::reconcile(db, &store, dry_run).map_err(HandlerError::from)?;
     Ok(tool_result_json(&json!({
-        "store_dir": store.root().display().to_string(),
+        "store_path": store.path().display().to_string(),
         "dry_run": dry_run,
         "imported": report.imported(),
         "exported": report.exported(),
         "report": report,
         "legacy_import": legacy,
         "message": format!(
-            "{} {} record(s) into the database and {} out to {}. Commit that directory with your code.",
+            "{} {} record(s) into the database and {} out to {}. Commit that file with your code.",
             if dry_run { "Would sync" } else { "Synced" },
             report.imported(),
             report.exported(),
-            store.root().display()
+            store.path().display()
         )
     })))
 }

@@ -154,7 +154,7 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
 ### Sync (teammates + GitHub Pages)
-- `sync` -> `deciduous sync` (reconcile `.deciduous/sync/` records with the local DB both ways, then export `docs/graph-data.json`)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways, then export `docs/graph-data.json`)
 - `sync --check` -> report pending changes without writing (exit 1 if any)
 - `sync --no-pages` -> reconcile only, skip the Pages export
 - Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
@@ -254,14 +254,14 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 
 ## Multi-User Sync
 
-Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/sync/`: one small JSON file per node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes its record immediately; `deciduous sync` reconciles the directory with the database in both directions.
+Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/graph.json`: one JSON file holding every node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes into it immediately; `deciduous sync` reconciles the file with the database in both directions.
 
 **Daily workflow:**
 ```bash
 git pull
 deciduous sync                # import teammates' records, export anything missing
 # ... work normally; records are written as you go ...
-git add .deciduous/sync/ && git commit -m "graph: <what you decided>"
+git add .deciduous/graph.json && git commit -m "graph: <what you decided>"
 git push
 ```
 
@@ -270,7 +270,7 @@ git push
 deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-**Two people edited the same record?** Git merges record files field by field through the `deciduous` merge driver (`deciduous sync` registers it in each clone). If a file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
+**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
 
 ## The Rule
 

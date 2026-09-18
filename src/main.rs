@@ -229,11 +229,11 @@ enum Command {
         bind: String,
     },
 
-    /// Sync the decision graph: reconcile .deciduous/sync/ records with the
+    /// Sync the decision graph: reconcile .deciduous/graph.json with the
     /// local database (both directions), then export docs/graph-data.json
     ///
     /// Run it after `git pull` to receive teammates' decisions and before
-    /// `git push` to make sure yours are written out. The record store is
+    /// `git push` to make sure yours are written out. The graph file is
     /// created on first run; the pre-0.17 JSONL event log is imported and
     /// removed automatically.
     Sync {
@@ -334,8 +334,8 @@ enum Command {
     /// Migrate database to add change_id columns (for multi-user sync)
     Migrate,
 
-    /// Git merge driver for record files (registered by init/update/sync):
-    /// field-level three-way merge of .deciduous/sync/**.json
+    /// Git merge driver for the graph file (registered by init/update/sync):
+    /// record-by-record three-way merge of .deciduous/graph.json
     #[command(hide = true)]
     MergeRecord {
         /// Common ancestor version (%O; empty file when both sides added it)
@@ -483,7 +483,7 @@ enum EventsAction {
 
     /// Initialize event-based sync in this repository
     ///
-    /// Creates .deciduous/sync/ directory structure and adds to .gitignore
+    /// Creates .deciduous/graph.json and adds it to .gitignore
     /// the local database while tracking the sync directory.
     Init,
 
@@ -1711,36 +1711,36 @@ fn main() {
             check,
             no_pages,
         } => {
-            let Some(store_dir) = RecordStore::dir_for_db(&Database::db_path()) else {
+            let Some(store_path) = RecordStore::path_for_db(&Database::db_path()) else {
                 eprintln!(
-                    "{} The database path has no directory of its own, so there is nowhere to keep records. Set DECIDUOUS_DB_PATH to a path inside a directory.",
+                    "{} The database path has no directory of its own, so there is nowhere to keep the graph file. Set DECIDUOUS_DB_PATH to a path inside a directory.",
                     "Error:".red()
                 );
                 std::process::exit(1);
             };
-            let store = match RecordStore::open(&store_dir) {
+            let store = match RecordStore::open(&store_path) {
                 Some(store) => store,
                 None if check => {
                     eprintln!(
-                        "{} No record store at {}. Run `deciduous sync` once to create it.",
+                        "{} No graph file at {}. Run `deciduous sync` once to create it.",
                         "Error:".red(),
-                        store_dir.display()
+                        store_path.display()
                     );
                     std::process::exit(1);
                 }
-                None => match RecordStore::create(&store_dir) {
+                None => match RecordStore::create(&store_path) {
                     Ok(store) => {
                         println!(
-                            "{} record store at {} (commit this directory)",
+                            "{} {} (commit this file)",
                             "Created".green(),
-                            store_dir.display()
+                            store_path.display()
                         );
                         // Later mutations in this process must publish too.
                         db.set_store(Some(store.clone()));
                         store
                     }
                     Err(e) => {
-                        eprintln!("{} Creating record store: {}", "Error:".red(), e);
+                        eprintln!("{} Creating the graph file: {}", "Error:".red(), e);
                         std::process::exit(1);
                     }
                 },
@@ -1750,11 +1750,28 @@ fn main() {
                 if let Ok(cwd) = std::env::current_dir() {
                     match deciduous::init::ensure_merge_driver(&cwd) {
                         Ok(true) => println!(
-                            "{} git merge driver for graph records (this clone)",
+                            "{} git merge driver for the graph file (this clone)",
                             "Configured".green()
                         ),
                         Ok(false) => {}
                         Err(e) => eprintln!("{} merge driver: {}", "Warning:".yellow(), e),
+                    }
+                }
+            }
+
+            if store.has_legacy_record_dir() {
+                if check {
+                    println!(
+                        "{} .deciduous/sync/ (0.17 per-record files) present; `deciduous sync` will fold it into the graph file",
+                        "Note:".yellow()
+                    );
+                } else {
+                    match store.import_legacy_record_dir() {
+                        Ok(report) => print_record_dir_import(&report),
+                        Err(e) => {
+                            eprintln!("{} Importing .deciduous/sync/: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
                     }
                 }
             }
@@ -1792,7 +1809,7 @@ fn main() {
                 println!(
                     "{} Run `deciduous sync` to apply, then commit {}",
                     "Pending:".yellow(),
-                    store_dir.display()
+                    store_path.display()
                 );
                 std::process::exit(1);
             }
@@ -2107,7 +2124,7 @@ fn main() {
                 "{} `deciduous events` is deprecated; `deciduous sync` does all of this now.",
                 "Note:".yellow()
             );
-            let Some(store_dir) = RecordStore::dir_for_db(&Database::db_path()) else {
+            let Some(store_path) = RecordStore::path_for_db(&Database::db_path()) else {
                 eprintln!(
                     "{} The database path has no directory of its own.",
                     "Error:".red()
@@ -2115,11 +2132,11 @@ fn main() {
                 std::process::exit(1);
             };
             match action {
-                EventsAction::Init => match RecordStore::create(&store_dir) {
+                EventsAction::Init => match RecordStore::create(&store_path) {
                     Ok(_) => println!(
-                        "{} record store at {}. Run `deciduous sync` to fill it.",
+                        "{} {}. Run `deciduous sync` to fill it.",
                         "Created".green(),
-                        store_dir.display()
+                        store_path.display()
                     ),
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
@@ -2128,15 +2145,15 @@ fn main() {
                 },
                 EventsAction::Checkpoint { .. } => {
                     println!(
-                        "Checkpoints are gone: the record store is already one file per record. Run `deciduous sync`."
+                        "Checkpoints are gone: the whole graph is one file now. Run `deciduous sync`."
                     );
                 }
                 EventsAction::Status | EventsAction::Rebuild { .. } | EventsAction::Emit { .. } => {
-                    let Some(store) = RecordStore::open(&store_dir) else {
+                    let Some(store) = RecordStore::open(&store_path) else {
                         eprintln!(
-                            "{} No record store at {}. Run `deciduous sync` to create it.",
+                            "{} No graph file at {}. Run `deciduous sync` to create it.",
                             "Error:".red(),
-                            store_dir.display()
+                            store_path.display()
                         );
                         std::process::exit(1);
                     };
@@ -2145,6 +2162,15 @@ fn main() {
                         EventsAction::Rebuild { dry_run } => *dry_run,
                         _ => false,
                     };
+                    if !dry_run && store.has_legacy_record_dir() {
+                        match store.import_legacy_record_dir() {
+                            Ok(report) => print_record_dir_import(&report),
+                            Err(e) => {
+                                eprintln!("{} Importing .deciduous/sync/: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
                     if !dry_run && store.has_legacy_events() {
                         match store.import_legacy_events() {
                             Ok(report) => print_legacy_import(&report),
@@ -4353,13 +4379,36 @@ fn print_legacy_import(report: &deciduous::LegacyImport) {
     }
 }
 
+fn print_record_dir_import(report: &deciduous::LegacyImport) {
+    println!(
+        "{} .deciduous/sync/ into the graph file: {} nodes, {} edges, {} themes, {} tags",
+        "Folded".green(),
+        report.nodes,
+        report.edges,
+        report.themes,
+        report.tags
+    );
+    if report.removed {
+        println!("  Removed .deciduous/sync/ (git rm -r it too)");
+    } else {
+        println!(
+            "  {} {} file(s) could not be read, so .deciduous/sync/ was kept:",
+            "Warning:".yellow(),
+            report.errors.len()
+        );
+        for e in &report.errors {
+            println!("    {}", e);
+        }
+    }
+}
+
 fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     let verb = if report.dry_run { "would" } else { "did" };
     let counts = store.counts();
     println!(
         "{} {} ({} nodes, {} edges, {} themes, {} tags on disk)",
         if report.dry_run { "Checked" } else { "Synced" }.cyan(),
-        store.root().display(),
+        store.path().display(),
         counts.nodes,
         counts.edges,
         counts.themes,
@@ -4423,7 +4472,7 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     }
     if !report.read_errors.is_empty() {
         println!(
-            "  {} {} record file(s) could not be read (fix or `git checkout` them):",
+            "  {} {} record(s) could not be read (fix them, or `git checkout` the graph file):",
             "Warning:".yellow(),
             report.read_errors.len()
         );

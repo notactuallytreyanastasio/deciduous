@@ -286,8 +286,8 @@ If orphaned files pile up:
 ## Multi-User Sync
 
 Documents are not part of multi-user sync yet. Attachment metadata and the files
-in `.deciduous/documents/` stay on the machine that attached them; the record store
-in `.deciduous/sync/` covers nodes, edges, themes, and tags. For sharing a file,
+in `.deciduous/documents/` stay on the machine that attached them; `.deciduous/graph.json`
+covers nodes, edges, themes, and tags. For sharing a file,
 include it in the repo or use a shared drive. See `docs/MULTI_USER_SYNC.md`.
 
 ---

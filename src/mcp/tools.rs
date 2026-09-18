@@ -625,7 +625,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
 
         ToolDefinition {
             name: "sync_status".to_string(),
-            description: "Show multi-user sync status: whether the .deciduous/sync/ record store exists, how many records it holds, and how many changes are pending in each direction. Node ids are local; records are shared by change_id.".to_string(),
+            description: "Show multi-user sync status: whether .deciduous/graph.json exists, how many records it holds, and how many changes are pending in each direction. Node ids are local; records are shared by change_id.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {}
@@ -634,7 +634,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
 
         ToolDefinition {
             name: "sync".to_string(),
-            description: "Reconcile the local database with the .deciduous/sync/ record store in both directions. Run after `git pull` to receive teammates' decisions (they get local ids here) and before `git push` so your decisions are written out. Creates the store on first use.".to_string(),
+            description: "Reconcile the local database with .deciduous/graph.json in both directions. Run after `git pull` to receive teammates' decisions (they get local ids here) and before `git push` so your decisions are written out. Creates the file on first use.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {

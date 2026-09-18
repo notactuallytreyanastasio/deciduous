@@ -2,7 +2,7 @@
 //!
 //! Older versions synced through per-author JSONL files in
 //! `.deciduous/sync/events/` plus a monolithic `checkpoint.json`. That
-//! design is gone: the record store in [`crate::records`] replaced it. This
+//! design is gone: the graph file in [`crate::records`] replaced it. This
 //! module only exists so `deciduous sync` can read those files once and
 //! convert them into records. Nothing writes this format any more.
 //!

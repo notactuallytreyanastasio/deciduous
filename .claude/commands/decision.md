@@ -170,7 +170,7 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
 ### Sync (teammates + GitHub Pages)
-- `sync` -> `deciduous sync` (reconcile `.deciduous/sync/` records with the local DB both ways, then export `docs/graph-data.json`)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways, then export `docs/graph-data.json`)
 - `sync --check` -> report pending changes without writing (exit 1 if any)
 - `sync --no-pages` -> reconcile only, skip the Pages export
 - Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
@@ -270,7 +270,7 @@ deciduous link <parent_id> <child_id> -r "Retroactive connection - <why>"
 
 ## Multi-User Sync
 
-Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/sync/`: one small JSON file per node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes its record immediately; `deciduous sync` reconciles the directory with the database in both directions.
+Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignored). The shared truth is `.deciduous/graph.json`: one JSON file holding every node, edge, theme, and tag, committed with the code. Every `add`, `link`, `status`, `delete` writes into it immediately; `deciduous sync` reconciles the file with the database in both directions.
 
 **Why it merges cleanly:** two people adding records never touch the same file. Only editing the *same* node concurrently conflicts, on one tiny JSON file. There is no log to replay, no checkpoint to compact.
 
@@ -279,7 +279,7 @@ Each machine has a private SQLite database (`.deciduous/deciduous.db`, gitignore
 git pull
 deciduous sync                # import teammates' records, export anything missing
 # ... work normally; records are written as you go ...
-git add .deciduous/sync/ && git commit -m "graph: <what you decided>"
+git add .deciduous/graph.json && git commit -m "graph: <what you decided>"
 git push
 ```
 
@@ -289,9 +289,9 @@ deciduous nodes                          # 57   a1b2c3d4  goal  ...  (a1b2c3d4 i
 deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-**Two people edited the same record?** Git merges record files field by field through the `deciduous` merge driver (`deciduous sync` registers it in each clone), so concurrent edits of one node usually merge silently. If a file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
+**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
 
-**Upgrading from the old JSONL event log:** `deciduous sync` imports `.deciduous/sync/events/` and `checkpoint.json` once, converts them to records, and removes them (only if every line parsed). `git rm` them afterwards.
+**Upgrading from 0.17 or earlier:** `deciduous sync` folds `.deciduous/sync/` (0.17's per-record files) and, before that, `.deciduous/sync/events/` with `checkpoint.json` into `.deciduous/graph.json` once, then removes them (only if everything parsed). `git rm -r` them afterwards.
 
 ## The Rule
 
@@ -299,7 +299,7 @@ deciduous link a1b2c3d4 58 -r "builds on their goal"
 LOG BEFORE YOU CODE, NOT AFTER.
 CONNECT EVERY NODE TO ITS PARENT.
 AUDIT FOR ORPHANS REGULARLY.
-SYNC AFTER PULL, SYNC BEFORE PUSH, COMMIT .deciduous/sync/.
+SYNC AFTER PULL, SYNC BEFORE PUSH, COMMIT .deciduous/graph.json.
 ```
 
 **Live graph**: https://notactuallytreyanastasio.github.io/deciduous/
