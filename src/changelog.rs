@@ -12,6 +12,19 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.18.0",
+        highlights: &[
+            "The shared graph is one file again: .deciduous/graph.json holds every node, edge, theme, and tag",
+            "0.17's .deciduous/sync/ directory (one file per record) is folded into it once by `sync`, `init`, or `update`, then deleted — `git rm -r .deciduous/sync` afterwards",
+            "Why: a real graph was 2,781 files and 11MB of directory overhead, which made `git status` and PR diffs unreadable for a ~1MB graph",
+            "The cost: concurrent changes now always conflict in git, so the `deciduous merge-record` driver runs on every merge instead of rarely",
+            "That driver merges the two documents record by record — both sides' additions survive, and a record both sides changed still merges field by field",
+            "`deciduous sync` writes the file once per run, not once per record",
+            "A graph.json that will not parse now stops a sync instead of being treated as an empty graph",
+            "Run `deciduous update` to fix .gitignore and .gitattributes, then `deciduous sync`",
+        ],
+    },
+    Release {
         version: "0.17.1",
         highlights: &[
             "Fix: `deciduous nodes` panicked on observations whose description contains multibyte characters (e.g. an ellipsis)",
@@ -28,6 +41,19 @@ pub const RELEASES: &[Release] = &[
             "Concurrent edits of one record merge field by field: a git merge driver (`deciduous merge-record`) is registered by init/update/sync, and `deciduous sync` repairs files left with conflict markers",
             "Legacy JSONL event logs are imported once (tolerating corrupted lines) and removed; `deciduous events` is a deprecated alias",
             "Run `deciduous update` to fix .gitignore (it used to hide all of .deciduous/) and refresh templates",
+        ],
+    },
+    Release {
+        version: "0.16.0",
+        highlights: &[
+            "Multi-graph HTTP API daemon (`deciduous serve --api`): many independent graphs over HTTP with bearer-token auth, one SQLite file per graph",
+            "Lets a graph live centrally and be written to by clients with no local .deciduous/",
+            "The HTTP API is append-and-read only: delete_node, unlink_nodes, update_status, and update_prompt are refused at the daemon (403), so a token holder cannot erase or rewrite history",
+            "graph_id is validated before any filesystem access",
+            "`GET /health`: unauthenticated, side-effect-free liveness endpoint for proxies and uptime probes",
+            "DECIDUOUS_API_DATA_DIR env var alongside --data-dir, for container and systemd configuration",
+            "Deployment artifacts: Dockerfile, Caddy auto-TLS reverse proxy, WAL-safe backup script, and a runbook (deploy/)",
+            "Fixed: a graph whose data directory vanished under a running daemon wedged every later write on a 404; the filesystem is authoritative now",
         ],
     },
     Release {
