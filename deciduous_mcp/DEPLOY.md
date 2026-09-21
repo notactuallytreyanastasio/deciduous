@@ -109,9 +109,16 @@ export DECIDUOUS_MCP_TOKEN=<the token>
 ~/code/deciduous/deciduous_mcp/scripts/import_all.sh
 ```
 
-Idempotent on `[workspace_id, change_id]`, so re-running refreshes rather than
-duplicating. Locally this imports 85 graphs into 73 workspaces: 29,838 nodes
-and 80,672 edges.
+It runs in two phases. First every file under any `.deciduous/documents/` is
+uploaded under its own computed sha256 — a content-addressed sweep, not a
+per-database walk, because files drift: `deep-squishing-sparrow.md` sits in
+njlegalize-me's documents directory while the only row referencing it lives in
+a different graph whose documents directory does not exist. Then the graphs
+import, and each document row records whether its bytes actually arrived.
+
+Idempotent on `[workspace_id, change_id]` and on content hash, so re-running
+refreshes rather than duplicating. Locally this imports 85 graphs into 73
+workspaces: 29,838 nodes, 80,672 edges, 85 document rows and 71 blobs.
 
 ## 7. Point Claude at it
 
@@ -147,8 +154,11 @@ adds a `.mcp.json` with an extra header:
 - **Themes.** `deciduous graph` exports `nodes`, `edges` and `documents` only,
   though SQLite has `themes`/`node_themes` and Postgres has the columns. Theme
   assignments do not survive the import.
-- **Document files.** Document rows are not imported at all; the blobs live in
-  each repo's `.deciduous/documents/`.
+- **Documents are imported**, content and all: 71 blobs, 22MB, stored in
+  Postgres `document_blobs` keyed by sha256 so a file attached in several
+  projects is stored once. `GET /documents/:id` serves them behind the same
+  bearer token. Five files are referenced by live rows but their bytes are gone
+  from this machine entirely; those rows import as history and answer 410.
 - **46 self-loop edges** across all graphs are rejected by the schema's
   no-self-loop rule and reported per project, not written.
 - **Nothing writes back to SQLite.** This is one-way: local graphs push up.

@@ -23,6 +23,8 @@ defmodule DeciduousMcp.Schema.Document do
     field :description_source, :string, default: "none"
     field :attached_by, :string
     field :detached_at, :utc_datetime_usec
+    field :content_missing, :boolean, default: false
+    field :storage, :string, default: "postgres"
 
     belongs_to :workspace, DeciduousMcp.Schema.Workspace
     belongs_to :node, DeciduousMcp.Schema.Node
@@ -35,7 +37,7 @@ defmodule DeciduousMcp.Schema.Document do
     |> cast(attrs, [
       :change_id, :content_hash, :original_filename, :storage_filename,
       :mime_type, :file_size, :description, :description_source,
-      :attached_by, :node_id, :workspace_id
+      :attached_by, :node_id, :workspace_id, :content_missing, :storage
     ])
     |> validate_required([
       :change_id, :content_hash, :original_filename, :storage_filename,
