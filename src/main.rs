@@ -468,6 +468,18 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum RemoteAction {
+    /// Store the API token outside every repository (mode 0600)
+    ///
+    /// Reads the token from stdin so it never lands in shell history.
+    Login {
+        /// Server URL to verify the token against before storing it
+        #[arg(long)]
+        url: Option<String>,
+    },
+
+    /// Forget the stored token
+    Logout,
+
     /// Point this project at a shared graph server
     Init {
         /// Base URL, e.g. https://example.com/deciduous-mcp
@@ -486,6 +498,24 @@ enum RemoteAction {
 
     /// Refresh the local database from the server
     Pull,
+
+    /// Configure many repositories at once
+    ///
+    /// Walks a directory for projects that already have a .deciduous, and
+    /// points each at the server. Existing configuration is left alone.
+    Adopt {
+        /// Directory to walk (default: the current directory)
+        #[arg(default_value = ".")]
+        root: String,
+
+        /// Server URL
+        #[arg(long)]
+        url: String,
+
+        /// Show what would change without writing
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1742,6 +1772,141 @@ fn main() {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
             match action {
+                RemoteAction::Login { url } => {
+                    // stdin, not an argument: a token passed on the command
+                    // line lands in shell history and in the process list,
+                    // where every other user on the machine can read it. This
+                    // does not stop the terminal echoing what is typed — it
+                    // keeps the token out of argv, which is the part that
+                    // persists.
+                    eprint!("Token (read from stdin, not saved to shell history): ");
+                    let mut token = String::new();
+                    if std::io::stdin().read_line(&mut token).is_err() {
+                        eprintln!("{} could not read the token", "Error:".red());
+                        std::process::exit(1);
+                    }
+
+                    if let Some(url) = url {
+                        let mut cfg = Config::load();
+                        cfg.remote.url = Some(url.trim_end_matches('/').to_string());
+                        std::env::set_var(deciduous::remote::TOKEN_ENV, token.trim());
+
+                        match deciduous::remote::Remote::resolve(&cfg, &cwd).and_then(|r| r.check())
+                        {
+                            Ok(_) => {}
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                eprintln!("\nNothing was stored.");
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+
+                    match deciduous::remote::store_token(&token) {
+                        Ok(path) => {
+                            println!("{} stored in {}", "Token:".green(), path.display());
+                            println!("  mode 0600, outside every repository");
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RemoteAction::Logout => match deciduous::remote::forget_token() {
+                    Ok(true) => println!("{} stored token removed.", "Logged out:".green()),
+                    Ok(false) => println!("No stored token to remove."),
+                    Err(e) => {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+                },
+
+                RemoteAction::Adopt { root, url, dry_run } => {
+                    let url = url.trim_end_matches('/').to_string();
+                    let root = PathBuf::from(&root);
+
+                    let projects = deciduous::remote::find_projects(&root);
+                    if projects.is_empty() {
+                        println!(
+                            "No projects with a .deciduous directory under {}",
+                            root.display()
+                        );
+                        return;
+                    }
+
+                    println!(
+                        "{} {} projects under {}\n",
+                        if dry_run {
+                            "Would configure:"
+                        } else {
+                            "Configuring:"
+                        },
+                        projects.len(),
+                        root.display()
+                    );
+
+                    let mut changed = 0;
+                    let mut skipped = 0;
+                    for project in &projects {
+                        let ws = deciduous::remote::workspace_for(project);
+                        let existing = deciduous::remote::read_remote_url(project);
+
+                        // Several directories can share one workspace name:
+                        // everything outside a git repository pools into
+                        // `scratch`. Printing only the name makes those rows
+                        // indistinguishable, so show the directory too.
+                        let label = {
+                            let dir = project
+                                .strip_prefix(&root)
+                                .unwrap_or(project)
+                                .display()
+                                .to_string();
+                            let dir = if dir.is_empty() { ".".to_string() } else { dir };
+                            if dir.to_lowercase() == ws {
+                                ws.clone()
+                            } else {
+                                format!("{ws}  ({dir})")
+                            }
+                        };
+
+                        match existing {
+                            Some(u) if u == url => {
+                                println!("  {:<44} {}", label, "already configured".dimmed());
+                                skipped += 1;
+                            }
+                            Some(u) => {
+                                // Repointing a project at a different server
+                                // would move where its decisions land; that is
+                                // the user's call, not a bulk operation's.
+                                println!("  {:<28} {} {}", ws, "points elsewhere:".yellow(), u);
+                                skipped += 1;
+                            }
+                            None => {
+                                if dry_run {
+                                    println!("  {:<44} would configure", label);
+                                } else {
+                                    match deciduous::remote::write_remote_url(project, &url) {
+                                        Ok(()) => {
+                                            println!("  {:<44} {}", label, "configured".green())
+                                        }
+                                        Err(e) => {
+                                            println!("  {:<44} {} {}", label, "failed:".red(), e)
+                                        }
+                                    }
+                                }
+                                changed += 1;
+                            }
+                        }
+                    }
+
+                    println!("\n{} configured, {} left alone", changed, skipped);
+                    if !dry_run && changed > 0 {
+                        println!("Each project's .deciduous/config.toml now holds the URL. The token stays in the credentials file.");
+                    }
+                }
+
                 RemoteAction::Init { url, workspace } => {
                     let url = url.trim_end_matches('/').to_string();
                     let ws = workspace

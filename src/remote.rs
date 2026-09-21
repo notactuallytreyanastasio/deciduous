@@ -45,17 +45,99 @@ impl RemoteConfig {
     }
 }
 
-/// The token, or an explanation of where to get one. Never defaulted: a
-/// request sent without it reaches a server that will refuse it anyway, and
-/// guessing here would turn an auth problem into a confusing 401.
+/// Where a stored token lives: outside every repository, so it cannot be
+/// committed by a stray `git add`, and mode 0600 so it is not world-readable
+/// the way a `.env` in a project directory tends to end up.
+pub fn credentials_path() -> Option<std::path::PathBuf> {
+    let base = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config"))
+        })?;
+    Some(base.join("deciduous").join("credentials"))
+}
+
+/// The token, or an explanation of where to get one.
+///
+/// Environment first so a one-off override works and CI can inject it, then
+/// the stored credential. Never defaulted: a request sent without a token
+/// reaches a server that will refuse it anyway, and guessing here turns an
+/// auth problem into a confusing 401.
 pub fn token() -> Result<String, String> {
-    match std::env::var(TOKEN_ENV) {
-        Ok(t) if !t.trim().is_empty() => Ok(t),
-        _ => Err(format!(
-            "{TOKEN_ENV} is not set.\n\
-             The shared graph is behind a bearer token; export it first:\n\n    \
-             export {TOKEN_ENV}=<token>"
-        )),
+    if let Ok(t) = std::env::var(TOKEN_ENV) {
+        if !t.trim().is_empty() {
+            return Ok(t.trim().to_string());
+        }
+    }
+
+    if let Some(path) = credentials_path() {
+        if let Ok(contents) = std::fs::read_to_string(&path) {
+            let t = contents.trim();
+            if !t.is_empty() {
+                return Ok(t.to_string());
+            }
+        }
+    }
+
+    Err(format!(
+        "no token for the shared graph.\n\n\
+         Store one (kept outside every repository, mode 0600):\n\n    \
+         deciduous remote login\n\n\
+         or set {TOKEN_ENV} for a one-off."
+    ))
+}
+
+/// Writes the token to the credentials file with owner-only permissions.
+///
+/// The permissions are set on the file before the secret is written, not
+/// after: creating it world-readable and then tightening it leaves a window in
+/// which any process on the machine can read it.
+pub fn store_token(token: &str) -> Result<std::path::PathBuf, String> {
+    let token = token.trim();
+    if token.is_empty() {
+        return Err("refusing to store an empty token".to_string());
+    }
+
+    let path = credentials_path().ok_or("cannot determine a config directory (is HOME set?)")?;
+    let dir = path.parent().ok_or("credentials path has no parent")?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("creating {}: {e}", dir.display()))?;
+
+    let mut opts = std::fs::OpenOptions::new();
+    opts.write(true).create(true).truncate(true);
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        opts.mode(0o600);
+    }
+
+    let mut file = opts
+        .open(&path)
+        .map_err(|e| format!("opening {}: {e}", path.display()))?;
+
+    use std::io::Write;
+    writeln!(file, "{token}").map_err(|e| format!("writing {}: {e}", path.display()))?;
+
+    // An existing file keeps its old mode through OpenOptions, so tighten it
+    // explicitly for the case where one was created before this code existed.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    Ok(path)
+}
+
+/// Removes the stored token. Reports whether there was one.
+pub fn forget_token() -> Result<bool, String> {
+    let Some(path) = credentials_path() else {
+        return Ok(false);
+    };
+    match std::fs::remove_file(&path) {
+        Ok(()) => Ok(true),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(format!("removing {}: {e}", path.display())),
     }
 }
 
@@ -369,6 +451,76 @@ fn urlencode(s: &str) -> String {
         .collect()
 }
 
+/// Every project under `root` that already has a `.deciduous` directory.
+///
+/// Shallow on purpose — three levels covers `~/code/<project>` and a worktree
+/// one below it, without descending into `node_modules` or a vendored tree and
+/// adopting something that is not a project of yours.
+pub fn find_projects(root: &Path) -> Vec<std::path::PathBuf> {
+    fn walk(dir: &Path, depth: usize, out: &mut Vec<std::path::PathBuf>) {
+        if depth > 3 {
+            return;
+        }
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+
+            if name == ".deciduous" {
+                if path.join("deciduous.db").exists() || path.join("config.toml").exists() {
+                    if let Some(project) = path.parent() {
+                        out.push(project.to_path_buf());
+                    }
+                }
+                continue;
+            }
+            if name == "node_modules" || name == "target" || name == "_build" || name == "deps" {
+                continue;
+            }
+            walk(&path, depth + 1, out);
+        }
+    }
+
+    let mut out = Vec::new();
+    walk(root, 0, &mut out);
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// The configured server URL for a project, if it has one.
+pub fn read_remote_url(project: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(project.join(".deciduous").join("config.toml")).ok()?;
+    let doc: toml::Value = toml::from_str(&text).ok()?;
+    doc.get("remote")?.get("url")?.as_str().map(str::to_string)
+}
+
+/// Writes `[remote] url` into a project's config, preserving its formatting.
+///
+/// Format-preserving for the same reason `Config::save_remote` is: these are
+/// files people hand-write and comment, and a bulk operation that reflowed
+/// every one of them would be a far worse diff than the change it made.
+pub fn write_remote_url(project: &Path, url: &str) -> Result<(), String> {
+    let dir = project.join(".deciduous");
+    let path = dir.join("config.toml");
+    let existing = std::fs::read_to_string(&path).unwrap_or_default();
+
+    let mut doc = existing
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| format!("{} is not valid TOML: {e}", path.display()))?;
+
+    doc["remote"].or_insert(toml_edit::table())["url"] = toml_edit::value(url.to_string());
+
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    std::fs::write(&path, doc.to_string()).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -393,6 +545,51 @@ mod tests {
         assert_eq!(urlencode("*"), "%2A");
         assert_eq!(urlencode("blog"), "blog");
         assert_eq!(urlencode("a b"), "a%20b");
+    }
+
+    #[test]
+    fn adopt_skips_vendored_trees() {
+        let root = std::env::temp_dir().join(format!("deciduous-adopt-{}", std::process::id()));
+        let real = root.join("my-project").join(".deciduous");
+        let vendored = root
+            .join("my-project")
+            .join("node_modules")
+            .join("dep")
+            .join(".deciduous");
+        std::fs::create_dir_all(&real).unwrap();
+        std::fs::create_dir_all(&vendored).unwrap();
+        std::fs::write(real.join("config.toml"), "").unwrap();
+        std::fs::write(vendored.join("config.toml"), "").unwrap();
+
+        let found = find_projects(&root);
+        assert_eq!(found.len(), 1, "found: {found:?}");
+        assert!(found[0].ends_with("my-project"));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn writing_a_remote_url_preserves_the_rest_of_the_file() {
+        let root = std::env::temp_dir().join(format!("deciduous-wr-{}", std::process::id()));
+        let dir = root.join(".deciduous");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("config.toml"),
+            "# keep me\n[branch]\nmain_branches = [\"main\"]\n",
+        )
+        .unwrap();
+
+        write_remote_url(&root, "https://example.com/mcp").unwrap();
+
+        let after = std::fs::read_to_string(dir.join("config.toml")).unwrap();
+        assert!(after.contains("# keep me"), "comment lost:\n{after}");
+        assert!(after.contains("main_branches = [\"main\"]"));
+        assert_eq!(
+            read_remote_url(&root).as_deref(),
+            Some("https://example.com/mcp")
+        );
+
+        std::fs::remove_dir_all(&root).ok();
     }
 
     #[test]
