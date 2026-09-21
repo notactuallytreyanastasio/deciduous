@@ -1,10 +1,10 @@
 defmodule DeciduousMcp.MCP.Tools.FindOrphans do
   @moduledoc "MCP Tool: find disconnected non-goal nodes in the graph."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Query
+  alias DeciduousMcp.MCP.Scope
 
-  @impl true
   def definition do
     %{
       name: "find_orphans",
@@ -13,11 +13,18 @@ defmodule DeciduousMcp.MCP.Tools.FindOrphans do
           "These indicate missing connections in the decision graph.",
       input_schema: %{type: "object", properties: %{}}
     }
+    |> Scope.with_workspace_arg(global?: true)
   end
 
-  @impl true
-  def call(%{server: frame}) do
-    orphans = Query.find_orphans(frame.assigns.workspace_id)
+  def call(%{arguments: args, server: frame}) do
+    case Scope.read_scope(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id) do
+    orphans = Query.find_orphans(workspace_id)
 
     result = %{
       count: length(orphans),

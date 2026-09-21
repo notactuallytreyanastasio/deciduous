@@ -9,11 +9,11 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
   Call this whenever you choose between approaches, technologies, patterns,
   or any other fork in the road.
   """
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.{Nodes, Edges}
 
-  @impl true
   def definition do
     %{
       name: "log_decision",
@@ -57,11 +57,17 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
         required: ["title", "chosen_option"]
       }
     }
+    |> Scope.with_workspace_arg()
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.write_workspace_id(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
     meta = %{} |> maybe_put("confidence", args["confidence"]) |> maybe_put("branch", args["branch"])
 
     # Create the decision node

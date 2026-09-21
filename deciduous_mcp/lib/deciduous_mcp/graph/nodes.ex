@@ -118,9 +118,9 @@ defmodule DeciduousMcp.Graph.Nodes do
   - `:limit` — max results (default 100)
   - `:offset` — pagination offset
   """
-  def list_nodes(workspace_id, opts \\ []) do
+  def list_nodes(scope, opts \\ []) do
     Node
-    |> where([n], n.workspace_id == ^workspace_id)
+    |> scope_workspace(scope)
     |> where([n], is_nil(n.deleted_at))
     |> maybe_filter_type(opts[:type])
     |> maybe_filter_status(opts[:status])
@@ -130,14 +130,15 @@ defmodule DeciduousMcp.Graph.Nodes do
     |> limit(^(opts[:limit] || 100))
     |> offset(^(opts[:offset] || 0))
     |> Repo.all()
+    |> Repo.preload(:workspace)
   end
 
   @doc """
   Counts nodes by type in a workspace. Useful for dashboard/pulse.
   """
-  def count_by_type(workspace_id) do
+  def count_by_type(scope) do
     Node
-    |> where([n], n.workspace_id == ^workspace_id)
+    |> scope_workspace(scope)
     |> where([n], is_nil(n.deleted_at))
     |> group_by([n], n.node_type)
     |> select([n], {n.node_type, count(n.id)})
@@ -146,6 +147,14 @@ defmodule DeciduousMcp.Graph.Nodes do
   end
 
   # --- Private helpers ---
+
+  # `:global` is the cross-project view: no workspace predicate at all. It is a
+  # distinct atom rather than a nil workspace_id so that an unresolved
+  # workspace can never silently widen a query to every project on the machine.
+  defp scope_workspace(query, :global), do: query
+
+  defp scope_workspace(query, workspace_id),
+    do: where(query, [n], n.workspace_id == ^workspace_id)
 
   defp maybe_filter_type(query, nil), do: query
   defp maybe_filter_type(query, type), do: where(query, [n], n.node_type == ^type)

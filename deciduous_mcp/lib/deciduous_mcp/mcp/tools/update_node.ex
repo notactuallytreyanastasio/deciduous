@@ -1,10 +1,9 @@
 defmodule DeciduousMcp.MCP.Tools.UpdateNode do
   @moduledoc "MCP Tool: update an existing decision graph node."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Nodes
 
-  @impl true
   def definition do
     %{
       name: "update_node",
@@ -27,7 +26,6 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
     }
   end
 
-  @impl true
   def call(%{arguments: args}) do
     attrs =
       %{}

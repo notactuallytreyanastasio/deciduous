@@ -1,10 +1,9 @@
 defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
   @moduledoc "MCP Tool: remove an edge between two nodes."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Edges
 
-  @impl true
   def definition do
     %{
       name: "delete_edge",
@@ -25,7 +24,6 @@ defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
     }
   end
 
-  @impl true
   def call(%{arguments: args}) do
     edge_type = args["edge_type"] || "leads_to"
 

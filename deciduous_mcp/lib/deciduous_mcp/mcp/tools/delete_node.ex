@@ -1,10 +1,9 @@
 defmodule DeciduousMcp.MCP.Tools.DeleteNode do
   @moduledoc "MCP Tool: soft-delete a decision graph node."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Nodes
 
-  @impl true
   def definition do
     %{
       name: "delete_node",
@@ -20,7 +19,6 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
     }
   end
 
-  @impl true
   def call(%{arguments: %{"node_id" => node_id}}) do
     case Nodes.delete_node(node_id) do
       {:ok, node} ->

@@ -18,14 +18,13 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
   The tool combines full-text search, type/status filtering, and graph
   traversal to find relevant nodes and their context.
   """
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   import Ecto.Query
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Node, Edge}
-  alias DeciduousMcp.Graph.Query, as: GraphQuery
 
-  @impl true
   def definition do
     %{
       name: "ask_graph",
@@ -57,11 +56,17 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
         required: ["question"]
       }
     }
+    |> Scope.with_workspace_arg(global?: true)
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.read_scope(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
     question = args["question"]
     scope = args["scope"] || "all"
     include_context = args["include_context"] != false
@@ -155,10 +160,13 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
   # --- Search strategies ---
 
+  defp scope_ws(query, :global), do: query
+  defp scope_ws(query, workspace_id), do: where(query, [n], n.workspace_id == ^workspace_id)
+
   defp search_by_text(workspace_id, terms, scope) when terms != [] do
     base_query =
       Node
-      |> where([n], n.workspace_id == ^workspace_id)
+      |> scope_ws(workspace_id)
       |> where([n], is_nil(n.deleted_at))
       |> apply_scope(scope)
 
@@ -207,7 +215,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
     query =
       Node
-      |> where([n], n.workspace_id == ^workspace_id)
+      |> scope_ws(workspace_id)
       |> where([n], is_nil(n.deleted_at))
       |> apply_scope(scope)
 
