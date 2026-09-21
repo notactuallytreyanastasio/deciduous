@@ -184,8 +184,20 @@ defmodule DeciduousMcp.Web.Router do
 
   defp valid_hash?(hash), do: is_binary(hash) and String.match?(hash, ~r/\A[0-9a-fA-F]{64}\z/)
 
+  # Bandit's default body read timeout is 15s per read, which is fine for an
+  # MCP call and far too short for an import. The largest graph here is a 23MB
+  # payload pushed from a laptop over a home uplink; every one of the 11
+  # biggest projects failed with `Bandit.HTTPError: Body read timeout`,
+  # surfacing to the client as a bare 408 with no body to explain it.
+  @body_read_timeout to_timeout(minute: 5)
+  @body_read_chunk 8 * 1024 * 1024
+
   defp read_whole_body(conn, acc \\ [], size \\ 0) do
-    case Plug.Conn.read_body(conn, length: 1_000_000) do
+    case Plug.Conn.read_body(conn,
+           length: @body_read_chunk,
+           read_length: @body_read_chunk,
+           read_timeout: @body_read_timeout
+         ) do
       {:ok, chunk, conn} ->
         total = size + byte_size(chunk)
 

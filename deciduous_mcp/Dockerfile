@@ -1,9 +1,13 @@
 # Two stages: the build image carries Elixir and the whole dep tree, the
 # runtime image carries only the compiled release. Matches how the other
 # Phoenix apps on this host are built.
+# These three have to name a tag that actually exists on Docker Hub — hexpm
+# publishes only specific elixir/erlang/debian combinations, and a plausible
+# guess fails at `load metadata` with "not found". OTP 28 matches the version
+# this is developed against.
 ARG ELIXIR_VERSION=1.18.4
-ARG OTP_VERSION=27.2
-ARG DEBIAN_VERSION=bookworm-20250113-slim
+ARG OTP_VERSION=28.0
+ARG DEBIAN_VERSION=bookworm-20260610-slim
 ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
 ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
 
