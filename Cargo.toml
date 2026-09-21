@@ -58,6 +58,9 @@ clap_complete = "4.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
+# Format-preserving TOML, for editing a config the user hand-wrote. Already in
+# the tree as a transitive dependency of `toml`.
+toml_edit = "0.22"
 
 # HTTP server for graph viewer
 tiny_http = "0.12"
@@ -80,6 +83,10 @@ libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 # Colored terminal output
 colored = "2.0"
+# Blocking HTTP client for `deciduous remote`. ureq over reqwest deliberately:
+# reqwest pulls in tokio, and every call this CLI makes is a single blocking
+# request from a short-lived process.
+ureq = { version = "2.10", features = ["json"] }
 
 ts-rs = { version = "10.1.0", optional = true }
 

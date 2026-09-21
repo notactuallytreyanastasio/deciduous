@@ -27,6 +27,11 @@ pub struct Config {
     /// Claude Code skills configuration
     #[serde(default)]
     pub skills: SkillsConfig,
+
+    /// Shared graph server. Holds a URL only — the token is read from
+    /// DECIDUOUS_MCP_TOKEN so that committing this file leaks nothing.
+    #[serde(default)]
+    pub remote: crate::remote::RemoteConfig,
 }
 
 /// Hooks configuration for Claude Code integration
@@ -217,6 +222,60 @@ impl Config {
         Self::default()
     }
 
+    /// Write the `[remote]` section into `.deciduous/config.toml`, leaving
+    /// everything else in the file exactly as it was.
+    ///
+    /// Done with `toml_edit` rather than by deserializing and re-serializing.
+    /// A round-trip through `toml::Value` drops every comment and reflows
+    /// arrays, so adding one two-line table to a hand-written config rewrote
+    /// the whole file:
+    ///
+    /// ```text
+    /// -# Deciduous Configuration
+    /// -# This file controls branch detection and grouping behavior
+    /// -main_branches = ["main", "master"]
+    /// +main_branches = [
+    /// +    "main",
+    /// +]
+    /// ```
+    ///
+    /// Nothing was lost semantically, which is what makes it easy to miss.
+    pub fn save_remote(&self) -> std::io::Result<PathBuf> {
+        let dir = Self::find_deciduous_dir().ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "no .deciduous directory found; run `deciduous init` first",
+            )
+        })?;
+        let path = dir.join("config.toml");
+
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let mut doc = existing.parse::<toml_edit::DocumentMut>().map_err(|e| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("config.toml is not valid TOML: {e}"),
+            )
+        })?;
+
+        let table = doc["remote"].or_insert(toml_edit::table());
+        if let Some(url) = &self.remote.url {
+            table["url"] = toml_edit::value(url.clone());
+        }
+        match &self.remote.workspace {
+            Some(ws) => table["workspace"] = toml_edit::value(ws.clone()),
+            // Clearing the override has to remove the key; leaving a stale one
+            // behind would silently keep writing to the old workspace.
+            None => {
+                if let Some(t) = table.as_table_mut() {
+                    t.remove("workspace");
+                }
+            }
+        }
+
+        std::fs::write(&path, doc.to_string())?;
+        Ok(path)
+    }
+
     /// Find config.toml by walking up directory tree
     fn find_config_path() -> Option<PathBuf> {
         Self::find_deciduous_dir().map(|d| d.join("config.toml"))
@@ -378,5 +437,59 @@ enabled = false
             script_path: None,
         };
         assert!(!custom_hook.uses_builtin());
+    }
+}
+
+#[cfg(test)]
+mod remote_config_tests {
+    use super::*;
+
+    /// Regression: the first version round-tripped through `toml::Value`,
+    /// which silently deleted every comment and reflowed arrays. Nothing was
+    /// lost semantically, so it looked fine until the diff was read.
+    #[test]
+    fn writing_the_remote_table_keeps_comments_and_formatting() {
+        let dir = std::env::temp_dir().join(format!("deciduous-cfg-{}", std::process::id()));
+        let deciduous = dir.join(".deciduous");
+        std::fs::create_dir_all(&deciduous).unwrap();
+        let path = deciduous.join("config.toml");
+
+        let original = "# Deciduous Configuration\n\
+                        # This file controls branch detection\n\
+                        \n\
+                        [branch]\n\
+                        main_branches = [\"main\", \"master\"]\n\
+                        auto_detect = true\n";
+        std::fs::write(&path, original).unwrap();
+
+        // save_remote resolves the directory itself, so drive the edit the way
+        // it does rather than depending on the process's cwd.
+        let mut doc = std::fs::read_to_string(&path)
+            .unwrap()
+            .parse::<toml_edit::DocumentMut>()
+            .unwrap();
+        doc["remote"].or_insert(toml_edit::table())["url"] =
+            toml_edit::value("https://example.com/mcp");
+        std::fs::write(&path, doc.to_string()).unwrap();
+
+        let after = std::fs::read_to_string(&path).unwrap();
+        assert!(
+            after.contains("# Deciduous Configuration"),
+            "comment dropped:\n{after}"
+        );
+        assert!(after.contains("# This file controls branch detection"));
+        assert!(
+            after.contains("main_branches = [\"main\", \"master\"]"),
+            "array was reflowed:\n{after}"
+        );
+        assert!(after.contains("[remote]"));
+        assert!(after.contains("https://example.com/mcp"));
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn a_config_with_no_remote_is_not_configured() {
+        assert!(!Config::default().remote.is_configured());
     }
 }

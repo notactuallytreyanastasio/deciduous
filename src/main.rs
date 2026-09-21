@@ -449,11 +449,43 @@ enum Command {
     /// {"command": "deciduous", "args": ["mcp"]}
     Mcp {},
 
+    /// Configure and use a shared graph server
+    ///
+    /// One Postgres behind an MCP endpoint holds every project's graph, one
+    /// workspace per repository. The local database becomes a cache of it.
+    /// The token is read from DECIDUOUS_MCP_TOKEN, never from config.
+    Remote {
+        #[command(subcommand)]
+        action: RemoteAction,
+    },
+
     /// Generate shell completions
     Completion {
         /// Shell type: bash, zsh, fish, powershell, elvish
         shell: clap_complete::Shell,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum RemoteAction {
+    /// Point this project at a shared graph server
+    Init {
+        /// Base URL, e.g. https://example.com/deciduous-mcp
+        url: String,
+
+        /// Workspace name. Defaults to the git repository's root directory.
+        #[arg(long)]
+        workspace: Option<String>,
+    },
+
+    /// Show how far the local database has drifted from the server
+    Status,
+
+    /// Send this project's local graph to the server
+    Push,
+
+    /// Refresh the local database from the server
+    Pull,
 }
 
 #[derive(Subcommand, Debug)]
@@ -1702,6 +1734,229 @@ fn main() {
                 if let Err(e) = deciduous::serve::start_graph_server(port) {
                     eprintln!("{} Server error: {}", "Error:".red(), e);
                     std::process::exit(1);
+                }
+            }
+        }
+
+        Command::Remote { action } => {
+            let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+            match action {
+                RemoteAction::Init { url, workspace } => {
+                    let url = url.trim_end_matches('/').to_string();
+                    let ws = workspace
+                        .clone()
+                        .unwrap_or_else(|| deciduous::remote::workspace_for(&cwd));
+
+                    // Verified before it is written. Saving a URL that does not
+                    // answer leaves a project configured to talk to nothing,
+                    // and the failure only surfaces on the next real command.
+                    let mut cfg = Config::load();
+                    cfg.remote.url = Some(url.clone());
+                    cfg.remote.workspace = workspace;
+
+                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    match remote.check() {
+                        Ok(counts) => {
+                            if let Err(e) = cfg.save_remote() {
+                                eprintln!("{} could not write config: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                            println!("{} {}", "Remote:".green(), url);
+                            println!("  workspace: {}", ws.cyan());
+                            println!(
+                                "  server holds {} nodes, {} edges, {} documents",
+                                counts.nodes, counts.edges, counts.documents
+                            );
+                            println!(
+                                "\nWritten to .deciduous/config.toml. The token stays in {}.",
+                                deciduous::remote::TOKEN_ENV
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            eprintln!("\nNothing was written; the project is unchanged.");
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RemoteAction::Status => {
+                    let cfg = Config::load();
+                    if !cfg.remote.is_configured() {
+                        println!(
+                            "{} no remote configured for this project.",
+                            "Local only:".yellow()
+                        );
+                        println!("\n    deciduous remote init <url>");
+                        return;
+                    }
+
+                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let local_nodes = db.get_all_nodes().map(|n: Vec<_>| n.len()).unwrap_or(0);
+                    let local_edges = db.get_all_edges().map(|e: Vec<_>| e.len()).unwrap_or(0);
+
+                    println!("{} {}", "Remote:".bold(), remote.url);
+                    println!("{} {}", "Workspace:".bold(), remote.workspace.cyan());
+
+                    match remote.check() {
+                        Ok(c) => {
+                            println!("\n              {:>8}  {:>8}", "local", "remote");
+                            println!("  nodes       {:>8}  {:>8}", local_nodes, c.nodes);
+                            println!("  edges       {:>8}  {:>8}", local_edges, c.edges);
+
+                            // Equal counts are not proof of equal content, so
+                            // this says "match", not "in sync". And the advice
+                            // follows the direction of the drift: telling
+                            // someone to pull when their local database is the
+                            // side holding the extra nodes sends them to a
+                            // command that will do nothing.
+                            if local_nodes == c.nodes && local_edges == c.edges {
+                                println!("\n{} counts match.", "OK:".green());
+                            } else if local_nodes > c.nodes || local_edges > c.edges {
+                                println!(
+                                    "\n{} local holds more than the server. `deciduous remote push` to send it up.",
+                                    "Drift:".yellow()
+                                );
+                            } else {
+                                println!(
+                                    "\n{} the server holds more than this machine. `deciduous remote pull` to refresh.",
+                                    "Drift:".yellow()
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            println!("\n  local: {} nodes, {} edges", local_nodes, local_edges);
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RemoteAction::Push => {
+                    let cfg = Config::load();
+                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let graph = match db.get_graph() {
+                        Ok(g) => match serde_json::to_value(&g) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                eprintln!("{} serializing the local graph: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        },
+                        Err(e) => {
+                            eprintln!("{} could not read the local graph: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    match remote.import(graph) {
+                        Ok(r) => {
+                            println!(
+                                "{} {} -> {}",
+                                "Pushed:".green(),
+                                remote.workspace.cyan(),
+                                remote.url
+                            );
+                            println!("  nodes {} of {}", r.nodes.upserted, r.nodes.received);
+                            println!("  edges {} of {}", r.edges.upserted, r.edges.received);
+                            if r.edges.unresolved > 0 {
+                                println!(
+                                    "  {} {} edges were not written (self-loops or missing endpoints)",
+                                    "note:".yellow(),
+                                    r.edges.unresolved
+                                );
+                            }
+                            if r.edges.stale_change_ids > 0 {
+                                println!(
+                                    "  {} {} endpoints had a change_id disagreeing with their node",
+                                    "note:".yellow(),
+                                    r.edges.stale_change_ids
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
+                }
+
+                RemoteAction::Pull => {
+                    let cfg = Config::load();
+                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    let Some(store_path) = RecordStore::path_for_db(&Database::db_path()) else {
+                        eprintln!(
+                            "{} The database path has no directory of its own, so there is nowhere to keep the graph file.",
+                            "Error:".red()
+                        );
+                        std::process::exit(1);
+                    };
+                    let store = match RecordStore::open(&store_path) {
+                        Some(s) => s,
+                        None => match RecordStore::create(&store_path) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                eprintln!(
+                                    "{} could not open the graph file: {}",
+                                    "Error:".red(),
+                                    e
+                                );
+                                std::process::exit(1);
+                            }
+                        },
+                    };
+
+                    match deciduous::remote::pull(&remote, &db, &store) {
+                        Ok(r) => {
+                            println!(
+                                "{} {} <- {}",
+                                "Pulled:".green(),
+                                remote.workspace.cyan(),
+                                remote.url
+                            );
+                            println!(
+                                "  fetched {} nodes, {} edges",
+                                r.fetched_nodes, r.fetched_edges
+                            );
+                            println!(
+                                "  imported {} nodes, {} edges into the local database",
+                                r.imported_nodes, r.imported_edges
+                            );
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
             }
         }

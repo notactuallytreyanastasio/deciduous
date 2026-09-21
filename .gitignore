@@ -54,3 +54,6 @@ deploy/.env
 .deciduous/*
 !.deciduous/config.toml
 !.deciduous/graph.json
+
+# PR bodies, passed to gh with --body-file
+.prs/

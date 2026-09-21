@@ -11,6 +11,7 @@ defmodule DeciduousMcp.Web.Router do
     * `POST /import` — bulk ingest of one project's graph.
     * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
+    * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
 
   `Plug.Parsers` is deliberately NOT in this pipeline. Hermes' plug reads the
   request body itself, but only when `body_params` is still unfetched
@@ -20,7 +21,8 @@ defmodule DeciduousMcp.Web.Router do
   """
   use Plug.Router
 
-  alias DeciduousMcp.Graph.Documents
+  alias DeciduousMcp.Graph.{Documents, Query}
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Storage
   alias DeciduousMcp.Sync.Import
   alias DeciduousMcp.Web.{Auth, WorkspacePlug}
@@ -75,6 +77,29 @@ defmodule DeciduousMcp.Web.Router do
           {:too_large, conn} -> json(conn, 413, %{error: "blob exceeds #{@max_import_bytes} bytes"})
           {:error, _} -> json(conn, 400, %{error: "could not read body"})
         end
+    end
+  end
+
+  # The pull half of the sync. `POST /import` has existed since the first
+  # deploy; without a matching export the remote could only ever be a
+  # write-only mirror, and a local database could never be refreshed from it.
+  get "/export" do
+    conn = Auth.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      # Run the pin plug here too, so a repo that pinned itself by header gets
+      # the same workspace on a pull as it does on every MCP call.
+      conn = conn |> WorkspacePlug.call([]) |> fetch_query_params()
+
+      case Scope.read_scope(conn_frame(conn), conn.query_params) do
+        {:ok, scope} ->
+          json(conn, 200, Query.get_full_graph(scope))
+
+        {:error, message} ->
+          json(conn, 422, %{error: message})
+      end
     end
   end
 
@@ -180,6 +205,11 @@ defmodule DeciduousMcp.Web.Router do
         json(conn, 404, %{error: "no such document"})
     end
   end
+
+  # Scope resolution reads `frame.assigns`, which on the MCP path Hermes
+  # inherits from Plug.Conn. This route talks to it directly, so it presents
+  # the same shape rather than duplicating the precedence rules.
+  defp conn_frame(conn), do: %{assigns: conn.assigns}
 
   defp content_type(conn) do
     case get_req_header(conn, "content-type") do
