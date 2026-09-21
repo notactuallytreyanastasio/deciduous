@@ -104,13 +104,25 @@ and writes alike:
       "type": "http",
       "url": "https://<host>/deciduous-mcp/mcp",
       "headers": {
-        "Authorization": "Bearer …",
+        "Authorization": "Bearer ${DECIDUOUS_MCP_TOKEN}",
         "X-Deciduous-Workspace": "my-project"
       }
     }
   }
 }
 ```
+
+**Use `${DECIDUOUS_MCP_TOKEN}`, never a literal token.** `.mcp.json` is a file
+people commit — it is meant to be, that is how a team shares server config —
+and Claude Code expands `${VAR}` from the environment when it connects. With
+the variable unset it refuses and says so:
+
+```
+[Warning] [deciduous] mcpServers.deciduous: Missing environment variables: DECIDUOUS_MCP_TOKEN
+```
+
+A literal token here is a credential committed to a repository. Pasting one in
+is the single easiest way to leak access to every graph on the server.
 
 ## Asking across every project
 
