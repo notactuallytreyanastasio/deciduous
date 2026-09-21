@@ -1,0 +1,33 @@
+defmodule DeciduousMcp.MCP.Tools.DeleteNode do
+  @moduledoc "MCP Tool: soft-delete a decision graph node."
+  use Hermes.Server.Component, type: :tool
+
+  alias DeciduousMcp.Graph.Nodes
+
+  @impl true
+  def definition do
+    %{
+      name: "delete_node",
+      description:
+        "Soft-delete a decision graph node. The node is marked as deleted but preserved for audit.",
+      input_schema: %{
+        type: "object",
+        properties: %{
+          node_id: %{type: "string", description: "UUID of the node to delete"}
+        },
+        required: ["node_id"]
+      }
+    }
+  end
+
+  @impl true
+  def call(%{arguments: %{"node_id" => node_id}}) do
+    case Nodes.delete_node(node_id) do
+      {:ok, node} ->
+        {:ok, Jason.encode!(%{id: node.id, message: "Node soft-deleted"})}
+
+      {:error, :not_found} ->
+        {:error, %{code: -1, message: "Node not found: #{node_id}"}}
+    end
+  end
+end

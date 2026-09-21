@@ -1,0 +1,59 @@
+defmodule DeciduousMcp.MCP.Tools.UpdateNode do
+  @moduledoc "MCP Tool: update an existing decision graph node."
+  use Hermes.Server.Component, type: :tool
+
+  alias DeciduousMcp.Graph.Nodes
+
+  @impl true
+  def definition do
+    %{
+      name: "update_node",
+      description: "Update an existing decision graph node's title, description, or status.",
+      input_schema: %{
+        type: "object",
+        properties: %{
+          node_id: %{type: "string", description: "UUID of the node to update"},
+          title: %{type: "string", description: "New title"},
+          description: %{type: "string", description: "New description"},
+          status: %{
+            type: "string",
+            enum: ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
+            description: "New status"
+          },
+          metadata: %{type: "object", description: "Updated metadata"}
+        },
+        required: ["node_id"]
+      }
+    }
+  end
+
+  @impl true
+  def call(%{arguments: args}) do
+    attrs =
+      %{}
+      |> maybe_put(:title, args["title"])
+      |> maybe_put(:description, args["description"])
+      |> maybe_put(:status, args["status"])
+      |> maybe_put(:metadata, args["metadata"])
+
+    case Nodes.update_node(args["node_id"], attrs) do
+      {:ok, node} ->
+        {:ok,
+         Jason.encode!(%{
+           id: node.id,
+           title: node.title,
+           status: node.status,
+           message: "Node updated"
+         })}
+
+      {:error, :not_found} ->
+        {:error, %{code: -1, message: "Node not found: #{args["node_id"]}"}}
+
+      {:error, reason} ->
+        {:error, %{code: -1, message: "Update failed: #{inspect(reason)}"}}
+    end
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
+end
