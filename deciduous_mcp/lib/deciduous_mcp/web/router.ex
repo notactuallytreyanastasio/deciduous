@@ -155,6 +155,12 @@ defmodule DeciduousMcp.Web.Router do
         # is meaningless and some viewers treat it as a reason to mistrust the
         # body.
         |> put_resp_header("content-type", doc.mime_type)
+        # These are private plans and PDFs reachable from the public internet,
+        # behind a bearer token and a CDN. Cloudflare reports DYNAMIC for this
+        # route today, but that is a default that a later page rule could
+        # change; no-store says it explicitly and also keeps the bytes out of
+        # the requesting browser's disk cache.
+        |> put_resp_header("cache-control", "no-store, private, max-age=0")
         |> put_resp_header(
           "content-disposition",
           ~s(inline; filename="#{doc.original_filename}")
