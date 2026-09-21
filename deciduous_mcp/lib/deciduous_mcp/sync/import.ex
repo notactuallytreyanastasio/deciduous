@@ -134,33 +134,46 @@ defmodule DeciduousMcp.Sync.Import do
   # --- Edges ------------------------------------------------------------------
 
   defp upsert_edges(workspace_id, edges, nodes) do
-    # Older rows predate the change_id columns and carry only SQLite integer
-    # ids, so the payload's own node list is the fallback lookup. Both are
-    # needed: neither alone covers every graph on disk.
-    by_sqlite_id =
-      Map.new(nodes, fn n -> {n["id"], n["change_id"]} end)
+    # An edge names its endpoints twice: `from_node_id` (SQLite's integer
+    # primary key, a real foreign key) and `from_change_id` (a denormalized
+    # copy added later). The copies go stale. In one graph on disk, 9,185 of
+    # 51,158 edges carry a from_change_id that belongs to no node at all, while
+    # all 51,158 integer endpoints resolve — edge 81346 stores node 82 and
+    # change_id de82201d…, but node 82's change_id is 08e5c211….
+    #
+    # So the integer id is tried first, against the payload's own node list,
+    # and the stored change_id is the fallback for rows written before those
+    # columns existed. Preferring change_id — which reads as the more portable
+    # identifier — silently drops every edge whose copy drifted.
+    by_sqlite_id = Map.new(nodes, fn n -> {n["id"], n["change_id"]} end)
 
     pg_ids = node_ids_by_change_id(workspace_id)
 
-    {rows, unresolved} =
-      Enum.reduce(edges, {[], []}, fn e, {ok, bad} ->
-        from_cid = e["from_change_id"] || Map.get(by_sqlite_id, e["from_node_id"])
-        to_cid = e["to_change_id"] || Map.get(by_sqlite_id, e["to_node_id"])
+    {rows, unresolved, stale} =
+      Enum.reduce(edges, {[], [], 0}, fn e, {ok, bad, stale} ->
+        from_cid = Map.get(by_sqlite_id, e["from_node_id"]) || e["from_change_id"]
+        to_cid = Map.get(by_sqlite_id, e["to_node_id"]) || e["to_change_id"]
+
+        stale =
+          stale +
+            count_stale(e["from_change_id"], from_cid) +
+            count_stale(e["to_change_id"], to_cid)
 
         from_id = Map.get(pg_ids, from_cid)
         to_id = Map.get(pg_ids, to_cid)
 
         cond do
           is_nil(from_id) or is_nil(to_id) ->
-            {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad]}
+            {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad], stale}
 
           from_id == to_id ->
             # The Ecto changeset forbids self-loops; insert_all bypasses it, so
-            # the check is repeated here rather than quietly writing one.
-            {ok, [%{edge: e["id"], self_loop: from_cid} | bad]}
+            # the check is repeated here rather than quietly writing one. There
+            # are 46 of these across the graphs on disk.
+            {ok, [%{edge: e["id"], self_loop: from_cid} | bad], stale}
 
           true ->
-            {[edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) | ok], bad}
+            {[edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) | ok], bad, stale}
         end
       end)
 
@@ -181,9 +194,17 @@ defmodule DeciduousMcp.Sync.Import do
       received: length(edges),
       upserted: inserted,
       unresolved: length(unresolved),
-      unresolved_examples: Enum.take(unresolved, 10)
+      unresolved_examples: Enum.take(unresolved, 10),
+      stale_change_ids: stale
     }
   end
+
+  # Counts endpoints whose stored change_id disagrees with the node its integer
+  # id actually points at. Reported rather than silently corrected, because a
+  # rising number here means the CLI is writing the denormalized column wrong.
+  defp count_stale(nil, _resolved), do: 0
+  defp count_stale(stored, resolved) when stored == resolved, do: 0
+  defp count_stale(_stored, _resolved), do: 1
 
   defp edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) do
     now = DateTime.utc_now()
