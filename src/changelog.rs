@@ -12,6 +12,21 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "0.19.0",
+        highlights: &[
+            "`deciduous remote` points a project at a shared graph server: one Postgres holds every repository's graph, one workspace each",
+            "The server is the truth and the local database becomes a cache of it — `remote pull` refreshes, `remote status` reports which side has drifted",
+            "`remote login` stores the token at ~/.config/deciduous/credentials, mode 0600, outside every repository — it is never written to config.toml",
+            "`remote adopt <dir>` configures many projects at once, and never repoints one already aimed somewhere else",
+            "Read tools accept workspace \"*\" for the cross-project view; writes refuse it, because a node has to land somewhere",
+            "An MCP endpoint serves the graph over HTTP, with documents stored in Postgres and keyed by sha256 so a file attached in several projects is stored once",
+            "Fix: edges resolve by their integer endpoint before the denormalized change_id, which was stale on 9,185 of 51,158 edges in one graph and silently dropped 11% of an archive on import",
+            "Fix: `GET /mcp` returns 405. Cloudflare buffers SSE, so the stream Claude Code waits on never opened and every tool call hung for 300s",
+            "Never put a literal token in .mcp.json — use ${DECIDUOUS_MCP_TOKEN}, which Claude Code expands and names when missing",
+            "See docs/remote-graph.md to set it up, and deciduous_mcp/DEPLOY.md to run the server",
+        ],
+    },
+    Release {
         version: "0.18.0",
         highlights: &[
             "The shared graph is one file again: .deciduous/graph.json holds every node, edge, theme, and tag",
