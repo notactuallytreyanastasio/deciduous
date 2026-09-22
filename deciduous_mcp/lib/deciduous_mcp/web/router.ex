@@ -155,6 +155,12 @@ defmodule DeciduousMcp.Web.Router do
         # is meaningless and some viewers treat it as a reason to mistrust the
         # body.
         |> put_resp_header("content-type", doc.mime_type)
+        # These are private plans and PDFs reachable from the public internet,
+        # behind a bearer token and a CDN. Cloudflare reports DYNAMIC for this
+        # route today, but that is a default that a later page rule could
+        # change; no-store says it explicitly and also keeps the bytes out of
+        # the requesting browser's disk cache.
+        |> put_resp_header("cache-control", "no-store, private, max-age=0")
         |> put_resp_header(
           "content-disposition",
           ~s(inline; filename="#{doc.original_filename}")
@@ -184,8 +190,20 @@ defmodule DeciduousMcp.Web.Router do
 
   defp valid_hash?(hash), do: is_binary(hash) and String.match?(hash, ~r/\A[0-9a-fA-F]{64}\z/)
 
+  # Bandit's default body read timeout is 15s per read, which is fine for an
+  # MCP call and far too short for an import. The largest graph here is a 23MB
+  # payload pushed from a laptop over a home uplink; every one of the 11
+  # biggest projects failed with `Bandit.HTTPError: Body read timeout`,
+  # surfacing to the client as a bare 408 with no body to explain it.
+  @body_read_timeout to_timeout(minute: 5)
+  @body_read_chunk 8 * 1024 * 1024
+
   defp read_whole_body(conn, acc \\ [], size \\ 0) do
-    case Plug.Conn.read_body(conn, length: 1_000_000) do
+    case Plug.Conn.read_body(conn,
+           length: @body_read_chunk,
+           read_length: @body_read_chunk,
+           read_timeout: @body_read_timeout
+         ) do
       {:ok, chunk, conn} ->
         total = size + byte_size(chunk)
 

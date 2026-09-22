@@ -43,6 +43,13 @@ starting it unauthenticated because a variable was missing.
 
 ## 3. Add the compose service
 
+**Check for drift first.** The live `/opt/blog/docker-compose.yml` is not
+always what is in `~/code/blog`: at time of writing the box had a
+`marginalia_drafts` volume and `DRAFT_REPO_ROOT` that the repo did not, holding
+each Marginalia draft's git history. Rsyncing the repo copy over it would have
+destroyed that. Edit the live file in place and backport the change.
+
+
 In `/opt/blog/docker-compose.yml`, alongside `marginalia`:
 
 ```yaml
@@ -63,33 +70,45 @@ In `/opt/blog/docker-compose.yml`, alongside `marginalia`:
     # Not exposed to host - Caddy proxies to port 4000 via Docker network
 ```
 
-## 4. Add the Caddy site
+## 4. Add the Caddy route
 
-In `/opt/blog/Caddyfile`:
+Deployed as a **path on the existing domain**, not a subdomain:
+`deciduous-mcp.bobbby.online` has no DNS record and there is no wildcard, so a
+subdomain would need a Cloudflare record before Caddy could get a certificate.
+A path needs neither. Inside the `bobbby.online` block, **before** the
+catch-all `handle` that sends everything to Phoenix:
 
 ```
-deciduous-mcp.bobbby.online {
-	encode gzip zstd
-
-	header {
-		X-Forwarded-Proto {scheme}
-		alt-svc "clear"
+	handle_path /deciduous-mcp/* {
+		reverse_proxy deciduous-mcp:4000 {
+			# MCP streams responses over SSE; without this Caddy buffers them
+			# and the client waits for a response already written.
+			flush_interval -1
+		}
 	}
-
-	reverse_proxy deciduous-mcp:4000 {
-		header_up X-Real-IP {http.request.header.CF-Connecting-IP}
-		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
-		# MCP streams responses over SSE; without this Caddy buffers them and
-		# the client waits for a response that has already been written.
-		flush_interval -1
-	}
-}
 ```
 
-A DNS record for `deciduous-mcp.bobbby.online` has to exist first (Cloudflare,
-same as the other subdomains).
+`handle_path` strips the prefix, so the app sees `/mcp`, `/import`,
+`/blob/:hash` and `/documents/:id` at its own root.
+
+To move to a subdomain later, add the Cloudflare record and swap this for its
+own site block; nothing in the app changes.
+
+Reload rather than restart Caddy — `docker compose exec caddy caddy reload
+--config /etc/caddy/Caddyfile` — so the other dozen sites on that box do not
+blink.
 
 ## 5. Ship it
+
+The Dockerfile's three ARGs must name a tag that actually exists on Docker Hub
+— hexpm publishes only specific elixir/erlang/debian combinations, and a
+plausible-looking guess fails at `load metadata` with "not found". Check before
+building:
+
+```bash
+curl -s "https://hub.docker.com/v2/repositories/hexpm/elixir/tags?page_size=100&name=1.18.4-erlang-28" \
+  | python3 -c "import json,sys;[print(r['"'"'name'"'"']) for r in json.load(sys.stdin)['"'"'results'"'"']]"
+```
 
 ```bash
 rsync -az --delete --exclude _build --exclude deps \
