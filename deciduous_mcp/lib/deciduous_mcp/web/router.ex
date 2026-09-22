@@ -127,6 +127,7 @@ defmodule DeciduousMcp.Web.Router do
       else
         conn
         |> WorkspacePlug.call([])
+        |> refuse_sse_stream()
         |> then(fn c -> if c.halted, do: c, else: super(c, opts) end)
       end
     else
@@ -134,7 +135,44 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
-  defoverridable call: 2
+  # Refuse the server-to-client SSE stream, and only that.
+  #
+  # This deployment sits behind Cloudflare, which buffers a streaming response
+  # until it completes. An SSE stream never completes, so its headers never
+  # reach the client:
+  #
+  #     GET /mcp  (accept: text/event-stream)
+  #       at the origin:      HTTP/2 200, content-type: text/event-stream
+  #       through Cloudflare: nothing, ever
+  #
+  # Claude Code opens that stream after initializing and waits on it, so every
+  # tool call hung until the client gave up at 300s — against a server that
+  # answers the same POST in 88ms.
+  #
+  # POST is untouched: those responses already come back as JSON through
+  # Cloudflare and are fast. The MCP spec permits refusing the GET stream with
+  # 405, and this server never initiates messages, so it has nothing to stream.
+  #
+  # The `accept` header is deliberately NOT rewritten to steer Hermes away from
+  # SSE. `validate_accept_header/1` and `wants_sse?/1` both read
+  # `get_req_header("accept") |> List.first("")`, and validation *requires*
+  # text/event-stream to be present — so any header that passes validation also
+  # selects SSE. Stripping it produced `Not Acceptable: Client must accept
+  # both`.
+  defp refuse_sse_stream(%Plug.Conn{method: "GET"} = conn) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(
+      405,
+      Jason.encode!(%{
+        error: "this server does not offer a server-to-client stream",
+        detail: "POST responses are returned directly; see MCP Streamable HTTP"
+      })
+    )
+    |> halt()
+  end
+
+  defp refuse_sse_stream(conn), do: conn
 
   defp mcp_path?(%Plug.Conn{path_info: ["mcp" | _]}), do: true
   defp mcp_path?(_), do: false
