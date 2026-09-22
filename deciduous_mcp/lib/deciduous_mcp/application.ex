@@ -36,6 +36,9 @@ defmodule DeciduousMcp.Application do
       # Deciduous MCP Server, reachable over HTTP
       {DeciduousMcp.MCP.Server, transport: :streamable_http},
 
+      # Bridges Postgres NOTIFY to PubSub, for the WebSocket event stream
+      DeciduousMcp.Events.Listener,
+
       # Public surface: /health, /mcp, /import
       {Bandit, plug: DeciduousMcp.Web.Router, scheme: :http, port: port}
     ]
