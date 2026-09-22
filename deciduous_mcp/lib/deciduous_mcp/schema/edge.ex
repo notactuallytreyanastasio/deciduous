@@ -9,6 +9,11 @@ defmodule DeciduousMcp.Schema.Edge do
   - `requires` — dependency
   - `blocks` — prevents progress
   - `enables` — makes something possible
+  - `took_from` — a borrow. `from` is the node you took the idea from, `to`
+    is your node that used it. This edge crosses branches on purpose: in a
+    run with several agents on their own branches it is the only edge that
+    does, and it is what turns "who borrowed what" from a regular expression
+    over titles into a graph query.
   """
   use Ecto.Schema
   import Ecto.Changeset
@@ -16,7 +21,7 @@ defmodule DeciduousMcp.Schema.Edge do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @edge_types ~w(leads_to requires chosen rejected blocks enables)
+  @edge_types ~w(leads_to requires chosen rejected blocks enables took_from)
 
   schema "decision_edges" do
     field :edge_type, :string, default: "leads_to"
@@ -37,8 +42,14 @@ defmodule DeciduousMcp.Schema.Edge do
   def changeset(edge, attrs) do
     edge
     |> cast(attrs, [
-      :edge_type, :weight, :rationale, :from_node_id, :to_node_id,
-      :from_change_id, :to_change_id, :workspace_id
+      :edge_type,
+      :weight,
+      :rationale,
+      :from_node_id,
+      :to_node_id,
+      :from_change_id,
+      :to_change_id,
+      :workspace_id
     ])
     |> validate_required([:from_node_id, :to_node_id, :workspace_id])
     |> validate_inclusion(:edge_type, @edge_types)

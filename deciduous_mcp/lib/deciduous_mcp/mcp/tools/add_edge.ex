@@ -10,7 +10,7 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
       name: "add_edge",
       description:
         "Create a directed edge between two nodes. Equivalent to `deciduous link FROM TO`. " <>
-          "Edge types: leads_to (default), chosen, rejected, requires, blocks, enables.",
+          "Edge types: leads_to (default), chosen, rejected, requires, blocks, enables, took_from.",
       input_schema: %{
         type: "object",
         properties: %{
@@ -18,8 +18,10 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
           to_node_id: %{type: "string", description: "UUID of the target node"},
           edge_type: %{
             type: "string",
-            enum: ["leads_to", "chosen", "rejected", "requires", "blocks", "enables"],
-            description: "Relationship type (default: leads_to)"
+            enum: DeciduousMcp.Schema.Edge.edge_types(),
+            description:
+              "Relationship type (default: leads_to). took_from records a borrow: " <>
+                "from = the node you took the idea from (any branch), to = your node that used it."
           },
           rationale: %{type: "string", description: "Why this connection exists"},
           branch: %{

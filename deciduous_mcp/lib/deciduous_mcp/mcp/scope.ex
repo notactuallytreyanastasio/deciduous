@@ -25,7 +25,7 @@ defmodule DeciduousMcp.MCP.Scope do
   interleaves with a burst the first agent is mid-way through.
   """
 
-  alias DeciduousMcp.Graph.Workspaces
+  alias DeciduousMcp.Graph.{Nodes, Workspaces}
   alias DeciduousMcp.Locks
 
   @fallback "scratch"
@@ -85,6 +85,56 @@ defmodule DeciduousMcp.MCP.Scope do
         with {:ok, workspace_id} <- resolve_single(frame, args) do
           claim_lock(workspace_id, frame, args)
         end
+    end
+  end
+
+  @doc """
+  Resolves a write scope from the node being written to, and claims the
+  branch lock for it.
+
+  `update_node`, `delete_node` and `delete_edge` name a row by id rather than
+  a workspace by name, so the workspace argument the other write tools take
+  would be the wrong source of truth here: a caller that omitted it would
+  lock `scratch` while editing a node in `blog`. The node already knows its
+  workspace. Look it up, refuse if it is gone, then claim the lock exactly
+  as `write_workspace_id/2` does.
+
+  For an edge, the source node stands in for the edge — an edge row carries
+  no branch of its own, and both of its endpoints are in one workspace by
+  construction.
+  """
+  def write_scope_for_node(frame, node_id, args) do
+    with {:ok, node} <- lookup_node(node_id),
+         :ok <- check_pin(frame, node) do
+      claim_lock(node.workspace_id, frame, args)
+    else
+      {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
+      {:error, message} when is_binary(message) -> {:error, message}
+    end
+  end
+
+  # The moduledoc's promise is that a pinned repo cannot have its writes
+  # redirected. Resolving the workspace from the node would quietly break it
+  # the other way round: a client pinned to `blog` naming a node in
+  # `deciduous` would take `deciduous`'s lock and edit `deciduous`'s row.
+  defp check_pin(frame, node) do
+    case pinned_id(frame) do
+      nil ->
+        :ok
+
+      pinned when pinned == node.workspace_id ->
+        :ok
+
+      _ ->
+        {:error,
+         "node #{node.id} belongs to another workspace than the one this client is pinned to"}
+    end
+  end
+
+  defp lookup_node(node_id) do
+    case Ecto.UUID.cast(node_id) do
+      {:ok, _} -> Nodes.get_node(node_id)
+      :error -> {:error, :not_found}
     end
   end
 

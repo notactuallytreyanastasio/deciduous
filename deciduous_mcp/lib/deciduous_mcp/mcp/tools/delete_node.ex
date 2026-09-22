@@ -3,6 +3,7 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
   use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Nodes
+  alias DeciduousMcp.MCP.Scope
 
   def definition do
     %{
@@ -24,7 +25,14 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
     }
   end
 
-  def call(%{arguments: %{"node_id" => node_id}}) do
+  def call(%{arguments: %{"node_id" => node_id} = args, server: frame}) do
+    case Scope.write_scope_for_node(frame, node_id, args) do
+      {:ok, _workspace_id} -> do_call(node_id)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(node_id) do
     case Nodes.delete_node(node_id) do
       {:ok, node} ->
         {:ok, Jason.encode!(%{id: node.id, message: "Node soft-deleted"})}

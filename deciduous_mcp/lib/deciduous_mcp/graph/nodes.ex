@@ -108,6 +108,43 @@ defmodule DeciduousMcp.Graph.Nodes do
   end
 
   @doc """
+  The most recent node on every branch of a workspace, newest branch first.
+
+  This is the read the agents in the first arena actually wanted from
+  `check_activity`: not "who holds a lock" but "what did everyone just do."
+  They were polling `query_nodes` for decisions because it was the only way
+  to see what was new. One `DISTINCT ON` over the branch key answers it in
+  a single query, and a node with no branch in its metadata lands under
+  `""` rather than being dropped, so an agent that forgot to pass one still
+  shows up.
+
+  Returns `{rows, total}`: the `limit` most recently written branches
+  (default 20) and how many branches the workspace has in all.
+  """
+  def latest_per_branch(workspace_id, opts \\ []) do
+    limit = Keyword.get(opts, :limit, 20)
+
+    rows =
+      Node
+      |> where([n], n.workspace_id == ^workspace_id)
+      |> where([n], is_nil(n.deleted_at))
+      |> distinct([n], asc: fragment("coalesce(? ->> 'branch', '')", n.metadata))
+      |> order_by([n],
+        asc: fragment("coalesce(? ->> 'branch', '')", n.metadata),
+        desc: n.inserted_at,
+        desc: n.id
+      )
+      |> Repo.all()
+      |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
+
+    # One row per branch is already the cheap part; the expensive part is a
+    # workspace that has had sixty branches since 2025 handing all sixty to
+    # an agent that asked what is happening right now. Most recent first,
+    # then cut, and say how many there were.
+    {Enum.take(rows, limit), length(rows)}
+  end
+
+  @doc """
   Lists nodes in a workspace with optional filters.
 
   Options:

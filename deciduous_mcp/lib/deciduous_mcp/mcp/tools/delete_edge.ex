@@ -3,6 +3,7 @@ defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
   use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Edges
+  alias DeciduousMcp.MCP.Scope
 
   def definition do
     %{
@@ -15,8 +16,13 @@ defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
           to_node_id: %{type: "string", description: "UUID of the target node"},
           edge_type: %{
             type: "string",
-            enum: ["leads_to", "chosen", "rejected", "requires", "blocks", "enables"],
+            enum: DeciduousMcp.Schema.Edge.edge_types(),
             description: "Edge type to remove (default: leads_to)"
+          },
+          branch: %{
+            type: "string",
+            description:
+              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
           }
         },
         required: ["from_node_id", "to_node_id"]
@@ -24,7 +30,14 @@ defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
     }
   end
 
-  def call(%{arguments: args}) do
+  def call(%{arguments: args, server: frame}) do
+    case Scope.write_scope_for_node(frame, args["from_node_id"], args) do
+      {:ok, _workspace_id} -> do_call(args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(args) do
     edge_type = args["edge_type"] || "leads_to"
 
     case Edges.delete_edge(args["from_node_id"], args["to_node_id"], edge_type) do
