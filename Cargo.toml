@@ -1,8 +1,8 @@
 [package]
 name = "deciduous"
-version = "0.19.0"
+version = "1.0.0"
 edition = "2021"
-rust-version = "1.70"
+rust-version = "1.85"
 authors = ["Trey Anastasio <trey@example.com>"]
 description = "Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning."
 license = "Apache-2.0"

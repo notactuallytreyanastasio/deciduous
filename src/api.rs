@@ -56,11 +56,8 @@ impl ApiServer {
         let addr = (config.bind.as_str(), config.port)
             .to_socket_addrs()?
             .next()
-            .ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::Other, "could not resolve bind address")
-            })?;
-        let server =
-            Server::http(addr).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            .ok_or_else(|| std::io::Error::other("could not resolve bind address"))?;
+        let server = Server::http(addr).map_err(std::io::Error::other)?;
         Ok(Self {
             server: Arc::new(server),
             registry: Arc::new(Registry::new(config.data_dir)),

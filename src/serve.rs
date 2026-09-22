@@ -31,8 +31,7 @@ const GRAPH_VIEWER_HTML: &str = include_str!("viewer.html");
 /// Start the decision graph viewer server
 pub fn start_graph_server(port: u16) -> std::io::Result<()> {
     let addr = format!("127.0.0.1:{}", port);
-    let server = Server::http(&addr)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+    let server = Server::http(&addr).map_err(|e| std::io::Error::other(e.to_string()))?;
 
     let url = format!("http://localhost:{}", port);
 

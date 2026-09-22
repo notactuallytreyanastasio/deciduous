@@ -347,9 +347,8 @@ pub fn get_current_author() -> String {
 /// Stable, pretty JSON with a trailing newline. Keys come out sorted, so
 /// two machines writing the same record produce byte-identical files.
 fn to_stable_json<T: Serialize>(value: &T) -> io::Result<String> {
-    let v = serde_json::to_value(value).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    let mut s =
-        serde_json::to_string_pretty(&v).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let v = serde_json::to_value(value).map_err(io::Error::other)?;
+    let mut s = serde_json::to_string_pretty(&v).map_err(io::Error::other)?;
     s.push('\n');
     Ok(s)
 }
@@ -519,9 +518,9 @@ where
     let Some(existing) = existing else {
         return serde_json::to_value(incoming)
             .and_then(serde_json::from_value)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e));
+            .map_err(io::Error::other);
     };
-    let bad = |e: serde_json::Error| io::Error::new(io::ErrorKind::Other, e);
+    let bad = |e: serde_json::Error| io::Error::other(e);
     let ours = serde_json::to_value(existing).map_err(bad)?;
     let theirs = serde_json::to_value(incoming).map_err(bad)?;
     let merged = merge_record_values(None, &ours, &theirs);

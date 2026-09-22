@@ -44,6 +44,9 @@ jobs:
     needs: check-version
     if: needs.check-version.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
 
     steps:
       - uses: actions/checkout@v4
@@ -54,3 +57,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ needs.check-version.outputs.version }}" -m "Release v${{ needs.check-version.outputs.version }}"
           git push origin "v${{ needs.check-version.outputs.version }}"
+
+      # A tag pushed with GITHUB_TOKEN does not start the Release workflow:
+      # GitHub never runs workflows from events that token creates, except
+      # workflow_dispatch and repository_dispatch. Every release this job
+      # tagged (0.16.0, 0.17.0, 0.17.1) was built only because someone
+      # dispatched release.yml by hand afterwards; the human-tagged ones ran
+      # on push. Dispatch it here so the tag and the build are one event.
+      - name: Start the release build for the tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "v${{ needs.check-version.outputs.version }}" -f tag="v${{ needs.check-version.outputs.version }}"

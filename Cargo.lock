@@ -355,7 +355,7 @@ checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
 name = "deciduous"
-version = "0.19.0"
+version = "1.0.0"
 dependencies = [
  "chrono",
  "clap",
