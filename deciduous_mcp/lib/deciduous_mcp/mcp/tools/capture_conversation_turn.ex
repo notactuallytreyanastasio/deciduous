@@ -28,11 +28,11 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
   The AI should call this after each substantive exchange — not for every single
   message, but whenever reasoning, decisions, or meaningful work happened.
   """
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.{Nodes, Edges}
 
-  @impl true
   def definition do
     %{
       name: "capture_conversation_turn",
@@ -118,11 +118,17 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
         required: ["summary"]
       }
     }
+    |> Scope.with_workspace_arg()
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.write_workspace_id(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
     branch = args["branch"]
     confidence = args["confidence"]
     parent_id = args["parent_node_id"]

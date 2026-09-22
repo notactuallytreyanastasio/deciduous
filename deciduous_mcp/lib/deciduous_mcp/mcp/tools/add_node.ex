@@ -8,11 +8,11 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
     goal → option → decision → action → outcome
   With observations and revisits attaching anywhere.
   """
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.Nodes
 
-  @impl true
   def definition do
     %{
       name: "add_node",
@@ -49,11 +49,17 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
         required: ["node_type", "title"]
       }
     }
+    |> Scope.with_workspace_arg()
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.write_workspace_id(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
 
     metadata =
       %{}

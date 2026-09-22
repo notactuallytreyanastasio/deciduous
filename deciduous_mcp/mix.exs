@@ -10,6 +10,14 @@ defmodule DeciduousMcp.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      releases: [
+        deciduous_mcp: [
+          include_executables_for: [:unix],
+          # The container runs migrations before boot via eval, so the release
+          # has to carry priv/repo/migrations.
+          applications: [deciduous_mcp: :permanent]
+        ]
+      ],
       description: "MCP server for Deciduous decision graphs with shared PostgreSQL backend",
       package: package()
     ]
@@ -33,6 +41,12 @@ defmodule DeciduousMcp.MixProject do
 
       # JSON
       {:jason, "~> 1.4"},
+
+      # HTTP surface: Hermes ships its Streamable HTTP plug behind
+      # `Code.ensure_loaded?(Plug)`, so plug is a hard dependency here even
+      # though it is optional upstream.
+      {:plug, "~> 1.18"},
+      {:bandit, "~> 1.6"},
 
       # PubSub for real-time collaboration
       {:phoenix_pubsub, "~> 2.1"},

@@ -2,8 +2,8 @@ defmodule DeciduousMcp.MCP.Server do
   @moduledoc """
   Deciduous MCP Server — powered by Hermes MCP.
 
-  Exposes decision graph operations as MCP tools that Cowork (or any MCP client)
-  can discover and invoke. Uses STDIO transport for local integration.
+  Exposes decision graph operations as MCP tools that any MCP client can
+  discover and invoke, over Streamable HTTP.
 
   ## Tools
 
@@ -59,24 +59,25 @@ defmodule DeciduousMcp.MCP.Server do
   # --- Natural language query ---
   component DeciduousMcp.MCP.Tools.AskGraph
 
+  # --- Cross-project ---
+  component DeciduousMcp.MCP.Tools.ListWorkspaces
+
   # --- Prompts ---
   component DeciduousMcp.MCP.Prompts.AlwaysCapture
 
   @impl true
-  def init(_client_info, frame) do
-    Logger.info("Deciduous MCP Server initialized")
+  def init(client_info, frame) do
+    Logger.info("Deciduous MCP session initialized: #{inspect(client_info)}")
 
-    # Resolve workspace on init — store in assigns for all tool calls
-    workspace_name =
-      Application.get_env(:deciduous_mcp, :default_workspace_name, "default")
-
-    case DeciduousMcp.Graph.Workspaces.find_or_create(workspace_name) do
-      {:ok, workspace} ->
-        {:ok, assign(frame, workspace_id: workspace.id)}
-
-      {:error, reason} ->
-        Logger.error("Failed to resolve workspace: #{inspect(reason)}")
-        {:ok, assign(frame, workspace_id: nil)}
-    end
+    # No workspace is resolved here. One server backs every project, so the
+    # workspace is decided per call by `DeciduousMcp.MCP.Scope` — from the
+    # X-Deciduous-Workspace header if the client pinned one (the plug puts it
+    # in assigns, which Frame inherits from Plug.Conn on HTTP transports), and
+    # otherwise from the call's own `workspace` argument.
+    #
+    # The previous version resolved it once from an application env var and
+    # pinned it for the whole connection. That made every tool call from every
+    # project land in a single workspace named "default".
+    {:ok, frame}
   end
 end

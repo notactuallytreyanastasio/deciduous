@@ -1,11 +1,11 @@
 defmodule DeciduousMcp.MCP.Tools.QueryNodes do
   @moduledoc "MCP Tool: search and filter decision graph nodes."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.Nodes
   alias DeciduousMcp.Schema.Node
 
-  @impl true
   def definition do
     %{
       name: "query_nodes",
@@ -16,12 +16,18 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
         properties: %{
           type: %{
             type: "string",
-            enum: ["goal", "decision", "option", "action", "outcome", "observation", "revisit"],
+            enum: [
+              "goal", "decision", "option", "action", "outcome",
+              "observation", "revisit", "feedback"
+            ],
             description: "Filter by node type"
           },
           status: %{
             type: "string",
-            enum: ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
+            enum: [
+              "pending", "active", "completed", "rejected",
+              "superseded", "abandoned", "done"
+            ],
             description: "Filter by status"
           },
           branch: %{type: "string", description: "Filter by git branch"},
@@ -30,12 +36,17 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
         }
       }
     }
+    |> Scope.with_workspace_arg(global?: true)
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.read_scope(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
 
+  defp do_call(workspace_id, args) do
     opts =
       []
       |> maybe_opt(:type, args["type"])
@@ -52,6 +63,9 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
         Enum.map(nodes, fn n ->
           %{
             id: n.id,
+            # Without this the global view is unreadable: 40k nodes from 91
+            # projects, none of them saying which project they came from.
+            workspace: n.workspace.name,
             change_id: n.change_id,
             node_type: n.node_type,
             title: n.title,

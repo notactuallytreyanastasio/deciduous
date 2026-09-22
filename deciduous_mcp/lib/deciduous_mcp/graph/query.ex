@@ -16,12 +16,12 @@ defmodule DeciduousMcp.Graph.Query do
   - `:branch` — filter nodes/edges to a specific git branch
   - `:include_deleted` — include soft-deleted nodes (default false)
   """
-  def get_full_graph(workspace_id, opts \\ []) do
-    nodes = fetch_nodes(workspace_id, opts)
+  def get_full_graph(scope, opts \\ []) do
+    nodes = fetch_nodes(scope, opts)
     node_ids = Enum.map(nodes, & &1.id)
-    edges = fetch_edges(workspace_id, node_ids)
-    themes = fetch_themes(workspace_id)
-    documents = fetch_documents(workspace_id, node_ids)
+    edges = fetch_edges(scope, node_ids)
+    themes = fetch_themes(scope)
+    documents = fetch_documents(scope, node_ids)
     node_themes = fetch_node_themes(node_ids)
 
     %{
@@ -31,7 +31,7 @@ defmodule DeciduousMcp.Graph.Query do
       documents: Enum.map(documents, &serialize_document/1),
       node_themes: Enum.map(node_themes, &serialize_node_theme/1),
       metadata: %{
-        workspace_id: workspace_id,
+        workspace_id: scope,
         node_count: length(nodes),
         edge_count: length(edges),
         exported_at: DateTime.utc_now() |> DateTime.to_iso8601()
@@ -43,16 +43,16 @@ defmodule DeciduousMcp.Graph.Query do
   Finds orphan nodes (nodes with no incoming edges and not of type 'goal').
   These indicate missing connections in the graph.
   """
-  def find_orphans(workspace_id) do
+  def find_orphans(scope) do
     # Nodes that have no incoming edges and aren't goals
     connected_node_ids =
       Edge
-      |> where([e], e.workspace_id == ^workspace_id)
+      |> scope_ws(scope)
       |> select([e], e.to_node_id)
       |> Repo.all()
 
     Node
-    |> where([n], n.workspace_id == ^workspace_id)
+    |> scope_ws(scope)
     |> where([n], is_nil(n.deleted_at))
     |> where([n], n.node_type != "goal")
     |> where([n], n.id not in ^connected_node_ids)
@@ -76,10 +76,15 @@ defmodule DeciduousMcp.Graph.Query do
 
   # --- Private helpers ---
 
-  defp fetch_nodes(workspace_id, opts) do
+  # `:global` drops the workspace predicate, giving the cross-project view.
+  # Defined once per schema because Ecto binds the field to the queried table.
+  defp scope_ws(query, :global), do: query
+  defp scope_ws(query, workspace_id), do: where(query, [x], x.workspace_id == ^workspace_id)
+
+  defp fetch_nodes(scope, opts) do
     query =
       Node
-      |> where([n], n.workspace_id == ^workspace_id)
+      |> scope_ws(scope)
       |> then(fn q ->
         if opts[:include_deleted], do: q, else: where(q, [n], is_nil(n.deleted_at))
       end)
@@ -95,23 +100,23 @@ defmodule DeciduousMcp.Graph.Query do
     |> Repo.all()
   end
 
-  defp fetch_edges(workspace_id, node_ids) do
+  defp fetch_edges(scope, node_ids) do
     Edge
-    |> where([e], e.workspace_id == ^workspace_id)
+    |> scope_ws(scope)
     |> where([e], e.from_node_id in ^node_ids and e.to_node_id in ^node_ids)
     |> order_by([e], asc: e.inserted_at)
     |> Repo.all()
   end
 
-  defp fetch_themes(workspace_id) do
+  defp fetch_themes(scope) do
     Theme
-    |> where([t], t.workspace_id == ^workspace_id)
+    |> scope_ws(scope)
     |> Repo.all()
   end
 
-  defp fetch_documents(workspace_id, node_ids) do
+  defp fetch_documents(scope, node_ids) do
     Document
-    |> where([d], d.workspace_id == ^workspace_id)
+    |> scope_ws(scope)
     |> where([d], d.node_id in ^node_ids)
     |> where([d], is_nil(d.detached_at))
     |> Repo.all()

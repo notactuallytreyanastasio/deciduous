@@ -1,10 +1,9 @@
 defmodule DeciduousMcp.MCP.Tools.GetDescendants do
   @moduledoc "MCP Tool: walk the graph forward from a node to find all descendants."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Query
 
-  @impl true
   def definition do
     %{
       name: "get_descendants",
@@ -19,7 +18,6 @@ defmodule DeciduousMcp.MCP.Tools.GetDescendants do
     }
   end
 
-  @impl true
   def call(%{arguments: %{"node_id" => node_id}}) do
     nodes = Query.descendants(node_id)
 

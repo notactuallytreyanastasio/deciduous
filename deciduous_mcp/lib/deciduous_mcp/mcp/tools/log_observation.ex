@@ -8,11 +8,11 @@ defmodule DeciduousMcp.MCP.Tools.LogObservation do
   Call this whenever you notice something interesting, learn something new,
   or discover a constraint or opportunity.
   """
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.{Nodes, Edges}
 
-  @impl true
   def definition do
     %{
       name: "log_observation",
@@ -41,11 +41,17 @@ defmodule DeciduousMcp.MCP.Tools.LogObservation do
         required: ["title"]
       }
     }
+    |> Scope.with_workspace_arg()
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.write_workspace_id(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
 
     {:ok, node} =
       Nodes.create_node(workspace_id, %{
