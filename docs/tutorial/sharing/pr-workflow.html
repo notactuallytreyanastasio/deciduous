@@ -1,266 +1,157 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The PR Workflow - The Deciduous Tutorial</title>
-    <link rel="stylesheet" href="../style.css">
-
-    <!-- Open Graph / Social -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="The Deciduous Tutorial" />
-    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
-    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Work as a team of agents · Deciduous docs</title>
+<meta name="description" content="Put agents working on the same project in one Deciduous workspace. Give each agent a Git branch and a bounded file scope. One agent can publish a finding while another is still implementing; the secon">
+<link rel="canonical" href="https://deciduous.dev/tutorial/teams.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Work as a team of agents · Deciduous docs"><meta property="og:description" content="Put agents working on the same project in one Deciduous workspace. Give each agent a Git branch and a bounded file scope. One agent can publish a finding while another is still implementing; the secon"><meta property="og:url" content="https://deciduous.dev/tutorial/teams.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
 </head>
-<body style="padding-top: 0;">
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <a href="../../" class="logo">DECIDUOUS</a>
-            <span class="subtitle">Tutorial</span>
-        </div>
-        <div class="toc">
-            <div class="toc-section">
-                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
-                <ul>
-                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
-                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
-                <ul>
-                    <li><a href="../getting-started/installing.html">Installing</a></li>
-                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
-                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
-                <ul>
-                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
-                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
-                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
-                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
-                <ul>
-                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
-                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
-                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
-                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title active">Sharing</a>
-                <ul>
-                    <li><a href="../sharing/pr-workflow.html" class="active">The PR Workflow</a></li>
-                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
-                <ul>
-                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
-                    <li><a href="../advanced/hooks.html">Hooks</a></li>
-                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
-            </div>
-        </div>
-    </nav>
-
-    <main class="content">
-        <article>
-            <h1>The Complete PR Workflow</h1>
-
-            <p class="lead">From implementation to pull request to teammate adoption&mdash;here is the full end-to-end workflow for sharing decisions through your PR process.</p>
-
-            <p>This page walks through every step using the snowflex CI pipeline work (nodes 57&ndash;61) as a running example. By the end, your PR will include a decision graph visualization, a structured writeup, and a patch file that teammates can apply after merge.</p>
-
-            <h2>Step 1: Generate the Visualization</h2>
-
-            <p>After your implementation work is complete and the decision graph has been populated, start by generating a branch-specific visualization:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Generate graph PNG</div>
-                <div class="terminal-body"><span class="command">deciduous dot --auto --nodes 57-61 --png --title "CI Pipeline Decisions"</span>
-<span class="output">Wrote docs/decision-graph-ci-pipelines.dot
-Wrote docs/decision-graph-ci-pipelines.png (5 nodes, 4 edges)</span></div>
-            </div>
-
-            <p>The <code>--auto</code> flag uses the current branch name in the filename. This is important: if you and a teammate both generate decision graphs on separate branches, the files will not conflict at merge time.</p>
-
-            <h2>Step 2: Export the Patch</h2>
-
-            <p>Export the decision nodes so teammates can import them into their local databases:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Export the patch</div>
-                <div class="terminal-body"><span class="command">deciduous diff export --nodes 57-61 -o .deciduous/patches/ci-feature.json --author alice</span>
-<span class="output">Success: Exported 5 nodes and 4 edges to .deciduous/patches/ci-feature.json</span></div>
-            </div>
-
-            <h2>Step 3: Commit and Push</h2>
-
-            <p>Stage the visualization, patch file, and any code changes, then push:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Commit and push</div>
-                <div class="terminal-body"><span class="comment"># Stage files explicitly - never use git add -A</span>
-<span class="command">git add docs/decision-graph-ci-pipelines.dot docs/decision-graph-ci-pipelines.png</span>
-<span class="command">git add .deciduous/patches/ci-feature.json</span>
-<span class="command">git commit -m "docs: add decision graph and patch for CI pipelines"</span>
-<span class="command">git push origin ci-pipelines</span></div>
-            </div>
-
-            <h2>Step 4: Create the PR</h2>
-
-            <p>Use <code>deciduous writeup</code> to generate the PR body, then create the PR with the GitHub CLI:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Create the PR</div>
-                <div class="terminal-body"><span class="command">gh pr create --title "Add CI pipelines for snowflex" \
-  --body "$(deciduous writeup -t 'Add CI Pipelines' --nodes 57-61 --auto)"</span>
-<span class="output">Creating pull request for ci-pipelines into main
-
-https://github.com/pepsico-ecommerce/snowflex/pull/97</span></div>
-            </div>
-
-            <p>The PR body generated by <code>deciduous writeup</code> includes:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Generated PR body</div>
-                <div class="terminal-body"><span class="output">## Summary
-**Goal:** Add CI pipelines for snowflex
-
-## Key Decisions
-### Use separate workflow files - clearer separation, easier contributor onboarding
-
-## Implementation
-- Implement unit test CI workflow
-
-## Test Plan
-- [ ] Verify implementation
-- [ ] Run test suite
-
-## Decision Graph Reference
-This PR corresponds to deciduous nodes: 57, 58, 59, 60, 61</span></div>
-            </div>
-
-            <p>When the <code>--auto</code> flag detects a branch-specific PNG file, it embeds an image link in the writeup so reviewers see the graph visualization directly in the PR.</p>
-
-            <h2>Step 5: Update an Existing PR</h2>
-
-            <p>If the decision graph evolves during code review, regenerate and update:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Update the PR</div>
-                <div class="terminal-body"><span class="command">deciduous dot --auto --nodes 57-61 --png --title "CI Pipeline Decisions"</span>
-<span class="command">deciduous diff export --nodes 57-61 -o .deciduous/patches/ci-feature.json --author alice</span>
-<span class="command">git add docs/decision-graph-ci-pipelines.dot docs/decision-graph-ci-pipelines.png .deciduous/patches/ci-feature.json</span>
-<span class="command">git commit -m "docs: update decision graph after review"</span>
-<span class="command">git push origin ci-pipelines</span>
-
-<span class="comment"># Update the PR body</span>
-<span class="command">gh pr edit 97 --body "$(deciduous writeup -t 'Add CI Pipelines' --nodes 57-61 --auto)"</span></div>
-            </div>
-
-            <h2>Step 6: Teammate Applies the Patch</h2>
-
-            <p>After the PR is merged, teammates pull the changes and apply the patch to get the decision nodes in their local database:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Teammate applies after merge</div>
-                <div class="terminal-body"><span class="command">git pull origin main</span>
-<span class="output">Updating abc123..def456
- .deciduous/patches/ci-feature.json  | 42 +++++++
- ...</span>
-
-<span class="command">deciduous diff apply .deciduous/patches/ci-feature.json</span>
-<span class="output">Applied: 5 nodes (5 new, 0 updated), 4 edges (4 new)</span></div>
-            </div>
-
-            <p>Because patches are idempotent, teammates who already applied the patch during review will not get duplicates.</p>
-
-            <h2>The Full Timeline</h2>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>When</th>
-                        <th>Who</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Day 1</td>
-                        <td>Alice</td>
-                        <td>Creates nodes 57&ndash;61 while implementing CI pipelines</td>
-                    </tr>
-                    <tr>
-                        <td>Day 2</td>
-                        <td>Alice</td>
-                        <td>Exports patch, generates PNG, opens PR with writeup</td>
-                    </tr>
-                    <tr>
-                        <td>Day 2</td>
-                        <td>Bob</td>
-                        <td>Reviews PR, applies patch to understand decision context</td>
-                    </tr>
-                    <tr>
-                        <td>Day 3</td>
-                        <td>Alice</td>
-                        <td>Addresses review, updates patch and PR body</td>
-                    </tr>
-                    <tr>
-                        <td>Day 3</td>
-                        <td>Bob</td>
-                        <td>Re-applies patch (idempotent), approves PR</td>
-                    </tr>
-                    <tr>
-                        <td>Day 3</td>
-                        <td>&mdash;</td>
-                        <td>PR merges to main</td>
-                    </tr>
-                    <tr>
-                        <td>Day 4</td>
-                        <td>Carol</td>
-                        <td>Pulls main, applies all patches, has full context</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <div class="info-box tip">
-                <strong>Cleanup happens automatically</strong>
-                <p>The GitHub Action created by <code>deciduous init</code> at <code>.github/workflows/cleanup-decision-graphs.yml</code> automatically removes branch-specific PNG and DOT files after a PR is merged, keeping your repository clean.</p>
-            </div>
-
-            <div class="info-box warning">
-                <strong>Always stage files explicitly</strong>
-                <p>Never use <code>git add -A</code> or <code>git add .</code> when working with deciduous. The database file (<code>.deciduous/deciduous.db</code>) is gitignored, but broad staging commands can pick up other unintended files. Always name the specific files you are staging.</p>
-            </div>
-
-            <div class="page-nav">
-                <a href="../real-work/editing-and-fixing.html" class="prev">
-                    <span class="label">Previous</span>
-                    <span class="title">Editing the Graph</span>
-                </a>
-                <a href="exporting-your-work.html" class="next">
-                    <span class="label">Next</span>
-                    <span class="title">Exporting Your Work</span>
-                </a>
-            </div>
-        </article>
-    </main>
-
-    <script src="../terminal-demo.js"></script>
-</body>
-</html>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html" aria-current="page">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Work as a team</span><a href="../../content/teams.md">Read as Markdown</a></div><article><h1 id="work-as-a-team-of-agents">Work as a team of agents</h1>
+<p>Put agents working on the same project in one Deciduous workspace. Give each agent a Git branch and a bounded file scope. One agent can publish a finding while another is still implementing; the second agent can reuse that finding and leave an edge back to its source.</p>
+<p>Deciduous records reasoning and coordinates short graph-write bursts. Your agent runner still assigns tasks, starts sessions, and manages code changes.</p>
+<h2 id="agree-on-the-project-and-branch-names">Agree on the project and branch names</h2>
+<p>This guide uses server <code>http://127.0.0.1:4000</code>, workspace <code>example-app</code>, and two branches:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Branch</th>
+<th>Responsibility</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>API agent</td>
+<td><code>agent-api</code></td>
+<td>Request validation and error responses</td>
+</tr>
+<tr>
+<td>Test agent</td>
+<td><code>agent-tests</code></td>
+<td>Fixtures and integration tests</td>
+</tr>
+</tbody>
+</table>
+<p>Use <a href="../clients.html">client configuration</a> to pin both MCP clients to <code>example-app</code>. Set that same name with <code>deciduous remote init ... --workspace example-app</code> in each initialized CLI checkout. Worktree directory names often differ; relying on their basenames can split one project into several workspaces.</p>
+<p>Pass the real branch name on each MCP write. The server cannot inspect your Git checkout and does not infer the branch from a local process.</p>
+<p>Create a new workspace with one client connection or <code>remote init</code> before launching parallel sessions. The current server can race if several clients first create the same workspace at once. A successful <code>check_activity</code> from the first client confirms it is ready for the rest.</p>
+<p>For a fresh exercise, run these commands from the code repository. The branch names and destination directories must not already exist; substitute unused names if needed:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">git status --short
+git worktree add -b agent-api ../example-app-api HEAD
+git worktree add -b agent-tests ../example-app-tests HEAD
+</code></pre>
+</div><p>Worktrees start from the selected commit and do not copy uncommitted changes. Launch the API agent in <code>../example-app-api</code> and the test agent in <code>../example-app-tests</code>. Ensure each has the same MCP connection configuration. Give each its responsibility from the table and tell both to pass their branch name on graph writes. They share Postgres memory without sharing a SQLite file.</p>
+<h2 id="a-complete-two-agent-handoff">A complete two-agent handoff</h2>
+<p>The examples below are MCP calls, not shell commands. Replace uppercase ID placeholders with the UUID returned by an earlier call. Do not send the placeholder text to the server.</p>
+<h3 id="1-the-api-agent-opens-the-work">1. The API agent opens the work</h3>
+<p>Check for another writer, then record the actual user request:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">check_activity({workspace: &quot;example-app&quot;})
+add_node({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-api&quot;,
+  node_type: &quot;goal&quot;, status: &quot;active&quot;,
+  title: &quot;Validate create-item requests&quot;,
+  prompt: &quot;Add request validation and tests for the create-item endpoint.&quot;
+})
+</code></pre>
+</div><p>Save the returned <code>id</code> as <code>GOAL_ID</code>. Before implementation, record the choice:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">log_decision({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-api&quot;,
+  parent_node_id: &quot;GOAL_ID&quot;,
+  title: &quot;Choose the validation boundary&quot;,
+  rationale: &quot;Reject malformed requests before they reach the service layer.&quot;,
+  chosen_option: {
+    title: &quot;Validate at the HTTP boundary&quot;,
+    description: &quot;Return 422 with stable field error codes.&quot;
+  },
+  rejected_options: [{
+    title: &quot;Validate after the database write&quot;,
+    reason: &quot;The service would receive invalid input and rely on rollback.&quot;
+  }]
+})
+</code></pre>
+</div><p>Save <code>decision_id</code> as <code>DECISION_ID</code>. The helper creates a decision and its option nodes, with <code>chosen</code> and <code>rejected</code> edges. Record the action and connect it:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">add_node({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-api&quot;,
+  node_type: &quot;action&quot;, status: &quot;active&quot;,
+  title: &quot;Implement request validation at the route boundary&quot;,
+  files: [&quot;src/http/items.ts&quot;]
+})
+add_edge({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-api&quot;,
+  from_node_id: &quot;DECISION_ID&quot;, to_node_id: &quot;API_ACTION_ID&quot;,
+  rationale: &quot;Implement the selected validation boundary&quot;
+})
+</code></pre>
+</div><p><code>API_ACTION_ID</code> is the ID returned by <code>add_node</code>. Send the test agent the workspace and <code>DECISION_ID</code>, along with its assigned files. A title alone is harder to follow than a linkable node.</p>
+<h3 id="2-the-test-agent-reads-before-writing">2. The test agent reads before writing</h3>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">check_activity({workspace: &quot;example-app&quot;, branches: 30})
+query_nodes({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-api&quot;,
+  type: &quot;decision&quot;, search: &quot;validation&quot;, limit: 10
+})
+show_node({node_id: &quot;DECISION_ID&quot;})
+</code></pre>
+</div><p><code>query_nodes</code> returns summaries. <code>show_node</code> supplies the description, metadata, and edge rationales. Read those details before treating a title as an agreed contract.</p>
+<p>The test agent uses the API agent's decision:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">log_observation({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  title: &quot;Use the API agent's field error contract in integration tests&quot;,
+  description: &quot;Assert status 422 and stable error codes, without coupling tests to message wording.&quot;,
+  related_to: &quot;GOAL_ID&quot;,
+  took_from: &quot;DECISION_ID&quot;,
+  why: &quot;The boundary decision defines the public response; a second contract would make the tests disagree with the implementation.&quot;
+})
+</code></pre>
+</div><p>Save the returned <code>id</code> as <code>BORROW_ID</code>. <code>took_from</code> creates an edge from the source decision to this observation. It accepts a node UUID or a full <code>change_id</code>, within the same workspace, including a source on another branch. Use the full identifier, not a shortened display prefix.</p>
+<h3 id="3-the-test-agent-implements-and-reports-evidence">3. The test agent implements and reports evidence</h3>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">add_node({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  node_type: &quot;action&quot;, status: &quot;active&quot;,
+  title: &quot;Cover invalid create-item requests&quot;,
+  files: [&quot;tests/items.test.ts&quot;]
+})
+add_edge({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  from_node_id: &quot;BORROW_ID&quot;, to_node_id: &quot;TEST_ACTION_ID&quot;,
+  rationale: &quot;Test the shared error contract&quot;
+})
+</code></pre>
+</div><p>After running the tests, record the actual command, result, and limitations. This example assumes the named tests passed:</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">close_thread({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  parent_node_id: &quot;TEST_ACTION_ID&quot;,
+  title: &quot;Invalid requests return the agreed field errors&quot;,
+  description: &quot;npm test -- tests/items.test.ts passed all 8 cases. Checked missing name, invalid quantity, and unknown fields. Full-suite run remains for integration.&quot;,
+  success: true
+})
+</code></pre>
+</div><p>The API agent records its own implementation outcome under <code>API_ACTION_ID</code>. Neither agent marks the shared goal complete until the coordinator has integrated the branches and verified the combined result. Deciduous does not merge code or run tests on your behalf.</p>
+<h2 id="read-between-milestones">Read between milestones</h2>
+<p>Call <code>check_activity</code> before a burst of writes and after each milestone. Its <code>sessions</code> list shows unexpired write leases, not every running agent. Its <code>branches</code> list shows recent branch nodes even after the writer's lease expires; <code>branches_total</code> tells you whether the list is truncated.</p>
+<p>The default is 20 branches, with a maximum of 200. Follow interesting nodes with <code>show_node</code>. Use <code>query_nodes</code> when you need a particular type or a search term.</p>
+<h2 id="treat-locks-as-coordination">Treat locks as coordination</h2>
+<p>The default advisory lock key is <code>(workspace, branch)</code>, with a ten-second lease. Another write from the same MCP session renews it. Sessions on different branches can write at once; a conflicting session gets an error identifying the current holder.</p>
+<p>On a conflict, read <code>check_activity</code>, wait for the other writer to finish, and retry with the same intended branch. Do not invent a new branch name to bypass a teammate's ownership. Missing <code>branch</code> values share the empty-branch lock bucket. A server operator can configure a workspace-wide lock, which makes all branches contend.</p>
+<p>These locks do not protect source files, reserve a task for the duration of an agent session, or prevent raw database/import operations. Keep file ownership and code review in your team workflow.</p>
+<h2 id="watch-the-conversation-in-the-graph">Watch the conversation in the graph</h2>
+<p>With the Deciduous 1.0 CLI configured for this workspace:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote watch --types decision,observation,outcome
+deciduous remote watch --branch agent-api --edges
+</code></pre>
+</div><p>The feed quotes titles and distinguishes updates from new nodes. It reconnects, but it does not replay events missed while disconnected. Query the graph after a gap. Do not count event frames as completed tasks.</p>
+<p><code>--url</code> prints a WebSocket URL containing the bearer token. Avoid it in screenshots, logs, and shared terminals. See <a href="../troubleshooting.html">Troubleshooting</a> for version and connection checks.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../clients.html"><span>Previous</span>Connect your agents</a><a href="../workflow.html"><span>Next</span>Record the reasoning</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#agree-on-the-project-and-branch-names">Agree on the project and branch names</a></li><li><a href="#a-complete-two-agent-handoff">A complete two-agent handoff</a></li><li><a href="#read-between-milestones">Read between milestones</a></li><li><a href="#treat-locks-as-coordination">Treat locks as coordination</a></li><li><a href="#watch-the-conversation-in-the-graph">Watch the conversation in the graph</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

@@ -1,288 +1,55 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Observations and Pivots - The Deciduous Tutorial</title>
-    <link rel="stylesheet" href="../style.css">
-
-    <!-- Open Graph / Social -->
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="The Deciduous Tutorial" />
-    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
-    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reconstruct earlier decisions · Deciduous docs</title>
+<meta name="description" content="An agent team can add useful history to its shared graph before it starts changing an unfamiliar repository. Use commits, tests, issues, and design notes to explain how the current implementation deve">
+<link rel="canonical" href="https://deciduous.dev/tutorial/history.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Reconstruct earlier decisions · Deciduous docs"><meta property="og:description" content="An agent team can add useful history to its shared graph before it starts changing an unfamiliar repository. Use commits, tests, issues, and design notes to explain how the current implementation deve"><meta property="og:url" content="https://deciduous.dev/tutorial/history.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
 </head>
-<body style="padding-top: 0;">
-    <nav class="sidebar">
-        <div class="sidebar-header">
-            <a href="../../" class="logo">DECIDUOUS</a>
-            <span class="subtitle">Tutorial</span>
-        </div>
-        <div class="toc">
-            <div class="toc-section">
-                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
-                <ul>
-                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
-                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
-                <ul>
-                    <li><a href="../getting-started/installing.html">Installing</a></li>
-                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
-                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title active">Reconstructing History</a>
-                <ul>
-                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
-                    <li><a href="../archaeology/observations-and-pivots.html" class="active">Observations &amp; Pivots</a></li>
-                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
-                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
-                <ul>
-                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
-                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
-                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
-                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
-                <ul>
-                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
-                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
-                <ul>
-                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
-                    <li><a href="../advanced/hooks.html">Hooks</a></li>
-                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
-                </ul>
-            </div>
-            <div class="toc-section">
-                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
-            </div>
-        </div>
-    </nav>
-
-    <main class="content">
-        <article>
-            <h1>Tracking What Went Wrong</h1>
-
-            <p class="lead">The most valuable part of a decision graph isn't what succeeded&mdash;it's what failed and why.</p>
-
-            <p>As Claude reads through snowflex's git history, it doesn't just trace the happy path. It discovers the problems that forced the project to change direction. These problems are captured as <span class="node-observation">observation</span> nodes, and the direction changes are captured as <span class="node-revisit">revisit</span> nodes.</p>
-
-            <h2>Observations: Capturing Problems</h2>
-
-            <p>Observations are facts that emerge from the codebase. They don't carry confidence scores because they aren't judgments&mdash;they're things that happened. In snowflex's case, Claude found a series of ODBC-related problems scattered across the commit history:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Observations discovered during archaeology</div>
-                <div class="terminal-body"><span class="command">deciduous add observation "Snowflake ODBC sessions expire after 4 hours idle" --date "2020-01-15"</span>
-<span class="output">Created node 15 (type: observation)</span>
-<span class="command">deciduous link 14 15 -r "Session expiry discovered in production"</span>
-<span class="output">Created edge 14 &rarr; 15</span>
-
-<span class="command">deciduous add observation "Snowflake returns UTF-16 data that corrupts query results" --date "2020-06-10"</span>
-<span class="output">Created node 22 (type: observation)</span>
-
-<span class="command">deciduous add observation "Community requests DBConnection/Ecto integration" --date "2020-09-01"</span>
-<span class="output">Created node 24 (type: observation)</span>
-
-<span class="command">deciduous add observation "ODBC limitations accumulating - auth expiry, encoding, Apple Silicon, memory" --date "2021-03-01"</span>
-<span class="output">Created node 33 (type: observation)</span></div>
-            </div>
-
-            <p>Each observation is a data point. Individually, they're annoyances. Together, they tell a story: the ODBC approach was slowly breaking down under the weight of accumulated issues. Session expiry, encoding bugs, platform incompatibilities, memory problems&mdash;each one required a workaround, and the workarounds were getting more fragile.</p>
-
-            <p>Observations get linked to the nodes they relate to. Node 15 (session expiry) connects back to the outcome of the ODBC implementation. Node 33 (accumulating limitations) connects to the earlier observations that built up the case for change.</p>
-
-            <h2>The Pivot: ODBC to HTTP</h2>
-
-            <p>This is the climax of the snowflex story. After two years of ODBC workarounds, the team decided to throw out the entire transport layer and rewrite it from scratch using HTTP REST APIs. In the decision graph, this is captured with a <span class="node-revisit">revisit</span> node&mdash;deciduous's way of marking the moment when an old approach gets reconsidered.</p>
-
-            <p>The <code>archaeology pivot</code> command captures this entire pivot atomically:</p>
-
-            <div class="session-demo" id="pivot-demo">
-                <div class="session-header">
-                    <span class="session-dot red"></span>
-                    <span class="session-dot yellow"></span>
-                    <span class="session-dot green"></span>
-                    <span class="session-title">Claude Code &mdash; Capturing the ODBC-to-HTTP pivot</span>
-                    <div class="session-controls">
-                        <button class="session-btn pause-btn">Pause</button>
-                        <button class="session-btn replay-btn">Replay</button>
-                    </div>
-                </div>
-                <div class="session-content">
-                    <div class="pause-overlay">
-                        <div class="pause-icon">&#10074;&#10074;</div>
-                        <div class="pause-text">Animation paused</div>
-                        <button class="resume-btn">Resume</button>
-                    </div>
-
-                    <div class="session-step" style="--delay: 0s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content">I can see a major architectural pivot here. The ODBC approach accumulated too many issues. Let me capture this with an archaeology pivot...</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 1.5s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous archaeology pivot 32 "ODBC limitations accumulating - auth expiry, encoding, Apple Silicon, memory" "Switch to HTTP REST API with JWT authentication" -c 90 -r "ODBC too fragile for production"</div>
-                        <div class="step-output">Created observation #33, revisit #34, decision #36<br>Linked: 32 &rarr; 33 &rarr; 34 &rarr; 36<br>Marked node 32 as superseded</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 3.5s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content">The pivot chain is created atomically. One command replaces 7 manual steps. Now let me capture the options that were evaluated for the replacement...</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 5s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add option "Transport behavior with HTTP implementation using Req" -c 90</div>
-                        <div class="step-output">Created node 37 (type: option)</div>
-                        <div class="cmd-inline">deciduous link 36 37 --edge-type chosen -r "Flexible transport pattern enables future extensibility"</div>
-                        <div class="step-output">Created edge 36 &rarr; 37 (chosen)</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 7s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add option "Direct HTTP client without transport abstraction" -c 60</div>
-                        <div class="step-output">Created node 38 (type: option)</div>
-                        <div class="cmd-inline">deciduous link 36 38 --edge-type rejected -r "Too rigid, no room for future transports"</div>
-                        <div class="step-output">Created edge 36 &rarr; 38 (rejected)</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 9s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add action "Complete v1.0 rewrite: HTTP REST API, JWT auth, Transport abstraction" -c 95</div>
-                        <div class="step-output">Created node 39 (type: action)</div>
-                        <div class="cmd-inline">deciduous link 36 39 -r "Implementing the chosen transport approach"</div>
-                        <div class="step-output">Created edge 36 &rarr; 39</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 11s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content code">deciduous add outcome "Snowflex v1.0 - Modern HTTP-based Snowflake adapter" -c 95</div>
-                        <div class="step-output">Created node 40 (type: outcome)</div>
-                        <div class="cmd-inline">deciduous link 39 40 -r "v1.0 rewrite complete"</div>
-                        <div class="step-output">Created edge 39 &rarr; 40</div>
-                    </div>
-
-                    <div class="session-step" style="--delay: 13s">
-                        <div class="step-label claude">Claude</div>
-                        <div class="step-content">The full pivot is captured: observations accumulated, the old approach was reconsidered, a new decision was made with two options evaluated, and the chosen option was implemented through to outcome.</div>
-                    </div>
-                </div>
-            </div>
-
-            <h3>The Revisit Node</h3>
-
-            <p>Revisit nodes are deciduous's way of capturing pivot points. They sit at the junction between an old approach that stopped working and a new approach that replaced it. The pattern is always the same:</p>
-
-            <pre style="line-height: 1.8; text-align: center;">
-<span style="color: #38bdf8;">[Old Outcome]</span> &rarr; <span style="color: #f472b6;">[Observation: why it failed]</span> &rarr; <span style="color: #f97316;">[REVISIT]</span> &rarr; <span style="color: #60a5fa;">[New Decision]</span></pre>
-
-            <p>In snowflex's case:</p>
-
-            <ul>
-                <li><strong>Old Outcome</strong> (node 32): The ODBC-based approach was working, but with increasing friction</li>
-                <li><strong>Observation</strong> (node 33): "ODBC limitations accumulating &mdash; auth expiry, encoding, Apple Silicon, memory"</li>
-                <li><strong>Revisit</strong> (node 34): "Reconsider ODBC as transport &mdash; switch to HTTP REST API"</li>
-                <li><strong>New Decision</strong> (node 36): "How to replace ODBC transport for v1.0?"</li>
-            </ul>
-
-            <p>This chain is what makes the graph useful for understanding <em>evolution</em>, not just current state. Anyone querying the graph in the future can trace exactly why ODBC was abandoned and what drove the decision to switch to HTTP.</p>
-
-            <div class="info-box tip">
-                <strong>One command, seven steps</strong>
-                <p><code>archaeology pivot</code> is the most powerful command for retroactive history. It creates an observation, a revisit, and a new decision, links them all together, and marks the old approach as superseded&mdash;all in one atomic operation. Without it, you'd need to run <code>deciduous add</code> three times, <code>deciduous link</code> three times, and <code>deciduous status</code> once.</p>
-            </div>
-
-            <h2>Statuses</h2>
-
-            <p>Every node in the graph has a status that reflects where it stands. As Claude builds the snowflex graph, it marks nodes appropriately:</p>
-
-            <div class="terminal-session">
-                <div class="terminal-header">Marking node statuses</div>
-                <div class="terminal-body"><span class="command">deciduous status 37 completed</span>
-<span class="output">Updated node 37 status: completed</span>
-
-<span class="command">deciduous status 38 rejected</span>
-<span class="output">Updated node 38 status: rejected</span></div>
-            </div>
-
-            <p>The full set of statuses:</p>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th>Status</th>
-                        <th>Meaning</th>
-                        <th>Example from Snowflex</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td><code>pending</code></td>
-                        <td>Not yet resolved</td>
-                        <td>A goal that's still being worked toward</td>
-                    </tr>
-                    <tr>
-                        <td><code>active</code></td>
-                        <td>Current truth &mdash; this is how things work now</td>
-                        <td>The HTTP transport approach (node 37)</td>
-                    </tr>
-                    <tr>
-                        <td><code>completed</code></td>
-                        <td>Done and working</td>
-                        <td>The v1.0 rewrite action (node 39)</td>
-                    </tr>
-                    <tr>
-                        <td><code>superseded</code></td>
-                        <td>Replaced by a newer approach</td>
-                        <td>The ODBC-based outcome (node 32) after the pivot</td>
-                    </tr>
-                    <tr>
-                        <td><code>abandoned</code></td>
-                        <td>Tried and given up on</td>
-                        <td>An approach that was started but never finished</td>
-                    </tr>
-                    <tr>
-                        <td><code>rejected</code></td>
-                        <td>Considered but not chosen</td>
-                        <td>"Direct HTTP client without transport abstraction" (node 38)</td>
-                    </tr>
-                </tbody>
-            </table>
-
-            <p>Statuses make the graph queryable by intent. You can ask "show me only active nodes" to see the current design, or "show me superseded nodes" to find every pivot point in the project's history.</p>
-
-            <div class="page-nav">
-                <a href="the-decision-graph-skill.html" class="prev">
-                    <span class="label">Previous</span>
-                    <span class="title">Building from Git</span>
-                </a>
-                <a href="exploring-the-graph.html" class="next">
-                    <span class="label">Next</span>
-                    <span class="title">Exploring the Graph</span>
-                </a>
-            </div>
-        </article>
-    </main>
-
-    <script src="../terminal-demo.js"></script>
-</body>
-</html>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html" aria-current="page">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Reference</span><a href="../../content/history.md">Read as Markdown</a></div><article><h1 id="reconstruct-earlier-decisions">Reconstruct earlier decisions</h1>
+<p>An agent team can add useful history to its shared graph before it starts changing an unfamiliar repository. Use commits, tests, issues, and design notes to explain how the current implementation developed. Store the resulting records in the same workspace the team uses for current work.</p>
+<p>This is optional groundwork. You can begin with <a href="../teams.html">the team workflow</a> and record new decisions as they happen without reconstructing the entire repository.</p>
+<h2 id="choose-a-bounded-question">Choose a bounded question</h2>
+<p>Pick a subsystem or a decision that affects the task: why retries have a fixed cap, why an endpoint has two response shapes, or why a dependency was removed. Assign separate investigations to agents only when the questions are independent. Share the source nodes so they can connect findings that overlap.</p>
+<p>Use one workspace and each investigator's actual branch. Read existing decisions first to avoid creating a second account of the same change without noticing the first.</p>
+<h2 id="read-the-evidence-before-writing-a-story">Read the evidence before writing a story</h2>
+<p>Inspect the relevant history with Git:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">git log --all --oneline -- src/retry.rs tests/retry.rs
+git log --all --format=fuller -- src/retry.rs
+git show COMMIT_SHA -- src/retry.rs tests/retry.rs
+</code></pre>
+</div><p>Replace the paths and commit placeholder with evidence from the repository. Start with the relevant commit list before narrowing it by keywords. Search for introductions, replacements, renames, and removals; an abandoned approach often explains the surviving one.</p>
+<p>A commit proves what changed. It may not prove why. Distinguish an author's stated rationale from your inference. If no source supports the rationale, record the uncertainty instead of filling the gap with a plausible explanation.</p>
+<h2 id="put-the-finding-in-shared-memory">Put the finding in shared memory</h2>
+<p>Use HTTP MCP tools to create an observation with a useful title, a description of the source evidence, and the full commit hash. Connect it to the goal or decision under investigation. A teammate should be able to follow the node back to the exact diff or test.</p>
+<p>Record a historical design choice as a decision only when the evidence supports that choice. Record alternatives as options only when they were considered, not because they are alternatives you can imagine now.</p>
+<p>The shared <code>add_node</code> tool does not have a backdating argument. Preserve the historical date in the description and commit reference; its creation timestamp records when your team added the node. The optional local CLI supports <code>--date</code>, but a local write does not appear in the shared workspace without a separate, reviewed migration.</p>
+<h2 id="represent-a-replacement-without-erasing-the-old-choice">Represent a replacement without erasing the old choice</h2>
+<p>Connect the old decision to the observation that challenged it, then to a revisit and the new decision:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">old decision -&gt; observation -&gt; revisit -&gt; replacement decision
+</code></pre>
+</div><p>Mark the old choice <code>superseded</code> if it explains a previous implementation. Keep the reason for replacement specific: a failing test, a deployment limit, or a measured cost. Do not model attempts made years apart as options considered at one meeting.</p>
+<h2 id="connect-investigators-findings">Connect investigators' findings</h2>
+<p>An agent studying the retry loop may discover that another agent already traced its timeout requirement. Read that source node, link the dependency, and use <code>took_from</code> when the source informed your own work. The <a href="../mcp.html#borrow-with-a-source">MCP guide</a> shows the supported borrowing call.</p>
+<p>Do not duplicate the entire other investigation inside your description. Link to it and record the new inference or evidence you contributed. Check activity at milestones so the team can change direction before two agents complete the same history pass.</p>
+<h2 id="review-the-result">Review the result</h2>
+<p>Use <code>show_node</code> to inspect claims and sources, <code>find_orphans</code> to find missing incoming links, and graph reads to check connections. A clean orphan check cannot establish factual accuracy. Have a second agent compare important claims with the original commits or tests.</p>
+<p>Keep a short description of what you did not investigate. That gives the next session a boundary and prevents a partial history from looking complete.</p>
+<h2 id="existing-local-archaeology-workflows">Existing local archaeology workflows</h2>
+<p>Older installations may have <code>/pulse</code>, <code>/narratives</code>, <code>/archaeology</code>, or <code>/decision-graph</code> command files and local narrative Markdown. They can help structure an investigation, but their generated instructions may call the SQLite CLI. Review them before giving them to a team using shared Postgres.</p>
+<p>Use the same evidence discipline while replacing local writes with the shared HTTP tools. Migrate an existing local graph through <a href="../upgrading.html">upgrading</a>; do not bulk-push an old copy into an active team workspace without review.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../solo.html"><span>Previous</span>Solo and offline use</a><span></span></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#choose-a-bounded-question">Choose a bounded question</a></li><li><a href="#read-the-evidence-before-writing-a-story">Read the evidence before writing a story</a></li><li><a href="#put-the-finding-in-shared-memory">Put the finding in shared memory</a></li><li><a href="#represent-a-replacement-without-erasing-the-old-choice">Represent a replacement without erasing the old choice</a></li><li><a href="#connect-investigators-findings">Connect investigators&#39; findings</a></li><li><a href="#review-the-result">Review the result</a></li><li><a href="#existing-local-archaeology-workflows">Existing local archaeology workflows</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

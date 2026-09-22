@@ -1,1350 +1,372 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Deciduous - Your AI Assistant Remembers Every Decision</title>
-
-    <!-- Primary Meta Tags -->
-    <meta
-      name="title"
-      content="Deciduous - Your AI Assistant Remembers Every Decision"
-    />
-    <meta
-      name="description"
-      content="Decision graph tooling for AI-assisted development. Build decision graphs from existing git history. Track goals, decisions, and outcomes as you work. Recover context across sessions."
-    />
-
-    <!-- Open Graph / Facebook -->
-    <meta property="og:type" content="website" />
-    <meta
-      property="og:url"
-      content="https://deciduous.dev/"
-    />
-    <meta
-      property="og:title"
-      content="Deciduous - Your AI Assistant Remembers Every Decision"
-    />
-    <meta
-      property="og:description"
-      content="Build decision graphs from existing git history. Track goals, decisions, and outcomes as you work. Recover context across sessions."
-    />
-    <meta
-      property="og:image"
-      content="https://deciduous.dev/og-image.png"
-    />
-    <meta property="og:image:width" content="1200" />
-    <meta property="og:image:height" content="630" />
-
-    <!-- Twitter -->
-    <meta property="twitter:card" content="summary_large_image" />
-    <meta
-      property="twitter:url"
-      content="https://deciduous.dev/"
-    />
-    <meta
-      property="twitter:title"
-      content="Deciduous - Your AI Assistant Remembers Every Decision"
-    />
-    <meta
-      property="twitter:description"
-      content="Build decision graphs from existing git history. Track goals, decisions, and outcomes as you work."
-    />
-    <meta
-      property="twitter:image"
-      content="https://deciduous.dev/og-image.png"
-    />
-
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        background: #ffffff;
-        color: #24292f;
-        line-height: 1.6;
-      }
-      .container { max-width: 1400px; margin: 0 auto; padding: 60px 20px; }
-      .narrow { max-width: 900px; margin: 0 auto; }
-
-      /* Navigation */
-      .top-nav {
-        display: flex; justify-content: center; gap: 30px;
-        margin-bottom: 30px; padding-bottom: 20px;
-        border-bottom: 1px solid #d0d7de;
-      }
-      .top-nav a { color: #57606a; text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
-      .top-nav a:hover { color: #0969da; }
-
-      /* Header */
-      header { text-align: center; margin-bottom: 20px; }
-      header h1 { font-size: 3.5rem; font-weight: 700; color: #24292f; margin-bottom: 15px; letter-spacing: -1px; }
-      .tagline { font-size: 1.15rem; color: #57606a; margin-bottom: 8px; max-width: 720px; margin-left: auto; margin-right: auto; }
-
-      /* Terminal window */
-      .session-demo {
-        background: #1e1e1e; border-radius: 12px; overflow: hidden;
-        margin: 30px 0; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-      }
-      .feature-grid .session-demo { margin: 15px 0 0 0; }
-      .session-header {
-        background: #2d2d2d; padding: 12px 16px;
-        display: flex; align-items: center; gap: 8px;
-      }
-      .session-dot { width: 12px; height: 12px; border-radius: 50%; }
-      .session-dot.red { background: #ff5f56; }
-      .session-dot.yellow { background: #ffbd2e; }
-      .session-dot.green { background: #27c93f; }
-      .session-title { color: #888; font-size: 0.85rem; margin-left: 8px; }
-      .replay-btn {
-        margin-left: auto; background: #374151; color: #9ca3af;
-        border: none; padding: 4px 12px; border-radius: 4px;
-        font-size: 0.75rem; cursor: pointer; transition: all 0.15s;
-      }
-      .replay-btn:hover { background: #4b5563; color: #e5e7eb; }
-      .session-content {
-        padding: 20px;
-        font-family: "SF Mono", Monaco, "Courier New", monospace;
-        font-size: 0.9rem; line-height: 1.6;
-        max-height: 440px; overflow-y: auto; scroll-behavior: smooth;
-      }
-      .feature-grid .session-content { font-size: 0.82rem; padding: 14px; max-height: 420px; }
-      .feature-grid .step-recovery-output { font-size: 0.8rem; padding: 10px; }
-      .feature-grid .session-header { padding: 10px 14px; }
-      .feature-grid .session-dot { width: 10px; height: 10px; }
-      .session-content::-webkit-scrollbar { width: 8px; }
-      .session-content::-webkit-scrollbar-track { background: #2d2d2d; }
-      .session-content::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
-
-      /* Animation steps */
-      .session-step { opacity: 0; transform: translateY(10px); margin-bottom: 16px; }
-      .session-step:last-child { margin-bottom: 0; }
-      .session-demo.animate .session-step,
-      .session-demo.hero-demo .session-step {
-        animation: fadeInStep 0.5s ease forwards;
-        animation-delay: var(--delay);
-      }
-      @keyframes fadeInStep { to { opacity: 1; transform: translateY(0); } }
-
-      /* Step labels */
-      .step-label { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-bottom: 6px; }
-      .step-label.user { background: #3b82f6; color: #fff; }
-      .step-label.claude { background: #d97706; color: #fff; }
-      .step-content { color: #e5e5e5; padding-left: 4px; }
-      .step-content.code { color: #7ee787; }
-      .step-output { color: #8b949e; font-size: 0.85rem; margin-top: 4px; padding-left: 4px; }
-      .step-files { color: #f97583; font-size: 0.85rem; margin-top: 4px; padding-left: 4px; }
-      .step-recovery-output {
-        background: #1a3a1a; border: 1px solid #22543d; border-radius: 6px;
-        padding: 12px; margin-top: 8px; color: #86efac; font-size: 0.85rem;
-      }
-      .step-recovery-output strong { color: #4ade80; }
-
-      /* Sections */
-      h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 10px; }
-      section { margin-top: 50px; padding-top: 30px; border-top: 1px solid #d0d7de; }
-      .narrow > section:first-child { margin-top: 40px; }
-      section p { color: #57606a; margin-bottom: 15px; }
-      section a { color: #0969da; text-decoration: none; }
-      section a:hover { text-decoration: underline; }
-
-      /* Feature grid — 2 per row on desktop */
-      .feature-grid {
-        display: grid; grid-template-columns: repeat(2, 1fr); gap: 40px 30px;
-        margin-top: 50px; padding-top: 30px; border-top: 1px solid #d0d7de;
-      }
-      @media (max-width: 1000px) { .feature-grid { grid-template-columns: 1fr; } }
-
-      /* Feature sections */
-      .feature-section { display: flex; flex-direction: column; }
-      .feature-section .session-demo { flex: 1; display: flex; flex-direction: column; }
-      .feature-section .session-content { flex: 1; }
-      .feature-section h2 { border: none; padding-bottom: 0; margin-bottom: 6px; font-size: 1.25rem; }
-      .feature-desc { color: #57606a; margin-bottom: 20px; font-size: 0.95rem; }
-      .feature-desc code { background: #e6ffec; color: #1a7f37; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
-      .feature-badge {
-        display: inline-block; padding: 3px 10px; border-radius: 12px;
-        font-size: 0.8rem; font-weight: 600; margin-bottom: 12px;
-      }
-      .feature-badge.command { background: #dbeafe; color: #1e40af; }
-      .feature-badge.skill { background: #f3e8ff; color: #6b21a8; }
-      .feature-badge.popular { background: #fef3c7; color: #92400e; }
-      .feature-badge.new { background: #dcfce7; color: #166534; }
-      .feature-grid .feature-badge { font-size: 0.75rem; margin-bottom: 8px; }
-      .feature-grid .feature-desc { font-size: 0.9rem; margin-bottom: 12px; }
-
-      /* Buttons */
-      .buttons { display: flex; justify-content: center; gap: 15px; margin: 40px 0; flex-wrap: wrap; }
-      .btn { padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 1rem; transition: all 0.15s; }
-      .btn-primary { background: #2da44e; color: #fff; }
-      .btn-primary:hover { background: #238636; }
-      .btn-secondary { background: #f6f8fa; color: #24292f; border: 1px solid #d0d7de; }
-      .btn-secondary:hover { background: #eaeef2; }
-
-      /* Editor badges */
-      .editor-badges { display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
-      .editor-badge {
-        display: inline-flex; align-items: center; gap: 8px;
-        padding: 10px 16px; background: #f6f8fa; border: 1px solid #d0d7de;
-        border-radius: 8px; font-weight: 500; color: #24292f;
-      }
-      .editor-badge code { background: #e6e6e6; padding: 2px 6px; border-radius: 4px; font-size: 0.85em; }
-
-      /* View cards */
-      .view-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 25px; }
-      @media (max-width: 700px) { .view-cards { grid-template-columns: 1fr; } }
-      .view-card {
-        background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px;
-        padding: 20px; text-decoration: none; transition: all 0.15s;
-      }
-      .view-card:hover { border-color: #0969da; background: #ffffff; }
-      .view-card h3 { color: #24292f; font-size: 1rem; margin-bottom: 8px; }
-      .view-card p { font-size: 0.85rem; margin: 0; color: #57606a; }
-
-      /* Node types */
-      .node-types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 20px; }
-      @media (max-width: 700px) { .node-types { grid-template-columns: repeat(2, 1fr); } }
-      @media (max-width: 450px) { .node-types { grid-template-columns: 1fr; } }
-      .node-type { background: #f6f8fa; padding: 12px 15px; border-radius: 8px; border: 1px solid #d0d7de; }
-      .node-type h3 { color: #24292f; font-size: 0.9rem; margin-bottom: 3px; }
-      .node-type p { font-size: 0.8rem; margin: 0; color: #57606a; }
-      .node-type.goal h3 { color: #d29922; }
-      .node-type.option h3 { color: #8250df; }
-      .node-type.decision h3 { color: #0969da; }
-      .node-type.action h3 { color: #2da44e; }
-      .node-type.outcome h3 { color: #1f6feb; }
-      .node-type.observation h3 { color: #bf3989; }
-      .node-type.revisit h3 { color: #cf222e; }
-
-      /* Quickstart */
-      .quickstart-step { margin-bottom: 25px; }
-      .quickstart-step-header { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 12px; }
-      .quickstart-num {
-        flex-shrink: 0; width: 32px; height: 32px; background: #2da44e; color: #fff;
-        border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        font-weight: 700; font-size: 1rem;
-      }
-      .quickstart-info h3 { color: #24292f; font-size: 1.1rem; margin: 0 0 4px 0; }
-      .quickstart-info p { color: #57606a; font-size: 0.9rem; margin: 0; }
-      .quickstart-terminal { background: #1e1e1e; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); }
-      .quickstart-content { padding: 16px 20px; font-family: "SF Mono", Monaco, "Courier New", monospace; font-size: 0.85rem; line-height: 1.7; }
-      .qs-prompt { color: #7ee787; margin-right: 8px; }
-      .qs-cmd { color: #e5e5e5; }
-      .qs-output { color: #8b949e; padding-left: 20px; }
-      .qs-success { color: #7ee787; padding-left: 20px; }
-
-      /* Command reference table */
-      .cmd-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9rem; }
-      .cmd-table th { text-align: left; padding: 10px 12px; background: #f6f8fa; border: 1px solid #d0d7de; font-weight: 600; color: #24292f; }
-      .cmd-table td { padding: 10px 12px; border: 1px solid #d0d7de; color: #57606a; }
-      .cmd-table code { background: #e6ffec; color: #1a7f37; padding: 1px 5px; border-radius: 3px; font-size: 0.85em; }
-      .cmd-table .type-badge {
-        display: inline-block; padding: 1px 6px; border-radius: 8px;
-        font-size: 0.7rem; font-weight: 600;
-      }
-      .cmd-table .type-command { background: #dbeafe; color: #1e40af; }
-      .cmd-table .type-skill { background: #f3e8ff; color: #6b21a8; }
-
-      /* Install section */
-      .install-section {
-        max-width: 900px; margin: 50px auto 0; padding-top: 30px;
-        border-top: 1px solid #d0d7de; text-align: center;
-      }
-      .install-section h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 20px; }
-      .install-options {
-        display: grid; grid-template-columns: 1fr 1fr; gap: 20px;
-        margin-bottom: 16px; text-align: left;
-      }
-      @media (max-width: 600px) { .install-options { grid-template-columns: 1fr; } }
-      .install-alt { color: #57606a; font-size: 0.9rem; }
-      .install-alt a { color: #0969da; text-decoration: none; }
-      .install-alt a:hover { text-decoration: underline; }
-
-      /* Footer */
-      footer { text-align: center; padding: 40px 0; margin-top: 40px; color: #6e7781; font-size: 0.9rem; }
-      footer a { color: #0969da; text-decoration: none; }
-      footer a:hover { text-decoration: underline; }
-
-      .story-link { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 8px; padding: 20px; margin-top: 20px; }
-      .story-link p { font-size: 0.95rem; margin: 0; }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <div class="narrow">
-        <nav class="top-nav">
-          <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
-          <a href="remote.html">Shared Graph</a>
-          <a href="mcp.html">MCP</a>
-          <a href="story.html">Story</a>
-          <a href="demo/">Live Graph</a>
-          <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
-          <a href="#install">Install</a>
-        </nav>
-
-        <header>
-          <h1>DECIDUOUS</h1>
-          <p class="tagline">
-            Every decision you've ever made, in one graph &mdash; and every agent working on it can see the others.
-            One server holds the reasoning behind every project on your machine, one workspace per repository.
-            Agents on different branches write to it at the same time, watch each other's writes land,
-            and record what they took from whom. What one session decided survives the next session's memory.
-          </p>
-        </header>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- LEAD: ten agents, one graph                                  -->
-      <!-- ============================================================ -->
-      <div class="narrow">
-      <div class="feature-section" id="multi-agent">
-        <span class="feature-badge new">New in 1.0</span>
-        <h2>Ten Agents, One Graph</h2>
-        <p class="feature-desc">
-          At 04:47 UTC on 22 September 2026, agent-7 implemented step reset for lock delay. The idea was agent-8's,
-          and agent-8 had not written the code yet. It had logged a decision; agent-7 read it in the shared graph,
-          wrote its own version, and recorded where it came from. Ten Claude Code sessions, ten git worktrees of
-          one repository, one workspace, and a rules file that said reading each other's work was the point.
-          Twenty-six minutes later: ten playable Tetris games, 386 graph nodes, 170 borrowed ideas with provenance.
-          <a href="https://notactuallytreyanastasio.github.io/tetris-arena/">The write-up</a> has the numbers, the
-          borrow matrix, and what broke.
-        </p>
-        <div class="quickstart-terminal">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">deciduous remote watch &mdash; the arena, live</span>
-          </div>
-          <div class="quickstart-content">
-            <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote watch</span></div>
-            <div class="qs-output">Watching: tetris-arena</div>
-            <div class="qs-output">04:45:14&nbsp;&nbsp;agent-9&nbsp;&nbsp;&nbsp;observation&nbsp;&nbsp;"Took 4 hidden rows from agent-3: SRS kicks can lift a piece 2 rows at the ceiling"</div>
-            <div class="qs-output">04:46:13&nbsp;&nbsp;agent-10&nbsp;&nbsp;observation&nbsp;&nbsp;"Took 4 hidden rows (agent-9, from agent-3) and lock-out (agent-2, from agent-1); dropped my y&lt;0 exemption"</div>
-            <div class="qs-output">04:47:15&nbsp;&nbsp;agent-7&nbsp;&nbsp;&nbsp;observation&nbsp;&nbsp;"Took the step-reset for lock delay from agent-8's decision, and spawn-then-step-down and lock-out from agent-8 and agent-3"</div>
-            <div class="qs-output">04:47:33&nbsp;&nbsp;agent-4&nbsp;&nbsp;&nbsp;observation&nbsp;&nbsp;"Took 4 hidden rows + solid ceiling (agent-3/9/6) and lock-out (agent-1); my merge() was silently dropping cells above row 0"</div>
-          </div>
-        </div>
-        <p class="feature-desc" style="margin-top: 16px;">
-          Those four lines are real nodes from the arena's graph, in the order they landed. One finding
-          (agent-3: some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at
-          the ceiling) reached eight of the nine other branches in eighteen minutes (agent-1 started with a forty-row board and never needed it), and two of the agents that took it
-          used it to find the same silent bug in their own <code>merge()</code>.
-        </p>
-        <p class="feature-desc">
-          <strong>Agents that work alongside each other.</strong> Every write claims an advisory lock on
-          <code>(workspace, branch)</code>, so ten agents on ten branches never wait for each other and two
-          on one branch are told who is there. <code>check_activity</code> reports who holds what and the
-          last node on each of the twenty most recently written branches. Postgres triggers push every write over a WebSocket the moment it
-          lands; <code>deciduous remote watch</code> sits on it. A <code>took_from</code> edge records a
-          borrow across branches as a query, not a sentence.
-        </p>
-        <p class="feature-desc">
-          <strong>Memory that survives the session.</strong> The graph is what <code>/recover</code> reads
-          when a new session starts or context compacts: goals, the options that were rejected, the
-          outcomes, the attached documents. Far richer than what compaction keeps, and it is the same graph
-          the other agents are writing to.
-        </p>
-        <p class="feature-desc">
-          <strong>Discovery over what was already decided.</strong> <code>query_nodes</code> with
-          <code>workspace: "*"</code> finds the auth decision you made in a repository you have not opened in a
-          year. <code>ask_graph</code> answers in prose grounded in the nodes. <code>/decision-graph</code>
-          builds the graph backwards from a commit history that predates the tool.
-        </p>
-        <div class="quickstart-terminal">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">check_activity &mdash; before a burst of writes</span>
-          </div>
-          <div class="quickstart-content">
-            <div><span class="qs-prompt">&gt;</span> <span class="qs-cmd">check_activity({ workspace: "tetris-arena" })</span></div>
-            <div class="qs-output">{ "active_sessions": 3,</div>
-            <div class="qs-output">&nbsp;&nbsp;"sessions": [ { "branch": "agent-3", "client": "claude-code", "is_you": false, "expires_in_seconds": 8 }, ... ],</div>
-            <div class="qs-output">&nbsp;&nbsp;"branches": [</div>
-            <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;{ "branch": "agent-3", "locked_by": { "client": "claude-code", "session": "GNei6CpI", "is_you": false }, "last_node": { "node_type": "outcome", "title": "Round 4: clamp DAS through the clear flash", ... } },</div>
-            <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;{ "branch": "agent-8", "locked_by": null, "last_node": { "node_type": "outcome", "title": "arena converged, stopping here", ... } },</div>
-            <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;... ] }</div>
-          </div>
-        </div>
-        <p class="feature-desc" style="margin-top: 16px;">
-          What the arena found wanting, 1.0 fixes. Zero of its 471 edges crossed a branch, because nothing
-          said a borrow was an edge: <code>took_from</code> is that edge, and <code>log_observation</code>
-          writes it in the same call. Agents polled <code>query_nodes</code> to see what was new:
-          <code>check_activity</code> now carries the last node per branch. A watcher summarised from a tally
-          and invented a convention that did not exist: <code>remote watch</code> quotes the title of every
-          write instead of counting them. And the event socket that fed the watcher was closed by the server
-          every sixty seconds; it is not any more.
-        </p>
-        <div class="buttons">
-          <a href="https://notactuallytreyanastasio.github.io/tetris-arena/" class="btn btn-primary">Read the arena write-up</a>
-          <a href="remote.html#alongside" class="btn btn-secondary">Work alongside other agents</a>
-        </div>
-      </div>
-      </div><!-- /.narrow (lead) -->
-
-      <!-- ============================================================ -->
-      <!-- HERO: /decision-graph — the breakout feature                 -->
-      <!-- ============================================================ -->
-      <div class="narrow">
-      <div class="session-demo hero-demo" id="hero-demo">
-        <div class="session-header">
-          <span class="session-dot red"></span>
-          <span class="session-dot yellow"></span>
-          <span class="session-dot green"></span>
-          <span class="session-title">Claude Code &mdash; entering an existing project</span>
-          <button class="replay-btn" onclick="replayDemo('hero-demo')">Replay</button>
-        </div>
-        <div class="session-content">
-          <div class="session-step" style="--delay: 0s">
-            <div class="step-label user">You</div>
-            <div class="step-content">/decision-graph ../snowflex</div>
-          </div>
-          <div class="session-step" style="--delay: 1.2s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content">Building a decision graph from the snowflex commit history. Let me analyze the repo...</div>
-          </div>
-          <div class="session-step" style="--delay: 2.5s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content code">git -C ../snowflex log --oneline --after="2024-01-01" | wc -l</div>
-            <div class="step-output">347 commits found</div>
-          </div>
-          <div class="session-step" style="--delay: 4s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content">I see 347 commits across 8 months. Let me trace the major narratives &mdash; I'll collect commits into stories before building the graph...</div>
-          </div>
-          <div class="session-step" style="--delay: 5.5s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content code">deciduous add goal "Query engine evolution" -c 95 --date "2024-01-15"</div>
-            <div class="step-output">Created node 1 (type: goal) [confidence: 95%] [branch: main]</div>
-          </div>
-          <div class="session-step" style="--delay: 7s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content code">deciduous add action "Initial SQL parser with hand-rolled tokenizer" --date "2024-01-20" --commit a3f8c12</div>
-            <div class="step-output">Created node 2 (type: action) [commit: a3f8c12]</div>
-          </div>
-          <div class="session-step" style="--delay: 8.5s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content code">deciduous add observation "Hand-rolled parser can't handle nested subqueries &mdash; 3 bug reports in March" --date "2024-03-10"</div>
-            <div class="step-output">Created node 3 (type: observation)</div>
-          </div>
-          <div class="session-step" style="--delay: 10s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content code">deciduous archaeology pivot 2 "Parser can't handle nested subqueries" "Switch to sqlparser-rs crate" -c 90 -r "Hand-rolled parser too fragile"</div>
-            <div class="step-output">Created observation #4, revisit #5, decision #6<br>Linked: 2 &rarr; 4 &rarr; 5 &rarr; 6<br>Marked node 2 as superseded</div>
-          </div>
-          <div class="session-step" style="--delay: 12s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content code">deciduous status 2 superseded</div>
-            <div class="step-output">Updated node 2 status: pending &rarr; superseded</div>
-          </div>
-          <div class="session-step" style="--delay: 13.5s">
-            <div class="step-label claude">Claude</div>
-            <div class="step-content">
-              Built graph from 347 commits: 28 nodes, 31 edges, 3 pivot points.<br><br>
-              Key narratives discovered:<br>
-              &nbsp;&nbsp;1. Query engine evolution (8 nodes, 2 pivots)<br>
-              &nbsp;&nbsp;2. Connection pooling strategy (6 nodes, 1 pivot)<br>
-              &nbsp;&nbsp;3. Auth middleware redesign (5 nodes)<br><br>
-              Run <span style="color: #7ee787">deciduous serve</span> to explore, or <span style="color: #7ee787">deciduous pulse</span> to see the summary.
-            </div>
-          </div>
-        </div>
-      </div>
-
-      </div><!-- /.narrow (hero) -->
-
-      <!-- ============================================================ -->
-      <!-- Feature Grid: 2 per row on desktop                           -->
-      <!-- ============================================================ -->
-      <div class="feature-grid">
-
-        <!-- ============================================================ -->
-        <!-- Feature 0: One graph, every project — the shared server      -->
-        <!-- ============================================================ -->
-        <div class="feature-section">
-          <span class="feature-badge popular">Shared graph</span>
-          <h2>One Graph, Every Project</h2>
-          <p class="feature-desc">
-            Point every repository at one server and the reasoning behind all of them lives in a single Postgres &mdash; one workspace per repo, queryable alone or all at once. Your agent reaches it from any directory over MCP. So does the CLI. The local database becomes a cache; the server is the truth.
-          </p>
-          <div class="quickstart-terminal">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">one project, or all of them</span>
-            </div>
-            <div class="quickstart-content">
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote status</span></div>
-              <div class="qs-output">Remote: https://example.com/deciduous-mcp</div>
-              <div class="qs-output">Workspace: blog</div>
-              <div class="qs-output">&nbsp;</div>
-              <div class="qs-output">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;local&nbsp;&nbsp;&nbsp;&nbsp;remote</div>
-              <div class="qs-output">&nbsp;&nbsp;nodes&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;719&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;719</div>
-              <div class="qs-output">&nbsp;&nbsp;edges&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;845&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;845</div>
-              <div class="qs-success">OK: counts match.</div>
-            </div>
-          </div>
-          <p class="feature-desc">
-            Read tools take <code>workspace: "*"</code> for the cross-project view &mdash; find the auth decision you made in a repo you haven't opened in a year. Writes refuse it, because a node has to land somewhere specific. A repository can pin itself with a header, and then nothing can write its nodes anywhere else.
-          </p>
-          <div class="quickstart-terminal">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">setup, once per machine</span>
-            </div>
-            <div class="quickstart-content">
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote login</span></div>
-              <div class="qs-output">Token: stored in ~/.config/deciduous/credentials</div>
-              <div class="qs-output">&nbsp;&nbsp;mode 0600, outside every repository</div>
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">deciduous remote adopt ~/code --url https://example.com/deciduous-mcp</span></div>
-              <div class="qs-success">90 configured, 1 left alone</div>
-            </div>
-          </div>
-          <p class="feature-desc">
-            The token is never written to a config file. It lives in a credentials file outside every repository, so committing your config leaks a hostname and nothing else. You run the server yourself &mdash; it is an Elixir app and a Postgres database, and it ships in the repo.
-          </p>
-          <div class="buttons">
-            <a href="remote.html" class="btn btn-primary">Set up the shared graph</a>
-          </div>
-        </div>
-
-      <!-- ============================================================ -->
-      <!-- Feature 3: Keeping the pulse — ongoing logging as you work   -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge skill">Skill: pulse</span>
-        <h2>Keep the Pulse &mdash; Log Decisions as You Work</h2>
-        <p class="feature-desc">
-          The pulse skill is what makes deciduous a living document. As you work, Claude logs goals before implementing, tracks which options you considered, records what you chose and why, and links outcomes to commits. Run <code>deciduous pulse</code> anytime to see the health of your graph.
-        </p>
-
-        <div class="session-demo" id="demo-pulse">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Code &mdash; normal development session</span>
-            <button class="replay-btn" onclick="replayDemo('demo-pulse')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">Add rate limiting to the API endpoints</div>
-            </div>
-            <div class="session-step" style="--delay: 1.2s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">I'll add rate limiting. Let me log this goal first and map the options.</div>
-            </div>
-            <div class="session-step" style="--delay: 2.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add goal "Add API rate limiting" -c 90 --prompt-stdin &lt;&lt; 'EOF'
-Add rate limiting to the API endpoints
-EOF</div>
-              <div class="step-output">Created node 42 (type: goal) [confidence: 90%] [branch: main]</div>
-            </div>
-            <div class="session-step" style="--delay: 4s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add option "Token bucket per user" -c 85
-deciduous add option "Sliding window counter" -c 75
-deciduous link 42 43 -r "possible_approach"
-deciduous link 42 44 -r "possible_approach"</div>
-              <div class="step-output">Created nodes 43, 44 (options)<br>Created edges 42 &rarr; 43, 42 &rarr; 44</div>
-            </div>
-            <div class="session-step" style="--delay: 6s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Token bucket is simpler and battle-tested. Going with that.</div>
-            </div>
-            <div class="session-step" style="--delay: 7s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add decision "Token bucket &mdash; simpler, proven at scale" -c 90
-deciduous link 43 45 -r "chosen"</div>
-              <div class="step-output">Created node 45 (type: decision)</div>
-            </div>
-            <div class="session-step" style="--delay: 8.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add action "Implement token bucket middleware" -c 85 -f "src/middleware/rate_limit.rs"
-deciduous link 45 46 -r "implementation"</div>
-              <div class="step-output">Created node 46 (type: action) [files: src/middleware/rate_limit.rs]</div>
-            </div>
-            <div class="session-step" style="--delay: 10s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Implementing rate limit middleware...</div>
-              <div class="step-files">Writing: src/middleware/rate_limit.rs</div>
-            </div>
-            <div class="session-step" style="--delay: 11.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add outcome "Rate limiting working &mdash; 100 req/min per user" -c 95 --commit HEAD
-deciduous link 46 47 -r "implementation complete"</div>
-              <div class="step-output">Created node 47 (type: outcome) [commit: c8d3e2f]</div>
-            </div>
-            <div class="session-step" style="--delay: 13s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous pulse</div>
-            </div>
-            <div class="session-step" style="--delay: 14s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>=== PULSE ===</strong><br><br>
-                Summary:<br>
-                &nbsp;&nbsp;Nodes: 47 | Edges: 52<br>
-                &nbsp;&nbsp;Types: goal(6) option(8) decision(5) action(14) outcome(10) observation(4)<br><br>
-                Active Goals:<br>
-                &nbsp;&nbsp;#42 [goal] Add API rate limiting [90%]<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #43 [option] Token bucket per user (chosen)<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #44 [option] Sliding window counter<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&#9500;&#9472;&#9472; #45 [decision] Token bucket &mdash; simpler, proven<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472;&#9472; #47 [outcome] Rate limiting working [commit: c8d3e2f]
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- Feature 7: MCP Server — Direct AI Access                     -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge new">New in v0.14</span>
-        <h2>MCP Server &mdash; Direct AI Access to the Graph</h2>
-        <p class="feature-desc">
-          Give Claude (Code or Desktop) direct structured access to your decision graph via the <a href="https://modelcontextprotocol.io/">Model Context Protocol</a>. 31 tools for creating, querying, analyzing, and reporting on decisions &mdash; no shell commands needed. Each conversation gets its own decision tree. <em>(Cowork support coming soon &mdash; <a href="https://github.com/anthropics/claude-code/issues/48909">tracking issue</a>.)</em>
-        </p>
-
-        <div class="session-demo" id="demo-mcp">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Desktop &mdash; querying decisions via MCP</span>
-            <button class="replay-btn" onclick="replayDemo('demo-mcp')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">Why did we switch from in-memory caching to Redis? Show me the full decision chain.</div>
-            </div>
-            <div class="session-step" style="--delay: 1.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">search_nodes({ query: "cache" })</div>
-              <div class="step-output">Found 4 nodes matching "cache"</div>
-            </div>
-            <div class="session-step" style="--delay: 3s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">trace_chain({ node_id: 1, direction: "outgoing" })</div>
-              <div class="step-output">{ node_count: 6, edge_count: 5, nodes: [...] }</div>
-            </div>
-            <div class="session-step" style="--delay: 5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>Decision Chain: Caching Strategy</strong><br><br>
-                Goal #1: "Caching strategy" [95%]<br>
-                &nbsp;&nbsp;&#9500;&#9472; Action #2: "In-memory LRU cache" <span style="color: #f97583">[superseded]</span><br>
-                &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Observation #3: "Memory pressure at 10k RPM"<br>
-                &nbsp;&nbsp;&#9474;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Revisit #4: "Reconsider caching"<br>
-                &nbsp;&nbsp;&#9492;&#9472; Decision #5: "Switch to Redis with TTL" [90%]<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&#9492;&#9472; Outcome #6: "Redis deployed, p95 &lt;12ms"<br><br>
-                <strong>Rationale:</strong> In-memory LRU consuming 1.2GB at scale. Redis TTL gives horizontal scaling without memory pressure.
-              </div>
-            </div>
-            <div class="session-step" style="--delay: 8s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">
-                The switch happened because the in-memory LRU was consuming 1.2GB at 10k requests/min.
-                Decision #5 chose Redis with TTL-based invalidation. The outcome (node #6) confirmed p95 latency under 12ms.
-                The full pivot chain is: Goal #1 &rarr; Action #2 (superseded) &rarr; Observation #3 &rarr; Revisit #4 &rarr; Decision #5 &rarr; Outcome #6.
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top: 12px; font-size: 0.9rem;">
-          <strong>Works with:</strong> Claude Code &middot; Claude Desktop &middot; Any MCP client (Cowork coming soon)<br>
-          <strong>Setup:</strong> Add <code>{"mcpServers": {"deciduous": {"command": "deciduous", "args": ["mcp"]}}}</code> to your config<br>
-          <a href="mcp.html" style="color: #0969da; font-weight: 600;">Full MCP documentation &rarr;</a>
-        </div>
-      </div>
-
-            <!-- ============================================================ -->
-      <!-- Feature 4: /recover — Context Recovery                       -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge command">Command</span>
-        <h2>/recover &mdash; Pick Up Where You Left Off</h2>
-        <p class="feature-desc">
-          New session? Context compacted? <code>/recover</code> reads the decision graph, checks attached documents, audits for disconnected nodes, and gives Claude full context &mdash; far richer than what compaction preserves.
-        </p>
-
-        <div class="session-demo" id="demo-recover">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Code &mdash; new session, context was compacted</span>
-            <button class="replay-btn" onclick="replayDemo('demo-recover')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">/recover</div>
-            </div>
-            <div class="session-step" style="--delay: 1s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Recovering context from decision graph...</div>
-            </div>
-            <div class="session-step" style="--delay: 2s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous nodes --branch main
-deciduous edges
-deciduous commands
-deciduous doc list
-git log --oneline -10</div>
-            </div>
-            <div class="session-step" style="--delay: 4s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>Branch:</strong> main<br><br>
-                <strong>Active Goals:</strong><br>
-                &nbsp;&nbsp;#42 [goal] Add API rate limiting [90%] <span style="color: #4ade80">&check; completed</span><br>
-                &nbsp;&nbsp;#48 [goal] Add WebSocket support [85%] <span style="color: #fbbf24">in progress</span><br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&#8627; #49 [decision] Use tokio-tungstenite [90%]<br>
-                &nbsp;&nbsp;&nbsp;&nbsp;&#8627; #50 [action] Implementing WS handler [85%]<br><br>
-                <strong>Attached documents (1):</strong><br>
-                &nbsp;&nbsp;cache-architecture.png on Goal #1 (Caching strategy)<br><br>
-                <strong>Last 3 commits:</strong><br>
-                &nbsp;&nbsp;c8d3e2f feat: add rate limiting middleware<br>
-                &nbsp;&nbsp;a1b7f3c feat: websocket connection handler (WIP)<br>
-                &nbsp;&nbsp;e9d4c2a test: rate limit integration tests
-              </div>
-            </div>
-            <div class="session-step" style="--delay: 7s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">
-                Rate limiting is done (commit c8d3e2f). You're mid-implementation on WebSocket support &mdash;
-                the WS handler exists but isn't complete (node 50). You chose tokio-tungstenite for the implementation.
-                Want me to continue the WebSocket work?
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- Feature 2: Document attachments + Q&A                        -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge new">New in v0.13</span>
-        <h2>Attach Evidence &amp; Ask Your Graph Questions</h2>
-        <p class="feature-desc">
-          Attach screenshots, PDFs, and architecture diagrams to decision nodes. Then ask questions &mdash; the built-in Q&amp;A interface grounds answers in your actual decision history with full-text search across all stored interactions.
-        </p>
-
-        <div class="session-demo" id="demo-docs-qa">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Code Session</span>
-            <button class="replay-btn" onclick="replayDemo('demo-docs-qa')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">Here's the architecture diagram for the new caching layer</div>
-              <div class="step-files">[Attached: cache-architecture.png]</div>
-            </div>
-            <div class="session-step" style="--delay: 1.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">I'll attach that to the caching goal node with an AI-generated description.</div>
-            </div>
-            <div class="session-step" style="--delay: 3s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous doc attach 1 /tmp/cache-architecture.png --ai-describe</div>
-              <div class="step-output">Attached document 1 to node 1 (goal: Caching strategy)</div>
-            </div>
-            <div class="session-step" style="--delay: 4.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>AI Description:</strong> Architecture diagram showing Redis cache layer between API gateway and PostgreSQL, with TTL-based invalidation and write-through strategy for user profiles. Hot path latency annotated as &lt;12ms p95.
-              </div>
-            </div>
-            <div class="session-step" style="--delay: 6.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Attached and described. Now future sessions can see this diagram when recovering context. The description makes it searchable via the Q&amp;A interface too.</div>
-            </div>
-            <div class="session-step" style="--delay: 8s">
-              <div class="step-label user">You</div>
-              <div class="step-content">Why did we switch from in-memory caching to Redis?</div>
-            </div>
-            <div class="session-step" style="--delay: 9.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous nodes --type revisit</div>
-            </div>
-            <div class="session-step" style="--delay: 10.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>Revisit #4:</strong> Reconsider caching strategy<br>
-                &nbsp;&nbsp;Reason: "In-memory cache doesn't scale"<br>
-                &nbsp;&nbsp;Observation #3: "Memory pressure at 10k RPM &mdash; LRU consuming 1.2GB"<br>
-                &nbsp;&nbsp;New decision #5: "Switch to Redis with TTL-based invalidation"<br><br>
-                <strong>Document:</strong> cache-architecture.png attached to Goal #1<br>
-                <strong>Grounded in:</strong> commit a1b2c3d, commit i7j8k9l
-              </div>
-            </div>
-            <div class="session-step" style="--delay: 13s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">The in-memory LRU cache was consuming 1.2GB at 10k requests/minute. The pivot to Redis with TTL invalidation is captured in revisit node #4, with the architecture diagram attached to the caching goal.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- Feature 5: /work — Work Transactions                         -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge command">Command</span>
-        <h2>/work &mdash; Start a Work Transaction</h2>
-        <p class="feature-desc">
-          Before any implementation, <code>/work</code> creates the goal node with your verbatim request, then tracks actions and outcomes as Claude writes code. Commits get linked to the graph automatically.
-        </p>
-
-        <div class="session-demo" id="demo-work">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Code Session</span>
-            <button class="replay-btn" onclick="replayDemo('demo-work')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">/work Add email verification to the signup flow</div>
-            </div>
-            <div class="session-step" style="--delay: 1.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add goal "Add email verification to signup" -c 90 --prompt-stdin &lt;&lt; 'EOF'
-Add email verification to the signup flow
-EOF</div>
-              <div class="step-output">Created node 51 (type: goal) [confidence: 90%]</div>
-            </div>
-            <div class="session-step" style="--delay: 3s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Goal #51 created. I'll implement email verification and track each step.</div>
-            </div>
-            <div class="session-step" style="--delay: 4s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add action "Implement verification token generation and email sending" -c 85 -f "src/auth/verify.rs,src/email/templates.rs"
-deciduous link 51 52 -r "implementation step"</div>
-              <div class="step-output">Created node 52 (type: action) [files: src/auth/verify.rs, src/email/templates.rs]</div>
-            </div>
-            <div class="session-step" style="--delay: 5.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Implementing...</div>
-              <div class="step-files">Writing: src/auth/verify.rs, src/email/templates.rs, src/routes/verify.rs</div>
-            </div>
-            <div class="session-step" style="--delay: 7s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add outcome "Email verification working" -c 95 --commit HEAD
-deciduous link 52 53 -r "implementation complete"
-deciduous sync</div>
-              <div class="step-output">Created node 53 (type: outcome) [commit: f2a8b1c]<br>Exported graph: 53 nodes, 58 edges</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- Feature 1: /decision-graph — Retroactive History Discovery   -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge popular">Breakout Feature</span>
-        <h2>/decision-graph &mdash; Build a Graph from Git History</h2>
-        <p class="feature-desc">
-          Point it at any repository. Claude reads every commit, traces the narratives &mdash; what got built, what got replaced, where the pivots happened &mdash; and builds a connected decision graph. Grounded entirely in what's in the repo. No speculation.
-        </p>
-
-        <div class="session-demo" id="demo-decision-graph">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Code &mdash; analyzing 14 months of commits</span>
-            <button class="replay-btn" onclick="replayDemo('demo-decision-graph')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">/decision-graph</div>
-            </div>
-            <div class="session-step" style="--delay: 1s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">I'll analyze the commit history and build narratives first, then construct the graph. Let me start with the full log...</div>
-            </div>
-            <div class="session-step" style="--delay: 2.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">git log --oneline --after="2024-01-01" -- src/</div>
-              <div class="step-output">Reading 847 commits... tracing key identifiers across their full lifecycle...</div>
-            </div>
-            <div class="session-step" style="--delay: 4.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Found 4 major narratives. Writing to narratives.md before building the graph:</div>
-            </div>
-            <div class="session-step" style="--delay: 5.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>## Cache Strategy</strong><br>
-                Concepts: cache, LRUCache, cacheTimeout, invalidate<br><br>
-                Lifecycle:<br>
-                - cache: introduced (a1b2c3d), changed (e4f5g6h), renamed to LRUCache (x1y2z3)<br>
-                - cacheTimeout: introduced (e4f5g6h), removed (i7j8k9l) &larr; switch to Redis TTL<br><br>
-                <span style="color: #f97583">PIVOT: In-memory LRU &rarr; Redis (memory pressure at scale)</span>
-              </div>
-            </div>
-            <div class="session-step" style="--delay: 8s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add goal "Caching strategy" -c 95 --date "2024-02-01"</div>
-              <div class="step-output">Created node 1 (type: goal) [backdated: 2024-02-01]</div>
-            </div>
-            <div class="session-step" style="--delay: 9s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous add action "In-memory LRU cache" -d "Initial cache. Sources: a1b2c3d 'Add in-memory cache for hot queries'" --date "2024-02-15" --commit a1b2c3d</div>
-              <div class="step-output">Created node 2 (type: action) [commit: a1b2c3d]</div>
-            </div>
-            <div class="session-step" style="--delay: 10.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous archaeology pivot 2 "Memory pressure at 10k RPM &mdash; LRU consuming 1.2GB" "Switch to Redis with TTL-based invalidation" -c 90 -r "In-memory cache doesn't scale"</div>
-              <div class="step-output">Created observation #3, revisit #4, decision #5<br>Linked: 2 &rarr; 3 &rarr; 4 &rarr; 5<br>Marked node 2 as superseded</div>
-            </div>
-            <div class="session-step" style="--delay: 12.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">
-                Graph built. Every action cites a real commit SHA. Every observation comes from commit messages or code.<br><br>
-                Run <span style="color: #7ee787">deciduous pulse</span> to see the summary, or <span style="color: #7ee787">deciduous serve</span> to explore visually.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================================ -->
-      <!-- Feature 6: Skills — Narratives + Archaeology                 -->
-      <!-- ============================================================ -->
-      <div class="feature-section">
-        <span class="feature-badge skill">Skills</span>
-        <h2>Narratives &amp; Archaeology &mdash; Maintain the Story</h2>
-        <p class="feature-desc">
-          The <strong>narratives</strong> skill helps maintain a living document (<code>.deciduous/narratives.md</code>) tracking how each subsystem evolved and where it pivoted.
-          The <strong>archaeology</strong> skill transforms those narratives into queryable graph structure &mdash; creating revisit nodes, superseding old approaches, and connecting the timeline.
-        </p>
-
-        <div class="session-demo" id="demo-narratives">
-          <div class="session-header">
-            <span class="session-dot red"></span>
-            <span class="session-dot yellow"></span>
-            <span class="session-dot green"></span>
-            <span class="session-title">Claude Code &mdash; maintaining decision history</span>
-            <button class="replay-btn" onclick="replayDemo('demo-narratives')">Replay</button>
-          </div>
-          <div class="session-content">
-            <div class="session-step" style="--delay: 0s">
-              <div class="step-label user">You</div>
-              <div class="step-content">The auth system has changed a lot. Can you trace the narrative and structure it in the graph?</div>
-            </div>
-            <div class="session-step" style="--delay: 1.5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous narratives init</div>
-              <div class="step-output">Created .deciduous/narratives.md with 6 active goal titles</div>
-            </div>
-            <div class="session-step" style="--delay: 3s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">I'll read the code and fill in the auth narrative. Looking for signs of pivots &mdash; two approaches coexisting, comments about "we used to do X", deprecation warnings...</div>
-            </div>
-            <div class="session-step" style="--delay: 5s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-recovery-output">
-                <strong>## Auth Strategy</strong><br>
-                &gt; How users authenticate with the API<br><br>
-                <strong>Current state:</strong> JWT with refresh rotation, httpOnly cookies<br><br>
-                <strong>Evolution:</strong><br>
-                1. Session-based auth (Jan 2024) &mdash; simple, worked for monolith<br>
-                2. <span style="color: #f97583">PIVOT:</span> Sessions don't scale across microservices (Jun 2024)<br>
-                3. JWT with refresh rotation (Jun 2024) &mdash; stateless, horizontal scaling<br><br>
-                <strong>Evidence:</strong> commits abc1234, def5678<br>
-                <strong>Status:</strong> active
-              </div>
-            </div>
-            <div class="session-step" style="--delay: 8s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Now I'll structure this in the graph using archaeology commands...</div>
-            </div>
-            <div class="session-step" style="--delay: 9s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous archaeology pivot 12 "Sessions don't scale across microservices" "JWT with refresh rotation" -c 90 -r "Monolith to microservices"</div>
-              <div class="step-output">Created observation #14, revisit #15, decision #16<br>Linked: 12 &rarr; 14 &rarr; 15 &rarr; 16<br>Marked node 12 as superseded</div>
-            </div>
-            <div class="session-step" style="--delay: 11s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content code">deciduous narratives pivots</div>
-              <div class="step-output">1 pivot chain found:<br>&nbsp;&nbsp;#12 (session auth) &rarr; #14 (scaling issues) &rarr; #15 (revisit) &rarr; #16 (JWT)</div>
-            </div>
-            <div class="session-step" style="--delay: 13s">
-              <div class="step-label claude">Claude</div>
-              <div class="step-content">Auth narrative is structured. The pivot from sessions to JWT is captured with the observation that drove it. Run <span style="color: #7ee787">deciduous archaeology timeline</span> to see everything chronologically.</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-</div><!-- /.feature-grid -->
-
-      <!-- ============================================================ -->
-      <!-- Install                                                       -->
-      <!-- ============================================================ -->
-      <div class="install-section" id="install">
-        <h2>Install</h2>
-        <div class="install-options">
-          <div class="install-option">
-            <div class="quickstart-terminal">
-              <div class="session-header">
-                <span class="session-dot red"></span>
-                <span class="session-dot yellow"></span>
-                <span class="session-dot green"></span>
-                <span class="session-title">Homebrew</span>
-              </div>
-              <div class="quickstart-content">
-                <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew tap notactuallytreyanastasio/tap</span></div>
-                <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew install deciduous</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="install-option">
-            <div class="quickstart-terminal">
-              <div class="session-header">
-                <span class="session-dot red"></span>
-                <span class="session-dot yellow"></span>
-                <span class="session-dot green"></span>
-                <span class="session-title">Cargo</span>
-              </div>
-              <div class="quickstart-content">
-                <div><span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <p class="install-alt">Or download <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a> for macOS, Linux, and Windows.</p>
-        <p class="install-alt">Working across several projects? <a href="remote.html">Set up the shared graph</a> so every repository reaches one server instead of a separate local database each.</p>
-      </div>
-
-      <div class="narrow">
-      <!-- ============================================================ -->
-      <!-- Web Viewer                                                    -->
-      <!-- ============================================================ -->
-      <section>
-        <h2>Explore Your Graph</h2>
-        <p>Deploy to GitHub Pages with <code>deciduous sync</code> or run locally with <code>deciduous serve</code>.</p>
-
-        <div class="view-cards">
-          <a href="demo/" class="view-card">
-            <h3>Live Graph</h3>
-            <p>Browse the actual graph from building deciduous &mdash; 1,100+ nodes across DAG, timeline, and archaeology views.</p>
-          </a>
-          <div class="view-card">
-            <h3>Q&amp;A Interface</h3>
-            <p>Ask questions in plain English via <code>POST /api/ask</code>. Answers grounded in your graph. Full-text search with FTS5.</p>
-          </div>
-          <div class="view-card">
-            <h3>Archaeology View</h3>
-            <p>Navigate narratives as card stacks. Keyboard navigation (j/k/g/G/Space). See pivots and superseded approaches.</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- Editor Integration                                            -->
-      <!-- ============================================================ -->
-      <section>
-        <h2>Works With Your Editor</h2>
-        <p>One command creates slash commands, skills, and project instructions that teach your AI assistant the workflow.</p>
-
-        <div class="editor-badges">
-          <div class="editor-badge">Claude Code <code>deciduous init</code></div>
-          <div class="editor-badge">Windsurf <code>deciduous init --windsurf</code></div>
-          <div class="editor-badge">OpenCode <code>deciduous init --opencode</code></div>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- Node Types                                                    -->
-      <!-- ============================================================ -->
-      <section>
-        <h2>Seven Node Types</h2>
-        <p>A vocabulary for how software actually gets built: <strong>goal &rarr; options &rarr; decision &rarr; actions &rarr; outcomes</strong>. Observations attach anywhere. Revisits connect old approaches to new.</p>
-
-        <div class="node-types">
-          <div class="node-type goal"><h3>Goal</h3><p>What to achieve</p></div>
-          <div class="node-type option"><h3>Option</h3><p>Approaches considered</p></div>
-          <div class="node-type decision"><h3>Decision</h3><p>Choice made</p></div>
-          <div class="node-type action"><h3>Action</h3><p>Work implemented</p></div>
-          <div class="node-type outcome"><h3>Outcome</h3><p>Result observed</p></div>
-          <div class="node-type observation"><h3>Observation</h3><p>Insight captured</p></div>
-          <div class="node-type revisit"><h3>Revisit</h3><p>Pivot point</p></div>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- Quickstart                                                    -->
-      <!-- ============================================================ -->
-      <section>
-        <h2>Get Started in 60 Seconds</h2>
-
-        <div class="quickstart-step">
-          <div class="quickstart-step-header">
-            <span class="quickstart-num">1</span>
-            <div class="quickstart-info">
-              <h3>Install</h3>
-              <p>Via Homebrew, Cargo, or <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">pre-built binaries</a>.</p>
-            </div>
-          </div>
-          <div class="quickstart-terminal">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">Terminal</span>
-            </div>
-            <div class="quickstart-content">
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew tap notactuallytreyanastasio/tap</span></div>
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">brew install deciduous</span></div>
-              <div style="color: #57606a; margin: 4px 0;">or</div>
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">cargo install deciduous</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="quickstart-step">
-          <div class="quickstart-step-header">
-            <span class="quickstart-num">2</span>
-            <div class="quickstart-info">
-              <h3>Initialize in your project</h3>
-              <p>Creates 9 slash commands, 3 skills, and project instructions.</p>
-            </div>
-          </div>
-          <div class="quickstart-terminal">
-            <div class="session-header">
-              <span class="session-dot red"></span>
-              <span class="session-dot yellow"></span>
-              <span class="session-dot green"></span>
-              <span class="session-title">Terminal</span>
-            </div>
-            <div class="quickstart-content">
-              <div><span class="qs-prompt">$</span> <span class="qs-cmd">cd my-project && deciduous init</span></div>
-              <div><span class="qs-output">Created .deciduous/deciduous.db</span></div>
-              <div><span class="qs-output">Created .claude/commands/ (9 slash commands)</span></div>
-              <div><span class="qs-output">Created .claude/skills/ (pulse, narratives, archaeology)</span></div>
-              <div><span class="qs-output">Created CLAUDE.md (project instructions)</span></div>
-              <div><span class="qs-success">Ready! Run /decision-graph to graph existing history, or just start working.</span></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="quickstart-step">
-          <div class="quickstart-step-header">
-            <span class="quickstart-num">3</span>
-            <div class="quickstart-info">
-              <h3>Graph your history, then keep going</h3>
-              <p>
-                Use <code>/decision-graph</code> to build from existing commits.
-                Then just work normally &mdash; Claude logs decisions as you go.
-                Use <code>/recover</code> at the start of every new session.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top: 30px; text-align: center;">
-          <a href="https://github.com/notactuallytreyanastasio/deciduous"><img src="https://img.shields.io/github/stars/notactuallytreyanastasio/deciduous?style=social" alt="GitHub"></a>
-        </div>
-      </section>
-
-      <!-- ============================================================ -->
-      <!-- All Commands & Skills Reference                               -->
-      <!-- ============================================================ -->
-      <section>
-        <h2>All Commands &amp; Skills</h2>
-        <p>Everything <code>deciduous init</code> installs. Commands are slash commands (<code>/recover</code>). Skills are contextual guides Claude follows.</p>
-
-        <table class="cmd-table">
-          <thead>
-            <tr><th>Name</th><th>Type</th><th>What It Does</th></tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>/decision-graph</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Build a decision graph from an existing repo's commit history. Analyzes commits, traces narratives, creates backdated nodes grounded in real evidence.</td>
-            </tr>
-            <tr>
-              <td><code>/recover</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Recover context at session start. Queries nodes, edges, documents, commands, and git state. Audits for disconnected nodes. Reports what's active and what's next.</td>
-            </tr>
-            <tr>
-              <td><code>/work</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Start a work transaction. Creates goal node with verbatim prompt before any code is written. Tracks actions and outcomes through to commit.</td>
-            </tr>
-            <tr>
-              <td><code>/decision</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Full decision graph management. Add nodes, link edges, manage documents, sync with teammates, export DOT/PNG, generate PR writeups.</td>
-            </tr>
-            <tr>
-              <td><code>/document</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Generate comprehensive documentation for a file or directory. Shakes the tree &mdash; traces callers, finds tests, maps dependencies.</td>
-            </tr>
-            <tr>
-              <td><code>/sync</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Multi-user sync. Pull teammate events, rebuild local DB, push your changes. Event-based, append-only, git-mergeable.</td>
-            </tr>
-            <tr>
-              <td><code>/serve-ui</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Start the web viewer at localhost:3000. Auto-refreshes. DAG, timeline, chains, archaeology, and Q&amp;A views.</td>
-            </tr>
-            <tr>
-              <td><code>/sync-graph</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Export graph to <code>docs/graph-data.json</code> for GitHub Pages deployment.</td>
-            </tr>
-            <tr>
-              <td><code>/build-test</code></td>
-              <td><span class="type-badge type-command">command</span></td>
-              <td>Build the project and run the test suite.</td>
-            </tr>
-            <tr>
-              <td><code>deciduous remote watch</code></td>
-              <td><span class="type-badge type-command">cli</span></td>
-              <td>Connect to the shared server's event stream and print one line per write, quoting the node's title and branch. Reconnects on close. <code>--types</code>, <code>--branch</code>, <code>--edges</code>, <code>--json</code>; <code>--url</code> prints the socket URL for another client.</td>
-            </tr>
-            <tr>
-              <td><code>check_activity</code></td>
-              <td><span class="type-badge type-command">mcp</span></td>
-              <td>Who is writing to this workspace right now, on which branch, and the last node on each of the twenty most recently written branches (<code>branches: N</code> for more). Call it before a burst of writes.</td>
-            </tr>
-            <tr>
-              <td><code>pulse</code></td>
-              <td><span class="type-badge type-skill">skill</span></td>
-              <td>Map the current state as decisions. Pick a scope, read the code, ask "what decisions define this?", build goal &rarr; options &rarr; decisions. <code>deciduous pulse</code> shows the summary.</td>
-            </tr>
-            <tr>
-              <td><code>narratives</code></td>
-              <td><span class="type-badge type-skill">skill</span></td>
-              <td>Maintain <code>.deciduous/narratives.md</code> &mdash; evolution stories for each subsystem. Identify pivots, track current state vs history, find evidence in commits.</td>
-            </tr>
-            <tr>
-              <td><code>archaeology</code></td>
-              <td><span class="type-badge type-skill">skill</span></td>
-              <td>Transform narratives into graph structure. Create backdated goals, use <code>archaeology pivot</code> to atomically create pivot chains, mark superseded paths, review timeline.</td>
-            </tr>
-          </tbody>
-        </table>
-      </section>
-
-      <!-- Tutorial + Story -->
-      <section>
-        <div class="story-link" style="margin-bottom: 15px;">
-          <p>New to deciduous? The tutorial walks through building a real decision graph from scratch, with live examples. <a href="tutorial/introduction/what-is-deciduous.html">Start the tutorial &rarr;</a></p>
-        </div>
-        <div class="story-link">
-          <p>Deciduous was built with itself &mdash; 1,100+ decisions tracking its own development. <a href="story.html">Read the full story &rarr;</a></p>
-        </div>
-      </section>
-
-      <footer>
-        <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
-        <a href="https://crates.io/crates/deciduous">crates.io</a> |
-        MIT License
-      </footer>
-      </div><!-- /.narrow (bottom sections) -->
-    </div>
-
-    <script>
-      // Auto-scroll within a terminal as steps appear
-      function setupAutoScroll(demoEl) {
-        const content = demoEl.querySelector(".session-content");
-        if (!content) return;
-        const steps = content.querySelectorAll(".session-step");
-        steps.forEach((step) => {
-          const delay = parseFloat(getComputedStyle(step).getPropertyValue("--delay")) * 1000;
-          setTimeout(() => {
-            const targetScroll = step.offsetTop - content.offsetTop - 20;
-            smoothScrollTo(content, targetScroll, 800);
-          }, delay + 400);
-        });
-      }
-
-      function smoothScrollTo(element, target, duration) {
-        const start = element.scrollTop;
-        const distance = target - start;
-        let startTime = null;
-        function animation(currentTime) {
-          if (!startTime) startTime = currentTime;
-          const elapsed = currentTime - startTime;
-          const progress = Math.min(elapsed / duration, 1);
-          const ease = 1 - Math.pow(1 - progress, 3);
-          element.scrollTop = start + distance * ease;
-          if (progress < 1) requestAnimationFrame(animation);
-        }
-        requestAnimationFrame(animation);
-      }
-
-      // Replay a specific demo
-      function replayDemo(demoId) {
-        const demo = document.getElementById(demoId);
-        const content = demo.querySelector(".session-content");
-        const steps = demo.querySelectorAll(".session-step");
-        if (content) content.scrollTop = 0;
-        demo.classList.remove("animate");
-        demo.classList.remove("hero-demo");
-        steps.forEach((step) => {
-          step.style.animation = "none";
-          step.offsetHeight;
-          step.style.animation = null;
-        });
-        requestAnimationFrame(() => {
-          demo.classList.add("animate");
-          setupAutoScroll(demo);
-        });
-      }
-
-      // IntersectionObserver for scroll-triggered animations
-      const observer = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add("animate");
-              setupAutoScroll(entry.target);
-              observer.unobserve(entry.target);
-            }
-          });
-        },
-        { threshold: 0.2 },
-      );
-
-      // Observe all feature demos (not the hero)
-      document.querySelectorAll(".session-demo:not(.hero-demo)").forEach((demo) => {
-        observer.observe(demo);
-      });
-
-      // Hero animates on page load
-      setupAutoScroll(document.getElementById("hero-demo"));
-    </script>
-  </body>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#fff0ed">
+<meta name="description" content="Give your coding agents a shared memory. They can read each other's decisions, reuse good ideas, and recover the reasoning when a session ends.">
+<title>Deciduous: Many minds. One memory.</title>
+<link rel="canonical" href="https://deciduous.dev/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://deciduous.dev/">
+<meta property="og:site_name" content="Deciduous">
+<meta property="og:locale" content="en_US">
+<meta property="og:title" content="Deciduous: Many minds. One memory.">
+<meta property="og:description" content="Give your coding agents a shared memory. They can read each other's decisions, reuse good ideas, and recover the reasoning when a session ends.">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png">
+<meta property="og:image:secure_url" content="https://deciduous.dev/og-many-minds.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Deciduous: Many minds. One memory. Ten agent terminals connect to a shared memory on a coral-pink background.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Deciduous: Many minds. One memory.">
+<meta name="twitter:description" content="Give your coding agents a shared memory. They can read each other's decisions, reuse good ideas, and recover the reasoning when a session ends.">
+<meta name="twitter:image" content="https://deciduous.dev/og-many-minds.png">
+<meta name="twitter:image:alt" content="Deciduous: Many minds. One memory. Ten agent terminals connect to a shared memory on a coral-pink background.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--blush:#fff0ed;--ink:#78333e;--console:#301e25;--paper:#fffaf9;--coral:#e97086;--rose:#dc7086;--muted:#946d77;--rule:#ebcbd0;--mono:"JetBrains Mono",ui-monospace,monospace;--sans:"Familjen Grotesk","Arial",sans-serif;--a1:#98d2b4;--a2:#ebc883;--a3:#a3bfff;--a4:#ecadbc;--a5:#c5acf3;--a6:#8fd5d0;--a7:#dfabe0;--a8:#c7d886;--a9:#ecb188;--a10:#adbef1}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:90px}body{margin:0;background:var(--blush);color:var(--ink);font-family:var(--sans);font-size:17px;line-height:1.45}button,input{font:inherit}button,a,input{-webkit-tap-highlight-color:transparent}button{cursor:pointer}a{color:inherit;text-underline-offset:4px}button{color:inherit}button:disabled{cursor:default;opacity:.4}:focus-visible{outline:3px solid var(--coral);outline-offset:5px}button:focus-visible{outline-offset:3px}::selection{background:#e97086;color:#301e25}svg{display:block}button svg{pointer-events:none}button{touch-action:manipulation}a,button{transition:background .18s,color .18s,box-shadow .18s}h1,h2,h3,p{margin:0}button,a{-webkit-user-select:none}code,pre,.mono{font-family:var(--mono)}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}.skip{position:fixed;left:20px;top:-70px;background:var(--paper);padding:12px;z-index:100}.skip:focus{top:12px}.icon{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}.branch-icon{width:27px;height:29px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}.topbar{height:83px;padding:0 3.3vw;display:flex;align-items:center;justify-content:space-between;gap:25px;border-bottom:1px solid #78333e1b;position:relative;z-index:20}.brand{font-size:27px;letter-spacing:-1.1px;text-decoration:none;font-weight:700;display:flex;align-items:center;gap:10px}.topnav{display:flex;align-items:center;gap:29px;font-size:14px}.topnav>a{text-decoration:none}.topnav>a:hover{color:#936149}.topnav .nav-install{background:var(--ink);color:white;border-radius:5px;padding:10px 16px}.run-label{display:flex;gap:9px;align-items:center;color:#846269;font-size:12px}.run-label i{height:6px;width:6px;background:var(--coral);border-radius:50%}.theatre{position:relative;padding:26px 3.3vw 0;overflow:hidden;max-width:1900px;margin:auto}.theatre-meta{display:flex;justify-content:space-between;align-items:center;gap:16px;font-size:12px;margin-bottom:24px;color:#85656b}.theatre-meta .meta-right{display:flex;gap:24px;align-items:center}.theatre-meta strong{font-weight:500;color:var(--ink)}.stage{min-height:610px;position:relative;display:grid;grid-template-columns:minmax(210px,1fr) minmax(350px,1.22fr) minmax(210px,1fr);gap:4.5vw;align-items:center;padding:5px 0 26px}.agent-bank{display:flex;flex-direction:column;gap:13px;z-index:2}.agent-tile{width:100%;text-align:left;min-width:0;border:1px solid #d6b4bb;background:#fef2f4;box-shadow:0 3px 0 #78333e08;border-radius:7px;padding:0;overflow:hidden;position:relative;transition:transform .25s,background .25s,border-color .25s,box-shadow .25s}.agent-tile:hover{transform:translateY(-3px);border-color:var(--ink);box-shadow:0 6px 18px #78333e14}.agent-tile.active{background:#fff;border-color:var(--ink);box-shadow:0 0 0 2px #78333e0d,0 7px 22px #78333e12}.agent-tile.active:before{content:"";height:100%;width:3px;position:absolute;left:0;top:0;background:var(--agent)}.agent-bar{height:28px;display:flex;align-items:center;gap:7px;padding:0 11px;border-bottom:1px solid #e7d0d5;font-size:10px;color:#816067}.agent-dot{width:7px;height:7px;border-radius:2px;background:var(--agent);border:1px solid #78333e20;display:inline-block;flex-shrink:0}.agent-bar b{font-weight:500;color:#57343b}.agent-bar .state{margin-left:auto;font-size:9px}.agent-lines{height:53px;padding:8px 12px;font-family:var(--mono);font-size:10px;line-height:1.65;color:#8e6e75}.agent-lines .preview{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#5f4046}.agent-lines .prompt{color:#b09399;margin-right:7px}.agent-bank.left .agent-tile:nth-child(2){transform:translateX(11px)}.agent-bank.left .agent-tile:nth-child(4){transform:translateX(18px)}.agent-bank.right .agent-tile:nth-child(2){transform:translateX(-15px)}.agent-bank.right .agent-tile:nth-child(4){transform:translateX(-8px)}.agent-bank .agent-tile:hover{transform:translateY(-3px)}.hero-center{text-align:center;z-index:2;position:relative;padding:25px 0}.memory-mark{margin:0 auto 19px;width:91px;height:91px;border:1px solid #d4aab3;border-radius:50%;display:grid;place-items:center;position:relative;background:var(--blush)}.memory-mark:before{content:"";position:absolute;inset:9px;border:1px dashed #d4aab3;border-radius:50%}.memory-mark .branch-icon{width:34px;height:42px}.memory-mark .satellite{position:absolute;background:var(--coral);width:8px;height:8px;border-radius:50%;right:2px;top:23px;border:2px solid var(--blush)}h1{font-size:clamp(64px,6.3vw,105px);line-height:.86;font-weight:600;letter-spacing:-.065em;margin-bottom:24px}.hero-center p{max-width:29ch;margin:0 auto;color:#8d676f;font-size:16px;line-height:1.55}.hero-center .follow{display:inline-flex;align-items:center;gap:17px;margin:25px auto 12px;background:var(--ink);color:white;padding:13px 19px;border-radius:5px;text-decoration:none;font-size:14px}.follow:hover{background:#803746}.hero-center .hint{display:block;color:#8f7378;font-size:11px}.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1;overflow:visible}.wire{fill:none;stroke:#dbbac1;stroke-width:1.2;opacity:.65}.wire.active{stroke:var(--rose);stroke-width:1.8;opacity:1}.signal{fill:var(--coral);opacity:0}.signal.moving{opacity:1}.stage-note{display:flex;align-items:center;gap:8px;font-size:11px;color:#88686e}.stage-note .icon{width:14px;height:14px}.hero-transport{margin-top:0;border-top:1px solid #dcbfc5;border-bottom:1px solid #dcbfc5;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:23px;padding:14px 0}.transport-button{display:inline-flex;gap:8px;align-items:center;border:1px solid #dabec4;border-radius:4px;background:transparent;font-size:12px;padding:8px 11px;min-height:36px;white-space:nowrap}.transport-button:hover{background:#78333e0c}.transport-button .icon{height:14px;width:14px}.scrub-wrap{position:relative;min-width:0}.scrub-labels{display:flex;justify-content:space-between;gap:10px;font-size:10px;color:#9b7e84;margin-top:0;font-family:var(--mono)}input[type=range]{--progress:0%;appearance:none;-webkit-appearance:none;width:100%;height:24px;background:transparent;cursor:ew-resize;margin:0;display:block}input[type=range]::-webkit-slider-runnable-track{height:3px;background:linear-gradient(to right,var(--coral) 0 var(--progress),#dfbfc6 var(--progress) 100%);border-radius:4px}input[type=range]::-moz-range-track{height:3px;background:#dfbfc6}input[type=range]::-moz-range-progress{background:var(--coral);height:3px}input[type=range]::-webkit-slider-thumb{appearance:none;-webkit-appearance:none;width:10px;height:17px;background:var(--coral);border-radius:2px;margin-top:-7px;box-shadow:0 0 0 4px #fff0ed99}input[type=range]::-moz-range-thumb{width:10px;height:17px;background:var(--coral);border:0;border-radius:2px}.clock-value{font-size:15px;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}.hero-caption{display:flex;justify-content:space-between;gap:24px;font-size:11px;color:#8f7378;padding:14px 0 35px}.hero-caption a{color:var(--ink)}.story-intro{padding:100px 6vw 77px;display:grid;grid-template-columns:1.35fr 1fr;align-items:end;gap:45px;max-width:1600px;margin:auto}.story-intro h2{font-weight:500;font-size:clamp(38px,4.5vw,66px);line-height:1.04;letter-spacing:-.045em;max-width:19ch}.story-intro p{max-width:37ch;font-size:17px;color:#8e6e74}.story-intro .scroll-cue{display:flex;gap:12px;align-items:center;color:var(--ink);font-size:12px;margin-top:25px}.stack{padding:0 25px;position:relative}.chapter{position:sticky;top:18px;margin-bottom:100px;min-height:720px;border:1px solid #d0b0b6;border-radius:13px 13px 0 0;box-shadow:0 -12px 50px #78333e0b;background:var(--paper);overflow:hidden;transform-origin:top center;scroll-margin-top:25px}.chapter:nth-child(2){top:34px;background:#fff4f1}.chapter:nth-child(3){top:50px;background:#f4e7e5}.chapter:nth-child(4){top:66px;background:#f7e8df;margin-bottom:0}.chapter-tab{border-bottom:1px solid #78333e21;display:flex;align-items:center;gap:12px;padding:15px 27px;font-size:12px;background:inherit}.tab-number{font-family:var(--mono);font-size:11px;padding:2px 7px;border:1px solid #cfb3b9;border-radius:3px}.chapter-tab .tab-meta{margin-left:auto;color:#998185;font-size:11px}.chapter-body{padding:31px 3.8vw 32px}.chapter-head{display:grid;grid-template-columns:1.3fr 1fr;align-items:end;gap:40px;margin-bottom:29px}.chapter h2{font-size:clamp(36px,3.8vw,57px);font-weight:500;line-height:1.05;letter-spacing:-.045em;max-width:21ch}.chapter-head p{font-size:15px;max-width:44ch;color:#897377;line-height:1.5}.chapter-head p b{font-weight:500;color:var(--ink)}.handoff-layout{display:grid;grid-template-columns:1fr 170px 1fr;gap:16px;align-items:stretch}.console{min-width:0;background:var(--console);border:1px solid #4b2c33;border-radius:7px;color:#f3e2e5;overflow:hidden;display:flex;flex-direction:column}.console-header{display:flex;align-items:center;gap:8px;padding:12px 15px;border-bottom:1px solid #ffffff13;font-family:var(--mono);font-size:10px;color:#c09aa2}.console-header b{color:#f8edef;font-weight:400}.console-header .branch{margin-left:auto;color:#aa8d93;font-size:9px}.console-body{padding:18px 18px 16px;overflow:auto;height:282px;scrollbar-width:thin;scrollbar-color:#7c4651 transparent}.terminal-entry{font-size:11px;line-height:1.75;font-family:var(--mono);margin-bottom:18px;animation:appear .18s ease}.terminal-entry:last-child{margin-bottom:0}.terminal-entry .entry-head{display:flex;align-items:center;gap:8px;margin-bottom:6px;color:#ce9ca6;font-size:9px}.terminal-entry .entry-head time{margin-left:auto;color:#b4868f}.terminal-entry code{font-size:10px;white-space:pre-wrap;overflow-wrap:anywhere;display:block;color:#f5e4e7;line-height:1.75}.terminal-entry .result{margin-top:8px;color:#cca5ad;font-size:10px;white-space:pre-wrap;overflow-wrap:anywhere}.terminal-entry .result strong{color:#c6daa1;font-weight:400}.terminal-entry .note{color:#dfbec4;font-family:var(--sans);font-size:14px;line-height:1.5}.empty-terminal{font-family:var(--mono);font-size:10px;line-height:1.9;color:#af8c93}.empty-terminal .cursor{display:inline-block;height:12px;width:6px;background:#cf95a1;vertical-align:-2px;margin-left:4px}.console-footer{border-top:1px solid #ffffff13;font-family:var(--mono);padding:10px 15px;font-size:9px;color:#b9939b;min-height:35px}.console-footer .agent-dot{margin-right:6px;height:6px;width:6px}.handoff-link{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center}.handoff-link>svg{width:100%;height:160px;overflow:visible}.handoff-link .transfer-track{fill:none;stroke:#d6bfc4;stroke-width:1.4}.handoff-link .transfer-lit{stroke:var(--rose);stroke-width:2;stroke-dasharray:4 5}.handoff-link p{font-size:11px;color:#957b80;max-width:17ch;line-height:1.6}.handoff-link b{color:var(--ink);font-size:12px;font-weight:500;display:block}.handoff-link .handoff-source{font-family:var(--mono);font-size:8px;fill:#957b80}.handoff-link .shared-label{font-family:var(--sans);font-size:11px;fill:var(--ink)}.timeline{display:grid;grid-template-columns:auto auto minmax(70px,1fr) auto auto;gap:12px;align-items:center;padding:18px 0 13px}.timeline .transport-button{padding:6px 10px}.timeline .icon-only{padding:8px}.timeline .clock-value{font-size:11px;min-width:62px;text-align:right}.timeline-labels{display:flex;justify-content:space-between;color:#95787d;font-size:9px;font-family:var(--mono)}.chapter-foot{display:flex;justify-content:space-between;gap:24px;border-top:1px solid #78333e1a;padding-top:15px;font-size:11px;color:#967d82}.chapter-foot p{max-width:90ch}.chapter-foot a{white-space:nowrap;color:#7d414d}.work-layout{display:grid;grid-template-columns:1fr 1fr;gap:22px}.work-layout .console-body{height:292px}.graph-panel{border:1px solid #d4b7bd;border-radius:7px;position:relative;overflow:hidden;background-color:#faf1f3;background-image:radial-gradient(#ddcace 1px,transparent 1px);background-size:16px 16px;display:flex;flex-direction:column;min-width:0}.graph-header{display:flex;justify-content:space-between;padding:12px 15px;font-size:11px;background:#faf1f3d9;border-bottom:1px solid #e4ccd1}.graph-header span:last-child{color:#99787e;font-family:var(--mono);font-size:9px}.work-graph{width:100%;height:267px;overflow:visible}.graph-node{opacity:.14;transition:opacity .25s;cursor:pointer}.graph-node.visible{opacity:1}.graph-node rect{fill:#fffbfc;stroke:#d4b6bc;stroke-width:1.2}.graph-node.visible rect{stroke:#a97982}.graph-node.current rect{fill:#f0d9dd;stroke:#9c5b68;stroke-width:1.8}.graph-node text{fill:#664047;font-family:var(--sans);font-size:11px;pointer-events:none}.graph-node .node-type{font-size:8px;fill:#a67b83}.graph-node .node-icon{fill:var(--agent);stroke:none}.graph-edge{stroke:#d1b4b9;stroke-width:1.3;fill:none;opacity:.17;transition:opacity .25s}.graph-edge.visible{opacity:1;stroke:#ad747f}.graph-edge.rejected{stroke-dasharray:4 3}.graph-edge.chosen.visible{stroke:#739174;stroke-width:1.8}.edge-label{font-family:var(--mono);font-size:7px;fill:#ac7983}.graph-note{margin-top:auto;display:flex;gap:14px;align-items:center;padding:7px 15px 12px;font-size:9px;color:#9e727a}.graph-note i{display:inline-block;width:6px;height:6px;background:#a97982;border-radius:2px;margin-right:4px}.graph-note .dash{height:0;width:12px;border-top:1px dashed #9e727a;background:none;border-radius:0;vertical-align:3px}.recall-layout{display:grid;grid-template-columns:.9fr 1.4fr;gap:36px}.questions{display:flex;flex-direction:column;gap:10px}.question{display:flex;gap:12px;align-items:center;text-align:left;border:1px solid #d4c2c7;background:#fff6f577;padding:15px 16px;border-radius:5px;font-size:13px}.question:hover,.question[aria-pressed=true]{background:#fffdfd;border-color:#84666c;box-shadow:0 3px 0 #301e2507}.question .q-number{font-family:var(--mono);font-size:10px;color:#957d82}.question .icon{margin-left:auto;width:14px;flex-shrink:0}.recall-context{margin-top:13px;font-size:12px;color:#8b7a7e;line-height:1.7;max-width:40ch}.memory-answer{min-width:0}.memory-answer .console-body{height:265px}.recall-trail{display:flex;align-items:center;gap:0;margin-top:15px;flex-wrap:wrap;font-size:10px;color:#88777b}.trail-chip{border:1px solid #d2bfc4;border-radius:3px;padding:4px 7px;background:#fff7f5}.trail-connector{width:17px;border-top:1px solid #c5a5ab}.recall-answer-summary{font-size:13px;color:#856b70;margin-top:13px;max-width:70ch}.rules-layout{display:grid;grid-template-columns:1.28fr .8fr;gap:40px;align-items:stretch}.rules-code{margin:0;background:#fffcf6;border:1px solid #d9c8b9;border-radius:5px;overflow:auto;max-height:327px;padding:21px;font-family:var(--mono);font-size:11px;line-height:1.8;color:#665658;white-space:pre-wrap}.rules-code .em{color:#895e49}.rules-code .rule-title{color:#592731}.run-evidence{display:flex;flex-direction:column;justify-content:space-between;gap:20px}.evidence-row{display:grid;grid-template-columns:1fr 1fr;gap:18px}.evidence-number{font-size:42px;line-height:1;letter-spacing:-2px;color:#603f54}.evidence-label{font-size:12px;color:#9a7c86;margin-top:6px}.evidence-note{font-size:13px;color:#8b7180;max-width:40ch}.evidence-note a{color:#644855}.rules-more{margin-top:24px;border-top:1px solid #d9c5be;font-size:12px;color:#755968}.rules-more summary{padding:13px 0;cursor:pointer}.rules-more dl{display:grid;grid-template-columns:100px 1fr;gap:12px;margin:0 0 20px;max-width:900px}.rules-more dt{font-family:var(--mono);font-size:10px}.rules-more dd{margin:0}.install{background:var(--console);color:var(--blush);position:relative;z-index:6;margin-top:130px;padding:77px 6vw 0}.install-top{display:flex;justify-content:space-between;gap:35px}.install .brand{font-size:20px;color:#d6a8b1}.install h2{font-size:clamp(62px,7.7vw,116px);line-height:.97;letter-spacing:-.055em;font-weight:500;margin:44px 0;max-width:10ch}.install-content{display:grid;grid-template-columns:1.1fr 1fr;gap:70px;align-items:end;padding-bottom:60px}.install-content p{font-size:17px;color:#bd989f;max-width:40ch;margin-bottom:23px}.install-links{display:flex;flex-wrap:wrap;gap:22px;font-size:13px}.install-links a{color:#e8c7cd}.install-terminal{align-self:end;max-width:620px;width:100%}.install-terminal .console-header{border:1px solid #643b43;border-bottom:none;background:#422229;border-radius:6px 6px 0 0}.install-terminal pre{margin:0;background:#2a1419;border:1px solid #643b43;border-radius:0 0 6px 6px;padding:23px;font-size:11px;line-height:2.2;overflow:auto;color:#ecc6cd}.install-terminal pre span{color:#8e626a;user-select:none}.copy-button{margin-left:auto;color:#e2b9c1;border:0;background:none;font-size:11px;display:flex;align-items:center;gap:6px;min-height:28px}.copy-button svg{width:13px;height:13px}.footer{border-top:1px solid #ffffff18;padding:21px 0 26px;display:flex;justify-content:space-between;gap:24px;font-size:11px;color:#b98e96}.footer>div{display:flex;gap:20px}.footer a{text-decoration:none}.chapter-nav{position:fixed;right:0;top:50%;z-index:15;display:flex;flex-direction:column;gap:3px;transform:translateY(-50%);opacity:0;pointer-events:none;transition:opacity .2s}.chapter-nav.visible{opacity:1;pointer-events:auto}.chapter-nav a{display:block;padding:10px 9px;background:#fff6f8b8;border:1px solid #e3cbd0;border-right:0;border-radius:4px 0 0 4px;font-family:var(--mono);font-size:9px;text-decoration:none}.chapter-nav a.active{background:var(--ink);color:white;border-color:var(--ink)}dialog{border:1px solid #9c6872;border-radius:12px;background:var(--paper);color:var(--ink);width:min(620px,calc(100% - 32px));padding:0;max-height:82dvh;box-shadow:0 30px 130px #301e2560}dialog::backdrop{background:#301e255e;backdrop-filter:blur(6px)}.dialog-head{display:flex;align-items:center;gap:9px;padding:20px 23px;border-bottom:1px solid #e8ccd1}.dialog-head h2{font-size:21px;letter-spacing:-.5px;font-weight:500}.dialog-close{margin-left:auto;border:1px solid #dbb9bf;background:none;border-radius:4px;width:32px;height:32px;display:grid;place-items:center}.dialog-body{padding:24px;max-height:60dvh;overflow:auto}.dialog-body .source-note{font-size:12px;color:#99787e;margin-bottom:20px}.agent-record{padding:16px 0;border-top:1px solid #e8d4d8}.agent-record:first-of-type{border-top:0}.agent-record .record-meta{display:flex;gap:12px;color:#ad8189;font-size:10px;font-family:var(--mono);margin-bottom:7px}.agent-record p{font-size:16px;line-height:1.6}.agent-record .record-kind{margin-left:auto}.dialog-actions{display:flex;gap:10px;flex-wrap:wrap;padding:17px 24px;border-top:1px solid #e8d4d8}.dialog-actions a{font-size:12px;display:inline-block;padding:8px 11px;background:var(--ink);color:white;border-radius:4px;text-decoration:none}.toast{position:fixed;bottom:25px;left:50%;transform:translate(-50%,15px);padding:10px 18px;border-radius:6px;background:var(--paper);color:var(--ink);box-shadow:0 4px 30px #301e2533;font-size:12px;opacity:0;pointer-events:none;z-index:80;transition:opacity .2s,transform .2s}.toast.show{opacity:1;transform:translate(-50%,0)}.noscript{margin:30px;padding:20px;background:white}.chapter a:hover,.install a:hover{color:var(--coral)}@keyframes appear{from{opacity:.3;transform:translateY(3px)}to{opacity:1;transform:none}}
+@media(min-width:1500px){.stage{min-height:690px}.agent-lines{height:65px;padding:12px 16px;font-size:11px}.agent-bar{height:33px;padding:0 16px;font-size:11px}.agent-bank{gap:17px}.chapter{min-height:790px}.chapter-body{padding-top:43px;padding-bottom:40px}.console-body{height:320px}.work-layout .console-body{height:330px}.work-graph{height:305px}.chapter-head{margin-bottom:35px}.memory-answer .console-body{height:296px}}
+@media(max-width:1100px){.topbar{height:73px}.stage{gap:25px;grid-template-columns:minmax(170px,1fr) minmax(300px,1.1fr) minmax(170px,1fr);min-height:578px}h1{font-size:75px}.hero-center p{font-size:14px}.agent-bar .state{display:none}.agent-lines{font-size:9px}.handoff-layout{grid-template-columns:1fr 95px 1fr;gap:10px}.handoff-link>svg{height:130px}.handoff-link p{font-size:10px}.chapter-body{padding:28px}.chapter-head{gap:24px}.chapter-head p{font-size:14px}.chapter h2{font-size:43px}.terminal-entry code{font-size:9px}.chapter{min-height:700px}.rules-layout{gap:25px}.install-content{gap:35px}.run-label{display:none}}
+@media(max-width:800px){.topbar{padding:0 22px}.topnav{gap:17px;font-size:12px}.brand{font-size:24px}.theatre{padding:20px 22px 0}.theatre-meta{font-size:10px;margin-bottom:12px}.theatre-meta .meta-right{gap:8px}.meta-right .elapsed-label{display:none}.stage{display:grid;grid-template-columns:1fr 1fr;gap:11px;min-height:0;padding-bottom:24px}.hero-center{grid-column:1/-1;grid-row:1;padding:20px 0 30px}.memory-mark{width:59px;height:59px;margin-bottom:17px}.memory-mark .branch-icon{width:25px;height:29px}.memory-mark:before{inset:6px}.memory-mark .satellite{top:14px;right:-1px}h1{font-size:clamp(66px,12vw,92px);margin-bottom:17px;line-height:.88}h1 br{display:none}h1{max-width:7ch;margin-left:auto;margin-right:auto}.hero-center p{font-size:15px;max-width:35ch}.hero-center .follow{margin-top:19px;padding:11px 16px}.hero-center .hint{font-size:10px}.agent-bank{gap:9px}.agent-bank.left .agent-tile,.agent-bank.right .agent-tile{transform:none}.agent-lines{height:45px;padding:6px 10px;font-size:9px}.agent-bar{height:25px;padding:0 10px}.wires{display:none}.agent-tile.active{box-shadow:0 0 0 1px var(--ink)}.hero-transport{gap:12px;grid-template-columns:auto 1fr auto}.hero-transport .clock-value{font-size:11px}.transport-button{padding:7px 9px;font-size:10px}.hero-caption{font-size:10px;padding-bottom:15px}.hero-caption span{max-width:40ch}.story-intro{padding:64px 28px 44px;gap:24px;grid-template-columns:1fr}.story-intro h2{font-size:43px}.story-intro p{font-size:15px;max-width:50ch}.story-intro .scroll-cue{margin-top:18px}.stack{padding:0 12px}.chapter,.chapter:nth-child(2),.chapter:nth-child(3),.chapter:nth-child(4){position:relative;top:auto;margin-bottom:34px;min-height:0;border-radius:10px}.chapter-tab{padding:12px 18px;font-size:10px;gap:8px}.chapter-tab .tab-meta{font-size:9px}.chapter-body{padding:25px 20px}.chapter-head{grid-template-columns:1fr;gap:15px;margin-bottom:24px}.chapter h2{font-size:39px;max-width:24ch}.chapter-head p{font-size:14px;max-width:62ch}.handoff-layout{grid-template-columns:1fr 1fr;gap:10px}.handoff-link{grid-column:1/-1;grid-row:2;flex-direction:row;justify-content:center;gap:20px;height:59px}.handoff-link>svg{width:100px;height:70px;transform:rotate(-90deg)}.handoff-link .shared-label,.handoff-link .handoff-source{display:none}.handoff-link p{max-width:30ch;text-align:left}.handoff-link b{display:inline}.console-body{height:288px;padding:14px 12px}.console-header{padding:10px;font-size:9px}.console-header .branch{display:none}.console-footer{padding:9px 10px;font-size:8px}.work-layout{grid-template-columns:1fr;gap:16px}.work-layout .console-body{height:235px}.work-graph{height:300px}.graph-header{font-size:10px}.recall-layout{grid-template-columns:1fr;gap:23px}.questions{display:grid;grid-template-columns:1fr 1fr}.question{padding:12px 10px;font-size:11px;gap:7px}.question:last-of-type{grid-column:1/-1}.recall-context{grid-column:1/-1;margin-top:0;max-width:65ch;font-size:11px}.rules-layout{grid-template-columns:1fr;gap:25px}.rules-code{font-size:10px;padding:15px;max-height:350px}.evidence-row{gap:20px}.run-evidence{display:grid;grid-template-columns:1fr 1fr;gap:26px}.evidence-note{grid-column:1/-1;max-width:70ch}.evidence-number{font-size:34px}.evidence-label{font-size:11px}.chapter-foot{font-size:10px;gap:16px}.chapter-foot p{max-width:55ch}.chapter-foot a{white-space:normal}.timeline{gap:8px}.timeline .transport-button{padding:6px 7px}.timeline-labels{font-size:8px}.timeline .clock-value{font-size:9px;min-width:52px}.timeline .restart-text{display:none}.chapter-nav{display:none}.install{margin-top:55px;padding:45px 28px 0}.install h2{font-size:75px;margin:33px 0}.install-content{grid-template-columns:1fr;gap:32px;padding-bottom:43px}.install-content p{font-size:15px;max-width:50ch}.install-terminal pre{padding:18px;font-size:10px}.install-links{font-size:12px}.footer{font-size:10px;flex-wrap:wrap;gap:16px}}
+@media(max-width:430px){.topbar{padding:0 17px;height:67px}.brand{font-size:23px;gap:6px}.brand .branch-icon{width:23px}.topnav>a:first-child{display:none}.topnav{gap:13px}.topnav .nav-install{padding:8px 11px}.theatre{padding:17px 17px 0}.theatre-meta{font-size:9px}.theatre-meta .meta-right{font-size:9px}.hero-center{padding-top:14px}.hero-center p{font-size:14px;max-width:29ch}.agent-lines{height:47px;font-size:8px}.agent-bar{font-size:9px}.hero-caption{gap:13px}.hero-caption a{flex-shrink:0}.stage-note{font-size:10px}.hero-transport{gap:9px}.scrub-labels{font-size:8px}.chapter-body{padding:23px 15px}.chapter h2{font-size:35px}.chapter-tab{padding:11px 14px}.chapter-tab .tab-meta{display:none}.handoff-layout{grid-template-columns:1fr}.handoff-layout .console-body{height:199px}.handoff-link{grid-row:auto;grid-column:auto;height:41px;gap:13px}.handoff-link>svg{height:55px;width:65px}.terminal-entry code{font-size:9px}.timeline{grid-template-columns:auto auto minmax(40px,1fr) auto auto;gap:6px}.timeline .transport-button{padding:7px 6px;font-size:9px}.timeline .transport-button .icon{width:12px;height:12px}.timeline .clock-value{display:none}.timeline-labels{font-size:7px}.chapter-foot{flex-direction:column;gap:9px}.graph-note{font-size:8px;gap:10px}.work-graph{height:248px}.run-evidence{grid-template-columns:1fr}.evidence-note{grid-column:auto}.story-intro h2{font-size:38px}.install h2{font-size:64px}.install-terminal pre{font-size:9px}.footer>div{gap:14px}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation:none!important;transition:none!important}.chapter{position:relative!important;top:0!important}.signal{display:none}}
+html{scroll-padding-top:20px;scroll-behavior:auto}.chapter{scroll-margin-top:0}.graph-node text{font-size:12.5px}.graph-node .node-type{font-size:9px}.chapter-nav{right:20px}.chapter-nav a{border-right:1px solid #e3cbd0;border-radius:4px}.signal.moving.ambient{opacity:.8}
+.flow-stream{fill:none;stroke:var(--rose);stroke-width:2.4;stroke-linecap:round;opacity:0;pointer-events:none}.flow-stream.wake{stroke-width:6;stroke:#d494a1}.flow-stream.moving{opacity:.85}.flow-stream.wake.moving{opacity:.2}.flow-stream.moving.ambient{opacity:.55}.flow-stream.wake.moving.ambient{opacity:.14}
+@media(max-width:800px){.agent-bank.left .agent-tile:nth-child(n),.agent-bank.right .agent-tile:nth-child(n){transform:none}.hero-center h1{font-size:clamp(56px,15.8vw,82px);max-width:none;line-height:.9}.hero-center h1 br{display:block}}
+@media(min-width:801px) and (max-height:850px){
+ .topbar{height:70px}.theatre{padding-top:20px}.theatre-meta{margin-bottom:20px}.stage{min-height:0;padding:4px 0 22px}.agent-bank{gap:11px}.agent-bar{height:25px}.agent-lines{height:48px}.hero-center{padding:20px 0}.hero-center h1{font-size:clamp(64px,6.3vw,96px)}.memory-mark{width:72px;height:72px;margin-bottom:21px}.memory-mark .branch-icon{width:29px;height:36px}.hero-center .follow{margin-top:21px}.hero-caption{padding-bottom:20px}
+ .chapter{min-height:calc(100svh - 90px)}.chapter-body{padding:24px 3.8vw 25px}.chapter-head{margin-bottom:23px}.chapter h2{font-size:clamp(36px,3.7vw,51px)}.console-body,.work-layout .console-body{height:235px}.work-graph{height:209px}.memory-answer .console-body{height:223px}.chapter-tab{padding-top:12px;padding-bottom:12px}.timeline{padding-top:13px;padding-bottom:11px}.chapter-foot{padding-top:11px;font-size:10px}.rules-code{max-height:265px;font-size:10px}.rules-more{margin-top:15px}.rules-more summary{padding:10px 0}.recall-context{font-size:11px}.question{padding:12px 14px}
+}
+@media(min-width:801px) and (max-height:650px){.chapter{position:relative!important;top:0!important}.stage{min-height:490px}.console-body,.work-layout .console-body{height:250px}}
+/* Coral surfaces and the soft depth of a native sheet stack. */
+h1{color:#ce6478}.topnav .nav-install,.hero-center .follow,.dialog-actions a{background:#b74e63;color:#fff}.topnav .nav-install:hover,.hero-center .follow:hover,.dialog-actions a:hover{background:#993c50;color:#fff}
+.chapter{border-radius:24px;box-shadow:0 -3px 18px #78333e08,0 14px 44px #78333e0a}.chapter-tab{border-radius:23px 23px 0 0}.chapter-nav a{transition:background .25s cubic-bezier(.22,1,.36,1),color .25s}
+@media(min-width:801px) and (min-height:651px){.chapter{margin-bottom:140px;transform:translateY(var(--card-lift,0px)) scale(var(--card-scale,1))}.chapter:last-child{margin-bottom:0}}
+@media(max-width:800px){.chapter{border-radius:22px}.chapter-tab{border-radius:21px 21px 0 0}}
+@media(prefers-reduced-motion:reduce){.chapter{transform:none!important;filter:none!important;will-change:auto}}
+.handoff-layout{grid-template-columns:minmax(0,1fr) 88px minmax(0,1fr);gap:0}.handoff-link{display:grid;place-items:center;gap:0}.handoff-link>svg{width:100%;height:24px;overflow:visible}.handoff-layout .console{transition:border-color .35s,box-shadow .35s}.handoff-layout .console.delivered{border-color:#dc7086;box-shadow:inset 3px 0 #dc7086,0 0 0 1px #dc708622}
+@media(max-width:800px){.handoff-layout{grid-template-columns:1fr}.handoff-link{grid-column:1;grid-row:auto;height:42px}.handoff-link>svg{width:40px;height:24px;transform:rotate(90deg)}.handoff-layout .console-body{height:220px}}
+/* Keep headline width independent of viewport-sized display type. */
+.hero-center{min-width:0}.hero-center h1{font-size:var(--hero-type,clamp(32px,5.5vw,96px));max-width:none;line-height:.94}.hero-line{display:block;white-space:nowrap}
+.agent-bank .agent-tile:hover{transform:none}.agent-bank.left .agent-tile:nth-child(2):hover{transform:translateX(11px)}.agent-bank.left .agent-tile:nth-child(4):hover{transform:translateX(18px)}.agent-bank.right .agent-tile:nth-child(2):hover{transform:translateX(-15px)}.agent-bank.right .agent-tile:nth-child(4):hover{transform:translateX(-8px)}
+@media(max-width:800px){.hero-center h1{font-size:var(--hero-type,clamp(40px,15vw,82px))}.agent-bank .agent-tile:nth-child(n):hover{transform:none}}
+</style>
+</head>
+<body id="top">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-branch" viewBox="0 0 30 34"><path d="M15 30V17M15 23C15 14 4 18 4 9M15 17C15 8 26 13 26 4M15 17V5"/><circle cx="4" cy="6" r="2.5"/><circle cx="15" cy="3" r="2.5"/><circle cx="26" cy="2" r="1.5"/><circle cx="15" cy="30" r="2.5"/></symbol>
+<symbol id="i-play" viewBox="0 0 20 20"><path d="m7 4 9 6-9 6Z"/></symbol><symbol id="i-pause" viewBox="0 0 20 20"><path d="M7 4v12M13 4v12"/></symbol><symbol id="i-down" viewBox="0 0 20 20"><path d="M10 3v14m-5-5 5 5 5-5"/></symbol><symbol id="i-back" viewBox="0 0 20 20"><path d="m12 5-5 5 5 5"/></symbol><symbol id="i-next" viewBox="0 0 20 20"><path d="m8 5 5 5-5 5"/></symbol><symbol id="i-restart" viewBox="0 0 20 20"><path d="M4 8a6 6 0 1 1 0 5M4 3v5h5"/></symbol><symbol id="i-copy" viewBox="0 0 20 20"><rect x="7" y="7" width="9" height="10" rx="1"/><path d="M12 7V3H3v10h4"/></symbol><symbol id="i-close" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15"/></symbol>
+</defs></svg>
+<a class="skip" href="#handoff">Skip to the interactive replays</a>
+<header class="topbar"><a class="brand" href="#top" aria-label="Deciduous home"><svg class="branch-icon" aria-hidden="true"><use href="#i-branch"/></svg>deciduous</a><div class="run-label"><i></i> Shared reasoning for coding agents</div><nav class="topnav" aria-label="Main navigation"><a href="#handoff">Explore the run</a><a href="tutorial/">Docs</a><a href="https://github.com/notactuallytreyanastasio/deciduous" target="_blank" rel="noopener">GitHub</a><a class="nav-install" href="#install">Get started</a></nav></header>
+<main>
+<section class="theatre" aria-labelledby="hero-title">
+ <div class="theatre-meta"><span><strong>tetris-arena</strong> / ten branches, one repository</span><span class="meta-right"><span class="elapsed-label">28 minutes of shared reasoning</span><span>Recorded run <span style="color:var(--coral)">↗</span></span></span></div>
+ <div class="stage" id="agent-stage"><svg class="wires" id="wires" aria-hidden="true"></svg><div class="agent-bank left" id="agents-left"></div>
+ <div class="hero-center"><div class="memory-mark" id="memory-mark"><svg class="branch-icon" aria-hidden="true"><use href="#i-branch"/></svg><span class="satellite"></span></div><h1 id="hero-title"><span class="hero-line">Many minds.</span><span class="hero-line">One memory.</span></h1><p>When one agent figures it out,<br>the others don’t have to.</p><a href="#handoff" class="follow">Follow one idea<svg class="icon" aria-hidden="true"><use href="#i-down"/></svg></a><span class="hint">Or pick an agent. There’s a story in every branch.</span></div>
+ <div class="agent-bank right" id="agents-right"></div></div>
+ <div class="hero-transport"><button type="button" class="transport-button" id="hero-play"><svg class="icon" aria-hidden="true"><use href="#i-pause"/></svg><span>Pause</span></button><div class="scrub-wrap"><label class="sr-only" for="hero-scrub">Scrub the ten-agent recorded run</label><input type="range" id="hero-scrub" min="0" max="1000" value="0"><div class="scrub-labels"><span>04:38:51</span><span>Drag to travel through the run</span><span>05:06:56</span></div></div><output class="clock-value" id="hero-clock" for="hero-scrub" aria-live="off">04:38:51</output></div>
+ <div class="hero-caption"><span>Deciduous connects what your agents decided, why they decided it, and who built on it.</span><a href="https://notactuallytreyanastasio.github.io/tetris-arena/" target="_blank" rel="noopener">Read the original run</a></div>
+</section>
+<div class="story-intro"><h2>The interesting part happens<br>between the terminals.</h2><div><p>Ten agents built ten versions of Tetris. They read each other’s decisions, borrowed better ideas, and left a trail. Here’s one moment inside that run.</p><a href="#handoff" class="scroll-cue"><svg class="icon" aria-hidden="true"><use href="#i-down"/></svg>Scroll into the work</a></div></div>
+<nav class="chapter-nav" aria-label="Replay chapters"><a href="#handoff" aria-label="Chapter 1: the handoff">01</a><a href="#decisions" aria-label="Chapter 2: the decision graph">02</a><a href="#memory" aria-label="Chapter 3: recover the reasoning">03</a><a href="#rules" aria-label="Chapter 4: repository rules">04</a></nav>
+<div class="stack">
+<section class="chapter" id="handoff" aria-labelledby="handoff-title"><div class="chapter-tab"><span class="tab-number">01</span><span>An idea changes hands</span><span class="tab-meta">agent-8 ↔ agent-7</span></div><div class="chapter-body"><div class="chapter-head"><h2 id="handoff-title">The idea travelled<br>before the code did.</h2><p>Agent-8 spotted a lock-delay bug and wrote down the fix. Agent-7 read the reasoning and built it. <b>Agent-8 hadn’t even committed yet.</b></p></div>
+<div class="handoff-layout"><div class="console" style="--agent:var(--a8)"><div class="console-header"><i class="agent-dot"></i><b>agent-8</b><span>Claude Code</span><span class="branch">branch: agent-8</span></div><div class="console-body" id="handoff-left" role="log" aria-label="Agent 8 terminal replay"></div><div class="console-footer" id="handoff-status-left">Own worktree. Shared reasoning.</div></div><div class="handoff-link"><svg viewBox="0 0 120 24" role="img" aria-label="Decision message flowing from agent-8 into agent-7’s terminal"><rect x="0" y="9" width="112" height="6" rx="3" fill="#ecd2d7"/><rect id="handoff-pipe-fill" x="0" y="9" width="0" height="6" rx="3" fill="#dc7086"/><path d="m110 5 9 7-9 7" fill="none" stroke="#c77a89" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="console" style="--agent:var(--a7)"><div class="console-header"><i class="agent-dot"></i><b>agent-7</b><span>Claude Code</span><span class="branch">branch: agent-7</span></div><div class="console-body" id="handoff-right" role="log" aria-label="Agent 7 terminal replay"></div><div class="console-footer" id="handoff-status-right">Own worktree. Shared reasoning.</div></div></div>
+<div class="timeline" data-player="handoff"></div><div class="chapter-foot"><p>Source excerpts, original timestamps. The observation landed at 04:47:15; agent-8’s commit followed 20 seconds later. In 1.0, <code>took_from</code> can make that credit a queryable edge.</p><a href="https://notactuallytreyanastasio.github.io/tetris-arena/" target="_blank" rel="noopener">Inspect the experiment</a></div></div></section>
+<section class="chapter" id="decisions" aria-labelledby="decisions-title"><div class="chapter-tab"><span class="tab-number">02</span><span>Every decision has a trail</span><span class="tab-meta">agent-6 / first five minutes</span></div><div class="chapter-body"><div class="chapter-head"><h2 id="decisions-title">You can rewind<br>the reasoning.</h2><p>A goal. Two possible loops. One choice, the work it led to, and the proof. <b>Drag the playhead.</b> The terminal and the graph move together.</p></div><div class="work-layout"><div class="console" style="--agent:var(--a6)"><div class="console-header"><i class="agent-dot"></i><b>agent-6</b><span>Claude Code</span><span class="branch">branch: agent-6</span></div><div class="console-body" id="work-terminal" role="log" aria-label="Agent 6 terminal replay"></div><div class="console-footer" id="work-status">Every new node is linked to its parent.</div></div><div class="graph-panel"><div class="graph-header"><span>A decision, taking shape</span><span id="node-count">1 of 7 nodes</span></div><svg class="work-graph" viewBox="0 0 480 290" aria-label="Interactive decision graph. Select a node to seek to its event." role="group">
+<path class="graph-edge" data-at="1" d="M240 48V61Q240 73 225 73H131Q119 73 119 87"/><path class="graph-edge" data-at="2" d="M240 48V61Q240 73 255 73H349Q361 73 361 87"/><path class="graph-edge chosen" data-at="3" d="M119 126V140Q119 152 136 152H223Q240 152 240 166"/><path class="graph-edge rejected" data-at="3" d="M361 126V140Q361 152 344 152H257Q240 152 240 166"/><text x="146" y="145" class="edge-label">chosen</text><text x="306" y="145" class="edge-label">rejected</text><path class="graph-edge" data-at="4" d="M240 205V220Q240 229 222 229H101Q85 229 85 242"/><path class="graph-edge" data-at="5" d="M153 262H174"/><path class="graph-edge" data-at="6" d="M306 262H329"/>
+<g class="graph-node" data-at="0" role="button" tabindex="0" aria-label="Seek to goal: a playable Tetris" style="--agent:var(--a6)"><rect x="157" y="9" width="166" height="40" rx="5"/><circle class="node-icon" cx="171" cy="29" r="4"/><text class="node-type" x="182" y="24">goal · 56aa10e7</text><text x="182" y="39">A playable Tetris</text></g>
+<g class="graph-node" data-at="1" role="button" tabindex="0" aria-label="Seek to option: requestAnimationFrame" style="--agent:var(--a3)"><rect x="33" y="87" width="172" height="40" rx="5"/><circle class="node-icon" cx="47" cy="108" r="4"/><text class="node-type" x="58" y="102">option · a0317625</text><text x="58" y="117">rAF + accumulators</text></g>
+<g class="graph-node" data-at="2" role="button" tabindex="0" aria-label="Seek to option: setInterval" style="--agent:var(--a3)"><rect x="278" y="87" width="166" height="40" rx="5"/><circle class="node-icon" cx="292" cy="108" r="4"/><text class="node-type" x="303" y="102">option · 133dc8ff</text><text x="303" y="117">setInterval per level</text></g>
+<g class="graph-node" data-at="3" role="button" tabindex="0" aria-label="Seek to decision: choose requestAnimationFrame" style="--agent:var(--a2)"><rect x="153" y="166" width="174" height="40" rx="5"/><path class="node-icon" d="m168 181 5 5-5 5-5-5Z"/><text class="node-type" x="179" y="181">decision · 341683eb</text><text x="179" y="196">Choose the rAF loop</text></g>
+<g class="graph-node" data-at="4" role="button" tabindex="0" aria-label="Seek to action: build the board" style="--agent:var(--a10)"><rect x="17" y="242" width="136" height="40" rx="5"/><circle class="node-icon" cx="30" cy="262" r="4"/><text class="node-type" x="41" y="257">action</text><text x="41" y="272">Build the board</text></g>
+<g class="graph-node" data-at="5" role="button" tabindex="0" aria-label="Seek to outcome: verified and committed" style="--agent:var(--a6)"><rect x="174" y="242" width="132" height="40" rx="5"/><circle class="node-icon" cx="187" cy="262" r="4"/><text class="node-type" x="198" y="257">outcome</text><text x="198" y="272">It works. Verified.</text></g>
+<g class="graph-node" data-at="6" role="button" tabindex="0" aria-label="Seek to observation: borrow from agent 9" style="--agent:var(--a7)"><rect x="329" y="242" width="135" height="40" rx="5"/><circle class="node-icon" cx="342" cy="262" r="4"/><text class="node-type" x="353" y="257">observation</text><text x="353" y="272">Borrow from #9</text></g>
+</svg><div class="graph-note"><span><i></i>Click any node to go there</span><span><i class="dash"></i>Rejected paths stay in memory</span></div></div></div><div class="timeline" data-player="work"></div><div class="chapter-foot"><p>These are agent-6’s graph writes. Each node and edge appears at the same replay moment as its terminal command. Rejected options stay attached to the decision.</p><span class="mono">56aa10e7 → 2cbc7ff1</span></div></div></section>
+<section class="chapter" id="memory" aria-labelledby="memory-title"><div class="chapter-tab"><span class="tab-number">03</span><span>The session ends. The reasoning stays.</span><span class="tab-meta">a fresh session, a week later</span></div><div class="chapter-body"><div class="chapter-head"><h2 id="memory-title">“Wait. Why did<br>we build it this way?”</h2><p>A new session has none of the old context. The graph still has the decisions, the dead ends, and where the good ideas came from.</p></div><div class="recall-layout"><div class="questions"><button class="question" data-question="rows" aria-pressed="true"><span class="q-number">?</span>Why four hidden rows?<svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button><button class="question" data-question="rotation" aria-pressed="false"><span class="q-number">?</span>Did anyone reject 180° rotation?<svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button><button class="question" data-question="recover" aria-pressed="false"><span class="q-number">/</span>Recover the whole workspace<svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button><p class="recall-context">Pick a question. Trace the answer back to the agents who made the call.<br><br>Illustrative recovery session, grounded in the graph records from the original run.</p></div><div class="memory-answer"><div class="console"><div class="console-header"><b>Fresh session</b><span>tetris-arena</span><span class="branch">No prior context</span></div><div class="console-body" id="recall-terminal" role="log" aria-label="Recovery session replay"></div><div class="console-footer">Persistent reasoning, across sessions and branches.</div></div><div class="recall-trail" id="recall-trail" aria-label="Provenance chain"></div><p class="recall-answer-summary" id="recall-summary"></p></div></div><div class="timeline" data-player="recall"></div><div class="chapter-foot"><p>A compacted context, a teammate’s bot, a repository nobody has touched in weeks: the graph can answer from what was recorded.</p><a href="tutorial/quickstart.html" target="_blank" rel="noopener">How the shared graph works</a></div></div></section>
+<section class="chapter" id="rules" aria-labelledby="rules-title"><div class="chapter-tab"><span class="tab-number">04</span><span>Give them a way to work together</span><span class="tab-meta">CLAUDE.md / inherited by every worktree</span></div><div class="chapter-body"><div class="chapter-head"><h2 id="rules-title">Looking is the point.</h2><p>The collaboration started before the first line of code. Every agent inherited the same repository rules: read, borrow, improve, and leave credit.</p></div><div class="rules-layout"><pre class="rules-code"><span class="rule-title"># Tetris Arena</span>
+Ten agents, one repo, one shared decision graph.
+Each of you builds a playable Tetris from nothing,
+in your own worktree, on your own branch.
+
+<span class="em">Looking is not cheating here. It is the point.
+Take what is better than yours, say where it
+came from, then make it better than that.</span>
+
+<span class="rule-title">## Peeking: do it, on a schedule</span>
+After every milestone, and before any real
+design decision:
+1. check_activity: who is writing, on which branch.
+2. query_nodes: decisions, no branch filter.
+3. Read the code in the sibling worktrees.
+
+When you take something, log an observation:
+“Took X from agent-M because Y; changed Z.”
+Link it to the action. Say it in the commit.</pre><div class="run-evidence"><div class="evidence-row"><div><div class="evidence-number">10</div><p class="evidence-label">playable games</p></div><div><div class="evidence-number">396</div><p class="evidence-label">graph nodes</p></div></div><div class="evidence-row"><div><div class="evidence-number">170</div><p class="evidence-label">borrowed ideas, credited</p></div><div><div class="evidence-number">0</div><p class="evidence-label">branch lock conflicts</p></div></div><p class="evidence-note">Twenty-eight minutes. One finding about hidden rows reached eight other branches.<br><br><a href="https://notactuallytreyanastasio.github.io/tetris-arena/" target="_blank" rel="noopener">The experiment includes what broke, too.</a></p></div></div><details class="rules-more"><summary>What was actually in each agent’s environment?</summary><dl><dt>worktree</dt><dd>Its own checkout and branch. Locks are per branch, so sessions do not interleave writes on the same branch.</dd><dt>MCP</dt><dd>Shared graph tools inside the session: add_node, add_edge, query_nodes, check_activity. Each call carried workspace: “tetris-arena” and branch: “agent-N”.</dd><dt>../agent-M</dt><dd>Every sibling worktree was readable. Agents could inspect each other’s code before and after commits.</dd><dt>opening prompt</dt><dd>“You are agent 7 of 10 in the tetris arena. This directory is your worktree, on branch agent-7. Read CLAUDE.md here and follow it exactly. Begin.”</dd><dt>permissions</dt><dd>The experiment ran with permission prompts off. This describes the run, not a prerequisite for using Deciduous.</dd></dl></details><div class="chapter-foot"><p>Condensed excerpt of the original repository rules. The numbers describe this experiment, not a promised result for every run.</p><a href="tutorial/clients.html" target="_blank" rel="noopener">Connect over MCP</a></div></div></section>
+</div>
+<section class="install" id="install" aria-labelledby="install-title"><div class="install-top"><a class="brand" href="#top"><svg class="branch-icon" aria-hidden="true"><use href="#i-branch"/></svg>deciduous</a><span style="font-size:12px;color:#c1959e">Open source. Yours to run.</span></div><div class="install-content"><div><h2 id="install-title">Give the next<br>agent a head start.</h2><p>Set up shared Postgres memory, then connect your agents to one workspace. Start on your laptop and move the service to a remote host when you need it. The Rust CLI keeps a local cache; the HTTP MCP service handles shared writes.</p><div class="install-links"><a href="tutorial/local-postgres.html">Set up Postgres</a><a href="tutorial/upgrading.html">Upgrade an existing graph</a></div></div><div class="install-terminal"><div class="console-header"><span>Your terminal</span><button type="button" class="copy-button" id="copy-install"><svg class="icon" aria-hidden="true"><use href="#i-copy"/></svg><span>Copy commands</span></button></div><pre id="install-code"><span>$ </span>brew tap notactuallytreyanastasio/tap
+<span>$ </span>brew install deciduous
+
+<span># Next: start Postgres and connect your agents</span>
+<span># https://deciduous.dev/tutorial/local-postgres.html</span>
+
+<span># Existing graphs? Back up before migrating</span>
+<span># https://deciduous.dev/tutorial/upgrading.html</span></pre></div></div><footer class="footer"><span>Deciduous 1.0 · Reasoning that outlives the session.</span><div><a href="https://github.com/notactuallytreyanastasio/deciduous" target="_blank" rel="noopener">GitHub</a><a href="tutorial/clients.html" target="_blank" rel="noopener">MCP</a><a href="https://notactuallytreyanastasio.github.io/tetris-arena/" target="_blank" rel="noopener">The arena</a><a href="#top">Back to the agents ↑</a></div></footer></section>
+</main>
+<dialog id="agent-dialog" aria-labelledby="agent-dialog-title"><div class="dialog-head"><i class="agent-dot" id="dialog-dot"></i><h2 id="agent-dialog-title">Agent</h2><button type="button" class="dialog-close" id="close-dialog" aria-label="Close agent details"><svg class="icon" aria-hidden="true"><use href="#i-close"/></svg></button></div><div class="dialog-body" id="agent-dialog-body"></div><div class="dialog-actions" id="agent-dialog-actions"></div></dialog><div class="toast" id="toast" role="status"></div>
+<noscript><p class="noscript">The text and setup commands are available without JavaScript. Enable JavaScript to explore the terminal replays and decision graph, or <a href="https://notactuallytreyanastasio.github.io/tetris-arena/">read the original run</a>.</p></noscript>
+<script>
+(()=>{
+'use strict';
+const $=(s,root=document)=>root.querySelector(s), $$=(s,root=document)=>[...root.querySelectorAll(s)], reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const icon=name=>`<svg class="icon" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const seconds=s=>s.split(':').reduce((v,n)=>v*60+Number(n),0), time=s=>[Math.floor(s/3600),Math.floor(s/60)%60,Math.floor(s)%60].map(v=>String(v).padStart(2,'0')).join(':');
+const feed=[
+{agent:9,time:'04:38:51',type:'goal',text:'agent-9: a playable Tetris'},
+{agent:6,time:'04:38:52',type:'goal',text:'agent-6: a playable Tetris'},
+{agent:7,time:'04:38:54',type:'prompt',text:'You are agent 7 of 10 in the tetris arena. This directory is your worktree, on branch agent-7. Read CLAUDE.md here and follow it exactly. Begin.'},
+{agent:8,time:'04:38:54',type:'prompt',text:'You are agent 8 of 10 in the tetris arena. This directory is your worktree, on branch agent-8. Read CLAUDE.md here and follow it exactly. Begin.'},
+{agent:6,time:'04:39:16',type:'option',text:'Loop: requestAnimationFrame with delta-time accumulator for gravity and lock delay'},
+{agent:6,time:'04:39:19',type:'option',text:'Loop: setInterval per level, re-armed on level change'},
+{agent:6,time:'04:39:47',type:'decision',text:'rAF loop with ms accumulators for gravity, lock delay, DAS/ARR'},
+{agent:6,time:'04:40:08',type:'action',text:'M1: index.html + style.css + tetris.js: board renders, piece falls, rAF loop'},
+{agent:6,time:'04:42:26',type:'outcome',text:'M1 works: commit 2b10665, piece falls and locks, loop verified in node harness'},
+{agent:6,time:'04:43:07',type:'observation',text:'Took 7-bag and the node-loadable module idea from agent-9; changed to a single file with a guarded mount()',from:9},
+{agent:1,time:'04:39:57',type:'decision',text:'Board is a flat Uint8Array 10 wide x 40 tall, bottom 20 visible'},
+{agent:10,time:'04:42:41',type:'observation',text:'After M1: all ten agents chose canvas + flat/2D board + SRS + rAF'},
+{agent:3,time:'04:44:14',type:'observation',text:'Took the tall-hidden-zone idea from agent-1; changed it to 4 buffer rows instead of 20',from:1},
+{agent:9,time:'04:45:14',type:'observation',text:'Took 4 hidden rows from agent-3: SRS kicks can lift a piece 2 rows at the ceiling',from:3},
+{agent:8,time:'04:45:52',type:'decision',text:'Held-key DAS/ARR input plus lock delay with move-reset AND step-reset'},
+{agent:6,time:'04:46:17',type:'observation',text:'Took 4 hidden rows from agent-3/agent-9 and lock-out from agent-1; changed: y<0 is now solid so lock() never discards cells',from:3},
+{agent:7,time:'04:47:15',type:'observation',text:"Took the step-reset for lock delay from agent-8’s decision, and spawn-then-step-down and lock-out from agent-8 and agent-3",from:8},
+{agent:4,time:'04:47:33',type:'observation',text:'… my merge() was silently dropping cells above row 0'},
+{agent:7,time:'04:49:45',type:'observation',text:'Reply to agent-5: my soft drop is min(40ms, gravity) per row, so it cannot be slower than gravity',from:5},
+{agent:8,time:'04:52:25',type:'decision',text:'M4: 5-deep preview, hold, outline ghost, 180 rotation with SRS+ kicks, lock pulse, clear flash'},
+{agent:1,time:'04:55:03',type:'decision',text:'M4 scope: 5-deep queue, hold, outline ghost, lock pulse, seeded replayable bag; no 180'},
+{agent:8,time:'05:04:47',type:'outcome',text:'Round 3 works: 92 checks pass, committed; arena converged, stopping here'},
+{agent:7,time:'05:04:51',type:'decision',text:'Round 2: … 180 rotation if three independent tables agree; correct the trail credit'},
+{agent:3,time:'05:05:41',type:'observation',text:'Took the idea of initial rotation/hold buffered through the flash from agent-10’s active round-3 action; implemented from the description since their code is not committed',from:10},
+{agent:9,time:'05:06:56',type:'outcome',text:'agent-9 final: playable Tetris, five milestones plus two improvement rounds'}].sort((a,b)=>seconds(a.time)-seconds(b.time));
+const initialStates={1:'Reading the arena instructions.',2:'Own worktree. Shared decision graph.',3:'Reading decisions across branches.',4:'Building a playable Tetris.',5:'Own worktree. Shared decision graph.',6:'Comparing loop timing options.',7:'Reading decisions across branches.',8:'Building a playable Tetris.',9:'Starting with a playable Tetris.',10:'Watching the other nine branches.'};
+for(let i=1;i<=10;i++){
+ const button=document.createElement('button');button.className='agent-tile';button.type='button';button.dataset.agent=i;button.style.setProperty('--agent',`var(--a${i})`);button.setAttribute('aria-label',`Inspect agent ${i} and its recorded graph events`);button.innerHTML=`<div class="agent-bar"><i class="agent-dot"></i><b>agent-${String(i).padStart(2,'0')}</b><span>/ tetris-arena</span><span class="state">connected</span></div><div class="agent-lines"><span class="preview"><span class="prompt">›</span>${initialStates[i]}</span></div>`;
+ $(i<=5?'#agents-left':'#agents-right').append(button);button.addEventListener('click',()=>openAgent(i));
+}
+const hero={progress:0,playing:!reduced,duration:50000,lastIndex:-1,visible:true,flowElapsed:0};
+const heroTiles=$$('.agent-tile');
+let wireRoutes=[],wireGeometry='',wireFrame=0;
+const traffic=new Map();
+function sendMessage(event,id=event.agent,readback=false){
+ const jitter=(id*67+seconds(event.time)*13)%210,queue=traffic.get(id)||[];
+ const previousPacket=queue.at(-1),ready=previousPacket?previousPacket.start+previousPacket.duration+60:hero.flowElapsed;
+ queue.push({event,start:Math.max(hero.flowElapsed+jitter,ready),duration:510+(id*173+seconds(event.time)*29)%430,inbound:readback||(event.type!=='prompt'&&!event.from)});
+ traffic.set(id,queue);
+}
+const start=seconds('04:38:51'),end=seconds('05:06:56');
+// Cache arc-length samples on layout changes. Animation never asks SVG to
+// measure a freshly styled path, which would force synchronous layout.
+function sampleCurve(x,y,c1x,c2x,cx,cy){
+ const points=[{x,y,distance:0}];let length=0;
+ for(let i=1;i<=120;i++){
+  const t=i/120,u=1-t,point={x:u*u*u*x+3*u*u*t*c1x+3*u*t*t*c2x+t*t*t*cx,y:u*u*u*y+3*u*u*t*y+3*u*t*t*cy+t*t*t*cy};
+  const previous=points.at(-1);length+=Math.hypot(point.x-previous.x,point.y-previous.y);points.push({...point,distance:length});
+ }
+ return {points,length};
+}
+function pointOnRoute(route,progress){
+ const distance=Math.max(0,Math.min(1,progress))*route.length;
+ let low=0,high=route.points.length-1;
+ while(low+1<high){const middle=(low+high)>>1;if(route.points[middle].distance<distance)low=middle;else high=middle;}
+ const a=route.points[low],b=route.points[high],t=(distance-a.distance)/(b.distance-a.distance||1);
+ return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t};
+}
+function scheduleWires(){if(!wireFrame)wireFrame=requestAnimationFrame(()=>{wireFrame=0;drawWires();});}
+function drawWires(){
+ const center=$('.hero-center'),type=Math.min(innerWidth<=800?82:96,center.clientWidth*.182).toFixed(2)+'px';
+ if(center.style.getPropertyValue('--hero-type')!==type){center.style.setProperty('--hero-type',type);scheduleWires();return;}
+ if(innerWidth<=800)return;
+ const sr=$('#agent-stage').getBoundingClientRect(),mr=$('#memory-mark').getBoundingClientRect();
+ const cx=mr.left+mr.width/2-sr.left,cy=mr.top+mr.height/2-sr.top;
+ const geometry=$$('.agent-tile').map((el,i)=>{
+  const r=el.getBoundingClientRect(),left=i<5,x=left?r.right-sr.left:r.left-sr.left,y=r.top+r.height/2-sr.top;
+  return {id:i+1,tile:el,x,y,c1x:x+(left?55:-55),c2x:cx+(left?-100:100)};
+ });
+ const key=JSON.stringify([sr.width,sr.height,cx,cy,...geometry.flatMap(g=>[g.x,g.y])].map(n=>Math.round(n*4)/4));
+ if(key===wireGeometry)return;wireGeometry=key;
+ const svg=$('#wires');svg.setAttribute('viewBox',`0 0 ${sr.width} ${sr.height}`);
+ if(!wireRoutes.length){
+  svg.innerHTML=geometry.map(({id})=>`<path class="wire" data-wire="${id}"/><path class="flow-stream wake" data-wake="${id}"/><path class="flow-stream" data-flow="${id}"/><circle class="signal" data-signal="${id}" r="2.7"/>`).join('');
+  wireRoutes=geometry.map(({id,tile})=>({id,tile,path:$(`[data-wire="${id}"]`),signal:$(`[data-signal="${id}"]`),wake:$(`[data-wake="${id}"]`),flow:$(`[data-flow="${id}"]`)}));
+ }
+ geometry.forEach((g,i)=>{
+  const route=wireRoutes[i],d=`M${g.x} ${g.y} C${g.c1x} ${g.y},${g.c2x} ${cy},${cx} ${cy}`;
+  Object.assign(route,sampleCurve(g.x,g.y,g.c1x,g.c2x,cx,cy));
+  [route.path,route.wake,route.flow].forEach(path=>path.setAttribute('d',d));route.revealed=false;
+ });
+}
+function setHeroPlay(value){hero.playing=value;$('#hero-play').innerHTML=icon(value?'pause':'play')+`<span>${value?'Pause':hero.progress>=1?'Replay':'Play'}</span>`;$('#hero-play').setAttribute('aria-label',value?'Pause ten-agent replay':'Play ten-agent replay');}
+function renderHero(force=false){
+ const current=start+hero.progress*(end-start);
+ const scrub=$('#hero-scrub'),tick=Math.round(hero.progress*1000),clock=time(current);
+ if(+scrub.value!==tick){scrub.value=tick;scrub.style.setProperty('--progress',`${tick/10}%`);}
+ if($('#hero-clock').textContent!==clock){scrub.setAttribute('aria-valuetext',clock);$('#hero-clock').textContent=clock;}
+ const index=feed.findLastIndex(e=>seconds(e.time)<=current),previousIndex=hero.lastIndex;
+ if(!hero.playing||index<previousIndex)traffic.clear();
+ if(index===previousIndex&&!force)return;
+ hero.lastIndex=index;
+ if(!force&&hero.playing&&index>previousIndex){
+  feed.slice(Math.max(0,previousIndex+1),index+1).forEach(event=>{sendMessage(event);if(event.from)sendMessage(event,event.from,true);});
+ }
+ $$('.agent-tile').forEach(tile=>{
+  const id=+tile.dataset.agent,last=feed.findLast(e=>e.agent===id&&seconds(e.time)<=current);
+  if(tile._event===last)return;tile._event=last;
+  $('.state',tile).textContent=last?last.type:'connected';
+  $('.preview',tile).innerHTML=`<span class="prompt">${last?'↳':'›'}</span>${esc(last?last.text:initialStates[id])}`;
+  tile.title=last?last.text:initialStates[id];
+ });
+}
+$('#hero-play').addEventListener('click',()=>{if(hero.progress>=1){hero.progress=0;hero.flowElapsed=0;hero.lastIndex=-1;traffic.clear();}setHeroPlay(!hero.playing);renderHero();});$('#hero-scrub').addEventListener('input',e=>{hero.progress=+e.target.value/1000;setHeroPlay(false);renderHero();});
+function openAgent(id){setHeroPlay(false);$('#agent-dialog-title').textContent=`agent-${String(id).padStart(2,'0')}`;$('#dialog-dot').style.setProperty('--agent',`var(--a${id})`);const records=feed.filter(e=>e.agent===id);$('#agent-dialog-body').innerHTML=`<p class="source-note">A branch of tetris-arena. This overview visualizes the recorded run; the excerpts below come from the supplied source.</p>`+(records.length?records.map(e=>`<article class="agent-record"><div class="record-meta"><time>${e.time}</time><span class="record-kind">${e.type}</span></div><p>“${esc(e.text)}”</p>${e.from?`<p style="font-size:11px;margin-top:9px;color:#aa7b84">Built on reasoning from agent-${e.from}.</p>`:''}</article>`).join(''):`<p>No individual graph-write excerpt for agent-${id} was included in this source. All ten agents participated; the full experiment has the complete run.</p>`);let link=id===6?'#decisions':[7,8].includes(id)?'#handoff':'#memory';$('#agent-dialog-actions').innerHTML=`<a href="${link}" class="dialog-jump">${id===6?'Replay this decision graph':[7,8].includes(id)?'Follow the handoff':'Explore the reasoning'}</a><a href="https://notactuallytreyanastasio.github.io/tetris-arena/" target="_blank" rel="noopener">Read the complete run</a>`;$('.dialog-jump').addEventListener('click',()=>$('#agent-dialog').close());$('#agent-dialog').showModal();}
+$('#close-dialog').addEventListener('click',()=>$('#agent-dialog').close());$('#agent-dialog').addEventListener('click',e=>{if(e.target===$('#agent-dialog')){const r=e.target.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)e.target.close();}});
+function entry(e){return `<div class="terminal-entry"><div class="entry-head"><span>${esc(e.role||'Claude')}</span><time>${e.time||''}</time></div>${e.note?`<div class="note">${esc(e.note)}</div>`:`<code>${esc(e.command||'')}</code>`}${e.result?`<div class="result">${esc(e.result)}</div>`:''}</div>`;}
+function renderTerminal(selector,events){
+ const el=$(selector),previous=el._events||[];
+ if(el._events&&events.length===previous.length&&events.every((event,i)=>event===previous[i]))return;
+ const append=previous.length>0&&events.length>previous.length&&previous.every((event,i)=>event===events[i]);
+ if(append)el.insertAdjacentHTML('beforeend',events.slice(previous.length).map(entry).join(''));
+ else el.innerHTML=events.length?events.map(entry).join(''):'<div class="empty-terminal">Watching the shared graph…<span class="cursor"></span><br>Next recorded event will appear here.</div>';
+ el._events=events;el.scrollTop=el.scrollHeight;
+}
+const handoff=[
+{at:0,time:'04:38:54',side:'left',role:'You',note:'You are agent 8 of 10 in the tetris arena. This directory is your worktree, on branch agent-8. Read CLAUDE.md here and follow it exactly. Begin.'},
+{at:0.025,time:'04:38:54',side:'right',role:'You',note:'You are agent 7 of 10 in the tetris arena. This directory is your worktree, on branch agent-7. Read CLAUDE.md here and follow it exactly. Begin.'},
+{at:0.2,time:'04:45:52',side:'left',command:'add_node({\n  node_type: "decision",\n  branch: "agent-8",\n  title: "Held-key DAS/ARR input plus lock delay with move-reset AND step-reset"\n})',result:'Created decision 767cce30\n\nThe reset cap is restored whenever the piece reaches a new lowest row. Without it, sliding off a ledge can lock a piece instantly at the bottom.'},
+{at:0.26,time:'',side:'right',command:'query_nodes({\n  workspace: "tetris-arena",\n  node_type: "decision"\n})',result:'04:45:52  agent-8  decision  767cce30\nHeld-key DAS/ARR input plus lock delay with move-reset AND step-reset'},
+{at:0.54,time:'04:47:15',side:'right',command:'add_node({\n  node_type: "observation",\n  branch: "agent-7",\n  title: "Took the step-reset for lock delay from agent-8’s decision"\n})',result:'Created observation 8d2f482a\n\n“agent-8’s game.js did not have it coded yet when I read it, so this implements the idea from the graph rather than from code.”'},
+{at:0.72,time:'04:47:35',side:'left',command:'$ git commit -m "M2: … the Guideline step reset agent-3 does not have"',result:'[agent-8 87491a1]'},
+{at:1,time:'04:48:52',side:'right',command:'$ git commit -m "M2: … step reset from agent-8’s decision"',result:'[agent-7]\nA borrowed idea. An independent implementation.'}];
+const work=[
+{time:'04:38:52',command:'add_node({ node_type: "goal",\n  title: "agent-6: a playable Tetris"\n})',result:'Created goal 56aa10e7'},
+{time:'04:39:16',command:'add_node({ node_type: "option",\n  title: "Loop: requestAnimationFrame with delta-time accumulator for gravity and lock delay"\n})\nadd_edge({ from: "56aa10e7", to: "a0317625",\n  rationale: "loop timing fork" })',result:'Created option a0317625 · Linked to goal'},
+{time:'04:39:19',command:'add_node({ node_type: "option",\n  title: "Loop: setInterval per level, re-armed on level change"\n})\nadd_edge({ from: "56aa10e7", to: "133dc8ff",\n  rationale: "loop timing fork" })',result:'Created option 133dc8ff · An alternative stays on record'},
+{time:'04:39:47',command:'add_node({ node_type: "decision",\n  title: "rAF loop with ms accumulators for gravity, lock delay, DAS/ARR"\n})\nadd_edge({ from: "a0317625", to: "341683eb",\n  edge_type: "chosen" })\nadd_edge({ from: "133dc8ff", to: "341683eb",\n  edge_type: "rejected" })',result:'Created decision 341683eb\nChosen: rAF. Rejected: setInterval.'},
+{time:'04:40:08',command:'add_node({ node_type: "action",\n  title: "M1: index.html + style.css + tetris.js: board renders, piece falls, rAF loop"\n})\nadd_edge({ from: "341683eb", to: "d89add40" })',result:'Created action d89add40 · Linked to the decision'},
+{time:'04:42:26',command:'add_node({ node_type: "outcome",\n  title: "M1 works: commit 2b10665, piece falls and locks, loop verified in node harness"\n})\nadd_edge({ from: "d89add40", to: "48e490d6" })',result:'Created outcome 48e490d6\nThe proof is part of the trail.'},
+{time:'04:43:07',command:'add_node({ node_type: "observation",\n  title: "Took 7-bag and the node-loadable module idea from agent-9; changed to a single file with a guarded mount()"\n})\nadd_edge({ from: "48e490d6", to: "2cbc7ff1" })',result:'Created observation 2cbc7ff1\nAnother agent’s idea extends the work.'}];
+const questions={rows:{events:[{role:'You',time:'09:12:31',note:'Why does every game have four hidden rows? I only asked for a playable Tetris.'},{time:'09:12:33',command:'ask_graph({ workspace: "tetris-arena",\n  question: "why four hidden rows" })',result:'04:39:57  agent-1  decision\nBoard: 10 wide × 40 tall, bottom 20 visible\n\n04:44:14  agent-3  observation\nTook the tall-hidden-zone idea from agent-1; changed it to 4 buffer rows instead of 20\n\n04:45:14  agent-9  observation\nSRS kicks can lift a piece 2 rows at the ceiling\n\n04:46:17  agent-6  observation\ny<0 is now solid so lock() never discards cells\n\n04:47:33  agent-4  observation\n… my merge() was silently dropping cells above row 0'},{time:'09:12:38',note:'Agent-1 started with twenty hidden rows. Agent-3 kept four. Eight branches took the idea from there, and five found the same silent bug in their own lock code along the way.'}],trail:['agent-1','agent-3','agent-9','agent-6','agent-4'],summary:'You recover the reason, the adaptations, and the bugs uncovered along the way.'},rotation:{events:[{role:'You',time:'09:13:10',note:'Did anyone say no to the 180 rotation?'},{time:'09:13:12',command:'query_nodes({ workspace: "tetris-arena",\n  node_type: "decision", search: "180" })',result:'04:52:25  agent-8\nM4: … 180 rotation with SRS+ kicks\n\n04:55:03  agent-1\nM4 scope: … seeded replayable bag; no 180\n\n05:04:51  agent-7\nRound 2: … 180 rotation if three independent tables agree; correct the trail credit'},{time:'09:13:12',note:'Agent-1 explicitly chose no 180° rotation. Agent-8 included it. Agent-7 conditioned it on agreement between three independent tables.'}],trail:['agent-8: include','agent-1: reject','agent-7: verify'],summary:'The graph preserves disagreement. It does not turn ten different decisions into one neat answer.'},recover:{events:[{role:'You',time:'09:12:04',command:'/recover'},{time:'09:12:06',command:'query_nodes({ workspace: "tetris-arena",\n  node_type: "goal" })',result:'10 goals on 10 branches\n10 completed\n396 nodes on the agent branches\n\nLast outcome · 05:06:56 · agent-9\n“agent-9 final: playable Tetris, five milestones plus two improvement rounds”'},{time:'09:12:06',note:'The workspace’s goals and outcomes are still here. A new session can start from the recorded work and query the decisions behind it.'}],trail:['10 branches','10 goals completed','396 nodes'],summary:'A fresh context can recover the workspace from persistent graph records.'}};
+class Player{
+ constructor(name,events,render,ms=24000){this.name=name;this.events=events;this.render=render;this.duration=ms;this.progress=0;this.playing=false;this.visible=false;this.started=false;this.last=-1;this.root=$(`[data-player="${name}"]`);this.root.innerHTML=`<button class="transport-button player-play" type="button" aria-label="Play ${name} replay">${icon('play')}<span>Play</span></button><button class="transport-button icon-only player-back" type="button" aria-label="Previous ${name} event">${icon('back')}</button><div class="scrub-wrap"><label class="sr-only" for="${name}-scrub">${name} replay timeline</label><input id="${name}-scrub" class="player-range" type="range" min="0" max="1000" value="0"><div class="timeline-labels"><span class="player-start">${events[0].time}</span><span class="player-step">1 / ${events.length}</span><span class="player-end">${events.at(-1).time}</span></div></div><button class="transport-button icon-only player-next" type="button" aria-label="Next ${name} event">${icon('next')}</button><button class="transport-button player-restart" type="button" aria-label="Restart ${name} replay">${icon('restart')}<span class="restart-text">Restart</span></button>`;this.range=$('.player-range',this.root);$('.player-play',this.root).addEventListener('click',()=>{if(this.progress>=1)this.seek(0);this.setPlay(!this.playing);});$('.player-back',this.root).addEventListener('click',()=>this.seekIndex(this.index()-1));$('.player-next',this.root).addEventListener('click',()=>this.seekIndex(this.index()+1));$('.player-restart',this.root).addEventListener('click',()=>{this.seek(0);this.setPlay(!reduced);});this.range.addEventListener('input',e=>{this.seek(+e.target.value/1000);this.setPlay(false);});this.update();}
+ index(){return Math.max(0,this.events.findLastIndex((e,i)=>this.progress+.00001>=(e.at??i/(this.events.length-1))));}
+ setPlay(value){this.playing=value;const b=$('.player-play',this.root);b.innerHTML=icon(value?'pause':'play')+`<span>${value?'Pause':this.progress>=1?'Replay':'Play'}</span>`;b.setAttribute('aria-label',`${value?'Pause':'Play'} ${this.name} replay`);}
+ seek(p){this.progress=Math.max(0,Math.min(1,p));this.update();}
+ seekIndex(i){const n=Math.max(0,Math.min(this.events.length-1,i));this.seek(this.events[n].at??n/(this.events.length-1));this.setPlay(false);}
+ update(){const i=this.index(),tick=Math.round(this.progress*1000);if(+this.range.value!==tick){this.range.value=tick;this.range.style.setProperty('--progress',`${tick/10}%`);}if(this.last!==i){this.range.setAttribute('aria-valuetext',`Event ${i+1} of ${this.events.length}, ${this.events[i].time||'graph read'}`);$('.player-step',this.root).textContent=`${i+1} / ${this.events.length}`;$('.player-back',this.root).disabled=i===0;$('.player-next',this.root).disabled=i===this.events.length-1;this.last=i;this.render(this.events.slice(0,i+1),i);}}
+ replace(events){this.events=events;this.progress=0;this.last=-1;$('.player-start',this.root).textContent=events[0].time;$('.player-end',this.root).textContent=events.at(-1).time;this.update();this.setPlay(!reduced);}
+}
+const handoffPlayer=new Player('handoff',handoff,(events,i)=>{renderTerminal('#handoff-left',events.filter(e=>e.side==='left'));renderTerminal('#handoff-right',events.filter(e=>e.side==='right'));$('#handoff-status-left').textContent=i>=5?'04:47:35 · 87491a1 committed':i>=2?'04:45:52 · Decision visible to every agent':'Own worktree. Shared reasoning.';$('#handoff-status-right').textContent=i>=6?'04:48:52 · Borrowed idea, committed':i>=4?'04:47:15 · Idea implemented before source commit':i>=3?'Reading decision 767cce30':'Own worktree. Shared reasoning.';},12500);
+const workPlayer=new Player('work',work,(events,i)=>{renderTerminal('#work-terminal',events);$$('.graph-node,.graph-edge').forEach(n=>n.classList.toggle('visible',+n.dataset.at<=i));$$('.graph-node').forEach(n=>n.classList.toggle('current',+n.dataset.at===i));$('#node-count').textContent=`${i+1} of 7 nodes`;$('#work-status').textContent=`${work[i].time} · Node and edge recorded together`;});
+let currentQuestion='rows';const recallPlayer=new Player('recall',questions.rows.events,(events,i)=>{renderTerminal('#recall-terminal',events);const q=questions[currentQuestion];$('#recall-trail').innerHTML=i>=1?q.trail.map((t,n)=>(n?'<span class="trail-connector"></span>':'')+`<span class="trail-chip">${esc(t)}</span>`).join(''):'';$('#recall-summary').textContent=i>=2?q.summary:'The next session can ask the graph what happened.';},11000);
+const players=[handoffPlayer,workPlayer,recallPlayer];
+$$('.graph-node').forEach(n=>{const seek=()=>workPlayer.seekIndex(+n.dataset.at);n.addEventListener('click',seek);n.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();seek();}});});
+$$('[data-question]').forEach(b=>b.addEventListener('click',()=>{currentQuestion=b.dataset.question;$$('[data-question]').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));recallPlayer.replace(questions[currentQuestion].events);}));
+const io=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.target.classList.contains('theatre')){hero.visible=e.isIntersecting;return;}const player=players.find(p=>p.root.closest('.chapter')===e.target);if(player){player.visible=e.isIntersecting;if(e.isIntersecting&&!player.started){player.started=true;player.setPlay(!reduced);}}}),{threshold:.2});io.observe($('.theatre'));$$('.chapter').forEach(c=>io.observe(c));
+const signalTravelMs=650;
+const cardMotion=$$('.chapter').map(el=>({el,value:0,velocity:0,target:0}));
+function updateCardTargets(){
+ const enabled=!reduced&&innerWidth>800&&innerHeight>650;
+ let nextTop=$('.stack').getBoundingClientRect().top;
+ cardMotion.forEach((card,i)=>{
+  nextTop+=card.el.offsetHeight+parseFloat(getComputedStyle(card.el).marginBottom);
+  const next=cardMotion[i+1];
+  if(!enabled||!next){card.target=0;return;}
+  const dock=parseFloat(getComputedStyle(next.el).top)||20,entry=innerHeight*.94;
+  const progress=Math.max(0,Math.min(1,(entry-Math.max(dock,nextTop))/(entry-dock)));
+  card.target=progress*progress*(3-2*progress);
+ });
+}
+function animateCards(dt){
+ const steps=Math.max(1,Math.ceil(dt/16)),step=dt/steps/1000;
+ cardMotion.forEach(card=>{
+  if(Math.abs(card.target-card.value)<.0001&&Math.abs(card.velocity)<.001){card.value=card.target;card.velocity=0;}
+  else for(let i=0;i<steps;i++){card.velocity+=((card.target-card.value)*220-card.velocity*28)*step;card.value+=card.velocity*step;}
+  if(card.value===card.painted)return;
+  const depth=Math.max(0,Math.min(1,card.value));
+  card.el.style.setProperty('--card-scale',(1-depth*.028).toFixed(5));
+  card.el.style.setProperty('--card-lift',(-depth*9).toFixed(2)+'px');
+  card.painted=card.value;
+ });
+}
+addEventListener('resize',updateCardTargets,{passive:true});
+new ResizeObserver(updateCardTargets).observe($('.stack'));
+let previous=performance.now();
+function frame(now){
+ const dt=Math.max(0,Math.min(now-previous,34));previous=now;
+ const available=!document.hidden&&!$('#agent-dialog').open;
+ if(available){
+  if(hero.playing&&hero.visible){hero.flowElapsed+=dt;hero.progress=Math.min(1,hero.progress+dt/hero.duration);renderHero();if(hero.progress===1)setHeroPlay(false);}
+  players.forEach(p=>{if(p.playing&&p.visible){p.seek(p.progress+dt/p.duration);if(p.progress===1)p.setPlay(false);}});
+ }
+ const active=feed[hero.lastIndex];
+ heroTiles.forEach(tile=>{
+  const id=+tile.dataset.agent,queue=traffic.get(id)||[];
+  while(queue.length>1&&hero.flowElapsed>=queue[0].start+queue[0].duration)queue.shift();
+  const packet=queue[0],age=packet?hero.flowElapsed-packet.start:-1;
+  tile.classList.toggle('active',id===active?.agent||id===active?.from||!!(packet&&age>=0&&age<packet.duration+900));
+ });
+ // Each burst belongs to a visible message. Independent sends can overlap;
+ // there is no repeating animation shared by all ten connections.
+ const flowing=!reduced&&available&&hero.visible&&hero.playing;
+ wireRoutes.forEach(route=>{
+  const {id,tile,path,length,signal,wake,flow}=route;
+  const elapsed=Math.max(0,hero.flowElapsed-(id%5)*36);
+  const reveal=reduced?1:Math.min(1,elapsed/signalTravelMs);
+  if(!route.revealed){
+   if(reveal===1){path.removeAttribute('stroke-dasharray');path.removeAttribute('stroke-dashoffset');route.revealed=true;}
+   else{path.setAttribute('stroke-dasharray',`${length.toFixed(2)} ${length.toFixed(2)}`);path.setAttribute('stroke-dashoffset',((reveal-1)*length).toFixed(2));}
+  }
+  const queue=traffic.get(id)||[];
+  while(queue.length>1&&hero.flowElapsed>=queue[0].start+queue[0].duration)queue.shift();
+  const packet=queue[0],age=packet?hero.flowElapsed-packet.start:-1;
+  // DOMTokenList.toggle treats an undefined optional force as a toggle.
+  // Always pass a boolean so idle routes cannot flash on alternate frames.
+  const moving=Boolean(flowing&&packet&&age>=0&&age<packet.duration);
+  const highlighted=id===active?.agent||id===active?.from;
+  path.classList.toggle('active',highlighted||!!moving);
+  [signal,wake,flow].forEach(el=>{el.classList.toggle('moving',moving);el.classList.toggle('ambient',!highlighted);});
+  if(moving){
+   const t=age/packet.duration;
+   const front=packet.inbound?t:1-t,point=pointOnRoute(route,front);
+   signal.setAttribute('cx',point.x.toFixed(2));signal.setAttribute('cy',point.y.toFixed(2));
+   [[wake,.38],[flow,.2]].forEach(([el,tail])=>{
+    el.setAttribute('stroke-dasharray',`${(Math.min(t,tail)*length).toFixed(2)} ${(length*2).toFixed(2)}`);
+    el.setAttribute('stroke-dashoffset',(-length*(packet.inbound?Math.max(0,front-Math.min(t,tail)):front)).toFixed(2));
+   });
+  }
+ });
+ const transfer=Math.max(0,Math.min(1,(handoffPlayer.progress-.2)/.06));
+ const pipeVisible=handoffPlayer.progress>=.2&&handoffPlayer.progress<.32;
+ $('#handoff-pipe-fill').setAttribute('width',(transfer*112).toFixed(2));
+ $('#handoff-pipe-fill').style.opacity=pipeVisible?'1':'0';
+ $('#handoff-right').closest('.console').classList.toggle('delivered',handoffPlayer.progress>=.26&&handoffPlayer.progress<.31);
+ if(available)animateCards(dt);
+ requestAnimationFrame(frame);
+}
+setHeroPlay(!reduced);renderHero();requestAnimationFrame(frame);scheduleWires();document.fonts.ready.then(scheduleWires);new ResizeObserver(scheduleWires).observe($('#agent-stage'));addEventListener('resize',scheduleWires,{passive:true});
+let scrollQueued=false;function onScroll(){if(scrollQueued)return;scrollQueued=true;requestAnimationFrame(()=>{scrollQueued=false;updateCardTargets();const chapters=$$('.chapter'),first=chapters[0].getBoundingClientRect(),last=chapters.at(-1).getBoundingClientRect();$('.chapter-nav').classList.toggle('visible',first.top<innerHeight*.6&&last.bottom>innerHeight*.3);let active=0;chapters.forEach((c,i)=>{if(c.getBoundingClientRect().top<innerHeight*.48)active=i;});$$('.chapter-nav a').forEach((a,i)=>{a.classList.toggle('active',i===active);if(i===active)a.setAttribute('aria-current','step');else a.removeAttribute('aria-current');});});}addEventListener('scroll',onScroll,{passive:true});onScroll();
+// A pinned card's bounding box is not its original place in the document.
+// Resolve chapter links from the stack's normal flow so earlier cards remain reachable.
+document.addEventListener('click',e=>{const a=e.target.closest('a[href^="#"]');if(!a||e.button!==0||e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;const target=document.getElementById(a.getAttribute('href').slice(1));if(!target?.classList.contains('chapter'))return;e.preventDefault();const chapters=$$('.chapter'),index=chapters.indexOf(target);const top=$('.stack').getBoundingClientRect().top+scrollY+chapters.slice(0,index).reduce((sum,c)=>sum+c.offsetHeight+parseFloat(getComputedStyle(c).marginBottom),0)-20;if(location.hash!==a.hash)history.pushState(null,'',a.hash);scrollTo({top,behavior:reduced?'instant':'smooth'});target.setAttribute('tabindex','-1');target.focus({preventScroll:true});onScroll();});
+let toastTimer;function toast(message){$('#toast').textContent=message;$('#toast').classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),3000);}
+const commands='brew tap notactuallytreyanastasio/tap\nbrew install deciduous\n\n# Next: start Postgres and connect your agents\n# https://deciduous.dev/tutorial/local-postgres.html\n\n# Existing graphs? Back up before migrating\n# https://deciduous.dev/tutorial/upgrading.html';
+$('#copy-install').addEventListener('click',async()=>{try{if(navigator.clipboard&&window.isSecureContext)await navigator.clipboard.writeText(commands);else{const area=document.createElement('textarea');area.value=commands;area.style.cssText='position:fixed;left:-9999px;top:0';document.body.append(area);area.select();const ok=document.execCommand('copy');area.remove();if(!ok)throw Error('Copy unavailable');}$('#copy-install span').textContent='Copied';toast('Setup commands copied.');setTimeout(()=>$('#copy-install span').textContent='Copy commands',2200);}catch(e){const sel=getSelection(),r=document.createRange();r.selectNodeContents($('#install-code'));sel.removeAllRanges();sel.addRange(r);toast('Commands selected. Press ⌘C or Ctrl+C to copy.');}});
+})();
+</script>
+</body>
 </html>

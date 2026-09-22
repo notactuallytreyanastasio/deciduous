@@ -1,0 +1,25 @@
+name: Documentation checks
+on:
+  pull_request:
+    paths: ['docs/**', 'scripts/docs/**', 'scripts/team-memory/**', '.github/workflows/docs.yml']
+  push:
+    branches: [main]
+    paths: ['docs/**', 'scripts/docs/**', 'scripts/team-memory/**', '.github/workflows/docs.yml']
+permissions:
+  contents: read
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: scripts/docs/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci --prefix scripts/docs --ignore-scripts
+      - run: npm run check --prefix scripts/docs
+      - run: python3 -m unittest discover -s scripts/team-memory/tests -v

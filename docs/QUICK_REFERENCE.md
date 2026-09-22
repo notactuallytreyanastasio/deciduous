@@ -1,371 +1,176 @@
-# Quick Reference
+<!-- Generated from content/reference.md by scripts/docs/build.mjs. Edit the source. -->
 
-Fast lookup for common deciduous operations.
+# Shared graph reference
 
----
+Use the HTTP MCP server for an agent team's day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that server and a local SQLite database.
 
-## Installation
+This reference describes Deciduous 1.0. Start with [local Postgres setup](content/local-postgres.md), then [connect your agents](content/clients.md). The [MCP guide](content/mcp.md) explains the transport and tool differences.
 
-```bash
-cargo install deciduous
-# or
-brew install deciduous  # if published to homebrew
+## Which command reaches which database
+
+| Interface | Storage it reads or writes | Intended use |
+| --- | --- | --- |
+| HTTP MCP at `/mcp` | Shared Postgres | Team reasoning, cross-branch reads, borrowing, handoffs |
+| `deciduous remote status`, `push`, `pull`, `watch` | The configured HTTP server; some commands also use local SQLite | Check connectivity, migrate history, refresh a local graph, watch writes |
+| `deciduous add`, `link`, `nodes`, `show`, `status`, `graph` | Local SQLite | Offline work or inspection of a pulled copy |
+| `deciduous mcp` | Local SQLite over stdio | Optional local-only MCP integration |
+| `deciduous serve` | Local SQLite | Local graph viewer |
+| `deciduous serve --api` | Per-graph SQLite stores | Separate Rust HTTP API; not the Postgres service |
+| `deciduous sync` | Local SQLite and `.deciduous/graph.json` | Optional Git-based sharing, not remote Postgres synchronization |
+
+Configuring `[remote]` does not reroute ordinary CLI commands or `deciduous mcp`. A successful local `deciduous add` is not evidence that your teammates can see the node.
+
+## Setup commands in newer source builds
+
+The onboarding change in the current source checkout adds `deciduous setup`. It is not included in the published `v1.0.0` binary. Check whether your build supports it with `deciduous setup --help`.
+
+```sh
+deciduous setup
 ```
 
----
+With no flags, this prints the shared Postgres setup and upgrade guide to stdout. It does not open a local graph, write configuration, generate credentials, or start a service.
 
-## Initialize a Project
+To generate a standalone database project instead:
 
-```bash
-deciduous init                    # Claude Code (default)
-deciduous init --opencode         # OpenCode
-deciduous init --windsurf         # Windsurf
-deciduous init --both             # Claude Code + OpenCode
+```sh
+deciduous setup --postgres --output ./deciduous-postgres --port 55432
 ```
 
-Creates: `.deciduous/`, `.claude/` (or `.opencode/`), hooks, CLAUDE.md section
+This creates `Dockerfile`, `compose.yaml`, `README.md`, `.gitignore`, and a private `.env` in a new directory. It refuses existing output paths and a symlink parent. The parent must already exist. Omit `--output` and `--port` to use `./deciduous-postgres` and port `55432`.
 
----
+Generation does not start Docker or alter a database. The generated Compose project runs Postgres only, with loopback access and a persistent named volume. It does not include the MCP service; agents still need that separate service.
 
-## Node Types
+For released `v1.0.0` installations, use the current Python helper from the [Postgres-only setup guide](content/local-postgres.md#generate-just-postgres). Both generators use the same templates. Follow the generated README before starting containers or connecting an app.
 
-| Type | Use When | Shape |
-|------|----------|-------|
-| `goal` | User wants something | House |
-| `decision` | Choice must be made | Diamond |
-| `option` | Possible choice | Box |
-| `action` | Work being done | Rounded box |
-| `outcome` | Work complete | Ellipse |
-| `observation` | Something noticed | Note |
-| `revisit` | Changing direction | Octagon |
+## Workspace and branch arguments
 
----
+Use one stable workspace name for the repository, such as `example-app`, across machines and worktrees. Pass the actual Git branch on writes, such as `agent-api` or `agent-tests`.
 
-## Add Nodes
+Scoped HTTP tools resolve the workspace in this order:
 
-```bash
-# Basic
-deciduous add goal "Add auth"
-deciduous add decision "How to store sessions?"
-deciduous add action "Implementing middleware"
-deciduous add outcome "Auth working"
-deciduous add observation "Redis adds complexity"
-deciduous add revisit "Rethinking approach"
+1. The `X-Deciduous-Workspace` request header, if present.
+2. The tool's `workspace` argument.
+3. `scratch`, if neither is present.
 
-# With metadata
-deciduous add action "Implementing X" \
-  -c 85 \                           # Confidence 0-100
-  --commit HEAD \                   # Link to current commit
-  -f "src/auth.rs,src/session.rs" \ # Associated files
-  -b feature-auth                   # Git branch
+Names are trimmed and lowercased. Path separators and names longer than 128 characters are rejected. Unknown names are created, so a typo can create a second workspace.
 
-# With verbatim prompt (for goals)
-deciduous add goal "Add auth" --prompt-stdin << 'EOF'
-I need user authentication with email/password and OAuth...
-EOF
+`query_nodes`, `get_graph`, `find_orphans`, and `ask_graph` accept `workspace: "*"` for cross-project reads when the client is not pinned. `check_activity` requires one workspace. Scoped writes reject `"*"`.
+
+The header is a routing safeguard, not an access-control boundary. The shared bearer token grants access to the service's data. `list_workspaces` and ID-based reads are not confined by a workspace header. See [security boundaries](content/architecture.md#security-boundaries).
+
+## Shared HTTP MCP tools
+
+The server registers 18 tools. Discover their current schemas with your MCP client's `tools/list`; the local stdio server exposes a different set.
+
+### Read and recover
+
+| Tool | Arguments | Result |
+| --- | --- | --- |
+| `list_workspaces` | None | Workspace names and live node/edge counts |
+| `check_activity` | `workspace`; optional `branches` from 0 to 200, default 20 | Active write leases and the newest created node on each returned branch |
+| `query_nodes` | `workspace`; optional `type`, `status`, `branch`, `search`, `limit` | Matching live node summaries, newest first; default limit 100 |
+| `show_node` | `node_id` | Full node metadata, descriptions, incoming/outgoing edges, documents, themes |
+| `get_graph` | `workspace`; optional `branch` | Graph snapshot with nodes, edges, document metadata, themes, and node-theme links |
+| `find_orphans` | `workspace` | Non-goal nodes with no incoming edge |
+| `get_ancestors` | `node_id` | Walk incoming edges, including the starting node |
+| `get_descendants` | `node_id` | Walk outgoing edges, including the starting node |
+| `ask_graph` | `question`, `workspace`; optional `scope`, `include_context` | Heuristic search results and optional connected-node context |
+
+`query_nodes.search` matches titles and descriptions. The MCP schema does not expose an offset. Narrow the filters or use `get_graph` when you need the complete workspace. A branch-filtered graph omits edges whose other endpoint is outside the returned branch; read the workspace graph to inspect cross-branch borrowing.
+
+The traversal tools currently stop after a budget of 50 visited nodes. They are useful for context recovery, not an exhaustive export of an arbitrarily large graph.
+
+`ask_graph` uses text matching and inferred type/status filters. It does not call a language model, produce a verified answer, or perform semantic vector search. Its `scope` values are `all`, `active`, `decisions`, `goals`, `observations`, and `recent`. Read the returned records before drawing a conclusion.
+
+### Write and connect
+
+| Tool | Required arguments | Useful optional arguments |
+| --- | --- | --- |
+| `add_node` | `node_type`, `title` | `workspace`, `branch`, `description`, `status`, `confidence`, `commit`, `prompt`, `files` |
+| `add_edge` | `from_node_id`, `to_node_id` | `workspace`, `branch`, `edge_type`, `rationale` |
+| `update_node` | `node_id` | `title`, `description`, `status`, `metadata`, `branch` |
+| `delete_node` | `node_id` | `branch` |
+| `delete_edge` | `from_node_id`, `to_node_id` | `edge_type`, `branch` |
+
+`add_node` returns both `id` and `change_id`. Use the returned server UUID `id` in ordinary node and edge tools. Local integer IDs and local change-ID prefixes are not interchangeable with server IDs.
+
+`update_node.metadata` replaces the metadata map. Read it first and preserve fields you still need. Its top-level `branch` selects the write lease; changing the node's recorded branch requires `metadata.branch`.
+
+`delete_node` sets a deletion timestamp. `delete_edge` removes the edge row. Prefer `superseded` or `abandoned` for a decision that remains useful history. A routine export is not a backup of deleted records.
+
+### Capture helpers
+
+| Tool | Required arguments | Purpose |
+| --- | --- | --- |
+| `log_observation` | `title` | Add an observation, optionally connected through `related_to` and `took_from`; also accepts `description`, `why`, `tags`, `workspace`, `branch` |
+| `log_decision` | `title`, `chosen_option` | Add a decision with a chosen option and optional rejected options, rationale, parent, confidence, workspace, branch |
+| `capture_conversation_turn` | `summary` | Add supplied goal, observations, options, decision, action, and outcome structures; optional parent, workspace, branch, confidence |
+| `close_thread` | `title` | Add an outcome; optional parent, goal to complete, lessons, follow-up goals, success, workspace, branch |
+
+`log_observation.related_to` and `took_from` accept a full server node UUID or full `change_id` in the same workspace. `why` becomes the borrowing edge's rationale. The observation and its edges are written in one transaction.
+
+The other capture helpers perform multiple writes. Their current implementations do not wrap the entire operation in one transaction. After an error, inspect the graph for partial results before retrying. None of these helpers is a general idempotency endpoint.
+
+`log_decision` draws `chosen` and `rejected` edges from the decision to its option nodes. Use the lower-level tools if your team requires a different connection pattern. `close_thread` does not finish an MCP session or release a lease through a separate unlock operation.
+
+## Vocabulary
+
+| Node type | Record |
+| --- | --- |
+| `goal` | The requested result and relevant user prompt |
+| `option` | An approach worth considering |
+| `decision` | The choice and its rationale |
+| `action` | Work planned or performed, with evidence |
+| `outcome` | What happened after the action |
+| `observation` | A fact learned during the work |
+| `revisit` | A decision being reconsidered |
+
+Normal tool statuses are `pending`, `active`, `completed`, `rejected`, `superseded`, and `abandoned`. Imports also preserve legacy `feedback` nodes and `done` statuses; new work should use the documented vocabulary above. Confidence is an optional value from 0 to 100, not a measured probability.
+
+Edge types are `leads_to`, `chosen`, `rejected`, `requires`, `blocks`, `enables`, and `took_from`. Both endpoints must exist in the same workspace. They may be on different branches. A `took_from` edge runs from the source idea to the node that reused it.
+
+## CLI remote commands
+
+Use the service's base URL for the CLI, without `/mcp`:
+
+```sh
+deciduous remote login --url http://127.0.0.1:4000
+deciduous remote init http://127.0.0.1:4000 --workspace example-app
+deciduous remote status
+deciduous remote watch
 ```
 
----
-
-## Link Nodes
-
-```bash
-# Basic (default: leads_to)
-deciduous link 1 2
-
-# With rationale
-deciduous link 1 2 -r "Auth decision follows from goal"
-
-# With edge type
-deciduous link 1 2 -t chosen    # Option was selected
-deciduous link 1 2 -t rejected  # Option was rejected
-deciduous link 1 2 -t requires  # Dependency
-deciduous link 7 42 -t took_from # 42 borrowed from 7, possibly on another branch
-```
-
----
-
-## Query Graph
-
-```bash
-# List nodes
-deciduous nodes
-deciduous nodes --branch main
-deciduous nodes --type goal
-deciduous nodes --status active
-
-# List edges
-deciduous edges
-
-# Show single node details
-deciduous show 42
-deciduous show 42 --json
-
-# Full graph as JSON
-deciduous graph
-```
-
----
-
-## Visualize
-
-```bash
-# Web viewer (opens browser)
-deciduous serve
-deciduous serve --port 8080
-
-# Terminal UI
-deciduous tui
-
-# DOT export
-deciduous dot > graph.dot
-deciduous dot --png -o graph.png    # Requires graphviz
-deciduous dot --auto                # Branch-specific filename
-```
-
----
-
-## Export & Sync
-
-```bash
-# Export for GitHub Pages
-deciduous sync
-
-# Creates:
-# - docs/graph-data.json
-# - docs/git-history.json
-# - docs/index.html
-
-# Then push to GitHub, enable Pages on /docs
-```
-
----
-
-## Multi-User Sync
-
-```bash
-# After git pull: import teammates' records, export yours, refresh docs/graph-data.json
-deciduous sync
-
-# What is pending? (exit 1 if anything)
-deciduous sync --check
-
-# Reconcile only, skip the GitHub Pages export
-deciduous sync --no-pages
-
-# Link to a teammate's node by change_id prefix (CHANGE column in `deciduous nodes`)
-deciduous link a1b2c3d4 42 -r "implements their goal"
-
-# Then commit the records
-git add .deciduous/graph.json
-```
-
----
-
-## Status Updates
-
-```bash
-deciduous status 42 active       # Currently in use
-deciduous status 42 superseded   # Replaced by newer approach
-deciduous status 42 abandoned    # Tried and rejected
-deciduous status 42 completed    # Finished
-```
-
----
-
-## Update Prompts
-
-```bash
-# Update existing node's prompt
-deciduous prompt 42 "The new prompt text"
-
-# From stdin (multi-line)
-deciduous prompt 42 << 'EOF'
-The full verbatim prompt here...
-EOF
-```
-
----
-
-## Roadmap Sync
-
-```bash
-# Initialize (parses ROADMAP.md)
-deciduous roadmap init
-
-# Sync with GitHub Issues
-deciduous roadmap sync              # Dry run
-deciduous roadmap sync --execute    # Apply changes
-
-# List items
-deciduous roadmap list
-deciduous roadmap list --with-issues
-```
-
----
-
-## Hooks
-
-```bash
-# Install hooks from config
-deciduous hooks install
-
-# Uninstall
-deciduous hooks uninstall
-
-# Check status
-deciduous hooks status
-
-# Show all integration status
-deciduous integration
-```
-
----
-
-## Database Operations
-
-```bash
-# Backup
-deciduous backup
-deciduous backup -o backup.db
-
-# Delete a node (and its edges)
-deciduous delete 42
-deciduous delete 42 --dry-run
-
-# Remove an edge
-deciduous unlink 1 2
-```
-
----
-
-## PR Writeup
-
-```bash
-# Generate PR description from graph
-deciduous writeup --title "Add auth" --nodes 1-15 -o PR.md
-
-# With embedded graph
-deciduous dot --auto --nodes 1-15 --png
-git add docs/decision-graph-*.png
-deciduous writeup --auto --title "Add auth" --nodes 1-15
-```
-
----
-
-## Session Recovery
-
-```bash
-# Check for updates (always-on, checked every 24h)
-deciduous check-update
-
-# Show recent decisions
-deciduous nodes
-deciduous edges
-
-# Show recent commands
-deciduous commands --limit 20
-
-# View git state
-git log --oneline -10
-git status
-```
-
----
-
-## Common Patterns
-
-### Start New Feature
-
-```bash
-deciduous add goal "Feature name" --prompt-stdin << 'EOF'
-User's full request here...
-EOF
-# Note the ID (e.g., 42)
-
-deciduous add decision "Key design question" -c 85
-deciduous link 42 43 -r "Design question for feature"
-```
-
-### Record a Pivot
-
-```bash
-deciduous add observation "Problem with current approach"
-deciduous add revisit "Reconsidering X"
-deciduous link <observation_id> <revisit_id> -r "Caused rethinking"
-deciduous link <revisit_id> <new_decision_id> -r "New approach"
-deciduous status <old_decision_id> superseded
-```
-
-### After Committing Code
-
-```bash
-git commit -m "feat: add auth"
-deciduous add action "Implemented auth" -c 90 --commit HEAD
-deciduous link <goal_id> <action_id> -r "Implementation"
-```
-
-### Before a PR
-
-```bash
-# Export graph for the PR
-deciduous dot --auto --nodes 1-15 --png
-
-# Generate writeup
-deciduous writeup --auto -t "My PR" --nodes 1-15
-
-# Update PR
-gh pr edit N --body "$(deciduous writeup --auto -t 'My PR' --nodes 1-15)"
-```
-
----
-
-## Environment Variables
-
-| Variable | Purpose |
-|----------|---------|
-| `DECIDUOUS_DB_PATH` | Override database path |
-| `GITHUB_TOKEN` | GitHub API access for roadmap sync |
-
----
-
-## Slash Commands
-
-All bootstrapped by `deciduous init` and updated by `deciduous update`.
-
-| Command | Purpose |
-|---------|---------|
-| `/decision` | Manage decision graph - add nodes, link edges, sync |
-| `/recover` | Recover context from decision graph on session start |
-| `/work` | Start a work transaction - creates goal node before implementation |
-| `/document` | Generate comprehensive documentation for a file or directory |
-| `/build-test` | Build the project and run the test suite |
-| `/serve-ui` | Start the decision graph web viewer |
-| `/sync-graph` | Export decision graph to GitHub Pages |
-| `/decision-graph` | Build a decision graph from commit history |
-| `/sync` | Multi-user sync - pull events, rebuild, push |
-
-## Skills
-
-| Skill | Purpose |
-|-------|---------|
-| `/pulse` | Map current design as decisions (Now mode) |
-| `/narratives` | Understand how the system evolved (History mode) |
-| `/archaeology` | Transform narratives into queryable graph |
-
----
-
-## File Locations
-
-| Path | Purpose |
-|------|---------|
-| `.deciduous/deciduous.db` | SQLite database (gitignored) |
-| `.deciduous/config.toml` | Configuration |
-| `.deciduous/.version` | Binary version for update detection |
-| `.deciduous/.latest_version` | Cached latest version from crates.io |
-| `.deciduous/.last_version_check` | Timestamp of last version check |
-| `.deciduous/graph.json` | The shared graph: every node, edge, theme, and tag (tracked) |
-| `.claude/hooks/` | Claude Code hooks |
-| `.claude/commands/` | Claude Code slash commands |
-| `.claude/skills/` | Claude Code skills |
-| `docs/graph-data.json` | Exported graph for GitHub Pages |
+Run repository commands from an initialized project. `login` reads the token from standard input and keeps it outside the repository. A non-empty `DECIDUOUS_MCP_TOKEN` environment value takes precedence over the stored credential.
+
+| Command | Behavior |
+| --- | --- |
+| `remote login [--url URL]` | Store a token; optional URL verifies it first |
+| `remote logout` | Remove the stored credential; does not clear a token already set in the environment |
+| `remote init URL [--workspace NAME]` | Check health/authentication and save `[remote]` configuration |
+| `remote status` | Compare local and server node and edge counts; matching counts do not prove identical content |
+| `remote pull` | Merge server nodes and edges into the local graph; does not retrieve attachment bytes or provide a complete server backup |
+| `remote push` | Bulk-import the local graph into the server; a controlled migration/backfill operation, not routine synchronization |
+| `remote adopt ROOT --url URL --dry-run` | Preview configuration of existing `.deciduous` projects below a directory; omit `--dry-run` only after reviewing |
+| `remote watch` | Connect to the event stream, print changes, and reconnect with backoff |
+
+In 1.0, `remote watch` supports `--types outcome,observation`, repeated `--branch NAME`, `--edges`, and `--json`. `--url` and `--claude-code` print connection information instead of watching; that output contains a token-bearing URL. Keep it out of logs, screenshots, and the decision graph. Older 0.19 builds print a URL by default, so check `deciduous --version` and `deciduous remote watch --help`.
+
+`remote push` can overwrite newer server fields with a stale local copy. `remote pull` does not reconcile server deletions into a faithful local mirror. Read [upgrading and migrating](content/upgrading.md) before using either on valuable history.
+
+## HTTP endpoints
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /health` | Unauthenticated liveness response, `ok` |
+| `POST /mcp` | Authenticated MCP Streamable HTTP requests |
+| `GET /export?workspace=example-app` | Authenticated graph snapshot; metadata, not attachment bytes |
+| `POST /import` | Authenticated bulk import of a local-export-shaped graph |
+| `PUT /blob/:sha256` | Authenticated raw document upload, verified against its SHA-256 hash |
+| `GET /documents/:id` | Authenticated document bytes by document ID or content hash |
+| `GET /events?workspace=example-app` | Authenticated WebSocket upgrade for write notifications |
+
+`GET /mcp` returns 405 because the server does not offer a server-to-client SSE stream. Tool responses arrive through the MCP POST transport. Use `/events` for live write notifications.
+
+Imports and blob uploads have a 64 MiB request-body limit. Document reads return 404 for an unknown attachment and 410 when the metadata exists but content is missing. The event stream can miss notifications during disconnects; query the graph after reconnecting.
+
+See [architecture](content/architecture.md) for persistence and security limits, or [solo and offline use](content/solo.md) for the local CLI and Git-based workflow.

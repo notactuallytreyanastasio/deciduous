@@ -1,269 +1,172 @@
-# Multi-User Sync
+<!-- Generated from content/teams.md by scripts/docs/build.mjs. Edit the source. -->
 
-How several people (and several machines) share one decision graph through git.
+# Work as a team of agents
 
-## The model in one paragraph
+Put agents working on the same project in one Deciduous workspace. Give each agent a Git branch and a bounded file scope. One agent can publish a finding while another is still implementing; the second agent can reuse that finding and leave an edge back to its source.
 
-Every machine has a private SQLite database, `.deciduous/deciduous.db`, which is
-gitignored. The shared source of truth is `.deciduous/graph.json`, one file holding
-the whole graph, committed with the code. Every graph write goes to the database and
-to that file at the same time. `deciduous sync` makes the file and the database
-agree, in both directions. That is the whole mechanism. There is no event log, no
-checkpoint, no patch export, no directory of records, and nothing to compact.
+Deciduous records reasoning and coordinates short graph-write bursts. Your agent runner still assigns tasks, starts sessions, and manages code changes.
 
-```text
-.deciduous/
-├── deciduous.db            private cache (gitignored)
-├── config.toml             shared
-└── graph.json              shared: the graph
-```
+## Agree on the project and branch names
 
-```json
-{
-  "version": 1,
-  "nodes":  { "<change_id>": { … } },
-  "edges":  { "<edge_id>":   { … } },
-  "themes": { "<change_id>": { … } },
-  "tags":   { "<node_change_id>--<theme_change_id>": { … } }
-}
-```
+This guide uses server `http://127.0.0.1:4000`, workspace `example-app`, and two branches:
 
-## Identity: local ids vs change ids
+| Agent | Branch | Responsibility |
+| --- | --- | --- |
+| API agent | `agent-api` | Request validation and error responses |
+| Test agent | `agent-tests` | Fixtures and integration tests |
 
-| Field | Scope | Example | Use it for |
-|-------|-------|---------|------------|
-| `id` | one machine | `42` | typing quickly at your own prompt |
-| `change_id` | everywhere | `a1b2c3d4-…` | anything that crosses machines |
+Use [client configuration](content/clients.md) to pin both MCP clients to `example-app`. Set that same name with `deciduous remote init ... --workspace example-app` in each initialized CLI checkout. Worktree directory names often differ; relying on their basenames can split one project into several workspaces.
 
-Alice's goal is `#12` on her laptop and `#907` on Bob's. Its `change_id` is the same
-on both. Records reference each other only by `change_id`; local ids are assigned
-when a record is imported and never leave the machine.
+Pass the real branch name on each MCP write. The server cannot inspect your Git checkout and does not infer the branch from a local process.
 
-Every command that takes a node id also takes a `change_id` prefix (four or more
-characters, unique). `deciduous nodes` prints the first eight characters in the
-CHANGE column:
+Create a new workspace with one client connection or `remote init` before launching parallel sessions. The current server can race if several clients first create the same workspace at once. A successful `check_activity` from the first client confirms it is ready for the rest.
 
-```text
-ID    CHANGE    TYPE         STATUS     TITLE
-57    a1b2c3d4  goal         pending    Rate limit the public API
-58    9f8e7d6c  action       pending    Add token bucket middleware
-```
+For a fresh exercise, run these commands from the code repository. The branch names and destination directories must not already exist; substitute unused names if needed:
 
 ```bash
-deciduous link a1b2c3d4 58 -r "implements the goal Alice logged"
-deciduous status 9f8e7d6c completed
-deciduous show a1b2
+git status --short
+git worktree add -b agent-api ../example-app-api HEAD
+git worktree add -b agent-tests ../example-app-tests HEAD
 ```
 
-The MCP tools accept the same thing: pass `"node_id": "a1b2c3d4"` instead of an
-integer.
+Worktrees start from the selected commit and do not copy uncommitted changes. Launch the API agent in `../example-app-api` and the test agent in `../example-app-tests`. Ensure each has the same MCP connection configuration. Give each its responsibility from the table and tell both to pass their branch name on graph writes. They share Postgres memory without sharing a SQLite file.
 
-## What a record looks like
+## A complete two-agent handoff
 
-One entry of `nodes`, keyed by its `change_id`:
+The examples below are MCP calls, not shell commands. Replace uppercase ID placeholders with the UUID returned by an earlier call. Do not send the placeholder text to the server.
 
-```json
-{
-  "author": "Alice Example",
-  "change_id": "a1b2c3d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
-  "created_at": "2026-09-02T10:15:00-04:00",
-  "metadata": {
-    "branch": "feat/rate-limit",
-    "confidence": 90,
-    "prompt": "add rate limiting to the public API"
+### 1. The API agent opens the work
+
+Check for another writer, then record the actual user request:
+
+```javascript
+check_activity({workspace: "example-app"})
+add_node({
+  workspace: "example-app", branch: "agent-api",
+  node_type: "goal", status: "active",
+  title: "Validate create-item requests",
+  prompt: "Add request validation and tests for the create-item endpoint."
+})
+```
+
+Save the returned `id` as `GOAL_ID`. Before implementation, record the choice:
+
+```javascript
+log_decision({
+  workspace: "example-app", branch: "agent-api",
+  parent_node_id: "GOAL_ID",
+  title: "Choose the validation boundary",
+  rationale: "Reject malformed requests before they reach the service layer.",
+  chosen_option: {
+    title: "Validate at the HTTP boundary",
+    description: "Return 422 with stable field error codes."
   },
-  "node_type": "goal",
-  "status": "pending",
-  "title": "Rate limit the public API",
-  "updated_at": "2026-09-02T10:15:00-04:00"
-}
+  rejected_options: [{
+    title: "Validate after the database write",
+    reason: "The service would receive invalid input and rely on rollback."
+  }]
+})
 ```
 
-Maps and keys are sorted and the file ends with a newline, so two machines holding
-the same graph write byte-identical files and a diff shows only what changed.
-`metadata` is the expanded form of the database's `metadata_json` string so diffs
-stay readable.
+Save `decision_id` as `DECISION_ID`. The helper creates a decision and its option nodes, with `chosen` and `rejected` edges. Record the action and connect it:
 
-An `edges` entry is the same idea. `edge_id` is a hash of
-`(from_change_id, to_change_id, edge_type)`, so the same edge created on two
-machines lands under one key.
+```javascript
+add_node({
+  workspace: "example-app", branch: "agent-api",
+  node_type: "action", status: "active",
+  title: "Implement request validation at the route boundary",
+  files: ["src/http/items.ts"]
+})
+add_edge({
+  workspace: "example-app", branch: "agent-api",
+  from_node_id: "DECISION_ID", to_node_id: "API_ACTION_ID",
+  rationale: "Implement the selected validation boundary"
+})
+```
 
-A deleted record is not dropped. It is rewritten with `deleted_at` set (a
-tombstone) and keeps its last fields. That way a deletion reaches machines that
-already have the record, and `git log` still shows what was deleted.
+`API_ACTION_ID` is the ID returned by `add_node`. Send the test agent the workspace and `DECISION_ID`, along with its assigned files. A title alone is harder to follow than a linkable node.
 
-## Why one file
+### 2. The test agent reads before writing
 
-0.17 kept one small JSON file per record under `.deciduous/sync/`. The reasoning was
-that two people adding records never touch the same file, so git merges their
-branches with no conflict at all, and `git log -- .deciduous/sync/nodes/<id>.json`
-is the history of one decision.
+```javascript
+check_activity({workspace: "example-app", branches: 30})
+query_nodes({
+  workspace: "example-app", branch: "agent-api",
+  type: "decision", search: "validation", limit: 10
+})
+show_node({node_id: "DECISION_ID"})
+```
 
-Both of those are true. They were not worth what they cost:
+`query_nodes` returns summaries. `show_node` supplies the description, metadata, and edge rationales. Read those details before treating a title as an agreed contract.
 
-| | Directory of records (0.17) | One file (0.18) |
-|---|---|---|
-| A real graph on disk | 2,781 files, 11 MB of mostly directory overhead | one file, ~1 MB |
-| `git status` after a sync | a wall of paths | one path |
-| A PR that touches the graph | hundreds of files in the diff | one file |
-| Reading the graph | `read_dir` + open + parse per record | one read, one parse |
-| A record's file renamed, or two files claiming one id | possible, and has to be detected and reported | not expressible |
-| Concurrent adds on two branches | merge with no conflict | git conflict, resolved by the merge driver |
+The test agent uses the API agent's decision:
 
-The last row is the trade. Adding a record used to be conflict-free; now every
-concurrent change collides in git. That turned the merge driver from a nicety into
-the mechanism, which is the honest place for it to be: the driver was already
-required for the case people actually hit (two people editing the same decision),
-and a mechanism exercised on every merge is one you find out about quickly, rather
-than one that quietly rots until the day it matters.
+```javascript
+log_observation({
+  workspace: "example-app", branch: "agent-tests",
+  title: "Use the API agent's field error contract in integration tests",
+  description: "Assert status 422 and stable error codes, without coupling tests to message wording.",
+  related_to: "GOAL_ID",
+  took_from: "DECISION_ID",
+  why: "The boundary decision defines the public response; a second contract would make the tests disagree with the implementation."
+})
+```
 
-`deciduous init` and `deciduous update` add
-`.deciduous/graph.json linguist-generated=true` to `.gitattributes`, so GitHub folds
-the file by default in pull request diffs. It is still there to expand and review.
+Save the returned `id` as `BORROW_ID`. `took_from` creates an edge from the source decision to this observation. It accepts a node UUID or a full `change_id`, within the same workspace, including a source on another branch. Use the full identifier, not a shortened display prefix.
 
-## The workflow
+### 3. The test agent implements and reports evidence
+
+```javascript
+add_node({
+  workspace: "example-app", branch: "agent-tests",
+  node_type: "action", status: "active",
+  title: "Cover invalid create-item requests",
+  files: ["tests/items.test.ts"]
+})
+add_edge({
+  workspace: "example-app", branch: "agent-tests",
+  from_node_id: "BORROW_ID", to_node_id: "TEST_ACTION_ID",
+  rationale: "Test the shared error contract"
+})
+```
+
+After running the tests, record the actual command, result, and limitations. This example assumes the named tests passed:
+
+```javascript
+close_thread({
+  workspace: "example-app", branch: "agent-tests",
+  parent_node_id: "TEST_ACTION_ID",
+  title: "Invalid requests return the agreed field errors",
+  description: "npm test -- tests/items.test.ts passed all 8 cases. Checked missing name, invalid quantity, and unknown fields. Full-suite run remains for integration.",
+  success: true
+})
+```
+
+The API agent records its own implementation outcome under `API_ACTION_ID`. Neither agent marks the shared goal complete until the coordinator has integrated the branches and verified the combined result. Deciduous does not merge code or run tests on your behalf.
+
+## Read between milestones
+
+Call `check_activity` before a burst of writes and after each milestone. Its `sessions` list shows unexpired write leases, not every running agent. Its `branches` list shows recent branch nodes even after the writer's lease expires; `branches_total` tells you whether the list is truncated.
+
+The default is 20 branches, with a maximum of 200. Follow interesting nodes with `show_node`. Use `query_nodes` when you need a particular type or a search term.
+
+## Treat locks as coordination
+
+The default advisory lock key is `(workspace, branch)`, with a ten-second lease. Another write from the same MCP session renews it. Sessions on different branches can write at once; a conflicting session gets an error identifying the current holder.
+
+On a conflict, read `check_activity`, wait for the other writer to finish, and retry with the same intended branch. Do not invent a new branch name to bypass a teammate's ownership. Missing `branch` values share the empty-branch lock bucket. A server operator can configure a workspace-wide lock, which makes all branches contend.
+
+These locks do not protect source files, reserve a task for the duration of an agent session, or prevent raw database/import operations. Keep file ownership and code review in your team workflow.
+
+## Watch the conversation in the graph
+
+With the Deciduous 1.0 CLI configured for this workspace:
 
 ```bash
-git pull
-deciduous sync              # 1. import their records  2. export anything missing  3. refresh docs/graph-data.json
-# ... work; every add/link/status/delete writes the file immediately ...
-git add .deciduous/graph.json docs/graph-data.json
-git commit -m "graph: chose token bucket over leaky bucket"
-git push
+deciduous remote watch --types decision,observation,outcome
+deciduous remote watch --branch agent-api --edges
 ```
 
-`deciduous sync --check` reports what is pending and exits 1 if anything is, which
-makes it a usable pre-push hook. `--no-pages` skips the GitHub Pages export.
+The feed quotes titles and distinguishes updates from new nodes. It reconnects, but it does not replay events missed while disconnected. Query the graph after a gap. Do not count event frames as completed tasks.
 
-The AI assistant templates (`/sync`, `/recover`, `/decision`) tell the assistant to
-run `deciduous sync` at session start and after any pull, and to use change_id
-prefixes when linking to another person's nodes.
-
-## How reconcile decides
-
-For each kind (nodes, themes, edges, tags), `deciduous sync` compares the file to
-the database by `change_id`:
-
-| File | Database | Result |
-|------|----------|--------|
-| record | missing | import (gets a fresh local id) |
-| missing | row | export |
-| record newer (`updated_at`) | row older | update the row |
-| record older | row newer | rewrite the record |
-| tombstone at or after the row's `updated_at` | row | delete locally |
-| tombstone before the row's `updated_at` | row | the row was edited after the delete: rewrite the record (resurrect) |
-
-Edges import once both endpoints exist locally. An edge whose endpoint has not
-arrived yet is reported as pending and imports on a later sync. An edge that points
-at a tombstoned node is skipped.
-
-Four details keep this honest:
-
-- On an `updated_at` tie the file wins if the content differs. A merge-driver
-  result keeps the winning side's `updated_at` but carries fields from both
-  sides, and the database only has ours.
-- A `graph.json` that does not parse stops the run. It is never treated as an
-  empty graph, because that would export every local row over whatever is
-  actually in there.
-- A record filed under a key that disagrees with its own `change_id` (a hand
-  edit) is reported and never written over.
-- A record the database refuses (a constraint violation, say) is listed under
-  "the database refused a record" and the rest of the run still completes.
-  Same-named themes created on two machines before syncing are folded first:
-  the smaller `change_id` becomes canonical everywhere and the other's tags
-  are re-pointed to it.
-
-Write-through follows the same rule in the other direction. When a local
-`status`, `link`, or `tag` writes its record, it merges with whatever is already
-in the file rather than replacing it, so a teammate's version that was pulled but
-not yet synced into the database keeps its fields.
-
-A sync that exports thousands of records rewrites `graph.json` once, not once per
-record: `reconcile` runs inside `RecordStore::batch`, which keeps the document in
-memory and writes on the way out.
-
-Nothing here depends on the order records are read, so `deciduous sync` is
-idempotent: a second run right after the first reports "already agree".
-
-## Two people change the graph
-
-Because everyone writes one file, git reports a conflict on every concurrent
-change — and then never shows it to you, because `deciduous init`, `update`, and
-`sync` register a merge driver in the clone's git config and `.gitattributes`
-routes the file through it:
-
-```text
-.gitattributes:   .deciduous/graph.json merge=deciduous linguist-generated=true
-git config:       merge.deciduous.driver = deciduous merge-record %O %A %B
-```
-
-Git hands the driver the common ancestor of the file (`%O`) along with both sides.
-The driver merges the two documents **record by record**:
-
-| Situation | Result |
-|-----------|--------|
-| Only one side has a record | keep it — both people's new nodes survive |
-| Both sides have it, unchanged | keep it |
-| Both sides changed it | merge field by field, below |
-| One side dropped it from the map, the other left it alone | it goes |
-| One side dropped it, the other edited it | the edit wins |
-
-For the one record both sides changed, the ancestor is the fingerprint that tells a
-one-sided change from a real collision:
-
-| Situation | Result |
-|-----------|--------|
-| Only one side changed a field | that side's value |
-| Both changed `metadata` | merged key by key with the same rules (Alice's `confidence` and Bob's `commit` both survive) |
-| Both changed the same field to different values | the side whose record has the later `updated_at` |
-| `updated_at` / `deleted_at` | the later one; `created_at` the earlier |
-| One side deleted, the other edited **after** the delete | the edit wins, the record lives |
-| One side deleted, the other edited **before** the delete | the tombstone stands, keeping the edited fields |
-| Both sides created the record independently (no ancestor) | every differing field is a collision: later `updated_at` wins, `metadata` still unions |
-
-The driver exits non-zero if either side is not valid JSON, and git then falls back
-to an ordinary conflict.
-
-Git config is per clone, so a clone that has never run `deciduous sync` (or a GitHub
-web merge) can still produce conflict markers inside `graph.json`. That is not
-fatal: `deciduous sync` reconstructs both sides from the markers, applies the same
-merge (using the `|||||||` base section when git's `merge.conflictStyle` is `diff3`
-or `zdiff3`, otherwise a two-way merge), rewrites the file, and imports the result.
-`deciduous sync --check` reports it and exits 1 without touching the file.
-
-`docs/graph-data.json` is a generated export and contains local ids. If it
-conflicts, take either side and run `deciduous sync` to regenerate it.
-
-## Where writes come from
-
-The graph file is written by the database layer, so every entry point publishes: the
-CLI, the MCP server (`add_node`, `link_nodes`, `update_status`, `delete_node` and
-the rest), the `deciduous pivot`/`supersede` archaeology commands, and the HTTP API
-daemon if a `graph.json` sits next to a graph's database. A write to the file that
-fails is reported on stderr and never fails the database write; the next
-`deciduous sync` exports whatever is missing.
-
-## Upgrading
-
-From **0.17** (`.deciduous/sync/` full of per-record files): run `deciduous update`
-and then `deciduous sync`. The first sync folds every record into `graph.json` and
-deletes the directory. A record the file already has in a *newer* version is not
-overwritten by the older file, so folding in a directory that arrived with a pull
-does not lose the pulled work. If any file will not parse, the directory is kept and
-the offending files are listed, so nothing is dropped silently. Afterwards
-`git rm -r .deciduous/sync`.
-
-From **pre-0.17** (`.deciduous/sync/events/*.jsonl` and `checkpoint.json`): the same
-`deciduous sync` replays them, writes the result into `graph.json`, and deletes the
-legacy files. Lines that held two JSON objects glued together (a bug in the old
-appender) are split and both objects recovered.
-
-`deciduous events …` still works as a deprecated alias for the equivalent
-`deciduous sync` behaviour. The `diff export` / `diff apply` patch commands were
-removed earlier; `.deciduous/patches/` is no longer read.
-
-## Not synced (yet)
-
-- **Documents** (`.deciduous/documents/`): attachment metadata and files stay local.
-- **Sessions and the command log**: local by design.
-- **Roadmap items**: synced through `ROADMAP.md` itself.
+`--url` prints a WebSocket URL containing the bearer token. Avoid it in screenshots, logs, and shared terminals. See [Troubleshooting](content/troubleshooting.md) for version and connection checks.

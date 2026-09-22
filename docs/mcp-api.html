@@ -1,282 +1,368 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-docs-generated="true">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MCP API Reference - Deciduous</title>
-    <style>
-      * { box-sizing: border-box; margin: 0; padding: 0; }
-      body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #ffffff; color: #24292f; line-height: 1.6; }
-      .container { max-width: 1400px; margin: 0 auto; padding: 60px 20px; }
-      .narrow { max-width: 900px; margin: 0 auto; }
-      .top-nav { display: flex; justify-content: center; gap: 30px; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #d0d7de; }
-      .top-nav a { color: #57606a; text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.15s; }
-      .top-nav a:hover { color: #0969da; }
-      .top-nav a.active { color: #0969da; }
-      header { text-align: center; margin-bottom: 40px; }
-      header h1 { font-size: 2.4rem; font-weight: 700; color: #24292f; margin-bottom: 8px; letter-spacing: -0.5px; }
-      .tagline { font-size: 1rem; color: #57606a; }
-      section { margin-top: 40px; padding-top: 30px; border-top: 1px solid #d0d7de; }
-      h2 { font-size: 1.4rem; color: #24292f; margin-bottom: 16px; }
-      p { color: #57606a; margin-bottom: 10px; font-size: 0.93rem; }
-      a { color: #0969da; text-decoration: none; }
-      a:hover { text-decoration: underline; }
-      code { background: #f6f8fa; padding: 2px 5px; border-radius: 3px; font-family: "SF Mono", Consolas, monospace; font-size: 0.85em; }
-      ul { margin: 8px 0 12px 20px; color: #57606a; font-size: 0.92rem; }
-      li { margin-bottom: 4px; }
-
-      /* Tool cards */
-      .tool-card { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 10px; padding: 16px 20px; margin: 12px 0; }
-      .tool-name { font-family: "SF Mono", Consolas, monospace; font-size: 0.95rem; font-weight: 700; color: #0969da; }
-      .tool-desc { color: #57606a; font-size: 0.88rem; margin: 4px 0 0; }
-      .tool-params { margin-top: 10px; }
-      .tool-params table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
-      .tool-params th { text-align: left; padding: 6px 10px; background: #eaeef2; border: 1px solid #d0d7de; font-weight: 600; color: #24292f; }
-      .tool-params td { padding: 6px 10px; border: 1px solid #d0d7de; color: #57606a; }
-      .tool-params code { font-size: 0.85em; }
-      .tag { display: inline-block; font-size: 0.68rem; padding: 2px 7px; border-radius: 10px; font-weight: 600; margin-left: 8px; vertical-align: middle; }
-      .tag-cli { background: #dbeafe; color: #1e40af; }
-      .tag-mcp { background: #dcfce7; color: #166534; }
-
-      /* Grid for compact tools */
-      .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-      @media (max-width: 700px) { .tool-grid { grid-template-columns: 1fr; } }
-
-      /* Architecture table */
-      .arch-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.88rem; }
-      .arch-table th { text-align: left; padding: 8px 12px; background: #f6f8fa; border: 1px solid #d0d7de; font-weight: 600; }
-      .arch-table td { padding: 8px 12px; border: 1px solid #d0d7de; color: #57606a; }
-
-      footer { text-align: center; padding: 40px 0; margin-top: 40px; color: #6e7781; font-size: 0.9rem; }
-      footer a { color: #0969da; text-decoration: none; }
-    </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shared graph reference · Deciduous docs</title>
+<meta name="description" content="Use the HTTP MCP server for an agent team&#39;s day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that serv">
+<link rel="canonical" href="https://deciduous.dev/tutorial/reference.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Shared graph reference · Deciduous docs"><meta property="og:description" content="Use the HTTP MCP server for an agent team&#39;s day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that serv"><meta property="og:url" content="https://deciduous.dev/tutorial/reference.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="tutorial/style.css"><script src="tutorial/docs.js" defer></script>
 </head>
-<body>
-    <div class="container">
-      <div class="narrow">
-        <nav class="top-nav">
-          <a href="tutorial/introduction/what-is-deciduous.html">Tutorial</a>
-          <a href="remote.html">Shared Graph</a>
-          <a href="mcp.html" class="active">MCP</a>
-          <a href="story.html">Story</a>
-          <a href="demo/">Live Graph</a>
-          <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
-        </nav>
-
-        <header>
-          <h1>MCP API Reference</h1>
-          <p class="tagline">All 31 tools. Parameters, types, CLI equivalents.<br><a href="mcp.html">&larr; Back to Quick Start &amp; Tutorial</a></p>
-        </header>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Graph CRUD</h2>
-
-          <div class="tool-card">
-            <span class="tool-name">add_node</span><span class="tag tag-cli">deciduous add</span>
-            <p class="tool-desc">Create a node in the decision graph.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-              <tr><td><code>node_type</code></td><td>string</td><td>Yes</td><td>goal, decision, option, action, outcome, observation, revisit</td></tr>
-              <tr><td><code>title</code></td><td>string</td><td>Yes</td><td>Node title</td></tr>
-              <tr><td><code>description</code></td><td>string</td><td></td><td>Longer description</td></tr>
-              <tr><td><code>confidence</code></td><td>int</td><td></td><td>0-100</td></tr>
-              <tr><td><code>prompt</code></td><td>string</td><td></td><td>Verbatim user prompt</td></tr>
-              <tr><td><code>files</code></td><td>string</td><td></td><td>Comma-separated file paths</td></tr>
-              <tr><td><code>branch</code></td><td>string</td><td></td><td>Git branch (auto-detected)</td></tr>
-              <tr><td><code>commit</code></td><td>string</td><td></td><td>Commit hash or "HEAD"</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-card">
-            <span class="tool-name">link_nodes</span><span class="tag tag-cli">deciduous link</span>
-            <p class="tool-desc">Create an edge between two nodes.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-              <tr><td><code>from_id</code></td><td>int</td><td>Yes</td><td>Source node ID</td></tr>
-              <tr><td><code>to_id</code></td><td>int</td><td>Yes</td><td>Target node ID</td></tr>
-              <tr><td><code>rationale</code></td><td>string</td><td></td><td>Why this connection exists</td></tr>
-              <tr><td><code>edge_type</code></td><td>string</td><td></td><td>leads_to, requires, chosen, rejected, blocks, enables, took_from (a borrow: from the node you took from, to your node that used it; crosses branches)</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">unlink_nodes</span><span class="tag tag-cli">deciduous unlink</span><p class="tool-desc">Remove an edge. Params: <code>from_id</code>, <code>to_id</code> (both required)</p></div>
-            <div class="tool-card"><span class="tool-name">delete_node</span><span class="tag tag-cli">deciduous delete</span><p class="tool-desc">Delete a node + edges. Params: <code>node_id</code> (req), <code>dry_run</code> (bool)</p></div>
-            <div class="tool-card"><span class="tool-name">update_status</span><span class="tag tag-cli">deciduous status</span><p class="tool-desc">Change status. Params: <code>node_id</code>, <code>status</code> (both required)</p></div>
-            <div class="tool-card"><span class="tool-name">update_prompt</span><span class="tag tag-cli">deciduous prompt</span><p class="tool-desc">Set prompt text. Params: <code>node_id</code>, <code>prompt</code> (both required)</p></div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Querying</h2>
-
-          <div class="tool-card">
-            <span class="tool-name">list_nodes</span><span class="tag tag-cli">deciduous nodes</span>
-            <p class="tool-desc">List nodes with optional filters.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Description</th></tr>
-              <tr><td><code>branch</code></td><td>string</td><td>Filter by git branch</td></tr>
-              <tr><td><code>node_type</code></td><td>string</td><td>Filter by type</td></tr>
-              <tr><td><code>status</code></td><td>string</td><td>Filter by status</td></tr>
-              <tr><td><code>theme</code></td><td>string</td><td>Filter by theme name</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-card">
-            <span class="tool-name">search_nodes</span><span class="tag tag-mcp">MCP-only</span>
-            <p class="tool-desc">Full-text search across titles, descriptions, and prompts.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-              <tr><td><code>query</code></td><td>string</td><td>Yes</td><td>Search text</td></tr>
-              <tr><td><code>node_type</code></td><td>string</td><td></td><td>Filter results by type</td></tr>
-              <tr><td><code>branch</code></td><td>string</td><td></td><td>Filter results by branch</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">list_edges</span><span class="tag tag-cli">deciduous edges</span><p class="tool-desc">All edges. No params.</p></div>
-            <div class="tool-card"><span class="tool-name">show_node</span><span class="tag tag-cli">deciduous show</span><p class="tool-desc">Detailed node view. Param: <code>node_id</code> (req)</p></div>
-            <div class="tool-card"><span class="tool-name">get_graph</span><span class="tag tag-cli">deciduous graph</span><p class="tool-desc">Full graph JSON. No params.</p></div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Analysis</h2>
-
-          <div class="tool-card">
-            <span class="tool-name">trace_chain</span><span class="tag tag-mcp">MCP-only</span>
-            <p class="tool-desc">BFS traversal from a node. Returns full connected subgraph with depth.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-              <tr><td><code>node_id</code></td><td>int</td><td>Yes</td><td>Start node</td></tr>
-              <tr><td><code>max_depth</code></td><td>int</td><td></td><td>0 = unlimited</td></tr>
-              <tr><td><code>direction</code></td><td>string</td><td></td><td>both, outgoing, incoming</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-card">
-            <span class="tool-name">get_node_context</span><span class="tag tag-mcp">MCP-only</span>
-            <p class="tool-desc">Node's full neighborhood: parents, children, siblings, edges.</p>
-            <div class="tool-params"><table><tr><th>Param</th><th>Type</th><th>Required</th></tr><tr><td><code>node_id</code></td><td>int</td><td>Yes</td></tr></table></div>
-          </div>
-
-          <div class="tool-card">
-            <span class="tool-name">get_timeline</span><span class="tag tag-cli">deciduous archaeology timeline</span>
-            <p class="tool-desc">Chronological view, newest first.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Description</th></tr>
-              <tr><td><code>limit</code></td><td>int</td><td>Max nodes (default 50, 0=all)</td></tr>
-              <tr><td><code>node_type</code></td><td>string</td><td>Filter by type</td></tr>
-              <tr><td><code>branch</code></td><td>string</td><td>Filter by branch</td></tr>
-              <tr><td><code>since</code></td><td>string</td><td>YYYY-MM-DD cutoff</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">get_pulse</span><span class="tag tag-cli">deciduous pulse</span><p class="tool-desc">Graph health: counts, active goals, orphans. Param: <code>branch</code></p></div>
-            <div class="tool-card"><span class="tool-name">find_orphans</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">Nodes violating connection rules. No params.</p></div>
-            <div class="tool-card"><span class="tool-name">get_branch_summary</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">All nodes on a branch, by type. Param: <code>branch</code> (req)</p></div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Sessions</h2>
-
-          <div class="tool-card">
-            <span class="tool-name">start_session</span><span class="tag tag-mcp">MCP-only</span>
-            <p class="tool-desc">Begin a conversation session. Creates root goal; all add_node calls auto-associate.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Required</th><th>Description</th></tr>
-              <tr><td><code>name</code></td><td>string</td><td>Yes</td><td>Session name ("cowork: auth refactor")</td></tr>
-              <tr><td><code>goal_title</code></td><td>string</td><td>Yes</td><td>Root goal title</td></tr>
-              <tr><td><code>goal_prompt</code></td><td>string</td><td></td><td>Original user prompt (verbatim)</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">end_session</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">Close active session. Param: <code>summary</code> (optional)</p></div>
-            <div class="tool-card"><span class="tool-name">resume_session</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">Reconnect to a previous session. Param: <code>session_id</code> (req)</p></div>
-            <div class="tool-card"><span class="tool-name">get_session</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">View session + nodes. Param: <code>session_id</code> (omit = current)</p></div>
-            <div class="tool-card"><span class="tool-name">list_sessions</span><span class="tag tag-mcp">MCP-only</span><p class="tool-desc">All sessions. Param: <code>active_only</code> (bool)</p></div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Documents &amp; Themes</h2>
-
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">attach_document</span><span class="tag tag-cli">deciduous doc attach</span><p class="tool-desc">Attach file to node. Params: <code>node_id</code>, <code>file_path</code> (req), <code>description</code></p></div>
-            <div class="tool-card"><span class="tool-name">list_documents</span><span class="tag tag-cli">deciduous doc list</span><p class="tool-desc">List attachments. Param: <code>node_id</code> (omit = all)</p></div>
-            <div class="tool-card"><span class="tool-name">create_theme</span><span class="tag tag-cli">deciduous themes create</span><p class="tool-desc">Create theme. Params: <code>name</code> (req), <code>color</code>, <code>description</code></p></div>
-            <div class="tool-card"><span class="tool-name">list_themes</span><span class="tag tag-cli">deciduous themes list</span><p class="tool-desc">All themes. No params.</p></div>
-            <div class="tool-card"><span class="tool-name">tag_node</span><span class="tag tag-cli">deciduous tag add</span><p class="tool-desc">Tag a node. Params: <code>node_id</code>, <code>theme</code> (both req)</p></div>
-            <div class="tool-card"><span class="tool-name">untag_node</span><span class="tag tag-cli">deciduous tag remove</span><p class="tool-desc">Untag a node. Params: <code>node_id</code>, <code>theme</code> (both req)</p></div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Export</h2>
-
-          <div class="tool-card">
-            <span class="tool-name">export_dot</span><span class="tag tag-cli">deciduous dot</span>
-            <p class="tool-desc">Export graph as DOT format for Graphviz visualization.</p>
-            <div class="tool-params"><table>
-              <tr><th>Param</th><th>Type</th><th>Description</th></tr>
-              <tr><td><code>roots</code></td><td>string</td><td>Root node IDs (comma-separated, traverses children)</td></tr>
-              <tr><td><code>nodes</code></td><td>string</td><td>Specific IDs or ranges ("1-11", "1,3,5")</td></tr>
-              <tr><td><code>title</code></td><td>string</td><td>Graph title</td></tr>
-              <tr><td><code>rankdir</code></td><td>string</td><td>TB or LR</td></tr>
-            </table></div>
-          </div>
-
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">generate_writeup</span><span class="tag tag-cli">deciduous writeup</span><p class="tool-desc">PR writeup. Params: <code>title</code>, <code>roots</code>, <code>nodes</code>, <code>no_dot</code>, <code>no_test_plan</code></p></div>
-            <div class="tool-card"><span class="tool-name">events_status</span><span class="tag tag-cli">deciduous events status</span><p class="tool-desc">Multi-user sync status. No params.</p></div>
-          </div>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Shared server</h2>
-          <p>This reference is the embedded server (<code>deciduous mcp</code>, stdio, one SQLite file). The <a href="remote.html">shared graph server</a> is a separate HTTP endpoint with its own 18 tools; the ones without an embedded equivalent are below. Every call takes <code>workspace</code>; every write takes <code>branch</code>.</p>
-          <div class="tool-grid">
-            <div class="tool-card"><span class="tool-name">check_activity</span><p class="tool-desc">Active write sessions in a workspace (branch, client, version, is_you, seconds left on the lease) and <code>branches</code>: the last node on each of the most recently written branches with who holds its lock, plus <code>branches_total</code>. Params: <code>workspace</code> (req), <code>branches</code> (integer, default 20, max 200: how many branches to list).</p></div>
-            <div class="tool-card"><span class="tool-name">log_observation</span><p class="tool-desc">Observation node in one call. Params: <code>title</code> (req), <code>description</code>, <code>related_to</code> (UUID or change_id), <code>took_from</code> (UUID or change_id of the node borrowed from; also writes a <code>took_from</code> edge), <code>why</code> (the edge's rationale: what made the borrowed thing better), <code>tags</code>, <code>branch</code>.</p></div>
-            <div class="tool-card"><span class="tool-name">log_decision</span><p class="tool-desc">Decision, its options, and chosen/rejected edges atomically. Params: <code>title</code>, <code>chosen_option</code> (req), <code>rejected_options</code>, <code>rationale</code>, <code>parent_node_id</code>, <code>confidence</code>, <code>branch</code>.</p></div>
-            <div class="tool-card"><span class="tool-name">list_workspaces</span><p class="tool-desc">Every workspace on the server, with size and last write. No params.</p></div>
-            <div class="tool-card"><span class="tool-name">ask_graph</span><p class="tool-desc">A question in prose, answered from the nodes. Params: <code>question</code> (req), <code>scope</code>, <code>include_context</code>, <code>workspace</code> (<code>"*"</code> for all).</p></div>
-            <div class="tool-card"><span class="tool-name">capture_conversation_turn</span><p class="tool-desc">One conversation turn as a subgraph: goal, observations, options, decision, action, outcome, linked. Params: <code>summary</code> (req), <code>goal</code>, <code>observations</code>, <code>options_considered</code>, <code>decision</code>, <code>action</code>, <code>outcome</code>, <code>parent_node_id</code>, <code>confidence</code>, <code>branch</code>.</p></div>
-          </div>
-          <p>Events are not a tool. <code>GET /events?workspace=&lt;name&gt;</code> (or <code>*</code>) on the same host is a WebSocket; one JSON frame per node insert or update and per edge insert, carrying <code>node_type</code>, <code>status</code>, <code>title</code>, <code>branch</code>, <code>change_id</code>. <code>deciduous remote watch</code> is the client.</p>
-        </section>
-
-        <!-- =========================================================== -->
-        <section>
-          <h2>Architecture</h2>
-          <p>Functional core, imperative shell. Everything except the server loop is testable without IO.</p>
-
-          <table class="arch-table">
-            <tr><th>Module</th><th>Role</th><th>IO</th></tr>
-            <tr><td><code>protocol.rs</code></td><td>JSON-RPC 2.0 + MCP message types, parsing, constructors</td><td>None</td></tr>
-            <tr><td><code>tools.rs</code></td><td>31 tool definitions with JSON Schema parameters</td><td>None</td></tr>
-            <tr><td><code>handlers.rs</code></td><td>Tool dispatch: (Database, Value) &rarr; Result&lt;Value&gt;</td><td>Database</td></tr>
-            <tr><td><code>query.rs</code></td><td>BFS, node context, timeline, pulse, orphans (pure)</td><td>None</td></tr>
-            <tr><td><code>mod.rs</code></td><td>Stdin/stdout loop, session state, MCP lifecycle</td><td>Stdin/stdout</td></tr>
-          </table>
-
-          <p>108 MCP-specific tests. 272 total across the codebase.</p>
-        </section>
-
-        <footer>
-          <a href="mcp.html">&larr; MCP Tutorial</a> &middot; <a href="index.html">Home</a> &middot; <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
-        </footer>
-      </div>
-    </div>
-</body>
-</html>
+<body data-search-index="tutorial/search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="tutorial/index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="tutorial/index.html">Shared memory</a></li><li><a href="tutorial/quickstart.html">Quickstart</a></li><li><a href="tutorial/local-postgres.html">Local Postgres setup</a></li><li><a href="tutorial/clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="tutorial/teams.html">Two agents, one graph</a></li><li><a href="tutorial/workflow.html">Record the reasoning</a></li><li><a href="tutorial/recovery.html">Recover context</a></li><li><a href="tutorial/evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="tutorial/remote-postgres.html">Remote hosting</a></li><li><a href="tutorial/upgrading.html">Upgrade and migrate</a></li><li><a href="tutorial/troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="tutorial/concepts.html">Graph concepts</a></li><li><a href="tutorial/reference.html" aria-current="page">CLI and API</a></li><li><a href="tutorial/mcp.html">MCP tools</a></li><li><a href="tutorial/architecture.html">Architecture and trust</a></li><li><a href="tutorial/developer.html">Develop Deciduous</a></li><li><a href="tutorial/solo.html">Solo and offline use</a></li><li><a href="tutorial/history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Reference</span><a href="content/reference.md">Read as Markdown</a></div><article><h1 id="shared-graph-reference">Shared graph reference</h1>
+<p>Use the HTTP MCP server for an agent team's day-to-day graph reads and writes. The server stores the shared graph in Postgres. The Rust CLI manages local tools and explicit transfers between that server and a local SQLite database.</p>
+<p>This reference describes Deciduous 1.0. Start with <a href="tutorial/local-postgres.html">local Postgres setup</a>, then <a href="tutorial/clients.html">connect your agents</a>. The <a href="tutorial/mcp.html">MCP guide</a> explains the transport and tool differences.</p>
+<h2 id="which-command-reaches-which-database">Which command reaches which database</h2>
+<table>
+<thead>
+<tr>
+<th>Interface</th>
+<th>Storage it reads or writes</th>
+<th>Intended use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HTTP MCP at <code>/mcp</code></td>
+<td>Shared Postgres</td>
+<td>Team reasoning, cross-branch reads, borrowing, handoffs</td>
+</tr>
+<tr>
+<td><code>deciduous remote status</code>, <code>push</code>, <code>pull</code>, <code>watch</code></td>
+<td>The configured HTTP server; some commands also use local SQLite</td>
+<td>Check connectivity, migrate history, refresh a local graph, watch writes</td>
+</tr>
+<tr>
+<td><code>deciduous add</code>, <code>link</code>, <code>nodes</code>, <code>show</code>, <code>status</code>, <code>graph</code></td>
+<td>Local SQLite</td>
+<td>Offline work or inspection of a pulled copy</td>
+</tr>
+<tr>
+<td><code>deciduous mcp</code></td>
+<td>Local SQLite over stdio</td>
+<td>Optional local-only MCP integration</td>
+</tr>
+<tr>
+<td><code>deciduous serve</code></td>
+<td>Local SQLite</td>
+<td>Local graph viewer</td>
+</tr>
+<tr>
+<td><code>deciduous serve --api</code></td>
+<td>Per-graph SQLite stores</td>
+<td>Separate Rust HTTP API; not the Postgres service</td>
+</tr>
+<tr>
+<td><code>deciduous sync</code></td>
+<td>Local SQLite and <code>.deciduous/graph.json</code></td>
+<td>Optional Git-based sharing, not remote Postgres synchronization</td>
+</tr>
+</tbody>
+</table>
+<p>Configuring <code>[remote]</code> does not reroute ordinary CLI commands or <code>deciduous mcp</code>. A successful local <code>deciduous add</code> is not evidence that your teammates can see the node.</p>
+<h2 id="setup-commands-in-newer-source-builds">Setup commands in newer source builds</h2>
+<p>The onboarding change in the current source checkout adds <code>deciduous setup</code>. It is not included in the published <code>v1.0.0</code> binary. Check whether your build supports it with <code>deciduous setup --help</code>.</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous setup
+</code></pre>
+</div><p>With no flags, this prints the shared Postgres setup and upgrade guide to stdout. It does not open a local graph, write configuration, generate credentials, or start a service.</p>
+<p>To generate a standalone database project instead:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous setup --postgres --output ./deciduous-postgres --port 55432
+</code></pre>
+</div><p>This creates <code>Dockerfile</code>, <code>compose.yaml</code>, <code>README.md</code>, <code>.gitignore</code>, and a private <code>.env</code> in a new directory. It refuses existing output paths and a symlink parent. The parent must already exist. Omit <code>--output</code> and <code>--port</code> to use <code>./deciduous-postgres</code> and port <code>55432</code>.</p>
+<p>Generation does not start Docker or alter a database. The generated Compose project runs Postgres only, with loopback access and a persistent named volume. It does not include the MCP service; agents still need that separate service.</p>
+<p>For released <code>v1.0.0</code> installations, use the current Python helper from the <a href="tutorial/local-postgres.html#generate-just-postgres">Postgres-only setup guide</a>. Both generators use the same templates. Follow the generated README before starting containers or connecting an app.</p>
+<h2 id="workspace-and-branch-arguments">Workspace and branch arguments</h2>
+<p>Use one stable workspace name for the repository, such as <code>example-app</code>, across machines and worktrees. Pass the actual Git branch on writes, such as <code>agent-api</code> or <code>agent-tests</code>.</p>
+<p>Scoped HTTP tools resolve the workspace in this order:</p>
+<ol>
+<li>The <code>X-Deciduous-Workspace</code> request header, if present.</li>
+<li>The tool's <code>workspace</code> argument.</li>
+<li><code>scratch</code>, if neither is present.</li>
+</ol>
+<p>Names are trimmed and lowercased. Path separators and names longer than 128 characters are rejected. Unknown names are created, so a typo can create a second workspace.</p>
+<p><code>query_nodes</code>, <code>get_graph</code>, <code>find_orphans</code>, and <code>ask_graph</code> accept <code>workspace: &quot;*&quot;</code> for cross-project reads when the client is not pinned. <code>check_activity</code> requires one workspace. Scoped writes reject <code>&quot;*&quot;</code>.</p>
+<p>The header is a routing safeguard, not an access-control boundary. The shared bearer token grants access to the service's data. <code>list_workspaces</code> and ID-based reads are not confined by a workspace header. See <a href="tutorial/architecture.html#security-boundaries">security boundaries</a>.</p>
+<h2 id="shared-http-mcp-tools">Shared HTTP MCP tools</h2>
+<p>The server registers 18 tools. Discover their current schemas with your MCP client's <code>tools/list</code>; the local stdio server exposes a different set.</p>
+<h3 id="read-and-recover">Read and recover</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Arguments</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>list_workspaces</code></td>
+<td>None</td>
+<td>Workspace names and live node/edge counts</td>
+</tr>
+<tr>
+<td><code>check_activity</code></td>
+<td><code>workspace</code>; optional <code>branches</code> from 0 to 200, default 20</td>
+<td>Active write leases and the newest created node on each returned branch</td>
+</tr>
+<tr>
+<td><code>query_nodes</code></td>
+<td><code>workspace</code>; optional <code>type</code>, <code>status</code>, <code>branch</code>, <code>search</code>, <code>limit</code></td>
+<td>Matching live node summaries, newest first; default limit 100</td>
+</tr>
+<tr>
+<td><code>show_node</code></td>
+<td><code>node_id</code></td>
+<td>Full node metadata, descriptions, incoming/outgoing edges, documents, themes</td>
+</tr>
+<tr>
+<td><code>get_graph</code></td>
+<td><code>workspace</code>; optional <code>branch</code></td>
+<td>Graph snapshot with nodes, edges, document metadata, themes, and node-theme links</td>
+</tr>
+<tr>
+<td><code>find_orphans</code></td>
+<td><code>workspace</code></td>
+<td>Non-goal nodes with no incoming edge</td>
+</tr>
+<tr>
+<td><code>get_ancestors</code></td>
+<td><code>node_id</code></td>
+<td>Walk incoming edges, including the starting node</td>
+</tr>
+<tr>
+<td><code>get_descendants</code></td>
+<td><code>node_id</code></td>
+<td>Walk outgoing edges, including the starting node</td>
+</tr>
+<tr>
+<td><code>ask_graph</code></td>
+<td><code>question</code>, <code>workspace</code>; optional <code>scope</code>, <code>include_context</code></td>
+<td>Heuristic search results and optional connected-node context</td>
+</tr>
+</tbody>
+</table>
+<p><code>query_nodes.search</code> matches titles and descriptions. The MCP schema does not expose an offset. Narrow the filters or use <code>get_graph</code> when you need the complete workspace. A branch-filtered graph omits edges whose other endpoint is outside the returned branch; read the workspace graph to inspect cross-branch borrowing.</p>
+<p>The traversal tools currently stop after a budget of 50 visited nodes. They are useful for context recovery, not an exhaustive export of an arbitrarily large graph.</p>
+<p><code>ask_graph</code> uses text matching and inferred type/status filters. It does not call a language model, produce a verified answer, or perform semantic vector search. Its <code>scope</code> values are <code>all</code>, <code>active</code>, <code>decisions</code>, <code>goals</code>, <code>observations</code>, and <code>recent</code>. Read the returned records before drawing a conclusion.</p>
+<h3 id="write-and-connect">Write and connect</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Required arguments</th>
+<th>Useful optional arguments</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add_node</code></td>
+<td><code>node_type</code>, <code>title</code></td>
+<td><code>workspace</code>, <code>branch</code>, <code>description</code>, <code>status</code>, <code>confidence</code>, <code>commit</code>, <code>prompt</code>, <code>files</code></td>
+</tr>
+<tr>
+<td><code>add_edge</code></td>
+<td><code>from_node_id</code>, <code>to_node_id</code></td>
+<td><code>workspace</code>, <code>branch</code>, <code>edge_type</code>, <code>rationale</code></td>
+</tr>
+<tr>
+<td><code>update_node</code></td>
+<td><code>node_id</code></td>
+<td><code>title</code>, <code>description</code>, <code>status</code>, <code>metadata</code>, <code>branch</code></td>
+</tr>
+<tr>
+<td><code>delete_node</code></td>
+<td><code>node_id</code></td>
+<td><code>branch</code></td>
+</tr>
+<tr>
+<td><code>delete_edge</code></td>
+<td><code>from_node_id</code>, <code>to_node_id</code></td>
+<td><code>edge_type</code>, <code>branch</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>add_node</code> returns both <code>id</code> and <code>change_id</code>. Use the returned server UUID <code>id</code> in ordinary node and edge tools. Local integer IDs and local change-ID prefixes are not interchangeable with server IDs.</p>
+<p><code>update_node.metadata</code> replaces the metadata map. Read it first and preserve fields you still need. Its top-level <code>branch</code> selects the write lease; changing the node's recorded branch requires <code>metadata.branch</code>.</p>
+<p><code>delete_node</code> sets a deletion timestamp. <code>delete_edge</code> removes the edge row. Prefer <code>superseded</code> or <code>abandoned</code> for a decision that remains useful history. A routine export is not a backup of deleted records.</p>
+<h3 id="capture-helpers">Capture helpers</h3>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Required arguments</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>log_observation</code></td>
+<td><code>title</code></td>
+<td>Add an observation, optionally connected through <code>related_to</code> and <code>took_from</code>; also accepts <code>description</code>, <code>why</code>, <code>tags</code>, <code>workspace</code>, <code>branch</code></td>
+</tr>
+<tr>
+<td><code>log_decision</code></td>
+<td><code>title</code>, <code>chosen_option</code></td>
+<td>Add a decision with a chosen option and optional rejected options, rationale, parent, confidence, workspace, branch</td>
+</tr>
+<tr>
+<td><code>capture_conversation_turn</code></td>
+<td><code>summary</code></td>
+<td>Add supplied goal, observations, options, decision, action, and outcome structures; optional parent, workspace, branch, confidence</td>
+</tr>
+<tr>
+<td><code>close_thread</code></td>
+<td><code>title</code></td>
+<td>Add an outcome; optional parent, goal to complete, lessons, follow-up goals, success, workspace, branch</td>
+</tr>
+</tbody>
+</table>
+<p><code>log_observation.related_to</code> and <code>took_from</code> accept a full server node UUID or full <code>change_id</code> in the same workspace. <code>why</code> becomes the borrowing edge's rationale. The observation and its edges are written in one transaction.</p>
+<p>The other capture helpers perform multiple writes. Their current implementations do not wrap the entire operation in one transaction. After an error, inspect the graph for partial results before retrying. None of these helpers is a general idempotency endpoint.</p>
+<p><code>log_decision</code> draws <code>chosen</code> and <code>rejected</code> edges from the decision to its option nodes. Use the lower-level tools if your team requires a different connection pattern. <code>close_thread</code> does not finish an MCP session or release a lease through a separate unlock operation.</p>
+<h2 id="vocabulary">Vocabulary</h2>
+<table>
+<thead>
+<tr>
+<th>Node type</th>
+<th>Record</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>goal</code></td>
+<td>The requested result and relevant user prompt</td>
+</tr>
+<tr>
+<td><code>option</code></td>
+<td>An approach worth considering</td>
+</tr>
+<tr>
+<td><code>decision</code></td>
+<td>The choice and its rationale</td>
+</tr>
+<tr>
+<td><code>action</code></td>
+<td>Work planned or performed, with evidence</td>
+</tr>
+<tr>
+<td><code>outcome</code></td>
+<td>What happened after the action</td>
+</tr>
+<tr>
+<td><code>observation</code></td>
+<td>A fact learned during the work</td>
+</tr>
+<tr>
+<td><code>revisit</code></td>
+<td>A decision being reconsidered</td>
+</tr>
+</tbody>
+</table>
+<p>Normal tool statuses are <code>pending</code>, <code>active</code>, <code>completed</code>, <code>rejected</code>, <code>superseded</code>, and <code>abandoned</code>. Imports also preserve legacy <code>feedback</code> nodes and <code>done</code> statuses; new work should use the documented vocabulary above. Confidence is an optional value from 0 to 100, not a measured probability.</p>
+<p>Edge types are <code>leads_to</code>, <code>chosen</code>, <code>rejected</code>, <code>requires</code>, <code>blocks</code>, <code>enables</code>, and <code>took_from</code>. Both endpoints must exist in the same workspace. They may be on different branches. A <code>took_from</code> edge runs from the source idea to the node that reused it.</p>
+<h2 id="cli-remote-commands">CLI remote commands</h2>
+<p>Use the service's base URL for the CLI, without <code>/mcp</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>sh</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-sh">deciduous remote login --url http://127.0.0.1:4000
+deciduous remote init http://127.0.0.1:4000 --workspace example-app
+deciduous remote status
+deciduous remote watch
+</code></pre>
+</div><p>Run repository commands from an initialized project. <code>login</code> reads the token from standard input and keeps it outside the repository. A non-empty <code>DECIDUOUS_MCP_TOKEN</code> environment value takes precedence over the stored credential.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Behavior</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>remote login [--url URL]</code></td>
+<td>Store a token; optional URL verifies it first</td>
+</tr>
+<tr>
+<td><code>remote logout</code></td>
+<td>Remove the stored credential; does not clear a token already set in the environment</td>
+</tr>
+<tr>
+<td><code>remote init URL [--workspace NAME]</code></td>
+<td>Check health/authentication and save <code>[remote]</code> configuration</td>
+</tr>
+<tr>
+<td><code>remote status</code></td>
+<td>Compare local and server node and edge counts; matching counts do not prove identical content</td>
+</tr>
+<tr>
+<td><code>remote pull</code></td>
+<td>Merge server nodes and edges into the local graph; does not retrieve attachment bytes or provide a complete server backup</td>
+</tr>
+<tr>
+<td><code>remote push</code></td>
+<td>Bulk-import the local graph into the server; a controlled migration/backfill operation, not routine synchronization</td>
+</tr>
+<tr>
+<td><code>remote adopt ROOT --url URL --dry-run</code></td>
+<td>Preview configuration of existing <code>.deciduous</code> projects below a directory; omit <code>--dry-run</code> only after reviewing</td>
+</tr>
+<tr>
+<td><code>remote watch</code></td>
+<td>Connect to the event stream, print changes, and reconnect with backoff</td>
+</tr>
+</tbody>
+</table>
+<p>In 1.0, <code>remote watch</code> supports <code>--types outcome,observation</code>, repeated <code>--branch NAME</code>, <code>--edges</code>, and <code>--json</code>. <code>--url</code> and <code>--claude-code</code> print connection information instead of watching; that output contains a token-bearing URL. Keep it out of logs, screenshots, and the decision graph. Older 0.19 builds print a URL by default, so check <code>deciduous --version</code> and <code>deciduous remote watch --help</code>.</p>
+<p><code>remote push</code> can overwrite newer server fields with a stale local copy. <code>remote pull</code> does not reconcile server deletions into a faithful local mirror. Read <a href="tutorial/upgrading.html">upgrading and migrating</a> before using either on valuable history.</p>
+<h2 id="http-endpoints">HTTP endpoints</h2>
+<table>
+<thead>
+<tr>
+<th>Method and path</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>GET /health</code></td>
+<td>Unauthenticated liveness response, <code>ok</code></td>
+</tr>
+<tr>
+<td><code>POST /mcp</code></td>
+<td>Authenticated MCP Streamable HTTP requests</td>
+</tr>
+<tr>
+<td><code>GET /export?workspace=example-app</code></td>
+<td>Authenticated graph snapshot; metadata, not attachment bytes</td>
+</tr>
+<tr>
+<td><code>POST /import</code></td>
+<td>Authenticated bulk import of a local-export-shaped graph</td>
+</tr>
+<tr>
+<td><code>PUT /blob/:sha256</code></td>
+<td>Authenticated raw document upload, verified against its SHA-256 hash</td>
+</tr>
+<tr>
+<td><code>GET /documents/:id</code></td>
+<td>Authenticated document bytes by document ID or content hash</td>
+</tr>
+<tr>
+<td><code>GET /events?workspace=example-app</code></td>
+<td>Authenticated WebSocket upgrade for write notifications</td>
+</tr>
+</tbody>
+</table>
+<p><code>GET /mcp</code> returns 405 because the server does not offer a server-to-client SSE stream. Tool responses arrive through the MCP POST transport. Use <code>/events</code> for live write notifications.</p>
+<p>Imports and blob uploads have a 64 MiB request-body limit. Document reads return 404 for an unknown attachment and 410 when the metadata exists but content is missing. The event stream can miss notifications during disconnects; query the graph after reconnecting.</p>
+<p>See <a href="tutorial/architecture.html">architecture</a> for persistence and security limits, or <a href="tutorial/solo.html">solo and offline use</a> for the local CLI and Git-based workflow.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="tutorial/concepts.html"><span>Previous</span>Graph concepts</a><a href="tutorial/mcp.html"><span>Next</span>MCP tools</a></nav><footer class="article-footer"><a href="index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#which-command-reaches-which-database">Which command reaches which database</a></li><li><a href="#setup-commands-in-newer-source-builds">Setup commands in newer source builds</a></li><li><a href="#workspace-and-branch-arguments">Workspace and branch arguments</a></li><li><a href="#shared-http-mcp-tools">Shared HTTP MCP tools</a></li><li><a href="#vocabulary">Vocabulary</a></li><li><a href="#cli-remote-commands">CLI remote commands</a></li><li><a href="#http-endpoints">HTTP endpoints</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>
