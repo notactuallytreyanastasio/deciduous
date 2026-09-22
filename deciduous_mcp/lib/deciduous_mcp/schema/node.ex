@@ -17,8 +17,13 @@ defmodule DeciduousMcp.Schema.Node do
   @primary_key {:id, :binary_id, autogenerate: true}
   @foreign_key_type :binary_id
 
-  @node_types ~w(goal decision option action outcome observation revisit)
-  @statuses ~w(pending active completed rejected superseded abandoned)
+  # `feedback` and `done` are not part of the documented vocabulary, but both
+  # exist in graphs on disk (one feedback node; 20 nodes carrying status
+  # "done"). They are accepted rather than folded into their obvious synonyms:
+  # rewriting a recorded status to `completed` on the way in would make the
+  # import lossy in a way nothing downstream could detect.
+  @node_types ~w(goal decision option action outcome observation revisit feedback)
+  @statuses ~w(pending active completed rejected superseded abandoned done)
 
   schema "decision_nodes" do
     field :change_id, :string

@@ -10,9 +10,8 @@ defmodule DeciduousMcp.MCP.Prompts.AlwaysCapture do
   supports MCP prompts will receive these instructions without needing
   CLAUDE.md or other out-of-band configuration.
   """
-  use Hermes.Server.Component, type: :prompt
+  use DeciduousMcp.MCP.Component, type: :prompt
 
-  @impl true
   def definition do
     %{
       name: "deciduous_always_on",
@@ -32,7 +31,6 @@ defmodule DeciduousMcp.MCP.Prompts.AlwaysCapture do
     }
   end
 
-  @impl true
   def call(%{arguments: args, server: _frame}) do
     verbosity = (args || %{})["verbosity"] || "full"
     instructions = build_instructions(verbosity)

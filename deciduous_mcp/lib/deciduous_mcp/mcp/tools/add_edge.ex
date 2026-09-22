@@ -1,10 +1,10 @@
 defmodule DeciduousMcp.MCP.Tools.AddEdge do
   @moduledoc "MCP Tool: create a directed edge between two nodes."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.Edges
 
-  @impl true
   def definition do
     %{
       name: "add_edge",
@@ -26,11 +26,17 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
         required: ["from_node_id", "to_node_id"]
       }
     }
+    |> Scope.with_workspace_arg()
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.write_workspace_id(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
 
     attrs = %{
       from_node_id: args["from_node_id"],

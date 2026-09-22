@@ -9,11 +9,11 @@ defmodule DeciduousMcp.MCP.Tools.CloseThread do
   Call this at the end of a conversation when work has concluded, or when
   a particular line of investigation reaches a conclusion.
   """
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.{Nodes, Edges}
 
-  @impl true
   def definition do
     %{
       name: "close_thread",
@@ -63,11 +63,17 @@ defmodule DeciduousMcp.MCP.Tools.CloseThread do
         required: ["title"]
       }
     }
+    |> Scope.with_workspace_arg()
   end
 
-  @impl true
   def call(%{arguments: args, server: frame}) do
-    workspace_id = frame.assigns.workspace_id
+    case Scope.write_workspace_id(frame, args) do
+      {:ok, workspace_id} -> do_call(workspace_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(workspace_id, args) do
     meta = %{} |> maybe_put("branch", args["branch"])
     status = if args["success"] != false, do: "completed", else: "rejected"
 

@@ -1,10 +1,9 @@
 defmodule DeciduousMcp.MCP.Tools.ShowNode do
   @moduledoc "MCP Tool: get detailed info about a single node with its connections."
-  use Hermes.Server.Component, type: :tool
+  use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Nodes
 
-  @impl true
   def definition do
     %{
       name: "show_node",
@@ -20,7 +19,6 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
     }
   end
 
-  @impl true
   def call(%{arguments: %{"node_id" => node_id}}) do
     case Nodes.get_node(node_id, [:edges_from, :edges_to, :documents, :themes]) do
       {:ok, node} ->

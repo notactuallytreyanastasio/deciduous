@@ -5,7 +5,7 @@ defmodule DeciduousMcp.Graph.Workspaces do
   """
   import Ecto.Query
   alias DeciduousMcp.Repo
-  alias DeciduousMcp.Schema.Workspace
+  alias DeciduousMcp.Schema.{Workspace, Node, Edge}
 
   @doc """
   Finds a workspace by name, or creates it if it doesn't exist.
@@ -39,4 +39,74 @@ defmodule DeciduousMcp.Graph.Workspaces do
   def list_workspaces do
     Repo.all(Workspace)
   end
+
+  @doc """
+  Lists every workspace with its live node and edge counts.
+
+  This is the index for the global view: which projects exist, and how much is
+  in each. Counts come from subqueries rather than preloads so a workspace with
+  24MB of graph does not get loaded into memory to be counted.
+  """
+  def list_with_counts do
+    node_counts =
+      from n in Node,
+        where: is_nil(n.deleted_at),
+        group_by: n.workspace_id,
+        select: %{workspace_id: n.workspace_id, count: count(n.id)}
+
+    edge_counts =
+      from e in Edge,
+        group_by: e.workspace_id,
+        select: %{workspace_id: e.workspace_id, count: count(e.id)}
+
+    from(w in Workspace,
+      left_join: n in subquery(node_counts),
+      on: n.workspace_id == w.id,
+      left_join: e in subquery(edge_counts),
+      on: e.workspace_id == w.id,
+      order_by: [desc: coalesce(n.count, 0)],
+      select: %{
+        id: w.id,
+        name: w.name,
+        description: w.description,
+        node_count: coalesce(n.count, 0),
+        edge_count: coalesce(e.count, 0),
+        updated_at: w.updated_at
+      }
+    )
+    |> Repo.all()
+  end
+
+  @max_name_length 128
+
+  @doc """
+  Normalizes a workspace name coming from a header or a tool argument.
+
+  Names are used as a stable key across machines, so they are lowercased and
+  stripped of anything that would make one project addressable under two
+  spellings. Path separators are rejected outright rather than rewritten: a
+  caller sending `/Users/bg/code/blog` has sent a path where a project name was
+  asked for, and silently turning that into `users-bg-code-blog` would scatter
+  one project across several workspaces depending on the machine it was logged
+  from.
+  """
+  def normalize_name(raw) when is_binary(raw) do
+    trimmed = String.trim(raw)
+
+    cond do
+      trimmed == "" ->
+        {:error, :blank}
+
+      String.contains?(trimmed, ["/", "\\"]) ->
+        {:error, :looks_like_a_path}
+
+      String.length(trimmed) > @max_name_length ->
+        {:error, :too_long}
+
+      true ->
+        {:ok, String.downcase(trimmed)}
+    end
+  end
+
+  def normalize_name(_), do: {:error, :not_a_string}
 end
