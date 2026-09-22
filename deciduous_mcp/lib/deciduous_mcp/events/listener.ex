@@ -15,6 +15,17 @@ defmodule DeciduousMcp.Events.Listener do
   tool already uses, kept consistent here rather than inventing a second
   meaning for the same character.
 
+  ## What a frame carries
+
+  A pointer with a label, not the row. For a node: `table`, `op` (INSERT or
+  UPDATE), `workspace`, `id`, `change_id`, `node_type`, `title` (cut at 200
+  characters), `status`, `branch`. For an edge: `table`, `op`, `workspace`,
+  `id`, `edge_type`, `from_change_id`, `to_change_id`, and `branch` taken
+  from the edge's source node, since an edge row has none of its own. The
+  title is there so a watcher can quote what landed instead of counting
+  what kind of thing it was; the first arena's watcher counted, and reported
+  a convention that did not exist.
+
   ## What this does not guarantee
 
   `Postgrex.Notifications` documents its own limit plainly: notifications that
