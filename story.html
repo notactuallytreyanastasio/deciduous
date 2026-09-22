@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>How I Built Myself - The Deciduous Story</title>
+
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="How I Built Myself - The Deciduous Story">
+    <meta name="description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 1,175 decisions over 77 days.">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="article">
+    <meta property="og:url" content="https://deciduous.dev/story.html">
+    <meta property="og:title" content="How I Built Myself - The Deciduous Story">
+    <meta property="og:description" content="The complete chronicle of how Deciduous was built. A decision graph tool that documented its own creation through 1,175 decisions over 77 days.">
+    <meta property="og:image" content="https://deciduous.dev/story-og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://deciduous.dev/story.html">
+    <meta property="twitter:title" content="How I Built Myself - The Deciduous Story">
+    <meta property="twitter:description" content="A decision graph tool that documented its own creation. 1,175 decisions, 1,023 connections, 77 days.">
+    <meta property="twitter:image" content="https://deciduous.dev/story-og.png">
+
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #fafafa;
+            color: #374151;
+            line-height: 1.7;
+        }
+        .top-nav {
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 16px 24px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .top-nav-inner {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .top-nav-brand {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #111827;
+            text-decoration: none;
+        }
+        .top-nav-links {
+            display: flex;
+            gap: 24px;
+        }
+        .top-nav-links a {
+            color: #6b7280;
+            text-decoration: none;
+            font-weight: 500;
+            font-size: 0.95rem;
+            transition: color 0.15s;
+        }
+        .top-nav-links a:hover { color: #3b82f6; }
+        .top-nav-links a.active { color: #3b82f6; }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .hero {
+            text-align: center;
+            padding: 80px 20px 60px;
+            border-bottom: 2px solid #e5e7eb;
+            margin-bottom: 40px;
+        }
+        .hero-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #9ca3af;
+            margin-bottom: 16px;
+        }
+        .hero h1 {
+            font-size: 48px;
+            font-weight: 800;
+            color: #111827;
+            margin: 0 0 20px 0;
+            letter-spacing: -0.03em;
+            line-height: 1.1;
+        }
+        .hero-subtitle {
+            font-size: 18px;
+            color: #6b7280;
+            line-height: 1.7;
+            max-width: 700px;
+            margin: 0 auto;
+        }
+
+        .stats-banner {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            padding: 24px 0;
+            border-bottom: 1px solid #e5e7eb;
+            margin-bottom: 60px;
+            flex-wrap: wrap;
+        }
+        .stat-item { text-align: center; }
+        .stat-num {
+            display: block;
+            font-size: 28px;
+            font-weight: 700;
+            color: #3b82f6;
+            line-height: 1;
+        }
+        .stat-label {
+            font-size: 11px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 6px;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 50px;
+        }
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 19px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: #e5e7eb;
+        }
+
+        .timeline-day {
+            position: relative;
+            margin-top: 60px;
+            margin-bottom: 24px;
+        }
+        .timeline-day::before {
+            content: '';
+            position: absolute;
+            left: -42px;
+            top: 8px;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #3b82f6;
+            border: 4px solid #dbeafe;
+        }
+        .timeline-day.highlight::before {
+            background: #8b5cf6;
+            border-color: #ede9fe;
+        }
+        .timeline-day-date {
+            font-size: 13px;
+            font-weight: 600;
+            color: #3b82f6;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .timeline-day.highlight .timeline-day-date {
+            color: #8b5cf6;
+        }
+        .timeline-day-title {
+            font-size: 28px;
+            font-weight: 700;
+            color: #111827;
+            margin: 4px 0 0 0;
+        }
+
+        .timeline-event {
+            position: relative;
+            margin-bottom: 40px;
+        }
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -42px;
+            top: 24px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #d1d5db;
+        }
+        .event-card {
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .event-header {
+            padding: 20px 24px 16px;
+            border-bottom: 1px solid #f3f4f6;
+        }
+        .event-time {
+            font-size: 12px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .event-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #111827;
+            margin: 4px 0 8px 0;
+        }
+        .event-tags {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .tag {
+            font-size: 11px;
+            font-weight: 500;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background: #f3f4f6;
+            color: #6b7280;
+        }
+        .tag-commit {
+            background: #d1fae5;
+            color: #059669;
+            font-family: ui-monospace, monospace;
+        }
+        .tag-node {
+            background: #ede9fe;
+            color: #7c3aed;
+            font-family: ui-monospace, monospace;
+        }
+        .event-body {
+            padding: 20px 24px 24px;
+            font-size: 15px;
+            line-height: 1.75;
+        }
+        .event-body p { margin-bottom: 16px; }
+        .event-body p:last-child { margin-bottom: 0; }
+        .event-body ul {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+        .event-body li { margin-bottom: 8px; }
+        .event-body strong { color: #111827; }
+        .event-body em { color: #6b7280; }
+        .event-body code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-family: ui-monospace, monospace;
+        }
+
+        .node-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin: 16px 0;
+        }
+        .node-badges {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+        .node-type-badge {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #ffffff;
+            padding: 3px 8px;
+            border-radius: 4px;
+        }
+        .node-type-goal { background: #f59e0b; }
+        .node-type-decision { background: #8b5cf6; }
+        .node-type-action { background: #3b82f6; }
+        .node-type-outcome { background: #22c55e; }
+        .node-type-observation { background: #6366f1; }
+        .node-type-option { background: #06b6d4; }
+        .node-type-revisit { background: #ef4444; }
+        .node-id-badge {
+            font-size: 11px;
+            font-weight: 600;
+            color: #6b7280;
+            background: #e5e7eb;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: ui-monospace, monospace;
+        }
+        .node-card-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #111827;
+        }
+        .node-card-desc {
+            font-size: 14px;
+            color: #6b7280;
+            margin-top: 6px;
+        }
+
+        .commit-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 16px 0;
+            font-family: ui-monospace, monospace;
+            font-size: 13px;
+        }
+        .commit-hash { color: #059669; font-weight: 600; }
+        .commit-message { color: #166534; }
+
+        .quote {
+            margin: 24px 0;
+            padding: 20px 24px;
+            background: #f8fafc;
+            border-left: 4px solid #3b82f6;
+            border-radius: 0 10px 10px 0;
+        }
+        .quote-text {
+            font-size: 15px;
+            font-style: italic;
+            color: #475569;
+            line-height: 1.7;
+        }
+        .quote-cite {
+            display: block;
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 12px;
+            font-style: normal;
+        }
+
+        .option-comparison {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin: 16px 0;
+        }
+        .option-box {
+            border-radius: 10px;
+            padding: 16px 18px;
+            border: 2px solid;
+        }
+        .option-box.chosen {
+            background: #f0fdf4;
+            border-color: #22c55e;
+        }
+        .option-box.rejected {
+            background: #fef2f2;
+            border-color: #fca5a5;
+        }
+        .option-status {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 10px;
+        }
+        .option-box.chosen .option-status { color: #22c55e; }
+        .option-box.rejected .option-status { color: #ef4444; }
+        .option-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #111827;
+            margin-bottom: 6px;
+        }
+        .option-desc {
+            font-size: 13px;
+            color: #6b7280;
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        .option-reason {
+            font-size: 12px;
+            font-style: italic;
+            color: #9ca3af;
+        }
+
+        .decision-grid {
+            display: grid;
+            gap: 12px;
+            margin: 16px 0;
+        }
+        .decision-box {
+            background: #faf5ff;
+            border: 1px solid #e9d5ff;
+            border-radius: 8px;
+            padding: 14px 16px;
+        }
+        .decision-box-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+        .decision-box-id {
+            font-size: 11px;
+            font-weight: 600;
+            color: #7c3aed;
+            font-family: ui-monospace, monospace;
+        }
+        .decision-box-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #581c87;
+        }
+        .decision-box-outcome {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+        }
+
+        .spike-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin: 16px 0;
+        }
+        @media (max-width: 700px) {
+            .spike-grid { grid-template-columns: 1fr; }
+        }
+        .spike-card {
+            background: #fffbeb;
+            border: 1px solid #fde68a;
+            border-radius: 10px;
+            padding: 16px;
+            text-align: center;
+        }
+        .spike-letter {
+            font-size: 11px;
+            font-weight: 700;
+            color: #d97706;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+        }
+        .spike-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #92400e;
+            margin-bottom: 6px;
+        }
+        .spike-desc {
+            font-size: 12px;
+            color: #a16207;
+            margin-bottom: 8px;
+            line-height: 1.4;
+        }
+        .spike-node {
+            font-size: 11px;
+            color: #ca8a04;
+            font-family: ui-monospace, monospace;
+        }
+
+        .release-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin: 16px 0;
+        }
+        @media (max-width: 600px) {
+            .release-grid { grid-template-columns: 1fr; }
+        }
+        .release-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            border-radius: 6px;
+            padding: 10px 14px;
+        }
+        .release-version {
+            font-size: 12px;
+            font-weight: 700;
+            color: #166534;
+            font-family: ui-monospace, monospace;
+        }
+        .release-desc {
+            font-size: 13px;
+            color: #166534;
+        }
+
+        .core-bet {
+            background: #eff6ff;
+            border: 2px solid #93c5fd;
+            border-radius: 12px;
+            padding: 28px 32px;
+            margin-top: 48px;
+        }
+        .core-bet h3 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #1d4ed8;
+            margin: 0 0 16px 0;
+        }
+        .core-bet p {
+            margin-bottom: 16px;
+            color: #1e40af;
+        }
+        .core-bet p:last-child { margin-bottom: 0; }
+
+        .final-stats {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin: 24px 0;
+            flex-wrap: wrap;
+        }
+        .final-stat { text-align: center; }
+        .final-stat-value {
+            display: block;
+            font-size: 36px;
+            font-weight: 800;
+            color: #3b82f6;
+            line-height: 1;
+        }
+        .final-stat-label {
+            font-size: 12px;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 8px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 40px 20px 60px;
+            color: #9ca3af;
+            font-size: 14px;
+        }
+        footer a {
+            color: #6b7280;
+            text-decoration: none;
+        }
+        footer a:hover { color: #3b82f6; }
+
+        @media (max-width: 600px) {
+            .hero h1 { font-size: 32px; }
+            .stats-banner { gap: 24px; }
+            .stat-num { font-size: 24px; }
+            .timeline { padding-left: 40px; }
+            .timeline::before { left: 14px; }
+            .timeline-day::before { left: -32px; width: 12px; height: 12px; }
+            .timeline-event::before { left: -32px; width: 8px; height: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="top-nav-inner">
+            <a href="./" class="top-nav-brand">DECIDUOUS</a>
+            <div class="top-nav-links">
+                <a href="story.html" class="active">Story</a>
+                <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a>
+                <a href="https://crates.io/crates/deciduous">crates.io</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <header class="hero">
+            <div class="hero-label">Told Through Its Own Graph</div>
+            <h1>How I Built Myself</h1>
+            <p class="hero-subtitle">
+                Deciduous is a decision graph tool that documented its own creation.
+                Every node, edge, and pivot point in this story is queryable in the
+                <a href="demo/">live graph</a>. This is the real history, told through
+                <span id="node-count">1,175</span> decisions and <span id="edge-count">1,023</span> connections.
+            </p>
+        </header>
+
+        <div class="stats-banner">
+            <div class="stat-item"><span class="stat-num" id="stat-nodes">1,175</span><span class="stat-label">Nodes</span></div>
+            <div class="stat-item"><span class="stat-num" id="stat-edges">1,023</span><span class="stat-label">Edges</span></div>
+            <div class="stat-item"><span class="stat-num">144</span><span class="stat-label">Goals</span></div>
+            <div class="stat-item"><span class="stat-num">103</span><span class="stat-label">Decisions</span></div>
+            <div class="stat-item"><span class="stat-num">5</span><span class="stat-label">Pivots</span></div>
+            <div class="stat-item"><span class="stat-num">417</span><span class="stat-label">Commits</span></div>
+            <div class="stat-item"><span class="stat-num">77</span><span class="stat-label">Days</span></div>
+        </div>
+
+        <div class="timeline">
+            <!-- ========================================== -->
+            <!-- DAY 1: December 4, 2025 - The Beginning -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 4, 2025</div>
+                <h2 class="timeline-day-title">The Beginning</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">A Different Project Entirely</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">951ba84</span>
+                            <span class="tag">genesis</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            It started with a simple idea: detect "fake lossless" audio files. Someone
+                            takes an MP3 and re-encodes it to FLAC, hoping no one notices the quality loss.
+                        </p>
+                        <div class="commit-card">
+                            <span class="commit-hash">951ba84</span>
+                            <span class="commit-message">initial sketch...lets see what its like to package this up</span>
+                        </div>
+                        <p>
+                            The first commit was modest. A Rust CLI tool called <strong>losselot</strong>
+                            that could parse ID3v2 tags, extract LAME headers, and analyze spectral content.
+                            Within hours it had D3.js reports, GUI mode, and spectral waterfall charts.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAY 2: December 5, 2025 - The Graph Emerges -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 5, 2025</div>
+                <h2 class="timeline-day-title">The Graph Emerges</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">5:09 AM</div>
+                        <h3 class="event-title">Node #1</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1</span>
+                            <span class="tag">decision-graph</span>
+                            <span class="tag">genesis</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            At 5:09 AM, something new appeared. Not code&mdash;a <em>decision</em>.
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#1</span>
+                            </div>
+                            <div class="node-card-title">Test lo-fi detection on charlie.flac</div>
+                        </div>
+                        <p>
+                            This was Node #1. The first entry in what would become a 1,175-node decision graph.
+                            Two minutes later, the first real decision was logged:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-decision">decision</span>
+                                <span class="node-id-badge">#2</span>
+                            </div>
+                            <div class="node-card-title">Lo-fi detection approach</div>
+                            <div class="node-card-desc">How to distinguish MP3 brick-wall cutoff from natural tape/lo-fi rolloff</div>
+                        </div>
+                        <p>Two approaches were weighed:</p>
+                        <div class="option-comparison">
+                            <div class="option-box rejected">
+                                <div class="option-status">REJECTED</div>
+                                <div class="option-title">Temporal Cutoff Variance</div>
+                                <div class="option-desc">Measure how cutoff frequency varies over time. MP3 = fixed, Tape = varies.</div>
+                                <div class="option-reason">More complex, requires per-window tracking</div>
+                            </div>
+                            <div class="option-box chosen">
+                                <div class="option-status">CHOSEN</div>
+                                <div class="option-title">Cross-Frequency Coherence (CFCC)</div>
+                                <div class="option-desc">Measure correlation between adjacent frequency bands. MP3 = sudden decorrelation cliff.</div>
+                                <div class="option-reason">Simpler, works with existing FFT structure</div>
+                            </div>
+                        </div>
+                        <div class="quote">
+                            <div class="quote-text">MP3 encoders apply the same filter everywhere. Analog rolloff is content-dependent.</div>
+                            <cite class="quote-cite">&mdash; Node #10</cite>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">The Decision System Takes Shape</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">fe3840b</span>
+                            <span class="tag">workflow</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The act of logging decisions wasn't just documentation&mdash;it was <em>forcing better thinking</em>.
+                        </p>
+                        <div class="commit-card">
+                            <span class="commit-hash">fe3840b</span>
+                            <span class="commit-message">add claude.md, makefile, and slash commands for dev workflow</span>
+                        </div>
+                        <p>
+                            This commit established the DNA: a CLAUDE.md with decision logging workflow,
+                            <code>/decision</code> and <code>/recover</code> slash commands. The pattern was set:
+                            log <em>before</em> you act, not after. Connect every node to its parent. Audit regularly.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Afternoon</div>
+                        <h3 class="event-title">The Living Museum</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#13</span>
+                            <span class="tag tag-node">#16</span>
+                            <span class="tag">github-pages</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#13</span>
+                            </div>
+                            <div class="node-card-title">Create GitHub Pages living museum site</div>
+                        </div>
+                        <p>
+                            The idea: make the decision graph public. Let anyone browse the reasoning behind every
+                            feature. Node #16 identified four pillars of value: Claude tooling, audio forensics,
+                            React/GUI methodologies, and the public development process itself.
+                        </p>
+                        <p>
+                            Day 2 ended with <strong>98 nodes</strong> in the graph. The decision system wasn't
+                            just tracking development&mdash;it was shaping how development happened.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- DAY 3: December 6-9 - The Fork -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">December 6, 2025</div>
+                <h2 class="timeline-day-title">The Fork</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Morning</div>
+                        <h3 class="event-title">The Decisive Moment</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#99</span>
+                            <span class="tag">fork</span>
+                            <span class="tag">genesis</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The decision graph tooling was more interesting than the audio analysis that spawned it.
+                            Node #99 captured the pivot:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#99</span>
+                            </div>
+                            <div class="node-card-title">Create Deciduous: Extract decision graph tooling into standalone portable package</div>
+                        </div>
+                        <p>
+                            The name "Deciduous" was perfect: it almost contains "decision", and the nodes form trees.
+                            Three architecture decisions shaped the standalone tool:
+                        </p>
+                        <div class="decision-grid">
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#100</span>
+                                    <span class="decision-box-title">Claude Tooling Integration</span>
+                                </div>
+                                <div class="decision-box-outcome">Include full tooling in deciduous init: slash commands, CLAUDE.md workflow</div>
+                            </div>
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#101</span>
+                                    <span class="decision-box-title">Web Viewer Architecture</span>
+                                </div>
+                                <div class="decision-box-outcome">React + TypeScript + Vite chosen over vanilla JS for type safety matching Diesel ORM</div>
+                            </div>
+                            <div class="decision-box">
+                                <div class="decision-box-header">
+                                    <span class="decision-box-id">#117</span>
+                                    <span class="decision-box-title">Build Strategy</span>
+                                </div>
+                                <div class="decision-box-outcome">Dual builds: embed (single HTML for binary) and pages (separate assets for GitHub Pages)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Afternoon</div>
+                        <h3 class="event-title">The Birth</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">0b74ffe</span>
+                            <span class="tag">release</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="commit-card">
+                            <span class="commit-hash">0b74ffe</span>
+                            <span class="commit-message">Extract deciduous from losselot - standalone decision graph tooling</span>
+                        </div>
+                        <p>
+                            The extraction preserved full git history. The parent project continued with audio analysis;
+                            the child would pursue decision tracking. Within hours, Deciduous was published:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-outcome">outcome</span>
+                                <span class="node-id-badge">#127</span>
+                            </div>
+                            <div class="node-card-title">Published deciduous v0.1.0 to crates.io</div>
+                            <div class="node-card-desc">cargo install deciduous now works</div>
+                        </div>
+                        <p>
+                            Anyone could now install the tool that was tracking its own development.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- December 7-10 - Multi-Editor + Metadata -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 7&ndash;10, 2025</div>
+                <h2 class="timeline-day-title">Multi-Editor &amp; Metadata</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">4 days</div>
+                        <h3 class="event-title">Teaching Every Editor</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#128</span>
+                            <span class="tag tag-node">#152</span>
+                            <span class="tag tag-node">#155</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The tool needed to work everywhere, not just Claude Code. Node #128 drove
+                            <code>--windsurf</code> and <code>--claude</code> flags for <code>deciduous init</code>.
+                            Node #131 captured the discovery that Windsurf uses <code>.windsurf/rules/rules.md</code>
+                            with 4 trigger modes.
+                        </p>
+                        <p>
+                            Node #152 added <code>--prompt</code> and <code>--files</code> flags. Node #155 introduced
+                            branch-scoped graphs&mdash;nodes auto-tagged with the current git branch. By v0.4.1,
+                            the graph had <strong>158 nodes</strong> and deciduous worked across editors.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- December 11-20 - The Sync Challenge -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 11&ndash;20, 2025</div>
+                <h2 class="timeline-day-title">The Sync Challenge</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">10 days</div>
+                        <h3 class="event-title">Multi-User Decisions</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#882</span>
+                            <span class="tag">sync</span>
+                            <span class="tag">multi-user</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The hardest problem: how do multiple users share decisions when each has a local
+                            SQLite database? The solution was inspired by jj (Jujutsu): a dual-ID model where
+                            every node has a local <code>id</code> (integer) and a global <code>change_id</code> (UUID).
+                        </p>
+                        <p>
+                            <code>deciduous diff export</code> creates shareable JSON patches.
+                            <code>deciduous diff apply</code> imports them&mdash;idempotently. Same patch applied
+                            twice produces no duplicates. The sync model was later extended with an event-log
+                            system for fully asynchronous team workflows.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- Late Dec - TUI, State Machine, Types -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">December 20&ndash;31, 2025</div>
+                <h2 class="timeline-day-title">The Rich Terminal Interface</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">11 days</div>
+                        <h3 class="event-title">TUI, State Machine, Types Unification</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#880</span>
+                            <span class="tag tag-node">#399</span>
+                            <span class="tag">ratatui</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Node #880 drove a full terminal UI with ratatui&mdash;collapsible nodes, detail panels,
+                            keyboard navigation. The observation at #199 that ratatui uses a TEA pattern
+                            (Model/Update/View) made the architecture testable.
+                        </p>
+                        <p>
+                            The graph kept growing. Decision #399 tackled types unification&mdash;making the
+                            TypeScript web viewer types match the Rust Diesel ORM schema exactly. By year's end:
+                            <strong>500+ nodes</strong>, a TUI, a web viewer, and a sync system.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- January 2026 - Archaeology & Skills -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">January 2026</div>
+                <h2 class="timeline-day-title">Archaeology</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Week 1</div>
+                        <h3 class="event-title">Building Graphs from History</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#981</span>
+                            <span class="tag tag-node">#994</span>
+                            <span class="tag">skills</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            The breakout idea: what if you could point deciduous at any existing project and build
+                            a decision graph retroactively from its git history?
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#981</span>
+                            </div>
+                            <div class="node-card-title">Build archaeology skill for bootstrapping deciduous in existing projects</div>
+                        </div>
+                        <p>
+                            Three skills were created: <strong>pulse</strong> (map current design as decisions),
+                            <strong>narratives</strong> (track how subsystems evolved), and <strong>archaeology</strong>
+                            (transform narratives into graph structure). The <code>/decision-graph</code> command
+                            tied them together&mdash;read commits, trace narratives, build backdated nodes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Week 1</div>
+                        <h3 class="event-title">The Revisit Node</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#994</span>
+                            <span class="tag tag-node">#997</span>
+                            <span class="tag">pivots</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            To capture pivots in a project's history, a new node type was needed:
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-revisit">revisit</span>
+                                <span class="node-id-badge">#997</span>
+                            </div>
+                            <div class="node-card-title">Test revisit node</div>
+                        </div>
+                        <p>
+                            The revisit captures: what is being reconsidered, why, and connects old approaches to new.
+                            <code>deciduous archaeology pivot</code> atomically creates an observation, revisit, and
+                            new decision&mdash;three nodes, three edges, and marks the old node superseded. One command.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Week 2</div>
+                        <h3 class="event-title">Ripgrep Archaeology</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1000</span>
+                            <span class="tag tag-node">#1068</span>
+                            <span class="tag">real-world test</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-goal">goal</span>
+                                <span class="node-id-badge">#1000</span>
+                            </div>
+                            <div class="node-card-title">Ripgrep design evolution archaeology</div>
+                        </div>
+                        <p>
+                            To prove the archaeology concept, deciduous was used to graph
+                            <strong>ripgrep's</strong> 10-year design evolution. The result: 107 nodes across
+                            7 major narratives&mdash;glob/ignore crate evolution (#1068), terminal coloring (#1090),
+                            file type system (#1104), PCRE2 integration (#1116), and more.
+                        </p>
+                        <p>
+                            Each narrative traced a real design arc. Node #1083 captured a genuine pivot:
+                            ripgrep switched from breadth-first to depth-first directory traversal after
+                            discovering 1GB memory usage in wide directory trees. The archaeology skill
+                            found the evidence in real commit messages.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- Late January - Web Viewer Redesign -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">Late January 2026</div>
+                <h2 class="timeline-day-title">The Web Viewer</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Week 4</div>
+                        <h3 class="event-title">Narrative-First Exploration</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#1146</span>
+                            <span class="tag tag-node">#1151</span>
+                            <span class="tag">web viewer</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            With 1,000+ nodes, the old web viewer was overwhelmed. A complete redesign followed.
+                        </p>
+                        <div class="node-card">
+                            <div class="node-badges">
+                                <span class="node-type-badge node-type-observation">observation</span>
+                                <span class="node-id-badge">#1151</span>
+                            </div>
+                            <div class="node-card-title">Graph analysis revealed 130 orphan goals but only ~25 goals with 10+ node trees &mdash; these are the real narratives</div>
+                        </div>
+                        <p>
+                            Smart narrative detection filtered to significant 10+ node trees. D3 DAG flowcharts
+                            replaced force-directed graphs. Full-text search with FTS5. Resizable panels.
+                            Card-stack archaeology view with keyboard navigation (j/k/g/G/Space).
+                            The Q&amp;A interface let users ask questions in plain English, grounded in the graph.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- February 2026 - Documents & Multi-Assistant -->
+            <!-- ========================================== -->
+            <div class="timeline-day highlight">
+                <div class="timeline-day-date">February 2026</div>
+                <h2 class="timeline-day-title">Documents &amp; Evidence</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Week 9</div>
+                        <h3 class="event-title">Attach Evidence to Decisions</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-node">#924</span>
+                            <span class="tag">v0.13.0</span>
+                            <span class="tag">documents</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <p>
+                            Decisions don't exist in isolation. They come from screenshots, architecture diagrams,
+                            Slack threads, spec PDFs. v0.13.0 added document attachments:
+                        </p>
+                        <ul>
+                            <li><strong>7 doc subcommands:</strong> attach, list, show, describe, open, detach, gc</li>
+                            <li><strong>AI-generated descriptions</strong> for searchability (<code>--ai-describe</code>)</li>
+                            <li><strong>Content-hash deduplication</strong> with soft-delete and garbage collection</li>
+                            <li><strong>REST API:</strong> <code>/api/documents</code> endpoints for the web viewer</li>
+                        </ul>
+                        <p>
+                            Multi-assistant support followed: Windsurf and OpenCode work alongside
+                            Claude Code. <code>deciduous init --windsurf</code>, <code>--opencode</code>.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Week 10</div>
+                        <h3 class="event-title">Canonical Node Flow</h3>
+                        <div class="event-tags">
+                            <span class="tag tag-commit">374d6cd</span>
+                            <span class="tag">enforcement</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="commit-card">
+                            <span class="commit-hash">374d6cd</span>
+                            <span class="commit-message">feat: enforce canonical node flow (goal -> options -> decision -> actions -> outcomes)</span>
+                        </div>
+                        <p>
+                            After watching how the graph grew over 77 days, the canonical flow became clear:
+                            goals lead to options, options lead to decisions, decisions lead to actions, actions lead
+                            to outcomes. Observations attach anywhere. Revisits connect old approaches to new.
+                            This wasn't imposed top-down&mdash;it emerged from 1,175 real nodes.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- The Numbers -->
+            <!-- ========================================== -->
+            <div class="timeline-day">
+                <div class="timeline-day-date">February 19, 2026</div>
+                <h2 class="timeline-day-title">Where It Stands</h2>
+            </div>
+
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-header">
+                        <div class="event-time">Day 77</div>
+                        <h3 class="event-title">The Graph Today</h3>
+                        <div class="event-tags">
+                            <span class="tag">v0.13.1</span>
+                            <span class="tag">current</span>
+                        </div>
+                    </div>
+                    <div class="event-body">
+                        <div class="final-stats">
+                            <div class="final-stat"><span class="final-stat-value" id="final-nodes">1,175</span><span class="final-stat-label">Nodes</span></div>
+                            <div class="final-stat"><span class="final-stat-value" id="final-edges">1,023</span><span class="final-stat-label">Edges</span></div>
+                            <div class="final-stat"><span class="final-stat-value">417</span><span class="final-stat-label">Commits</span></div>
+                            <div class="final-stat"><span class="final-stat-value">77</span><span class="final-stat-label">Days</span></div>
+                        </div>
+                        <p>
+                            The graph breaks down into: 144 goals, 126 options, 103 decisions, 391 actions,
+                            246 outcomes, 160 observations, and 5 revisit nodes. 9 slash commands and 3 skills
+                            are bootstrapped by <code>deciduous init</code>. The web viewer runs at
+                            <code>deciduous serve</code> with DAG, timeline, archaeology, and Q&amp;A views.
+                        </p>
+
+                        <div class="release-grid">
+                            <div class="release-item"><span class="release-version">v0.1.0</span><span class="release-desc">First publish to crates.io</span></div>
+                            <div class="release-item"><span class="release-version">v0.4.0</span><span class="release-desc">Multi-editor init flags</span></div>
+                            <div class="release-item"><span class="release-version">v0.9.0</span><span class="release-desc">Backdating, archaeology workflow</span></div>
+                            <div class="release-item"><span class="release-version">v0.9.2</span><span class="release-desc">Revisit node type</span></div>
+                            <div class="release-item"><span class="release-version">v0.10.0</span><span class="release-desc">Archaeology-first web viewer</span></div>
+                            <div class="release-item"><span class="release-version">v0.12.0</span><span class="release-desc">Narrative-first web redesign</span></div>
+                            <div class="release-item"><span class="release-version">v0.13.0</span><span class="release-desc">Document attachments + themes</span></div>
+                            <div class="release-item"><span class="release-version">v0.13.1</span><span class="release-desc">Safe CLAUDE.md section replacement</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- The Core Bet -->
+            <!-- ========================================== -->
+            <div class="timeline-event">
+                <div class="event-card">
+                    <div class="event-body">
+                        <div class="core-bet">
+                            <h3>The Core Bet</h3>
+                            <p>
+                                <strong>Decisions are the unit of institutional knowledge.</strong> Code is the output;
+                                decisions are the input. If we capture decisions systematically, we unlock organizational
+                                intelligence that's currently impossible.
+                            </p>
+                            <p>
+                                Most documentation captures the <em>what</em>. The <em>why</em> is more valuable and
+                                almost never captured. Deciduous is a bet that capturing the <em>why</em> is worth
+                                the effort.
+                            </p>
+                            <p>
+                                If that bet pays off, the decision graph becomes the most valuable artifact in a
+                                codebase. More valuable than tests (which verify behavior) or docs (which explain
+                                usage). Because the graph explains <em>intent</em>&mdash;and intent is what you need
+                                to maintain and extend software over time.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <footer>
+            <p>Built by a human and an AI, documented in real-time, queryable forever.</p>
+            <p style="margin-top: 12px;">
+                <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> &middot;
+                <a href="https://crates.io/crates/deciduous">crates.io</a> &middot;
+                MIT License
+            </p>
+        </footer>
+    </div>
+
+    <script>
+        // Fetch actual counts from graph data
+        fetch('graph-data.json')
+            .then(r => r.json())
+            .then(data => {
+                const nodes = data.nodes ? data.nodes.length : 1175;
+                const edges = data.edges ? data.edges.length : 1023;
+                document.getElementById('node-count').textContent = nodes.toLocaleString();
+                document.getElementById('edge-count').textContent = edges.toLocaleString();
+                document.getElementById('stat-nodes').textContent = nodes.toLocaleString();
+                document.getElementById('stat-edges').textContent = edges.toLocaleString();
+                document.getElementById('final-nodes').textContent = nodes.toLocaleString();
+                document.getElementById('final-edges').textContent = edges.toLocaleString();
+            })
+            .catch(() => {});
+    </script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Building a Graph from Git History - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title active">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html" class="active">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Building a Graph from Git History</h1>
+
+            <p class="lead">Point your AI assistant at any repository. It reads the commits, traces the narratives, and builds a connected decision graph.</p>
+
+            <h2>The /decision-graph Skill</h2>
+
+            <p>This is deciduous's breakout feature. You type <code>/decision-graph</code> in Claude Code, and Claude does the rest. It reads your entire git log, identifies the major eras and architectural shifts in your project, and builds a fully connected decision graph with backdated nodes grounded in real commits.</p>
+
+            <p>No manual data entry. No forms to fill out. You point Claude at a repository, and it reconstructs the story of how that codebase came to be.</p>
+
+            <p>Let's watch it work on the snowflex project&mdash;an Elixir library for querying Snowflake databases that evolved through five major architectural shifts over 130 commits and four years.</p>
+
+            <div class="session-demo" id="archaeology-demo">
+                <div class="session-header">
+                    <span class="session-dot red"></span>
+                    <span class="session-dot yellow"></span>
+                    <span class="session-dot green"></span>
+                    <span class="session-title">Claude Code &mdash; /decision-graph on snowflex</span>
+                    <div class="session-controls">
+                        <button class="session-btn pause-btn">Pause</button>
+                        <button class="session-btn replay-btn">Replay</button>
+                    </div>
+                </div>
+                <div class="session-content">
+                    <div class="pause-overlay">
+                        <div class="pause-icon">&#10074;&#10074;</div>
+                        <div class="pause-text">Animation paused</div>
+                        <button class="resume-btn">Resume</button>
+                    </div>
+
+                    <div class="session-step" style="--delay: 0s">
+                        <div class="step-label user">You</div>
+                        <div class="step-content">/decision-graph</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 1.2s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">I'll analyze the snowflex commit history and build a decision graph. Let me start with the full log...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 2.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">git log --oneline --reverse | head -20</div>
+                        <div class="step-output">3d3b8db Initial commit<br>b1c0e4e initial ODBC wrapper<br>8e4c0d4 add ConnectionPool<br>a7b2f1e module-based connection<br>...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 4s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">130 commits across 4 years. I can see major eras: ODBC wrapper, ConnectionPool, module-based API, HTTP rewrite. Let me start mapping the origin story.</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 5.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add goal "Create an Elixir library for querying Snowflake" -c 100 --date "2019-06-15" --commit 3d3b8db</div>
+                        <div class="step-output">Created node 1 (type: goal) [confidence: 100%] [commit: 3d3b8db]</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 7s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add option "Use Erlang ODBC driver to connect to Snowflake" -c 85 --date "2019-06-15"</div>
+                        <div class="step-output">Created node 2 (type: option)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 8.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous link 1 2 -r "Goal leads to exploring ODBC approach"</div>
+                        <div class="step-output">Created edge 1 &rarr; 2</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 10s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">The ODBC driver was the only viable path for Elixir to Snowflake at the time. Let me trace the implementation...</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 11.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add decision "How to connect Elixir to Snowflake?" -c 90 --date "2019-06-20"</div>
+                        <div class="step-output">Created node 3 (type: decision)</div>
+                        <div class="cmd-inline">deciduous link 2 3 -r "ODBC option evaluated"</div>
+                        <div class="step-output">Created edge 2 &rarr; 3</div>
+                        <div class="cmd-inline">deciduous link 3 2 --edge-type chosen -r "ODBC was the only viable Elixir->Snowflake path"</div>
+                        <div class="step-output">Created edge 3 &rarr; 2 (chosen)</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 13s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content code">deciduous add action "Implement initial ODBC wrapper with single connection" --date "2019-06-25" --commit b1c0e4e</div>
+                        <div class="step-output">Created node 4 (type: action) [commit: b1c0e4e]</div>
+                        <div class="cmd-inline">deciduous link 3 4 -r "Implement chosen ODBC approach"</div>
+                        <div class="step-output">Created edge 3 &rarr; 4</div>
+                    </div>
+
+                    <div class="session-step" style="--delay: 14.5s">
+                        <div class="step-label claude">Claude</div>
+                        <div class="step-content">The first five nodes are in place: goal, option, decision, action. Now I'll trace the outcome and the next evolution&mdash;ConnectionPool...</div>
+                    </div>
+                </div>
+            </div>
+
+            <p>Claude continues like this through the entire history, creating nodes for each major shift and connecting them with edges. The full snowflex graph ends up with 56 nodes and 66 edges, tracing every era from the first ODBC wrapper through the HTTP rewrite.</p>
+
+            <h2>Under the Hood</h2>
+
+            <p>Each step in the demo above is a real CLI command. Here's what each one does:</p>
+
+            <h3>Creating Nodes with <code>deciduous add</code></h3>
+
+            <p>Every <code>deciduous add</code> command creates a typed node in the graph. The seven node types are:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Purpose</th>
+                        <th>Example from Snowflex</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="node-goal">goal</span></td>
+                        <td>What you're trying to achieve</td>
+                        <td>"Create an Elixir library for querying Snowflake"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-option">option</span></td>
+                        <td>A possible approach to explore</td>
+                        <td>"Use Erlang ODBC driver to connect to Snowflake"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-decision">decision</span></td>
+                        <td>Choosing which option to pursue</td>
+                        <td>"How to connect Elixir to Snowflake?"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-action">action</span></td>
+                        <td>Implementation work</td>
+                        <td>"Implement initial ODBC wrapper with single connection"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-outcome">outcome</span></td>
+                        <td>What resulted</td>
+                        <td>"Working single-connection ODBC wrapper"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-observation">observation</span></td>
+                        <td>Something noticed along the way</td>
+                        <td>"Snowflake ODBC sessions expire after 4 hours idle"</td>
+                    </tr>
+                    <tr>
+                        <td><span class="node-revisit">revisit</span></td>
+                        <td>Reconsidering a previous approach</td>
+                        <td>"Reconsider ODBC as transport &mdash; switch to HTTP REST API"</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>Metadata Flags</h3>
+
+            <p>Each node can carry additional metadata through flags:</p>
+
+            <ul>
+                <li><code>-c 90</code> &mdash; <strong>Confidence score</strong> (0&ndash;100). How sure are you about this? Claude uses this to signal certainty when reconstructing history.</li>
+                <li><code>--date "2019-06-15"</code> &mdash; <strong>Backdate</strong>. For archaeology, this places the node at the right point in the timeline based on when the commit actually happened.</li>
+                <li><code>--commit 3d3b8db</code> &mdash; <strong>Commit link</strong>. Ties the node directly to a git commit. The web viewer will show the commit message, author, and date.</li>
+                <li><code>-p "..."</code> &mdash; <strong>Prompt</strong>. Captures the user's original request verbatim, useful for forward-logging sessions.</li>
+            </ul>
+
+            <h3>Connecting Nodes with <code>deciduous link</code></h3>
+
+            <p>Nodes alone are just a list. The graph's value is in its connections. Each <code>deciduous link FROM TO</code> creates a directed edge between two nodes:</p>
+
+            <ul>
+                <li><code>deciduous link 1 2 -r "Goal leads to exploring ODBC approach"</code> &mdash; connects the goal to the option it spawned</li>
+                <li><code>deciduous link 3 2 --edge-type chosen -r "ODBC was the only viable path"</code> &mdash; marks the decision's chosen option with a rationale</li>
+            </ul>
+
+            <p>The <code>-r</code> flag captures the rationale&mdash;the <em>why</em> behind the connection. This is what makes the graph useful for context recovery months later.</p>
+
+            <div class="info-box tip">
+                <strong>No speculation</strong>
+                <p>The <code>/decision-graph</code> skill reads your entire git history and identifies the major narratives&mdash;what got built, what got replaced, where the pivots happened. It creates backdated nodes grounded in real commits. Claude doesn't guess at motivations; it infers them from the code changes, commit messages, and the sequence of events in the log.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="../getting-started/ai-integration.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">What Your AI Gets</span>
+                </a>
+                <a href="observations-and-pivots.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Observations &amp; Pivots</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

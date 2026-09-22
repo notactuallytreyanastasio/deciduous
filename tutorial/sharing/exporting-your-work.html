@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exporting Your Work - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body style="padding-top: 0;">
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title active">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html" class="active">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Exporting Your Work</h1>
+
+            <p class="lead">The decision graph lives in a local SQLite database. To share it with others, you export it&mdash;as JSON for the web, as DOT for visualizations, or as markdown for pull requests.</p>
+
+            <h2>Sync &mdash; Export for GitHub Pages</h2>
+
+            <p>The <code>deciduous sync</code> command exports your entire graph as JSON files suitable for static hosting:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous sync</div>
+                <div class="terminal-body"><span class="command">deciduous sync</span>
+<span class="output">Exported graph to docs/graph-data.json
+  61 nodes, 70 edges
+Exported git-history.json (28 commits)</span></div>
+            </div>
+
+            <p>This creates two files in your <code>docs/</code> directory:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>File</th>
+                        <th>Contents</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>docs/graph-data.json</code></td>
+                        <td>All nodes, edges, metadata, and prompts</td>
+                    </tr>
+                    <tr>
+                        <td><code>docs/git-history.json</code></td>
+                        <td>Commit messages, authors, and dates for nodes linked via <code>--commit</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>The web viewer (<code>docs/index.html</code>) reads these JSON files. Once synced and pushed to GitHub, anyone can browse the decision graph in a browser&mdash;no deciduous installation needed.</p>
+
+            <h2>Deploying to GitHub Pages</h2>
+
+            <p>After running <code>deciduous sync</code>, deploying is three steps:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Deploying to GitHub Pages</div>
+                <div class="terminal-body"><span class="command">deciduous sync</span>
+<span class="output">Exported graph to docs/graph-data.json
+  61 nodes, 70 edges
+Exported git-history.json (28 commits)</span>
+
+<span class="command">git add docs/graph-data.json docs/git-history.json</span>
+<span class="command">git commit -m "docs: sync decision graph"</span>
+<span class="command">git push origin main</span></div>
+            </div>
+
+            <p>Then in your GitHub repository settings, go to <strong>Pages</strong>, select <strong>Deploy from branch</strong>, and choose the <code>/docs</code> folder. Your graph will be live at <code>https://&lt;user&gt;.github.io/&lt;repo&gt;/</code>.</p>
+
+            <h2>PR Writeups</h2>
+
+            <p>The <code>deciduous writeup</code> command generates a markdown summary of a set of nodes, suitable for pasting into a pull request body:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Generating a PR writeup</div>
+                <div class="terminal-body"><span class="command">deciduous writeup -t "Add CI Pipelines" --nodes 57-61 --auto</span>
+<span class="output">## Summary
+**Goal:** Add CI pipelines for snowflex
+
+## Key Decisions
+### Use separate workflow files - clearer separation, easier contributor onboarding
+
+## Implementation
+- Implement unit test CI workflow
+
+## Test Plan
+- [ ] Verify implementation
+- [ ] Run test suite
+
+## Decision Graph Reference
+This PR corresponds to deciduous nodes: 57, 58, 59, 60, 61</span></div>
+            </div>
+
+            <p>The writeup pulls goal titles, decision rationales, action summaries, and outcome statuses directly from the graph. The <code>--auto</code> flag detects a branch-specific PNG and embeds it as an image link.</p>
+
+            <p>Key flags for <code>deciduous writeup</code>:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Flag</th>
+                        <th>Effect</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><code>-t, --title</code></td>
+                        <td>PR title used in the summary header</td>
+                    </tr>
+                    <tr>
+                        <td><code>-n, --nodes</code></td>
+                        <td>Node IDs or ranges to include (e.g., <code>57-61</code> or <code>57,58,60</code>)</td>
+                    </tr>
+                    <tr>
+                        <td><code>-r, --roots</code></td>
+                        <td>Root node IDs&mdash;BFS traverses all children</td>
+                    </tr>
+                    <tr>
+                        <td><code>--auto</code></td>
+                        <td>Auto-detect branch-specific PNG for embedding</td>
+                    </tr>
+                    <tr>
+                        <td><code>--png</code></td>
+                        <td>Specify a PNG filename manually</td>
+                    </tr>
+                    <tr>
+                        <td><code>--no-dot</code></td>
+                        <td>Skip the DOT graph section</td>
+                    </tr>
+                    <tr>
+                        <td><code>--no-test-plan</code></td>
+                        <td>Skip the test plan checklist</td>
+                    </tr>
+                    <tr>
+                        <td><code>-o, --output</code></td>
+                        <td>Write to file instead of stdout</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h2>Attaching Writeups to the Graph</h2>
+
+            <p>You can attach the generated writeup back to the graph as a document, creating a permanent record:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Attaching a writeup</div>
+                <div class="terminal-body"><span class="command">deciduous writeup -t "Add CI Pipelines" --nodes 57-61 -o PR-WRITEUP.md</span>
+<span class="command">deciduous doc attach 57 PR-WRITEUP.md -d "PR writeup for CI pipeline work"</span>
+<span class="output">Attached document (id: 3) to node #57</span></div>
+            </div>
+
+            <h2>Backups</h2>
+
+            <p>Before any major export or sync operation, it is good practice to create a backup of the database:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">deciduous backup</div>
+                <div class="terminal-body"><span class="command">deciduous backup</span>
+<span class="output">Backup created: .deciduous/backups/deciduous-2024-01-15T14-30-00.db</span></div>
+            </div>
+
+            <p>Backups are timestamped SQLite copies stored in <code>.deciduous/backups/</code>. If anything goes wrong during a sync or export, you can restore from the most recent backup by copying it over the main database.</p>
+
+            <div class="info-box warning">
+                <strong>Never delete the database</strong>
+                <p>The SQLite database at <code>.deciduous/deciduous.db</code> is the source of truth. Always use <code>deciduous backup</code> before risky operations, and never delete the database file directly.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="pr-workflow.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">The PR Workflow</span>
+                </a>
+                <a href="../advanced/themes-and-tags.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Themes &amp; Tags</span>
+                </a>
+            </div>
+        </article>
+    </main>
+
+    <script src="../terminal-demo.js"></script>
+</body>
+</html>

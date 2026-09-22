@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Installing Deciduous - The Deciduous Tutorial</title>
+    <link rel="stylesheet" href="../style.css">
+
+    <!-- Open Graph / Social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="The Deciduous Tutorial" />
+    <meta property="og:description" content="Learn how to use Deciduous with real world examples, hands on" />
+    <meta property="og:image" content="https://deciduous.dev/og-image-tutorial.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="description" content="Learn how to use Deciduous with real world examples, hands on" />
+</head>
+<body>
+    <nav class="sidebar">
+        <div class="sidebar-header">
+            <a href="../../" class="logo">DECIDUOUS</a>
+            <span class="subtitle">Tutorial</span>
+        </div>
+        <div class="toc">
+            <div class="toc-section">
+                <a href="../introduction/what-is-deciduous.html" class="toc-title">Introduction</a>
+                <ul>
+                    <li><a href="../introduction/what-is-deciduous.html">What is Deciduous?</a></li>
+                    <li><a href="../introduction/how-to-read.html">How to Read This</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../getting-started/installing.html" class="toc-title active">Getting Started</a>
+                <ul>
+                    <li><a href="../getting-started/installing.html" class="active">Installing</a></li>
+                    <li><a href="../getting-started/initializing.html">Initializing</a></li>
+                    <li><a href="../getting-started/ai-integration.html">What Your AI Gets</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../archaeology/the-decision-graph-skill.html" class="toc-title">Reconstructing History</a>
+                <ul>
+                    <li><a href="../archaeology/the-decision-graph-skill.html">Building from Git</a></li>
+                    <li><a href="../archaeology/observations-and-pivots.html">Observations &amp; Pivots</a></li>
+                    <li><a href="../archaeology/exploring-the-graph.html">Exploring the Graph</a></li>
+                    <li><a href="../archaeology/narratives.html">Telling the Story</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../real-work/starting-work.html" class="toc-title">Live Development</a>
+                <ul>
+                    <li><a href="../real-work/starting-work.html">Starting Work</a></li>
+                    <li><a href="../real-work/attaching-evidence.html">Attaching Documents</a></li>
+                    <li><a href="../real-work/implementing.html">The Implementation</a></li>
+                    <li><a href="../real-work/editing-and-fixing.html">Editing the Graph</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../sharing/exporting-your-work.html" class="toc-title">Sharing</a>
+                <ul>
+                    <li><a href="../sharing/pr-workflow.html">The PR Workflow</a></li>
+                    <li><a href="../sharing/exporting-your-work.html">Exporting Your Work</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../advanced/themes-and-tags.html" class="toc-title">Advanced</a>
+                <ul>
+                    <li><a href="../advanced/themes-and-tags.html">Themes &amp; Tags</a></li>
+                    <li><a href="../advanced/hooks.html">Hooks</a></li>
+                    <li><a href="../advanced/multi-assistant.html">Multi-Assistant</a></li>
+                </ul>
+            </div>
+            <div class="toc-section">
+                <a href="../reference/index.html" class="toc-title">CLI Reference</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="content">
+        <article>
+            <h1>Installing Deciduous</h1>
+
+            <p class="lead">Three ways to install, zero runtime dependencies.</p>
+
+            <p>Deciduous is distributed as a single static binary. Pick whichever installation method works best for your setup.</p>
+
+            <h2>Option 1: Homebrew (macOS / Linux)</h2>
+
+            <p>The fastest path if you already have Homebrew installed:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Homebrew</div>
+                <div class="terminal-body"><span class="command">brew tap notactuallytreyanastasio/tap</span>
+<span class="command">brew install deciduous</span></div>
+            </div>
+
+            <p>This installs the latest release and makes the <code>deciduous</code> command available globally. Homebrew will handle updates when you run <code>brew upgrade</code>.</p>
+
+            <h2>Option 2: Cargo (Rust Toolchain)</h2>
+
+            <p>If you have the <a href="https://www.rust-lang.org/tools/install">Rust toolchain</a> installed:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Cargo</div>
+                <div class="terminal-body"><span class="command">cargo install deciduous</span></div>
+            </div>
+
+            <p>This compiles from source and places the binary in your Cargo bin directory (usually <code>~/.cargo/bin/</code>). Compilation takes a couple of minutes on most machines.</p>
+
+            <h2>Option 3: Pre-built Binaries</h2>
+
+            <p>Download a pre-built binary directly from the <a href="https://github.com/notactuallytreyanastasio/deciduous/releases">GitHub Releases page</a>. Binaries are available for every major platform:</p>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Platform</th>
+                        <th>Architecture</th>
+                        <th>Binary Name</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>macOS</td>
+                        <td>Apple Silicon (M1/M2/M3/M4)</td>
+                        <td><code>deciduous-darwin-arm64</code></td>
+                    </tr>
+                    <tr>
+                        <td>macOS</td>
+                        <td>Intel</td>
+                        <td><code>deciduous-darwin-amd64</code></td>
+                    </tr>
+                    <tr>
+                        <td>Linux</td>
+                        <td>x86_64</td>
+                        <td><code>deciduous-linux-amd64</code></td>
+                    </tr>
+                    <tr>
+                        <td>Linux</td>
+                        <td>ARM64</td>
+                        <td><code>deciduous-linux-arm64</code></td>
+                    </tr>
+                    <tr>
+                        <td>Windows</td>
+                        <td>x86_64</td>
+                        <td><code>deciduous-windows-amd64.exe</code></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <p>After downloading, make the binary executable and move it somewhere on your <code>PATH</code>:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Manual Install</div>
+                <div class="terminal-body"><span class="command">chmod +x deciduous-darwin-arm64</span>
+<span class="command">mv deciduous-darwin-arm64 /usr/local/bin/deciduous</span></div>
+            </div>
+
+            <h2>Verify the Installation</h2>
+
+            <p>Regardless of which method you chose, confirm that deciduous is available:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Verify</div>
+                <div class="terminal-body"><span class="command">deciduous --version</span>
+<span class="output">deciduous 0.13.2</span></div>
+            </div>
+
+            <p>If you see a version number, you are good to go.</p>
+
+            <h2>Optional: Graphviz for PNG Export</h2>
+
+            <p>Deciduous can export decision graphs as DOT files natively. If you also want to generate PNG images directly (for embedding in PRs or documentation), you will need <a href="https://graphviz.org/">Graphviz</a> installed:</p>
+
+            <div class="terminal-session">
+                <div class="terminal-header">Graphviz (Optional)</div>
+                <div class="terminal-body"><span class="comment"># macOS</span>
+<span class="command">brew install graphviz</span>
+
+<span class="comment"># Ubuntu / Debian</span>
+<span class="command">sudo apt install graphviz</span>
+
+<span class="comment"># Fedora</span>
+<span class="command">sudo dnf install graphviz</span></div>
+            </div>
+
+            <p>Without Graphviz, the <code>deciduous dot --png</code> flag will not work, but everything else functions normally. You can always install it later when you need PNG output.</p>
+
+            <div class="info-box tip">
+                <strong>Zero runtime dependencies</strong>
+                <p>Deciduous is a single static binary with SQLite compiled in. There is no database server to install, no runtime to configure, and no background process to manage. The binary is entirely self-contained for all core features.</p>
+            </div>
+
+            <div class="page-nav">
+                <a href="../introduction/how-to-read.html" class="prev">
+                    <span class="label">Previous</span>
+                    <span class="title">How to Read This</span>
+                </a>
+                <a href="initializing.html" class="next">
+                    <span class="label">Next</span>
+                    <span class="title">Initializing on a Project</span>
+                </a>
+            </div>
+        </article>
+    </main>
+</body>
+</html>

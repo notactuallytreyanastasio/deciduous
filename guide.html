@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deciduous Guide - Decision Graph for AI Development</title>
+
+    <!-- OpenGraph meta tags -->
+    <meta property="og:title" content="The Guide - Deciduous">
+    <meta property="og:description" content="Commands, patterns, and real-world workflows. Build an e-commerce cart from scratch with decision graphs.">
+    <meta property="og:image" content="https://deciduous.dev/guide-og.png">
+    <meta property="og:url" content="https://deciduous.dev/guide">
+    <meta property="og:type" content="website">
+
+    <!-- Twitter Card meta tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Guide - Deciduous">
+    <meta name="twitter:description" content="Commands, patterns, and real-world workflows. Build an e-commerce cart from scratch with decision graphs.">
+    <meta name="twitter:image" content="https://deciduous.dev/guide-og.png">
+
+    <style>
+        :root {
+            --bg: #ffffff;
+            --bg-secondary: #f6f8fa;
+            --bg-tertiary: #eaeef2;
+            --bg-code: #24292f;
+            --text: #24292f;
+            --text-muted: #57606a;
+            --accent: #0969da;
+            --accent-green: #2da44e;
+            --accent-yellow: #9a6700;
+            --accent-red: #cf222e;
+            --accent-purple: #8250df;
+            --border: #d0d7de;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            padding: 20px;
+            position: fixed;
+            height: 100vh;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header {
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-header .logo {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-header .logo:hover {
+            color: var(--accent);
+        }
+
+        .sidebar-header .subtitle {
+            display: block;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .sidebar nav {
+            background: none;
+            border: none;
+            padding: 0;
+            position: static;
+        }
+
+        .sidebar nav h2 {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .sidebar nav ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sidebar nav a {
+            display: block;
+            padding: 8px 12px;
+            color: var(--text-muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+
+        .sidebar nav a:hover {
+            background: var(--bg);
+            color: var(--accent);
+        }
+
+        .sidebar nav a.active {
+            background: var(--accent-green);
+            color: white;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: var(--sidebar-width);
+            flex: 1;
+            padding: 40px;
+            max-width: calc(900px + var(--sidebar-width));
+        }
+
+        .content-wrapper {
+            max-width: 800px;
+        }
+
+        header {
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 1.2rem;
+        }
+
+        section {
+            margin-bottom: 4rem;
+        }
+
+        h2 {
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        h3 {
+            font-size: 1.3rem;
+            margin: 2rem 0 1rem;
+            color: var(--text);
+        }
+
+        h4 {
+            font-size: 1.1rem;
+            margin: 1.5rem 0 0.75rem;
+            color: var(--text);
+        }
+
+        p {
+            margin-bottom: 1rem;
+        }
+
+        code {
+            background: var(--bg-secondary);
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+            font-size: 0.9em;
+            color: var(--text);
+        }
+
+        pre {
+            background: var(--bg-code);
+            border-radius: 8px;
+            padding: 1rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+            color: #f6f8fa;
+        }
+
+        pre code {
+            background: none;
+            padding: 0;
+            color: #f6f8fa;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1rem 0;
+        }
+
+        th, td {
+            text-align: left;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: var(--bg-secondary);
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background: var(--bg-secondary);
+        }
+
+        .card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .card-title {
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .warning {
+            background: #fff8c5;
+            border-left: 4px solid #d4a72c;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .success {
+            background: #d1f7d6;
+            border-left: 4px solid var(--accent-green);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .info {
+            background: #ddf4ff;
+            border-left: 4px solid #54aeff;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .scenario {
+            background: var(--bg-secondary);
+            border: 2px solid var(--accent-purple);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .scenario-title {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent-purple);
+            margin-bottom: 1rem;
+        }
+
+        .user-message {
+            background: #d1f7d6;
+            border-left: 3px solid var(--accent-green);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+            font-style: italic;
+        }
+
+        .user-message::before {
+            content: "User: ";
+            font-weight: bold;
+            font-style: normal;
+            color: var(--accent-green);
+        }
+
+        .claude-action {
+            background: #fbefff;
+            border-left: 3px solid var(--accent-purple);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .claude-action::before {
+            content: "Claude: ";
+            font-weight: bold;
+            color: var(--accent-purple);
+        }
+
+        .step {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            border-left: 3px solid var(--accent);
+        }
+
+        .step-number {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--bg);
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-weight: bold;
+            font-size: 0.8rem;
+            margin-right: 0.5rem;
+        }
+
+        .phase {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+
+        .phase-header {
+            padding: 1rem 1.5rem;
+            background: var(--bg-secondary);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .phase-header:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .phase-content {
+            padding: 1.5rem;
+            display: none;
+        }
+
+        .phase-content.active {
+            display: block;
+        }
+
+        .arrow {
+            transition: transform 0.2s;
+            color: var(--text-muted);
+        }
+
+        .arrow.rotated {
+            transform: rotate(90deg);
+        }
+
+        .todo-list {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+        }
+
+        .todo-list h5 {
+            color: var(--text);
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .todo-list ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .todo-list li {
+            padding: 0.25rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .todo-list .done {
+            text-decoration: line-through;
+            color: var(--text-muted);
+        }
+
+        .todo-list .new {
+            color: #9a6700;
+            font-weight: 500;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            border-top: 1px solid var(--border);
+            color: var(--text-muted);
+            margin-top: 2rem;
+        }
+
+        footer a {
+            color: var(--accent);
+        }
+
+        .node-type {
+            display: inline-block;
+            padding: 0.2em 0.6em;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: 500;
+        }
+        .node-goal { background: #d1f7d6; color: #1a7f37; }
+        .node-decision { background: #ddf4ff; color: #0969da; }
+        .node-action { background: #fbefff; color: #8250df; }
+        .node-outcome { background: #fff8c5; color: #9a6700; }
+        .node-observation { background: var(--bg-tertiary); color: var(--text-muted); }
+        .node-option { background: #ffebe9; color: #cf222e; }
+
+        .graph-visual {
+            background: var(--bg-code);
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            font-family: 'SFMono-Regular', Consolas, monospace;
+            font-size: 0.85rem;
+            line-height: 1.4;
+            overflow-x: auto;
+            color: #f6f8fa;
+        }
+
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin: 1rem 0;
+        }
+
+        .command-example {
+            margin: 1.5rem 0;
+        }
+
+        .command-example .description {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Responsive */
+        @media (max-width: 900px) {
+            .sidebar {
+                position: static;
+                width: 100%;
+                height: auto;
+                border-right: none;
+                border-bottom: 1px solid var(--border);
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 20px;
+            }
+
+            body {
+                flex-direction: column;
+            }
+
+            .two-column {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <a href="./" class="logo">DECIDUOUS</a>
+            <span class="subtitle">The Guide</span>
+        </div>
+        <nav>
+            <h2>Contents</h2>
+            <ul>
+                <li><a href="#why">Why Decision Graphs?</a></li>
+                <li><a href="#quickstart">Quick Start</a></li>
+                <li><a href="#real-scenario">Real Scenario</a></li>
+                <li><a href="#patterns">Common Patterns</a></li>
+                <li><a href="#commands">Command Reference</a></li>
+                <li><a href="#troubleshooting">Troubleshooting</a></li>
+            </ul>
+        </nav>
+    </div>
+
+    <main class="main-content">
+        <div class="content-wrapper">
+            <header>
+                <h1>Deciduous Guide</h1>
+                <p class="subtitle">Real-world patterns for decision graph tooling in AI-assisted development</p>
+            </header>
+
+            <section id="why">
+            <h2>Why Decision Graphs?</h2>
+
+            <p>If you've worked with AI coding assistants, you've experienced this:</p>
+
+            <div class="scenario">
+                <div class="user-message">
+                    "Why did we use Redux instead of Context? I thought we discussed this yesterday..."
+                </div>
+                <div class="claude-action">
+                    "I don't have context from previous sessions. Could you remind me what was decided?"
+                </div>
+            </div>
+
+            <p>Every time Claude's context resets, you lose:</p>
+            <ul style="margin: 1rem 0 1rem 2rem;">
+                <li>Why you chose approach A over B</li>
+                <li>What was tried and didn't work</li>
+                <li>The reasoning behind architectural decisions</li>
+                <li>The full scope of what the user originally asked for</li>
+            </ul>
+
+            <p><strong>Deciduous fixes this.</strong> It creates a persistent graph of goals, decisions, actions, and outcomes that survives context loss. When a new session starts, Claude can query the graph to understand what happened and why.</p>
+
+            <div class="graph-visual">
+[goal] "Add user authentication"
+   |
+   +---> [decision] "Choose auth method"
+   |        |
+   |        +---> [option] "JWT tokens" (CHOSEN: stateless, scales well)
+   |        +---> [option] "Sessions" (REJECTED: need Redis, more complexity)
+   |
+   +---> [action] "Implement JWT middleware"
+   |        |
+   |        +---> [outcome] "JWT auth working" (commit: a1b2c3d)
+   |
+   +---> [observation] "Found existing bcrypt in codebase, will reuse"
+            </div>
+
+            <p>This graph is queryable. In a new session, Claude can run <code>deciduous nodes</code> and immediately understand the project's decision history.</p>
+        </section>
+
+        <section id="quickstart">
+            <h2>Quick Start (5 minutes)</h2>
+
+            <div class="step">
+                <span class="step-number">1</span>
+                <strong>Install deciduous</strong>
+                <pre><code>cargo install deciduous</code></pre>
+            </div>
+
+            <div class="step">
+                <span class="step-number">2</span>
+                <strong>Initialize in your project</strong>
+                <pre><code>cd your-project
+deciduous init</code></pre>
+                <p style="margin-top: 0.5rem; color: var(--text-muted);">This creates <code>.deciduous/</code>, <code>.claude/</code> with slash commands, and updates <code>CLAUDE.md</code>.</p>
+            </div>
+
+            <div class="step">
+                <span class="step-number">3</span>
+                <strong>Start working - log as you go</strong>
+                <pre><code># When starting new work
+deciduous add goal "Add dark mode toggle" -c 90
+
+# Before writing code
+deciduous add action "Creating ThemeContext provider" -c 85
+deciduous link 1 2 -r "Implementation step"
+
+# After committing
+git commit -m "feat: add theme context"
+deciduous add outcome "Theme context working" -c 95 --commit HEAD
+deciduous link 2 3 -r "Complete"</code></pre>
+            </div>
+
+            <div class="step">
+                <span class="step-number">4</span>
+                <strong>View your graph</strong>
+                <pre><code># Terminal UI
+deciduous tui
+
+# Web viewer (opens browser)
+deciduous serve
+
+# Export for GitHub Pages
+deciduous sync</code></pre>
+            </div>
+
+            <div class="success">
+                <strong>That's it!</strong> You now have a queryable decision history. In future sessions, run <code>deciduous nodes</code> to see what decisions exist.
+            </div>
+        </section>
+
+        <section id="real-scenario">
+            <h2>Real Scenario: Building an E-commerce Cart</h2>
+
+            <p>Let's walk through a realistic development scenario. Watch how the work evolves, requirements expand, and decisions compound - all captured in the graph.</p>
+
+            <div class="phase">
+                <div class="phase-header" onclick="togglePhase(this)">
+                    <div>
+                        <strong>Phase 1: Initial Request</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">The user asks for a shopping cart</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                </div>
+                <div class="phase-content">
+                    <div class="user-message">
+                        I need to add a shopping cart to our React e-commerce site. Users should be able to add items, change quantities, and see a running total. The cart should persist across page refreshes.
+                    </div>
+
+                    <div class="claude-action">
+                        First, I'll create a goal node with the user's exact request:
+                    </div>
+
+                    <pre><code>deciduous add goal "Add shopping cart feature" -c 90 --prompt-stdin << 'EOF'
+I need to add a shopping cart to our React e-commerce site. Users should be able
+to add items, change quantities, and see a running total. The cart should persist
+across page refreshes.
+EOF</code></pre>
+
+                    <p><strong>Output:</strong> <code>Created node 1 (type: goal)</code></p>
+
+                    <div class="info">
+                        <strong>Why capture the full prompt?</strong> When context resets, Claude can read this verbatim request and understand exactly what was asked for - not a summary, but the actual words.
+                    </div>
+
+                    <div class="todo-list">
+                        <h5>Current Understanding</h5>
+                        <ul>
+                            <li>[ ] Add shopping cart UI</li>
+                            <li>[ ] Persist cart across refreshes</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="phase">
+                <div class="phase-header" onclick="togglePhase(this)">
+                    <div>
+                        <strong>Phase 2: Exploration & Decisions</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">Claude investigates the codebase and makes decisions</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                </div>
+                <div class="phase-content">
+                    <div class="claude-action">
+                        Before coding, I'll explore the codebase to understand the existing patterns...
+                    </div>
+
+                    <pre><code># After exploring, log what was found
+deciduous add observation "App uses Redux Toolkit, should follow existing pattern" -c 85
+deciduous link 1 2 -r "Codebase discovery"
+
+deciduous add observation "Found existing useLocalStorage hook in utils/" -c 90
+deciduous link 1 3 -r "Codebase discovery"</code></pre>
+
+                    <div class="claude-action">
+                        Now I need to decide on the cart state management approach:
+                    </div>
+
+                    <pre><code># Create the decision
+deciduous add decision "Choose cart state management approach" -c 75
+deciduous link 1 4 -r "Architectural decision needed"
+
+# Add the options we're considering
+deciduous add option "Redux slice with localStorage sync" -c 80
+deciduous link 4 5 -r "Option: follows existing patterns"
+
+deciduous add option "React Context with useLocalStorage" -c 70
+deciduous link 4 6 -r "Option: simpler but inconsistent with app"
+
+deciduous add option "Zustand store" -c 60
+deciduous link 4 7 -r "Option: new dependency"</code></pre>
+
+                    <div class="graph-visual">
+[goal:1] "Add shopping cart feature"
+   |
+   +---> [observation:2] "App uses Redux Toolkit"
+   +---> [observation:3] "Found useLocalStorage hook"
+   +---> [decision:4] "Choose cart state management"
+            |
+            +---> [option:5] "Redux + localStorage"
+            +---> [option:6] "Context + useLocalStorage"
+            +---> [option:7] "Zustand"
+                    </div>
+
+                    <div class="claude-action">
+                        I'll recommend Redux since it matches the existing architecture:
+                    </div>
+
+                    <pre><code># Mark the decision
+deciduous link 4 5 -r "CHOSEN: Consistent with existing Redux architecture, team already knows it" -t chosen
+deciduous link 4 6 -r "REJECTED: Would create inconsistency in state management" -t rejected
+deciduous link 4 7 -r "REJECTED: Adds new dependency when Redux already exists" -t rejected</code></pre>
+
+                    <div class="todo-list">
+                        <h5>Expanded Understanding</h5>
+                        <ul>
+                            <li class="done">[x] Decide state management (Redux)</li>
+                            <li>[ ] Create cart Redux slice</li>
+                            <li>[ ] Add localStorage persistence</li>
+                            <li>[ ] Build cart UI components</li>
+                            <li>[ ] Add "Add to Cart" buttons to product pages</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="phase">
+                <div class="phase-header" onclick="togglePhase(this)">
+                    <div>
+                        <strong>Phase 3: Implementation</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">Writing code with action/outcome logging</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                </div>
+                <div class="phase-content">
+                    <div class="claude-action">
+                        Before each piece of implementation, I log what I'm about to do:
+                    </div>
+
+                    <pre><code># About to create the Redux slice
+deciduous add action "Creating cartSlice with add/remove/updateQty reducers" -c 85 \
+  -f "src/store/cartSlice.ts"
+deciduous link 1 8 -r "Implementation"</code></pre>
+
+                    <p><em>...writes the cartSlice.ts code...</em></p>
+
+                    <pre><code># After committing
+git add src/store/cartSlice.ts
+git commit -m "feat(cart): add cartSlice with core reducers"
+
+deciduous add outcome "Cart slice created with add/remove/updateQty" -c 95 --commit HEAD
+deciduous link 8 9 -r "Complete"</code></pre>
+
+                    <div class="warning">
+                        <strong>Key pattern:</strong> Log the <strong>action</strong> BEFORE writing code, then log the <strong>outcome</strong> AFTER committing. This creates a clear trail of intent -> result.
+                    </div>
+
+                    <pre><code># Next piece: localStorage persistence
+deciduous add action "Adding localStorage sync middleware" -c 85 \
+  -f "src/store/cartSlice.ts,src/store/index.ts"
+deciduous link 1 10 -r "Implementation"
+
+# ...writes the middleware...
+
+git commit -m "feat(cart): add localStorage persistence"
+deciduous add outcome "Cart persists across page refreshes" -c 95 --commit HEAD
+deciduous link 10 11 -r "Complete"</code></pre>
+
+                    <div class="graph-visual">
+[goal:1] "Add shopping cart feature"
+   |
+   +---> [decision:4] "Choose state management" -> [option:5] Redux (CHOSEN)
+   |
+   +---> [action:8] "Creating cartSlice"
+   |        +---> [outcome:9] "Cart slice created" (commit: f3e4d5c)
+   |
+   +---> [action:10] "Adding localStorage sync"
+            +---> [outcome:11] "Persistence working" (commit: a1b2c3d)
+                    </div>
+                </div>
+            </div>
+
+            <div class="phase">
+                <div class="phase-header" onclick="togglePhase(this)">
+                    <div>
+                        <strong>Phase 4: Scope Expansion</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">User adds requirements mid-stream</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                </div>
+                <div class="phase-content">
+                    <div class="user-message">
+                        Oh, I forgot to mention - we also need the cart to sync with the backend when users are logged in, so it persists across devices. Can you add that?
+                    </div>
+
+                    <div class="claude-action">
+                        This is a significant scope change. I'll create a new goal linked to the original:
+                    </div>
+
+                    <pre><code>deciduous add goal "Add backend cart sync for logged-in users" -c 85 --prompt-stdin << 'EOF'
+Oh, I forgot to mention - we also need the cart to sync with the backend when
+users are logged in, so it persists across devices. Can you add that?
+EOF
+deciduous link 1 12 -r "Scope expansion from user"</code></pre>
+
+                    <pre><code># This triggers new decisions
+deciduous add decision "Cart sync strategy" -c 70
+deciduous link 12 13 -r "Need to decide sync approach"
+
+deciduous add option "Sync on every change (real-time)" -c 60
+deciduous link 13 14 -r "Option: immediate but chatty"
+
+deciduous add option "Debounced sync (batch changes)" -c 80
+deciduous link 13 15 -r "Option: efficient, handles rapid changes"
+
+deciduous add option "Sync only on checkout/logout" -c 50
+deciduous link 13 16 -r "Option: minimal but risks data loss"</code></pre>
+
+                    <div class="info">
+                        <strong>Why link scope changes?</strong> When someone asks "why does cart have backend sync?", the graph shows the exact user request that triggered it, linked to the original goal.
+                    </div>
+
+                    <div class="todo-list">
+                        <h5>Expanded Scope (discovered during implementation)</h5>
+                        <ul>
+                            <li class="done">[x] Decide state management (Redux)</li>
+                            <li class="done">[x] Create cart Redux slice</li>
+                            <li class="done">[x] Add localStorage persistence</li>
+                            <li>[ ] Build cart UI components</li>
+                            <li>[ ] Add "Add to Cart" buttons</li>
+                            <li class="new">[ ] NEW: Backend cart API endpoints</li>
+                            <li class="new">[ ] NEW: Sync middleware for logged-in users</li>
+                            <li class="new">[ ] NEW: Merge local cart with server cart on login</li>
+                            <li class="new">[ ] NEW: Handle sync conflicts</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="phase">
+                <div class="phase-header" onclick="togglePhase(this)">
+                    <div>
+                        <strong>Phase 5: Bug Discovery</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">Something goes wrong and needs investigation</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                </div>
+                <div class="phase-content">
+                    <div class="user-message">
+                        The cart total is showing wrong values sometimes. Can you investigate?
+                    </div>
+
+                    <pre><code>deciduous add goal "Fix cart total calculation bug" -c 75 --prompt-stdin << 'EOF'
+The cart total is showing wrong values sometimes. Can you investigate?
+EOF
+deciduous link 1 17 -r "Bug in cart feature"</code></pre>
+
+                    <div class="claude-action">
+                        I'll log observations as I investigate...
+                    </div>
+
+                    <pre><code># While debugging
+deciduous add observation "Total uses floating point, seeing precision errors" -c 90
+deciduous link 17 18 -r "Investigation finding"
+
+deciduous add observation "Bug only occurs with items priced at $X.99" -c 95
+deciduous link 17 19 -r "Investigation finding"</code></pre>
+
+                    <pre><code># Decide on fix approach
+deciduous add decision "How to fix price precision" -c 80
+deciduous link 17 20 -r "Need to decide fix"
+
+deciduous add option "Store prices as cents (integers)" -c 90
+deciduous link 20 21 -r "Best practice for money"
+
+deciduous add option "Use decimal.js library" -c 70
+deciduous link 20 22 -r "Adds dependency"
+
+# Choose and implement
+deciduous link 20 21 -r "CHOSEN: Standard practice, no dependencies" -t chosen
+deciduous add action "Converting price storage to cents" -c 85 -f "src/store/cartSlice.ts"
+deciduous link 17 23 -r "Bug fix implementation"</code></pre>
+
+                    <div class="success">
+                        <strong>Future value:</strong> When someone encounters a similar bug, they can search the graph and find this exact debugging journey - the observations, the decision, and the fix.
+                    </div>
+                </div>
+            </div>
+
+            <div class="phase">
+                <div class="phase-header" onclick="togglePhase(this)">
+                    <div>
+                        <strong>Phase 6: Context Recovery (New Session)</strong>
+                        <span style="color: var(--text-muted); margin-left: 1rem;">Picking up work after context loss</span>
+                    </div>
+                    <span class="arrow">▶</span>
+                </div>
+                <div class="phase-content">
+                    <p><em>The next day, in a fresh Claude session...</em></p>
+
+                    <div class="user-message">
+                        Let's continue working on the cart. Where were we?
+                    </div>
+
+                    <div class="claude-action">
+                        I'll query the decision graph to recover context:
+                    </div>
+
+                    <pre><code>deciduous nodes</code></pre>
+
+                    <div class="graph-visual">
+ID   Type         Title                                    Status    Confidence
+1    goal         Add shopping cart feature                active    90%
+2    observation  App uses Redux Toolkit                   active    85%
+4    decision     Choose cart state management             active    75%
+5    option       Redux slice with localStorage sync       active    80%
+8    action       Creating cartSlice with reducers         completed 85%
+9    outcome      Cart slice created                       completed 95%
+12   goal         Add backend cart sync                    active    85%
+17   goal         Fix cart total calculation bug           active    75%
+...
+                    </div>
+
+                    <pre><code>deciduous edges</code></pre>
+
+                    <div class="graph-visual">
+1 -> 4 (leads_to) "Architectural decision needed"
+4 -> 5 (chosen) "Consistent with existing Redux architecture"
+1 -> 8 (leads_to) "Implementation"
+8 -> 9 (leads_to) "Complete"
+1 -> 12 (leads_to) "Scope expansion from user"
+...
+                    </div>
+
+                    <div class="claude-action">
+                        Based on the graph, I can see:
+                        <ul style="margin: 0.5rem 0 0 1.5rem;">
+                            <li>Main goal: Shopping cart feature (goal 1)</li>
+                            <li>Decision made: Using Redux (not Context/Zustand)</li>
+                            <li>Completed: Cart slice, localStorage persistence</li>
+                            <li>In progress: Backend sync (goal 12), bug fix (goal 17)</li>
+                            <li>Bug: Floating point precision, fixing with cents storage</li>
+                        </ul>
+                    </div>
+
+                    <div class="success">
+                        <strong>Full context recovered</strong> - Claude now knows the decisions, the reasoning, what's done, and what's in progress, all from querying the graph.
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="patterns">
+            <h2>Common Patterns</h2>
+
+            <div class="two-column">
+                <div class="card">
+                    <div class="card-title"><span class="node-type node-goal">goal</span> Starting New Work</div>
+                    <pre><code>deciduous add goal "Feature name" \
+  -c 90 \
+  --prompt-stdin << 'EOF'
+[User's exact request here]
+EOF</code></pre>
+                    <p>Always capture the verbatim user prompt for context recovery.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="node-type node-decision">decision</span> Making Choices</div>
+                    <pre><code>deciduous add decision "What to decide"
+deciduous add option "Choice A"
+deciduous add option "Choice B"
+deciduous link DECISION OPTION_A -t chosen
+deciduous link DECISION OPTION_B -t rejected</code></pre>
+                    <p>Document why you chose A over B.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="node-type node-action">action</span> Before Coding</div>
+                    <pre><code>deciduous add action "What I'm implementing" \
+  -c 85 \
+  -f "file1.ts,file2.ts"
+deciduous link GOAL ACTION -r "Implementation"</code></pre>
+                    <p>Log BEFORE you write code, not after.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="node-type node-outcome">outcome</span> After Committing</div>
+                    <pre><code>git commit -m "feat: ..."
+deciduous add outcome "What was accomplished" \
+  -c 95 \
+  --commit HEAD
+deciduous link ACTION OUTCOME -r "Complete"</code></pre>
+                    <p>Links the commit hash to the graph.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title"><span class="node-type node-observation">observation</span> Discoveries</div>
+                    <pre><code>deciduous add observation "What I found" -c 85
+deciduous link GOAL OBSERVATION -r "Discovery"</code></pre>
+                    <p>Log interesting findings, constraints, or insights.</p>
+                </div>
+
+                <div class="card">
+                    <div class="card-title">Session Recovery</div>
+                    <pre><code>deciduous nodes          # What exists?
+deciduous edges          # How connected?
+deciduous commands       # Recent activity?
+git status               # Current state?</code></pre>
+                    <p>Run these at the start of every session.</p>
+                </div>
+            </div>
+
+            <h3>The Golden Rule</h3>
+            <div class="warning">
+                <pre><code>BEFORE you code  ->  Log what you're ABOUT to do (action)
+AFTER it works   ->  Log what happened (outcome)
+ALWAYS           ->  Link nodes to their parents immediately</code></pre>
+            </div>
+        </section>
+
+        <section id="commands">
+            <h2>Command Reference</h2>
+
+            <h3>Adding Nodes</h3>
+            <div class="command-example">
+                <div class="description">Create a goal (high-level objective)</div>
+                <pre><code>deciduous add goal "Feature title" -c 90 -p "Short prompt"
+deciduous add goal "Feature title" -c 90 --prompt-stdin  # Read from stdin</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Create a decision (choice point)</div>
+                <pre><code>deciduous add decision "What needs to be decided" -c 75</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Create an option (for a decision)</div>
+                <pre><code>deciduous add option "Possible approach" -c 70</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Create an action (about to implement)</div>
+                <pre><code>deciduous add action "What I'm implementing" -c 85 -f "file1.ts,file2.ts"</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Create an outcome (result of action)</div>
+                <pre><code>deciduous add outcome "What happened" -c 95 --commit HEAD</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Create an observation (finding/insight)</div>
+                <pre><code>deciduous add observation "What I discovered" -c 80</code></pre>
+            </div>
+
+            <h3>Linking Nodes</h3>
+            <div class="command-example">
+                <div class="description">Create a connection between nodes</div>
+                <pre><code>deciduous link FROM_ID TO_ID -r "Reason for connection"
+deciduous link 4 5 -r "Implementation step" -t leads_to  # Explicit type
+deciduous link 4 5 -t chosen    # Mark option as chosen
+deciduous link 4 6 -t rejected  # Mark option as rejected</code></pre>
+            </div>
+
+            <h3>Querying</h3>
+            <div class="command-example">
+                <div class="description">List nodes (with filters)</div>
+                <pre><code>deciduous nodes                    # All nodes
+deciduous nodes --type goal        # Only goals
+deciduous nodes --branch main      # Only from main branch
+deciduous nodes --type decision    # Only decisions</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">List edges</div>
+                <pre><code>deciduous edges                    # All connections</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Export full graph</div>
+                <pre><code>deciduous graph > graph.json       # JSON export</code></pre>
+            </div>
+
+            <h3>Viewing</h3>
+            <div class="command-example">
+                <div class="description">Start viewers</div>
+                <pre><code>deciduous tui                      # Terminal UI
+deciduous serve                    # Web viewer (port 3000)
+deciduous serve --port 8080        # Custom port</code></pre>
+            </div>
+
+            <h3>Exporting</h3>
+            <div class="command-example">
+                <div class="description">Sync for GitHub Pages</div>
+                <pre><code>deciduous sync                     # Exports to docs/</code></pre>
+            </div>
+
+            <div class="command-example">
+                <div class="description">Generate visualizations</div>
+                <pre><code>deciduous dot                      # DOT format to stdout
+deciduous dot --png -o graph.dot   # Generate PNG (needs graphviz)
+deciduous writeup -t "PR Title"    # Generate PR writeup</code></pre>
+            </div>
+
+            <h3>Team Collaboration</h3>
+            <div class="command-example">
+                <div class="description">Export/import patches for teammates</div>
+                <pre><code>deciduous diff export --branch feature-x -o patches/my-work.json
+deciduous diff apply patches/teammate.json
+deciduous diff apply --dry-run patches/teammate.json  # Preview first</code></pre>
+            </div>
+        </section>
+
+        <section id="troubleshooting">
+            <h2>Troubleshooting</h2>
+
+            <h3>Enforcement Hooks</h3>
+
+            <p>Deciduous includes Claude Code hooks that enforce decision logging. These are installed with <code>deciduous init</code>.</p>
+
+            <div class="card">
+                <div class="card-title">Error: "No recent action/goal node found"</div>
+                <p>The Edit/Write hook blocked you because no node was logged in the last 15 minutes.</p>
+                <p><strong>Fix:</strong> Log what you're about to do first:</p>
+                <pre><code>deciduous add action "What I'm about to implement" -c 85
+# Now you can edit files</code></pre>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Reminder: "Link this commit to the decision graph!"</div>
+                <p>After git commits, the hook reminds you to link the commit.</p>
+                <p><strong>Fix:</strong> Create an outcome linked to the commit:</p>
+                <pre><code>deciduous add outcome "What was accomplished" -c 95 --commit HEAD
+deciduous link ACTION_ID OUTCOME_ID -r "Complete"</code></pre>
+            </div>
+
+            <h3>Common Issues</h3>
+
+            <div class="card">
+                <div class="card-title">Orphan nodes (disconnected from graph)</div>
+                <p>Every node except root goals should be linked to a parent.</p>
+                <p><strong>Fix:</strong> Run <code>deciduous edges</code> to find gaps, then link:</p>
+                <pre><code>deciduous link PARENT_ID ORPHAN_ID -r "Retroactive connection"</code></pre>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Lost context on what to do next</div>
+                <p>Use the recovery pattern:</p>
+                <pre><code>deciduous nodes    # See what goals exist
+deciduous edges    # See connections and progress
+git status         # See uncommitted work
+deciduous commands # See recent deciduous activity</code></pre>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Graph not updating on GitHub Pages</div>
+                <p>Make sure to sync and push:</p>
+                <pre><code>deciduous sync     # Export to docs/
+git add docs/
+git commit -m "docs: update decision graph"
+git push</code></pre>
+            </div>
+        </section>
+
+            <footer>
+                <p>
+                    <a href="./">Home</a> |
+                    <a href="demo/">Live Graph</a> |
+                    <a href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a> |
+                    <a href="https://crates.io/crates/deciduous">crates.io</a>
+                </p>
+                <p>Built with deciduous - decision graph tooling for AI development</p>
+            </footer>
+        </div>
+    </main>
+
+    <script>
+        function togglePhase(header) {
+            const content = header.nextElementSibling;
+            const arrow = header.querySelector('.arrow');
+            content.classList.toggle('active');
+            arrow.classList.toggle('rotated');
+        }
+
+        // Auto-expand first phase on load
+        document.addEventListener('DOMContentLoaded', () => {
+            const firstPhase = document.querySelector('.phase-header');
+            if (firstPhase) {
+                togglePhase(firstPhase);
+            }
+        });
+    </script>
+</body>
+</html>
