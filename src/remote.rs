@@ -194,6 +194,35 @@ impl Remote {
         })
     }
 
+    /// A `wss://…/events?workspace=…&token=…` URL for this project's
+    /// workspace, ready to hand to a WebSocket client.
+    ///
+    /// The token rides in the query string, not a header, because the
+    /// WebSocket handshake itself cannot carry a custom `Authorization`
+    /// header in most clients that matter here — not a workaround for one
+    /// client, a limit of the browser `WebSocket` constructor and everything
+    /// built against it. The server accepts exactly this fallback; see
+    /// `deciduous_mcp/lib/deciduous_mcp/web/router.ex`.
+    ///
+    /// The scheme is derived from the configured URL (`https` → `wss`,
+    /// `http` → `ws`) rather than hardcoded, so this also works against a
+    /// plain-HTTP dev server.
+    pub fn events_url(&self) -> String {
+        let ws_base = if let Some(rest) = self.url.strip_prefix("https://") {
+            format!("wss://{rest}")
+        } else if let Some(rest) = self.url.strip_prefix("http://") {
+            format!("ws://{rest}")
+        } else {
+            self.url.clone()
+        };
+
+        format!(
+            "{ws_base}/events?workspace={}&token={}",
+            urlencode(&self.workspace),
+            urlencode(&self.token)
+        )
+    }
+
     fn get(&self, path: &str) -> ureq::Request {
         ureq::get(&format!("{}{}", self.url, path))
             .set("authorization", &format!("Bearer {}", self.token))
@@ -597,5 +626,49 @@ mod tests {
         let cfg = Config::default();
         let err = Remote::resolve(&cfg, Path::new(".")).unwrap_err();
         assert!(err.contains("deciduous remote init"), "got: {err}");
+    }
+
+    #[test]
+    fn events_url_converts_https_to_wss() {
+        let r = Remote {
+            url: "https://example.com/deciduous-mcp".to_string(),
+            workspace: "blog".to_string(),
+            token: "abc123".to_string(),
+        };
+        assert_eq!(
+            r.events_url(),
+            "wss://example.com/deciduous-mcp/events?workspace=blog&token=abc123"
+        );
+    }
+
+    #[test]
+    fn events_url_converts_plain_http_to_ws_for_a_dev_server() {
+        let r = Remote {
+            url: "http://localhost:4111".to_string(),
+            workspace: "blog".to_string(),
+            token: "abc123".to_string(),
+        };
+        assert_eq!(
+            r.events_url(),
+            "ws://localhost:4111/events?workspace=blog&token=abc123"
+        );
+    }
+
+    #[test]
+    fn events_url_encodes_a_workspace_name_with_special_characters() {
+        // Not a realistic workspace name (normalize_name would reject the
+        // space), but the URL builder should not assume its caller already
+        // validated — a raw string finding its way in here should not corrupt
+        // the query string.
+        let r = Remote {
+            url: "https://example.com".to_string(),
+            workspace: "a b".to_string(),
+            token: "tok".to_string(),
+        };
+        assert!(
+            r.events_url().contains("workspace=a%20b"),
+            "got: {}",
+            r.events_url()
+        );
     }
 }

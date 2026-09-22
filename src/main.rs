@@ -516,6 +516,21 @@ enum RemoteAction {
         #[arg(short = 'n', long)]
         dry_run: bool,
     },
+
+    /// Print a URL that streams this project's writes live, as they happen
+    ///
+    /// Verifies the server and token first, the same way `init` does, so a
+    /// broken URL fails here instead of inside whatever WebSocket client
+    /// tries to use it. The URL itself works with any WebSocket client in
+    /// any harness — it carries the token in the query string because the
+    /// handshake cannot carry a header — so this is the one command in
+    /// `remote` that is not Claude-Code-specific by nature; `--claude-code`
+    /// only changes what gets printed alongside it.
+    Watch {
+        /// Also print a ready-to-paste Monitor tool call for Claude Code
+        #[arg(long)]
+        claude_code: bool,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -2134,6 +2149,48 @@ fn main() {
                             std::process::exit(1);
                         }
                     }
+                }
+
+                RemoteAction::Watch { claude_code } => {
+                    let cfg = Config::load();
+                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+
+                    // Checked here, not left to whatever WebSocket client
+                    // picks up the URL next: a bad token or an unreachable
+                    // server should fail against a clear error message, not
+                    // as an opaque handshake failure three tools removed from
+                    // this one.
+                    if let Err(e) = remote.check() {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
+
+                    let url = remote.events_url();
+
+                    println!("{} {}", "Watching:".green(), remote.workspace.cyan());
+                    println!("{}", url);
+
+                    if claude_code {
+                        println!();
+                        println!("{}", "Paste into Claude Code:".bold());
+                        println!(
+                            "Monitor({{ description: \"live writes to {}\", ws: {{ url: \"{}\" }} }})",
+                            remote.workspace, url
+                        );
+                    }
+
+                    println!();
+                    println!(
+                        "{} this URL carries a live token. Do not paste it anywhere it might be \
+                         logged or shared.",
+                        "Note:".yellow()
+                    );
                 }
             }
         }
