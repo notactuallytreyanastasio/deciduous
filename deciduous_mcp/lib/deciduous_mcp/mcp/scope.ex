@@ -17,9 +17,16 @@ defmodule DeciduousMcp.MCP.Scope do
   Read tools additionally accept `workspace: "*"`, which is the global view:
   no workspace filter at all, every project at once. Write tools reject it,
   because a node has to land somewhere specific.
+
+  Every write also claims a short advisory lock, keyed by workspace and
+  branch (`DeciduousMcp.Locks`), before it is allowed to proceed — two agents
+  on different branches never contend by default, but two on the same one do,
+  and the second gets told who is holding it rather than writing a node that
+  interleaves with a burst the first agent is mid-way through.
   """
 
   alias DeciduousMcp.Graph.Workspaces
+  alias DeciduousMcp.Locks
 
   @fallback "scratch"
   @global "*"
@@ -61,7 +68,11 @@ defmodule DeciduousMcp.MCP.Scope do
   end
 
   @doc """
-  Resolves a write scope. Always a single workspace id.
+  Resolves a write scope, and claims the branch lock for it.
+
+  On conflict, the error names who holds it and for how much longer, so the
+  caller (an LLM, almost always) has what it needs to just say so rather than
+  silently retrying into the same collision.
   """
   def write_workspace_id(frame, args) do
     case Map.get(args, "workspace") do
@@ -71,8 +82,70 @@ defmodule DeciduousMcp.MCP.Scope do
            "project. Pass the repo name."}
 
       _ ->
-        resolve_single(frame, args)
+        with {:ok, workspace_id} <- resolve_single(frame, args) do
+          claim_lock(workspace_id, frame, args)
+        end
     end
+  end
+
+  defp claim_lock(workspace_id, frame, args) do
+    with {:ok, workspace} <- Workspaces.get_workspace(workspace_id) do
+      lock_key = Locks.lock_key_for(workspace, Map.get(args, "branch"))
+      session_id = session_id(frame)
+      client = client_info(frame)
+
+      case Locks.acquire(workspace_id, lock_key, session_id, client.name, client.version) do
+        {:ok, _lock} ->
+          {:ok, workspace_id}
+
+        {:error, holder} ->
+          {:error, lock_conflict_message(workspace.name, lock_key, holder)}
+      end
+    else
+      {:error, :not_found} -> {:error, "workspace vanished between resolve and lock"}
+    end
+  end
+
+  defp lock_conflict_message(workspace_name, lock_key, holder) do
+    remaining = max(DateTime.diff(holder.expires_at, DateTime.utc_now(), :second), 0)
+    who = holder.client_name || "another client"
+
+    where =
+      case lock_key do
+        "*" -> "workspace-wide"
+        "" -> "no branch recorded"
+        branch -> "branch \"#{branch}\""
+      end
+
+    "workspace \"#{workspace_name}\" (#{where}) is locked by #{who}" <>
+      if(holder.client_version, do: " (#{holder.client_version})", else: "") <>
+      ", session #{short_session(holder.session_id)}. " <>
+      "Releases in #{remaining}s if that session goes idle, or finishes sooner. " <>
+      "Retry shortly, or write to a different branch."
+  end
+
+  # Every session id Hermes hands out starts with the literal "session_", so
+  # slicing the first N characters shows that fixed prefix, not anything that
+  # tells two sessions apart. Strip it first.
+  defp short_session(id) do
+    id
+    |> String.replace_prefix("session_", "")
+    |> String.slice(0, 8)
+  end
+
+  defp session_id(frame) do
+    frame.private
+    |> Map.new()
+    |> Map.get(:session_id, "unknown-session")
+  end
+
+  defp client_info(frame) do
+    info =
+      frame.private
+      |> Map.new()
+      |> Map.get(:client_info, %{})
+
+    %{name: info["name"] || info[:name], version: info["version"] || info[:version]}
   end
 
   @doc """
