@@ -340,6 +340,7 @@ The graph viewer shows a branch dropdown in the stats bar:
 | `requires` | Dependency |
 | `blocks` | Preventing progress |
 | `enables` | Makes something possible |
+| `took_from` | Borrowed from that node, usually on another branch |
 
 ## Graph Integrity - CRITICAL
 

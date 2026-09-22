@@ -82,7 +82,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                     "edge_type": {
                         "type": "string",
                         "description": "Edge type (default: leads_to)",
-                        "enum": ["leads_to", "requires", "chosen", "rejected", "blocks", "enables"],
+                        "enum": ["leads_to", "requires", "chosen", "rejected", "blocks", "enables", "took_from"],
                         "default": "leads_to"
                     }
                 },
