@@ -305,35 +305,17 @@ pub fn init_project(
             .green()
             .bold()
     );
-    println!("\nNext steps:");
+    print_setup_guide();
+    println!("\nLocal tools (solo/offline, or after pulling a server cache):");
     println!(
-        "  1. Run {} to start the local graph viewer",
+        "  {} starts the local graph viewer.",
         "deciduous serve".cyan()
     );
     println!(
-        "  2. Run {} to export graph for GitHub Pages",
+        "  {} reconciles local Git records and exports a static graph; it does not contact Postgres.",
         "deciduous sync".cyan()
     );
-    println!(
-        "  3. Use slash commands: {}, {}, {}, {}, etc.",
-        "/decision".cyan(),
-        "/recover".cyan(),
-        "/work".cyan(),
-        "/document".cyan()
-    );
-    println!();
-    println!(
-        "  4. Commit and push: {}",
-        "git add docs/ .github/ && git push".cyan()
-    );
-    println!(
-        "  5. Enable GitHub Pages (Settings -> Pages -> Source: Deploy from branch, gh-pages)"
-    );
-    println!();
-    println!(
-        "Your graph will be live at: {}",
-        "https://<user>.github.io/<repo>/".cyan()
-    );
+    println!("  Review prompts and attachments before publishing any export.");
 
     if windsurf_configured {
         println!();
@@ -449,6 +431,7 @@ pub fn update_tooling() -> Result<(), String> {
             .green()
             .bold()
     );
+    print_setup_guide();
     println!("\nUpdated files contain the latest:");
     println!("  - Slash commands (/decision, /recover, /work, /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync)");
     println!("  - Skills (/pulse, /narratives, /archaeology)");
@@ -491,6 +474,47 @@ pub fn update_tooling() -> Result<(), String> {
     println!();
 
     Ok(())
+}
+
+/// Recommend the shared server without changing local storage or provisioning it.
+///
+/// The setup scripts live in the source checkout, not in the installed binary.
+/// Keep the recommendation explicit about that prerequisite and the separate
+/// HTTP MCP write path so `remote init` is not mistaken for a storage switch.
+pub fn print_setup_guide() {
+    let border = "======================================================================";
+    println!("\n{}", border.cyan().bold());
+    println!(
+        "{}",
+        "DECIDUOUS 1.0: SET UP SHARED POSTGRES MEMORY".cyan().bold()
+    );
+    println!("{}", border.cyan().bold());
+    println!("  Before launching a team of agents, connect them to one Postgres-backed Deciduous server.");
+    println!(
+        "  UPGRADING AN EXISTING INSTALL? Read this before moving your graph:\n    {}",
+        "https://deciduous.dev/tutorial/upgrading.html"
+            .yellow()
+            .bold()
+    );
+    println!(
+        "  LOCAL POSTGRES SETUP:\n    {}",
+        "https://deciduous.dev/tutorial/local-postgres.html".cyan()
+    );
+    println!("  Want PostgreSQL Docker files only? Generate a fresh, private directory:");
+    println!("    deciduous setup --postgres --output ./deciduous-postgres --port 55432");
+    println!("  That command creates files only. Start Docker yourself and connect the MCP service separately.");
+    println!("  From a cloned Deciduous source repository, with Python 3 and Docker Compose:");
+    println!("    python3 scripts/team-memory/local-stack.py configure");
+    println!("    python3 scripts/team-memory/local-stack.py configure --apply");
+    println!("    python3 scripts/team-memory/local-stack.py up --apply");
+    println!("  The guide covers credentials, client configuration, and a two-agent handoff.");
+    println!("  For an existing shared server, use its URL and token instead of starting another.");
+    println!("  In each initialized project, after authenticating:");
+    println!("    deciduous remote init <server-base-url> --workspace <project-name>");
+    println!("  Agents should write through the shared HTTP MCP endpoint.");
+    println!("  remote init does not redirect plain CLI writes or the local stdio MCP server; they still use SQLite.");
+    println!("  SQLite remains available for solo/offline work. No Postgres server was started or remote credentials configured.");
+    println!("{}", border.cyan().bold());
 }
 
 /// Update Claude Code tooling files

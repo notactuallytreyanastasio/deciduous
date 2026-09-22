@@ -26,6 +26,25 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
+    /// Print the setup guide, or generate a standalone Postgres Compose project
+    ///
+    /// With no flags, prints the shared-memory guide without changing files.
+    /// --postgres writes Docker files and a private .env into a new directory;
+    /// it never starts Docker or changes a database.
+    Setup {
+        /// Generate PostgreSQL-only Docker files (does not include the MCP server)
+        #[arg(long)]
+        postgres: bool,
+
+        /// New output directory (default: ./deciduous-postgres); must not exist
+        #[arg(long, requires = "postgres")]
+        output: Option<PathBuf>,
+
+        /// Unprivileged loopback host port, 1024-65535 (default: 55432)
+        #[arg(long, requires = "postgres", value_parser = clap::value_parser!(u16).range(1024..))]
+        port: Option<u16>,
+    },
+
     /// Initialize deciduous in current directory
     ///
     /// Sets up the decision graph database and AI assistant integration.
@@ -971,6 +990,34 @@ enum TagAction {
 fn main() {
     let args = Args::parse();
 
+    // Neither setup mode needs a local graph. Only the explicit --postgres
+    // mode writes files, and it does so in a fresh, private output directory.
+    if let Command::Setup {
+        postgres,
+        output,
+        port,
+    } = &args.command
+    {
+        if *postgres {
+            let output = output
+                .clone()
+                .unwrap_or_else(|| PathBuf::from(deciduous::setup::DEFAULT_POSTGRES_OUTPUT));
+            match deciduous::setup::scaffold_postgres(
+                &output,
+                port.unwrap_or(deciduous::setup::DEFAULT_POSTGRES_PORT),
+            ) {
+                Ok(directory) => deciduous::setup::print_postgres_next_steps(&directory),
+                Err(message) => {
+                    eprintln!("{} {}", "Error:".red(), message);
+                    std::process::exit(1);
+                }
+            }
+        } else {
+            deciduous::init::print_setup_guide();
+        }
+        return;
+    }
+
     // Handle init separately - it doesn't need an existing database
     if let Command::Init {
         claude,
@@ -1150,6 +1197,7 @@ fn main() {
     };
 
     match args.command {
+        Command::Setup { .. } => unreachable!(),  // Handled above
         Command::Init { .. } => unreachable!(),   // Handled above
         Command::Update { .. } => unreachable!(), // Handled above
         Command::MergeRecord { .. } => unreachable!(), // Handled above
