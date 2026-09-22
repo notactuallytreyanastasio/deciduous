@@ -1,0 +1,19 @@
+# Build artifacts
+/_build/
+/deps/
+
+# Generated on crash
+erl_crash.dump
+
+# Database file (local dev)
+*.db
+
+# Mix lock (include in repo for reproducible builds)
+# /mix.lock
+
+# Environment
+.env
+
+# IDE
+.elixir_ls/
+.vscode/

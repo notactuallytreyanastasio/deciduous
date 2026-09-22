@@ -29,6 +29,8 @@ exclude = [
     # Elixir/Erlang build artifacts (from decidulixir)
     "_build/**",
     "deps/**",
+    # Elixir MCP server - deployed as a container, not shipped in the crate
+    "deciduous_mcp/**",
     # Misc stray files
     "prodigious/**",
     "burrito_out/**",

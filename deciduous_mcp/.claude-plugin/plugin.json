@@ -1,0 +1,30 @@
+{
+  "name": "deciduous",
+  "version": "0.1.0",
+  "description": "Shared decision graphs for team development. Track every goal, decision, and outcome in a collaborative PostgreSQL-backed graph that survives context loss.",
+  "author": "notactuallytreyanastasio",
+  "homepage": "https://github.com/notactuallytreyanastasio/deciduous",
+  "license": "MIT",
+  "mcp": {
+    "stdio": {
+      "command": "./deciduous_mcp",
+      "args": ["start"],
+      "env": {
+        "DATABASE_URL": "${DECIDUOUS_DATABASE_URL}",
+        "DECIDUOUS_WORKSPACE": "${DECIDUOUS_WORKSPACE:-default}",
+        "DECIDUOUS_PROJECT_DIR": "${DECIDUOUS_PROJECT_DIR}"
+      }
+    }
+  },
+  "capabilities": [
+    "decision-graph",
+    "team-collaboration",
+    "context-recovery"
+  ],
+  "tags": [
+    "ai-development",
+    "decision-tracking",
+    "team-collaboration",
+    "architecture"
+  ]
+}
