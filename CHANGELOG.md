@@ -1,5 +1,51 @@
 # Changelog
 
+## [1.0.0] - 2026-09-22
+
+The shared server is the product now. 0.19.0 put every project's graph in one Postgres; 1.0.0 is what happens when several agents write to it at once. The proof is the tetris arena: ten Claude Code sessions in ten git worktrees, one workspace, told to read each other's code and reasoning. Twenty-six minutes later there were ten playable games, 386 nodes, and 170 borrowed ideas with provenance. Write-up: https://notactuallytreyanastasio.github.io/tetris-arena/
+
+### Added
+- **`took_from` edge type.** A borrow is an edge, not a sentence: `from` is the node you took from, `to` is your node that used it, and it crosses branches on purpose. `log_observation` takes `took_from` (a node UUID or a full change_id) and `why` (the edge's rationale) and writes the observation and the edge in one call; `related_to` accepts a change_id too. `add_edge` and `deciduous link -t took_from` take it directly; the web viewer source draws it dash-dot, and the DOT export colours it violet. The viewer embedded in the binary is a separate build that has not been refreshed since 0.14.0; it draws the edge as a plain line until it is. In the arena zero of 471 edges crossed a branch, and the borrow counts in the write-up came from a regular expression over observation titles.
+- **`check_activity` returns `branches`:** the last node on each of the twenty most recently written branches (type, title, change_id, created_at) with who holds its lock; `branches: N` widens it and `branches_total` counts them all. A workspace that has had sixty branches since 2025 should not hand all sixty to an agent asking what is happening now. The arena's agents polled `query_nodes` for decisions because the lock list was all the tool returned.
+- **`deciduous remote watch` connects.** One line per write, quoting the branch, the operation, the node type and the title: `04:47:15  agent-7  observation  "Took the step-reset for lock delay from agent-8's decision, …"`. Edges, with `--edges`, print as `agent-3  edge chosen  a1b2c3d4 -> e5f6a7b8`. It reconnects with backoff when the socket closes. `--types`, `--branch`, `--json`; `--url` prints the socket URL for another client and `--claude-code` adds a `Monitor(...)` call to paste. It quotes rather than counts because a watcher in the arena kept a tally, counted updates as inserts, and reported a "second goal" convention that did not exist.
+- **Event frames carry the node's `title` and `status`**, and edge frames carry the branch of their source node. Edges have no branch of their own, so before this a watcher could not tell whose edge it was looking at.
+
+### Fixed
+- **The events socket closed every subscriber after sixty seconds** with code 1002, whether or not any frame had been sent. `GraphSocket` was upgraded with no options, so Bandit's default idle timeout applied. The server now sends a ping every thirty seconds; the client's pong resets the timer, and a client that stops answering is still reaped.
+- **`update_node`, `delete_node` and `delete_edge` never claimed the branch lock.** The 0.19 commit that said it closed this gap had added the `branch` argument to their schemas, but the tools called the graph directly and never went through `Scope.write_workspace_id/2`. They now resolve the node's workspace and claim the lock before touching anything.
+- **Every MCP call from a long-lived Claude Code session hung for 300 seconds.** Hermes expires a session after thirty idle minutes, and a restart drops every session at once. The next call with the old `mcp-session-id` got a `200` carrying `"Server not initialized"` under a freshly generated id, not the request's id, so the client could never match it and waited until its own timeout. The client log says exactly this: `Received a response for an unknown message ID: {"id":"err_GNei6oQr…"}`. The server now answers a dead session with `404` and JSON-RPC error `-32001 Session not found` under the request's id, the shape the MCP spec and the reference SDK use, so the client fails in milliseconds and re-initializes. The idle timeout is 24 hours.
+- **Every connection from Claude Code paid five seconds before its first call.** The client opens with a version-negotiation probe, a request named `server/discover` that Hermes does not know; Hermes stripped the method and answered `202` as if it were a notification, so the client waited five seconds for a reply to that id before falling back to the legacy handshake. Captured through a logging relay: probe at 19.68s, handshake at 24.69s. The server now answers any request whose method it does not implement with `-32601 Method not found` under the request's id, and the same client connects in 35 milliseconds.
+
+### Changed
+- The site leads with the multi-agent story alongside the two things it already did: memory that survives a session (`/recover`, the graph) and discovery over what was already decided (`ask_graph`, `query_nodes` across every workspace, `/decision-graph`). `docs/remote.html#alongside` documents locks, `check_activity`, events, `remote watch` and `took_from` together.
+- The MCP server behind the shared graph reports version 1.0.0.
+
+### Not in this release
+- Nothing writes back from the server to SQLite except `remote pull`. The local database is a cache.
+- The event stream is advisory: a `NOTIFY` that fires while the listener is down is lost, and a reconnect races new `LISTEN`s against notifications issued at the same moment. A gap is not proof of silence; `check_activity` and `query_nodes` are how a subscriber catches up.
+- Locks are advisory too. A client that ignores the refusal and writes anyway still can.
+
+## [0.19.0] - 2026-09-21
+
+This entry was written for 1.0.0; 0.19.0 shipped with release notes in `src/changelog.rs` and none here.
+
+### Added
+- **`deciduous remote`** points a repository at a shared graph server. One Postgres holds every project's graph, one workspace per repository, and the local database becomes a cache of it. `remote init <url>` verifies the server and the token before writing anything; `remote status` reports which side has drifted; `remote pull` refreshes the cache; `remote push` seeds a workspace or carries history that predates the server.
+- **`remote login`** stores the token at `~/.config/deciduous/credentials`, mode 0600, outside every repository. It is never written to `config.toml`; committing that file leaks a hostname and nothing else.
+- **`remote adopt <dir>`** configures many projects at once and never repoints one already aimed somewhere else.
+- **An MCP endpoint over HTTP** (`deciduous_mcp/`, Elixir and Postgres) serves the graph to Claude from any directory. Read tools accept `workspace: "*"` for the cross-project view; writes refuse it, because a node has to land somewhere. A repository can pin its workspace with an `X-Deciduous-Workspace` header and then no tool call can write its nodes anywhere else.
+- **Documents live in Postgres**, keyed by sha256, so a file attached in several projects is stored once.
+- **Advisory write locks** per `(workspace, branch)`, ten second lease renewed by every write from the same session, and `check_activity` to report the holders. Two agents on different branches never contend; a workspace can set `lock_scope: "workspace"` to make them.
+- **Live events.** Postgres triggers fire `NOTIFY` on every node insert or update and edge insert; `GET /events` streams one JSON frame per write over a WebSocket, scoped to a workspace or `"*"`. Claude Code's `Monitor` tool can sit on it.
+- **`deciduous remote watch`** printed the events URL with the token and workspace resolved. (In 1.0.0 it connects.)
+
+### Fixed
+- Edges resolve by their integer endpoint before the denormalized change_id. The copies go stale: 9,185 of 51,158 edges in one graph carried a change_id belonging to no node, and preferring the portable-looking identifier silently dropped 11% of an archive on import.
+- `GET /mcp` returns 405. Cloudflare buffers SSE, so the server-to-client stream Claude Code waits on never opened, and every tool call hung for 300 seconds against a server answering the same POST in 88ms.
+
+### Security
+- Never put a literal token in `.mcp.json`. Use `${DECIDUOUS_MCP_TOKEN}`, which Claude Code expands from the environment and names when it is missing.
+
 ## [0.18.0] - 2026-09-18
 
 ### Changed

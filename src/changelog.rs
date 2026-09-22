@@ -12,6 +12,22 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.0",
+        highlights: &[
+            "Fix: a Claude Code session idle for 30 minutes found every later MCP call hanging for 300s. The server answered the expired session under a made-up id; it now answers 404 Session not found under the request's id, and sessions live 24 hours",
+            "Fix: every Claude Code connection paid five seconds before its first call, waiting on a version probe (server/discover) the server answered as a notification; unknown methods now get -32601 under the request id and the client connects in 35ms",
+            "Several agents, one graph: ten Claude Code sessions in ten worktrees built ten Tetris games against one shared workspace in 26 minutes, 386 nodes, 170 borrowed ideas with provenance — https://notactuallytreyanastasio.github.io/tetris-arena/",
+            "`took_from` edge type: a borrow is an edge, from the node you took from to your node that used it, across branches. `log_observation` takes `took_from` (UUID or change_id) and writes the observation and the edge in one call; `deciduous link -t took_from` too",
+            "`check_activity` returns `branches`: the last node on each of the twenty most recently written branches with who holds its lock (`branches: N` for more), so a peer sees what is new without polling query_nodes",
+            "`deciduous remote watch` connects and prints one quoted line per write — branch, operation, type, title — and reconnects with backoff. `--types`, `--branch`, `--edges`, `--json`; `--url` prints the socket URL for another client",
+            "Event frames carry the node title and status; edge frames carry the source node's branch. A watcher can quote instead of count",
+            "Fix: the events socket closed every subscriber after 60s (Bandit's default idle timeout, close 1002). The server pings every 30s now",
+            "Fix: update_node, delete_node and delete_edge never claimed the branch lock; the 0.19 fix had only added the argument to their schemas. They resolve the node's workspace and claim it now",
+            "The site leads with the multi-agent story next to memory (/recover) and discovery (ask_graph, workspace \"*\"): docs/remote.html#alongside documents locks, check_activity, events, watch and took_from together",
+            "Still advisory: a NOTIFY that fires while the listener is down is lost, and a lock is a refusal with a name attached, not a table constraint. check_activity and query_nodes are how you catch up",
+        ],
+    },
+    Release {
         version: "0.19.0",
         highlights: &[
             "`deciduous remote` points a project at a shared graph server: one Postgres holds every repository's graph, one workspace each",

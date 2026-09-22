@@ -82,7 +82,7 @@
         </nav>
 
         <header>
-          <span class="badge badge-new">New in v0.19</span>
+          <span class="badge badge-new">Updated in 1.0</span>
           <h1>One Graph, Every Project</h1>
           <p class="tagline">
             One Postgres server holds every repository's decision graph, one workspace each &mdash;
@@ -412,6 +412,145 @@ url = "https://example.com/deciduous-mcp"</code></pre>
         </section>
 
         <!-- =========================================================== -->
+        <section id="alongside">
+          <h2>Working alongside other agents</h2>
+          <p>
+            Two sessions writing to one workspace need three things: not to interleave, to know the
+            other exists, and to find out when it writes. The server does all three, and the branch is
+            the unit for each of them.
+          </p>
+          <h3>Locks</h3>
+          <p>
+            Every write claims an advisory lock keyed on <code>(workspace, branch)</code> with a ten
+            second lease. The same session writing again renews it, so one lease covers an arbitrary
+            run of writes; a different session on the same branch is refused and told who holds it and
+            for how long. Sessions on different branches never contend. This is why the arena ran ten
+            agents in ten worktrees rather than one directory: the branch name is the lock key.
+          </p>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">add_node from a second session on a branch someone else holds</span>
+            </div>
+            <div class="session-content">
+              <div class="cmd-out">workspace "blog" (branch "feat/auth") is locked by claude-code (2.1.278), session GNeD3Qwg. Releases in 8s if that session goes idle, or finishes sooner. Retry shortly, or write to a different branch.</div>
+            </div>
+          </div>
+          <p>
+            Pass <code>branch</code> on every write. Without it a session locks the empty-branch bucket,
+            and contends with everyone else who also forgot. A workspace that wants branches to contend
+            sets <code>lock_scope: "workspace"</code> in its settings.
+          </p>
+          <div class="note">
+            <strong>Fixed in 1.0:</strong> <code>update_node</code>, <code>delete_node</code> and
+            <code>delete_edge</code> did not claim the lock at all. They resolve the node's workspace
+            and claim it now. The 0.19 commit that said it closed this gap had only added the
+            <code>branch</code> argument to their schemas; the tools never called the lock.
+          </div>
+          <h3>check_activity</h3>
+          <p>
+            The read side. Call it before a burst of writes, or after reading a peer's decision and
+            before acting on it.
+          </p>
+          <table class="cmdref">
+            <tr><th>Field</th><th>What it holds</th></tr>
+            <tr><td><code>sessions</code></td><td>every unexpired lock: branch, client, version, whether it is you, seconds left on the lease</td></tr>
+            <tr><td><code>branches</code></td><td>the twenty most recently written branches, each with its last node (type, title, change_id, created_at) and who holds its lock, if anyone. Pass <code>branches: N</code> for more; <code>branches_total</code> says how many the workspace has in all</td></tr>
+          </table>
+          <p>
+            <code>branches</code> is new in 1.0. In the arena the agents polled <code>query_nodes</code>
+            for decisions because the lock list was the only thing <code>check_activity</code> returned;
+            the last node on each branch is what they were actually after.
+          </p>
+          <h3>Events</h3>
+          <p>
+            Postgres triggers call <code>pg_notify</code> on every insert or update to
+            <code>decision_nodes</code> and every insert to <code>decision_edges</code>. One listener
+            bridges that to a WebSocket at <code>GET /events</code>, scoped to a workspace or to
+            <code>"*"</code> for all of them. A frame is a pointer with enough text to quote, not the
+            row:
+          </p>
+          <div class="config-block">
+            <h4>one frame</h4>
+<pre><code>{"table":"decision_nodes","op":"INSERT","workspace":"tetris-arena",
+ "id":"…","change_id":"8d2f482a-…","node_type":"observation","status":"pending",
+ "branch":"agent-7",
+ "title":"Took the step-reset for lock delay from agent-8's decision, …"}</code></pre>
+          </div>
+          <p>
+            Edge frames carry <code>edge_type</code>, both endpoints' <code>change_id</code>, and the
+            branch of the source node. Edges have no branch of their own; before 1.0 a watcher could not
+            tell whose edge it was looking at.
+          </p>
+          <p>
+            The handshake cannot carry an <code>Authorization</code> header from a browser
+            <code>WebSocket</code> or anything built on one, so <code>?token=</code> is accepted as a
+            fallback. It is a bearer token in a URL: do not paste it anywhere that logs.
+          </p>
+          <h3>deciduous remote watch</h3>
+          <p>
+            Connects to that socket for the current repository's workspace and prints one line per
+            write. It quotes; it does not count. It reconnects with backoff when the socket closes.
+          </p>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">deciduous remote watch</span>
+            </div>
+            <div class="session-content">
+              <div class="cmd-out">Watching: tetris-arena</div>
+              <div class="cmd-out">04:45:14  agent-9   observation  "Took 4 hidden rows from agent-3: SRS kicks can lift a piece 2 rows at the ceiling"</div>
+              <div class="cmd-out">04:46:13  agent-10  observation  "Took 4 hidden rows (agent-9, from agent-3) and lock-out (agent-2, from agent-1); dropped my y&lt;0 exemption"</div>
+              <div class="cmd-out">04:47:15  agent-7   observation  "Took the step-reset for lock delay from agent-8's decision, and spawn-then-step-down and lock-out from agent-8 and agent-3"</div>
+            </div>
+          </div>
+          <table class="cmdref">
+            <tr><th>Flag</th><th>Effect</th></tr>
+            <tr><td><code>--types outcome,observation</code></td><td>only these node types</td></tr>
+            <tr><td><code>--branch agent-3</code></td><td>only this branch</td></tr>
+            <tr><td><code>--edges</code></td><td>include edge frames, printed as <code>agent-3  edge chosen  a1b2c3d4 -&gt; e5f6a7b8</code></td></tr>
+            <tr><td><code>--json</code></td><td>the raw frame, one per line</td></tr>
+            <tr><td><code>--url</code></td><td>print the socket URL and exit, for another client</td></tr>
+            <tr><td><code>--claude-code</code></td><td>with <code>--url</code>: also print a <code>Monitor(...)</code> call to paste into Claude Code</td></tr>
+          </table>
+          <div class="note">
+            <strong>Why quote rather than count.</strong> During the arena a session watching the raw
+            stream kept a per-branch tally and reported that a "second goal" convention was spreading
+            through the agents. The graph had ten goals, one per agent; the tally had counted updates as
+            inserts. A line that quotes the title and the operation cannot invent that.
+          </div>
+          <h3>took_from</h3>
+          <p>
+            An edge type for a borrow. <code>from</code> is the node you took from, <code>to</code> is
+            your node that used it, and it crosses branches on purpose. <code>log_observation</code>
+            takes <code>took_from</code> (a node UUID or a full change_id) and <code>why</code> (the edge's rationale) and writes the observation and the edge
+            in one call; <code>add_edge</code> and <code>deciduous link -t took_from</code> take it
+            directly.
+          </p>
+          <div class="config-block">
+            <h4>log_observation</h4>
+<pre><code>log_observation({
+  workspace: "tetris-arena", branch: "agent-7",
+  title: "Took the step-reset for lock delay from agent-8's decision",
+  took_from: "767cce30-9d0b-4e56-a4d8-2f0b1c8e7a11",
+  why: "Resetting the lock timer on every step is what makes fast play at the floor feel fair.",
+  description: "agent-8's game.js did not have it coded yet when I read it, so this implements the idea from the graph rather than from code."
+})</code></pre>
+          </div>
+          <p>
+            In the arena zero of 471 edges crossed a branch. The agents cited each other in 89 of 91
+            observation titles, four of them by change_id, and never linked to the node, because the
+            rules said to link every node to its parent and did not say the node you borrowed from
+            counts. The borrow figures in the write-up come from a regular expression over titles. That
+            is the wrong place for that information to live; <code>took_from</code> is the right one.
+          </p>
+        </section>
+
+        <!-- =========================================================== -->
         <section id="run-your-own">
           <h2>Running the server</h2>
           <p>
@@ -441,6 +580,21 @@ url = "https://example.com/deciduous-mcp"</code></pre>
             <code>push</code>, and until then the two differ.</li>
             <li><strong>Self-loop edges are rejected</strong> by the server's schema, and reported
             per project rather than silently dropped.</li>
+            <li><strong>A session that outlives the server is refused, not resumed.</strong> Sessions
+            expire after 24 idle hours, and a restart drops all of them. The next call on an old
+            <code>mcp-session-id</code> gets <em>404</em> with JSON-RPC error <code>-32001 Session not
+            found</code> under the request's own id, and the client starts a new session. Before 1.0 the
+            server answered such a call with a <em>200</em> under a made-up id, and Claude Code waited
+            300 seconds for a reply it could never match, on every call, until the process was
+            restarted.</li>
+            <li><strong>The event stream is advisory.</strong> Postgres does not queue a
+            <code>NOTIFY</code> that fires while the listener's connection is down, and a reconnect
+            races new <code>LISTEN</code>s against notifications issued at the same moment. A gap in
+            the stream is not proof that nothing happened; a subscriber that needs certainty calls
+            <code>check_activity</code> or <code>query_nodes</code> to catch up.</li>
+            <li><strong>Locks are advisory too.</strong> A client that ignores the refusal and writes
+            anyway still can. The lock is a refusal with a name attached, not a constraint on the
+            table.</li>
             <li><strong>A document can outlive its bytes.</strong> If a file referenced by a
             document row is missing at import time, the row still imports as history and a fetch
             answers <em>410 Gone</em> rather than <em>404</em> &mdash; the attachment was real; the

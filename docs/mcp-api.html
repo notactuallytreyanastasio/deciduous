@@ -96,7 +96,7 @@
               <tr><td><code>from_id</code></td><td>int</td><td>Yes</td><td>Source node ID</td></tr>
               <tr><td><code>to_id</code></td><td>int</td><td>Yes</td><td>Target node ID</td></tr>
               <tr><td><code>rationale</code></td><td>string</td><td></td><td>Why this connection exists</td></tr>
-              <tr><td><code>edge_type</code></td><td>string</td><td></td><td>leads_to, requires, chosen, rejected, blocks, enables</td></tr>
+              <tr><td><code>edge_type</code></td><td>string</td><td></td><td>leads_to, requires, chosen, rejected, blocks, enables, took_from (a borrow: from the node you took from, to your node that used it; crosses branches)</td></tr>
             </table></div>
           </div>
 
@@ -239,6 +239,21 @@
             <div class="tool-card"><span class="tool-name">generate_writeup</span><span class="tag tag-cli">deciduous writeup</span><p class="tool-desc">PR writeup. Params: <code>title</code>, <code>roots</code>, <code>nodes</code>, <code>no_dot</code>, <code>no_test_plan</code></p></div>
             <div class="tool-card"><span class="tool-name">events_status</span><span class="tag tag-cli">deciduous events status</span><p class="tool-desc">Multi-user sync status. No params.</p></div>
           </div>
+        </section>
+
+        <!-- =========================================================== -->
+        <section>
+          <h2>Shared server</h2>
+          <p>This reference is the embedded server (<code>deciduous mcp</code>, stdio, one SQLite file). The <a href="remote.html">shared graph server</a> is a separate HTTP endpoint with its own 18 tools; the ones without an embedded equivalent are below. Every call takes <code>workspace</code>; every write takes <code>branch</code>.</p>
+          <div class="tool-grid">
+            <div class="tool-card"><span class="tool-name">check_activity</span><p class="tool-desc">Active write sessions in a workspace (branch, client, version, is_you, seconds left on the lease) and <code>branches</code>: the last node on each of the most recently written branches with who holds its lock, plus <code>branches_total</code>. Params: <code>workspace</code> (req), <code>branches</code> (integer, default 20, max 200: how many branches to list).</p></div>
+            <div class="tool-card"><span class="tool-name">log_observation</span><p class="tool-desc">Observation node in one call. Params: <code>title</code> (req), <code>description</code>, <code>related_to</code> (UUID or change_id), <code>took_from</code> (UUID or change_id of the node borrowed from; also writes a <code>took_from</code> edge), <code>why</code> (the edge's rationale: what made the borrowed thing better), <code>tags</code>, <code>branch</code>.</p></div>
+            <div class="tool-card"><span class="tool-name">log_decision</span><p class="tool-desc">Decision, its options, and chosen/rejected edges atomically. Params: <code>title</code>, <code>chosen_option</code> (req), <code>rejected_options</code>, <code>rationale</code>, <code>parent_node_id</code>, <code>confidence</code>, <code>branch</code>.</p></div>
+            <div class="tool-card"><span class="tool-name">list_workspaces</span><p class="tool-desc">Every workspace on the server, with size and last write. No params.</p></div>
+            <div class="tool-card"><span class="tool-name">ask_graph</span><p class="tool-desc">A question in prose, answered from the nodes. Params: <code>question</code> (req), <code>scope</code>, <code>include_context</code>, <code>workspace</code> (<code>"*"</code> for all).</p></div>
+            <div class="tool-card"><span class="tool-name">capture_conversation_turn</span><p class="tool-desc">One conversation turn as a subgraph: goal, observations, options, decision, action, outcome, linked. Params: <code>summary</code> (req), <code>goal</code>, <code>observations</code>, <code>options_considered</code>, <code>decision</code>, <code>action</code>, <code>outcome</code>, <code>parent_node_id</code>, <code>confidence</code>, <code>branch</code>.</p></div>
+          </div>
+          <p>Events are not a tool. <code>GET /events?workspace=&lt;name&gt;</code> (or <code>*</code>) on the same host is a WebSocket; one JSON frame per node insert or update and per edge insert, carrying <code>node_type</code>, <code>status</code>, <code>title</code>, <code>branch</code>, <code>change_id</code>. <code>deciduous remote watch</code> is the client.</p>
         </section>
 
         <!-- =========================================================== -->
