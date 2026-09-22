@@ -61,6 +61,7 @@ defmodule DeciduousMcp.MCP.Server do
 
   # --- Cross-project ---
   component DeciduousMcp.MCP.Tools.ListWorkspaces
+  component DeciduousMcp.MCP.Tools.CheckActivity
 
   # --- Prompts ---
   component DeciduousMcp.MCP.Prompts.AlwaysCapture
