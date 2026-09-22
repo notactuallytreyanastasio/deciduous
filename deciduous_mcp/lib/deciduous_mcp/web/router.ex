@@ -12,6 +12,8 @@ defmodule DeciduousMcp.Web.Router do
     * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
     * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
+    * `GET  /events` — a WebSocket stream of writes as they happen, one frame per
+      trigger firing (see `DeciduousMcp.Events.Listener`).
 
   `Plug.Parsers` is deliberately NOT in this pipeline. Hermes' plug reads the
   request body itself, but only when `body_params` is still unfetched
@@ -21,26 +23,27 @@ defmodule DeciduousMcp.Web.Router do
   """
   use Plug.Router
 
-  alias DeciduousMcp.Graph.{Documents, Query}
+  alias DeciduousMcp.Graph.{Documents, Query, Workspaces}
   alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Storage
   alias DeciduousMcp.Sync.Import
-  alias DeciduousMcp.Web.{Auth, WorkspacePlug}
+  alias DeciduousMcp.Web.{Auth, GraphSocket, WorkspacePlug}
 
   # 64MB: the largest graph on disk today is 24MB of SQLite, which is smaller
   # again as exported JSON. A project past this should be split, not streamed.
   @max_import_bytes 64 * 1024 * 1024
 
-  plug :match
-  plug :dispatch
+  plug(:match)
+  plug(:dispatch)
 
   get "/health" do
     send_resp(conn, 200, "ok")
   end
 
-  forward "/mcp",
+  forward("/mcp",
     to: Hermes.Server.Transport.StreamableHTTP.Plug,
     init_opts: [server: DeciduousMcp.MCP.Server]
+  )
 
   post "/import" do
     conn = Auth.call(conn, [])
@@ -73,9 +76,14 @@ defmodule DeciduousMcp.Web.Router do
 
       true ->
         case read_whole_body(conn) do
-          {:ok, content, conn} -> store_blob(conn, hash, content)
-          {:too_large, conn} -> json(conn, 413, %{error: "blob exceeds #{@max_import_bytes} bytes"})
-          {:error, _} -> json(conn, 400, %{error: "could not read body"})
+          {:ok, content, conn} ->
+            store_blob(conn, hash, content)
+
+          {:too_large, conn} ->
+            json(conn, 413, %{error: "blob exceeds #{@max_import_bytes} bytes"})
+
+          {:error, _} ->
+            json(conn, 400, %{error: "could not read body"})
         end
     end
   end
@@ -106,6 +114,30 @@ defmodule DeciduousMcp.Web.Router do
   get "/documents/:id" do
     conn = Auth.call(conn, [])
     if conn.halted, do: conn, else: serve_document(conn, id)
+  end
+
+  # The WebSocket handshake itself cannot carry a custom Authorization header
+  # in most clients that matter here — not a workaround for one client, a
+  # limit of the browser `WebSocket` constructor and of every simple client
+  # built against it, this session's own `Monitor` included. `?token=` is the
+  # accepted pattern for that reason. It costs a real thing: a bearer token in
+  # a URL can end up in a proxy's access log where a header would not, so the
+  # header is still tried first and this is strictly a fallback for a
+  # connection that arrives with none.
+  get "/events" do
+    conn = maybe_token_from_query(conn)
+    conn = Auth.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      conn = conn |> WorkspacePlug.call([]) |> fetch_query_params()
+
+      case Scope.read_scope(conn_frame(conn), conn.query_params) do
+        {:ok, scope} -> upgrade_to_event_stream(conn, scope)
+        {:error, message} -> json(conn, 422, %{error: message})
+      end
+    end
   end
 
   match _ do
@@ -205,7 +237,11 @@ defmodule DeciduousMcp.Web.Router do
         json(conn, 200, %{stored: hash, bytes: byte_size(content)})
 
       {:error, {:hash_mismatch, expected: expected, actual: actual}} ->
-        json(conn, 422, %{error: "content does not match hash", expected: expected, actual: actual})
+        json(conn, 422, %{
+          error: "content does not match hash",
+          expected: expected,
+          actual: actual
+        })
     end
   end
 
@@ -248,6 +284,50 @@ defmodule DeciduousMcp.Web.Router do
   # inherits from Plug.Conn. This route talks to it directly, so it presents
   # the same shape rather than duplicating the precedence rules.
   defp conn_frame(conn), do: %{assigns: conn.assigns}
+
+  # --- Events -------------------------------------------------------------
+
+  defp maybe_token_from_query(conn) do
+    case get_req_header(conn, "authorization") do
+      [] ->
+        conn = fetch_query_params(conn)
+
+        case conn.query_params["token"] do
+          token when is_binary(token) and token != "" ->
+            put_req_header(conn, "authorization", "Bearer " <> token)
+
+          _ ->
+            conn
+        end
+
+      _ ->
+        conn
+    end
+  end
+
+  # `Scope.read_scope/2` returns a workspace id (or :global) so every other
+  # read tool can query decision_nodes by an indexed FK. The PubSub topics
+  # this stream runs on are keyed by name instead, because that is what the
+  # trigger's NOTIFY payload already carries — resolving the id back to a
+  # name here, rather than teaching the trigger or the topic scheme to key on
+  # ids, keeps exactly one place that knows the mapping.
+  defp upgrade_to_event_stream(conn, :global) do
+    conn |> Plug.Conn.upgrade_adapter(:websocket, {GraphSocket, %{topic: "graph:*"}, []})
+  end
+
+  defp upgrade_to_event_stream(conn, workspace_id) do
+    case Workspaces.get_workspace(workspace_id) do
+      {:ok, workspace} ->
+        conn
+        |> Plug.Conn.upgrade_adapter(
+          :websocket,
+          {GraphSocket, %{topic: "graph:" <> workspace.name}, []}
+        )
+
+      {:error, :not_found} ->
+        json(conn, 404, %{error: "no such workspace"})
+    end
+  end
 
   defp content_type(conn) do
     case get_req_header(conn, "content-type") do
