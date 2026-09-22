@@ -405,7 +405,7 @@ pub fn run_server() -> io::Result<()> {
         Err(e) => {
             eprintln!("deciduous-mcp: Failed to open database: {e}");
             eprintln!("deciduous-mcp: Make sure you're in a directory with .deciduous/ or set DECIDUOUS_DB_PATH");
-            return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
+            return Err(io::Error::other(e.to_string()));
         }
     };
 
