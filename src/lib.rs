@@ -53,6 +53,7 @@ pub mod narratives;
 pub mod opencode;
 pub mod pulse;
 pub mod records;
+pub mod remote;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
