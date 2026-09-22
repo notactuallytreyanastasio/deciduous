@@ -3,6 +3,7 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
   use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Nodes
+  alias DeciduousMcp.MCP.Scope
 
   def definition do
     %{
@@ -31,7 +32,14 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
     }
   end
 
-  def call(%{arguments: args}) do
+  def call(%{arguments: args, server: frame}) do
+    case Scope.write_scope_for_node(frame, args["node_id"], args) do
+      {:ok, _workspace_id} -> do_call(args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp do_call(args) do
     attrs =
       %{}
       |> maybe_put(:title, args["title"])

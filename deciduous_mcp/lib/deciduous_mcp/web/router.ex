@@ -13,7 +13,8 @@ defmodule DeciduousMcp.Web.Router do
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
     * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
     * `GET  /events` — a WebSocket stream of writes as they happen, one frame per
-      trigger firing (see `DeciduousMcp.Events.Listener`).
+      trigger firing (see `DeciduousMcp.Events.Listener` for the payload and
+      `DeciduousMcp.Web.GraphSocket` for why the server pings).
 
   `Plug.Parsers` is deliberately NOT in this pipeline. Hermes' plug reads the
   request body itself, but only when `body_params` is still unfetched
@@ -25,6 +26,9 @@ defmodule DeciduousMcp.Web.Router do
 
   alias DeciduousMcp.Graph.{Documents, Query, Workspaces}
   alias DeciduousMcp.MCP.Scope
+  alias DeciduousMcp.Web.SessionGuard
+
+  @session_guard SessionGuard.init(server: DeciduousMcp.MCP.Server)
   alias DeciduousMcp.Storage
   alias DeciduousMcp.Sync.Import
   alias DeciduousMcp.Web.{Auth, GraphSocket, WorkspacePlug}
@@ -160,6 +164,7 @@ defmodule DeciduousMcp.Web.Router do
         conn
         |> WorkspacePlug.call([])
         |> refuse_sse_stream()
+        |> then(fn c -> if c.halted, do: c, else: SessionGuard.call(c, @session_guard) end)
         |> then(fn c -> if c.halted, do: c, else: super(c, opts) end)
       end
     else
