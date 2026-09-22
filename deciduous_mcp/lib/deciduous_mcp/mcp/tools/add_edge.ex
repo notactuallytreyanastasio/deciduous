@@ -21,7 +21,12 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
             enum: ["leads_to", "chosen", "rejected", "requires", "blocks", "enables"],
             description: "Relationship type (default: leads_to)"
           },
-          rationale: %{type: "string", description: "Why this connection exists"}
+          rationale: %{type: "string", description: "Why this connection exists"},
+          branch: %{
+            type: "string",
+            description:
+              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+          }
         },
         required: ["from_node_id", "to_node_id"]
       }
@@ -37,7 +42,6 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
   end
 
   defp do_call(workspace_id, args) do
-
     attrs = %{
       from_node_id: args["from_node_id"],
       to_node_id: args["to_node_id"],

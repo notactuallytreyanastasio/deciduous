@@ -19,7 +19,12 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
             enum: ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
             description: "New status"
           },
-          metadata: %{type: "object", description: "Updated metadata"}
+          metadata: %{type: "object", description: "Updated metadata"},
+          branch: %{
+            type: "string",
+            description:
+              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+          }
         },
         required: ["node_id"]
       }

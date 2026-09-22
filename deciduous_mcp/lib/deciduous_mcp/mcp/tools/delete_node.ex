@@ -12,7 +12,12 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
       input_schema: %{
         type: "object",
         properties: %{
-          node_id: %{type: "string", description: "UUID of the node to delete"}
+          node_id: %{type: "string", description: "UUID of the node to delete"},
+          branch: %{
+            type: "string",
+            description:
+              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+          }
         },
         required: ["node_id"]
       }
