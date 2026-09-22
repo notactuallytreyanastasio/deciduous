@@ -1901,7 +1901,19 @@ fn main() {
                         }
                     }
 
-                    println!("\n{} configured, {} left alone", changed, skipped);
+                    // "N configured" during a dry run is a lie about work that
+                    // did not happen, and checking before touching 90
+                    // repositories is this command's entire purpose.
+                    println!(
+                        "\n{} {}, {} left alone",
+                        changed,
+                        if dry_run {
+                            "would be configured"
+                        } else {
+                            "configured"
+                        },
+                        skipped
+                    );
                     if !dry_run && changed > 0 {
                         println!("Each project's .deciduous/config.toml now holds the URL. The token stays in the credentials file.");
                     }
