@@ -87,6 +87,10 @@ colored = "2.0"
 # reqwest pulls in tokio, and every call this CLI makes is a single blocking
 # request from a short-lived process.
 ureq = { version = "2.10", features = ["json"] }
+# Blocking WebSocket client for `deciduous remote watch`, for the same reason:
+# one connection, read in a loop, no executor. rustls and webpki-roots are
+# already in the tree through ureq.
+tungstenite = { version = "0.30", features = ["rustls-tls-webpki-roots"] }
 
 ts-rs = { version = "10.1.0", optional = true }
 
