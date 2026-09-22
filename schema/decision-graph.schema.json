@@ -20,7 +20,7 @@
 
     "EdgeType": {
       "type": "string",
-      "enum": ["leads_to", "requires", "chosen", "rejected", "blocks", "enables"],
+      "enum": ["leads_to", "requires", "chosen", "rejected", "blocks", "enables", "took_from"],
       "description": "Valid edge types connecting nodes"
     },
 

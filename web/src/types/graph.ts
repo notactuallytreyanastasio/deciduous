@@ -23,7 +23,7 @@ export type NodeStatus = typeof NODE_STATUSES[number];
 // Edge Types - matches schema CHECK constraint
 // =============================================================================
 
-export const EDGE_TYPES = ['leads_to', 'requires', 'chosen', 'rejected', 'blocks', 'enables'] as const;
+export const EDGE_TYPES = ['leads_to', 'requires', 'chosen', 'rejected', 'blocks', 'enables', 'took_from'] as const;
 export type EdgeType = typeof EDGE_TYPES[number];
 
 // =============================================================================

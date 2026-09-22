@@ -874,12 +874,18 @@ fn test_all_edge_types() {
     let db_path = temp_dir.path().join("test.db");
 
     // Create nodes
-    for i in 0..6 {
+    for i in 0..7 {
         run_deciduous(&["add", "goal", &format!("Node {}", i)], &db_path);
     }
 
     let edge_types = [
-        "leads_to", "chosen", "rejected", "blocks", "enables", "requires",
+        "leads_to",
+        "chosen",
+        "rejected",
+        "blocks",
+        "enables",
+        "requires",
+        "took_from",
     ];
     for (i, edge_type) in edge_types.iter().enumerate() {
         let from = format!("{}", i + 1);

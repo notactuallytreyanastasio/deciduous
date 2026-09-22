@@ -1188,6 +1188,7 @@ const EDGE_DASH_PATTERNS: Record<EdgeType, string> = {
   rejected: '8,4,2,4',    // dash-dot
   blocks: '10,5',         // long dash
   enables: '3,3',         // short dash
+  took_from: '4,2,1,2',   // dash-dot, short: a borrow, usually across branches
 };
 
 interface D3GraphProps {
@@ -1601,20 +1602,21 @@ function D3Graph({ narrative, selectedNodeId, onSelectNode }: D3GraphProps) {
       }}>
         <span style={{ fontWeight: 600, marginBottom: '2px' }}>Edges</span>
         {([
-          { type: 'leads_to', label: 'leads to', dash: '' },
-          { type: 'requires', label: 'requires', dash: '5,5' },
-          { type: 'chosen', label: 'chosen', dash: '2,2' },
-          { type: 'rejected', label: 'rejected', dash: '8,4,2,4' },
-          { type: 'blocks', label: 'blocks', dash: '10,5' },
-          { type: 'enables', label: 'enables', dash: '3,3' },
-        ]).map(({ type, label, dash }) => (
+          { type: 'leads_to', label: 'leads to' },
+          { type: 'requires', label: 'requires' },
+          { type: 'chosen', label: 'chosen' },
+          { type: 'rejected', label: 'rejected' },
+          { type: 'blocks', label: 'blocks' },
+          { type: 'enables', label: 'enables' },
+          { type: 'took_from', label: 'took from' },
+        ] as { type: EdgeType; label: string }[]).map(({ type, label }) => (
           <span key={type} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <svg width="24" height="8">
               <line
                 x1="0" y1="4" x2="24" y2="4"
                 stroke={THEME.textMuted}
                 strokeWidth="2"
-                strokeDasharray={dash}
+                strokeDasharray={EDGE_DASH_PATTERNS[type]}
               />
             </svg>
             <span>{label}</span>

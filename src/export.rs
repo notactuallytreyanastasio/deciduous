@@ -92,11 +92,12 @@ fn edge_style(edge_type: &str) -> &'static str {
 /// Get the edge color based on edge type
 fn edge_color(edge_type: &str) -> &'static str {
     match edge_type {
-        "chosen" => "#228B22",   // Forest green
-        "rejected" => "#DC143C", // Crimson
-        "blocks" => "#FF4500",   // Orange red
-        "enables" => "#4169E1",  // Royal blue
-        _ => "#333333",          // Dark gray
+        "chosen" => "#228B22",    // Forest green
+        "rejected" => "#DC143C",  // Crimson
+        "blocks" => "#FF4500",    // Orange red
+        "enables" => "#4169E1",   // Royal blue
+        "took_from" => "#8A2BE2", // Blue violet: a borrow, usually across branches
+        _ => "#333333",           // Dark gray
     }
 }
 
@@ -725,6 +726,7 @@ mod tests {
         assert_eq!(edge_color("rejected"), "#DC143C"); // crimson
         assert_eq!(edge_color("blocks"), "#FF4500"); // orange red
         assert_eq!(edge_color("enables"), "#4169E1"); // royal blue
+        assert_eq!(edge_color("took_from"), "#8A2BE2"); // blue violet
         assert_eq!(edge_color("unknown"), "#333333"); // default
     }
 
