@@ -132,7 +132,8 @@ enum Command {
         #[arg(short, long)]
         rationale: Option<String>,
 
-        /// Edge type: leads_to, requires, chosen, rejected, blocks, enables
+        /// Edge type: leads_to, requires, chosen, rejected, blocks, enables,
+        /// took_from (this node borrowed from that one, usually across branches)
         #[arg(short = 't', long, default_value = "leads_to")]
         edge_type: String,
     },
@@ -517,19 +518,43 @@ enum RemoteAction {
         dry_run: bool,
     },
 
-    /// Print a URL that streams this project's writes live, as they happen
+    /// Stream this project's writes live, one line per event, as they happen
+    ///
+    /// Connects to the server's event socket and prints each node write as
+    /// it lands, quoting the node's own title: which branch, what type,
+    /// what it says. Updates are shown as updates, not as new nodes. The
+    /// connection is re-opened whenever it drops, with a backoff that
+    /// starts at one second.
     ///
     /// Verifies the server and token first, the same way `init` does, so a
-    /// broken URL fails here instead of inside whatever WebSocket client
-    /// tries to use it. The URL itself works with any WebSocket client in
-    /// any harness — it carries the token in the query string because the
-    /// handshake cannot carry a header — so this is the one command in
-    /// `remote` that is not Claude-Code-specific by nature; `--claude-code`
-    /// only changes what gets printed alongside it.
+    /// bad token fails here against a clear message rather than as an
+    /// opaque handshake failure. `--url` prints the socket URL instead of
+    /// connecting, for any other WebSocket client; it carries the token in
+    /// the query string because the handshake cannot carry a header.
     Watch {
-        /// Also print a ready-to-paste Monitor tool call for Claude Code
+        /// Print the socket URL and exit instead of connecting
+        #[arg(long)]
+        url: bool,
+
+        /// Print the URL plus a ready-to-paste Monitor tool call for Claude Code, and exit
         #[arg(long)]
         claude_code: bool,
+
+        /// Only these node types, comma-separated (e.g. outcome,observation)
+        #[arg(long, value_delimiter = ',')]
+        types: Vec<String>,
+
+        /// Only this branch; repeat for several
+        #[arg(long = "branch")]
+        branches: Vec<String>,
+
+        /// Also show edge events (off by default: they are most of the traffic)
+        #[arg(long)]
+        edges: bool,
+
+        /// Print the raw JSON frame for each event instead of a formatted line
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -2151,7 +2176,14 @@ fn main() {
                     }
                 }
 
-                RemoteAction::Watch { claude_code } => {
+                RemoteAction::Watch {
+                    url: url_only,
+                    claude_code,
+                    types,
+                    branches,
+                    edges,
+                    json,
+                } => {
                     let cfg = Config::load();
                     let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
                         Ok(r) => r,
@@ -2173,24 +2205,54 @@ fn main() {
 
                     let url = remote.events_url();
 
-                    println!("{} {}", "Watching:".green(), remote.workspace.cyan());
-                    println!("{}", url);
+                    if url_only || claude_code {
+                        println!("{} {}", "Watching:".green(), remote.workspace.cyan());
+                        println!("{}", url);
 
-                    if claude_code {
+                        if claude_code {
+                            println!();
+                            println!("{}", "Paste into Claude Code:".bold());
+                            println!(
+                                "Monitor({{ description: \"live writes to {}\", ws: {{ url: \"{}\" }} }})",
+                                remote.workspace, url
+                            );
+                        }
+
                         println!();
-                        println!("{}", "Paste into Claude Code:".bold());
                         println!(
-                            "Monitor({{ description: \"live writes to {}\", ws: {{ url: \"{}\" }} }})",
-                            remote.workspace, url
+                            "{} this URL carries a live token. Do not paste it anywhere it might be \
+                             logged or shared.",
+                            "Note:".yellow()
                         );
+                        return;
                     }
 
-                    println!();
-                    println!(
-                        "{} this URL carries a live token. Do not paste it anywhere it might be \
-                         logged or shared.",
-                        "Note:".yellow()
-                    );
+                    // stderr, so stdout is exactly one event per line and
+                    // can be piped without a header in the way.
+                    eprintln!("{} {}", "Watching:".green(), remote.workspace.cyan());
+
+                    let filter = deciduous::watch::Filter {
+                        types,
+                        branches,
+                        edges,
+                        json,
+                    };
+                    let unknown = filter.unknown_types();
+                    if !unknown.is_empty() {
+                        eprintln!(
+                            "{} unknown node type{} in --types: {}. Valid types: {}",
+                            "Error:".red(),
+                            if unknown.len() == 1 { "" } else { "s" },
+                            unknown.join(", "),
+                            deciduous::watch::NODE_TYPES.join(", ")
+                        );
+                        std::process::exit(1);
+                    }
+                    let mut stdout = std::io::stdout();
+                    if let Err(e) = deciduous::watch::run(&url, &filter, &mut stdout) {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
                 }
             }
         }
