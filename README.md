@@ -46,6 +46,22 @@ This isn't documentation written after the fact. It's a real-time record of *how
 
 ---
 
+## Several Agents, One Graph
+
+Ten Claude Code sessions, started at the same second in ten git worktrees of one repository, each building a Tetris from nothing, all logging to one shared deciduous workspace and told to read each other's code and reasoning. Twenty-six minutes later: ten playable games, 386 graph nodes, 170 borrowed ideas with provenance. One finding (some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at the ceiling) reached eight of the nine other branches in eighteen minutes (agent-1 started with a forty-row board and never needed it), and two of the agents that took it used it to find the same silent bug in their own `merge()`.
+
+**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://notactuallytreyanastasio.github.io/deciduous/remote.html#alongside)**
+
+What made it work is one server, reachable over MCP from every directory, with the branch as the unit of coordination:
+
+- **Locks.** Every write claims an advisory lock on `(workspace, branch)` with a ten second lease. Ten agents on ten branches never wait for each other; two on one branch are told who is there. `check_activity` reports the holders and the last node on each of the twenty most recent branches.
+- **Events.** Postgres triggers push every write over a WebSocket the moment it lands. `deciduous remote watch` prints one quoted line per write; Claude Code's `Monitor` tool can sit on the same URL.
+- **Provenance.** A `took_from` edge records a borrow across branches, and `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression; that is the wrong place for them.
+
+Set it up with `deciduous remote init <url>` once the server is running (`deciduous_mcp/DEPLOY.md`).
+
+---
+
 ## Installation
 
 ### Homebrew (Recommended)
@@ -159,7 +175,7 @@ deciduous init --both --windsurf   # All three
 
 ### MCP Server
 
-Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph.
+Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph. The [shared graph server](https://notactuallytreyanastasio.github.io/deciduous/remote.html) is a second endpoint, over HTTP, with 18 tools of its own and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
 
 > **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
 

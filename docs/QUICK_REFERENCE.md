@@ -80,6 +80,7 @@ deciduous link 1 2 -r "Auth decision follows from goal"
 deciduous link 1 2 -t chosen    # Option was selected
 deciduous link 1 2 -t rejected  # Option was rejected
 deciduous link 1 2 -t requires  # Dependency
+deciduous link 7 42 -t took_from # 42 borrowed from 7, possibly on another branch
 ```
 
 ---

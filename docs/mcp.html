@@ -119,7 +119,7 @@
         <header>
           <span class="badge badge-new">New in v0.14</span>
           <h1>MCP Server</h1>
-          <p class="tagline">Give Claude direct access to your decision graph. 31 tools for searching, tracing, and analyzing decisions. Works with Claude Code and Claude Desktop.</p>
+          <p class="tagline">Give Claude direct access to your decision graph. 32 tools for searching, tracing, and analyzing decisions. Works with Claude Code and Claude Desktop.</p>
         </header>
 
         <!-- =========================================================== -->
@@ -492,9 +492,60 @@ trace_chain({ node_id: 1361 })             &rarr; 13 nodes, 14 edges</div>
         </section>
 
         <!-- =========================================================== -->
+        <section id="shared-server">
+          <h2>The shared server: several agents, one workspace</h2>
+          <p>
+            Everything above is the embedded server: <code>deciduous mcp</code> over stdio, one SQLite
+            file, one project. The <a href="remote.html">shared graph server</a> is a second MCP
+            endpoint, over HTTP, with one Postgres for every project. Its tool set is smaller (18)
+            and it is the one that knows about other agents. Register it once at user scope and it is
+            present in every directory:
+          </p>
+          <div class="session-demo">
+            <div class="session-header">
+              <span class="session-dot red"></span>
+              <span class="session-dot yellow"></span>
+              <span class="session-dot green"></span>
+              <span class="session-title">one registration, every project</span>
+            </div>
+            <div class="session-content">
+              <div class="session-step"><div class="step-content code">claude mcp add --scope user --transport http deciduous https://&lt;host&gt;/deciduous-mcp/mcp --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"</div></div>
+            </div>
+          </div>
+          <p>Three arguments and one tool are what make it multi-agent:</p>
+          <table class="tool-table" style="width:100%; border-collapse:collapse; margin:16px 0; font-size:0.92rem;">
+            <tr><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">Name</th><th style="text-align:left; padding:8px 12px; border-bottom:1px solid #eaeef2;">What it does</th></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>workspace</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">on every call: the repository name. Reads accept <code>"*"</code> for every project at once; writes refuse it.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>branch</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">on every write: the lock key. Two sessions on one branch are serialised and told about each other; on different branches they never meet. Omit it and you lock the empty-branch bucket with everyone else who omitted it.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>took_from</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">on <code>log_observation</code>: the UUID or change_id of the node you borrowed from, on any branch. Writes the observation and a <code>took_from</code> edge in one call; <code>why</code> becomes the edge's rationale. <code>add_edge</code> takes <code>edge_type: "took_from"</code> directly.</td></tr>
+            <tr><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;"><code>check_activity</code></td><td style="padding:8px 12px; border-bottom:1px solid #eaeef2;">who holds a lock in this workspace right now, and the last node on each of the twenty most recently written branches. Call it before a burst of writes.</td></tr>
+          </table>
+          <p>
+            Writes are also pushed live: <code>GET /events</code> on the same host is a WebSocket that
+            emits one frame per node insert or update and per edge insert, with the node's title, type,
+            status and branch. <code>deciduous remote watch</code> prints it; Claude Code's
+            <code>Monitor</code> tool can sit on the URL that <code>deciduous remote watch --url
+            --claude-code</code> prints.
+          </p>
+          <p>
+            All 18 tools: <code>add_node</code>, <code>add_edge</code>, <code>update_node</code>,
+            <code>delete_node</code>, <code>delete_edge</code>, <code>log_decision</code>,
+            <code>log_observation</code>, <code>capture_conversation_turn</code>,
+            <code>close_thread</code>, <code>check_activity</code>, <code>query_nodes</code>,
+            <code>show_node</code>, <code>get_graph</code>, <code>get_ancestors</code>,
+            <code>get_descendants</code>, <code>find_orphans</code>, <code>ask_graph</code>,
+            <code>list_workspaces</code>. The sessions tools on this page
+            (<code>start_session</code>, <code>resume_session</code>) belong to the embedded server
+            only; on the shared server a conversation is scoped by <code>workspace</code> and
+            <code>branch</code> instead.
+          </p>
+          <p><a href="remote.html#alongside">How the locks, events and <code>took_from</code> fit together &rarr;</a></p>
+        </section>
+
+        <!-- =========================================================== -->
         <div class="api-link">
           <p><a href="mcp-api.html">MCP API Reference &rarr;</a></p>
-          <p style="color:#57606a; font-size:0.9rem; margin-top:6px;">All 31 tools with parameters, types, and CLI equivalents.</p>
+          <p style="color:#57606a; font-size:0.9rem; margin-top:6px;">All 32 tools with parameters, types, and CLI equivalents.</p>
         </div>
 
         <footer>
