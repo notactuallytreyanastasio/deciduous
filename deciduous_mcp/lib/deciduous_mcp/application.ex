@@ -33,8 +33,16 @@ defmodule DeciduousMcp.Application do
       # Hermes MCP Server Registry
       Hermes.Server.Registry,
 
-      # Deciduous MCP Server, reachable over HTTP
-      {DeciduousMcp.MCP.Server, transport: :streamable_http},
+      # Deciduous MCP Server, reachable over HTTP.
+      #
+      # Hermes expires a session after 30 idle minutes by default. Claude Code
+      # keeps one session for the life of the process and does not notice the
+      # expiry, so a session that was merely quiet for an afternoon came back
+      # to find every call refused (see DeciduousMcp.Web.SessionGuard for what
+      # that refusal has to look like). A day covers a working session; a
+      # restart still drops everything, and the guard handles that case.
+      {DeciduousMcp.MCP.Server,
+       transport: :streamable_http, session_idle_timeout: to_timeout(hour: 24)},
 
       # Bridges Postgres NOTIFY to PubSub, for the WebSocket event stream
       DeciduousMcp.Events.Listener,
