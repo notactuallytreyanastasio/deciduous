@@ -9,6 +9,8 @@ defmodule DeciduousMcp.Web.Router do
     * `ALL  /mcp`    — the MCP endpoint, forwarded to Hermes' Streamable HTTP
       plug.
     * `POST /import` — bulk ingest of one project's graph.
+    * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
+    * `GET  /documents/:id` — a document's bytes, by its id or content hash.
 
   `Plug.Parsers` is deliberately NOT in this pipeline. Hermes' plug reads the
   request body itself, but only when `body_params` is still unfetched
@@ -18,6 +20,8 @@ defmodule DeciduousMcp.Web.Router do
   """
   use Plug.Router
 
+  alias DeciduousMcp.Graph.Documents
+  alias DeciduousMcp.Storage
   alias DeciduousMcp.Sync.Import
   alias DeciduousMcp.Web.{Auth, WorkspacePlug}
 
@@ -50,6 +54,33 @@ defmodule DeciduousMcp.Web.Router do
           json(conn, 413, %{error: "import exceeds #{@max_import_bytes} bytes"})
       end
     end
+  end
+
+  # Bytes arrive here rather than inside the graph payload: the largest
+  # document on disk is 16MB and the largest graph is already megabytes of
+  # JSON, and base64 inside that would be a 22MB string inside a 50MB body.
+  put "/blob/:hash" do
+    conn = Auth.call(conn, [])
+
+    cond do
+      conn.halted ->
+        conn
+
+      not valid_hash?(hash) ->
+        json(conn, 400, %{error: "hash must be 64 hex characters (sha256)"})
+
+      true ->
+        case read_whole_body(conn) do
+          {:ok, content, conn} -> store_blob(conn, hash, content)
+          {:too_large, conn} -> json(conn, 413, %{error: "blob exceeds #{@max_import_bytes} bytes"})
+          {:error, _} -> json(conn, 400, %{error: "could not read body"})
+        end
+    end
+  end
+
+  get "/documents/:id" do
+    conn = Auth.call(conn, [])
+    if conn.halted, do: conn, else: serve_document(conn, id)
   end
 
   match _ do
@@ -97,6 +128,61 @@ defmodule DeciduousMcp.Web.Router do
         json(conn, 422, %{error: to_string_reason(reason)})
     end
   end
+
+  # --- Documents --------------------------------------------------------------
+
+  defp store_blob(conn, hash, content) do
+    # The hash is the primary key and the cross-project dedup key, so it is
+    # verified rather than trusted: a client sending the wrong one would
+    # shadow another document's bytes for every project referencing it.
+    case Storage.verify(hash, content) do
+      :ok ->
+        :ok = Storage.put(hash, content, mime_type: content_type(conn))
+        Import.mark_content_found(hash)
+        json(conn, 200, %{stored: hash, bytes: byte_size(content)})
+
+      {:error, {:hash_mismatch, expected: expected, actual: actual}} ->
+        json(conn, 422, %{error: "content does not match hash", expected: expected, actual: actual})
+    end
+  end
+
+  defp serve_document(conn, id) do
+    case Documents.fetch(id) do
+      {:ok, doc, content} ->
+        conn
+        # Set directly rather than via put_resp_content_type/2, which appends
+        # "; charset=utf-8" to every type — including application/pdf, where it
+        # is meaningless and some viewers treat it as a reason to mistrust the
+        # body.
+        |> put_resp_header("content-type", doc.mime_type)
+        |> put_resp_header(
+          "content-disposition",
+          ~s(inline; filename="#{doc.original_filename}")
+        )
+        |> send_resp(200, content)
+
+      {:error, :content_missing} ->
+        # 410, not 404. The attachment is real and its metadata imported; the
+        # bytes were already gone before this server ever saw them, and that is
+        # a different thing from a bad id.
+        json(conn, 410, %{
+          error: "document content is gone",
+          detail: "the row imported but no bytes were ever found for its hash"
+        })
+
+      {:error, :not_found} ->
+        json(conn, 404, %{error: "no such document"})
+    end
+  end
+
+  defp content_type(conn) do
+    case get_req_header(conn, "content-type") do
+      [t | _] -> t |> String.split(";") |> hd() |> String.trim()
+      [] -> nil
+    end
+  end
+
+  defp valid_hash?(hash), do: is_binary(hash) and String.match?(hash, ~r/\A[0-9a-fA-F]{64}\z/)
 
   defp read_whole_body(conn, acc \\ [], size \\ 0) do
     case Plug.Conn.read_body(conn, length: 1_000_000) do

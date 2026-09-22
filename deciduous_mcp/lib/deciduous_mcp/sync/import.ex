@@ -27,12 +27,18 @@ defmodule DeciduousMcp.Sync.Import do
   the SQLite `themes` / `node_themes` tables and the matching Postgres columns
   both exist. Theme assignments will not survive this path until the CLI
   exports them.
+
+  Document *bytes* do not travel in this payload either — they are pushed
+  separately to `PUT /blob/:content_hash` so a 16MB PDF does not ride along
+  inside a graph that is already megabytes of JSON. This import records the
+  metadata and marks a row `content_missing` when no blob has arrived for its
+  hash.
   """
   import Ecto.Query
 
   alias DeciduousMcp.Graph.Workspaces
   alias DeciduousMcp.Repo
-  alias DeciduousMcp.Schema.{Edge, Node}
+  alias DeciduousMcp.Schema.{Document, Edge, Node}
 
   @chunk 1_000
 
@@ -44,12 +50,14 @@ defmodule DeciduousMcp.Sync.Import do
         fn ->
           node_report = upsert_nodes(workspace.id, nodes)
           edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes)
+          doc_report = upsert_documents(workspace.id, graph["documents"] || [])
 
           %{
             workspace: workspace.name,
             workspace_id: workspace.id,
             nodes: node_report,
             edges: edge_report,
+            documents: doc_report,
             themes_skipped: "deciduous graph does not export themes"
           }
         end,
@@ -59,6 +67,22 @@ defmodule DeciduousMcp.Sync.Import do
   end
 
   def run(_), do: {:error, "payload must contain a \"graph\" object"}
+
+  @doc """
+  Clears `content_missing` on every row waiting for this hash.
+
+  Blobs can arrive after the metadata that references them — the import script
+  uploads bytes first, but a document attached later, or a file recovered from
+  another project, arrives the other way round. Without this, a row imported
+  while its bytes were absent would answer 410 forever even once they showed up.
+  """
+  def mark_content_found(hash) do
+    {count, _} =
+      from(d in Document, where: d.content_hash == ^String.downcase(hash) and d.content_missing)
+      |> Repo.update_all(set: [content_missing: false, updated_at: DateTime.utc_now()])
+
+    count
+  end
 
   # --- Nodes ------------------------------------------------------------------
 
@@ -223,6 +247,77 @@ defmodule DeciduousMcp.Sync.Import do
       updated_at: now
     }
   end
+
+  # --- Documents ---------------------------------------------------------------
+
+  defp upsert_documents(_workspace_id, []), do: %{received: 0, upserted: 0, content_missing: 0}
+
+  defp upsert_documents(workspace_id, documents) do
+    pg_ids = node_ids_by_change_id(workspace_id)
+    now = DateTime.utc_now()
+
+    {rows, orphaned} =
+      Enum.reduce(documents, {[], []}, fn d, {ok, bad} ->
+        case Map.get(pg_ids, d["node_change_id"]) do
+          nil ->
+            {ok, [%{document: d["original_filename"], node: d["node_change_id"]} | bad]}
+
+          node_id ->
+            hash = d["content_hash"]
+
+            row = %{
+              id: Ecto.UUID.generate(),
+              workspace_id: workspace_id,
+              node_id: node_id,
+              change_id: d["change_id"],
+              content_hash: hash,
+              original_filename: d["original_filename"],
+              storage_filename: d["storage_filename"],
+              mime_type: d["mime_type"] || "application/octet-stream",
+              file_size: d["file_size"] || 0,
+              description: d["description"],
+              description_source: d["description_source"] || "none",
+              attached_by: d["attached_by"],
+              detached_at: parse_optional_time(d["detached_at"]),
+              # Whether the bytes arrived is checked here rather than assumed.
+              # Five documents on this machine are referenced by live rows whose
+              # files are gone; they import as history with this flag set, so a
+              # fetch can say "gone" instead of "never existed".
+              content_missing: not DeciduousMcp.Storage.exists?(hash),
+              storage: "postgres",
+              inserted_at: parse_time(d["attached_at"], now),
+              updated_at: now
+            }
+
+            {[row | ok], bad}
+        end
+      end)
+
+    inserted =
+      rows
+      |> Enum.chunk_every(@chunk)
+      |> Enum.reduce(0, fn chunk, acc ->
+        {count, _} =
+          Repo.insert_all(Document, chunk,
+            on_conflict:
+              {:replace, [:description, :description_source, :detached_at, :content_missing, :updated_at]},
+            conflict_target: [:workspace_id, :change_id]
+          )
+
+        acc + count
+      end)
+
+    %{
+      received: length(documents),
+      upserted: inserted,
+      content_missing: Enum.count(rows, & &1.content_missing),
+      orphaned: length(orphaned),
+      orphaned_examples: Enum.take(orphaned, 5)
+    }
+  end
+
+  defp parse_optional_time(nil), do: nil
+  defp parse_optional_time(value), do: parse_time(value, nil)
 
   defp node_ids_by_change_id(workspace_id) do
     from(n in Node, where: n.workspace_id == ^workspace_id, select: {n.change_id, n.id})
