@@ -57,6 +57,7 @@ pub mod remote;
 pub mod roadmap;
 pub mod schema;
 pub mod serve;
+pub mod setup;
 pub mod watch;
 
 pub use config::Config;
