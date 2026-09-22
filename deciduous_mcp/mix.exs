@@ -10,6 +10,14 @@ defmodule DeciduousMcp.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      releases: [
+        deciduous_mcp: [
+          include_executables_for: [:unix],
+          # The container runs migrations before boot via eval, so the release
+          # has to carry priv/repo/migrations.
+          applications: [deciduous_mcp: :permanent]
+        ]
+      ],
       description: "MCP server for Deciduous decision graphs with shared PostgreSQL backend",
       package: package()
     ]
