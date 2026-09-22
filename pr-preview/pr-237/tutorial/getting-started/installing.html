@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en" data-docs-generated="true">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Run shared memory on your machine · Deciduous docs</title>
+<meta name="description" content="Run one Postgres-backed Deciduous server, then connect every agent to its HTTP MCP endpoint. Each repository gets a workspace. Agents in different worktrees use the same workspace name when they need ">
+<link rel="canonical" href="https://deciduous.dev/tutorial/local-postgres.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Run shared memory on your machine · Deciduous docs"><meta property="og:description" content="Run one Postgres-backed Deciduous server, then connect every agent to its HTTP MCP endpoint. Each repository gets a workspace. Agents in different worktrees use the same workspace name when they need "><meta property="og:url" content="https://deciduous.dev/tutorial/local-postgres.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
+</head>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html" aria-current="page">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Get connected</span><a href="../../content/local-postgres.md">Read as Markdown</a></div><article><h1 id="run-shared-memory-on-your-machine">Run shared memory on your machine</h1>
+<p>Run one Postgres-backed Deciduous server, then connect every agent to its HTTP MCP endpoint. Each repository gets a workspace. Agents in different worktrees use the same workspace name when they need to share decisions.</p>
+<p>This setup runs on your laptop. Agents call <code>http://127.0.0.1:4000/mcp</code>; they do not connect to Postgres. Later, you can put the same server behind HTTPS and change the base URL. See <a href="../remote-postgres.html">Remote Postgres</a>.</p>
+<p>Only need Postgres? <a href="#generate-just-postgres">Generate the database-only setup</a> without cloning Deciduous or installing Rust or the CLI.</p>
+<h2 id="what-you-need">What you need</h2>
+<ul>
+<li>macOS, Linux, or WSL with Python 3.9 or newer, Git, <code>unzip</code>, and Docker with Compose v2. The scripts rely on POSIX file permissions; native Windows is not covered. Docker Desktop includes Compose. On Linux, install the Docker Engine and Compose plugin using the <a href="https://docs.docker.com/engine/install/">Docker installation instructions</a>. Start the Docker daemon before continuing.</li>
+<li>A Deciduous checkout containing <code>deciduous_mcp/</code> and <code>scripts/team-memory/</code>. Use the same reviewed release for the CLI and server. The commands in these guides target the 1.0.0 source interface.</li>
+<li>Rust 1.85 or newer if you build the CLI from source. The containers build the Elixir server, so you do not need Elixir on your host.</li>
+</ul>
+<h2 id="get-the-matching-source-and-setup-helpers">Get the matching source and setup helpers</h2>
+<p>Use a new directory so these commands cannot overwrite an existing checkout. The <code>v1.0.0</code> tag resolves to the source used by this guide. Until the new helper scripts are included in a GitHub release, download the published bundle from this site:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">mkdir deciduous-setup
+cd deciduous-setup
+git clone --branch v1.0.0 --depth 1 \
+  https://github.com/notactuallytreyanastasio/deciduous.git
+curl --fail --location --output team-memory.zip \
+  https://deciduous.dev/downloads/team-memory.zip
+curl --fail --location --output team-memory.zip.sha256 \
+  https://deciduous.dev/downloads/team-memory.zip.sha256
+shasum -a 256 -c team-memory.zip.sha256
+unzip -l team-memory.zip
+cd deciduous
+unzip -n ../team-memory.zip
+</code></pre>
+</div><p>On Linux, <code>sha256sum -c team-memory.zip.sha256</code> is an alternative checksum command. Check that the archive lists only files under <code>scripts/team-memory/</code>. <code>unzip -n</code> does not overwrite existing files. If a checksum fails or the listed paths differ, stop before extracting. Use a fresh checkout for a newer bundle instead of mixing helper versions.</p>
+<p>From that Deciduous checkout:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">docker version
+docker compose version
+python3 --version
+cargo install --path . --locked
+deciduous --version
+deciduous remote --help
+</code></pre>
+</div><p>The helper also recognizes the standalone <code>docker-compose</code> v2 binary. If the first command cannot reach the daemon, start Docker Desktop or your chosen runtime. Do not continue with a stopped runtime.</p>
+<p>Installing the CLI replaces the executable. It does not convert local graphs to Postgres. Existing users should read <a href="../upgrading.html">Upgrading and migrating</a> before moving data.</p>
+<h2 id="generate-just-postgres">Generate just Postgres</h2>
+<p>The database-only path needs Python 3.9+, Docker with Compose v2, and <code>unzip</code>, plus the standard download/checksum tools below. It does not need a Deciduous checkout, Rust, or the CLI. Start in a new empty folder:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">mkdir deciduous-postgres-setup
+cd deciduous-postgres-setup
+curl --fail --location --output team-memory.zip \
+  https://deciduous.dev/downloads/team-memory.zip
+curl --fail --location --output team-memory.zip.sha256 \
+  https://deciduous.dev/downloads/team-memory.zip.sha256
+shasum -a 256 -c team-memory.zip.sha256
+unzip -l team-memory.zip
+</code></pre>
+</div><p>Use <code>sha256sum -c team-memory.zip.sha256</code> if that is your system's checksum command. Stop if verification fails or the archive contains paths outside <code>scripts/team-memory/</code>. Then extract without overwriting and generate the database project:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">unzip -n team-memory.zip
+python3 scripts/team-memory/postgres-only.py \
+  --output ./deciduous-postgres --port 55432
+cd deciduous-postgres
+docker compose config --quiet
+docker compose up -d --build --wait
+docker compose exec db psql -U deciduous -d deciduous -c 'SELECT 1;'
+</code></pre>
+</div><p>The generator creates <code>Dockerfile</code>, <code>compose.yaml</code>, <code>README.md</code>, <code>.gitignore</code>, and a private <code>.env</code> containing a fresh database password. It refuses an existing directory, file, or symlink and does not start Docker. The parent directory must already exist and must not be a symlink. Postgres uses a persistent named volume and binds only <code>127.0.0.1:55432</code>. Change <code>--port</code> if that host port is occupied.</p>
+<p>New CLI builds with the generator provide the equivalent command:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous setup --postgres --output ./deciduous-postgres --port 55432
+</code></pre>
+</div><p>The released <code>v1.0.0</code> tag above does not include that flag. Use the Python helper from the current download bundle until your installed CLI's <code>setup --help</code> lists <code>--postgres</code>. Choose a fresh output path; neither generator overwrites an earlier setup.</p>
+<p>This generates a database only. Agents still need a separate Deciduous MCP service. For a service running on your host, construct its database URL from the generated credentials without printing them:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">set -a
+. ./.env
+set +a
+export DATABASE_URL=&quot;ecto://${POSTGRES_USER}:${POSTGRES_PASSWORD}@127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DB}&quot;
+</code></pre>
+</div><p>Pass <code>DATABASE_URL</code> to a host-run production release of <code>deciduous_mcp</code>, or a host process configured with <code>MIX_ENV=prod</code>. The current runtime reads this URL only in production mode; default development <code>mix run</code> uses the development database settings instead. Supply the service's own independent <code>DECIDUOUS_MCP_TOKEN</code> and run its Ecto migrations before starting it. Do not reuse the database password as an MCP token. This host URL does not work as a container's <code>127.0.0.1</code>; a container has its own network namespace. The full stack below handles container-to-container networking for you and creates its own private Postgres, so it is an alternative to this database-only project.</p>
+<p>Do not enable shell tracing while loading secrets. Exported <code>POSTGRES_*</code> values override <code>.env</code> during Compose interpolation, so use a clean shell or unset unrelated values first. Changing the generated password in <code>.env</code> after initialization does not rotate the password stored in Postgres. Keep the volume, back it up, and read the generated README before changing credentials or versions.</p>
+<p>You can stop here if you only wanted Postgres. To choose the full MCP-plus-Postgres stack instead, follow <a href="#get-the-matching-source-and-setup-helpers">Get the matching source and setup helpers</a> and run the following steps from that Deciduous source checkout, not from the generated database directory.</p>
+<h2 id="1-create-credentials-outside-the-repository">1. Create credentials outside the repository</h2>
+<p>Preview the operation, then apply it:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">python3 scripts/team-memory/local-stack.py configure
+python3 scripts/team-memory/local-stack.py configure --apply
+</code></pre>
+</div><p>The script creates <code>~/.config/deciduous/team-memory/local.env</code> with owner-only permissions. It generates independent random values for the database password and the server's bearer token. It does not print either value or overwrite an existing file.</p>
+<p>The default app port is 4000. To choose another port for a new installation, add <code>--port 4400</code> to both commands. For a separate installation, also pass a different <code>--env-file</code> and <code>--project</code> to every command. A Compose project name selects its database volume; changing it can make an existing graph appear to disappear because you started a different stack.</p>
+<p>The server refuses to start without <code>DECIDUOUS_MCP_TOKEN</code>, or with a token shorter than 32 bytes. Treat it as access to all workspaces on this server. Workspace names and pinned headers are routing controls, not separate user permissions.</p>
+<h2 id="2-start-postgres-and-the-mcp-server">2. Start Postgres and the MCP server</h2>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">python3 scripts/team-memory/local-stack.py up
+python3 scripts/team-memory/local-stack.py up --apply
+python3 scripts/team-memory/local-stack.py check
+</code></pre>
+</div><p>The first build can take several minutes. The stack uses <code>postgres:16-bookworm</code>, stores data in a named volume, and waits for Postgres to accept connections. The MCP container applies its Ecto migrations before starting the HTTP server. <code>check</code> then verifies a SQL query, <code>/health</code>, and an authenticated graph export. A health response alone does not prove that graph access works.</p>
+<p>The networking is deliberate:</p>
+<table>
+<thead>
+<tr>
+<th>Connection</th>
+<th>Address</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent to MCP</td>
+<td><code>http://127.0.0.1:4000/mcp</code></td>
+</tr>
+<tr>
+<td>CLI remote base URL</td>
+<td><code>http://127.0.0.1:4000</code></td>
+</tr>
+<tr>
+<td>MCP container to Postgres</td>
+<td><code>db:5432</code>, inside its Compose network</td>
+</tr>
+<tr>
+<td>Host to Postgres</td>
+<td>No published port</td>
+</tr>
+</tbody>
+</table>
+<p>The app's host port binds to loopback. Another computer cannot use this local URL. Do not change it to <code>0.0.0.0</code> to share it; use the <a href="../remote-postgres.html">remote setup</a> with HTTPS instead. The container-to-database connection uses the private Compose network without database TLS.</p>
+<h2 id="3-give-the-cli-the-server-token">3. Give the CLI the server token</h2>
+<p>Run this from the Deciduous source checkout:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">python3 scripts/team-memory/local-stack.py token \
+  | deciduous remote login --url http://127.0.0.1:4000
+</code></pre>
+</div><p>The token goes through stdin, not through a command-line argument. <code>remote login</code> verifies it and stores it outside repositories in <code>~/.config/deciduous/credentials</code>, or under <code>$XDG_CONFIG_HOME/deciduous/credentials</code>. Do not run the token helper as an ordinary display command. It refuses a terminal, but piping it to <code>cat</code> would still expose the token.</p>
+<p>The stored CLI credential does not configure an MCP client. Export the token into the process that launches your agent client, or put it in that client's secret store:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">export DECIDUOUS_MCP_TOKEN=&quot;$(python3 scripts/team-memory/local-stack.py token)&quot;
+</code></pre>
+</div><p>Do not turn on shell tracing (<code>set -x</code>) while handling credentials. Restart a client that was launched before the environment variable existed. See <a href="../clients.html">Connect your agents</a> for client-specific configuration.</p>
+<h2 id="4-point-one-project-at-a-named-workspace">4. Point one project at a named workspace</h2>
+<p>Open a terminal in the project your agents will work on. For a new Deciduous project:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous init
+deciduous remote init http://127.0.0.1:4000 --workspace example-app
+deciduous remote status
+</code></pre>
+</div><p><code>init</code> creates local integration files; inspect its Git diff. Skip it if your project is already initialized. <code>remote init</code> checks the server and token before writing the <code>[remote]</code> section of <code>.deciduous/config.toml</code>:</p>
+<div class="code-block"><div class="code-toolbar"><span>toml</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-toml">[remote]
+url = &quot;http://127.0.0.1:4000&quot;
+workspace = &quot;example-app&quot;
+</code></pre>
+</div><p>Use the same <code>example-app</code> workspace in each clone and worktree. Default workspace names derive from the local Git root directory, which may differ between teammates. The explicit name avoids splitting a team into separate graphs.</p>
+<p>Run this first connection with one client before launching the team. The current server can return an HTTP 500 if several clients try to create the same new workspace at once. Once the workspace exists, connect the other agents. If a first connection failed in that race, retry it after the first client succeeds.</p>
+<p><code>remote init</code> does not redirect ordinary CLI writes. <code>deciduous add</code>, <code>deciduous link</code>, and the Rust <code>deciduous mcp</code> stdio server still use local SQLite. Team agents should write through the HTTP MCP endpoint. Use <code>deciduous remote pull</code> to refresh the CLI's node-and-edge cache for local inspection.</p>
+<h2 id="5-connect-two-agents-and-verify-the-handoff">5. Connect two agents and verify the handoff</h2>
+<p>Give both agents the server's HTTP MCP URL, the token, and workspace <code>example-app</code>. Pin the workspace with <code>X-Deciduous-Workspace: example-app</code> where your client supports headers. Do not put a literal bearer token in a tracked config file.</p>
+<p>Ask agent A to call <code>add_node</code> with <code>node_type: &quot;goal&quot;</code>, a short task title, and <code>workspace: &quot;example-app&quot;</code>. Keep the returned <code>change_id</code>. Ask agent B to query the same workspace, read that goal, and attach an observation with the first node's identifier as its parent through <code>add_edge</code>.</p>
+<p>Then check the CLI cache:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous remote status
+deciduous remote pull
+deciduous nodes
+deciduous edges
+deciduous remote watch
+</code></pre>
+</div><p>With the 1.0.0 CLI, <code>remote watch</code> streams server writes. Older versions can have different behavior; 0.19.0 prints a credential-bearing socket URL instead. Check your version before using it in a terminal or log. Equal counts from <code>remote status</code> are useful, but do not prove equal content: read the shared goal and its edge.</p>
+<p>Continue with <a href="../teams.html">Working as an agent team</a> for task ownership, branches, locks, and recovery.</p>
+<h2 id="keep-the-graph-safe">Keep the graph safe</h2>
+<p>Create a backup before an upgrade:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">python3 scripts/team-memory/local-stack.py backup
+python3 scripts/team-memory/local-stack.py backup --apply
+</code></pre>
+</div><p>The script creates a private custom-format <code>pg_dump</code> archive and checks that <code>pg_restore</code> can read its table of contents. Store a copy on another device or encrypted backup service and rehearse restoring it. Postgres holds the shared graph and uploaded document blobs; a graph JSON export is not a full backup. See <a href="../upgrading.html#restore-a-backup-without-overwriting-the-live-database">the restore procedure</a>.</p>
+<p>To stop this installation without deleting its volume:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">docker compose --project-name deciduous-team-memory \
+  --env-file ~/.config/deciduous/team-memory/local.env \
+  --file scripts/team-memory/compose.yaml stop
+</code></pre>
+</div><p>Run the helper's <code>up --apply</code> to start it again. Do not use volume-removal options or prune the stack's volume. None of the supplied scripts deletes a database or volume.</p>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Check</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cannot connect to Docker</td>
+<td>Start the Docker daemon; confirm <code>docker version</code> shows a server.</td>
+</tr>
+<tr>
+<td>Port 4000 is occupied</td>
+<td>Choose an unused loopback port in your private config, then update the client URL.</td>
+</tr>
+<tr>
+<td>Health is 200, graph requests are 401</td>
+<td>The client and server must use the same bearer token. A stored CLI token is separate from the agent's environment.</td>
+</tr>
+<tr>
+<td>HTTP 404</td>
+<td>The CLI uses the base URL; MCP uses the base URL plus <code>/mcp</code>.</td>
+</tr>
+<tr>
+<td>Agent sees a different graph</td>
+<td>Check the explicit workspace in both client headers and CLI config.</td>
+</tr>
+<tr>
+<td>Local graph is behind</td>
+<td>Use <code>remote pull</code>; SQLite does not receive server writes in the background.</td>
+</tr>
+<tr>
+<td>Server fails after an update</td>
+<td>Keep the backup and volume. Read app/migration logs before retrying; do not reinitialize the database.</td>
+</tr>
+</tbody>
+</table>
+<p>For logs, use the same Compose arguments as the stop command followed by <code>logs --tail 100 mcp</code>. Logs may contain task content; review them before sharing. Do not publish expanded <code>docker compose config</code> output because it contains credentials.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../quickstart.html"><span>Previous</span>Quickstart</a><a href="../clients.html"><span>Next</span>Connect your agents</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#what-you-need">What you need</a></li><li><a href="#get-the-matching-source-and-setup-helpers">Get the matching source and setup helpers</a></li><li><a href="#generate-just-postgres">Generate just Postgres</a></li><li><a href="#1-create-credentials-outside-the-repository">1. Create credentials outside the repository</a></li><li><a href="#2-start-postgres-and-the-mcp-server">2. Start Postgres and the MCP server</a></li><li><a href="#3-give-the-cli-the-server-token">3. Give the CLI the server token</a></li><li><a href="#4-point-one-project-at-a-named-workspace">4. Point one project at a named workspace</a></li><li><a href="#5-connect-two-agents-and-verify-the-handoff">5. Connect two agents and verify the handoff</a></li><li><a href="#keep-the-graph-safe">Keep the graph safe</a></li><li><a href="#troubleshooting">Troubleshooting</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

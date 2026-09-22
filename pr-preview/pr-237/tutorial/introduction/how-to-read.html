@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en" data-docs-generated="true">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How agents share reasoning · Deciduous docs</title>
+<meta name="description" content="A team gives each agent its own worktree and branch, then connects those agents to one Deciduous workspace. The workspace&#39;s Postgres graph holds the decisions, evidence, and links between their work. ">
+<link rel="canonical" href="https://deciduous.dev/tutorial/concepts.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="How agents share reasoning · Deciduous docs"><meta property="og:description" content="A team gives each agent its own worktree and branch, then connects those agents to one Deciduous workspace. The workspace&#39;s Postgres graph holds the decisions, evidence, and links between their work. "><meta property="og:url" content="https://deciduous.dev/tutorial/concepts.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
+</head>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html" aria-current="page">Graph concepts</a></li><li><a href="../reference.html">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Reference</span><a href="../../content/concepts.md">Read as Markdown</a></div><article><h1 id="how-agents-share-reasoning">How agents share reasoning</h1>
+<p>A team gives each agent its own worktree and branch, then connects those agents to one Deciduous workspace. The workspace's Postgres graph holds the decisions, evidence, and links between their work. An agent can inspect another branch's reasoning without waiting for that branch to merge.</p>
+<p>Deciduous does not create agents, assign tasks, merge code, or decide whether an idea is correct. You and your agent harness handle those jobs. The graph gives the team a record it can query and challenge.</p>
+<h2 id="workspace-branch-session">Workspace, branch, session</h2>
+<table>
+<thead>
+<tr>
+<th>Term</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Workspace</td>
+<td>A named graph, normally one repository such as <code>example-app</code></td>
+</tr>
+<tr>
+<td>Branch</td>
+<td>Metadata naming the Git branch where the work happened</td>
+</tr>
+<tr>
+<td>MCP session</td>
+<td>A connection session used by the server for tool calls and short write leases</td>
+</tr>
+<tr>
+<td>Node</td>
+<td>A goal, option, decision, action, outcome, observation, or revisit</td>
+</tr>
+<tr>
+<td>Edge</td>
+<td>A directed relationship between two nodes in the workspace</td>
+</tr>
+</tbody>
+</table>
+<p>Agree on the workspace name across worktrees and machines. Automatic directory names can differ when a worktree is called <code>example-app-agent-api</code>; an explicit workspace keeps that agent in the same graph as the rest of the team.</p>
+<p>Branch metadata supports filtering and cross-branch credit. It does not check out a Git branch. The HTTP server relies on the client to pass the real branch and commit hash.</p>
+<p>An MCP session is shorter-lived than the reasoning it records. Restarting an agent or reconnecting to the server does not remove its nodes.</p>
+<h2 id="a-useful-reasoning-chain">A useful reasoning chain</h2>
+<p>Record the requested result as a goal. Connect the approaches under consideration, explain the selected decision, then link the implementation and its observed result:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">goal -&gt; option -&gt; decision -&gt; action -&gt; outcome
+</code></pre>
+</div><p>Observations attach to the work that produced them. A revisit connects a previous approach to new evidence and a replacement decision. Preserve failed options and superseded choices when they explain why the team stopped pursuing them.</p>
+<p>The graph does not enforce a single writing style. The <code>log_decision</code> helper uses a decision with outgoing <code>chosen</code> and <code>rejected</code> links to its options. Read edge types and rationales, not just visual position. Use explicit <code>add_node</code> and <code>add_edge</code> calls when you need the chain above.</p>
+<h2 id="credit-the-idea-you-reused">Credit the idea you reused</h2>
+<p>An agent should inspect the source node before adopting a teammate's approach. Record what changed and why that source was useful. A <code>took_from</code> edge runs from the source node to the node describing the reuse:</p>
+<div class="code-block"><div class="code-toolbar"><span>text</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-text">agent-api's decision --took_from--&gt; agent-tests' observation
+</code></pre>
+</div><p>This is cross-branch provenance. It neither copies the source branch's code nor asserts that both implementations are equivalent. Both nodes belong to the same workspace. For a cross-project reference, include the source workspace and full node identifier in the description; the server does not create edges across workspace boundaries.</p>
+<h2 id="record-evidence-at-the-right-time">Record evidence at the right time</h2>
+<p>Before editing, record the action and the decision it implements. After testing, record the outcome and actual result. Keep a rejected experiment distinct from an untested proposal. A useful outcome says which test ran, what it demonstrated, and what remains uncertain.</p>
+<p>Capture the relevant user request accurately, but redact secrets and material the team should not share. A graph is durable shared data. Avoid storing credentials, private conversation unrelated to the task, or a full transcript when a focused record will do.</p>
+<p>Confidence is a recorded judgment from 0 to 100. It is not an automated correctness score. Statuses such as <code>active</code>, <code>completed</code>, <code>superseded</code>, and <code>abandoned</code> describe the record's place in the work; they do not replace evidence.</p>
+<h2 id="recover-through-connections">Recover through connections</h2>
+<p>A new agent can read active goals and nearby decisions, use <code>show_node</code> for details, and follow ancestors to the earlier evidence. <code>check_activity</code> adds a view of current write leases and each branch's newest created node. The <a href="../recovery.html">recovery guide</a> turns this into a working routine.</p>
+<p><code>find_orphans</code> catches non-goal nodes with no incoming edge. It can reveal a missing link, but a graph without orphans can still contain wrong or unsupported reasoning. Read the sources and inspect the code before treating an old decision as current truth.</p>
+<h2 id="coordination-has-limits">Coordination has limits</h2>
+<p>The shared server's short advisory leases prevent two MCP sessions from interleaving a burst of writes on the same branch without a conflict response. Separate branches can proceed in parallel. A lease does not reserve files, prove that someone is still working, or provide task scheduling.</p>
+<p>The event stream announces writes while a watcher is connected. It has no replay cursor or durable queue. After a disconnection, query the graph to recover state rather than assuming that no events occurred.</p>
+<p>Workspaces group records within one trust boundary. They are not permissions. See <a href="../architecture.html">architecture and security</a> before exposing a server beyond your machine or trusted team.</p>
+<h2 id="shared-postgres-and-local-sqlite">Shared Postgres and local SQLite</h2>
+<p>For the team workflow, the HTTP MCP service is the authoritative graph. A local SQLite copy can support the viewer and offline inspection, but transfers are explicit and incomplete. Ordinary CLI writes and the Rust stdio MCP stay local even after <code>remote init</code>.</p>
+<p>Choose one primary write path for the team. Use <a href="../upgrading.html">upgrading</a> to migrate existing history, and <a href="../solo.html">solo use</a> if you want a separate offline or Git-synced graph. Avoid treating the two stores as an automatic bidirectional replica.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../troubleshooting.html"><span>Previous</span>Troubleshooting</a><a href="../reference.html"><span>Next</span>CLI and API</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#workspace-branch-session">Workspace, branch, session</a></li><li><a href="#a-useful-reasoning-chain">A useful reasoning chain</a></li><li><a href="#credit-the-idea-you-reused">Credit the idea you reused</a></li><li><a href="#record-evidence-at-the-right-time">Record evidence at the right time</a></li><li><a href="#recover-through-connections">Recover through connections</a></li><li><a href="#coordination-has-limits">Coordination has limits</a></li><li><a href="#shared-postgres-and-local-sqlite">Shared Postgres and local SQLite</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>
