@@ -37,6 +37,28 @@ defmodule DeciduousMcp.Web.SessionGuard do
   404 may still send it, and Hermes only reports the id of the session it
   creates when the request arrived without one.
 
+  ## The other five seconds: a probe Hermes cannot name
+
+  Claude Code opens every connection with a version-negotiation probe, a
+  JSON-RPC *request* (it has an id) whose method is `server/discover`:
+
+      {"jsonrpc":"2.0","id":"server-discover-probe-1","method":"server/discover",
+       "params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28",...}}}
+
+  Hermes validates a request's method against the twelve it knows. This one
+  fails validation, the decoder strips the method, and what is left has an id
+  but no method, so the transport treats it as a notification and answers
+  `202 {}`. The client is waiting for a reply carrying that id. It waits
+  five seconds, gives up, and falls back to the legacy handshake, which then
+  succeeds in under 100 ms. Every reconnect paid those five seconds; captured
+  verbatim through a logging relay on 2026-09-22.
+
+  JSON-RPC says what a server does with a method it does not implement:
+  answer `-32601 Method not found` under the request's id. The guard does
+  that for any request whose method Hermes does not know, and the client
+  moves on at once. Notifications with unknown methods are left to Hermes,
+  which ignores them.
+
   Reading the body here would normally starve Hermes, which reads it itself.
   `Hermes.Server.Transport.StreamableHTTP.Plug` accepts an already-fetched
   binary in `body_params`, so the raw body is stored there for it when the
@@ -48,26 +70,58 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   @session_header "mcp-session-id"
   @not_found_code -32001
+  @method_not_found_code -32601
+
+  # Hermes.MCP.Message's @request_methods, 0.14.1. A request whose method is
+  # not here never reaches a handler: the decoder drops the method and the
+  # transport answers 202 as if it were a notification.
+  @known_request_methods ~w(initialize ping resources/list resources/read prompts/get
+    prompts/list tools/call tools/list logging/setLevel completion/complete roots/list
+    sampling/createMessage)
 
   @impl true
   def init(opts), do: Keyword.fetch!(opts, :server)
 
   @impl true
   def call(%Plug.Conn{method: "POST"} = conn, server) do
+    case read_body(conn) do
+      {:ok, body, conn} ->
+        # Hermes' plug accepts an already-fetched binary here and skips its
+        # own read (maybe_read_request_body/2).
+        conn = %{conn | body_params: body}
+        route(conn, server, decode(body))
+
+      # Bandit hands back at most 8 MB per read; a body past that cannot be
+      # a request this server would ever answer.
+      {:more, _partial, conn} ->
+        too_large(conn)
+
+      {:error, _reason} ->
+        conn
+    end
+  end
+
+  def call(conn, _server), do: conn
+
+  defp route(conn, server, {:ok, %{"method" => method, "id" => id} = message})
+       when is_binary(method) and method not in @known_request_methods do
+    _ = {server, message}
+    method_not_found(conn, method, id)
+  end
+
+  defp route(conn, server, decoded) do
     case get_req_header(conn, @session_header) do
       [session_id | _] when session_id != "" ->
         case session_state(server, session_id) do
           :initialized -> conn
-          :uninitialized -> refuse_unless_initializing(conn, server, session_id)
-          :gone -> refuse_unless_initialize(conn, session_id)
+          :uninitialized -> refuse_unless_initializing(conn, server, session_id, decoded)
+          :gone -> refuse_unless_initialize(conn, session_id, decoded)
         end
 
       _ ->
         conn
     end
   end
-
-  def call(conn, _server), do: conn
 
   # The registry drops a dead process's key when it gets the :DOWN message,
   # not at the instant the process dies, so a lookup can still return a pid
@@ -113,33 +167,22 @@ defmodule DeciduousMcp.Web.SessionGuard do
   @initialized_grace_tries 25
   @initialized_grace_ms 10
 
-  defp refuse_unless_initializing(conn, server, session_id) do
-    case read_body(conn) do
-      {:ok, body, conn} ->
-        conn = %{conn | body_params: body}
+  defp refuse_unless_initializing(conn, server, session_id, decoded) do
+    case decoded do
+      {:ok, %{"method" => "initialize"}} ->
+        delete_req_header(conn, @session_header)
 
-        case decode(body) do
-          {:ok, %{"method" => "initialize"}} ->
-            delete_req_header(conn, @session_header)
+      {:ok, %{"method" => "notifications/initialized"}} ->
+        conn
 
-          {:ok, %{"method" => "notifications/initialized"}} ->
-            conn
-
-          {:ok, message} ->
-            if wait_initialized(server, session_id, @initialized_grace_tries) do
-              conn
-            else
-              not_found(conn, session_id, Map.get(message, "id"))
-            end
-
-          :error ->
-            not_found(conn, session_id, nil)
+      {:ok, message} ->
+        if wait_initialized(server, session_id, @initialized_grace_tries) do
+          conn
+        else
+          not_found(conn, session_id, Map.get(message, "id"))
         end
 
-      {:more, _partial, conn} ->
-        too_large(conn, session_id)
-
-      {:error, _reason} ->
+      :error ->
         not_found(conn, session_id, nil)
     end
   end
@@ -158,32 +201,18 @@ defmodule DeciduousMcp.Web.SessionGuard do
     end
   end
 
-  defp refuse_unless_initialize(conn, session_id) do
-    case read_body(conn) do
-      {:ok, body, conn} ->
-        conn = %{conn | body_params: body}
+  defp refuse_unless_initialize(conn, session_id, decoded) do
+    case decoded do
+      {:ok, %{"method" => "initialize"}} ->
+        # Hermes only echoes a session id when the request arrived
+        # without one. Left in place, a stale header would make it mint
+        # a session the client is never told about.
+        delete_req_header(conn, @session_header)
 
-        case decode(body) do
-          {:ok, %{"method" => "initialize"}} ->
-            # Hermes only echoes a session id when the request arrived
-            # without one. Left in place, a stale header would make it mint
-            # a session the client is never told about.
-            delete_req_header(conn, @session_header)
+      {:ok, %{"id" => id}} ->
+        not_found(conn, session_id, id)
 
-          {:ok, %{"id" => id}} ->
-            not_found(conn, session_id, id)
-
-          _ ->
-            not_found(conn, session_id, nil)
-        end
-
-      # Bandit hands back at most 8 MB per read; a body past that cannot be
-      # a request this server would ever answer, and the session is dead
-      # anyway.
-      {:more, _partial, conn} ->
-        too_large(conn, session_id)
-
-      {:error, _reason} ->
+      _ ->
         not_found(conn, session_id, nil)
     end
   end
@@ -196,15 +225,28 @@ defmodule DeciduousMcp.Web.SessionGuard do
     end
   end
 
-  defp too_large(conn, session_id) do
+  defp method_not_found(conn, method, id) do
+    body = %{
+      jsonrpc: "2.0",
+      id: id,
+      error: %{
+        code: @method_not_found_code,
+        message: "Method not found",
+        data: %{method: method}
+      }
+    }
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(200, Jason.encode!(body))
+    |> halt()
+  end
+
+  defp too_large(conn) do
     body = %{
       jsonrpc: "2.0",
       id: nil,
-      error: %{
-        code: -32600,
-        message: "Request body too large",
-        data: %{session_id: session_id}
-      }
+      error: %{code: -32600, message: "Request body too large"}
     }
 
     conn

@@ -113,7 +113,7 @@ defmodule DeciduousMcp.Web.SessionGuardTest do
 
   test "a session id the server has never seen gets the same answer", %{token: token} do
     conn =
-      post(token, %{jsonrpc: "2.0", id: 3, method: "check_activity"}, [
+      post(token, %{jsonrpc: "2.0", id: 3, method: "tools/list"}, [
         {"mcp-session-id", "session_never_existed"}
       ])
 
@@ -200,6 +200,50 @@ defmodule DeciduousMcp.Web.SessionGuardTest do
       true ->
         Process.sleep(10)
         wait_until(fun, tries - 1)
+    end
+  end
+
+  describe "the version negotiation probe" do
+    test "an unknown request method is answered -32601 under its id, not 202", %{token: token} do
+      conn =
+        post(token, %{
+          jsonrpc: "2.0",
+          id: "server-discover-probe-1",
+          method: "server/discover",
+          params: %{"_meta" => %{"io.modelcontextprotocol/protocolVersion" => "2026-07-28"}}
+        })
+
+      assert conn.status == 200
+      body = Jason.decode!(conn.resp_body)
+      assert body["id"] == "server-discover-probe-1"
+      assert body["error"]["code"] == -32601
+      assert body["error"]["data"]["method"] == "server/discover"
+    end
+
+    test "an unknown method on a live session is also -32601, and the session survives",
+         %{token: token} do
+      session_id = initialize(token)
+
+      conn =
+        post(token, %{jsonrpc: "2.0", id: 5, method: "resources/templates/list"}, [
+          {"mcp-session-id", session_id}
+        ])
+
+      assert %{"id" => 5, "error" => %{"code" => -32601}} = Jason.decode!(conn.resp_body)
+
+      conn =
+        post(token, %{jsonrpc: "2.0", id: 6, method: "tools/list"}, [
+          {"mcp-session-id", session_id}
+        ])
+
+      assert %{"id" => 6, "result" => _} = Jason.decode!(conn.resp_body)
+    end
+
+    test "an unknown notification is left to Hermes", %{token: token} do
+      conn = post(token, %{jsonrpc: "2.0", method: "notifications/whatever"})
+      # Hermes answers this one itself (a 400 parse error today); the guard
+      # must not have turned it into a method-not-found for a request.
+      refute conn.resp_body =~ "-32601"
     end
   end
 end
