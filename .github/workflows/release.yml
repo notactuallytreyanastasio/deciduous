@@ -193,7 +193,7 @@ jobs:
           cat > deciduous.rb << FORMULA
           class Deciduous < Formula
             desc "Decision graph tooling for AI-assisted development"
-            homepage "https://notactuallytreyanastasio.github.io/deciduous/"
+            homepage "https://deciduous.dev/"
             version "${VERSION}"
             license "Apache-2.0"
 
@@ -222,6 +222,32 @@ jobs:
             def install
               binary_name = Dir["deciduous-*"].first
               bin.install binary_name => "deciduous"
+            end
+
+            def caveats
+              <<~EOS
+                ======================================================================
+                DECIDUOUS 1.0: SET UP SHARED POSTGRES MEMORY
+                ======================================================================
+
+                Running a team of agents? Set up Postgres before starting the team.
+                Homebrew installed the CLI. It did NOT create a shared graph server.
+
+                START HERE: POSTGRES + AGENT SETUP
+                  https://deciduous.dev/tutorial/local-postgres.html
+
+                UPGRADING AN EXISTING GRAPH? BACK UP BEFORE MIGRATING.
+                  https://deciduous.dev/tutorial/upgrading.html
+
+                Agents share memory through the HTTP MCP server backed by Postgres.
+                Ordinary CLI writes and stdio MCP still use local SQLite.
+                SQLite remains available for solo/offline use.
+
+                Read the guides, then run deciduous init in your project.
+                Installing or upgrading the CLI does not migrate your existing data.
+                See this message again with: brew info deciduous
+                ======================================================================
+              EOS
             end
 
             test do

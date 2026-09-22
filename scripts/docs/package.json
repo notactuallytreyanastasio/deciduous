@@ -1,0 +1,11 @@
+{
+  "name": "deciduous-docs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs && python3 bundle.py",
+    "check": "node build.mjs --check && python3 bundle.py --check && node test.mjs && node test-homebrew.mjs"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": { "markdown-it": "14.1.0" }
+}

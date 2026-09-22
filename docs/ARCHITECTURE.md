@@ -1,488 +1,85 @@
-# Deciduous Architecture
-
-> Decision graph tooling for AI-assisted development. Track every goal, decision, and outcome. Survive context loss. Query your reasoning.
-
-## The Core Problem
-
-AI assistants have **context limits**. When you work on a complex feature across multiple sessions:
-
-1. **Context compaction** - The AI summarizes to fit limits, losing nuance
-2. **Session boundaries** - New sessions start fresh with no memory
-3. **Decision amnesia** - Why did we choose approach A over B? Lost.
-4. **Pivot confusion** - We changed direction, but the old code remains. Why?
-
-**Deciduous solves this by externalizing the AI's reasoning into a queryable graph.**
-
----
-
-## System Goals
-
-### 1. Survive Context Loss
-
-When an AI session ends or context is compacted, all the reasoning is gone. Deciduous captures decisions **in real-time** so they persist beyond any single session.
-
-```
-Session 1: "Let's use JWT tokens" → logged to graph
-Session 2: "What auth approach did we choose?" → query the graph
-```
-
-### 2. Track Design Evolution
-
-Codebases evolve. Decisions get revisited. Deciduous captures **pivots** - when and why you changed direction:
-
-```
-[Old Decision: JWT] → [Observation: Too large for mobile] → [REVISIT] → [New Decision: Session cookies]
-```
-
-### 3. Enable Context Recovery
-
-Start a new session with `/recover` and the AI can rebuild its understanding from the graph:
-
-```bash
-deciduous nodes        # What decisions exist?
-deciduous edges        # How are they connected?
-deciduous show 42      # What was the reasoning for node 42?
-```
-
-### 4. Enforce Discipline
-
-Through hooks, Deciduous **blocks** the AI from making code changes without first logging what it's doing:
-
-```
-[AI tries to edit code]
-  ↓
-[Hook checks: Is there a recent action node?]
-  ↓
-[No? Block the edit. Force the AI to log first.]
-```
-
----
-
-## How It All Fits Together
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           USER + AI ASSISTANT                                │
-│                                                                              │
-│  User: "Add authentication"                                                 │
-│  AI:   Creates goal node → deciduous add goal "Add auth" --prompt "..."     │
-│  AI:   Logs decision → deciduous add decision "JWT vs sessions"             │
-│  AI:   Links them → deciduous link 1 2                                      │
-│  AI:   Makes code changes                                                   │
-│  AI:   Logs outcome → deciduous add outcome "Auth implemented"              │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              HOOKS LAYER                                     │
-│                                                                              │
-│  Pre-Tool-Use Hooks:                                                        │
-│  ├── require-action-node.sh                                                 │
-│  │   "Before Edit/Write, verify recent action node exists"                  │
-│  │   Blocks: "You must log what you're doing first!"                        │
-│  │                                                                          │
-│  Post-Tool-Use Hooks:                                                       │
-│  └── post-commit-reminder.sh                                                │
-│      "After Bash commit, remind to link commit to graph"                    │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            DECIDUOUS CLI                                     │
-│                                                                              │
-│  Commands:                                                                  │
-│  ├── add <type> <title>   → Create nodes (goal/decision/action/outcome)     │
-│  ├── link <from> <to>     → Connect nodes with rationale                    │
-│  ├── nodes/edges/graph    → Query the graph                                 │
-│  ├── doc attach/list/show → Document attachments on nodes                   │
-│  ├── serve                → Start web viewer                                │
-│  └── sync                → Multi-user sync + GitHub Pages export            │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           SQLITE DATABASE                                    │
-│                                                                              │
-│  .deciduous/deciduous.db                                                    │
-│  ├── decision_nodes      → All nodes with types, titles, metadata           │
-│  ├── decision_edges      → Connections with rationale                       │
-│  ├── node_documents      → File attachments with metadata                   │
-│  ├── command_log         → CLI operation history                            │
-│  └── roadmap_items       → ROADMAP.md sync state                            │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                    ┌────────────────┼────────────────┐
-                    ▼                ▼                ▼
-         ┌─────────────────┐  ┌───────────┐  ┌──────────────────┐
-         │   WEB VIEWER    │  │    TUI    │  │  GITHUB PAGES    │
-         │                 │  │           │  │                  │
-         │ React app with  │  │ Ratatui   │  │ Static export    │
-         │ multiple views: │  │ terminal  │  │ via sync         │
-         │ - Archaeology   │  │ interface │  │                  │
-         │ - DAG          │  │           │  │ docs/             │
-         │ - Chains       │  │           │  │ ├── index.html    │
-         │ - Timeline     │  │           │  │ ├── graph.json    │
-         │ - Roadmap      │  │           │  │ └── git-history   │
-         └─────────────────┘  └───────────┘  └──────────────────┘
-```
-
----
-
-## Node Types and Their Meaning
-
-| Type | Shape | Purpose | Example |
-|------|-------|---------|---------|
-| **goal** | House | What you're trying to achieve | "Add user authentication" |
-| **decision** | Diamond | A choice point with options | "How to identify users?" |
-| **option** | Box | Possible choice for a decision | "Use JWT tokens" |
-| **action** | Rounded box | Work being done | "Implementing auth middleware" |
-| **outcome** | Ellipse | Result of work | "Auth working in staging" |
-| **observation** | Note | Something noticed | "Sessions scale better for mobile" |
-| **revisit** | Octagon | Reconsidering past decisions | "Rethinking token strategy" |
-
-### The Revisit Pattern (Pivots)
-
-When you change direction, the graph captures **why**:
-
-```
-[Decision: Use JWT]
-       │
-       ▼
-[Option: JWT chosen] ──────► [Action: Implement JWT]
-       │                              │
-       ▼                              ▼
-[Observation: JWT payloads         [Outcome: JWT works but
- too large for mobile]              mobile has issues]
-       │                              │
-       └──────────┬───────────────────┘
-                  ▼
-           [REVISIT: Reconsidering
-            token strategy]
-                  │
-                  ▼
-           [Decision: Session-based auth]
-                  │
-                  ▼
-           [Option: Server sessions chosen]
-```
-
----
-
-## The Three Interfaces
-
-### 1. CLI (`deciduous <command>`)
-
-For AI assistants and power users. Fast, scriptable, integrates with hooks.
-
-```bash
-# Add a decision
-deciduous add decision "How to structure the API?" -c 85
-
-# Link it to a goal
-deciduous link 1 2 -r "API design is part of auth goal"
-
-# See the graph
-deciduous nodes
-deciduous edges
-deciduous graph | jq '.nodes | length'
-```
-
-### 2. TUI (`deciduous tui`)
-
-Interactive terminal interface for exploring the graph. Vim-style navigation.
-
-- **Views**: Timeline, DAG, Roadmap
-- **Features**: File picker, syntax highlighting, git diff viewer
-- **Pattern**: Elm Architecture (TEA) - messages, update, render
-
-### 3. Web Viewer (`deciduous serve` or GitHub Pages)
-
-React application with multiple browsing modes:
-
-| View | Purpose |
-|------|---------|
-| **Archaeology** | Default. Shows pivots and narratives - how design evolved |
-| **DAG** | Directed graph visualization with hierarchical layout |
-| **Chains** | Connected component chains rooted at goals |
-| **Timeline** | Chronological view of nodes + git commits |
-| **Story** | Goal-focused tree showing full decision tree from a goal |
-| **Roadmap** | ROADMAP.md items synced with GitHub Issues |
-
----
-
-## Multi-User Sync
-
-The database is local (`.deciduous/deciduous.db` is gitignored). How do teammates share decisions?
-
-### The Dual-ID Model (jj-inspired)
-
-Every node has two IDs:
-- **`id`** (integer): Local database primary key, different on each machine
-- **`change_id`** (UUID): Globally unique, stable across all machines
-
-### The Graph File
-
-`.deciduous/graph.json` holds the whole shared graph — `nodes`, `edges`, `themes`,
-and `tags`, each a map keyed by `change_id` — and is committed with the code. The
-database layer writes it on every mutation, so the CLI, the MCP server, and the
-HTTP API all publish. `deciduous sync` reconciles the file with the local database
-in both directions; the newer `updated_at` wins per record, deletions are
-tombstones, and edges import once both endpoints exist locally.
-
-```bash
-git pull && deciduous sync          # receive
-git add .deciduous/graph.json && git push  # share
-```
-
-Records only ever reference `change_id`s. Because everyone writes one file, git
-sees a conflict on every concurrent change and hands both versions to the
-`deciduous merge-record` driver, which merges the document record by record: an
-addition from either side survives, and a record both sides changed merges field by
-field. See [MULTI_USER_SYNC.md](MULTI_USER_SYNC.md).
-
----
-
-## AI Assistant Integration
-
-Deciduous supports multiple AI assistants:
-
-| Assistant | Integration Directory | Config File |
-|-----------|----------------------|-------------|
-| Claude Code | `.claude/` | `CLAUDE.md` |
-| OpenCode | `.opencode/` | `AGENTS.md` |
-| Windsurf | `.windsurf/` | `rules/deciduous.md` |
-
-### Hook Enforcement
-
-```toml
-# .deciduous/config.toml
-[hooks]
-enabled = true
-
-[[hooks.pre_tool_use]]
-name = "require-action-node"
-matcher = "Edit|Write"
-description = "Block code edits without recent action node"
-enabled = true
-
-[[hooks.post_tool_use]]
-name = "post-commit-reminder"
-matcher = "Bash"
-description = "Remind to link commits to graph"
-enabled = true
-```
-
-When the AI tries to edit code:
-1. Hook script runs
-2. Checks: Is there an action node in the last 15 minutes?
-3. No? **Blocks the edit** with a message telling the AI to log first
-
----
-
-## Key Data Flows
-
-### Flow 1: Real-Time Decision Capture
-
-```
-User says "Add dark mode"
-         │
-         ▼
-AI creates goal node:
-deciduous add goal "Add dark mode" --prompt "Add dark mode..."
-         │
-         ▼
-AI decides approach:
-deciduous add decision "How to implement theming?" -c 85
-deciduous link 1 2 -r "Theme decision for dark mode"
-         │
-         ▼
-AI implements:
-deciduous add action "Implementing CSS variables theme system"
-[Code changes happen]
-deciduous add outcome "Dark mode working" --commit HEAD
-```
-
-### Flow 2: Context Recovery
-
-```
-New session starts
-         │
-         ▼
-User runs /recover (or AI reads CLAUDE.md instructions)
-         │
-         ▼
-AI queries graph:
-├── deciduous nodes --branch main
-├── deciduous edges
-└── git log --oneline -10
-         │
-         ▼
-AI rebuilds understanding:
-"Ah, we're working on auth. We chose JWT but there were mobile
- issues logged as observations. There's a revisit node suggesting
- we might switch to sessions."
-```
-
-### Flow 3: Graph Export for Visualization
-
-```
-deciduous serve --port 3000
-         │
-         ▼
-HTTP server starts with embedded React app
-         │
-         ├── GET /api/graph        → Full graph JSON
-         ├── GET /api/git-history  → Commit info
-         └── GET /api/roadmap      → ROADMAP items
-         │
-         ▼
-React app loads data
-         │
-         ├── buildChains()    → Find connected components
-         ├── buildSessions()  → Group by time
-         └── findPivots()     → Detect revisit patterns
-         │
-         ▼
-User browses with multiple views
-```
-
-### Flow 4: Static Export for GitHub Pages
-
-```
-deciduous sync
-         │
-         ├── docs/graph-data.json     → Decision graph
-         ├── docs/git-history.json    → Commit metadata
-         ├── docs/roadmap-items.json  → Roadmap state
-         └── docs/index.html          → Embedded viewer
-         │
-         ▼
-git push → GitHub Pages serves static files
-         │
-         ▼
-Anyone can browse: https://user.github.io/repo/
-```
-
-### Flow 5: Document Attachment
-
-```
-User: "Attach this diagram to the auth goal"
-         │
-         ▼
-AI runs: deciduous doc attach 42 architecture.png -d "Auth architecture"
-         │
-         ▼
-File hashed (SHA-256), copied to .deciduous/documents/
-         │
-         ▼
-Record created in node_documents table
-(change_id for sync, content_hash for dedup)
-         │
-         ├── Web viewer shows document in node detail panel
-         ├── GET /api/documents?node_id=42 → document list
-         └── GET /api/documents/file/1 → serve file content
-```
-
----
-
-## Source Code Organization
-
-```
-src/
-├── main.rs           # CLI command dispatcher (clap)
-├── lib.rs            # Public API exports
-├── db.rs             # SQLite database (Diesel ORM)
-├── schema.rs         # Database table definitions
-├── config.rs         # .deciduous/config.toml loader
-├── init/             # deciduous init
-│   ├── mod.rs        # Project initialization
-│   └── templates.rs  # File templates (CLAUDE.md, hooks, etc.)
-├── serve.rs          # HTTP server for web viewer
-├── export.rs         # DOT export, PR writeup generation
-├── records.rs        # Multi-user sync: per-record JSON store + reconcile
-├── events.rs         # Reader for the pre-0.17 JSONL event log (migration only)
-├── hooks.rs          # Claude Code hook management
-├── opencode.rs       # OpenCode integration
-├── github.rs         # GitHub API client
-├── roadmap.rs        # ROADMAP.md parsing and sync
-├── changelog.rs      # Embedded release notes
-└── tui/              # Terminal UI
-    ├── mod.rs        # Event loop, file watcher
-    ├── app.rs        # Application state
-    ├── msg.rs        # TEA messages
-    ├── update.rs     # State transitions
-    ├── state.rs      # Pure state transformations
-    ├── ui.rs         # Rendering
-    ├── events.rs     # Keyboard/mouse handling
-    └── views/        # Timeline, DAG, Roadmap views
-
-web/                  # React/TypeScript web viewer
-├── src/
-│   ├── App.tsx       # Router setup, data loading
-│   ├── types/        # TypeScript interfaces
-│   ├── utils/        # Graph algorithms
-│   │   ├── graphProcessing.ts      # Chain/session building
-│   │   └── archaeologyProcessing.ts # Pivot detection
-│   ├── hooks/        # React custom hooks
-│   ├── components/   # Reusable UI components
-│   └── views/        # Browsing mode views
-└── vite.config.ts    # Build configuration
-```
-
----
-
-## Testing
-
-```bash
-# Run all tests
-cargo test
-
-# Integration tests use temporary databases
-# See: tests/cli_integration.rs
-```
-
-Tests verify:
-- CLI commands work correctly
-- Database operations are consistent
-- Graph queries return expected results
-- Export formats are valid
-
----
-
-## Development Workflow
-
-```bash
-# Build
-cargo build --release
-
-# Run
-./target/release/deciduous <command>
-
-# Web viewer development
-cd web && npm run dev
-
-# Rebuild embedded viewer after web changes
-cd web && npm run build
-cp dist/index.html ../src/viewer.html
-cp dist/index.html ../docs/demo/index.html
-cargo build --release
-```
-
----
-
-## Summary
-
-Deciduous is **external memory for AI-assisted development**. It:
-
-1. **Captures decisions in real-time** before context is lost
-2. **Enforces discipline** through hooks that block unlogged work
-3. **Enables recovery** by providing a queryable graph of past reasoning
-4. **Tracks evolution** by capturing pivots when direction changes
-5. **Enables collaboration** through the git-tracked graph file `.deciduous/graph.json`
-6. **Visualizes everything** through web and terminal interfaces
-
-The system works because it's integrated at the workflow level - AI assistants are trained (via CLAUDE.md) to use deciduous commands, and hooks prevent them from skipping the logging step.
+<!-- Generated from content/architecture.md by scripts/docs/build.mjs. Edit the source. -->
+
+# Shared Postgres architecture
+
+The team workflow runs one long-lived Elixir HTTP service in front of Postgres. Each agent connects through MCP, selects the same repository workspace, and includes its own branch on writes. The Rust CLI remains useful for local graphs, inspection, and explicit migration operations.
+
+## Runtime components
+
+| Component | Responsibility |
+| --- | --- |
+| Agent harness | Runs agents, manages worktrees, supplies MCP credentials and workspace/branch context |
+| `deciduous_mcp` | Authenticates HTTP requests, implements MCP tools, applies workspace routing and advisory write leases |
+| Postgres | Stores workspace graphs, attachment bytes, audit rows, and write leases |
+| Event listener | Receives Postgres notifications and distributes them to WebSocket subscribers |
+| Rust CLI | Manages local SQLite graphs and explicit `remote` operations |
+| Local web viewer | Displays the local SQLite graph served by `deciduous serve` |
+
+The static documentation and landing page do not run the shared graph service. The graph server does not serve the Rust viewer at `/`; connect an MCP client or use the documented HTTP endpoints.
+
+## From a tool call to a record
+
+1. An agent sends an authenticated MCP request to `/mcp`.
+2. The HTTP layer checks the shared bearer token, resolves any workspace header, and validates the session.
+3. The tool resolves its target workspace or node and claims the branch's advisory lease for a write.
+4. The graph context validates and stores the record through Ecto in Postgres.
+5. Database triggers notify connected watchers of node and edge inserts or updates.
+
+Other agents query the same stored graph. No Git push, local file merge, or `remote pull` is required for a second HTTP MCP client to see a committed server write.
+
+## Stored data
+
+The main tables are `workspaces`, `decision_nodes`, and `decision_edges`. Nodes have a server UUID and a `change_id` for import compatibility. Branch, commit, file, prompt, and confidence fields are stored in the node's JSONB metadata.
+
+Edges carry their type and rationale, along with both endpoint IDs and change IDs. Endpoints must belong to the same workspace. The server rejects self-edges and duplicate endpoint/type combinations; it does not enforce a general acyclic graph constraint.
+
+The schema also contains document metadata, content-addressed document blobs, themes and node-theme assignments, audit data, and tables retained for local-import compatibility. A table's presence does not mean an HTTP MCP tool exposes full editing support for it. The [feature matrix](content/solo.md#feature-boundaries) distinguishes those interfaces.
+
+Document bytes are stored in Postgres `bytea`, deduplicated by SHA-256. A raw upload verifies the hash before storing the bytes. Graph import creates document metadata separately; missing bytes remain visible as a missing-content condition. A Postgres backup includes both graph records and uploaded bytes.
+
+## Concurrency and live events
+
+MCP writes use a ten-second lease keyed by workspace and branch. The same session renews its lease on another write. A conflicting session receives a holder/expiry message. Omitting `branch` puts writes under the same empty-branch key; a workspace configured with `lock_scope: "workspace"` uses one key across branches.
+
+These leases are application-level coordination. Direct SQL and `/import` do not honor them. They do not lock source files, and a series of separate tool calls is not one database transaction. The `log_observation` helper writes its observation and edges in one transaction; other multi-write capture helpers can leave partial results on failure.
+
+Postgres `NOTIFY` feeds one listener connection in the service. Phoenix PubSub fans events out to `/events` WebSocket subscribers by workspace or global topic. An event identifies the row and includes selected labels, such as a node title capped at 200 characters. It is not the full row or a durable change log.
+
+Disconnected listeners can miss events. There is no event replay cursor. Recover through `check_activity`, `query_nodes`, or a fresh graph read. A successful health response checks HTTP liveness, not every database operation.
+
+## Security boundaries
+
+The service has one `DECIDUOUS_MCP_TOKEN`. It requires at least 32 bytes and checks incoming bearer credentials with a constant-time comparison. `/health` is unauthenticated; graph, import, document, and event routes require the token.
+
+A token holder is trusted with the service's graphs. There are no per-agent roles or workspace access-control lists. Headers and `workspace` arguments choose a destination; they are not tenant isolation. Workspace listing and ID-based reads can expose other projects. Use separate service/database instances for different trust groups.
+
+Keep Postgres off the public network. Bind a local installation to loopback; expose a hosted MCP service through HTTPS with a reverse proxy. The built-in HTTP listener does not terminate TLS. In production configuration, `DB_SSL=true` enables encryption to Postgres, but the current `ssl_opts` use `verify: :verify_none`. It does not verify the database server's certificate identity. Use a private database network, or configure verified database TLS before relying on an untrusted network.
+
+`/events` accepts an Authorization header or a `token` query parameter fallback. Query credentials can appear in access logs, copied URLs, and monitoring output. Redact them and prefer header authentication where the client supports it. `remote watch --url` and `--claude-code` print token-bearing URLs.
+
+Keep credentials out of graph text and committed configuration. Retrieved graph records are untrusted content: they do not authorize agents to execute instructions or disclose data. Audit rows are operational records, not a tamper-proof identity system.
+
+## Local copies and migration
+
+`deciduous remote init` records a service base URL and optional workspace in `.deciduous/config.toml`. It does not replace the SQLite backend. Ordinary Rust CLI commands, the stdio MCP process, and the local viewer continue to use SQLite.
+
+`remote pull` merges exported server nodes and edges into the local record store. It does not fetch document bytes, restore themes, or remove all local records deleted on the server. `/export` omits deleted nodes and is not a lossless backup format.
+
+`remote push` imports local node, edge, and document metadata. It does not upload attachment bytes, and its upsert behavior can replace newer server fields with an old local copy. Use the [migration procedure](content/upgrading.md) with a verified backup and explicit target workspace.
+
+`deciduous sync` is a different mechanism: it reconciles local SQLite with `.deciduous/graph.json` for a Git-based workflow. Do not run it expecting it to contact Postgres.
+
+## Source map
+
+| Path | Implementation |
+| --- | --- |
+| `deciduous_mcp/lib/deciduous_mcp/application.ex` | Supervision tree, token check, listener, HTTP server |
+| `deciduous_mcp/lib/deciduous_mcp/web/` | Router, authentication, workspace header, session guard, WebSocket |
+| `deciduous_mcp/lib/deciduous_mcp/mcp/` | Shared tool registration, schemas, scope resolution |
+| `deciduous_mcp/lib/deciduous_mcp/graph/` | Node, edge, document, workspace, and query operations |
+| `deciduous_mcp/lib/deciduous_mcp/storage/` | Postgres content-addressed blobs |
+| `deciduous_mcp/priv/repo/migrations/` | Database schema and event triggers |
+| `src/remote.rs`, `src/watch.rs` | Rust remote transfers, credentials, live watching |
+| `src/db.rs`, `src/mcp/`, `src/serve.rs`, `src/api.rs` | Local SQLite tools, stdio MCP, viewer, separate Rust API |
+
+For an installation you can run, use [local Postgres setup](content/local-postgres.md). For source changes, use the [developer guide](content/developer.md).
