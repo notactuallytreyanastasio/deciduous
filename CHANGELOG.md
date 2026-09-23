@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.3] - 2026-09-23
+
+`deciduous update` no longer destroys what it did not write. Upgrading the 86 projects on one machine to 1.0.2 took a script that backed everything up, restored what `update` wrote outside its own files, and put back 59 files it had replaced: a project's own `build-test` command, hand-edited hook scripts, a staged edit. That script is now the update.
+
+### Changed
+- **`update` keeps what it did not write.** A harness file (command, skill, hook script, `agents.toml`, OpenCode and Windsurf files) is replaced only when deciduous wrote it: its hash is recorded in `.deciduous/harness.json` when written, and for older installs it is recognised against every template text deciduous ever shipped (234, from the repository's whole history, embedded in the binary). A Markdown file someone else wrote is kept, with the new text appended in a `<!-- deciduous:start -->` block that later updates replace on their own; a script, TOML or other file someone else wrote is left untouched, and a kept hook script gets `deciduous log-loop` added beside it in `settings.json` rather than lost.
+- **Everything `update` changes is backed up first**, to `.deciduous/update-backups/<unix-time>/`, and the run prints where.
+- **On a project with `[remote]` configured, `update` leaves `.gitignore`, `.gitattributes`, `.git/config` and `graph.json` alone.** The graph lives on the server; the `graph.json` sync only wrote into files that belong to the project.
+- **`.claude/settings.json` keeps its key order** when the log-loop hooks are merged in; before, it came back alphabetised.
+- **`remote push` sends only what the server does not have.** The server's import replaces a row it already holds, so pushing a whole local graph overwrote anything changed on the server since with the stale local copy. Edges are matched through the local node map, because an older database's stored edge change ids can be stale or missing: matched by those alone, one 7,805-node workspace looked like 51,092 missing edges, all of which the server had. `--overwrite` restores the old behaviour.
+
+### Added
+- **`deciduous update --all <dir>`** updates every deciduous project directly under `<dir>` (and `<dir>` itself), one after another, reporting each and continuing past failures.
+
+### Not in this release
+- OpenCode command files are generated from the Claude templates at run time, so older generated copies are not in the embedded list: an OpenCode project's first 1.0.3 update appends to them instead of replacing them. Later updates recognise them by the hash recorded on write.
+
 ## [1.0.2] - 2026-09-23
 
 The shared graph server can be installed without Erlang, Elixir or a hand-built database, and no MCP call can hang long enough for Claude Code to background it. Both packages move to 1.0.2 together; the release workflow refuses to publish a tag that Cargo.toml and deciduous_mcp/mix.exs do not both declare.
