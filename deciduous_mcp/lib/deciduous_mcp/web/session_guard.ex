@@ -259,12 +259,29 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   defp with_default_arguments(_method, params), do: params
 
+  # Peri nests a member's errors under its parent's, with the parent's own
+  # message nil; Hermes's formatter printed only the parent, as "params: ".
+  # The leaves are what say what is wrong.
   defp peri_errors(errors) when is_list(errors) do
-    text = Hermes.Server.Component.Schema.format_errors(errors)
+    text =
+      errors
+      |> Enum.flat_map(&peri_leaves/1)
+      |> Enum.map_join("; ", fn {path, message} ->
+        "#{Enum.join(path, ".")}: #{String.replace(message, ~r/\s+/, " ")}"
+      end)
+
     if String.length(text) > 300, do: String.slice(text, 0, 300) <> "...", else: text
   end
 
   defp peri_errors(_), do: "they do not match the method's schema"
+
+  defp peri_leaves(%{errors: [_ | _] = nested}), do: Enum.flat_map(nested, &peri_leaves/1)
+
+  defp peri_leaves(%{path: path, message: message}) when is_binary(message),
+    do: [{path || [], message}]
+
+  defp peri_leaves(%{path: path}), do: [{path || [], "is invalid"}]
+  defp peri_leaves(other), do: [{[], inspect(other, limit: 5)}]
 
   defp tool_call_params_problem(%{"name" => name} = params) when is_binary(name) do
     case Map.get(params, "arguments") do

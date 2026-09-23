@@ -67,6 +67,18 @@ defmodule DeciduousMcp.Web.ProtocolParamsTest do
     end
   end
 
+  test "invalid params name the member that is wrong", %{h: h} do
+    assert {200, %{"error" => %{"message" => m1}}} =
+             rpc(%{jsonrpc: "2.0", id: 50, method: "logging/setLevel", params: %{level: 5}}, h)
+
+    assert m1 =~ ~r/params\.level: expected one of .* received 5/
+
+    assert {200, %{"error" => %{"message" => m2}}} =
+             rpc(%{jsonrpc: "2.0", id: 51, method: "resources/read"}, h)
+
+    assert m2 =~ "params.uri"
+  end
+
   test "an initialize without a session and with bad params is answered, not dropped" do
     cases = [
       %{params: "x"},
