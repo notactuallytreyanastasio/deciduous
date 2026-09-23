@@ -1,9 +1,9 @@
-# hermes_mcp 0.14.1, vendored with four patches
+# hermes_mcp 0.14.1, vendored with five patches
 
-This is the hex package `hermes_mcp` 0.14.1 as fetched, with four changes
+This is the hex package `hermes_mcp` 0.14.1 as fetched, with five changes
 deciduous needs and upstream does not have. It is a `path:` dependency in
 `mix.exs` so `mix deps.get` never overwrites it. Upgrading Hermes means
-re-applying these four hunks or confirming upstream made them unnecessary.
+re-applying these five hunks or confirming upstream made them unnecessary.
 
 ## 1. Request handlers run in a Task, not in `Hermes.Server.Base`
 
@@ -74,6 +74,18 @@ messages at or below the configured level. At `:info` in production every
 
 The arguments are swapped. The deadline test asserts the log line, and was
 the first thing to notice it was missing.
+
+## 5. `initialize` carries the server's `instructions`
+
+`lib/hermes/server/base.ex`. MCP's `InitializeResult` has an optional
+`instructions` string, and clients such as Claude Code put it in the model's
+context for the session. Upstream never sends it. Base now calls the server
+module's `server_instructions/0` once at start, if the module defines it,
+and puts the text in every `initialize` result. A module without it, or one
+returning an empty string, sends none, as upstream does. deciduous uses it
+for the logging guidance that replaced the log-loop hook
+(`DeciduousMcp.MCP.Instructions`). Test:
+`test/deciduous_mcp/mcp/instructions_test.exs`.
 
 Patch files with the full rationale and measurements for 1 and 2:
 `serialization-hermes-base-async.patch` and

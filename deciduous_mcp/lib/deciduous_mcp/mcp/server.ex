@@ -33,6 +33,9 @@ defmodule DeciduousMcp.MCP.Server do
 
   require Logger
 
+  @doc "Sent as `instructions` on initialize (vendored Hermes patch 5)."
+  def server_instructions, do: DeciduousMcp.MCP.Instructions.text()
+
   # --- Graph CRUD tools ---
   component DeciduousMcp.MCP.Tools.AddNode
   component DeciduousMcp.MCP.Tools.UpdateNode
