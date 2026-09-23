@@ -67,9 +67,31 @@ defmodule DeciduousMcp.MCP.Tools.CloseThread do
   end
 
   def call(%{arguments: args, server: frame}) do
-    case Scope.write_workspace_id(frame, args) do
-      {:ok, workspace_id} -> do_call(workspace_id, args)
+    with {:ok, workspace_id} <- Scope.write_workspace_id(frame, args),
+         :ok <- check_goal(workspace_id, args["goal_node_id"]) do
+      do_call(workspace_id, args)
+    else
       {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  # The goal is the one row close_thread edits rather than creates, and it
+  # arrives by id. The workspace the call writes to is already settled (the
+  # pin, else the argument), so the goal has to be in it: resolving the
+  # goal by id alone completed a goal in any workspace on the server, from a
+  # client pinned to a different one.
+  defp check_goal(_workspace_id, nil), do: :ok
+
+  defp check_goal(workspace_id, goal_id) do
+    case Nodes.get_node(goal_id) do
+      {:ok, %{workspace_id: ^workspace_id, deleted_at: nil}} ->
+        :ok
+
+      {:ok, %{workspace_id: ^workspace_id}} ->
+        {:error, "goal_node_id #{goal_id} was deleted; nothing was written"}
+
+      _ ->
+        {:error, "goal_node_id #{goal_id} is not a node in this workspace; nothing was written"}
     end
   end
 
