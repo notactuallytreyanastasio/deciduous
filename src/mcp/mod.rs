@@ -204,10 +204,12 @@ impl McpServer {
         let _ = self.db.add_node_to_session(session_id, node_id);
 
         // One file per project, so two servers in one project share it. Say
-        // when this start displaces another server's live session: a
-        // restart of that server will now resume this one instead.
-        let replaced = load_session_from_disk(&self.db, &self.session_file)
-            .filter(|&other| Some(other) != self.active_session_id);
+        // when this start displaces a live session: a restart will now
+        // resume this one instead. That includes the session this server is
+        // in: a server adopts whatever the file names when it starts, so
+        // "my own session" is often another server's, and leaving it out
+        // (as this did) hid exactly the common case.
+        let replaced = load_session_from_disk(&self.db, &self.session_file);
         self.active_session_id = Some(session_id);
         if let Err(e) = save_session_to_disk(&self.session_file, session_id) {
             return protocol::tool_result_error(format!(
@@ -228,8 +230,8 @@ impl McpServer {
         );
         if let Some(other) = replaced {
             message.push_str(&format!(
-                ". Session #{other}, started by another deciduous server in this project, \
-                 is still open but is no longer the one {} resumes after a restart",
+                ". Session #{other} is still open, and another deciduous server in this \
+                 project may be using it, but it is no longer the one {} resumes after a restart",
                 self.session_file.display()
             ));
         }
@@ -264,7 +266,10 @@ impl McpServer {
         eprintln!("deciduous-mcp: ended session #{session_id} ({node_count} nodes)");
 
         self.active_session_id = None;
-        if let Err(e) = clear_session_from_disk(&self.session_file) {
+        // Only if the file still names this session. Another server may have
+        // started its own since, and deleting the file then dropped that
+        // live session from every restart, with no warning to anyone.
+        if let Err(e) = clear_session_from_disk(&self.session_file, session_id) {
             return protocol::tool_result_error(format!(
                 "Ended session #{session_id}, but {} could not be removed: {e}. \
                  A restarted server would resume the ended session.",
@@ -445,8 +450,14 @@ fn save_session_to_disk(file: &std::path::Path, session_id: i32) -> io::Result<(
     std::fs::write(file, session_id.to_string())
 }
 
-/// Remove the session file from disk. Already gone is fine.
-fn clear_session_from_disk(file: &std::path::Path) -> io::Result<()> {
+/// Remove the session file if it names `session_id`. Already gone, or
+/// naming another session, is fine.
+fn clear_session_from_disk(file: &std::path::Path, session_id: i32) -> io::Result<()> {
+    match std::fs::read_to_string(file) {
+        Ok(content) if content.trim() != session_id.to_string() => return Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        _ => {}
+    }
     match std::fs::remove_file(file) {
         Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
         _ => Ok(()),

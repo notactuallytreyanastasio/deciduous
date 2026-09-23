@@ -1674,6 +1674,43 @@ fn a_non_ascii_commit_does_not_kill_the_server_in_generate_writeup() {
     assert_eq!(code, Some(0));
 }
 
+/// A server resumes the session in `active_session` at startup. When it then
+/// starts its own, the one it resumed is still open and belongs to whoever
+/// started it; that was not reported, and when that owner ended its session
+/// it deleted the file, which by then named the new one.
+#[test]
+fn starting_a_session_after_resuming_one_reports_it_and_ending_keeps_the_others() {
+    let p = Project::new();
+    let mut a = p.mcp();
+    let sa = a
+        .call("start_session", json!({"name":"a","goal_title":"ga"}))
+        .unwrap()["session_id"]
+        .clone();
+
+    let mut b = p.mcp(); // resumes a's session from the file
+    let got = b.call("get_session", json!({})).unwrap();
+    assert_eq!(got["session_id"], sa, "{got}");
+    let sb = b
+        .call("start_session", json!({"name":"b","goal_title":"gb"}))
+        .unwrap();
+    assert_eq!(
+        sb["replaced_session_id"], sa,
+        "b displaced the session it had resumed without saying so: {sb}"
+    );
+
+    // a ends its own session; b's is the one a restart must resume.
+    a.call("end_session", json!({"summary":"a done"})).unwrap();
+    a.close();
+    b.close();
+    let mut c = p.mcp();
+    let got = c.call("get_session", json!({})).unwrap();
+    assert_eq!(
+        got["session_id"], sb["session_id"],
+        "ending a's session dropped b's from the session file: {got}"
+    );
+    c.close();
+}
+
 // ============================================================================
 // R4, again: the file checked is the file read
 // ============================================================================
