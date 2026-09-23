@@ -100,6 +100,25 @@ defmodule DeciduousMcp.MCP.DeletedNodesTest do
     refute "dn quokka B" in neighbours
   end
 
+  # write_scope_for_node checked the from node only, so an edge into a
+  # deleted node could be deleted ("Edge deleted") while one out of it
+  # was refused.
+  test "delete_edge into a deleted node is refused and the edge row stays", %{
+    client: client,
+    a: a,
+    b: b
+  } do
+    assert {:error, message} =
+             McpClient.call(client, "delete_edge", %{
+               "from_node_id" => a.id,
+               "to_node_id" => b.id,
+               "branch" => "dn"
+             })
+
+    assert message =~ b.id and message =~ "deleted"
+    assert [_] = Edges.edges_to(b.id)
+  end
+
   test "add_edge to a deleted node is refused", %{client: client, a: a, b: b} do
     assert {:error, _} =
              McpClient.call(client, "add_edge", %{

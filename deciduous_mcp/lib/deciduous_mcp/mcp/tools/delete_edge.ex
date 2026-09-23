@@ -31,8 +31,10 @@ defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
   end
 
   def call(%{arguments: args, server: frame}) do
-    case Scope.write_scope_for_node(frame, args["from_node_id"], args) do
-      {:ok, _workspace_id} -> do_call(args)
+    with :ok <- Scope.check_node(frame, args["to_node_id"]),
+         {:ok, _workspace_id} <- Scope.write_scope_for_node(frame, args["from_node_id"], args) do
+      do_call(args)
+    else
       {:error, message} -> {:error, %{code: -1, message: message}}
     end
   end

@@ -114,6 +114,26 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
+  @doc """
+  Checks that a node other than the one a write is scoped by may be
+  touched by it: it exists, it is in the pinned workspace if there is a
+  pin, and it is not deleted. Claims no lock.
+
+  delete_edge scopes itself by its source node, so an edge *into* a
+  deleted node was deleted with "Edge deleted" while one out of it was
+  refused. Its target goes through this.
+  """
+  def check_node(frame, node_id) do
+    with {:ok, node} <- lookup_node(node_id),
+         :ok <- check_pin(frame, node),
+         :ok <- check_live(node) do
+      :ok
+    else
+      {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
+      {:error, message} when is_binary(message) -> {:error, message}
+    end
+  end
+
   # The moduledoc's promise is that a pinned repo cannot have its writes
   # redirected, nor read its neighbours. Resolving the workspace from the node would quietly break it
   # the other way round: a client pinned to `blog` naming a node in

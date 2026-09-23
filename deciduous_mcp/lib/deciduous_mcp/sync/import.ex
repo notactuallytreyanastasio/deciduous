@@ -49,9 +49,10 @@ defmodule DeciduousMcp.Sync.Import do
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []) do
       Repo.transaction(
         fn ->
-          node_report = upsert_nodes(workspace.id, nodes)
-          edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes)
-          doc_report = upsert_documents(workspace.id, graph["documents"] || [])
+          deleted = deleted_change_ids(workspace.id)
+          node_report = upsert_nodes(workspace.id, nodes, deleted)
+          edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)
+          doc_report = upsert_documents(workspace.id, graph["documents"] || [], deleted)
 
           %{
             workspace: workspace.name,
@@ -154,8 +155,16 @@ defmodule DeciduousMcp.Sync.Import do
     end
   end
 
-  defp upsert_nodes(workspace_id, nodes) do
+  # A node deleted on the server stays deleted through an import. The
+  # upsert used to replace title, status and metadata on any change_id, so
+  # a push rewrote the tombstone ("REWRITTEN VIA IMPORT", status
+  # completed, deleted_at still set) while every MCP write tool refused
+  # the same edit. Those rows are left alone and named in the report, so
+  # the CLI can tell its user the edit did not land and why.
+  defp upsert_nodes(workspace_id, nodes, deleted) do
     now = DateTime.utc_now()
+
+    {refused, nodes} = Enum.split_with(nodes, &Map.has_key?(deleted, &1["change_id"]))
 
     rows =
       Enum.map(nodes, fn n ->
@@ -179,19 +188,56 @@ defmodule DeciduousMcp.Sync.Import do
       |> Enum.reduce(0, fn chunk, acc ->
         {count, _} =
           Repo.insert_all(Node, chunk,
-            on_conflict: {:replace, [:node_type, :title, :description, :status, :metadata, :updated_at]},
+            on_conflict: replace_unless_deleted(),
             conflict_target: [:workspace_id, :change_id]
           )
 
         acc + count
       end)
 
-    %{received: length(rows), upserted: inserted}
+    %{
+      received: length(rows) + length(refused),
+      upserted: inserted,
+      refused_deleted: length(refused),
+      refused_deleted_examples:
+        refused
+        |> Enum.take(20)
+        |> Enum.map(&%{change_id: &1["change_id"], deleted_at: Map.fetch!(deleted, &1["change_id"])})
+    }
+  end
+
+  # The split above names the rows that were already deleted. This guard
+  # covers a delete_node that commits between that read and the insert:
+  # the conflicting row is then skipped rather than rewritten, and shows
+  # up as upserted < received.
+  defp replace_unless_deleted do
+    from(n in Node,
+      where: is_nil(n.deleted_at),
+      update: [
+        set: [
+          node_type: fragment("EXCLUDED.node_type"),
+          title: fragment("EXCLUDED.title"),
+          description: fragment("EXCLUDED.description"),
+          status: fragment("EXCLUDED.status"),
+          metadata: fragment("EXCLUDED.metadata"),
+          updated_at: fragment("EXCLUDED.updated_at")
+        ]
+      ]
+    )
+  end
+
+  defp deleted_change_ids(workspace_id) do
+    from(n in Node,
+      where: n.workspace_id == ^workspace_id and not is_nil(n.deleted_at),
+      select: {n.change_id, n.deleted_at}
+    )
+    |> Repo.all()
+    |> Map.new(fn {cid, at} -> {cid, DateTime.to_iso8601(at)} end)
   end
 
   # --- Edges ------------------------------------------------------------------
 
-  defp upsert_edges(workspace_id, edges, nodes) do
+  defp upsert_edges(workspace_id, edges, nodes, deleted) do
     # An edge names its endpoints twice: `from_node_id` (SQLite's integer
     # primary key, a real foreign key) and `from_change_id` (a denormalized
     # copy added later). The copies go stale. In one graph on disk, 9,185 of
@@ -207,8 +253,8 @@ defmodule DeciduousMcp.Sync.Import do
 
     pg_ids = node_ids_by_change_id(workspace_id)
 
-    {rows, unresolved, stale} =
-      Enum.reduce(edges, {[], [], 0}, fn e, {ok, bad, stale} ->
+    {rows, unresolved, dead, stale} =
+      Enum.reduce(edges, {[], [], [], 0}, fn e, {ok, bad, dead, stale} ->
         from_cid = Map.get(by_sqlite_id, e["from_node_id"]) || e["from_change_id"]
         to_cid = Map.get(by_sqlite_id, e["to_node_id"]) || e["to_change_id"]
 
@@ -221,17 +267,24 @@ defmodule DeciduousMcp.Sync.Import do
         to_id = Map.get(pg_ids, to_cid)
 
         cond do
+          # Before the unresolved check: the endpoint exists, and saying
+          # "missing" would send the reader looking for the wrong thing.
+          # An edge touching a deleted node is dropped by every read, so
+          # writing one only makes a row nothing can see or remove.
+          Map.has_key?(deleted, from_cid) or Map.has_key?(deleted, to_cid) ->
+            {ok, bad, [%{edge: e["id"], from: from_cid, to: to_cid} | dead], stale}
+
           is_nil(from_id) or is_nil(to_id) ->
-            {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad], stale}
+            {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad], dead, stale}
 
           from_id == to_id ->
             # The Ecto changeset forbids self-loops; insert_all bypasses it, so
             # the check is repeated here rather than quietly writing one. There
             # are 46 of these across the graphs on disk.
-            {ok, [%{edge: e["id"], self_loop: from_cid} | bad], stale}
+            {ok, [%{edge: e["id"], self_loop: from_cid} | bad], dead, stale}
 
           true ->
-            {[edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) | ok], bad, stale}
+            {[edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) | ok], bad, dead, stale}
         end
       end)
 
@@ -253,6 +306,8 @@ defmodule DeciduousMcp.Sync.Import do
       upserted: inserted,
       unresolved: length(unresolved),
       unresolved_examples: Enum.take(unresolved, 10),
+      refused_deleted: length(dead),
+      refused_deleted_examples: Enum.take(dead, 10),
       stale_change_ids: stale
     }
   end
@@ -284,11 +339,16 @@ defmodule DeciduousMcp.Sync.Import do
 
   # --- Documents ---------------------------------------------------------------
 
-  defp upsert_documents(_workspace_id, []), do: %{received: 0, upserted: 0, content_missing: 0}
+  defp upsert_documents(_workspace_id, [], _deleted),
+    do: %{received: 0, upserted: 0, content_missing: 0}
 
-  defp upsert_documents(workspace_id, documents) do
-    pg_ids = node_ids_by_change_id(workspace_id)
+  defp upsert_documents(workspace_id, documents, deleted) do
+    pg_ids = Map.drop(node_ids_by_change_id(workspace_id), Map.keys(deleted))
     now = DateTime.utc_now()
+
+    # A document on a deleted node is refused like an edge to one: it would
+    # be attached to content the delete was meant to hide.
+    {refused, documents} = Enum.split_with(documents, &Map.has_key?(deleted, &1["node_change_id"]))
 
     {rows, orphaned} =
       Enum.reduce(documents, {[], []}, fn d, {ok, bad} ->
@@ -342,8 +402,9 @@ defmodule DeciduousMcp.Sync.Import do
       end)
 
     %{
-      received: length(documents),
+      received: length(documents) + length(refused),
       upserted: inserted,
+      refused_deleted: length(refused),
       content_missing: Enum.count(rows, & &1.content_missing),
       orphaned: length(orphaned),
       orphaned_examples: Enum.take(orphaned, 5)
