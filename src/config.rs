@@ -99,8 +99,8 @@ impl Hook {
     pub fn default_require_action_node() -> Self {
         Self {
             name: "require-action-node".to_string(),
-            description: "Blocks Edit/Write if no recent action/goal node exists".to_string(),
-            matcher: "Edit|Write".to_string(),
+            description: "Blocks work after too many actions without a graph write".to_string(),
+            matcher: "Edit|Write|NotebookEdit|Bash".to_string(),
             enabled: true,
             script: None, // Uses built-in template
             script_path: None,
@@ -368,7 +368,10 @@ auto_detect = true
         // Should have default pre-tool-use hook
         assert_eq!(config.hooks.pre_tool_use.len(), 1);
         assert_eq!(config.hooks.pre_tool_use[0].name, "require-action-node");
-        assert_eq!(config.hooks.pre_tool_use[0].matcher, "Edit|Write");
+        assert_eq!(
+            config.hooks.pre_tool_use[0].matcher,
+            "Edit|Write|NotebookEdit|Bash"
+        );
         assert!(config.hooks.pre_tool_use[0].enabled);
 
         // Should have default post-tool-use hook

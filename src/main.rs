@@ -465,6 +465,14 @@ enum Command {
         /// Shell type: bash, zsh, fish, powershell, elvish
         shell: clap_complete::Shell,
     },
+
+    /// Claude Code hook: make the agent log to the graph as it works.
+    /// Reads the hook's JSON on stdin; see src/log_loop.rs.
+    #[command(name = "log-loop", hide = true)]
+    LogLoop {
+        /// pre | post-log | post-bash | stop
+        event: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -1127,6 +1135,13 @@ fn main() {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
+        return;
+    }
+
+    // The hook runs on every tool call an agent makes. It must never open or
+    // create the local database, so it is handled before Database::open.
+    if let Command::LogLoop { event } = &args.command {
+        deciduous::log_loop::run(event);
         return;
     }
 
@@ -3336,6 +3351,7 @@ fn main() {
         },
 
         Command::Completion { .. } => unreachable!(), // Handled above
+        Command::LogLoop { .. } => unreachable!(),    // Handled above
         Command::Mcp { .. } => unreachable!(),        // Handled above
 
         Command::Audit {

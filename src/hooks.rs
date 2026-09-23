@@ -140,12 +140,13 @@ fn generate_settings_json(claude_dir: &Path, config: &Config) -> Result<(), Stri
         })
         .collect();
 
-    let settings = json!({
+    let mut settings = json!({
         "hooks": {
             "PreToolUse": pre_hooks,
             "PostToolUse": post_hooks
         }
     });
+    crate::log_loop::merge_claude_settings(&mut settings);
 
     let json_string = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Could not serialize settings: {}", e))?;
@@ -447,7 +448,9 @@ mod tests {
         let hook = Hook::default_require_action_node();
         let script = get_hook_script(&hook, &Config::default()).unwrap();
         assert!(script.contains("require-action-node"));
-        assert!(script.contains("deciduous nodes"));
+        // The rules live in the binary; the script only hands over to it.
+        assert!(script.contains("exec deciduous log-loop pre"));
+        assert!(!script.contains("deciduous nodes"));
     }
 
     #[test]
