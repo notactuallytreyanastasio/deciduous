@@ -237,8 +237,11 @@ one-sided change from a real collision:
 
 A version that still carries conflict markers (someone committed a conflicted file)
 is resolved by merging its own sides first, so it does not poison every later merge
-whose ancestor it is. An ancestor that will not parse at all is dropped, with a note
-on stderr, and the merge goes two-way.
+whose ancestor it is. An ancestor that will not parse at all fails the driver: a
+merge without it would hand every field the sides differ on to the newer record and
+silently lose the older side's edits. The error names the way to do that anyway,
+knowingly (`deciduous merge-record /dev/null <ours> <theirs>`: an empty base is the
+two-way merge).
 
 When the driver does fail (a side is not JSON), or git cannot run it (`deciduous` is
 not on the PATH git sees: GUI clients, CI images), git does **not** fall back to an
@@ -248,6 +251,13 @@ committing it silently drops the other side. `deciduous sync --check` reports th
 unmerged state and exits 1, and `deciduous sync` finishes the merge from git's own
 three versions (`git ls-files -u`), keeping any local writes made to the working file
 since, and stages the result.
+
+Staging that file by hand (`git add`) clears the unmerged state but not the problem.
+So while a merge, rebase or cherry-pick is stopped, `sync` and `sync --check` also
+fold the incoming commit's version (`MERGE_HEAD`, `REBASE_HEAD`, `CHERRY_PICK_HEAD`)
+into the working file, measured from its base. For a file the driver merged this
+changes nothing; for one that is missing the other side, `--check` exits 1 and
+`sync` merges and stages it. A merge already committed is out of reach.
 
 Git config is per clone, so a clone that has never run `deciduous sync` (or a GitHub
 web merge) can still produce conflict markers inside `graph.json`. That is not
