@@ -535,28 +535,101 @@ fn read_map<T: Clone + RecordIdentity>(path: &Path, map: &BTreeMap<String, T>) -
     out
 }
 
-/// Three-way merge of a record about to be written over one already in the
-/// document, with no known common ancestor: every differing field is a
-/// collision and the later `updated_at` wins.
-fn merged_record<T>(existing: Option<&T>, incoming: &T) -> io::Result<T>
+/// Merge a record produced by a local write into the one already in the
+/// document. `base` is what the database held before the write, when the
+/// caller knows it: with it, a field only the file changed (a teammate's
+/// edit that was pulled but not synced yet) survives the write. Without it
+/// every differing field is a collision.
+///
+/// The write is restamped first (see [`restamp_local_write`]), so it wins
+/// every collision. Returns the merged record and, when the write's
+/// `updated_at` had to move, the new value, which the database must adopt
+/// too or the next sync would see the file as newer and re-import it.
+fn merged_record<T>(
+    existing: Option<&T>,
+    incoming: &T,
+    base: Option<&T>,
+) -> io::Result<(T, Option<String>)>
 where
     T: Serialize + for<'de> Deserialize<'de>,
 {
-    let Some(existing) = existing else {
-        return serde_json::to_value(incoming)
-            .and_then(serde_json::from_value)
-            .map_err(io::Error::other);
-    };
     let bad = |e: serde_json::Error| io::Error::other(e);
+    let Some(existing) = existing else {
+        let rec = serde_json::to_value(incoming)
+            .and_then(serde_json::from_value)
+            .map_err(bad)?;
+        return Ok((rec, None));
+    };
     let ours = serde_json::to_value(existing).map_err(bad)?;
-    let theirs = serde_json::to_value(incoming).map_err(bad)?;
-    let merged = merge_record_values(None, &ours, &theirs);
-    serde_json::from_value(merged).map_err(|e| {
+    let mut theirs = serde_json::to_value(incoming).map_err(bad)?;
+    let base = base.map(serde_json::to_value).transpose().map_err(bad)?;
+    let restamped = restamp_local_write(base.as_ref(), &ours, &mut theirs);
+    let merged = merge_record_values(base.as_ref(), &ours, &theirs);
+    let rec = serde_json::from_value(merged).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("merging a record produced something unreadable: {}", e),
         )
-    })
+    })?;
+    Ok((rec, restamped))
+}
+
+/// Fields that say who wrote a record and when, not what it says.
+const STAMP_FIELDS: [&str; 3] = ["author", "created_at", "updated_at"];
+
+/// A local write happens after every version of its record that is already
+/// in the file, so it must carry a later timestamp than all of them.
+///
+/// Normally it does: the database stamps it with the current time. It does
+/// not when the file holds a version stamped ahead of this clock: a node
+/// backdated into the future with `add --date`, or a teammate whose clock
+/// runs fast. Last-writer-wins then picks the file's version, the write
+/// reports success, and the next `deciduous sync` reverts the database to
+/// the file. Every later edit is discarded the same way until the wall
+/// clock passes the bad timestamp.
+///
+/// So a write that changes anything is moved to just after the newest
+/// version it replaces (a Lamport clock, in effect). The field moved is the
+/// one that dates this kind of write: `deleted_at` for a tombstone,
+/// `updated_at` for an edit, `created_at` for an edge or tag (which have
+/// nothing else). Returns the new `updated_at` when that is what moved.
+fn restamp_local_write(
+    base: Option<&Value>,
+    existing: &Value,
+    incoming: &mut Value,
+) -> Option<String> {
+    let ex_ts = record_ts(existing);
+    let (Some(inc), Some(ex)) = (incoming.as_object(), existing.as_object()) else {
+        return None;
+    };
+    if record_ts(incoming) > ex_ts {
+        return None;
+    }
+    // What does the write change? Against the database's previous state
+    // when known; otherwise against the file, where a field the write does
+    // not carry is someone else's addition, not a removal.
+    let changes = match base.and_then(Value::as_object) {
+        Some(b) => b
+            .keys()
+            .chain(inc.keys())
+            .filter(|k| !STAMP_FIELDS.contains(&k.as_str()))
+            .any(|k| b.get(k) != inc.get(k)),
+        None => inc
+            .iter()
+            .filter(|(k, _)| !STAMP_FIELDS.contains(&k.as_str()))
+            .any(|(k, v)| ex.get(k) != Some(v)),
+    };
+    if !changes {
+        return None;
+    }
+    let field = ["deleted_at", "updated_at", "created_at"]
+        .into_iter()
+        .find(|f| inc.contains_key(*f))?;
+    let stamp = (ex_ts + chrono::Duration::milliseconds(1))
+        .with_timezone(&chrono::Local)
+        .to_rfc3339();
+    incoming[field] = Value::String(stamp.clone());
+    (field == "updated_at").then_some(stamp)
 }
 
 /// Insert `rec` under `key`, reporting whether the document changed.
@@ -789,27 +862,46 @@ impl RecordStore {
     /// Write a record produced by a local mutation, merged with whatever is
     /// already in the document. That entry may hold a teammate's version
     /// that was pulled but not yet synced into the database; overwriting it
-    /// would lose their fields.
+    /// would lose their fields. Returns whether the file changed and, if the
+    /// write had to be restamped past a newer-looking version, its new
+    /// `updated_at`.
     fn write_merged<T>(
         &self,
         pick: impl FnOnce(&mut GraphDoc) -> &mut BTreeMap<String, T>,
         key: String,
         rec: &T,
-    ) -> io::Result<bool>
+        base: Option<&T>,
+    ) -> io::Result<(bool, Option<String>)>
     where
         T: Serialize + for<'de> Deserialize<'de> + PartialEq,
     {
-        self.mutate(|doc| {
+        let mut restamped = None;
+        let changed = self.mutate(|doc| {
             let map = pick(doc);
-            let merged = merged_record(map.get(&key), rec)?;
+            let (merged, stamp) = merged_record(map.get(&key), rec, base)?;
+            restamped = stamp;
             Ok(put(map, key, merged))
-        })
+        })?;
+        Ok((changed, restamped))
     }
 
     /// Publish a live node from the database.
     pub fn publish_node(&self, node: &DecisionNode) -> io::Result<bool> {
+        Ok(self.publish_node_edit(None, node)?.0)
+    }
+
+    /// Publish a node the database just changed. `before` is the row as it
+    /// was before the change. Returns whether the file changed, and the
+    /// `updated_at` the database must take if the write had to be moved
+    /// past a version in the file stamped later than this clock.
+    pub fn publish_node_edit(
+        &self,
+        before: Option<&DecisionNode>,
+        node: &DecisionNode,
+    ) -> io::Result<(bool, Option<String>)> {
         let rec = NodeRecord::from_db(node, Some(self.author()));
-        self.write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec)
+        let base = before.map(|b| NodeRecord::from_db(b, None));
+        self.write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec, base.as_ref())
     }
 
     /// Mark a node deleted. Keeps the last known fields so history stays
@@ -817,13 +909,18 @@ impl RecordStore {
     pub fn tombstone_node(&self, node: &DecisionNode) -> io::Result<bool> {
         let mut rec = NodeRecord::from_db(node, Some(self.author()));
         rec.deleted_at = Some(now_ts());
-        self.write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec)
+        let base = NodeRecord::from_db(node, None);
+        Ok(self
+            .write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec, Some(&base))?
+            .0)
     }
 
     /// Publish a live edge. Legacy edges without change ids are skipped.
     pub fn publish_edge(&self, edge: &DecisionEdge) -> io::Result<bool> {
         match EdgeRecord::from_db(edge, Some(self.author())) {
-            Some(rec) => self.write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec),
+            Some(rec) => Ok(self
+                .write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec, None)?
+                .0),
             None => Ok(false),
         }
     }
@@ -832,21 +929,30 @@ impl RecordStore {
         match EdgeRecord::from_db(edge, Some(self.author())) {
             Some(mut rec) => {
                 rec.deleted_at = Some(now_ts());
-                self.write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec)
+                Ok(self
+                    .write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec, None)?
+                    .0)
             }
             None => Ok(false),
         }
     }
 
     pub fn publish_theme(&self, theme: &Theme) -> io::Result<bool> {
+        Ok(self.publish_theme_edit(theme)?.0)
+    }
+
+    /// Like [`Self::publish_node_edit`], for a theme.
+    pub fn publish_theme_edit(&self, theme: &Theme) -> io::Result<(bool, Option<String>)> {
         let rec = ThemeRecord::from_db(theme, Some(self.author()));
-        self.write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec)
+        self.write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec, None)
     }
 
     pub fn tombstone_theme(&self, theme: &Theme) -> io::Result<bool> {
         let mut rec = ThemeRecord::from_db(theme, Some(self.author()));
         rec.deleted_at = Some(now_ts());
-        self.write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec)
+        Ok(self
+            .write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec, None)?
+            .0)
     }
 
     pub fn publish_tag(
@@ -866,7 +972,7 @@ impl RecordStore {
             extra: Default::default(),
         };
         let key = tag_id(node_change_id, theme_change_id);
-        self.write_merged(|d| &mut d.tags, key, &rec)
+        Ok(self.write_merged(|d| &mut d.tags, key, &rec, None)?.0)
     }
 
     /// Two people created a theme with the same name before syncing. The
@@ -928,8 +1034,20 @@ impl RecordStore {
                 deleted_at: None,
                 extra: Default::default(),
             });
+            // Later than whatever version is there, even one stamped ahead
+            // of this clock (see restamp_local_write).
+            let prev = serde_json::to_value(&rec)
+                .map(|v| record_ts(&v))
+                .unwrap_or_default();
+            let deleted = if parse_ts(&now) > prev {
+                now
+            } else {
+                (prev + chrono::Duration::milliseconds(1))
+                    .with_timezone(&chrono::Local)
+                    .to_rfc3339()
+            };
             rec.author = Some(author);
-            rec.deleted_at = Some(now);
+            rec.deleted_at = Some(deleted);
             Ok(put(&mut doc.tags, key, rec))
         })
     }
@@ -2332,6 +2450,40 @@ mod tests {
         fs::write(s.path(), "{broken").unwrap();
         db.update_node_status(id, "completed").unwrap();
         assert_eq!(fs::read_to_string(s.path()).unwrap(), "{broken");
+    }
+
+    #[test]
+    fn a_local_edit_keeps_a_pulled_change_to_a_field_it_did_not_touch() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        let id = db
+            .create_node("goal", "Old title", None, None, None)
+            .unwrap();
+        let row = db.get_node(id).unwrap().unwrap();
+        // Alice renamed it; her record is pulled but not synced yet, and her
+        // clock is a day ahead.
+        let mut theirs = s.read_node(&row.change_id).unwrap().unwrap();
+        theirs.title = "Alice's title".into();
+        theirs.updated_at = (Utc::now() + chrono::Duration::days(1)).to_rfc3339();
+        s.write_node(&theirs).unwrap();
+        // Bob changes the status. The database knows what it held before,
+        // so the title is Alice's change, not a collision.
+        db.update_node_status(id, "active").unwrap();
+        let on_disk = s.read_node(&row.change_id).unwrap().unwrap();
+        assert_eq!(on_disk.title, "Alice's title");
+        assert_eq!(on_disk.status, "active");
+        assert!(parse_ts(&on_disk.updated_at) > parse_ts(&theirs.updated_at));
+        // The row took the same stamp, so sync imports only Alice's title.
+        let row = db.get_node(id).unwrap().unwrap();
+        assert_eq!(row.updated_at, on_disk.updated_at);
+        let r = reconcile(&db, &s, false).unwrap();
+        assert_eq!(r.nodes_updated, 1, "{r:?}");
+        let row = db.get_node(id).unwrap().unwrap();
+        assert_eq!(
+            (row.title.as_str(), row.status.as_str()),
+            ("Alice's title", "active")
+        );
+        assert!(reconcile(&db, &s, false).unwrap().is_clean());
     }
 
     #[test]

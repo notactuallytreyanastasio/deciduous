@@ -754,16 +754,45 @@ impl Database {
     }
 
     fn publish_node_by_id(&self, node_id: i32) {
+        self.publish_node_edit(node_id, None);
+    }
+
+    /// Publish a node this process just changed. `before` is the row as it
+    /// was before the change, so the file can keep fields a teammate changed
+    /// that this write did not touch.
+    fn publish_node_edit(&self, node_id: i32, before: Option<DecisionNode>) {
         let Some(store) = self.store() else { return };
         match self.get_node(node_id) {
-            Ok(Some(node)) => {
-                if let Err(e) = store.publish_node(&node) {
-                    Self::store_warn("could not write node record", e);
+            Ok(Some(node)) => match store.publish_node_edit(before.as_ref(), &node) {
+                Ok((_, Some(stamp))) => {
+                    // The file held a version stamped after this clock; the
+                    // write went in just after it, and the row must agree or
+                    // the next sync would re-import the file's copy.
+                    if let Err(e) = self.set_node_updated_at(node_id, &stamp) {
+                        Self::store_warn("could not restamp node", e);
+                    }
                 }
-            }
+                Ok((_, None)) => {}
+                Err(e) => Self::store_warn("could not write node record", e),
+            },
             Ok(None) => {}
             Err(e) => Self::store_warn("could not read node for publishing", e),
         }
+    }
+
+    /// The row as it is now, for [`Self::publish_node_edit`]. Only read when
+    /// a graph file is attached.
+    fn node_before_edit(&self, node_id: i32) -> Option<DecisionNode> {
+        self.store()?;
+        self.get_node(node_id).ok().flatten()
+    }
+
+    fn set_node_updated_at(&self, node_id: i32, updated_at: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+            .set(decision_nodes::updated_at.eq(updated_at))
+            .execute(&mut conn)?;
+        Ok(())
     }
 
     fn publish_edge_by_id(&self, edge_id: i32) {
@@ -791,11 +820,21 @@ impl Database {
     fn publish_theme_by_id(&self, theme_id: i32) {
         let Some(store) = self.store() else { return };
         match self.get_theme_by_id(theme_id) {
-            Ok(Some(theme)) => {
-                if let Err(e) = store.publish_theme(&theme) {
-                    Self::store_warn("could not write theme record", e);
+            Ok(Some(theme)) => match store.publish_theme_edit(&theme) {
+                Ok((_, Some(stamp))) => {
+                    let result = self.get_conn().and_then(|mut conn| {
+                        diesel::update(themes::table.filter(themes::id.eq(theme_id)))
+                            .set(themes::updated_at.eq(&stamp))
+                            .execute(&mut conn)
+                            .map_err(DbError::from)
+                    });
+                    if let Err(e) = result {
+                        Self::store_warn("could not restamp theme", e);
+                    }
                 }
-            }
+                Ok((_, None)) => {}
+                Err(e) => Self::store_warn("could not write theme record", e),
+            },
             Ok(None) => {}
             Err(e) => Self::store_warn("could not read theme for publishing", e),
         }
@@ -2077,6 +2116,7 @@ impl Database {
 
     /// Update node status
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
+        let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2088,12 +2128,13 @@ impl Database {
             .execute(&mut conn)?;
         drop(conn);
 
-        self.publish_node_by_id(node_id);
+        self.publish_node_edit(node_id, before);
         Ok(())
     }
 
     /// Update a node's commit hash in metadata_json
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
+        let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2125,12 +2166,13 @@ impl Database {
             .execute(&mut conn)?;
         drop(conn);
 
-        self.publish_node_by_id(node_id);
+        self.publish_node_edit(node_id, before);
         Ok(())
     }
 
     /// Update a node's prompt in metadata_json
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
+        let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2162,7 +2204,7 @@ impl Database {
             .execute(&mut conn)?;
         drop(conn);
 
-        self.publish_node_by_id(node_id);
+        self.publish_node_edit(node_id, before);
         Ok(())
     }
 

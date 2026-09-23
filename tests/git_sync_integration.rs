@@ -417,3 +417,84 @@ fn fields_this_version_does_not_know_survive_every_write_and_merge() {
     assert_eq!(doc["nodes"][&goal_cid]["status"], "completed", "{doc:#}");
     assert_eq!(doc["documents"]["d1"]["sha"], "abc", "{doc:#}");
 }
+
+// ============================================================================
+// G1: a record stamped in the future
+// ============================================================================
+
+fn status_of(dev: &Dev, reference: &str) -> String {
+    let shown: Value = serde_json::from_str(&dev.ok(&["show", reference, "--json"])).unwrap();
+    shown["status"]
+        .as_str()
+        .or_else(|| shown["node"]["status"].as_str())
+        .unwrap_or_else(|| panic!("no status in {shown}"))
+        .to_string()
+}
+
+#[test]
+fn a_local_edit_is_never_reverted_by_a_future_updated_at() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+
+    // Backdating is for archaeology, but nothing stops a date ahead of now.
+    let dated = alice.add("action", "dated", &["--date", "2099-01-01"]);
+    let out = alice.ok(&["status", &dated.to_string(), "completed"]);
+    assert!(out.to_lowercase().contains("updated"), "{out}");
+    alice.ok(&["prompt", &dated.to_string(), "the real prompt"]);
+    let out = alice.ok(&["sync"]);
+    assert_eq!(status_of(&alice, &dated.to_string()), "completed", "{out}");
+    let rec = alice.doc()["nodes"][alice.change_id(dated)].clone();
+    assert_eq!(rec["status"], "completed", "{rec:#}");
+    assert_eq!(rec["metadata"]["prompt"], "the real prompt", "{rec:#}");
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+
+    // Deleting it sticks too: a tombstone older than the record's
+    // updated_at used to lose to it, and the node came back.
+    let doomed = alice.add("action", "doomed", &["--date", "2099-01-01"]);
+    let doomed_cid = alice.change_id(doomed);
+    alice.ok(&["delete", &doomed.to_string()]);
+    alice.ok(&["sync"]);
+    assert!(
+        alice.node_by_title("doomed").is_none(),
+        "deleted node came back"
+    );
+    assert!(
+        alice.doc()["nodes"][&doomed_cid]["deleted_at"].is_string(),
+        "{:#}",
+        alice.doc()["nodes"][&doomed_cid]
+    );
+
+    // A teammate whose clock runs a day ahead.
+    let goal = alice.add("goal", "Shared goal", &[]);
+    let goal_cid = alice.change_id(goal);
+    alice.commit_graph("goal");
+    alice.git(&["push", "-q"]);
+    let bob = team.join("bob");
+    let mut doc = bob.doc();
+    let tomorrow = (chrono_like_now_plus_days(1)).to_string();
+    doc["nodes"][&goal_cid]["status"] = "active".into();
+    doc["nodes"][&goal_cid]["updated_at"] = tomorrow.clone().into();
+    bob.write_doc(&doc);
+    bob.ok(&["sync"]);
+    bob.commit_graph("skewed clock");
+    bob.git(&["push", "-q"]);
+
+    alice.git(&["pull", "-q", "--no-edit"]);
+    alice.ok(&["sync"]);
+    assert_eq!(status_of(&alice, &goal.to_string()), "active");
+    // Alice decides later, by her clock and by causality.
+    alice.ok(&["status", &goal.to_string(), "superseded"]);
+    alice.ok(&["sync"]);
+    assert_eq!(status_of(&alice, &goal.to_string()), "superseded");
+    alice.commit_graph("supersede");
+    alice.git(&["push", "-q"]);
+    bob.git(&["pull", "-q", "--no-edit"]);
+    bob.ok(&["sync"]);
+    assert_eq!(status_of(&bob, &goal_cid[..8]), "superseded");
+}
+
+/// RFC 3339 timestamp `days` from now.
+fn chrono_like_now_plus_days(days: i64) -> String {
+    (chrono::Utc::now() + chrono::Duration::days(days)).to_rfc3339()
+}
