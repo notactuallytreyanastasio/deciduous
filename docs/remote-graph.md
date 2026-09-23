@@ -66,9 +66,9 @@ called.
 | Command | What it does |
 |---|---|
 | `deciduous remote init <url>` | Point this repo at a server; verifies and claims the workspace before writing, then sends local history the server lacks |
-| `deciduous remote status` | Writes waiting in the log, and every node and edge that differs, field by field |
+| `deciduous remote status` | Writes waiting in the log, and every node, edge and document that differs, field by field, each with the command that fixes it. Exits 1 when anything differs |
 | `deciduous remote pull` | Send what is waiting, then refresh the local cache from the server (including its deletions) |
-| `deciduous remote push` | Send what is waiting in the log. `--seed` also sends rows no op covers (history from before the remote); `--drop-rejected` discards ops the server refused |
+| `deciduous remote push` | Send what is waiting in the log. `--seed` also sends rows and documents (with their bytes) no op covers, such as history from before the remote. `--repair` makes the server's fields match this copy's for every node status lists as Different. `--drop-rejected` discards ops the server refused |
 
 `status` compares content, not counts. Two graphs can hold the same number of
 nodes and different nodes:
@@ -87,9 +87,18 @@ Only here (1)
 Only on the server (1)
   goal 0e355b0b "agents goal"
 
-Differs: `deciduous remote push` sends what is waiting; `deciduous remote pull`
-takes the server's side (newer edit wins per node).
+Differs: `deciduous remote push` sends what is waiting; `--seed` adds what only
+this copy has; `--repair` makes the server's fields match this copy's;
+`deciduous remote pull` takes the server's side (newer edit wins per node).
 ```
+
+A node listed as Different says which side edited it later. When this copy
+did, the edit's op never reached the log. It may have been made before this
+clone's config had a `[remote]`, or while the log could not be written.
+`remote push --repair` sends it. A node an agent deleted is listed under
+"Deleted on the server", and `remote pull` removes it here; `--seed` never
+sends it back. Themes and tags are not sent to the server and are not
+compared.
 
 ## How CLI writes reach the server
 
@@ -98,16 +107,19 @@ Every write the CLI makes to its local database (`add`, `link`, `unlink`,
 HTTP API) also appends one operation to `.deciduous/remote-log.jsonl`:
 
 ```json
-{"entry":"op","op_id":"b220f13c-…","at":"…","kind":"update_node","change_id":"d5508657-…","set":{"status":"completed"}}
+{"entry":"op","op_id":"b220f13c-…","at":"…","kind":"update_node","change_id":"d5508657-…","set":{"status":"completed"},"was":{"status":"pending"}}
 ```
 
-An op names only what the write changed. Before the command exits, the ops the
+An op names only what the write changed, and what each field held before
+(`was`). The server writes a field only while it still holds that value. An
+op that waited in the queue while an agent changed the same field is refused,
+with both values, instead of putting the older one back. Before the command exits, the ops the
 server has not acknowledged are sent, in order, to `POST /ops`, which applies
 each one field by field and at most once (by `op_id`), and the answers are
 appended to the log as acks. So:
 
 - a status change does not resend the node, and cannot put back a title an
-  agent changed in the meantime;
+  agent changed in the meantime, or a status either;
 - a write made while the server is down waits in the log and goes on the next
   write or `deciduous remote push`;
 - deletes and unlinks are ops too, and reach the server;
@@ -136,15 +148,22 @@ the working directory, so running the CLI from a subdirectory cannot split one
 project across two workspaces; the main working tree rather than a linked
 worktree, so `git worktree add ../repo-feature` writes to `repo` like the
 agents in it do. Recorded rather than re-derived, so renaming the directory or
-cloning it under another name keeps writing to the same graph. (A config
-written by 1.0.7, URL only, gets the name recorded the first time it is used.)
+cloning it under another name keeps writing to the same graph. A config
+written by 1.0.7 (URL only) gets its name recorded the first time it is used.
+The server is asked first (`POST /locate`) which workspace holds this
+project's nodes, so a project renamed while on 1.0.7 keeps the graph it wrote
+under its old name. Agents are told to read the same `workspace` from
+`.deciduous/config.toml`.
 Anything outside a git repository pools into `scratch` instead of minting a
 workspace per temporary directory.
 
 A workspace belongs to the repository that first wrote to it, identified by
 its root commits. Two unrelated repositories that are both called `api` would
-derive the same name; the second one's `remote init`, writes and pulls are
-refused, and the error says how to name its own workspace.
+derive the same name. The second one's `remote init`, writes, seeds, pulls and
+status are refused, and the error says how to name its own workspace. A
+repository with no commit yet is refused from a claimed workspace until its
+first commit. A shallow clone (CI's `--depth 1`) sends no roots, because its
+oldest commit is not the root, and it is not checked. Neither is a 1.0.7 client.
 
 Override the name when the directory name is not what the graph should be
 called, or to share one workspace between repositories on purpose:
@@ -334,9 +353,8 @@ importer would have to re-earn all of that and would drift from it.
   columns both exist, but nothing carries the assignments across.
 - **`push` is not the normal write path.** It exists to seed a workspace and to
   carry history that predates the server. Routine writes should go through MCP.
-- **There is no offline queue.** Without the network you have a local cache and
-  a CLI that can still write to it; those writes reach the server on the next
-  `push`, and until then the two differ.
+- **Documents are not ops.** `remote push --seed` sends documents attached
+  since the last seed, bytes included. Attaching one does not send it.
 - **Self-loop edges are rejected** by the server's schema, and reported per
   project rather than dropped quietly.
 - **The event stream is advisory.** Postgres does not queue a `NOTIFY` that
