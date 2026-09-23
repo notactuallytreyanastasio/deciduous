@@ -2,11 +2,10 @@
 //! `deciduous` binary as the CLI and as the registered merge driver.
 //!
 //! `sync_integration.rs` stands in for git by calling `merge-record` by hand.
-//! These tests do not: they `git pull`, `git merge`, `git checkout`, so what
-//! they check is what a team actually sees, including the cases where git
-//! does something other than what its documentation suggests.
-
-#![allow(dead_code)] // helpers are shared by tests added one finding at a time
+//! These tests do not: they commit, push and `git pull` between clones, so
+//! what they check is what a team actually sees, including the cases where
+//! git does something other than what one would expect (a failed merge
+//! driver leaves no conflict markers).
 
 use serde_json::Value;
 use std::fs;
@@ -866,4 +865,50 @@ fn a_resurrected_node_comes_back_with_the_edges_and_tags_its_delete_took() {
     assert!(tags.contains("infra"), "{tags}");
     let out = alice.ok(&["sync", "--check"]);
     assert!(out.contains("already agree"), "{out}");
+}
+
+// ============================================================================
+// G10: smaller things found on the way
+// ============================================================================
+
+#[test]
+fn a_record_filed_twice_under_one_key_merges_instead_of_last_wins() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "Twice", &[]);
+    let cid = alice.change_id(goal);
+    let rec = alice.doc()["nodes"][&cid].clone();
+
+    // A bad hand merge leaves the record twice. The first copy is newer.
+    let mut newer = rec.clone();
+    newer["status"] = "completed".into();
+    newer["updated_at"] = "2099-01-02T00:00:00+00:00".into();
+    let mut older = rec.clone();
+    older["updated_at"] = "2099-01-01T00:00:00+00:00".into();
+    older["description"] = "only in the older copy".into();
+    let text = format!(
+        "{{\n  \"version\": 1,\n  \"edges\": {{}},\n  \"nodes\": {{\n    \"{cid}\": {},\n    \"{cid}\": {}\n  }}\n}}\n",
+        serde_json::to_string(&newer).unwrap(),
+        serde_json::to_string(&older).unwrap()
+    );
+    fs::write(alice.graph_path(), text).unwrap();
+    let out = alice.ok(&["sync"]);
+    assert_eq!(status_of(&alice, &goal.to_string()), "completed", "{out}");
+    let shown = alice.ok(&["show", &goal.to_string()]);
+    assert!(shown.contains("only in the older copy"), "{shown}");
+}
+
+#[test]
+fn an_unreadable_graph_file_says_how_to_recover_not_to_rerun_what_failed() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "Here", &[]);
+    fs::write(alice.graph_path(), "{\"version\": 1, \"nodes\": {").unwrap();
+    let out = alice.run(&["sync"]);
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("git checkout"), "{err}");
+    assert!(!err.contains("run `deciduous sync`"), "{err}");
+    // Still untouched.
+    assert_eq!(alice.graph_text(), "{\"version\": 1, \"nodes\": {");
 }

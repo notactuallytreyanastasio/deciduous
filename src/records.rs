@@ -486,17 +486,57 @@ impl<T> StoreRead<T> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GraphDoc {
     pub version: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub nodes: BTreeMap<String, NodeRecord>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub edges: BTreeMap<String, EdgeRecord>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub themes: BTreeMap<String, ThemeRecord>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub tags: BTreeMap<String, TagRecord>,
     /// Top-level sections this version does not know about, kept as is.
     #[serde(flatten)]
     pub extra: BTreeMap<String, Value>,
+}
+
+/// Deserialize one record map. JSON allows a key twice and serde keeps the
+/// last, so a record a bad hand merge left in the file twice silently
+/// became whichever copy came second, even when the first was newer. Two
+/// copies of one record are two versions of it: merge them with the same
+/// rules as the merge driver.
+fn record_map<'de, D, T>(deserializer: D) -> Result<BTreeMap<String, T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    struct Records<T>(std::marker::PhantomData<T>);
+    impl<'de, T: serde::de::DeserializeOwned> serde::de::Visitor<'de> for Records<T> {
+        type Value = BTreeMap<String, T>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a map of records")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(
+            self,
+            mut map: A,
+        ) -> Result<Self::Value, A::Error> {
+            let mut raw: BTreeMap<String, Value> = BTreeMap::new();
+            while let Some((key, value)) = map.next_entry::<String, Value>()? {
+                let merged = match raw.remove(&key) {
+                    Some(earlier) => merge_record_values(None, &earlier, &value),
+                    None => value,
+                };
+                raw.insert(key, merged);
+            }
+            raw.into_iter()
+                .map(|(k, v)| {
+                    serde_json::from_value(v)
+                        .map(|rec| (k.clone(), rec))
+                        .map_err(|e| serde::de::Error::custom(format!("record {}: {}", k, e)))
+                })
+                .collect()
+        }
+    }
+    deserializer.deserialize_map(Records(std::marker::PhantomData))
 }
 
 impl Default for GraphDoc {
@@ -534,10 +574,12 @@ fn load_doc(path: &Path) -> io::Result<GraphDoc> {
         return Ok(GraphDoc::default());
     }
     serde_json::from_str(&text).map_err(|e| {
+        // Not "run `deciduous sync`" for a file that is merely broken: that
+        // is often the very command that just failed.
         let hint = if text.contains("<<<<<<<") {
             "; it still has git conflict markers, run `deciduous sync` to merge it"
         } else {
-            "; left untouched, run `deciduous sync`"
+            "; left untouched. Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`; local rows missing from it are exported by the next sync"
         };
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -2354,6 +2396,13 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
 fn parse_version(text: &str, what: &str) -> io::Result<Option<Value>> {
     if text.trim().is_empty() {
         return Ok(None);
+    }
+    // Through GraphDoc first, which merges a record filed twice; a version
+    // that is JSON but not a graph document still merges as plain JSON.
+    if let Ok(doc) = serde_json::from_str::<GraphDoc>(text) {
+        return serde_json::to_value(doc)
+            .map(Some)
+            .map_err(io::Error::other);
     }
     let err = match serde_json::from_str(text) {
         Ok(v) => return Ok(Some(v)),
