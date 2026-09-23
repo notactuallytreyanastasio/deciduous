@@ -14,9 +14,15 @@ defmodule DeciduousMcp.Graph.Documents do
   `id` is either the document's UUID or a content hash. The hash form exists
   because the same file is attached in more than one project — asking by hash
   returns the content without having to know which attachment you meant.
+
+  `workspace_id:` limits both forms to one workspace, for a client pinned by
+  header. Without it a pinned repo read a neighbour's attachment by id, or
+  by the hash of any file it could guess. A document whose node is deleted
+  is not found either way: the delete hides the node's content, and an
+  attachment is part of it.
   """
-  def fetch(id) do
-    with {:ok, doc} <- lookup(id) do
+  def fetch(id, opts \\ []) do
+    with {:ok, doc} <- lookup(id, opts[:workspace_id]) do
       cond do
         doc.content_missing -> {:error, :content_missing}
         true -> load_content(doc)
@@ -35,17 +41,24 @@ defmodule DeciduousMcp.Graph.Documents do
     |> Repo.all()
   end
 
-  defp lookup(id) do
+  defp lookup(id, workspace_id) do
+    base =
+      from(d in Document,
+        join: n in assoc(d, :node),
+        where: is_nil(n.deleted_at)
+      )
+
+    base = if workspace_id, do: where(base, [d], d.workspace_id == ^workspace_id), else: base
+
     result =
       if uuid?(id) do
-        Repo.get(Document, id)
+        Repo.one(where(base, [d], d.id == ^id))
       else
-        Repo.one(
-          from d in Document,
-            where: d.content_hash == ^String.downcase(id),
-            order_by: [asc: d.content_missing, asc: d.inserted_at],
-            limit: 1
-        )
+        base
+        |> where([d], d.content_hash == ^String.downcase(id))
+        |> order_by([d], asc: d.content_missing, asc: d.inserted_at)
+        |> limit(1)
+        |> Repo.one()
       end
 
     case result do

@@ -14,7 +14,9 @@ defmodule DeciduousMcp.Graph.Query do
 
   Options:
   - `:branch` — filter nodes/edges to a specific git branch
-  - `:include_deleted` — include soft-deleted nodes (default false)
+  - `:tombstones` — also return soft-deleted nodes, each carrying
+    `deleted_at` (default false; `GET /export` sets it). Edges touching a
+    deleted node are never returned.
   """
   def get_full_graph(scope, opts \\ []) do
     # `details: false` drops description, metadata and rationale. On the
@@ -22,15 +24,36 @@ defmodule DeciduousMcp.Graph.Query do
     # and the MCP client re-parses the body as a string inside JSON-RPC, so
     # every byte is paid for three times (encode, escape, decode).
     details? = Keyword.get(opts, :details, true)
-    nodes = fetch_nodes(scope, opts)
+    tombstones? = Keyword.get(opts, :tombstones, false)
+
+    fetched =
+      fetch_nodes(scope, if(tombstones?, do: [{:include_deleted, true} | opts], else: opts))
+
+    {nodes, dead} = Enum.split_with(fetched, &is_nil(&1.deleted_at))
     node_ids = Enum.map(nodes, & &1.id)
     edges = fetch_edges(scope, node_ids)
     themes = fetch_themes(scope)
     documents = fetch_documents(scope, node_ids)
     node_themes = fetch_node_themes(node_ids)
 
+    serialize = &serialize_node(&1, details?)
+
+    # A tombstone sits in `nodes` beside the live ones, with `deleted_at`
+    # set: the shape the CLI's pull already reads (RemoteNode has a
+    # deleted_at field and hands it to reconcile, which deletes). Only
+    # /export asks for them; `deleted_at` is on every node there, nil for a
+    # live one, so a reader need not guess what a missing key means.
+    serialized =
+      if tombstones?,
+        do:
+          Enum.map(fetched, fn
+            %Node{deleted_at: nil} = n -> Map.put(serialize.(n), :deleted_at, nil)
+            n -> serialize_tombstone(n)
+          end),
+        else: Enum.map(nodes, serialize)
+
     %{
-      nodes: Enum.map(nodes, &serialize_node(&1, details?)),
+      nodes: serialized,
       edges: Enum.map(edges, &serialize_edge(&1, details?)),
       themes: Enum.map(themes, &serialize_theme/1),
       documents: Enum.map(documents, &serialize_document/1),
@@ -38,6 +61,7 @@ defmodule DeciduousMcp.Graph.Query do
       metadata: %{
         workspace_id: scope,
         node_count: length(nodes),
+        deleted_node_count: length(dead),
         edge_count: length(edges),
         exported_at: DateTime.utc_now() |> DateTime.to_iso8601()
       }
@@ -45,23 +69,90 @@ defmodule DeciduousMcp.Graph.Query do
   end
 
   @doc """
-  Finds orphan nodes (nodes with no incoming edges and not of type 'goal').
-  These indicate missing connections in the graph.
+  Finds orphan nodes: live non-goal nodes with no incoming edge from a live
+  node, plus live nodes cut off from every such root by a cycle (see
+  `stranded_in_cycles/1`). These indicate missing connections in the graph.
   """
   def find_orphans(scope) do
-    # Nodes that have no incoming edges and aren't goals
-    connected_node_ids =
-      Edge
-      |> scope_ws(scope)
-      |> select([e], e.to_node_id)
-      |> Repo.all()
-
-    Node
+    # Nodes with no incoming edge from a live node, that aren't goals. An
+    # edge from a deleted node connects nothing: every other read drops it,
+    # so counting it here hid exactly the nodes a delete had just stranded.
+    # One NOT EXISTS rather than the old list of every to_node_id in the
+    # workspace sent back to Postgres as a parameter.
+    from(n in Node, as: :node)
     |> scope_ws(scope)
     |> where([n], is_nil(n.deleted_at))
     |> where([n], n.node_type != "goal")
-    |> where([n], n.id not in ^connected_node_ids)
+    |> where(
+      [n],
+      not exists(
+        from e in Edge,
+          join: p in Node,
+          on: p.id == e.from_node_id,
+          where: e.to_node_id == parent_as(:node).id and is_nil(p.deleted_at),
+          select: 1
+      )
+    )
     |> Repo.all()
+    |> Kernel.++(stranded_in_cycles(scope))
+  end
+
+  # "No incoming live edge" cannot see a cycle: X(goal) -> Y -> Z, Z -> Y,
+  # then X deleted, and Y and Z each still have a live parent -- the other
+  # one. The pair is cut off from every root and was never reported. So
+  # also: every live node that no walk from a root reaches, where a root is
+  # a live goal or a live node with no live parent (the orphans above).
+  # Anything unreached is only reachable through a rootless cycle; it is
+  # reported with whatever hangs below that cycle, since all of it is
+  # detached. Disjoint from the first query by construction: those nodes
+  # are roots, and a root is reached.
+  #
+  # Walked in memory over two flat reads, not as a recursive CTE. The CTE
+  # was the first version; on a synthetic 8,000-node chain with 12,000
+  # edges it took 24,976 ms, because each recursion level rescans the
+  # unindexed live-edge CTE and a chain is 8,000 levels deep. The flat
+  # reads and the linear walk take tens of milliseconds on the same graph.
+  defp stranded_in_cycles(scope) do
+    live =
+      from(n in Node, where: is_nil(n.deleted_at), select: {n.id, n.node_type})
+      |> scope_ws(scope)
+      |> Repo.all()
+
+    alive = MapSet.new(live, &elem(&1, 0))
+
+    # Filtered against `alive` here rather than by joining decision_nodes
+    # twice in SQL: on freshly written tables with stale statistics the
+    # planner picked a nested loop for that join and the call took 4.1 s.
+    edges =
+      from(e in Edge, select: {e.from_node_id, e.to_node_id})
+      |> scope_ws(scope)
+      |> Repo.all()
+      |> Enum.filter(fn {f, t} -> MapSet.member?(alive, f) and MapSet.member?(alive, t) end)
+
+    children = Enum.group_by(edges, &elem(&1, 0), &elem(&1, 1))
+    has_parent = MapSet.new(edges, &elem(&1, 1))
+
+    roots =
+      for {id, type} <- live, type == "goal" or not MapSet.member?(has_parent, id), do: id
+
+    reached = reach(roots, children, MapSet.new(roots))
+
+    case for({id, _} <- live, not MapSet.member?(reached, id), do: id) do
+      [] -> []
+      ids -> Node |> where([n], n.id in ^ids) |> Repo.all()
+    end
+  end
+
+  defp reach([], _children, seen), do: seen
+
+  defp reach(frontier, children, seen) do
+    next =
+      frontier
+      |> Enum.flat_map(&Map.get(children, &1, []))
+      |> Enum.reject(&MapSet.member?(seen, &1))
+      |> Enum.uniq()
+
+    reach(next, children, Enum.reduce(next, seen, &MapSet.put(&2, &1)))
   end
 
   @doc """
@@ -151,11 +242,23 @@ defmodule DeciduousMcp.Graph.Query do
   # `max_depth: 50` returned exactly 50 nodes from any hub and said nothing
   # about having stopped: `get_descendants` on epstein's root goal returned
   # `count: 50` from a subtree of thousands. Returns `{nodes, truncated?}`.
+  #
+  # Only live nodes are visited, and a walk does not pass through a deleted
+  # one: A -> B -> C with B deleted is [A] from A. get_graph and /export
+  # already drop edges touching a deleted node, so a walk that went through
+  # B described a path no other read shows (the probe got
+  # [A, "B zombie", C]). A deleted start node yields nothing.
   def walk_graph(start_node_id, direction, max_depth, max_nodes \\ @walk_max_nodes) do
     visited = MapSet.new([start_node_id])
-    start = Repo.get(Node, start_node_id)
-    acc = if start, do: [start], else: []
-    do_walk_levels([start_node_id], visited, direction, max_depth, max_nodes, acc, false)
+
+    acc =
+      case Repo.get(Node, start_node_id) do
+        %Node{deleted_at: nil} = start -> [start]
+        _ -> []
+      end
+
+    frontier = Enum.map(acc, & &1.id)
+    do_walk_levels(frontier, visited, direction, max_depth, max_nodes, acc, false)
   end
 
   defp do_walk_levels([], _visited, _dir, _depth, _max, acc, truncated),
@@ -182,17 +285,33 @@ defmodule DeciduousMcp.Graph.Query do
       |> Enum.uniq()
       |> Enum.reject(&MapSet.member?(visited, &1))
 
-    room = max_nodes - length(acc)
-    {take, dropped} = Enum.split(next_ids, max(room, 0))
+    # Mark the dead ones visited too, so they are not asked for again.
+    visited = Enum.reduce(next_ids, visited, &MapSet.put(&2, &1))
 
-    nodes = if take == [], do: [], else: Node |> where([n], n.id in ^take) |> Repo.all()
-    visited = Enum.reduce(take, visited, &MapSet.put(&2, &1))
+    live =
+      if next_ids == [],
+        do: [],
+        else:
+          Node
+          |> where([n], n.id in ^next_ids and is_nil(n.deleted_at))
+          |> Repo.all()
+
+    room = max_nodes - length(acc)
+    {nodes, dropped} = Enum.split(live, max(room, 0))
     acc = Enum.reverse(nodes) ++ acc
 
     if dropped != [] do
       {Enum.reverse(acc), true}
     else
-      do_walk_levels(take, visited, direction, depth - 1, max_nodes, acc, false)
+      do_walk_levels(
+        Enum.map(nodes, & &1.id),
+        visited,
+        direction,
+        depth - 1,
+        max_nodes,
+        acc,
+        false
+      )
     end
   end
 
@@ -222,6 +341,30 @@ defmodule DeciduousMcp.Graph.Query do
     if details?,
       do: Map.merge(base, %{description: node.description, metadata: node.metadata || %{}}),
       else: base
+  end
+
+  # What a delete leaves visible: which row, what kind, and when it died.
+  # Not the title, description or metadata. A delete is how someone removes
+  # a secret pasted into a prompt, and the first version of this sent the
+  # whole row, prompt included, to every token holder through /export
+  # (and through /export?workspace=* across every project). Reconcile needs
+  # change_id and deleted_at; title and status stay as keys, empty and
+  # unchanged, only because a 1.0.x CLI's RemoteNode requires both strings
+  # and would fail to parse the export without them.
+  defp serialize_tombstone(node) do
+    %{
+      id: node.id,
+      change_id: node.change_id,
+      node_type: node.node_type,
+      title: "",
+      description: nil,
+      status: node.status,
+      metadata: nil,
+      branch: nil,
+      created_at: DateTime.to_iso8601(node.inserted_at),
+      updated_at: DateTime.to_iso8601(node.updated_at),
+      deleted_at: DateTime.to_iso8601(node.deleted_at)
+    }
   end
 
   # The slim edge is what an LLM needs to follow the graph: which two nodes

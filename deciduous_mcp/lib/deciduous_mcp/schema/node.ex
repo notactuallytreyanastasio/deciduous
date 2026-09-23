@@ -73,20 +73,42 @@ defmodule DeciduousMcp.Schema.Node do
         changeset
 
       metadata when is_map(metadata) ->
-        changeset
-        |> validate_confidence(metadata)
+        validate_confidence(changeset, metadata)
 
       _ ->
         add_error(changeset, :metadata, "must be a map")
     end
   end
 
-  defp validate_confidence(changeset, %{"confidence" => c})
-       when is_number(c) and (c < 0 or c > 100) do
-    add_error(changeset, :metadata, "confidence must be between 0 and 100")
+  # A string confidence ("999") passed the old number-only guard and was
+  # stored; so did `true`. Anything present must be a number in range --
+  # but only when this change sets it. update_node merges a patch into the
+  # stored map, so a value stored before this check existed (or by an
+  # import that skipped it) rode along into every later changeset, and
+  # `{metadata: {files: "a"}}` was refused over a confidence it never
+  # touched. A key the change leaves as it was is not this change's to
+  # judge.
+  defp validate_confidence(changeset, metadata) do
+    stored = changeset.data.metadata || %{}
+    c = metadata["confidence"]
+
+    cond do
+      Map.has_key?(stored, "confidence") and stored["confidence"] === c -> changeset
+      message = confidence_error(c) -> add_error(changeset, :metadata, message)
+      true -> changeset
+    end
   end
 
-  defp validate_confidence(changeset, _), do: changeset
+  @doc """
+  Nil for an acceptable confidence (absent, or a number from 0 to 100),
+  otherwise the message saying what is wrong with it. Shared with the bulk
+  import, which writes with insert_all and never runs a changeset.
+  """
+  def confidence_error(nil), do: nil
+  def confidence_error(c) when is_number(c) and c >= 0 and c <= 100, do: nil
+
+  def confidence_error(c),
+    do: "confidence must be a number between 0 and 100, got #{inspect(c)}"
 
   # Convenience accessors for metadata fields
   def confidence(%__MODULE__{metadata: %{"confidence" => c}}), do: c

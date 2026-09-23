@@ -42,15 +42,17 @@ defmodule DeciduousMcp.Sync.Import do
 
   @chunk 1_000
 
-  def run(%{"graph" => graph} = payload) when is_map(graph) do
-    with {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
-         {:ok, workspace} <- Workspaces.find_or_create(name),
+  def run(payload, opts \\ [])
+
+  def run(%{"graph" => graph} = payload, opts) when is_map(graph) do
+    with {:ok, workspace} <- target_workspace(payload["workspace"], opts[:pinned_workspace_id]),
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []) do
       Repo.transaction(
         fn ->
-          node_report = upsert_nodes(workspace.id, nodes)
-          edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes)
-          doc_report = upsert_documents(workspace.id, graph["documents"] || [])
+          deleted = deleted_change_ids(workspace.id)
+          node_report = upsert_nodes(workspace.id, nodes, deleted)
+          edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)
+          doc_report = upsert_documents(workspace.id, graph["documents"] || [], deleted)
 
           %{
             workspace: workspace.name,
@@ -66,7 +68,40 @@ defmodule DeciduousMcp.Sync.Import do
     end
   end
 
-  def run(_), do: {:error, "payload must contain a \"graph\" object"}
+  def run(_, _), do: {:error, "payload must contain a \"graph\" object"}
+
+  # Unpinned: the body names the workspace, as it always has.
+  defp target_workspace(name, nil) do
+    with {:ok, name} <- Workspaces.normalize_name(name || "") do
+      Workspaces.find_or_create(name)
+    end
+  end
+
+  # Pinned by X-Deciduous-Workspace: the pinned workspace, and a body naming
+  # a different one is refused rather than redirected. Quietly importing
+  # into the pin would report success for a push the sender meant for
+  # somewhere else; the MCP tools can ignore their workspace argument
+  # because it is a default, but this one names where every row goes.
+  defp target_workspace(name, pinned_id) do
+    {:ok, pinned} = Workspaces.get_workspace(pinned_id)
+
+    case name && Workspaces.normalize_name(name) do
+      nil ->
+        {:ok, pinned}
+
+      {:ok, same} when same == pinned.name ->
+        {:ok, pinned}
+
+      {:ok, other} ->
+        {:error,
+         {:pinned,
+          "this client is pinned to workspace \"#{pinned.name}\" by " <>
+            "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."}}
+
+      {:error, _} = err ->
+        err
+    end
+  end
 
   @doc """
   Clears `content_missing` on every row waiting for this hash.
@@ -116,12 +151,55 @@ defmodule DeciduousMcp.Sync.Import do
     cond do
       problems != [] -> {:error, %{rejected: "unknown vocabulary", examples: problems}}
       Enum.any?(nodes, &is_nil(&1["change_id"])) -> {:error, "every node needs a change_id"}
-      true -> {:ok, nodes}
+      true -> validate_metadata(nodes)
     end
   end
 
-  defp upsert_nodes(workspace_id, nodes) do
+  # insert_all skips Node.changeset, so the metadata rules update_node
+  # enforces were never applied here: {"confidence": "999"} and
+  # {"confidence": true} were stored, and metadata_json that did not decode
+  # to an object was stored as %{} -- a node's prompt and branch dropped
+  # without a word. Refused whole, like unknown vocabulary, and for the
+  # same reason: a row dropped from a 200 is a row lost silently.
+  # Returns the nodes with metadata_json decoded, so it is parsed once.
+  defp validate_metadata(nodes) do
+    {decoded, problems} =
+      Enum.map_reduce(nodes, [], fn n, problems ->
+        case decode_metadata(n["metadata_json"]) do
+          {:ok, meta} ->
+            case Node.confidence_error(meta["confidence"]) do
+              nil -> {Map.put(n, "metadata_json", meta), problems}
+              message -> {n, ["node #{n["change_id"]}: #{message}" | problems]}
+            end
+
+          {:error, message} ->
+            {n, ["node #{n["change_id"]}: #{message}" | problems]}
+        end
+      end)
+
+    case problems do
+      [] ->
+        {:ok, decoded}
+
+      _ ->
+        shown = problems |> Enum.reverse() |> Enum.take(20)
+
+        {:error,
+         "metadata rejected, nothing was written (#{length(problems)} node(s)): " <>
+           Enum.join(shown, "; ")}
+    end
+  end
+
+  # A node deleted on the server stays deleted through an import. The
+  # upsert used to replace title, status and metadata on any change_id, so
+  # a push rewrote the tombstone ("REWRITTEN VIA IMPORT", status
+  # completed, deleted_at still set) while every MCP write tool refused
+  # the same edit. Those rows are left alone and named in the report, so
+  # the CLI can tell its user the edit did not land and why.
+  defp upsert_nodes(workspace_id, nodes, deleted) do
     now = DateTime.utc_now()
+
+    {refused, nodes} = Enum.split_with(nodes, &Map.has_key?(deleted, &1["change_id"]))
 
     rows =
       Enum.map(nodes, fn n ->
@@ -133,7 +211,8 @@ defmodule DeciduousMcp.Sync.Import do
           title: n["title"] || "(untitled)",
           description: n["description"],
           status: n["status"] || "pending",
-          metadata: decode_metadata(n["metadata_json"]),
+          # Decoded and checked by validate_metadata/1.
+          metadata: n["metadata_json"],
           inserted_at: parse_time(n["created_at"], now),
           updated_at: parse_time(n["updated_at"], now)
         }
@@ -145,19 +224,56 @@ defmodule DeciduousMcp.Sync.Import do
       |> Enum.reduce(0, fn chunk, acc ->
         {count, _} =
           Repo.insert_all(Node, chunk,
-            on_conflict: {:replace, [:node_type, :title, :description, :status, :metadata, :updated_at]},
+            on_conflict: replace_unless_deleted(),
             conflict_target: [:workspace_id, :change_id]
           )
 
         acc + count
       end)
 
-    %{received: length(rows), upserted: inserted}
+    %{
+      received: length(rows) + length(refused),
+      upserted: inserted,
+      refused_deleted: length(refused),
+      refused_deleted_examples:
+        refused
+        |> Enum.take(20)
+        |> Enum.map(&%{change_id: &1["change_id"], deleted_at: Map.fetch!(deleted, &1["change_id"])})
+    }
+  end
+
+  # The split above names the rows that were already deleted. This guard
+  # covers a delete_node that commits between that read and the insert:
+  # the conflicting row is then skipped rather than rewritten, and shows
+  # up as upserted < received.
+  defp replace_unless_deleted do
+    from(n in Node,
+      where: is_nil(n.deleted_at),
+      update: [
+        set: [
+          node_type: fragment("EXCLUDED.node_type"),
+          title: fragment("EXCLUDED.title"),
+          description: fragment("EXCLUDED.description"),
+          status: fragment("EXCLUDED.status"),
+          metadata: fragment("EXCLUDED.metadata"),
+          updated_at: fragment("EXCLUDED.updated_at")
+        ]
+      ]
+    )
+  end
+
+  defp deleted_change_ids(workspace_id) do
+    from(n in Node,
+      where: n.workspace_id == ^workspace_id and not is_nil(n.deleted_at),
+      select: {n.change_id, n.deleted_at}
+    )
+    |> Repo.all()
+    |> Map.new(fn {cid, at} -> {cid, DateTime.to_iso8601(at)} end)
   end
 
   # --- Edges ------------------------------------------------------------------
 
-  defp upsert_edges(workspace_id, edges, nodes) do
+  defp upsert_edges(workspace_id, edges, nodes, deleted) do
     # An edge names its endpoints twice: `from_node_id` (SQLite's integer
     # primary key, a real foreign key) and `from_change_id` (a denormalized
     # copy added later). The copies go stale. In one graph on disk, 9,185 of
@@ -173,8 +289,8 @@ defmodule DeciduousMcp.Sync.Import do
 
     pg_ids = node_ids_by_change_id(workspace_id)
 
-    {rows, unresolved, stale} =
-      Enum.reduce(edges, {[], [], 0}, fn e, {ok, bad, stale} ->
+    {rows, unresolved, dead, stale} =
+      Enum.reduce(edges, {[], [], [], 0}, fn e, {ok, bad, dead, stale} ->
         from_cid = Map.get(by_sqlite_id, e["from_node_id"]) || e["from_change_id"]
         to_cid = Map.get(by_sqlite_id, e["to_node_id"]) || e["to_change_id"]
 
@@ -187,17 +303,24 @@ defmodule DeciduousMcp.Sync.Import do
         to_id = Map.get(pg_ids, to_cid)
 
         cond do
+          # Before the unresolved check: the endpoint exists, and saying
+          # "missing" would send the reader looking for the wrong thing.
+          # An edge touching a deleted node is dropped by every read, so
+          # writing one only makes a row nothing can see or remove.
+          Map.has_key?(deleted, from_cid) or Map.has_key?(deleted, to_cid) ->
+            {ok, bad, [%{edge: e["id"], from: from_cid, to: to_cid} | dead], stale}
+
           is_nil(from_id) or is_nil(to_id) ->
-            {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad], stale}
+            {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad], dead, stale}
 
           from_id == to_id ->
             # The Ecto changeset forbids self-loops; insert_all bypasses it, so
             # the check is repeated here rather than quietly writing one. There
             # are 46 of these across the graphs on disk.
-            {ok, [%{edge: e["id"], self_loop: from_cid} | bad], stale}
+            {ok, [%{edge: e["id"], self_loop: from_cid} | bad], dead, stale}
 
           true ->
-            {[edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) | ok], bad, stale}
+            {[edge_row(workspace_id, e, from_id, to_id, from_cid, to_cid) | ok], bad, dead, stale}
         end
       end)
 
@@ -219,6 +342,8 @@ defmodule DeciduousMcp.Sync.Import do
       upserted: inserted,
       unresolved: length(unresolved),
       unresolved_examples: Enum.take(unresolved, 10),
+      refused_deleted: length(dead),
+      refused_deleted_examples: Enum.take(dead, 10),
       stale_change_ids: stale
     }
   end
@@ -250,11 +375,16 @@ defmodule DeciduousMcp.Sync.Import do
 
   # --- Documents ---------------------------------------------------------------
 
-  defp upsert_documents(_workspace_id, []), do: %{received: 0, upserted: 0, content_missing: 0}
+  defp upsert_documents(_workspace_id, [], _deleted),
+    do: %{received: 0, upserted: 0, content_missing: 0}
 
-  defp upsert_documents(workspace_id, documents) do
-    pg_ids = node_ids_by_change_id(workspace_id)
+  defp upsert_documents(workspace_id, documents, deleted) do
+    pg_ids = Map.drop(node_ids_by_change_id(workspace_id), Map.keys(deleted))
     now = DateTime.utc_now()
+
+    # A document on a deleted node is refused like an edge to one: it would
+    # be attached to content the delete was meant to hide.
+    {refused, documents} = Enum.split_with(documents, &Map.has_key?(deleted, &1["node_change_id"]))
 
     {rows, orphaned} =
       Enum.reduce(documents, {[], []}, fn d, {ok, bad} ->
@@ -308,8 +438,9 @@ defmodule DeciduousMcp.Sync.Import do
       end)
 
     %{
-      received: length(documents),
+      received: length(documents) + length(refused),
       upserted: inserted,
+      refused_deleted: length(refused),
       content_missing: Enum.count(rows, & &1.content_missing),
       orphaned: length(orphaned),
       orphaned_examples: Enum.take(orphaned, 5)
@@ -327,17 +458,19 @@ defmodule DeciduousMcp.Sync.Import do
 
   # --- Coercion ---------------------------------------------------------------
 
-  defp decode_metadata(nil), do: %{}
+  defp decode_metadata(nil), do: {:ok, %{}}
+  defp decode_metadata(map) when is_map(map), do: {:ok, map}
 
   defp decode_metadata(json) when is_binary(json) do
     case Jason.decode(json) do
-      {:ok, map} when is_map(map) -> map
-      _ -> %{}
+      {:ok, map} when is_map(map) -> {:ok, map}
+      {:ok, other} -> {:error, "metadata_json must be a JSON object, got #{inspect(other)}"}
+      {:error, _} -> {:error, "metadata_json is not valid JSON: #{inspect(String.slice(json, 0, 80))}"}
     end
   end
 
-  defp decode_metadata(map) when is_map(map), do: map
-  defp decode_metadata(_), do: %{}
+  defp decode_metadata(other),
+    do: {:error, "metadata_json must be a JSON object or a string holding one, got #{inspect(other)}"}
 
   # The CLI writes timestamps with an offset ("2016-02-01T00:00:00-05:00") and
   # backdated archaeology nodes reach back years, so these are parsed rather

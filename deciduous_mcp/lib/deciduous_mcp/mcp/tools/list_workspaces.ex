@@ -25,8 +25,15 @@ defmodule DeciduousMcp.MCP.Tools.ListWorkspaces do
     }
   end
 
-  def call(_params) do
-    workspaces = Workspaces.list_with_counts()
+  def call(%{server: frame}) do
+    # A pinned client sees its own workspace only: the list is every
+    # project's name and size, which is exactly the neighbour-reading a pin
+    # exists to rule out.
+    workspaces =
+      case Scope.pinned_workspace_id(frame) do
+        nil -> Workspaces.list_with_counts()
+        pinned -> Enum.filter(Workspaces.list_with_counts(), &(&1.id == pinned))
+      end
 
     result = %{
       count: length(workspaces),

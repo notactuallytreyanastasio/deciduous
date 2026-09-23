@@ -60,6 +60,12 @@ defmodule DeciduousMcp.Web.Router do
   post "/import" do
     conn = Auth.call(conn, [])
 
+    # The pin applies here as it does to /export, /events and every MCP
+    # tool. Without it a client pinned to A could rewrite any workspace's
+    # nodes by naming it in the body: the pinned-write guard close_thread
+    # and the id-taking tools enforce, bypassed by the CLI's push path.
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
+
     if conn.halted do
       conn
     else
@@ -115,7 +121,9 @@ defmodule DeciduousMcp.Web.Router do
 
       case Scope.read_scope(conn_frame(conn), conn.query_params) do
         {:ok, scope} ->
-          json(conn, 200, Query.get_full_graph(scope))
+          # Tombstones: without them a node deleted on the server never
+          # left a pulled graph, and the next push re-sent it.
+          json(conn, 200, Query.get_full_graph(scope, tombstones: true))
 
         {:error, message} ->
           json(conn, 422, %{error: message})
@@ -123,8 +131,12 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
+  # Pinned like /export: without the plug a client pinned to A read O's
+  # attachment bytes by id, or by the content hash of any file it could
+  # name.
   get "/documents/:id" do
     conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
     if conn.halted, do: conn, else: serve_document(conn, id)
   end
 
@@ -226,11 +238,15 @@ defmodule DeciduousMcp.Web.Router do
 
   defp handle_import(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
-         {:ok, report} <- Import.run(payload) do
+         {:ok, report} <-
+           Import.run(payload, pinned_workspace_id: conn.assigns[:pinned_workspace_id]) do
       json(conn, 200, report)
     else
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
 
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
@@ -259,7 +275,7 @@ defmodule DeciduousMcp.Web.Router do
   end
 
   defp serve_document(conn, id) do
-    case Documents.fetch(id) do
+    case Documents.fetch(id, workspace_id: conn.assigns[:pinned_workspace_id]) do
       {:ok, doc, content} ->
         conn
         # Set directly rather than via put_resp_content_type/2, which appends

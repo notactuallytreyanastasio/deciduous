@@ -105,7 +105,8 @@ defmodule DeciduousMcp.MCP.Scope do
   """
   def write_scope_for_node(frame, node_id, args) do
     with {:ok, node} <- lookup_node(node_id),
-         :ok <- check_pin(frame, node) do
+         :ok <- check_pin(frame, node),
+         :ok <- check_live(node) do
       claim_lock(node.workspace_id, frame, args)
     else
       {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
@@ -113,8 +114,28 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
+  @doc """
+  Checks that a node other than the one a write is scoped by may be
+  touched by it: it exists, it is in the pinned workspace if there is a
+  pin, and it is not deleted. Claims no lock.
+
+  delete_edge scopes itself by its source node, so an edge *into* a
+  deleted node was deleted with "Edge deleted" while one out of it was
+  refused. Its target goes through this.
+  """
+  def check_node(frame, node_id) do
+    with {:ok, node} <- lookup_node(node_id),
+         :ok <- check_pin(frame, node),
+         :ok <- check_live(node) do
+      :ok
+    else
+      {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
+      {:error, message} when is_binary(message) -> {:error, message}
+    end
+  end
+
   # The moduledoc's promise is that a pinned repo cannot have its writes
-  # redirected. Resolving the workspace from the node would quietly break it
+  # redirected, nor read its neighbours. Resolving the workspace from the node would quietly break it
   # the other way round: a client pinned to `blog` naming a node in
   # `deciduous` would take `deciduous`'s lock and edit `deciduous`'s row.
   defp check_pin(frame, node) do
@@ -130,6 +151,21 @@ defmodule DeciduousMcp.MCP.Scope do
          "node #{node.id} belongs to another workspace than the one this client is pinned to"}
     end
   end
+
+  # Always asked after check_pin, never before. The other order told a
+  # client pinned to one workspace which of another workspace's node ids
+  # were deleted, and when: "was deleted at T" for those, "belongs to
+  # another workspace" for live ones, "not found" for the rest.
+  #
+  # A soft-deleted row is kept for audit and for /export's tombstones, not
+  # to be read or edited by id. Reading one answered with no sign it was
+  # deleted; editing one said "Node updated"; deleting one again reset
+  # deleted_at. Say what happened to it instead of "not found", so a caller
+  # holding a stale id learns why.
+  defp check_live(%{deleted_at: nil}), do: :ok
+
+  defp check_live(node),
+    do: {:error, "node #{node.id} was deleted at #{DateTime.to_iso8601(node.deleted_at)}"}
 
   defp lookup_node(node_id) do
     case Ecto.UUID.cast(node_id) do
@@ -217,6 +253,32 @@ defmodule DeciduousMcp.MCP.Scope do
         resolve_single(frame, args)
     end
   end
+
+  @doc """
+  Resolves a node named by id for a read, holding it to the pin.
+
+  `read_scope/2` covers the tools that take a workspace. The ones that take
+  a node id (show_node, get_ancestors, get_descendants) had no scope at all:
+  a client pinned to `blog` could read any node on the server by UUID,
+  description and prompt included, and walk another workspace's tree. Edges
+  never cross workspaces, so checking the node a read starts from is enough
+  to keep a traversal inside it too.
+
+  Returns `{:ok, node}` or `{:error, message}`.
+  """
+  def read_node(frame, node_id, preloads \\ []) do
+    with {:ok, node} <- Nodes.get_node(node_id, preloads),
+         :ok <- check_pin(frame, node),
+         :ok <- check_live(node) do
+      {:ok, node}
+    else
+      {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
+      {:error, message} when is_binary(message) -> {:error, message}
+    end
+  end
+
+  @doc "The workspace id a client pinned by header, or nil."
+  def pinned_workspace_id(frame), do: pinned_id(frame)
 
   defp resolve_single(frame, args) do
     case pinned_id(frame) do

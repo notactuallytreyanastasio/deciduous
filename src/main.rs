@@ -102,7 +102,7 @@ enum Command {
         description: Option<String>,
 
         /// Confidence level (0-100)
-        #[arg(short, long)]
+        #[arg(short, long, value_parser = clap::value_parser!(u8).range(0..=100))]
         confidence: Option<u8>,
 
         /// Git commit hash to link this node to. Use "HEAD" to auto-detect current commit.
@@ -836,7 +836,7 @@ enum ArchaeologyAction {
         new_approach: String,
 
         /// Confidence for the new decision (0-100)
-        #[arg(short, long)]
+        #[arg(short, long, value_parser = clap::value_parser!(u8).range(0..=100))]
         confidence: Option<u8>,
 
         /// Reason/rationale for why the old approach failed
@@ -2153,11 +2153,46 @@ fn main() {
                     println!("{} {}", "Remote:".bold(), remote.url);
                     println!("{} {}", "Workspace:".bold(), remote.workspace.cyan());
 
-                    match remote.check() {
-                        Ok(c) => {
+                    let checked = remote.health().and_then(|_| {
+                        remote
+                            .export()
+                            .map_err(|e| format!("reached {} but {}", remote.url, e))
+                    });
+                    match checked {
+                        Ok(server) => {
+                            let c = server.live_counts();
                             println!("\n              {:>8}  {:>8}", "local", "remote");
                             println!("  nodes       {:>8}  {:>8}", local_nodes, c.nodes);
                             println!("  edges       {:>8}  {:>8}", local_edges, c.edges);
+
+                            // Nodes the server deleted and this machine has
+                            // not pulled make local look bigger, and the
+                            // advice below used to say push. Push cannot
+                            // apply a deletion; only pull can. Say that
+                            // first, then compare what local will hold once
+                            // it has.
+                            let graph = db
+                                .get_graph()
+                                .ok()
+                                .and_then(|g| serde_json::to_value(&g).ok())
+                                .unwrap_or_default();
+                            let deleted = deciduous::remote::deleted_on_server(&graph, &server);
+                            let (local_nodes, local_edges) = if deleted.is_empty() {
+                                (local_nodes, local_edges)
+                            } else {
+                                println!(
+                                    "\n{} the server deleted {} node(s) this machine still has. `deciduous remote pull` to apply the deletion(s):",
+                                    "Drift:".yellow(),
+                                    deleted.len()
+                                );
+                                for d in deleted.iter().take(10) {
+                                    println!(
+                                        "  {} \"{}\" deleted at {}",
+                                        d.id, d.title, d.deleted_at
+                                    );
+                                }
+                                deciduous::remote::counts_without(&graph, &deleted)
+                            };
 
                             // Equal counts are not proof of equal content, so
                             // this says "match", not "in sync". And the advice
@@ -2165,7 +2200,12 @@ fn main() {
                             // someone to pull when their local database is the
                             // side holding the extra nodes sends them to a
                             // command that will do nothing.
-                            if local_nodes == c.nodes && local_edges == c.edges {
+                            if !deleted.is_empty()
+                                && local_nodes == c.nodes
+                                && local_edges == c.edges
+                            {
+                                println!("  After that pull the counts match.");
+                            } else if local_nodes == c.nodes && local_edges == c.edges {
                                 println!("\n{} counts match.", "OK:".green());
                             } else if local_nodes > c.nodes || local_edges > c.edges {
                                 println!(
@@ -2212,20 +2252,37 @@ fn main() {
                     };
 
                     let sent = if overwrite {
-                        remote.import(graph).map(Some)
+                        remote.import(graph.clone()).map(|r| (Some(r), Vec::new()))
                     } else {
                         deciduous::remote::push_missing(&remote, &graph)
                     };
 
-                    match sent {
-                        Ok(None) => {
+                    // Local nodes the server deleted: nothing pushed can
+                    // change them, and printing "edges 1 of 1" for an edge
+                    // into one, run after run, sent people back to push.
+                    if let Ok((_, deleted)) = &sent {
+                        if !deleted.is_empty() {
                             println!(
-                                "{} the server already has every node and edge in the local graph ({})",
+                                "{} the server deleted {} node(s) this machine still has; they were not pushed. `deciduous remote pull` to apply the deletion(s):",
+                                "Note:".yellow(),
+                                deleted.len()
+                            );
+                            for d in deleted.iter().take(10) {
+                                println!("  {} \"{}\" deleted at {}", d.id, d.title, d.deleted_at);
+                            }
+                        }
+                    }
+
+                    match sent {
+                        Ok((None, _)) => {
+                            println!(
+                                "{} the server already has every live node and edge in the local graph ({})",
                                 "Nothing to push:".green(),
                                 remote.workspace.cyan()
                             );
                         }
-                        Ok(Some(r)) => {
+                        Ok((Some(r), _)) => {
+                            deciduous::remote::report_refused(&r, &graph);
                             println!(
                                 "{} {} -> {}",
                                 "Pushed:".green(),
@@ -2304,6 +2361,19 @@ fn main() {
                                 "  imported {} nodes, {} edges into the local database",
                                 r.imported_nodes, r.imported_edges
                             );
+                            let deleted = r.deleted_nodes + r.deleted_over_local_edits.len();
+                            if deleted > 0 {
+                                println!("  deleted {} node(s) the server had deleted", deleted);
+                            }
+                            for d in &r.deleted_over_local_edits {
+                                println!(
+                                    "  {} node {} \"{}\" was edited here after the server deleted it at {}; the server refuses edits to a deleted node, so it is deleted here too and the edit with it",
+                                    "note:".yellow(),
+                                    d.id,
+                                    d.title,
+                                    d.deleted_at
+                                );
+                            }
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);

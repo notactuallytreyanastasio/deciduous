@@ -111,7 +111,9 @@ defmodule DeciduousMcp.MCP.Component do
   # server process down and every session with it. Handlers now run in their
   # own task, so the same input is a contained error, but it is still a
   # crash and still a stack trace where a one-line answer belongs.
-  @id_keys ~w(node_id from_node_id to_node_id related_to took_from parent_node_id parent_id)
+  # `goal_node_id` (close_thread) was missing: "PLACEHOLDER_SKIP" there
+  # crashed with Ecto.CastError after the outcome had been written.
+  @id_keys ~w(node_id from_node_id to_node_id related_to took_from parent_node_id parent_id goal_node_id)
 
   def dispatch_tool(module, params, frame) do
     params = params || %{}
