@@ -2168,3 +2168,146 @@ fn rust_n7_an_offline_stdio_server_says_it_is_offline_once() {
     assert_eq!(queued_titles(&dir).len(), 20);
     assert_eq!(err.matches("did not get it").count(), 1, "{err}");
 }
+
+// ---------------------------------------------------------------------------
+// Chapter 28, round 2: findings from the adversarial verification of this
+// chapter, each test named after its finding.
+// ---------------------------------------------------------------------------
+
+/// The ops in the log, in order, as `kind title-or-change_id`.
+fn log_ops(dir: &Path) -> Vec<String> {
+    log_lines(dir)
+        .iter()
+        .filter(|l| l["entry"] == "op")
+        .map(|l| {
+            let what = l["title"]
+                .as_str()
+                .map(str::to_string)
+                .unwrap_or_else(|| l["change_id"].as_str().unwrap_or("").to_string());
+            format!("{} {what}", l["kind"].as_str().unwrap())
+        })
+        .collect()
+}
+
+// NEW (high): the op was appended after the database commit, so a write
+// whose append did not happen (a kill in between, a log that could not be
+// written) was made here and never queued. A lost delete was then undone by
+// `remote pull`, and nothing but `--seed` (creates only) could resend
+// anything. Deterministic here with a log that cannot be written: the op must
+// survive the failed append and be queued, in order, once the log can be
+// written again.
+#[test]
+fn new_wal_a_write_whose_append_failed_is_queued_by_the_next_write() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "wal-append");
+    sb.dx_ok(&dir, &["add", "goal", "doomed"]);
+    let doomed = local_change_id(&sb, &dir, 1);
+    let log = log_path(&dir);
+    let aside = dir.join(".deciduous").join("log.bak");
+    std::fs::rename(&log, &aside).unwrap();
+    std::fs::create_dir_all(&log).unwrap();
+
+    // Both made here while the log is a directory: neither op can be appended.
+    let _ = sb.dx(&dir, &["add", "goal", "lost-create"]);
+    let _ = sb.dx(&dir, &["delete", "1"]);
+
+    std::fs::remove_dir(&log).unwrap();
+    std::fs::rename(&aside, &log).unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "after"]);
+    assert_eq!(
+        log_ops(&dir),
+        [
+            "create_node doomed".to_string(),
+            "create_node lost-create".to_string(),
+            format!("delete_node {doomed}"),
+            "create_node after".to_string(),
+        ]
+    );
+}
+
+// NEW (high), the kill itself: stdio MCP servers killed (SIGKILL) 0-80 ms
+// after being handed creates and deletes. Afterwards every node this
+// database holds has a create op, and every node it lost has a delete op.
+// On the chapter's head the probe left 5 nodes in 30 trials with no op.
+#[test]
+fn new_wal_a_killed_writer_leaves_no_local_write_without_its_op() {
+    use std::io::{BufRead, BufReader, Write};
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "wal-kill");
+    for i in 0..40 {
+        sb.dx_ok(&dir, &["add", "goal", &format!("seed{i}")]);
+    }
+    let mut next_delete = 1;
+    for trial in 0..25 {
+        let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+            .arg("mcp")
+            .current_dir(&dir)
+            .env("HOME", sb.path().join("home"))
+            .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+            .env("DECIDUOUS_MCP_TOKEN", &sb.token)
+            .env("DECIDUOUS_NO_SERVER", "1")
+            .env_remove("DECIDUOUS_DB_PATH")
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .unwrap();
+        let mut stdin = child.stdin.take().unwrap();
+        // Started (a debug build takes a while to): the writes below are
+        // then in flight when the kill lands.
+        writeln!(stdin, "{}", serde_json::json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}})).unwrap();
+        let mut stdout = BufReader::new(child.stdout.take().unwrap());
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        let mut msgs = Vec::new();
+        for i in 0..3 {
+            msgs.push(serde_json::json!({"jsonrpc":"2.0","id":10 + i,"method":"tools/call","params":{"name":"add_node","arguments":{"node_type":"goal","title":format!("k{trial}-{i}")}}}));
+        }
+        for i in 0..2 {
+            msgs.push(serde_json::json!({"jsonrpc":"2.0","id":20 + i,"method":"tools/call","params":{"name":"delete_node","arguments":{"node_id":next_delete}}}));
+            next_delete += 1;
+        }
+        for m in msgs {
+            let _ = writeln!(stdin, "{m}");
+        }
+        let _ = stdin.flush();
+        let jitter = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .subsec_nanos()
+            % 80) as u64;
+        std::thread::sleep(std::time::Duration::from_millis(jitter));
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    // The next write is where a kill's leftovers are picked up.
+    sb.dx_ok(&dir, &["add", "goal", "final"]);
+
+    let g: Value = serde_json::from_str(&sb.dx_ok(&dir, &["graph"])).unwrap();
+    let local: std::collections::HashSet<String> = g["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|n| n["change_id"].as_str().unwrap().to_string())
+        .collect();
+    let lines = log_lines(&dir);
+    let ops = |kind: &str| -> std::collections::HashSet<String> {
+        lines
+            .iter()
+            .filter(|l| l["kind"] == kind)
+            .map(|l| l["change_id"].as_str().unwrap().to_string())
+            .collect()
+    };
+    let (created, deleted) = (ops("create_node"), ops("delete_node"));
+    let no_create: Vec<&String> = local.iter().filter(|c| !created.contains(*c)).collect();
+    let no_delete: Vec<&String> = created
+        .iter()
+        .filter(|c| !local.contains(*c) && !deleted.contains(*c))
+        .collect();
+    assert!(
+        no_create.is_empty() && no_delete.is_empty(),
+        "{} node(s) here with no create op, {} deleted here with no delete op",
+        no_create.len(),
+        no_delete.len()
+    );
+}

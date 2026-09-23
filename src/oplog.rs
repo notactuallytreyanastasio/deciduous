@@ -61,14 +61,17 @@
 //! removed by rewriting the file (temporary file, then rename). The log is
 //! therefore as long as what is waiting, not as long as the project's history.
 //!
-//! ## Written after the local database, ahead of the server
+//! ## Committed with the local write, appended after it
 //!
-//! The op is appended after the local write commits, because the op carries
-//! what that write produced (a fresh change_id, the stored metadata). A crash
-//! between the two loses the op, not the write, and the next write's replay
-//! does not recover it; `deciduous remote status` shows it as a content
-//! difference. Logging first would need every database method split into
-//! "plan" and "apply", for a window measured in microseconds.
+//! A write's op is made before its commit and stored in the database's
+//! `remote_outbox` table in the same transaction as the write, then appended
+//! here once the commit is done. It used to be built and appended only after
+//! the commit, with nothing durable in between: a process killed there (an
+//! MCP client closing its server, SIGTERM at shutdown) left a write with no
+//! op, and a lost delete was undone by the next `remote pull`. Now the next
+//! logged write, or the next process to open the database, moves whatever
+//! the outbox still holds into this file, in commit order, skipping an op
+//! the file already has.
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -419,22 +422,54 @@ impl OpLog {
         Some(OpLog::at(dir.join(FILE_NAME)))
     }
 
-    /// Appends one op and returns it.
-    pub fn append(&self, body: OpBody) -> Result<Op, String> {
-        let op = Op {
+    /// A new op for `body`: a fresh id, stamped now. Not yet in any log.
+    pub fn new_op(body: OpBody) -> Op {
+        Op {
             op_id: uuid::Uuid::new_v4().to_string(),
             at: chrono::Utc::now().to_rfc3339(),
             body,
-        };
-        let line = serde_json::to_string(&Entry::Op(op.clone()))
-            .map_err(|e| format!("serializing op: {e}"))?;
+        }
+    }
+
+    /// Appends one op and returns it.
+    pub fn append(&self, body: OpBody) -> Result<Op, String> {
+        let op = Self::new_op(body);
+        self.append_ops(std::slice::from_ref(&op))?;
+        Ok(op)
+    }
+
+    /// Appends ops already made (see `Database`'s outbox), in one write.
+    pub fn append_ops(&self, ops: &[Op]) -> Result<(), String> {
+        if ops.is_empty() {
+            return Ok(());
+        }
+        let lines = ops
+            .iter()
+            .map(|op| {
+                serde_json::to_string(&Entry::Op(op.clone()))
+                    .map_err(|e| format!("serializing op: {e}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
         let _lock = self.lock()?;
         self.mend_torn_tail()?;
-        self.append_lines(&[line])?;
+        self.append_lines(&lines)?;
         if let Ok(mut g) = APPENDED.lock() {
             *g = Some(self.path.clone());
         }
-        Ok(op)
+        Ok(())
+    }
+
+    /// The ids of every op in the log, answered or not.
+    pub fn op_ids(&self) -> Result<std::collections::HashSet<String>, String> {
+        Ok(self
+            .parsed()?
+            .entries
+            .into_iter()
+            .filter_map(|e| match e {
+                Entry::Op(op) => Some(op.op_id),
+                Entry::Ack(_) => None,
+            })
+            .collect())
     }
 
     /// Records the server's answers.
@@ -720,6 +755,22 @@ impl OpLog {
     ///
     /// Re-entrant within a thread: a write holding the lock appends under it.
     pub fn lock(&self) -> Result<LockGuard, String> {
+        self.lock_within(LOCK_WAIT)?.ok_or_else(|| {
+            format!(
+                "{} has been held by another deciduous process for {}s \
+                 (a live one: the lock is released when its holder exits, however it exits)",
+                self.path.with_extension("lock").display(),
+                LOCK_WAIT.as_secs()
+            )
+        })
+    }
+
+    /// The lock if it is free now; `None` if another process holds it.
+    pub fn try_lock(&self) -> Result<Option<LockGuard>, String> {
+        self.lock_within(std::time::Duration::ZERO)
+    }
+
+    fn lock_within(&self, wait: std::time::Duration) -> Result<Option<LockGuard>, String> {
         let path = self.path.with_extension("lock");
         let held = HELD.with(|h| {
             let mut h = h.borrow_mut();
@@ -732,7 +783,7 @@ impl OpLog {
             }
         });
         if held {
-            return Ok(LockGuard { path });
+            return Ok(Some(LockGuard { path }));
         }
         let file = std::fs::OpenOptions::new()
             .create(true)
@@ -740,18 +791,13 @@ impl OpLog {
             .write(true)
             .open(&path)
             .map_err(|e| format!("{}: {e}", path.display()))?;
-        let deadline = std::time::Instant::now() + LOCK_WAIT;
+        let deadline = std::time::Instant::now() + wait;
         loop {
             match file.try_lock() {
                 Ok(()) => break,
                 Err(std::fs::TryLockError::WouldBlock) => {
-                    if std::time::Instant::now() > deadline {
-                        return Err(format!(
-                            "{} has been held by another deciduous process for {}s \
-                             (a live one: the lock is released when its holder exits, however it exits)",
-                            path.display(),
-                            LOCK_WAIT.as_secs()
-                        ));
+                    if std::time::Instant::now() >= deadline {
+                        return Ok(None);
                     }
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
@@ -761,7 +807,7 @@ impl OpLog {
             }
         }
         HELD.with(|h| h.borrow_mut().push((path.clone(), file, 1)));
-        Ok(LockGuard { path })
+        Ok(Some(LockGuard { path }))
     }
 }
 
