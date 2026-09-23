@@ -44,8 +44,16 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
             reject(conn, raw, reason)
         end
 
+      # Assigned explicitly, as nil, rather than left absent. Hermes 0.14.1
+      # keeps one Frame per server and `populate_frame/4` does
+      # `Map.merge(frame.assigns, conn.assigns)` on every request, so an
+      # assign is never removed once any session has set it. Seen on
+      # production 2026-09-22: session P pinned `epstein` by header, then
+      # session Q with no header asked `query_nodes` for `tetris-arena` and
+      # got epstein's nodes. Writing nil here overwrites the leaked pin on
+      # every request that does not carry the header.
       [] ->
-        conn
+        assign(conn, :pinned_workspace_id, nil)
     end
   end
 
