@@ -476,6 +476,7 @@ defmodule DeciduousMcp.Sync.Import do
     by_sqlite_id = Map.new(nodes, fn n -> {n["id"], n["change_id"]} end)
 
     pg_ids = node_ids_by_change_id(workspace_id)
+    unlinked = edge_tombstones(workspace_id)
 
     {rows, unresolved, dead, stale} =
       Enum.reduce(edges, {[], [], [], 0}, fn e, {ok, bad, dead, stale} ->
@@ -500,6 +501,13 @@ defmodule DeciduousMcp.Sync.Import do
 
           is_nil(from_id) or is_nil(to_id) ->
             {ok, [%{edge: e["id"], from: from_cid, to: to_cid} | bad], dead, stale}
+
+          # Unlinked here after this copy of the edge was made: the same
+          # refusal /ops gives a stale link, so `--seed` cannot put back an
+          # edge an agent removed.
+          unlinked_later?(unlinked, from_cid, to_cid, e) ->
+            {ok, bad, [%{edge: e["id"], from: from_cid, to: to_cid, unlinked: true} | dead],
+             stale}
 
           from_id == to_id ->
             # The Ecto changeset forbids self-loops; insert_all bypasses it, so
@@ -534,6 +542,27 @@ defmodule DeciduousMcp.Sync.Import do
       refused_deleted_examples: Enum.take(dead, 10),
       stale_change_ids: stale
     }
+  end
+
+  defp edge_tombstones(workspace_id) do
+    %{rows: rows} =
+      Repo.query!(
+        "SELECT from_change_id, to_change_id, edge_type, deleted_at FROM edge_tombstones WHERE workspace_id = $1",
+        [Ecto.UUID.dump!(workspace_id)]
+      )
+
+    Map.new(rows, fn [f, t, type, at] -> {{f, t, type}, DateTime.from_naive!(at, "Etc/UTC")} end)
+  end
+
+  defp unlinked_later?(unlinked, from_cid, to_cid, e) do
+    case Map.get(unlinked, {from_cid, to_cid, e["edge_type"] || "leads_to"}) do
+      nil ->
+        false
+
+      at ->
+        made = parse_time(e["created_at"], nil)
+        made == nil or DateTime.compare(at, made) == :gt
+    end
   end
 
   # Counts endpoints whose stored change_id disagrees with the node its integer

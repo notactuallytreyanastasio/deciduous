@@ -127,8 +127,20 @@ pub enum OpBody {
         #[serde(default, skip_serializing_if = "Map::is_empty")]
         was_metadata: Map<String, Value>,
     },
+    /// `was` holds the node's title, description and status and
+    /// `was_metadata` its whole metadata map, as this copy held them when
+    /// it deleted the node. The server deletes only while it holds exactly
+    /// that: a delete that waited in the queue must not win over an edit
+    /// made after it (round-2 NEW-2). An old log's delete has neither and
+    /// is refused by the server, by name.
     DeleteNode {
         change_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        node_type: Option<String>,
+        #[serde(default)]
+        was: Map<String, Value>,
+        #[serde(default)]
+        was_metadata: Map<String, Value>,
     },
     CreateEdge {
         from_change_id: String,
@@ -140,10 +152,16 @@ pub enum OpBody {
         weight: Option<f64>,
         created_at: String,
     },
+    /// Ordered against a link of the same edge by when each was made: the
+    /// server refuses an unlink older than the edge it holds. The unlink's
+    /// time is the op's `at`, or `deleted_at` when the unlink came from
+    /// graph.json (a teammate's, through git) and is older than the op.
     DeleteEdge {
         from_change_id: String,
         to_change_id: String,
         edge_type: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        deleted_at: Option<String>,
     },
 }
 
@@ -153,7 +171,7 @@ impl OpBody {
         match self {
             OpBody::CreateNode { change_id, .. }
             | OpBody::UpdateNode { change_id, .. }
-            | OpBody::DeleteNode { change_id } => vec![change_id],
+            | OpBody::DeleteNode { change_id, .. } => vec![change_id],
             OpBody::CreateEdge {
                 from_change_id,
                 to_change_id,
@@ -193,7 +211,7 @@ impl OpBody {
                 fields.extend(metadata.keys().map(|k| format!("metadata.{k}")));
                 format!("update {} {}", short(change_id), fields.join(" "))
             }
-            OpBody::DeleteNode { change_id } => format!("delete node {}", short(change_id)),
+            OpBody::DeleteNode { change_id, .. } => format!("delete node {}", short(change_id)),
             OpBody::CreateEdge {
                 from_change_id,
                 to_change_id,
@@ -208,6 +226,7 @@ impl OpBody {
                 from_change_id,
                 to_change_id,
                 edge_type,
+                ..
             } => format!(
                 "unlink {} -> {} ({edge_type})",
                 short(from_change_id),

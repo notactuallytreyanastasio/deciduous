@@ -1172,6 +1172,37 @@ impl Database {
         }]
     }
 
+    /// The op deleting `node`, carrying what it held (see
+    /// [`crate::oplog::OpBody::DeleteNode`]).
+    pub(crate) fn node_deleted_body(node: &DecisionNode) -> crate::oplog::OpBody {
+        let opt = |v: &Option<String>| {
+            v.clone()
+                .map(serde_json::Value::String)
+                .unwrap_or(serde_json::Value::Null)
+        };
+        let mut was = serde_json::Map::new();
+        was.insert(
+            "title".into(),
+            serde_json::Value::String(node.title.clone()),
+        );
+        was.insert("description".into(), opt(&node.description));
+        was.insert(
+            "status".into(),
+            serde_json::Value::String(node.status.clone()),
+        );
+        crate::oplog::OpBody::DeleteNode {
+            change_id: node.change_id.clone(),
+            node_type: Some(node.node_type.clone()),
+            was,
+            was_metadata: node
+                .metadata_json
+                .as_deref()
+                .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+                .and_then(|v| v.as_object().cloned())
+                .unwrap_or_default(),
+        }
+    }
+
     /// The ops removing `edges`, and a description of each edge that cannot
     /// be named to the server (an endpoint with no change_id).
     fn edges_deleted_bodies(
@@ -1199,6 +1230,7 @@ impl Database {
                         from_change_id,
                         to_change_id,
                         edge_type: e.edge_type.clone(),
+                        deleted_at: None,
                     })
                 }
                 _ => unnamed.push(format!(
@@ -2831,9 +2863,7 @@ impl Database {
             Default::default()
         };
         if publish && self.oplog().is_some() {
-            bodies.push(crate::oplog::OpBody::DeleteNode {
-                change_id: node.change_id.clone(),
-            });
+            bodies.push(Self::node_deleted_body(&node));
         }
         let mut conn = self.get_conn()?;
 

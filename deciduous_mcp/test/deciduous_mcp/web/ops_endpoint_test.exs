@@ -56,6 +56,48 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
 
   defp node(ws, cid), do: Repo.get_by!(Node, workspace_id: ws.id, change_id: cid)
 
+  # A delete says what the node held; `create/3`'s defaults unless changed.
+  defp delete(cid, was, meta \\ %{"branch" => "main"}) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "delete_node",
+      change_id: cid,
+      was: Map.merge(%{"title" => cid, "description" => nil, "status" => "pending"}, was),
+      was_metadata: meta
+    }
+  end
+
+  defp link(from, to, made) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "create_edge",
+      from_change_id: from,
+      to_change_id: to,
+      edge_type: "leads_to",
+      created_at: made
+    }
+  end
+
+  defp unlink(from, to, at) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "delete_edge",
+      from_change_id: from,
+      to_change_id: to,
+      edge_type: "leads_to",
+      at: at
+    }
+  end
+
+  defp export(token, ws) do
+    conn =
+      conn(:get, "/export?workspace=" <> ws)
+      |> put_req_header("authorization", "Bearer " <> token)
+      |> Router.call(@opts)
+
+    Jason.decode!(conn.resp_body)
+  end
+
   test "a status op changes the status and leaves an agent's title and description alone",
        %{token: token} do
     {200, _} = ops(token, "ops-c1", [create("a1", "a1")])
@@ -157,7 +199,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       from_change_id: "e1",
       to_change_id: "e2",
       edge_type: "leads_to",
-      rationale: "why"
+      rationale: "why",
+      created_at: "2016-02-01T00:00:01-05:00"
     }
 
     {200, %{"results" => [r]}} =
@@ -171,7 +214,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       kind: "delete_edge",
       from_change_id: "e1",
       to_change_id: "e2",
-      edge_type: "leads_to"
+      edge_type: "leads_to",
+      at: "2016-02-01T00:00:02-05:00"
     }
 
     {200, %{"results" => [r]}} = ops(token, "ops-edge", [del])
@@ -180,7 +224,7 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
 
     {200, %{"results" => [r]}} =
       ops(token, "ops-edge", [
-        %{op_id: Ecto.UUID.generate(), kind: "delete_node", change_id: "e2"}
+        delete("e2", %{"title" => "e2"})
       ])
 
     assert r["result"] == "applied"
@@ -365,7 +409,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       from_change_id: "a",
       to_change_id: "c",
       edge_type: "leads_to",
-      weight: Integer.pow(10, 400)
+      weight: Integer.pow(10, 400),
+      created_at: "2016-02-01T00:00:01-05:00"
     }
 
     {status, body} = ops(token, ws, [huge, create("after", "after")])
@@ -389,5 +434,123 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     assert r["result"] == "rejected"
     refute r["reason"] =~ "<<", r["reason"]
     assert r["reason"] =~ ~S(metadata."a\0b"), r["reason"]
+  end
+
+  # --- round 2: every op carries what it was made against -------------------
+
+  test "new_2: a delete made before a newer edit is refused, and the node stays",
+       %{token: token} do
+    ws = "ops-new2-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    # Bob's edit reached the server first; alice's delete was made before it.
+    {:ok, _} = Nodes.update_node(node(w, "c").id, %{status: "completed"})
+
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("c", %{"title" => "C"})])
+    assert r["result"] == "rejected", inspect(r)
+
+    assert r["reason"] =~
+             ~s(status: the server has "completed", this copy deleted it at "pending")
+
+    assert is_nil(node(w, "c").deleted_at)
+
+    # A delete made over what the server holds goes through.
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [delete("c", %{"title" => "C", "status" => "completed"})])
+
+    assert r["result"] == "applied", inspect(r)
+    refute is_nil(node(w, "c").deleted_at)
+  end
+
+  test "new_2: a delete that does not say what it deleted is refused", %{token: token} do
+    ws = "ops-new2b-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [%{op_id: Ecto.UUID.generate(), kind: "delete_node", change_id: "c"}])
+
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "does not say what the node held"
+  end
+
+  test "new_2: a metadata key changed on the server stops a delete", %{token: token} do
+    ws = "ops-new2c-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+
+    {:ok, _} =
+      Nodes.update_node(node(w, "c").id, %{metadata: %{"branch" => "main", "prompt" => "p"}})
+
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("c", %{"title" => "C"})])
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ ~s(metadata.prompt: the server has "p", this copy deleted it at nil)
+  end
+
+  test "new_3: a delete of a node the server never had leaves a tombstone the create meets",
+       %{token: token} do
+    ws = "ops-new3n-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("t", %{"title" => "T"})])
+    assert r["result"] == "absent"
+
+    {200, %{"results" => [r]}} = ops(token, ws, [create("t", "T")])
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "was deleted on the server"
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    refute is_nil(node(w, "t").deleted_at)
+  end
+
+  test "new_3: an unlink leaves a tombstone; a link made before it is refused, one after applied",
+       %{token: token} do
+    ws = "ops-new3e-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("b", "b")])
+
+    # Bob unlinks an edge the server never had (it reached him through git).
+    {200, %{"results" => [r]}} = ops(token, ws, [unlink("a", "b", "2016-02-01T00:00:05Z")])
+    assert r["result"] == "absent"
+
+    # Alice's link, made before the unlink, replayed after it.
+    {200, %{"results" => [r]}} = ops(token, ws, [link("a", "b", "2016-02-01T00:00:03Z")])
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "was unlinked on the server"
+
+    [t] = export(token, ws)["edge_tombstones"]
+    assert t["from_change_id"] == "a" and t["deleted_at"] =~ "2016-02-01T00:00:05"
+
+    # A link made after the unlink is a relink, and removes the tombstone.
+    {200, %{"results" => [r]}} = ops(token, ws, [link("a", "b", "2016-02-01T00:00:09Z")])
+    assert r["result"] == "applied", inspect(r)
+    assert export(token, ws)["edge_tombstones"] == []
+  end
+
+  test "new_3: an unlink older than the edge the server holds is refused", %{token: token} do
+    ws = "ops-new3r-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("b", "b")])
+
+    {200, [_]} =
+      then(ops(token, ws, [link("a", "b", "2016-02-01T00:00:09Z")]), fn {s, b} ->
+        {s, b["results"]}
+      end)
+
+    {200, %{"results" => [r]}} = ops(token, ws, [unlink("a", "b", "2016-02-01T00:00:05Z")])
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "was linked again on the server"
+    assert length(export(token, ws)["edges"]) == 1
+
+    {200, %{"results" => [r]}} = ops(token, ws, [unlink("a", "b", "2016-02-01T00:00:10Z")])
+    assert r["result"] == "applied"
+    assert export(token, ws)["edges"] == []
+    [t] = export(token, ws)["edge_tombstones"]
+    assert t["deleted_at"] =~ "2016-02-01T00:00:10"
+  end
+
+  test "stack: an agent's unlink is in /export as an edge tombstone", %{token: token} do
+    ws = "ops-stack-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("b", "b")])
+    {200, _} = ops(token, ws, [link("a", "b", "2016-02-01T00:00:01Z")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    {:ok, _} = DeciduousMcp.Graph.Edges.delete_edge(node(w, "a").id, node(w, "b").id)
+
+    [t] = export(token, ws)["edge_tombstones"]
+    assert {t["from_change_id"], t["to_change_id"], t["edge_type"]} == {"a", "b", "leads_to"}
   end
 end

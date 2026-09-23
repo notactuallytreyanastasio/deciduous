@@ -284,16 +284,42 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  # A delete carries what the node held when it was deleted (`was`: title,
+  # description and status; `was_metadata`: the whole map) and applies only
+  # while the server still holds exactly that. Without it a delete queued on
+  # a laptop won over an edit made after it anywhere else, and `remote pull`
+  # then deleted the edited node on every clone (round-2 NEW-2). git's merge
+  # driver keeps the edit in that race ("an edit after a delete brings the
+  # node back"); this is the same rule, decided by content instead of clocks.
+  #
+  # A delete of a node this server never had leaves a tombstone. The node
+  # reached the deleter through git, and its create is still queued on the
+  # laptop that made it; without the tombstone that create, replayed later,
+  # put the node back for good (NEW-3).
   defp apply_op(ws, "delete_node", op) do
-    with {:ok, cid} <- change_id(op, "change_id") do
-      case any_node(ws, cid) do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         {:ok, was} <- deleted_state(op) do
+      case any_node(ws, cid, lock: true) do
         nil ->
+          bury(ws, cid, op)
           {:ok, "absent"}
 
         %Node{deleted_at: nil} = node ->
-          case Nodes.delete_node(node.id) do
-            {:ok, _} -> {:ok, "applied"}
-            {:error, other} -> {:rejected, "delete_node #{cid}: #{describe(other)}"}
+          case delete_conflicts(node, was) do
+            [] ->
+              case Nodes.delete_node(node.id) do
+                {:ok, _} -> {:ok, "applied"}
+                {:error, other} -> {:rejected, "delete_node #{cid}: #{describe(other)}"}
+              end
+
+            conflicts ->
+              {:rejected,
+               "node #{cid} changed on the server after this delete was made (" <>
+                 Enum.map_join(conflicts, "; ", fn {k, now, then} ->
+                   "#{k}: the server has #{inspect(now)}, this copy deleted it at #{inspect(then)}"
+                 end) <>
+                 "). Nothing was deleted. `deciduous remote pull` brings the newer node " <>
+                 "back here; delete it again if it should still go"}
           end
 
         %Node{} ->
@@ -303,54 +329,105 @@ defmodule DeciduousMcp.Sync.Ops do
   end
 
   # --- Edges ------------------------------------------------------------------
+  #
+  # An edge has no fields to compare-and-set; what can go stale is whether it
+  # exists. The server keeps a tombstone for every unlink (see the
+  # edge_tombstones migration) and orders a link and an unlink of the same
+  # edge by when each was made on its machine: `created_at` of the link,
+  # `deleted_at` (else `at`) of the unlink. That is the clock git's merge
+  # driver already uses for the same pair in graph.json, so the server and
+  # git settle a link/unlink race the same way. A link older than the
+  # server's tombstone is refused, and so is an unlink older than the edge
+  # the server holds (a relink made after it).
 
   defp apply_op(ws, "create_edge", op) do
     with {:ok, from_cid} <- change_id(op, "from_change_id"),
          {:ok, to_cid} <- change_id(op, "to_change_id"),
+         {:ok, made} <- instant(op, "created_at"),
          {:ok, from} <- live_node(ws, from_cid),
          {:ok, to} <- live_node(ws, to_cid) do
       type = op["edge_type"] || "leads_to"
 
-      if edge(from.id, to.id, type) do
-        {:ok, "exists"}
-      else
-        attrs = %{
-          from_node_id: from.id,
-          to_node_id: to.id,
-          edge_type: type,
-          rationale: op["rationale"]
-        }
+      cond do
+        edge(from.id, to.id, type) ->
+          {:ok, "exists"}
 
-        attrs = if is_number(op["weight"]), do: Map.put(attrs, :weight, op["weight"]), else: attrs
+        (dead = tombstone(ws, from_cid, to_cid, type)) &&
+            DateTime.compare(dead.deleted_at, made) == :gt ->
+          {:rejected,
+           "the edge #{from_cid} -> #{to_cid} (#{type}) was unlinked on the server at " <>
+             "#{DateTime.to_iso8601(dead.deleted_at)}, after this link was made at " <>
+             "#{DateTime.to_iso8601(made)}; it is not linked again. " <>
+             "`deciduous remote pull` removes it here; link it again if it should stay"}
 
-        case Edges.create_edge(ws.id, attrs) do
-          {:ok, _} ->
-            {:ok, "applied"}
+        true ->
+          attrs = %{
+            from_node_id: from.id,
+            to_node_id: to.id,
+            edge_type: type,
+            rationale: op["rationale"],
+            inserted_at: made
+          }
 
-          {:error, %Ecto.Changeset{} = cs} ->
-            {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{errors(cs)}"}
+          attrs =
+            if is_number(op["weight"]), do: Map.put(attrs, :weight, op["weight"]), else: attrs
 
-          {:error, other} ->
-            {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{describe(other)}"}
-        end
+          case Edges.create_edge(ws.id, attrs) do
+            {:ok, _} ->
+              {:ok, "applied"}
+
+            {:error, %Ecto.Changeset{} = cs} ->
+              {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{errors(cs)}"}
+
+            {:error, other} ->
+              {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{describe(other)}"}
+          end
       end
     end
   end
 
   defp apply_op(ws, "delete_edge", op) do
     with {:ok, from_cid} <- change_id(op, "from_change_id"),
-         {:ok, to_cid} <- change_id(op, "to_change_id") do
+         {:ok, to_cid} <- change_id(op, "to_change_id"),
+         {:ok, unlinked} <- instant(op, if(op["deleted_at"], do: "deleted_at", else: "at")) do
       type = op["edge_type"] || "leads_to"
+      stamp(unlinked)
 
-      with %Node{} = from <- any_node(ws, from_cid),
-           %Node{} = to <- any_node(ws, to_cid),
-           %Edge{} <- edge(from.id, to.id, type) do
-        case Edges.delete_edge(from.id, to.id, type) do
-          {:ok, _} -> {:ok, "applied"}
-          {:error, :not_found} -> {:ok, "absent"}
+      live =
+        with %Node{} = from <- any_node(ws, from_cid),
+             %Node{} = to <- any_node(ws, to_cid) do
+          edge(from.id, to.id, type)
         end
-      else
-        nil -> {:ok, "absent"}
+
+      case live do
+        %Edge{} = e ->
+          if DateTime.compare(e.inserted_at, unlinked) == :gt do
+            {:rejected,
+             "the edge #{from_cid} -> #{to_cid} (#{type}) was linked again on the server at " <>
+               "#{DateTime.to_iso8601(e.inserted_at)}, after this unlink was made at " <>
+               "#{DateTime.to_iso8601(unlinked)}; it is kept. `deciduous remote pull` " <>
+               "brings it back here; unlink it again if it should go"}
+          else
+            case Edges.delete_edge(e.from_node_id, e.to_node_id, type) do
+              {:ok, _} -> {:ok, "applied"}
+              {:error, :not_found} -> {:ok, "absent"}
+            end
+          end
+
+        _ ->
+          # Never here, or already removed: the tombstone is what a link
+          # replayed later is checked against.
+          Repo.query!(
+            """
+            INSERT INTO edge_tombstones (workspace_id, from_change_id, to_change_id, edge_type, deleted_at)
+            VALUES ($1, $2, $3, $4, $5)
+            ON CONFLICT (workspace_id, from_change_id, to_change_id, edge_type)
+            DO UPDATE SET deleted_at = greatest(edge_tombstones.deleted_at, EXCLUDED.deleted_at)
+            """,
+            [Ecto.UUID.dump!(ws.id), from_cid, to_cid, type, DateTime.to_naive(unlinked)]
+          )
+
+          {:ok, "absent"}
       end
     end
   end
@@ -362,6 +439,115 @@ defmodule DeciduousMcp.Sync.Ops do
   end
 
   # --- Helpers ----------------------------------------------------------------
+
+  @node_columns ~w(title description status)
+
+  # What a delete says the node held. Every column and the whole metadata
+  # map: a delete removes all of it, so a change to any of it since is a
+  # newer edit the delete did not see.
+  defp deleted_state(op) do
+    was = op["was"]
+    was_meta = op["was_metadata"]
+
+    cond do
+      not is_map(was) or Enum.any?(@node_columns, &(not Map.has_key?(was, &1))) ->
+        {:rejected,
+         "delete_node #{op["change_id"]} does not say what the node held when it was " <>
+           "deleted (was: #{Enum.join(@node_columns, ", ")}; was_metadata); without it a " <>
+           "newer edit on the server would be deleted unseen. A CLI older than this server?"}
+
+      not is_map(was_meta) ->
+        {:rejected,
+         "delete_node #{op["change_id"]} does not say what metadata the node held " <>
+           "(was_metadata must be an object, got #{inspect(was_meta)})"}
+
+      true ->
+        {:ok, {was, was_meta}}
+    end
+  end
+
+  defp delete_conflicts(node, {was, was_meta}) do
+    blank = fn
+      "" -> nil
+      v -> v
+    end
+
+    columns =
+      for k <- @node_columns,
+          now = Map.get(node, String.to_existing_atom(k)),
+          blank.(now) != blank.(was[k]),
+          do: {k, now, was[k]}
+
+    held = node.metadata || %{}
+
+    meta =
+      for k <- Enum.uniq(Map.keys(held) ++ Map.keys(was_meta)),
+          Map.get(held, k) != Map.get(was_meta, k),
+          do: {"metadata." <> k, Map.get(held, k), Map.get(was_meta, k)}
+
+    columns ++ Enum.sort(meta)
+  end
+
+  # A tombstone for a node this server never had.
+  defp bury(ws, cid, op) do
+    now = DateTime.utc_now()
+    type = if op["node_type"] in Node.node_types(), do: op["node_type"], else: "observation"
+
+    Repo.insert_all(
+      Node,
+      [
+        %{
+          id: Ecto.UUID.generate(),
+          workspace_id: ws.id,
+          change_id: cid,
+          node_type: type,
+          title: "",
+          status: "pending",
+          metadata: %{},
+          inserted_at: now,
+          updated_at: now,
+          deleted_at: now
+        }
+      ],
+      on_conflict: :nothing,
+      conflict_target: [:workspace_id, :change_id]
+    )
+  end
+
+  defp tombstone(ws, from_cid, to_cid, type) do
+    case Repo.query!(
+           """
+           SELECT deleted_at FROM edge_tombstones
+           WHERE workspace_id = $1 AND from_change_id = $2 AND to_change_id = $3 AND edge_type = $4
+           """,
+           [Ecto.UUID.dump!(ws.id), from_cid, to_cid, type]
+         ) do
+      %{rows: [[at]]} -> %{deleted_at: DateTime.from_naive!(at, "Etc/UTC")}
+      %{rows: []} -> nil
+    end
+  end
+
+  # Dates the tombstone the trigger writes for this transaction's unlink.
+  defp stamp(at) do
+    Repo.query!("SELECT set_config('deciduous.unlinked_at', $1, true)", [
+      DateTime.to_iso8601(at)
+    ])
+  end
+
+  defp instant(op, key) do
+    with v when is_binary(v) <- op[key],
+         {:ok, dt, _} <- DateTime.from_iso8601(v) do
+      # UTC, microseconds, and 6-digit precision whatever the input had:
+      # the columns are :utc_datetime_usec (see Import.parse_time/2).
+      dt = DateTime.truncate(dt, :microsecond)
+      {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+    else
+      _ ->
+        {:rejected,
+         "#{op["kind"]} needs #{key} as an ISO 8601 time, got #{inspect(op[key])}; it orders " <>
+           "this op against a link or unlink of the same edge made elsewhere"}
+    end
+  end
 
   defp change_id(op, key) do
     case op[key] do

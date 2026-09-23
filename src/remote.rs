@@ -1225,7 +1225,7 @@ impl Held {
         match &op.body {
             CreateNode { change_id, .. }
             | UpdateNode { change_id, .. }
-            | DeleteNode { change_id } => vec![format!("n:{change_id}")],
+            | DeleteNode { change_id, .. } => vec![format!("n:{change_id}")],
             CreateEdge {
                 from_change_id,
                 to_change_id,
@@ -1236,6 +1236,7 @@ impl Held {
                 from_change_id,
                 to_change_id,
                 edge_type,
+                ..
             } => vec![format!("e:{from_change_id}|{to_change_id}|{edge_type}")],
         }
     }
@@ -2045,6 +2046,18 @@ pub struct RemoteGraph {
     pub edges: Vec<RemoteEdge>,
     #[serde(default)]
     pub documents: Vec<Value>,
+    /// Unlinks the server remembers. Absent from servers before 1.0.8's
+    /// second round, which hard-deleted edges.
+    #[serde(default)]
+    pub edge_tombstones: Vec<RemoteEdgeTombstone>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RemoteEdgeTombstone {
+    pub from_change_id: String,
+    pub to_change_id: String,
+    pub edge_type: String,
+    pub deleted_at: String,
 }
 
 impl RemoteGraph {
@@ -2194,6 +2207,23 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 deleted_at: None,
                 extra: Default::default(),
             };
+            if store.absorb_edge(&rec).map_err(|e| e.to_string())? {
+                written += 1;
+            }
+        }
+
+        // An unlink on the server (an agent's, or another clone's that
+        // reached the server first). Merged like a teammate's tombstone: it
+        // removes the edge here unless the edge here was made after it.
+        for t in &graph.edge_tombstones {
+            let id = records::edge_id(&t.from_change_id, &t.to_change_id, &t.edge_type);
+            let Some(mut rec) = store.read_edge(&id).map_err(|e| e.to_string())? else {
+                continue;
+            };
+            if rec.is_tombstone() {
+                continue;
+            }
+            rec.deleted_at = Some(t.deleted_at.clone());
             if store.absorb_edge(&rec).map_err(|e| e.to_string())? {
                 written += 1;
             }
@@ -2464,6 +2494,7 @@ mod tests {
                 })
                 .collect(),
             documents: vec![],
+            edge_tombstones: vec![],
         }
     }
 
