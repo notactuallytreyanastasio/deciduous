@@ -29,14 +29,18 @@ struct Stub {
     url: String,
     export: Arc<Mutex<Value>>,
     imports: Arc<Mutex<Vec<Value>>>,
+    ops: Arc<Mutex<Vec<Value>>>,
 }
 
 fn stub() -> Stub {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}", listener.local_addr().unwrap());
-    let export = Arc::new(Mutex::new(json!({"nodes": [], "edges": [], "documents": []})));
+    let export = Arc::new(Mutex::new(
+        json!({"nodes": [], "edges": [], "documents": []}),
+    ));
     let imports = Arc::new(Mutex::new(Vec::new()));
-    let (ex, im) = (export.clone(), imports.clone());
+    let ops = Arc::new(Mutex::new(Vec::new()));
+    let (ex, im, op) = (export.clone(), imports.clone(), ops.clone());
 
     std::thread::spawn(move || {
         for stream in listener.incoming() {
@@ -68,6 +72,15 @@ fn stub() -> Stub {
                 let report = import_report(&ex.lock().unwrap(), &payload["graph"]);
                 im.lock().unwrap().push(payload);
                 report
+            } else if path.starts_with("/ops") {
+                let payload: Value = serde_json::from_slice(&body).unwrap();
+                let report = ops_report(&ex.lock().unwrap(), &payload["ops"]);
+                op.lock().unwrap().push(payload);
+                report
+            } else if path.starts_with("/claim") {
+                json!({"claim": "unchecked"})
+            } else if path.starts_with("/locate") {
+                json!({"workspaces": []})
             } else {
                 json!({"error": "not found"})
             };
@@ -85,6 +98,7 @@ fn stub() -> Stub {
         url,
         export,
         imports,
+        ops,
     }
 }
 
@@ -121,6 +135,35 @@ fn import_report(server: &Value, graph: &Value) -> Value {
     })
 }
 
+/// What the server's /ops answers: a write to a deleted node, or an edge
+/// touching one, is rejected with the server's reason; the rest applied.
+fn ops_report(server: &Value, ops: &Value) -> Value {
+    let dead: Vec<&str> = server["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|n| !n["deleted_at"].is_null())
+        .map(|n| n["change_id"].as_str().unwrap())
+        .collect();
+    let results: Vec<Value> = ops
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|o| {
+            let touched = ["change_id", "from_change_id", "to_change_id"]
+                .iter()
+                .filter_map(|k| o[*k].as_str())
+                .find(|c| dead.contains(c));
+            match touched {
+                Some(cid) => json!({"op_id": o["op_id"], "result": "rejected",
+                                    "reason": format!("node {cid} was deleted on the server")}),
+                None => json!({"op_id": o["op_id"], "result": "applied"}),
+            }
+        })
+        .collect();
+    json!({ "results": results })
+}
+
 fn run(dir: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_deciduous"))
         .args(args)
@@ -148,7 +191,18 @@ fn project_after_server_delete() -> (TempDir, Stub, String) {
     let dir = tmp.path();
     assert!(run(dir, &["init"]).status.success());
     run(dir, &["add", "goal", "root goal", "-c", "90"]);
-    run(dir, &["add", "action", "doomed", "-c", "80", "-p", "my password is hunter2"]);
+    run(
+        dir,
+        &[
+            "add",
+            "action",
+            "doomed",
+            "-c",
+            "80",
+            "-p",
+            "my password is hunter2",
+        ],
+    );
     run(dir, &["link", "1", "2", "-r", "r"]);
 
     let graph: Value = serde_json::from_slice(&run(dir, &["graph"]).stdout).unwrap();
@@ -164,13 +218,26 @@ fn project_after_server_delete() -> (TempDir, Stub, String) {
             .to_string()
     };
     let (goal, doomed) = (cid("root goal"), cid("doomed"));
+    // The server's copy of the goal matches the local one field for field,
+    // so the only difference status can find is the delete.
+    let goal_node = graph["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["title"] == "root goal")
+        .unwrap()
+        .clone();
+    let goal_meta: Value = goal_node["metadata_json"]
+        .as_str()
+        .map(|m| serde_json::from_str(m).unwrap())
+        .unwrap_or(json!({}));
 
     let server = stub();
     *server.export.lock().unwrap() = json!({
         "nodes": [
             {"id": "u1", "change_id": goal, "node_type": "goal", "title": "root goal",
-             "description": null, "status": "pending", "metadata": {},
-             "created_at": "2026-09-23T17:00:00Z", "updated_at": "2026-09-23T17:00:00Z",
+             "description": null, "status": "pending", "metadata": goal_meta,
+             "created_at": goal_node["created_at"], "updated_at": goal_node["updated_at"],
              "deleted_at": null},
             {"id": "u2", "change_id": doomed, "node_type": "action", "title": "",
              "description": null, "status": "pending", "metadata": null,
@@ -194,15 +261,24 @@ fn status_sends_the_user_to_pull_when_the_server_deleted_a_local_node() {
         !out.contains("remote push` to send it up"),
         "status advised a push that cannot help:\n{out}"
     );
-    assert!(out.contains("deleted"), "{out}");
+    assert!(
+        out.to_lowercase().contains("deleted on the server"),
+        "{out}"
+    );
     assert!(out.contains("deciduous remote pull"), "{out}");
+    assert!(
+        !out.contains("Edges only here"),
+        "an edge into the deleted node was offered to --seed, which will not send it:\n{out}"
+    );
 }
 
 #[test]
 fn push_does_not_resend_an_edge_into_a_server_deleted_node_and_says_to_pull() {
     let (tmp, server, doomed) = project_after_server_delete();
     let before = server.imports.lock().unwrap().len();
-    let out = text(&run(tmp.path(), &["remote", "push"]));
+    // --seed is the push that diffs the local graph against the server's;
+    // a plain push replays the op log and nothing else.
+    let out = text(&run(tmp.path(), &["remote", "push", "--seed"]));
 
     let sent: Vec<Value> = server.imports.lock().unwrap()[before..].to_vec();
     for payload in &sent {
@@ -217,8 +293,12 @@ fn push_does_not_resend_an_edge_into_a_server_deleted_node_and_says_to_pull() {
     assert!(out.contains("deciduous remote pull"), "{out}");
 }
 
+/// With the op log, the edit is sent as an op and the server refuses it by
+/// name; before the log, the push resent the whole node over the tombstone.
+/// Either way the user must hear that the node is gone and that pull is
+/// what applies it.
 #[test]
-fn an_edit_to_a_node_the_server_deleted_is_not_sent_and_the_user_is_told() {
+fn an_edit_to_a_node_the_server_deleted_is_refused_and_the_user_is_told() {
     let (tmp, server, doomed) = project_after_server_delete();
     let before = server.imports.lock().unwrap().len();
     let out = run(tmp.path(), &["status", "2", "completed"]);
@@ -232,11 +312,19 @@ fn an_edit_to_a_node_the_server_deleted_is_not_sent_and_the_user_is_told() {
                 .unwrap()
                 .iter()
                 .any(|n| n["change_id"] == doomed.as_str()),
-            "the edit to the deleted node was pushed: {payload}"
+            "the edited node was re-imported over its tombstone: {payload}"
         );
     }
+    let sent_ops = server.ops.lock().unwrap().clone();
+    assert!(
+        sent_ops
+            .iter()
+            .flat_map(|p| p["ops"].as_array().unwrap().clone())
+            .any(|o| o["kind"] == "update_node" && o["change_id"] == doomed.as_str()),
+        "the edit never reached the server as an op: {sent_ops:?}"
+    );
     assert!(out.contains("deleted on the server"), "{out}");
-    assert!(out.contains("doomed"), "{out}");
+    assert!(out.contains(&doomed[..8]), "{out}");
     assert!(out.contains("deciduous remote pull"), "{out}");
 }
 
@@ -252,19 +340,32 @@ fn pull_applies_a_server_delete_even_over_a_later_local_edit() {
     run(dir, &["status", "2", "completed"]);
 
     let out = text(&run(dir, &["remote", "pull"]));
-    assert!(out.contains("doomed"), "pull did not say what it deleted:\n{out}");
+    assert!(
+        out.contains("doomed"),
+        "pull did not say what it deleted:\n{out}"
+    );
 
     let nodes = text(&run(dir, &["nodes"]));
-    assert!(!nodes.contains("doomed"), "the deleted node survived the pull:\n{nodes}");
+    assert!(
+        !nodes.contains("doomed"),
+        "the deleted node survived the pull:\n{nodes}"
+    );
 
-    let status = text(&run(dir, &["remote", "status"]));
-    assert!(status.contains("counts match"), "{status}");
-    assert!(!status.contains("deleted 1 node"), "{status}");
+    let status = run(dir, &["remote", "status"]);
+    let said = text(&status);
+    assert!(
+        status.status.success(),
+        "status is not clean after the pull:\n{said}"
+    );
+    assert!(!said.contains("Deleted on the server"), "{said}");
 
     // The delete is how a pasted secret leaves the graph; the local
     // tombstone keeps no more of the node than the server's does.
     let file = std::fs::read_to_string(dir.join(".deciduous/graph.json")).unwrap();
-    assert!(!file.contains("hunter2"), "graph.json kept the deleted prompt");
+    assert!(
+        !file.contains("hunter2"),
+        "graph.json kept the deleted prompt"
+    );
 }
 
 #[test]

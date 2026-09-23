@@ -706,7 +706,9 @@ pub fn counts_without(local: &Value, deleted: &[DeletedOnServer]) -> (usize, usi
     let edges = local["edges"].as_array().map_or(0, |e| {
         e.iter()
             .filter(|e| {
-                !e["from_node_id"].as_i64().is_some_and(|i| gone.contains(&i))
+                !e["from_node_id"]
+                    .as_i64()
+                    .is_some_and(|i| gone.contains(&i))
                     && !e["to_node_id"].as_i64().is_some_and(|i| gone.contains(&i))
             })
             .count()
@@ -960,6 +962,17 @@ pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplo
          `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
         log.path().display()
     );
+    // The one refusal with a fix that is not a choice: the node is gone on
+    // the server, so the write can never apply, and pull both removes the
+    // node here and drops the refusals that touch it.
+    if rejected
+        .iter()
+        .any(|(_, reason)| reason.contains("was deleted on the server"))
+    {
+        eprintln!(
+            "A node these writes touch was deleted on the server: `deciduous remote pull` removes it here and drops the refusals with it."
+        );
+    }
 }
 
 /// Replays the log after a command that wrote to it, without letting the
@@ -1207,8 +1220,12 @@ pub fn content_diff(
         .collect();
     d.local_edges = local_edges.len();
     d.server_edges = server_edges.len();
+    // A local edge into a node the server deleted is not "only here" either:
+    // --seed will not send it (see `missing_on_server`), and the pull that
+    // removes the node removes it too, so it is listed with the node.
     d.edges_only_local = local_edges
         .difference(&server_edges)
+        .filter(|(f, t, _)| !tombstones.contains(f.as_str()) && !tombstones.contains(t.as_str()))
         .map(|(f, t, k)| edge_label(f, t, k))
         .collect();
     d.edges_only_server = server_edges
@@ -1522,9 +1539,20 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
             serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
         })?;
     let overridden = deleted_on_server(&local, &graph);
-    for d in &overridden {
+    // Applying the server's own delete is not a write the server needs to
+    // hear about: logged, the delete_node and delete_edge ops for it were
+    // refused ("was deleted on the server") and left `remote status`
+    // reporting rejected writes after every such pull.
+    let log = db.oplog();
+    db.set_oplog(None);
+    let deleted = overridden.iter().try_for_each(|d| {
         db.delete_node(d.id as i32, false)
-            .map_err(|e| format!("deleting node {} \"{}\": {e}", d.id, d.title))?;
+            .map(|_| ())
+            .map_err(|e| format!("deleting node {} \"{}\": {e}", d.id, d.title))
+    });
+    db.set_oplog(log.clone());
+    deleted?;
+    for d in &overridden {
         // The local tombstone keeps the row's last fields, prompt included;
         // the server's keeps none, because a delete is how a pasted secret
         // leaves the graph. Keep the local deleted_at (now, later than the
@@ -1545,6 +1573,17 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
         }
     }
 
+    let dead: std::collections::HashSet<String> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_some())
+        .map(|n| n.change_id.clone())
+        .collect();
+    let dropped_rejected = match &log {
+        Some(log) if !dead.is_empty() => log.drop_rejected_touching(&dead)?,
+        _ => 0,
+    };
+
     Ok(PullReport {
         fetched_nodes: graph
             .nodes
@@ -1564,6 +1603,7 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
         imported_edges: report.edges_imported,
         removed_edges: report.edges_deleted,
         deleted_over_local_edits: overridden,
+        dropped_rejected,
     })
 }
 
@@ -1586,6 +1626,9 @@ pub struct PullReport {
     /// delete; deleted anyway, edit and all (see `pull`). Counted in
     /// `removed_nodes` too.
     pub deleted_over_local_edits: Vec<DeletedOnServer>,
+    /// Refused ops in the log that touched a node the server deleted,
+    /// dropped because they can never apply.
+    pub dropped_rejected: usize,
 }
 
 /// ureq puts the useful part of an HTTP failure in the response body, which

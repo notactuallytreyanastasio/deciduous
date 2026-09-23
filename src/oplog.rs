@@ -124,6 +124,25 @@ pub enum OpBody {
 }
 
 impl OpBody {
+    /// The nodes this op writes to or links, by change_id.
+    pub fn change_ids(&self) -> Vec<&str> {
+        match self {
+            OpBody::CreateNode { change_id, .. }
+            | OpBody::UpdateNode { change_id, .. }
+            | OpBody::DeleteNode { change_id } => vec![change_id],
+            OpBody::CreateEdge {
+                from_change_id,
+                to_change_id,
+                ..
+            }
+            | OpBody::DeleteEdge {
+                from_change_id,
+                to_change_id,
+                ..
+            } => vec![from_change_id, to_change_id],
+        }
+    }
+
     /// A short human description, for warnings and `remote status`.
     pub fn describe(&self) -> String {
         let short = |c: &str| c.chars().take(8).collect::<String>();
@@ -307,6 +326,21 @@ impl OpLog {
         let before = self.read()?.rejected.len();
         self.rewrite(|_, ack| ack.is_none())?;
         Ok(before)
+    }
+
+    /// Drops the rejected ops that touch any of `change_ids`: the nodes the
+    /// server deleted, after a pull removed them here. Such an op was
+    /// refused because the node is gone and can never apply; kept, it held
+    /// `remote status` at "rejected" until `--drop-rejected`, which would
+    /// also have thrown away unrelated refusals. Returns how many it dropped.
+    pub fn drop_rejected_touching(
+        &self,
+        change_ids: &std::collections::HashSet<String>,
+    ) -> Result<usize, String> {
+        self.rewrite(|op, ack| {
+            !(ack.is_some_and(|a| a.is_rejected())
+                && op.body.change_ids().iter().any(|c| change_ids.contains(*c)))
+        })
     }
 
     fn rewrite(&self, keep: impl Fn(&Op, Option<&Ack>) -> bool) -> Result<usize, String> {

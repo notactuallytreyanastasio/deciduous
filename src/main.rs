@@ -2699,6 +2699,12 @@ fn main() {
                                 r.imported_edges,
                                 r.removed_edges
                             );
+                            if r.dropped_rejected > 0 {
+                                println!(
+                                    "  dropped {} refused write(s) to nodes the server deleted",
+                                    r.dropped_rejected
+                                );
+                            }
                             for d in &r.deleted_over_local_edits {
                                 println!(
                                     "  {} node {} \"{}\" was edited here after the server deleted it at {}; the server refuses edits to a deleted node, so it is deleted here too and the edit with it",
