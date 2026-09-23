@@ -81,9 +81,15 @@ defmodule DeciduousMcp.Schema.Node do
     end
   end
 
+  # A string confidence ("999") passed the old number-only guard and was
+  # stored; so did `true`. Anything present must be a number in range.
   defp validate_confidence(changeset, %{"confidence" => c})
-       when is_number(c) and (c < 0 or c > 100) do
-    add_error(changeset, :metadata, "confidence must be between 0 and 100")
+       when not is_nil(c) and (not is_number(c) or c < 0 or c > 100) do
+    add_error(
+      changeset,
+      :metadata,
+      "confidence must be a number between 0 and 100, got #{inspect(c)}"
+    )
   end
 
   defp validate_confidence(changeset, _), do: changeset

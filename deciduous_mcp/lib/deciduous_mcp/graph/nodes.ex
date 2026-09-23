@@ -37,8 +37,16 @@ defmodule DeciduousMcp.Graph.Nodes do
 
   A soft-deleted node is refused with `{:error, :deleted}`: the tools check
   first, and this is the belt for every other caller.
+
+  `merge_metadata: true` treats `attrs.metadata` as a patch on the stored
+  map (JSON merge patch, top level): keys given are set, keys given as nil
+  are removed, keys not given are kept. It is applied here, under the row
+  lock, rather than by the caller reading the row first, so two patches to
+  one node cannot each start from the same old map and lose the other's key.
+  Without it, metadata is replaced whole, which is what the sync processor
+  replaying a CLI node wants.
   """
-  def update_node(node_id, attrs) do
+  def update_node(node_id, attrs, opts \\ []) do
     Repo.transaction(fn ->
       case Node |> lock("FOR UPDATE") |> Repo.get(node_id) do
         nil ->
@@ -48,6 +56,8 @@ defmodule DeciduousMcp.Graph.Nodes do
           Repo.rollback(:deleted)
 
         node ->
+          attrs = if opts[:merge_metadata], do: merge_metadata(node, attrs), else: attrs
+
           case node |> Node.update_changeset(attrs) |> Repo.update() do
             {:ok, updated} ->
               audit_change(node.workspace_id, updated, "update", attrs)
@@ -233,6 +243,19 @@ defmodule DeciduousMcp.Graph.Nodes do
   end
 
   # --- Private helpers ---
+
+  defp merge_metadata(node, %{metadata: patch} = attrs) when is_map(patch) do
+    merged =
+      Enum.reduce(patch, node.metadata || %{}, fn
+        {key, nil}, acc -> Map.delete(acc, key)
+        {key, value}, acc -> Map.put(acc, key, value)
+      end)
+
+    %{attrs | metadata: merged}
+  end
+
+  # Not a map: left as it is, for the changeset to refuse by name.
+  defp merge_metadata(_node, attrs), do: attrs
 
   # `:global` is the cross-project view: no workspace predicate at all. It is a
   # distinct atom rather than a nil workspace_id so that an unresolved

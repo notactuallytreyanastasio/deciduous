@@ -20,7 +20,13 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
             enum: ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
             description: "New status"
           },
-          metadata: %{type: "object", description: "Updated metadata"},
+          metadata: %{
+            type: "object",
+            description:
+              "Metadata keys to change. Merged into the node's existing metadata: keys " <>
+                "sent are set, a key sent as null is removed, keys not sent are kept " <>
+                "(branch, prompt, commit, files). confidence must be a number 0-100."
+          },
           branch: %{
             type: "string",
             description:
@@ -47,7 +53,7 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
       |> maybe_put(:status, args["status"])
       |> maybe_put(:metadata, args["metadata"])
 
-    case Nodes.update_node(args["node_id"], attrs) do
+    case Nodes.update_node(args["node_id"], attrs, merge_metadata: true) do
       {:ok, node} ->
         {:ok,
          Jason.encode!(%{
@@ -63,6 +69,9 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
       {:error, :deleted} ->
         {:error, %{code: -1, message: "node #{args["node_id"]} was deleted"}}
 
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error, %{code: -1, message: "Update failed: #{changeset_errors(changeset)}"}}
+
       {:error, reason} ->
         {:error, %{code: -1, message: "Update failed: #{inspect(reason)}"}}
     end
@@ -70,4 +79,9 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp changeset_errors(changeset) do
+    changeset.errors
+    |> Enum.map_join("; ", fn {field, {message, _}} -> "#{field} #{message}" end)
+  end
 end
