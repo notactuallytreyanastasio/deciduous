@@ -52,6 +52,7 @@ pub mod init;
 pub mod mcp;
 pub mod narratives;
 pub mod opencode;
+pub mod oplog;
 pub mod pulse;
 pub mod records;
 pub mod remote;

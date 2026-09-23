@@ -1,0 +1,537 @@
+//! The local log of writes on their way to the shared server.
+//!
+//! Every graph write the CLI makes to its local database also appends one
+//! operation to `.deciduous/remote-log.jsonl`, next to the database, when the
+//! project has a `[remote]` configured. `deciduous remote push` (and the
+//! automatic replay after each write) sends the unacknowledged tail to the
+//! server's `POST /ops`, which applies each op at most once, by `op_id`, and
+//! only to the fields the op names.
+//!
+//! ## Why a log and not a snapshot
+//!
+//! 1.0.7 pushed by comparing the local graph with the server's and sending
+//! whole nodes. That has two holes a log does not:
+//!
+//! * A snapshot cannot say which fields changed, so re-sending node 2 after
+//!   `deciduous status 2 completed` also re-sent its title, and put back the
+//!   one an agent had just changed.
+//! * A diff by change_id only sees what the server lacks. An edit to a node
+//!   the server already has, made while the server was down, was never
+//!   found again; neither was a delete.
+//!
+//! ## The file
+//!
+//! JSON lines, append-only, one entry per line:
+//!
+//! ```text
+//! {"entry":"op","op_id":"…","at":"…","kind":"update_node","change_id":"…","set":{"status":"completed"}}
+//! {"entry":"ack","op_id":"…","result":"applied","at":"…"}
+//! ```
+//!
+//! An op with no ack is pending. An ack whose result is `rejected` keeps its op
+//! in the file, with the server's reason, until the user drops it
+//! (`remote push --drop-rejected`): the server refused it and something has to
+//! decide what that means.
+//!
+//! It lives beside the database, not in a tracked file: it holds this
+//! machine's unsent writes, and the `.deciduous/*` rule `deciduous init`
+//! writes already keeps it out of git.
+//!
+//! ## Compaction
+//!
+//! After a replay, ops acknowledged as anything other than `rejected` are
+//! removed by rewriting the file (temporary file, then rename). The log is
+//! therefore as long as what is waiting, not as long as the project's history.
+//!
+//! ## Written after the local database, ahead of the server
+//!
+//! The op is appended after the local write commits, because the op carries
+//! what that write produced (a fresh change_id, the stored metadata). A crash
+//! between the two loses the op, not the write, and the next write's replay
+//! does not recover it; `deciduous remote status` shows it as a content
+//! difference. Logging first would need every database method split into
+//! "plan" and "apply", for a window measured in microseconds.
+
+use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+pub const FILE_NAME: &str = "remote-log.jsonl";
+
+/// One graph change, as the server's `POST /ops` receives it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Op {
+    pub op_id: String,
+    /// When the local write happened.
+    pub at: String,
+    #[serde(flatten)]
+    pub body: OpBody,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum OpBody {
+    CreateNode {
+        change_id: String,
+        node_type: String,
+        title: String,
+        #[serde(default)]
+        description: Option<String>,
+        status: String,
+        #[serde(default)]
+        metadata: Map<String, Value>,
+        created_at: String,
+        updated_at: String,
+    },
+    /// Only the fields named here change on the server. `set` holds
+    /// top-level columns (title, description, status); `metadata` holds keys
+    /// merged into the node's metadata map.
+    UpdateNode {
+        change_id: String,
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        set: Map<String, Value>,
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        metadata: Map<String, Value>,
+    },
+    DeleteNode {
+        change_id: String,
+    },
+    CreateEdge {
+        from_change_id: String,
+        to_change_id: String,
+        edge_type: String,
+        #[serde(default)]
+        rationale: Option<String>,
+        #[serde(default)]
+        weight: Option<f64>,
+        created_at: String,
+    },
+    DeleteEdge {
+        from_change_id: String,
+        to_change_id: String,
+        edge_type: String,
+    },
+}
+
+impl OpBody {
+    /// A short human description, for warnings and `remote status`.
+    pub fn describe(&self) -> String {
+        let short = |c: &str| c.chars().take(8).collect::<String>();
+        match self {
+            OpBody::CreateNode {
+                change_id,
+                node_type,
+                title,
+                ..
+            } => format!("create {node_type} {} \"{title}\"", short(change_id)),
+            OpBody::UpdateNode {
+                change_id,
+                set,
+                metadata,
+            } => {
+                let mut fields: Vec<String> = set
+                    .iter()
+                    .map(|(k, v)| match v {
+                        Value::String(s) if s.chars().count() <= 40 => format!("{k}={s}"),
+                        _ => k.clone(),
+                    })
+                    .collect();
+                fields.extend(metadata.keys().map(|k| format!("metadata.{k}")));
+                format!("update {} {}", short(change_id), fields.join(" "))
+            }
+            OpBody::DeleteNode { change_id } => format!("delete node {}", short(change_id)),
+            OpBody::CreateEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+                ..
+            } => format!(
+                "link {} -> {} ({edge_type})",
+                short(from_change_id),
+                short(to_change_id)
+            ),
+            OpBody::DeleteEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+            } => format!(
+                "unlink {} -> {} ({edge_type})",
+                short(from_change_id),
+                short(to_change_id)
+            ),
+        }
+    }
+}
+
+/// The server's answer for one op.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Ack {
+    pub op_id: String,
+    /// `applied`, `exists`, `absent`, `duplicate` or `rejected`.
+    pub result: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
+    pub at: String,
+}
+
+impl Ack {
+    pub fn is_rejected(&self) -> bool {
+        self.result == "rejected"
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "entry", rename_all = "snake_case")]
+enum Entry {
+    Op(Op),
+    Ack(Ack),
+}
+
+/// What the log holds right now.
+#[derive(Debug, Default)]
+pub struct LogState {
+    /// Ops with no ack, in the order they were written.
+    pub pending: Vec<Op>,
+    /// Ops the server refused, with its answer.
+    pub rejected: Vec<(Op, Ack)>,
+    /// Ops acknowledged and not yet compacted away.
+    pub acked: usize,
+}
+
+/// Set when this process appends an op, so the CLI knows to replay on exit
+/// without re-reading the file after every command.
+static APPENDED: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
+
+/// The log this process appended to, if any.
+pub fn appended_this_process() -> Option<OpLog> {
+    APPENDED
+        .lock()
+        .ok()
+        .and_then(|g| g.clone())
+        .map(|path| OpLog { path })
+}
+
+#[derive(Debug, Clone)]
+pub struct OpLog {
+    path: PathBuf,
+}
+
+impl OpLog {
+    pub fn at(path: impl Into<PathBuf>) -> Self {
+        OpLog { path: path.into() }
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The log for a database, when that database's project points at a
+    /// server. `None` otherwise: a project with no remote keeps no log, and a
+    /// log started later would lack everything before it anyway (that history
+    /// is what `remote init` seeds).
+    pub fn for_db(db_path: &Path) -> Option<Self> {
+        let dir = db_path.parent()?;
+        if dir.as_os_str().is_empty() {
+            return None;
+        }
+        let config = std::fs::read_to_string(dir.join("config.toml")).ok()?;
+        let doc: toml::Value = toml::from_str(&config).ok()?;
+        doc.get("remote")?.get("url")?.as_str()?;
+        Some(OpLog::at(dir.join(FILE_NAME)))
+    }
+
+    /// Appends one op and returns it.
+    pub fn append(&self, body: OpBody) -> Result<Op, String> {
+        let op = Op {
+            op_id: uuid::Uuid::new_v4().to_string(),
+            at: chrono::Utc::now().to_rfc3339(),
+            body,
+        };
+        let line = serde_json::to_string(&Entry::Op(op.clone()))
+            .map_err(|e| format!("serializing op: {e}"))?;
+        let _lock = self.lock()?;
+        self.append_lines(&[line])?;
+        if let Ok(mut g) = APPENDED.lock() {
+            *g = Some(self.path.clone());
+        }
+        Ok(op)
+    }
+
+    /// Records the server's answers.
+    pub fn record_acks(&self, acks: &[Ack]) -> Result<(), String> {
+        if acks.is_empty() {
+            return Ok(());
+        }
+        let lines = acks
+            .iter()
+            .map(|a| {
+                serde_json::to_string(&Entry::Ack(a.clone()))
+                    .map_err(|e| format!("serializing ack: {e}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let _lock = self.lock()?;
+        self.append_lines(&lines)
+    }
+
+    pub fn read(&self) -> Result<LogState, String> {
+        let entries = self.entries()?;
+        Ok(state(&entries))
+    }
+
+    /// Drops acknowledged ops, keeping pending and rejected ones.
+    pub fn compact(&self) -> Result<usize, String> {
+        self.rewrite(|_, ack| match ack {
+            None => true,
+            Some(a) => a.is_rejected(),
+        })
+    }
+
+    /// Drops rejected ops (and acknowledged ones). Returns how many rejected
+    /// ops were dropped.
+    pub fn drop_rejected(&self) -> Result<usize, String> {
+        let before = self.read()?.rejected.len();
+        self.rewrite(|_, ack| ack.is_none())?;
+        Ok(before)
+    }
+
+    fn rewrite(&self, keep: impl Fn(&Op, Option<&Ack>) -> bool) -> Result<usize, String> {
+        let _lock = self.lock()?;
+        let entries = self.entries()?;
+        if entries.is_empty() {
+            return Ok(0);
+        }
+        let mut acks: std::collections::HashMap<&str, &Ack> = std::collections::HashMap::new();
+        for e in &entries {
+            if let Entry::Ack(a) = e {
+                // The last answer wins: a rejected op sent again may be applied.
+                acks.insert(a.op_id.as_str(), a);
+            }
+        }
+        let mut kept = Vec::new();
+        let mut dropped = 0;
+        for e in &entries {
+            if let Entry::Op(op) = e {
+                let ack = acks.get(op.op_id.as_str()).copied();
+                if keep(op, ack) {
+                    kept.push(serde_json::to_string(e).map_err(|e| e.to_string())?);
+                    if let Some(a) = ack {
+                        kept.push(
+                            serde_json::to_string(&Entry::Ack(a.clone()))
+                                .map_err(|e| e.to_string())?,
+                        );
+                    }
+                } else {
+                    dropped += 1;
+                }
+            }
+        }
+        let tmp = self.path.with_extension("jsonl.tmp");
+        let mut body = kept.join("\n");
+        if !body.is_empty() {
+            body.push('\n');
+        }
+        std::fs::write(&tmp, body).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, &self.path).map_err(|e| format!("{}: {e}", self.path.display()))?;
+        Ok(dropped)
+    }
+
+    fn entries(&self) -> Result<Vec<Entry>, String> {
+        let text = match std::fs::read_to_string(&self.path) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+            Err(e) => return Err(format!("{}: {e}", self.path.display())),
+        };
+        text.lines()
+            .enumerate()
+            .filter(|(_, l)| !l.trim().is_empty())
+            .map(|(i, l)| {
+                serde_json::from_str::<Entry>(l).map_err(|e| {
+                    format!(
+                        "{} line {} is not a log entry ({e}): {}\n\
+                         Nothing was sent. Fix or delete that line; every other line is one write.",
+                        self.path.display(),
+                        i + 1,
+                        l.chars().take(200).collect::<String>()
+                    )
+                })
+            })
+            .collect()
+    }
+
+    fn append_lines(&self, lines: &[String]) -> Result<(), String> {
+        let mut f = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.path)
+            .map_err(|e| format!("{}: {e}", self.path.display()))?;
+        let mut buf = lines.join("\n");
+        buf.push('\n');
+        // One write call: with O_APPEND the kernel places it at the end in
+        // one piece, so two processes appending at once do not interleave.
+        f.write_all(buf.as_bytes())
+            .and_then(|_| f.sync_data())
+            .map_err(|e| format!("{}: {e}", self.path.display()))
+    }
+
+    /// A lock file held while appending or rewriting.
+    ///
+    /// Appends alone would not need it (O_APPEND), but compaction replaces
+    /// the file, and an append that lands in the old file after compaction
+    /// read it would be lost. `std::fs::File::lock` would do this, but it is
+    /// newer than this crate's minimum Rust, so this is `create_new` on a
+    /// sibling file, which is atomic on every filesystem the CLI runs on.
+    fn lock(&self) -> Result<LockGuard, String> {
+        let path = self.path.with_extension("lock");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            match std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&path)
+            {
+                Ok(_) => return Ok(LockGuard { path }),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    // A process that died holding the lock leaves the file
+                    // behind. Nothing holds it for more than a rewrite.
+                    let stale = std::fs::metadata(&path)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|t| t.elapsed().ok())
+                        .is_some_and(|age| age > std::time::Duration::from_secs(60));
+                    if stale {
+                        let _ = std::fs::remove_file(&path);
+                        continue;
+                    }
+                    if std::time::Instant::now() > deadline {
+                        return Err(format!(
+                            "{} has been held for 10s by another deciduous process. \
+                             If none is running, delete it.",
+                            path.display()
+                        ));
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(e) => return Err(format!("{}: {e}", path.display())),
+            }
+        }
+    }
+}
+
+struct LockGuard {
+    path: PathBuf,
+}
+
+impl Drop for LockGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.path);
+    }
+}
+
+fn state(entries: &[Entry]) -> LogState {
+    let mut acks: std::collections::HashMap<&str, &Ack> = std::collections::HashMap::new();
+    for e in entries {
+        if let Entry::Ack(a) = e {
+            acks.insert(a.op_id.as_str(), a);
+        }
+    }
+    let mut st = LogState::default();
+    for e in entries {
+        if let Entry::Op(op) = e {
+            match acks.get(op.op_id.as_str()) {
+                None => st.pending.push(op.clone()),
+                Some(a) if a.is_rejected() => st.rejected.push((op.clone(), (*a).clone())),
+                Some(_) => st.acked += 1,
+            }
+        }
+    }
+    st
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn status(cid: &str, s: &str) -> OpBody {
+        let mut set = Map::new();
+        set.insert("status".into(), Value::String(s.into()));
+        OpBody::UpdateNode {
+            change_id: cid.into(),
+            set,
+            metadata: Map::new(),
+        }
+    }
+
+    fn ack(op: &Op, result: &str) -> Ack {
+        Ack {
+            op_id: op.op_id.clone(),
+            result: result.into(),
+            reason: (result == "rejected").then(|| "no".into()),
+            at: "t".into(),
+        }
+    }
+
+    #[test]
+    fn an_update_serializes_only_the_fields_it_changed() {
+        let v = serde_json::to_value(Entry::Op(Op {
+            op_id: "o".into(),
+            at: "t".into(),
+            body: status("c", "completed"),
+        }))
+        .unwrap();
+        assert_eq!(
+            v,
+            serde_json::json!({"entry":"op","op_id":"o","at":"t","kind":"update_node","change_id":"c","set":{"status":"completed"}})
+        );
+    }
+
+    #[test]
+    fn acked_ops_are_compacted_away_and_rejected_ones_kept() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log = OpLog::at(dir.path().join(FILE_NAME));
+        let a = log.append(status("a", "completed")).unwrap();
+        let b = log.append(status("b", "completed")).unwrap();
+        let c = log.append(status("c", "completed")).unwrap();
+        log.record_acks(&[ack(&a, "applied"), ack(&b, "rejected")])
+            .unwrap();
+
+        let st = log.read().unwrap();
+        assert_eq!(st.pending, vec![c.clone()]);
+        assert_eq!(st.rejected.len(), 1);
+        assert_eq!(st.acked, 1);
+
+        assert_eq!(log.compact().unwrap(), 1);
+        let st = log.read().unwrap();
+        assert_eq!((st.pending.len(), st.rejected.len(), st.acked), (1, 1, 0));
+
+        assert_eq!(log.drop_rejected().unwrap(), 1);
+        let st = log.read().unwrap();
+        assert_eq!((st.pending.len(), st.rejected.len()), (1, 0));
+        assert_eq!(st.pending[0].op_id, c.op_id);
+    }
+
+    #[test]
+    fn a_corrupt_line_is_an_error_naming_the_line() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join(FILE_NAME);
+        std::fs::write(&path, "{\"entry\":\"op\"\n").unwrap();
+        let err = OpLog::at(&path).read().unwrap_err();
+        assert!(err.contains("line 1"), "{err}");
+    }
+
+    #[test]
+    fn a_database_without_a_remote_has_no_log() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let db = dir.path().join("deciduous.db");
+        assert!(OpLog::for_db(&db).is_none());
+        std::fs::write(
+            dir.path().join("config.toml"),
+            "[remote]\nurl = \"http://x\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            OpLog::for_db(&db).unwrap().path(),
+            dir.path().join(FILE_NAME)
+        );
+    }
+}

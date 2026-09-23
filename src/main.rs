@@ -548,11 +548,23 @@ enum RemoteAction {
     /// Show how far the local database has drifted from the server
     Status,
 
-    /// Send the server what this project's local graph has and it does not
+    /// Send the server the writes waiting in .deciduous/remote-log.jsonl
     ///
-    /// Only nodes, edges and documents the server lacks are sent, so nothing
-    /// changed on the server since is overwritten by a stale local copy.
+    /// Every local write is logged as an operation naming only what it
+    /// changed; this replays the ones the server has not acknowledged, in
+    /// order. The server applies each at most once, so pushing twice is safe.
     Push {
+        /// Discard the ops the server rejected (after reading why with
+        /// `remote status`)
+        #[arg(long, conflicts_with_all = ["seed", "overwrite"])]
+        drop_rejected: bool,
+
+        /// Also send nodes, edges and documents the server lacks that no op
+        /// covers: history written before this project had a remote. Never
+        /// changes a row the server already has.
+        #[arg(long, conflicts_with = "overwrite")]
+        seed: bool,
+
         /// Send the whole local graph and replace the server's copy of every
         /// row it already has (the pre-1.0.3 behaviour)
         #[arg(long)]
@@ -1266,6 +1278,10 @@ fn main() {
         }
     };
 
+    // Declared after `db`, so it drops first: whatever this command queued
+    // for the server is sent before the process exits.
+    let _replay = deciduous::remote::ReplayOnExit;
+
     match args.command {
         Command::Init { .. } => unreachable!(),   // Handled above
         Command::Update { .. } => unreachable!(), // Handled above
@@ -1416,7 +1432,6 @@ fn main() {
                         branch_str,
                         date_str
                     );
-                    deciduous::remote::push_after_write(&db, &[id]);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1443,7 +1458,6 @@ fn main() {
                         to_id,
                         edge_type
                     );
-                    deciduous::remote::push_after_write(&db, &[from_id, to_id]);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1458,7 +1472,6 @@ fn main() {
             match db.delete_edge(from_id, to_id) {
                 Ok(()) => {
                     println!("{} edge ({} -> {})", "Removed".red(), from_id, to_id);
-                    deciduous::remote::warn_removal_is_local_only("edge");
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1487,7 +1500,6 @@ fn main() {
                             summary.node_title,
                             summary.edges_deleted
                         );
-                        deciduous::remote::warn_removal_is_local_only("node");
                     }
                 }
                 Err(e) => {
@@ -1502,7 +1514,6 @@ fn main() {
             match db.update_node_status(id, &status) {
                 Ok(()) => {
                     println!("{} node {} status to '{}'", "Updated".green(), id, status);
-                    deciduous::remote::push_after_write(&db, &[id]);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1550,7 +1561,6 @@ fn main() {
                         id,
                         effective_prompt.len()
                     );
-                    deciduous::remote::push_after_write(&db, &[id]);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -2122,6 +2132,33 @@ fn main() {
                                 "  server holds {} nodes, {} edges, {} documents",
                                 counts.nodes, counts.edges, counts.documents
                             );
+
+                            // History written before the remote existed has no
+                            // ops in the log (the log starts now), so it is
+                            // sent once here, insert-only: a row the server
+                            // already has is never replaced.
+                            let seeded = db
+                                .get_graph()
+                                .map_err(|e| format!("reading the local graph: {e}"))
+                                .and_then(|g| {
+                                    serde_json::to_value(&g)
+                                        .map_err(|e| format!("serializing the local graph: {e}"))
+                                })
+                                .and_then(|g| deciduous::remote::push_missing(&remote, &g));
+                            match seeded {
+                                Ok((None, _)) => {}
+                                Ok((Some(r), _)) => println!(
+                                    "  sent {} local node(s), {} edge(s) the server lacked",
+                                    r.nodes.upserted, r.edges.upserted
+                                ),
+                                Err(e) => {
+                                    eprintln!(
+                                        "{} the remote is configured, but the local history was not sent: {e}\n\
+                                         Send it with `deciduous remote push --seed`.",
+                                        "Warning:".yellow()
+                                    );
+                                }
+                            }
                             println!(
                                 "\nWritten to .deciduous/config.toml. The token stays in {}.",
                                 deciduous::remote::TOKEN_ENV
@@ -2234,7 +2271,11 @@ fn main() {
                     }
                 }
 
-                RemoteAction::Push { overwrite } => {
+                RemoteAction::Push {
+                    overwrite,
+                    drop_rejected,
+                    seed,
+                } => {
                     let cfg = Config::load();
                     let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
                         Ok(r) => r,
@@ -2243,6 +2284,63 @@ fn main() {
                             std::process::exit(1);
                         }
                     };
+                    let Some(log) = db.oplog() else {
+                        eprintln!(
+                            "{} this database has no server log: its .deciduous/config.toml has no [remote] url \
+                             (DECIDUOUS_DB_PATH may point at another project's database).",
+                            "Error:".red()
+                        );
+                        std::process::exit(1);
+                    };
+
+                    if drop_rejected {
+                        match log.drop_rejected() {
+                            Ok(n) => println!(
+                                "{} {} rejected op(s) from {}",
+                                "Dropped".yellow(),
+                                n,
+                                log.path().display()
+                            ),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        }
+                        return;
+                    }
+
+                    match deciduous::remote::replay(&remote, &log) {
+                        Ok(r) if r.sent == 0 => println!(
+                            "{} no writes are waiting in {}",
+                            "Nothing to push:".green(),
+                            log.path().display()
+                        ),
+                        Ok(r) => {
+                            println!(
+                                "{} {} op(s) to {}: {} applied, {} already there, {} rejected",
+                                "Pushed".green(),
+                                r.sent,
+                                remote.workspace.cyan(),
+                                r.applied,
+                                r.already,
+                                r.rejected.len()
+                            );
+                            deciduous::remote::print_rejected(&r.rejected, &log);
+                        }
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
+                            eprintln!(
+                                "{waiting} write(s) still waiting in {}.",
+                                log.path().display()
+                            );
+                            std::process::exit(1);
+                        }
+                    }
+
+                    if !(seed || overwrite) {
+                        return;
+                    }
 
                     let graph = match db.get_graph() {
                         Ok(g) => match serde_json::to_value(&g) {
@@ -2284,7 +2382,7 @@ fn main() {
                         Ok((None, _)) => {
                             println!(
                                 "{} the server already has every live node and edge in the local graph ({})",
-                                "Nothing to push:".green(),
+                                "Nothing to seed:".green(),
                                 remote.workspace.cyan()
                             );
                         }
@@ -2292,7 +2390,7 @@ fn main() {
                             deciduous::remote::report_refused(&r, &graph);
                             println!(
                                 "{} {} -> {}",
-                                "Pushed:".green(),
+                                if overwrite { "Overwrote:" } else { "Seeded:" }.green(),
                                 remote.workspace.cyan(),
                                 remote.url
                             );
@@ -2351,6 +2449,23 @@ fn main() {
                             }
                         },
                     };
+
+                    // Unsent local writes go up first. Otherwise the pull
+                    // reads a server that lacks them and reports a
+                    // difference that is only this machine's queue.
+                    if let Some(log) = db.oplog() {
+                        match deciduous::remote::replay(&remote, &log) {
+                            Ok(r) => deciduous::remote::print_rejected(&r.rejected, &log),
+                            Err(e) => {
+                                eprintln!(
+                                    "{} could not send the writes waiting in {} first: {e}\nNothing was pulled.",
+                                    "Error:".red(),
+                                    log.path().display()
+                                );
+                                std::process::exit(1);
+                            }
+                        }
+                    }
 
                     match deciduous::remote::pull(&remote, &db, &store) {
                         Ok(r) => {

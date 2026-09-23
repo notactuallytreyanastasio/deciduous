@@ -497,44 +497,156 @@ pub fn report_refused(r: &ImportReport, graph: &Value) {
     }
 }
 
-/// Says that edits to nodes the server deleted were not sent.
-fn warn_edits_to_deleted(deleted: &[DeletedOnServer]) {
-    use colored::Colorize;
-    for d in deleted {
-        eprintln!(
-            "{} node {} \"{}\" was deleted on the server at {}, so this edit was not sent. \
-             It stays in the local database until `deciduous remote pull` removes the node here; \
-             to keep the change, add it again as a new node.",
-            "Warning:".yellow(),
-            d.id,
-            d.title,
-            d.deleted_at
-        );
+/// What one replay of the log did.
+#[derive(Debug, Default)]
+pub struct ReplayReport {
+    /// Ops sent.
+    pub sent: usize,
+    /// Ops the server changed something for.
+    pub applied: usize,
+    /// Ops whose effect the server already had: a create for a row it holds,
+    /// a delete for one it does not, or an op id it applied before.
+    pub already: usize,
+    /// Ops the server refused, with its reason. They stay in the log.
+    pub rejected: Vec<(crate::oplog::Op, String)>,
+}
+
+/// Ops per request. The server takes up to 5,000; a smaller batch keeps one
+/// request well inside its body limit and gets acks written sooner.
+const REPLAY_BATCH: usize = 500;
+
+impl Remote {
+    /// Sends ops to `POST /ops` and returns the server's answer for each.
+    pub fn post_ops(&self, ops: &[crate::oplog::Op]) -> Result<Vec<crate::oplog::Ack>, String> {
+        #[derive(Deserialize)]
+        struct Answer {
+            op_id: String,
+            result: String,
+            #[serde(default)]
+            reason: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct Reply {
+            results: Vec<Answer>,
+        }
+
+        let payload = serde_json::json!({
+            "workspace": self.workspace,
+            "ops": ops,
+        });
+        let reply: Reply = self
+            .post("/ops")
+            .timeout(std::time::Duration::from_secs(120))
+            .send_json(payload)
+            .map_err(describe)?
+            .into_json()
+            .map_err(|e| format!("the server's response was not an ops report: {e}"))?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let answers: std::collections::HashMap<String, Answer> = reply
+            .results
+            .into_iter()
+            .map(|a| (a.op_id.clone(), a))
+            .collect();
+        ops.iter()
+            .map(|op| {
+                let a = answers.get(&op.op_id).ok_or_else(|| {
+                    format!(
+                        "the server answered for {} of {} ops and not for {} ({}); nothing was marked sent",
+                        answers.len(),
+                        ops.len(),
+                        op.op_id,
+                        op.body.describe()
+                    )
+                })?;
+                match a.result.as_str() {
+                    "applied" | "exists" | "absent" | "duplicate" | "rejected" => {}
+                    other => {
+                        return Err(format!(
+                            "the server answered {other:?} for {} ({}); this CLI knows applied, exists, absent, duplicate and rejected",
+                            op.op_id,
+                            op.body.describe()
+                        ))
+                    }
+                }
+                Ok(crate::oplog::Ack {
+                    op_id: op.op_id.clone(),
+                    result: a.result.clone(),
+                    reason: a.reason.clone(),
+                    at: now.clone(),
+                })
+            })
+            .collect()
     }
 }
 
-/// Pushes to the server after a local write, without letting the server turn a
-/// successful write into a failed command.
+/// Sends every pending op in the log to the server, in order, records the
+/// answers and compacts the log.
+///
+/// Acks are written batch by batch, so a failure halfway leaves the first
+/// half marked and the rest pending. A batch the server applied but whose
+/// answer never arrived is sent again next time and answered `duplicate`.
+pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, String> {
+    let state = log.read()?;
+    let mut report = ReplayReport::default();
+
+    for batch in state.pending.chunks(REPLAY_BATCH) {
+        let acks = remote.post_ops(batch)?;
+        log.record_acks(&acks)?;
+        report.sent += batch.len();
+        for (op, ack) in batch.iter().zip(&acks) {
+            match ack.result.as_str() {
+                "applied" => report.applied += 1,
+                "rejected" => report.rejected.push((
+                    op.clone(),
+                    ack.reason
+                        .clone()
+                        .unwrap_or_else(|| "no reason given".into()),
+                )),
+                _ => report.already += 1,
+            }
+        }
+    }
+
+    log.compact()?;
+    Ok(report)
+}
+
+/// Prints the ops a server refused, loudly, with what to do about them.
+pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplog::OpLog) {
+    use colored::Colorize;
+    if rejected.is_empty() {
+        return;
+    }
+    eprintln!(
+        "{} the server refused {} write(s):",
+        "Rejected:".red().bold(),
+        rejected.len()
+    );
+    for (op, reason) in rejected {
+        eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+    }
+    eprintln!(
+        "They stay in {} and the local graph keeps them. \
+         `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
+        log.path().display()
+    );
+}
+
+/// Replays the log after a command that wrote to it, without letting the
+/// server turn a successful local write into a failed command.
 ///
 /// The CLI writes to the local database and the agents write through the MCP
 /// server. A local write the server never sees is a fork, not a cache: this is
 /// how one workspace ended up with 502 nodes locally and 0 on the server, with
-/// neither side saying a word. So every write pushes.
+/// neither side saying a word. So every write is logged, and every command
+/// that logged one replays the log before it exits.
 ///
-/// `touched` names the nodes this command changed, by local id. They are sent
-/// even when the server already has them: `missing_on_server` only finds what
-/// the server lacks, so on its own it would push a new node but never a changed
-/// one, and `status`/`prompt` would go on diverging silently. The server's
-/// import replaces `status`, `title`, `description` and `metadata` on a
-/// change_id it already holds, so re-sending a node is what applies an edit.
-///
-/// Best effort deliberately. The local write has already happened and is not
-/// rolled back: the CLI has to keep working on a plane, and a server being down
-/// must not stop anyone recording a decision. A failure prints what is waiting
-/// and the command to send it; the records stay in the local database and the
-/// next successful push — automatic or manual — takes them, which is what the
-/// full-diff half of the payload is for.
-pub fn push_after_write(db: &Database, touched: &[i32]) {
+/// Best effort deliberately. The CLI has to keep working on a plane, and a
+/// server being down must not stop anyone recording a decision. A failure
+/// says how many writes are waiting and where; they stay in the log, and the
+/// next write or `deciduous remote push` sends them.
+pub fn replay_after_write(log: &crate::oplog::OpLog) {
     use colored::Colorize;
 
     let cfg = Config::load();
@@ -542,129 +654,35 @@ pub fn push_after_write(db: &Database, touched: &[i32]) {
         return;
     }
     let dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let pushed = Remote::resolve(&cfg, &dir).and_then(|remote| {
-        let graph = db
-            .get_graph()
-            .map_err(|e| format!("reading the local graph: {e}"))
-            .and_then(|g| {
-                serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
-            })?;
-        let server = remote.export()?;
-        let (mut payload, _, _) = missing_on_server(&graph, &server);
-        // A touched node the server has deleted is not re-sent: the server
-        // refuses it, and before it did, the push rewrote the tombstone and
-        // the next pull dropped the edit without a word. Say so instead.
-        let deleted: Vec<DeletedOnServer> = deleted_on_server(&graph, &server)
-            .into_iter()
-            .filter(|d| touched.contains(&(d.id as i32)))
-            .collect();
-        warn_edits_to_deleted(&deleted);
-        let live_touched: Vec<i32> = touched
-            .iter()
-            .copied()
-            .filter(|t| !deleted.iter().any(|d| d.id == *t as i64))
-            .collect();
-        let added = add_touched_nodes(&mut payload, &graph, &live_touched);
-        if payload["nodes"].as_array().is_some_and(|n| n.is_empty())
-            && payload["edges"].as_array().is_some_and(|e| e.is_empty())
-            && added == 0
-        {
-            return Ok((remote, None));
+    let result = Remote::resolve(&cfg, &dir).and_then(|remote| replay(&remote, log));
+    match result {
+        Ok(report) => print_rejected(&report.rejected, log),
+        Err(e) => {
+            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
+            eprintln!(
+                "{} the local write succeeded but the server did not get it: {e}\n\
+                 {waiting} write(s) queued in {}. They are sent on the next write, or now with \
+                 `deciduous remote push` once the server is reachable.",
+                "Warning:".yellow(),
+                log.path().display(),
+            );
         }
-        remote.import(payload).map(|r| {
-            report_refused(&r, &graph);
-            (remote, Some(r))
-        })
-    });
-    match pushed {
-        Ok((_, None)) => {}
-        Ok((remote, Some(r))) => {
-            // Quiet on the expected case: one command, one node or edge sent.
-            // A larger number means a backlog just cleared, which is worth
-            // saying, because the user was told about it when it built up.
-            if r.nodes.upserted + r.edges.upserted > 2 {
-                println!(
-                    "   {} {} node(s), {} edge(s) to {}",
-                    "Pushed".green(),
-                    r.nodes.upserted,
-                    r.edges.upserted,
-                    remote.workspace.cyan()
-                );
-            }
-        }
-        Err(e) => eprintln!(
-            "{} the local write succeeded but the server did not get it: {e}\n\
-             {} `deciduous remote push` once the server is reachable. Until then the \
-             local graph and the graph the agents read are different graphs.",
-            "Warning:".yellow(),
-            "Run:".yellow(),
-        ),
     }
 }
 
-/// Adds the nodes `touched` names to a push payload, skipping any the diff
-/// already put there. Returns how many were added.
-fn add_touched_nodes(payload: &mut Value, graph: &Value, touched: &[i32]) -> usize {
-    use std::collections::HashSet;
-
-    if touched.is_empty() {
-        return 0;
-    }
-    let already: HashSet<String> = payload["nodes"]
-        .as_array()
-        .map(|n| {
-            n.iter()
-                .filter_map(|n| n["change_id"].as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-    let extra: Vec<Value> = graph["nodes"]
-        .as_array()
-        .map(|nodes| {
-            nodes
-                .iter()
-                .filter(|n| {
-                    n["id"]
-                        .as_i64()
-                        .is_some_and(|id| touched.contains(&(id as i32)))
-                        && n["change_id"]
-                            .as_str()
-                            .is_some_and(|c| !already.contains(c))
-                })
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default();
-    let added = extra.len();
-    if let Some(nodes) = payload["nodes"].as_array_mut() {
-        nodes.extend(extra);
-    }
-    added
-}
-
-/// Says that a local removal stopped at the local database.
+/// Replays the log when dropped, if this process appended to it.
 ///
-/// `POST /import` upserts `status`, `title`, `description` and `metadata` on a
-/// change_id the server already holds, and nothing else: `deleted_at` is not in
-/// its replace list, and a hard-deleted local row has nothing left to send
-/// anyway. So a `delete` or `unlink` here cannot reach the server, and saying
-/// nothing would recreate exactly the silent divergence the automatic push
-/// exists to end.
-pub fn warn_removal_is_local_only(what: &str) {
-    use colored::Colorize;
+/// Held for the life of `main`, so every command that writes (add, link,
+/// status, prompt, delete, the archaeology commands, anything added later)
+/// sends its ops without each one having to remember to.
+pub struct ReplayOnExit;
 
-    let cfg = Config::load();
-    if !cfg.remote.is_configured() {
-        return;
+impl Drop for ReplayOnExit {
+    fn drop(&mut self) {
+        if let Some(log) = crate::oplog::appended_this_process() {
+            replay_after_write(&log);
+        }
     }
-    let url = cfg.remote.url.unwrap_or_default();
-    eprintln!(
-        "{} the {what} was removed locally only. {url} still has it, and \
-         `deciduous remote push` will not remove it there: the server's import \
-         applies additions and edits, not removals. Remove it through the agent \
-         (the deciduous MCP tools) as well, or the two graphs stay different.",
-        "Note:".yellow(),
-    );
 }
 
 #[derive(Debug, Default)]
@@ -1062,44 +1080,6 @@ mod tests {
         assert_eq!(g["nodes"][0]["change_id"], "c");
         assert_eq!(g["edges"][0]["from_change_id"], "b");
         assert_eq!(g["edges"][0]["to_change_id"], "c");
-    }
-
-    #[test]
-    fn a_changed_node_the_server_already_has_is_still_sent_when_touched() {
-        // The whole point of `touched`: `status`/`prompt` edit a node the
-        // server already holds, so the missing-diff finds nothing and the edit
-        // would never leave this machine.
-        let local = serde_json::json!({
-            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}],
-            "edges": [],
-            "documents": []
-        });
-        let (mut payload, n, m) = missing_on_server(&local, &server(&["a", "b"], &[]));
-        assert_eq!((n, m), (0, 0), "nothing is missing, by construction");
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[2]), 1);
-        assert_eq!(payload["nodes"][0]["change_id"], "b");
-    }
-
-    #[test]
-    fn a_touched_node_the_diff_already_sends_is_not_sent_twice() {
-        let local = serde_json::json!({
-            "nodes": [{"id": 1, "change_id": "a"}],
-            "edges": [],
-            "documents": []
-        });
-        let (mut payload, n, _) = missing_on_server(&local, &server(&[], &[]));
-        assert_eq!(n, 1);
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[1]), 0);
-        assert_eq!(payload["nodes"].as_array().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn touching_nothing_adds_nothing() {
-        let local = serde_json::json!({"nodes": [{"id": 1, "change_id": "a"}], "edges": []});
-        let (mut payload, _, _) = missing_on_server(&local, &server(&["a"], &[]));
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[]), 0);
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[99]), 0);
-        assert!(payload["nodes"].as_array().unwrap().is_empty());
     }
 
     #[test]
