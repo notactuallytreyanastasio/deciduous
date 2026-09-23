@@ -406,9 +406,9 @@ fn r6_bypass_abandoned_queries_do_not_pile_up() {
         statuses.iter().any(|s| s == &Ok(503)),
         "12 slow queries all ran at once, none was turned away: {statuses:?}"
     );
-    // A stopped query ends at its next op, and no op here runs longer than
-    // about 5 s, so the daemon is free again soon after the answers, not
-    // after the abandoned queries would have finished (35 s each).
+    // A stopped query's process is killed at the limit, so the daemon is
+    // free again soon after the answers, not after the abandoned queries
+    // would have finished (35 s each).
     let t = Instant::now();
     loop {
         let (st, body, _) = query(&d, "SELECT 1");
@@ -419,6 +419,68 @@ fn r6_bypass_abandoned_queries_do_not_pile_up() {
         assert!(
             t.elapsed() < Duration::from_secs(7),
             "stopped queries still held the daemon {:?} after they were answered",
+            t.elapsed()
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// R6 bypass, round 2: sqlite3_interrupt is seen between ops, and one op can
+/// run far past the limit. LIKE with a leading % and a 50,000-byte pattern
+/// over a 1 MB value is a single op of about 50 s (GLOB the same): four of
+/// them sent by clients that gave up at 2 s held the daemon at 398% CPU and
+/// every /query got 503 for about 50 s, repeatably.
+#[test]
+fn r6_bypass_one_long_op_is_stopped_at_the_limit_too() {
+    let Some(()) = local("r6_bypass_one_long_op_is_stopped_at_the_limit_too") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let s = d.as_server();
+    let like = "SELECT printf('%.*c',999999,'a') LIKE ('%' || printf('%.*c',49990,'a') || 'b')";
+    let glob = "SELECT printf('%.*c',999999,'a') GLOB '*'||printf('%.*c',49990,'a')||'b'";
+
+    // Waited for: answered at the limit with the reason.
+    let t = Instant::now();
+    let (st, body, _) = query(&d, like);
+    assert_eq!(st, 400, "{body}");
+    assert!(
+        body["error"].as_str().unwrap_or("").contains("time limit"),
+        "{body}"
+    );
+    assert!(
+        t.elapsed() < Duration::from_millis(6500),
+        "{:?}",
+        t.elapsed()
+    );
+
+    // Abandoned: four clients give up at 2 s.
+    let t = Instant::now();
+    std::thread::scope(|scope| {
+        for sql in [like, glob, like, glob] {
+            let s = s.clone();
+            scope.spawn(move || {
+                let _ = s.try_request(
+                    "POST",
+                    "/api/v1/graphs/g/query",
+                    Some(&s.bearer()),
+                    &[("content-type", "application/json")],
+                    Some(json!({ "sql": sql }).to_string().as_bytes()),
+                    Duration::from_secs(2),
+                );
+            });
+        }
+    });
+    loop {
+        let (st, body, _) = query(&d, "SELECT 1");
+        if st == 200 {
+            break;
+        }
+        assert_eq!(st, 503, "SELECT 1 got {st}: {body}");
+        assert!(
+            t.elapsed() < Duration::from_secs(8),
+            "four abandoned single-op queries still held every /query slot {:?} after they were sent: {body}",
             t.elapsed()
         );
         std::thread::sleep(Duration::from_millis(200));

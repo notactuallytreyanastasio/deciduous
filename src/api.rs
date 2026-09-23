@@ -45,6 +45,11 @@ pub struct ApiConfig {
     pub port: u16,
     pub data_dir: PathBuf,
     pub token: String,
+    /// The deciduous executable. Each `/query` runs in a child process of
+    /// it (`<exe> __api-query`, see [`query_child_main`]), so a query past
+    /// its time limit can be killed wherever it is. `serve --api` passes
+    /// its own executable.
+    pub query_exe: PathBuf,
 }
 
 /// A running API server (owned by tests or by the CLI loop).
@@ -65,6 +70,9 @@ pub struct ApiServer {
     registry: Arc<Registry>,
     token: String,
 }
+
+/// The executable `/query` children run, set once by [`ApiServer::bind`].
+static QUERY_EXE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
 /// Set by the panic hook when tiny_http's accept thread panics, which it
 /// does without telling `recv`.
@@ -125,6 +133,13 @@ impl ApiServer {
             .ok_or_else(|| std::io::Error::other("could not resolve bind address"))?;
         raise_open_file_limit();
         watch_tiny_http_panics();
+        if !config.query_exe.is_file() {
+            return Err(std::io::Error::other(format!(
+                "the executable for /query children, {}, is not a file",
+                config.query_exe.display()
+            )));
+        }
+        let _ = QUERY_EXE.set(config.query_exe.clone());
         let listener = std::net::TcpListener::bind(addr)?;
         let server = serve_on(&listener)?;
         Ok(Self {
@@ -558,23 +573,26 @@ fn tool_result_to_json(result: ToolCallResult) -> Value {
 /// never finishes, and the daemon runs one thread per request: four aborted
 /// requests pinned it at 400% CPU until it was killed.
 ///
-/// It is enforced by `sqlite3_interrupt` from the request's thread, not by
-/// a progress handler. A progress handler runs every N VM ops, and a single
-/// op can take seconds: `instr()` over two values near the length cap is
-/// one op of about 4.5 s, so eight rows of it ran 35.89 s past a handler
-/// that checked the clock every 10,000 ops. An interrupt is seen at the
-/// next op, and the caller gets its answer at the limit either way.
+/// It is enforced by killing the child process the query runs in, not by
+/// anything inside SQLite. A progress handler runs every N VM ops and
+/// `sqlite3_interrupt` is seen between ops, and a single op can run far past
+/// the limit: `instr()` over two values near the length cap is one op of
+/// about 4.5 s, and LIKE with a leading % and a 50,000-byte pattern over a
+/// 1 MB value one of about 50 s. Four of those, from clients that gave up,
+/// held every /query slot and four cores for 50 s after an interrupt. Lower
+/// SQLite limits would only bound the functions someone thought of (LIKE,
+/// GLOB, instr, replace, two-argument trim are all O(n*m) in one op); a
+/// killed process stops whatever it was doing.
 const QUERY_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 
-/// Queries that may execute at once, counting stopped ones still finishing
-/// their last op. Past this, `/query` answers 503 at once: every query is
-/// one thread at full CPU, and a client that gives up does not stop it.
+/// Queries that may execute at once. Past this, `/query` answers 503 at
+/// once: every query is a process at full CPU for up to the time limit.
 const QUERY_MAX_RUNNING: usize = 4;
 
 static QUERIES_RUNNING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
-/// A place among the `QUERY_MAX_RUNNING`, held by the thread executing the
-/// query, so it is given back when the SQL stops, not when the answer goes.
+/// A place among the `QUERY_MAX_RUNNING`, held until the query's child
+/// process has exited (killed, if it ran past the limit) and been reaped.
 struct QuerySlot;
 
 impl QuerySlot {
@@ -668,40 +686,128 @@ fn sql_error(e: rusqlite::Error) -> ApiError {
             "statement refused: /query may only read this graph's tables \
              (no ATTACH, no pragmas beyond table/index/foreign-key info)",
         )
-    } else if msg.contains("interrupted") {
-        time_limit_error()
     } else {
         ApiError::bad_request(&format!("SQL error: {msg}"))
     }
 }
 
 fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, ApiError> {
-    let slot = QuerySlot::take().ok_or_else(|| {
+    use std::process::{Command, Stdio};
+    let _slot = QuerySlot::take().ok_or_else(|| {
         ApiError::unavailable(&format!(
             "{QUERY_MAX_RUNNING} queries are already running on this daemon; \
-             try again when one has finished (each stops after {} s)",
+             try again in a moment (each is stopped at {} s)",
             QUERY_TIME_LIMIT.as_secs()
         ))
     })?;
-    let conn = open_query_connection(db_path)?;
-    let interrupt = conn.get_interrupt_handle();
+    let exe = QUERY_EXE
+        .get()
+        .ok_or_else(|| ApiError::internal("no executable for /query was configured"))?;
+    let mut child = Command::new(exe)
+        .arg(QUERY_CHILD_ARG)
+        .arg(db_path)
+        .arg(limit.to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .env_remove("DECIDUOUS_API_TOKEN")
+        .spawn()
+        .map_err(|e| ApiError::internal(&format!("starting the query process: {e}")))?;
+    let deadline = std::time::Instant::now() + QUERY_TIME_LIMIT;
+    // Stdin and stdout on threads of their own: the SQL can be up to the
+    // body limit and the answer up to 8 MiB, more than a pipe holds, so
+    // writing or reading on this thread could block past the deadline.
+    let mut stdin = child.stdin.take().expect("stdin is piped");
     let sql = sql.to_string();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        let _ = stdin.write_all(sql.as_bytes());
+    });
+    let mut stdout = child.stdout.take().expect("stdout is piped");
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
-        let _slot = slot;
-        let _ = tx.send(execute_query(&conn, &sql, limit));
+        let mut out = Vec::new();
+        let read = stdout.read_to_end(&mut out).map(|_| out);
+        let _ = tx.send(read);
     });
-    match rx.recv_timeout(QUERY_TIME_LIMIT) {
-        Ok(result) => result,
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            // The executing thread sees this at its next op and ends,
-            // releasing its slot; the caller is answered now regardless.
-            interrupt.interrupt();
-            Err(time_limit_error())
+    let output = rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()));
+    let output = match output {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(ApiError::internal(&format!(
+                "reading the query process: {e}"
+            )));
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(ApiError::internal(
-            "the query thread ended without an answer",
-        )),
+        Err(_) => {
+            // Past the limit: stop it now, wherever it is, and reap it
+            // before the slot is given back.
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(time_limit_error());
+        }
+    };
+    let status = child
+        .wait()
+        .map_err(|e| ApiError::internal(&format!("waiting for the query process: {e}")))?;
+    let answer: Value = serde_json::from_slice(&output).map_err(|_| {
+        ApiError::internal(&format!(
+            "the query process ended ({status}) without an answer"
+        ))
+    })?;
+    match (answer.get("ok"), answer.get("error")) {
+        (Some(result), _) => Ok(result.clone()),
+        (None, Some(err)) => Err(ApiError {
+            status: err["status"].as_u64().unwrap_or(500) as u16,
+            message: err["message"]
+                .as_str()
+                .unwrap_or("query failed")
+                .to_string(),
+        }),
+        _ => Err(ApiError::internal(&format!(
+            "the query process answered something unreadable ({status})"
+        ))),
+    }
+}
+
+/// The first argument that makes the deciduous executable a `/query` child
+/// instead of the CLI. Handled before argument parsing, so it opens nothing
+/// the CLI would (the project database, config).
+pub const QUERY_CHILD_ARG: &str = "__api-query";
+
+/// A `/query` child: `<exe> __api-query <db path> <row limit>`, SQL on
+/// stdin, one JSON object on stdout, `{"ok": result}` or `{"error":
+/// {"status", "message"}}`. `args` are the ones after QUERY_CHILD_ARG.
+/// Returns the exit code. The parent kills it at the time limit.
+pub fn query_child_main(args: &[String]) -> i32 {
+    let answer = (|| -> Result<Value, ApiError> {
+        let [db_path, limit] = args else {
+            return Err(ApiError::internal(&format!(
+                "{QUERY_CHILD_ARG} takes a database path and a row limit, got {args:?}"
+            )));
+        };
+        let limit: usize = limit
+            .parse()
+            .map_err(|_| ApiError::internal(&format!("row limit {limit:?} is not a number")))?;
+        let mut sql = String::new();
+        std::io::stdin()
+            .read_to_string(&mut sql)
+            .map_err(|e| ApiError::internal(&format!("reading the SQL: {e}")))?;
+        let conn = open_query_connection(Path::new(db_path))?;
+        execute_query(&conn, &sql, limit)
+    })();
+    let out = match answer {
+        Ok(result) => json!({ "ok": result }),
+        Err(e) => json!({ "error": { "status": e.status, "message": e.message } }),
+    };
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    let written = serde_json::to_writer(&mut stdout, &out).is_ok() && stdout.flush().is_ok();
+    if written {
+        0
+    } else {
+        1
     }
 }
 

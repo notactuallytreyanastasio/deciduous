@@ -1250,11 +1250,23 @@ fn run_api_daemon(
         );
         return 1;
     };
+    let query_exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(e) => {
+            eprintln!(
+                "{} API mode runs each /query in a child of this executable, and its path \
+                 could not be found: {e}",
+                "Error:".red()
+            );
+            return 1;
+        }
+    };
     let config = deciduous::api::ApiConfig {
         bind: bind.clone(),
         port,
         data_dir: data_dir.clone(),
         token,
+        query_exe,
     };
     match deciduous::api::ApiServer::bind(config) {
         Ok(server) => {
@@ -1276,6 +1288,12 @@ fn run_api_daemon(
 }
 
 fn main() {
+    // A `serve --api` daemon runs each /query in a child of this executable,
+    // so a query past its time limit can be killed wherever it is.
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if raw.first().map(String::as_str) == Some(deciduous::api::QUERY_CHILD_ARG) {
+        std::process::exit(deciduous::api::query_child_main(&raw[1..]));
+    }
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
