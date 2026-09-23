@@ -397,7 +397,7 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   defp check_bounds(_spec, _value, _path), do: :ok
 
   defp check_length(spec, value, path) when is_binary(value) do
-    length = String.length(value)
+    length = chars(value)
 
     cond do
       is_integer(spec[:minLength]) and
@@ -413,6 +413,19 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   end
 
   defp check_length(_spec, _value, _path), do: :ok
+
+  @doc """
+  A string's length in codepoints, which is what every limit here counts.
+
+  Not String.length/1, which counts graphemes: "a" followed by 300
+  combining accents is one grapheme and 301 codepoints, so it passed a
+  255 limit and then failed varchar(255) (Postgres counts codepoints) as
+  an empty HTTP 500 or "add_node failed (Postgrex.Error)". A branch of 500
+  graphemes carrying 20 marks each passed the 512 limit and failed the
+  write_locks btree index (8191 bytes). Counted in codepoints, a string
+  within a limit of n is at most 4n bytes, so 512 fits any index.
+  """
+  def chars(value) when is_binary(value), do: value |> String.to_charlist() |> length()
 
   defp check_items(spec, list, path) when is_list(list) do
     max = spec[:maxItems]
@@ -455,7 +468,7 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   # Undeclared fields (update_node's free-form metadata, unknown keys) get
   # the same ceiling as declared text, so no string anywhere is unbounded.
   defp no_oversized_string(value, path) when is_binary(value) do
-    length = String.length(value)
+    length = chars(value)
 
     if length > @text_max,
       do: {:error, "#{path} is #{length} characters; the limit is #{@text_max}"},
@@ -480,7 +493,7 @@ defmodule DeciduousMcp.MCP.ArgCheck do
       else: :ok
   end
 
-  defp text_size(v) when is_binary(v), do: String.length(v)
+  defp text_size(v) when is_binary(v), do: chars(v)
 
   defp text_size(%{} = map),
     do: Enum.reduce(map, 0, fn {k, v}, acc -> acc + text_size(to_string(k)) + text_size(v) end)

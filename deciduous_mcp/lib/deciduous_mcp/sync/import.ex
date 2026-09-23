@@ -57,55 +57,93 @@ defmodule DeciduousMcp.Sync.Import do
          :ok <- validate_shapes(graph),
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []),
          :ok <- validate_edge_sizes(graph["edges"] || []) do
-      Repo.transaction(
-        fn ->
-          workspace =
-            case Workspaces.find_or_create(name) do
-              {:ok, workspace} -> workspace
-              {:error, reason} -> Repo.rollback(Workspaces.describe_name_error(name, reason))
-            end
-
-          # The same check /ops makes. Without it, `remote push --seed` (or
-          # --overwrite) from an unrelated repository with the same directory
-          # name wrote into a workspace its /ops writes were refused from.
-          # Made here, after the workspace exists, because a refused import
-          # creates nothing: the rollback takes a new workspace with it.
-          case Workspaces.claim(workspace, payload["repo_roots"], false) do
-            {:ok, _claim} -> :ok
-            {:error, reason} -> Repo.rollback(reason)
-          end
-
-          # /ops creates and add_node with a change_id take turns on each
-          # change_id, and every edge create on its pair of nodes; this
-          # upserts both without looking first. Racing it, an /ops create
-          # lost on the unique index and was answered "rejected:
-          # workspace_id has already been taken" (14 in 15 rounds), the
-          # SERVER-N4 false alarm by another path. Those locks are all
-          # taken shared on the workspace first, and this takes it
-          # exclusively: an import runs alone against them, and whoever
-          # comes after it finds its rows and answers `exists`.
-          :ok = Workspaces.lock_exclusively(workspace.id)
-
-          deleted = deleted_change_ids(workspace.id)
-          node_report = upsert_nodes(workspace.id, nodes, deleted)
-          edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)
-          doc_report = upsert_documents(workspace.id, graph["documents"] || [], deleted)
-
-          %{
-            workspace: workspace.name,
-            workspace_id: workspace.id,
-            nodes: node_report,
-            edges: edge_report,
-            documents: doc_report,
-            themes_skipped: "deciduous graph does not export themes"
-          }
-        end,
-        timeout: :infinity
-      )
+      if writes_nothing?(graph),
+        do: run_empty(name, payload["repo_roots"]),
+        else: run_writes(name, graph, nodes, payload)
     end
   end
 
   def run(_, _), do: {:error, "payload must contain a \"graph\" object"}
+
+  # An import with no rows creates no workspace and records no claim, the
+  # rule /ops has held since chapter 30. It did both: POST /import
+  # {graph: {nodes: [], edges: []}, repo_roots: [A]} left an empty
+  # workspace behind, and on a workspace an agent had made over MCP it
+  # recorded A as the claim, so the real repository's next /ops was 409
+  # claimed_by_other_repository (verification of SERVER-N6). The claim is
+  # still checked, so a workspace another repository holds is refused.
+  defp writes_nothing?(graph),
+    do: Enum.all?(~w(nodes edges documents), &((graph[&1] || []) == []))
+
+  defp run_empty(name, roots) do
+    case Workspaces.get_by_name(name) do
+      {:ok, workspace} ->
+        with {:ok, _} <- Workspaces.check_claim(workspace, roots),
+             do: {:ok, empty_report(workspace.name, workspace.id)}
+
+      {:error, :not_found} ->
+        with {:ok, _} <- Workspaces.validate_roots(roots), do: {:ok, empty_report(name, nil)}
+    end
+  end
+
+  defp empty_report(name, id) do
+    %{
+      workspace: name,
+      workspace_id: id,
+      nodes: %{imported: 0},
+      edges: %{imported: 0},
+      documents: %{imported: 0},
+      themes_skipped: "deciduous graph does not export themes"
+    }
+  end
+
+  defp run_writes(name, graph, nodes, payload) do
+    Repo.transaction(
+      fn ->
+        workspace =
+          case Workspaces.find_or_create(name) do
+            {:ok, workspace} -> workspace
+            {:error, reason} -> Repo.rollback(Workspaces.describe_name_error(name, reason))
+          end
+
+        # The same check /ops makes. Without it, `remote push --seed` (or
+        # --overwrite) from an unrelated repository with the same directory
+        # name wrote into a workspace its /ops writes were refused from.
+        # Made here, after the workspace exists, because a refused import
+        # creates nothing: the rollback takes a new workspace with it.
+        case Workspaces.claim(workspace, payload["repo_roots"], false) do
+          {:ok, _claim} -> :ok
+          {:error, reason} -> Repo.rollback(reason)
+        end
+
+        # /ops creates and add_node with a change_id take turns on each
+        # change_id, and every edge create on its pair of nodes; this
+        # upserts both without looking first. Racing it, an /ops create
+        # lost on the unique index and was answered "rejected:
+        # workspace_id has already been taken" (14 in 15 rounds), the
+        # SERVER-N4 false alarm by another path. Those locks are all
+        # taken shared on the workspace first, and this takes it
+        # exclusively: an import runs alone against them, and whoever
+        # comes after it finds its rows and answers `exists`.
+        :ok = Workspaces.lock_exclusively(workspace.id)
+
+        deleted = deleted_change_ids(workspace.id)
+        node_report = upsert_nodes(workspace.id, nodes, deleted)
+        edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)
+        doc_report = upsert_documents(workspace.id, graph["documents"] || [], deleted)
+
+        %{
+          workspace: workspace.name,
+          workspace_id: workspace.id,
+          nodes: node_report,
+          edges: edge_report,
+          documents: doc_report,
+          themes_skipped: "deciduous graph does not export themes"
+        }
+      end,
+      timeout: :infinity
+    )
+  end
 
   # Where the import goes, as a name: find_or_create runs inside the
   # transaction, after validation, so a refused import creates nothing.
@@ -368,6 +406,9 @@ defmodule DeciduousMcp.Sync.Import do
   @node_schema %{
     type: "object",
     properties: %{
+      # varchar(255), counted in codepoints: a 301-codepoint change_id was
+      # an empty HTTP 500 from the insert (verification of SERVER-N3).
+      change_id: %{type: "string", maxLength: 255},
       title: %{type: "string"},
       description: %{type: "string"},
       metadata: %{type: "object", properties: %{branch: %{type: "string"}}}
@@ -381,6 +422,7 @@ defmodule DeciduousMcp.Sync.Import do
     |> Enum.with_index()
     |> Enum.reduce_while({:ok, nodes}, fn {n, i}, ok ->
       held = %{
+        "change_id" => n["change_id"],
         "title" => n["title"],
         "description" => n["description"],
         "metadata" => n["metadata_json"]

@@ -356,8 +356,8 @@ defmodule DeciduousMcp.Web.SessionGuard do
             String.contains?(v, <<0>>) ->
               "clientInfo.#{key} contains a NUL character (U+0000), which cannot be stored"
 
-            String.length(v) > @client_info_max ->
-              "clientInfo.#{key} is #{String.length(v)} characters; the limit is #{@client_info_max}"
+            DeciduousMcp.MCP.ArgCheck.chars(v) > @client_info_max ->
+              "clientInfo.#{key} is #{DeciduousMcp.MCP.ArgCheck.chars(v)} characters; the limit is #{@client_info_max}"
 
             true ->
               nil

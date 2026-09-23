@@ -336,7 +336,8 @@ defmodule DeciduousMcp.Graph.Workspaces do
       String.match?(trimmed, ~r/[\p{Cc}\p{Cf}]/u) ->
         {:error, :control_character}
 
-      String.length(trimmed) > @max_name_length ->
+      # Codepoints, not graphemes: the column is varchar(255).
+      DeciduousMcp.MCP.ArgCheck.chars(trimmed) > @max_name_length ->
         {:error, :too_long}
 
       true ->

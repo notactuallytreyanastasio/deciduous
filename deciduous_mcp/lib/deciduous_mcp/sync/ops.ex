@@ -238,9 +238,9 @@ defmodule DeciduousMcp.Sync.Ops do
       (i = Enum.find_index(ops, &String.contains?(&1["op_id"], <<0>>))) != nil ->
         {:error, "ops[#{i}].op_id contains a NUL character (U+0000); nothing was applied"}
 
-      (i = Enum.find_index(ops, &(String.length(&1["op_id"]) > 255))) != nil ->
+      (i = Enum.find_index(ops, &(ArgCheck.chars(&1["op_id"]) > 255))) != nil ->
         {:error,
-         "ops[#{i}].op_id is #{String.length(Enum.at(ops, i)["op_id"])} characters; " <>
+         "ops[#{i}].op_id is #{ArgCheck.chars(Enum.at(ops, i)["op_id"])} characters; " <>
            "the limit is 255; nothing was applied"}
 
       true ->
@@ -1015,9 +1015,9 @@ defmodule DeciduousMcp.Sync.Ops do
             {:rejected,
              "#{op["kind"]} #{key} contains a NUL character (U+0000); no change_id can hold one"}
 
-          String.length(cid) > 255 ->
+          ArgCheck.chars(cid) > 255 ->
             {:rejected,
-             "#{op["kind"]} #{key} is #{String.length(cid)} characters; the limit is 255"}
+             "#{op["kind"]} #{key} is #{ArgCheck.chars(cid)} characters; the limit is 255"}
 
           true ->
             {:ok, cid}
