@@ -669,3 +669,32 @@ fn same_named_repositories_do_not_share_a_workspace_unless_named() {
         ["a's goal", "d's goal"]
     );
 }
+
+// ---------------------------------------------------------------------------
+// C8: a repository whose name is not ASCII can use a remote.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_non_ascii_repository_name_reaches_the_server() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let name = format!("{}-café-ünï", unique("wal-c8"));
+    let dir = sb.repo(&name);
+
+    let out = sb.dx_ok(&dir, &["remote", "init", &url]);
+    assert!(out.contains(&name), "{out}");
+    sb.dx_ok(&dir, &["add", "goal", "accented"]);
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("In sync"), "{out}");
+
+    // Encoded here the way a browser would: UTF-8 bytes.
+    let encoded: String = name
+        .bytes()
+        .map(|b| match b {
+            b'a'..=b'z' | b'0'..=b'9' | b'-' => (b as char).to_string(),
+            b => format!("%{b:02X}"),
+        })
+        .collect();
+    assert_eq!(live_titles(&export(&url, &token, &encoded)), ["accented"]);
+}

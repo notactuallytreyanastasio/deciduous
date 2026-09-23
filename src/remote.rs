@@ -1284,12 +1284,19 @@ fn describe(e: ureq::Error) -> String {
     }
 }
 
+/// Percent-encodes a query value, byte by byte over its UTF-8.
+///
+/// 1.0.7 encoded each `char` as `%{code point}`, so `é` (U+00E9) became
+/// `%E9`, which is not UTF-8, and the server answered every request from a
+/// repository called `bridge-café` with a bare 400 (C8). A percent escape
+/// names one byte; `é` is two (`%C3%A9`).
 fn urlencode(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            '*' => "%2A".to_string(),
-            c => format!("%{:02X}", c as u32),
+    s.bytes()
+        .map(|b| match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            b => format!("%{b:02X}"),
         })
         .collect()
 }
@@ -1453,6 +1460,13 @@ mod tests {
         assert_eq!(urlencode("*"), "%2A");
         assert_eq!(urlencode("blog"), "blog");
         assert_eq!(urlencode("a b"), "a%20b");
+    }
+
+    #[test]
+    fn non_ascii_is_encoded_as_utf8_bytes() {
+        assert_eq!(urlencode("café"), "caf%C3%A9");
+        assert_eq!(urlencode("ü"), "%C3%BC");
+        assert_eq!(urlencode("日"), "%E6%97%A5");
     }
 
     #[test]
