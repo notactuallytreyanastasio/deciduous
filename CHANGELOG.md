@@ -1,9 +1,15 @@
 # Changelog
 
-## [Unreleased]
+## [1.0.4] - 2026-09-23
+
+Agents are told how to log by the server itself, on every connection, in place of the hook 1.0.3 removed. The release also adds a multi-agent demonstration and fixes `update --help`.
 
 ### Added
-- **`/demo-swarm`, a multi-agent demonstration for iTerm2 and Ghostty.** `deciduous demo-swarm` (hidden from `--help`) creates a fresh repository and opens one window. An Opus lead walks through the setup, then four Sonnet workers start, each in its own worktree: the functional core, the imperative shell, the view and QA. They build one Tetris and share one deciduous workspace; each worker's goal links to the lead's assignment node, so the edges cross branches. The team works to five rules: functional core and imperative shell, tests first under `node --test`, Playwright tests that reproduce user errors, JSDoc types checked by `tsc --checkJs` (the page runs from disk with no build step), and simple over easy. The lead merges only when all three checks pass. Splits are native AppleScript in both terminals. Every pane runs under `script -r` with a pinned session id, so a run can be replayed from `.swarm/rec/`. Any other terminal gets a one-line refusal and exit 1.
+- **The MCP server sends logging instructions on `initialize`.** MCP's `InitializeResult` has an optional `instructions` string, which Claude Code and other clients put in the model's context for the whole session. Upstream Hermes never sends it; a fifth vendored patch does. The text (`DeciduousMcp.MCP.Instructions`) says when to write (a request, a fork, a choice, a change, a result, a fact that changes the plan), names `capture_conversation_turn` as the one-call step and `add_node` with `parent_id` for single nodes, and asks for `workspace` and `branch` on every write. It reaches every client with no project configuration, which is where the hook was weakest, and it cannot block anything.
+- **`/demo-swarm`, a multi-agent demonstration for iTerm2 and Ghostty.** `deciduous demo-swarm` (hidden from `--help`) creates a fresh repository and opens one window. An Opus lead walks through the setup, then four Sonnet workers start, each in its own worktree: the functional core, the imperative shell, the view and QA. They build one Tetris and share one deciduous workspace; each worker's goal links to the lead's assignment node, so the edges cross branches. The team works to five rules: functional core and imperative shell, tests first under `node --test`, Playwright tests that reproduce user errors, JSDoc types checked by `tsc --checkJs` (the page runs from disk with no build step), and simple over easy. The lead merges only when all three checks pass. Splits are native AppleScript in both terminals. Every pane runs under `script -r` with a pinned session id, so a run can be replayed from `.swarm/rec/`. Any other terminal gets a one-line refusal and exit 1. `deciduous demo-swarm --preview` plays the walkthrough alone in the current terminal, creating and starting nothing.
+
+### Fixed
+- **`deciduous update --help` said it did not touch settings files.** It has edited `.claude/settings.json` since 1.0.2; it now says what it does there (removes the logging hooks earlier versions installed, keeping the user's entries and key order), what it backs up, and what it leaves alone with and without a `[remote]`.
 
 ## [1.0.3] - 2026-09-23
 

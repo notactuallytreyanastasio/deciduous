@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.4",
+        highlights: &[
+            "The MCP server tells every agent when and how to log, in the `instructions` of its initialize reply: no project configuration, and nothing that can block a tool call",
+            "`/demo-swarm` (iTerm2 or Ghostty): an Opus lead and four Sonnet workers build one Tetris under five rules (functional core, tests first, browser tests of user errors, compiler-checked types, simple over easy), sharing one graph; every pane is recorded for replay. `deciduous demo-swarm --preview` plays the walkthrough alone",
+            "`deciduous update --help` describes what update changes in .claude/settings.json and what it leaves alone",
+        ],
+    },
+    Release {
         version: "1.0.3",
         highlights: &[
             "The log-loop hook is removed: nothing denies an agent's tool calls any more. `deciduous update` deletes the hook scripts and plugins deciduous wrote (keeping any you wrote) and takes `deciduous log-loop` out of .claude/settings.json",

@@ -54,13 +54,19 @@ enum Command {
 
     /// Update AI assistant integration files to latest version
     ///
-    /// Auto-detects which assistants are installed (.claude/, .opencode/)
-    /// and updates their integration files.
-    /// Does NOT touch: settings files, .deciduous/config.toml, docs/
+    /// Auto-detects which assistants are installed (.claude/, .opencode/,
+    /// .windsurf/) and updates their commands, skills, hooks and the
+    /// deciduous section of CLAUDE.md / AGENTS.md.
     ///
     /// Files deciduous wrote are replaced; files someone else wrote are kept
-    /// (Markdown gets the new text appended in a marked block). Everything it
+    /// (Markdown gets the new text appended in a marked block). In
+    /// .claude/settings.json it only removes the logging hooks earlier
+    /// versions installed, keeping your entries and key order. Everything it
     /// changes is first copied to .deciduous/update-backups/<time>/.
+    ///
+    /// Does NOT touch .deciduous/config.toml or docs/. With a [remote]
+    /// configured it also leaves .gitignore, .gitattributes, .git/config and
+    /// graph.json alone.
     Update {
         /// Update every deciduous project directly under this directory (and
         /// the directory itself, if it is one), one after another

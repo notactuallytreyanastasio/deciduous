@@ -142,7 +142,7 @@ pub fn init_project(
         let sync_path = claude_dir.join("sync.md");
         write_file_if_missing(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
 
-        // Write demo-swarm.md slash command (the easter egg)
+        // Write demo-swarm.md slash command (the multi-agent demo)
         let demo_path = claude_dir.join("demo-swarm.md");
         write_file_if_missing(&demo_path, DEMO_SWARM_MD, ".claude/commands/demo-swarm.md")?;
 
@@ -553,7 +553,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     let sync_path = claude_dir.join("sync.md");
     write_file_overwrite(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
 
-    // Overwrite demo-swarm.md slash command (the easter egg)
+    // Overwrite demo-swarm.md slash command (the multi-agent demo)
     let demo_path = claude_dir.join("demo-swarm.md");
     write_file_overwrite(&demo_path, DEMO_SWARM_MD, ".claude/commands/demo-swarm.md")?;
 
