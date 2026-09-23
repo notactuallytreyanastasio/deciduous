@@ -343,7 +343,7 @@ defmodule DeciduousMcp.Sync.Ops do
          :ok <- held_to(@create_schema, op, "create_node #{cid}"),
          {:ok, inserted_at} <- time(op, "created_at", cid),
          {:ok, updated_at} <- time(op, "updated_at", cid) do
-      serialize(["node", ws.id, cid])
+      Nodes.lock_change_id(ws.id, cid)
 
       case any_node(ws, cid) do
         %Node{deleted_at: nil} ->

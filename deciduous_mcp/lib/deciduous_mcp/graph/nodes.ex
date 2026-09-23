@@ -33,6 +33,25 @@ defmodule DeciduousMcp.Graph.Nodes do
   end
 
   @doc """
+  Makes creates of one change_id in one workspace take turns, until the
+  calling transaction ends. POST /ops and add_node with a change_id both
+  take it before they look for the node, so whichever comes second finds
+  the first one's node instead of losing on the unique index.
+  """
+  def lock_change_id(workspace_id, change_id) do
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      Enum.join(["node", workspace_id, change_id], "|")
+    ])
+
+    :ok
+  end
+
+  @doc "The node with this change_id in the workspace, deleted or not, or nil."
+  def any_by_change_id(workspace_id, change_id) do
+    Repo.one(from n in Node, where: n.workspace_id == ^workspace_id and n.change_id == ^change_id)
+  end
+
+  @doc """
   Updates an existing node. Only provided fields are changed.
 
   A soft-deleted node is refused with `{:error, :deleted}`: the tools check

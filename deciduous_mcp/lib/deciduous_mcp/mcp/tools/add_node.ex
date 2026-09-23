@@ -70,6 +70,17 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
           rationale: %{
             type: "string",
             description: "Why the parent leads to this node. Only with parent_id."
+          },
+          change_id: %{
+            type: "string",
+            minLength: 1,
+            maxLength: 255,
+            description:
+              "Optional identity for this node, the same on every surface (the CLI prints " <>
+                "one for every node it writes). If this workspace already has a node with " <>
+                "it, of the same type and title, that node is the answer (created: false) " <>
+                "and no second one is made; so a retry, or the same write sent through the " <>
+                "CLI and MCP, makes one node. A different node under it is refused."
           }
         },
         required: ["node_type", "title"]
@@ -102,8 +113,21 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
       metadata: metadata
     }
 
-    case create(workspace_id, attrs, args["parent_id"], args) do
-      {:ok, {node, edge}} ->
+    case create_once(workspace_id, attrs, args) do
+      {:ok, {node, edge, created?}} ->
+        message =
+          cond do
+            not created? ->
+              "Node already exists with change_id #{node.change_id}; nothing new was created" <>
+                if(edge, do: " (linked under parent_id)", else: "")
+
+            edge ->
+              "Node created and linked"
+
+            true ->
+              "Node created successfully"
+          end
+
         {:ok,
          Jason.encode!(
            %{
@@ -112,7 +136,8 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
              node_type: node.node_type,
              title: node.title,
              status: node.status,
-             message: if(edge, do: "Node created and linked", else: "Node created successfully")
+             created: created?,
+             message: message
            }
            |> maybe_put(:edge_id, edge && edge.id)
            |> maybe_put(:parent_id, edge && edge.from_node_id)
@@ -127,8 +152,99 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
                "Check the id (query_nodes or show_node), or leave parent_id out and link later."
          }}
 
+      {:error, {:change_id_taken, cid, node}} ->
+        {:error,
+         %{
+           code: -1,
+           message:
+             "change_id #{cid} is already node #{node.id}, #{node.node_type} " <>
+               "#{inspect(node.title)}; this call names a #{attrs.node_type} " <>
+               "#{inspect(attrs.title)}. Nothing was written. Use another change_id, or " <>
+               "update_node to change that node."
+         }}
+
+      {:error, {:change_id_deleted, cid, node}} ->
+        {:error,
+         %{
+           code: -1,
+           message:
+             "change_id #{cid} is node #{node.id}, deleted at " <>
+               "#{DateTime.to_iso8601(node.deleted_at)}; it is not recreated. Nothing was written."
+         }}
+
       {:error, reason} ->
-        {:error, %{code: -1, message: "Failed to create node: #{DeciduousMcp.MCP.Component.describe_error(reason)}"}}
+        {:error,
+         %{
+           code: -1,
+           message: "Failed to create node: #{DeciduousMcp.MCP.Component.describe_error(reason)}"
+         }}
+    end
+  end
+
+  # With a change_id: one node per change_id, whichever surface or retry
+  # gets there first (team probe T3: the same write through the CLI and
+  # MCP at the same moment made two nodes). Under the same per-change_id
+  # lock /ops takes, so the two paths cannot both miss each other.
+  defp create_once(workspace_id, attrs, %{"change_id" => cid} = args) when is_binary(cid) do
+    Repo.transaction(fn ->
+      :ok = Nodes.lock_change_id(workspace_id, cid)
+
+      case Nodes.any_by_change_id(workspace_id, cid) do
+        nil ->
+          case create(workspace_id, Map.put(attrs, :change_id, cid), args["parent_id"], args) do
+            {:ok, {node, edge}} -> {node, edge, true}
+            {:error, reason} -> Repo.rollback(reason)
+          end
+
+        %{deleted_at: %DateTime{}} = node ->
+          Repo.rollback({:change_id_deleted, cid, node})
+
+        %{node_type: type, title: title} = node
+        when type == attrs.node_type and title == attrs.title ->
+          case link_existing(workspace_id, node, args) do
+            {:ok, edge} -> {node, edge, false}
+            {:error, reason} -> Repo.rollback(reason)
+          end
+
+        node ->
+          Repo.rollback({:change_id_taken, cid, node})
+      end
+    end)
+  end
+
+  defp create_once(workspace_id, attrs, args) do
+    with {:ok, {node, edge}} <- create(workspace_id, attrs, args["parent_id"], args),
+         do: {:ok, {node, edge, true}}
+  end
+
+  # A retry of a call with parent_id finds the edge the first call made; a
+  # node the CLI made has none yet, and the call asked for one.
+  defp link_existing(_workspace_id, _node, %{"parent_id" => nil}), do: {:ok, nil}
+
+  defp link_existing(_workspace_id, _node, args) when not is_map_key(args, "parent_id"),
+    do: {:ok, nil}
+
+  defp link_existing(workspace_id, node, %{"parent_id" => parent_id} = args) do
+    type = args["edge_type"] || "leads_to"
+
+    case Enum.find(
+           Edges.edges_to(node.id),
+           &(&1.from_node_id == parent_id and &1.edge_type == type)
+         ) do
+      nil ->
+        case Edges.create_edge(workspace_id, %{
+               from_node_id: parent_id,
+               to_node_id: node.id,
+               edge_type: type,
+               rationale: args["rationale"]
+             }) do
+          {:ok, edge} -> {:ok, edge}
+          {:error, {:node_not_found, _}} -> {:error, {:node_not_found, parent_id}}
+          {:error, reason} -> {:error, reason}
+        end
+
+      edge ->
+        {:ok, edge}
     end
   end
 
