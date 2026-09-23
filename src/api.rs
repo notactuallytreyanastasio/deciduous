@@ -265,6 +265,12 @@ impl ApiError {
             message: msg.to_string(),
         }
     }
+    fn unavailable(msg: &str) -> Self {
+        Self {
+            status: 503,
+            message: msg.to_string(),
+        }
+    }
 }
 
 fn handle(mut request: Request, registry: &Registry, token: &str) -> std::io::Result<()> {
@@ -408,7 +414,43 @@ fn tool_result_to_json(result: ToolCallResult) -> Value {
 /// Wall-clock budget for one `/query`. A recursive CTE without a bound
 /// never finishes, and the daemon runs one thread per request: four aborted
 /// requests pinned it at 400% CPU until it was killed.
+///
+/// It is enforced by `sqlite3_interrupt` from the request's thread, not by
+/// a progress handler. A progress handler runs every N VM ops, and a single
+/// op can take seconds: `instr()` over two values near the length cap is
+/// one op of about 4.5 s, so eight rows of it ran 35.89 s past a handler
+/// that checked the clock every 10,000 ops. An interrupt is seen at the
+/// next op, and the caller gets its answer at the limit either way.
 const QUERY_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Queries that may execute at once, counting stopped ones still finishing
+/// their last op. Past this, `/query` answers 503 at once: every query is
+/// one thread at full CPU, and a client that gives up does not stop it.
+const QUERY_MAX_RUNNING: usize = 4;
+
+static QUERIES_RUNNING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// A place among the `QUERY_MAX_RUNNING`, held by the thread executing the
+/// query, so it is given back when the SQL stops, not when the answer goes.
+struct QuerySlot;
+
+impl QuerySlot {
+    fn take() -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        QUERIES_RUNNING
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < QUERY_MAX_RUNNING).then_some(n + 1)
+            })
+            .ok()
+            .map(|_| QuerySlot)
+    }
+}
+
+impl Drop for QuerySlot {
+    fn drop(&mut self) {
+        QUERIES_RUNNING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
 
 /// Largest string or blob a query may build (SQLITE_LIMIT_LENGTH). The
 /// default is 1 GB; `printf('%.*c', 200000000, 'x')` built 200 MB in 62 ms.
@@ -484,16 +526,50 @@ fn sql_error(e: rusqlite::Error) -> ApiError {
              (no ATTACH, no pragmas beyond table/index/foreign-key info)",
         )
     } else if msg.contains("interrupted") {
-        ApiError::bad_request(&format!(
-            "query stopped: it exceeded the {} s time limit",
-            QUERY_TIME_LIMIT.as_secs()
-        ))
+        time_limit_error()
     } else {
         ApiError::bad_request(&format!("SQL error: {msg}"))
     }
 }
 
 fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, ApiError> {
+    let slot = QuerySlot::take().ok_or_else(|| {
+        ApiError::unavailable(&format!(
+            "{QUERY_MAX_RUNNING} queries are already running on this daemon; \
+             try again when one has finished (each stops after {} s)",
+            QUERY_TIME_LIMIT.as_secs()
+        ))
+    })?;
+    let conn = open_query_connection(db_path)?;
+    let interrupt = conn.get_interrupt_handle();
+    let sql = sql.to_string();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _slot = slot;
+        let _ = tx.send(execute_query(&conn, &sql, limit));
+    });
+    match rx.recv_timeout(QUERY_TIME_LIMIT) {
+        Ok(result) => result,
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            // The executing thread sees this at its next op and ends,
+            // releasing its slot; the caller is answered now regardless.
+            interrupt.interrupt();
+            Err(time_limit_error())
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(ApiError::internal(
+            "the query thread ended without an answer",
+        )),
+    }
+}
+
+fn time_limit_error() -> ApiError {
+    ApiError::bad_request(&format!(
+        "query stopped: it exceeded the {} s time limit",
+        QUERY_TIME_LIMIT.as_secs()
+    ))
+}
+
+fn open_query_connection(db_path: &Path) -> Result<rusqlite::Connection, ApiError> {
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -509,10 +585,11 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
         QUERY_MAX_VALUE_BYTES,
     );
     conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_ATTACHED, 0);
-    let deadline = std::time::Instant::now() + QUERY_TIME_LIMIT;
-    conn.progress_handler(10_000, Some(move || std::time::Instant::now() > deadline));
     conn.authorizer(Some(query_authorizer));
+    Ok(conn)
+}
 
+fn execute_query(conn: &rusqlite::Connection, sql: &str, limit: usize) -> Result<Value, ApiError> {
     let mut stmt = conn.prepare(sql).map_err(sql_error)?;
     if !stmt.readonly() {
         return Err(ApiError::forbidden(

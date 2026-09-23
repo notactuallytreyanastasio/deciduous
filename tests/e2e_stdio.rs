@@ -338,6 +338,93 @@ fn r6_flake_daemons_started_at_once_each_answer_their_first_request() {
     }
 }
 
+/// One `instr()` over the 1 MB value cap is a single VM op that runs for
+/// seconds, so a progress handler that looks at the clock every 10,000 ops
+/// never gets to look. Eight rows of it ran 35.89 s against a 5 s limit.
+const R6_SLOW_ROWS: &str =
+    "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<8) \
+     SELECT x, instr(printf('%.*c',999999,'a'), printf('%.*c',499999-x,'a')||'b') FROM c";
+
+/// R6 bypass: one slow op per row walked past the 5 s limit.
+#[test]
+fn r6_bypass_one_slow_op_per_row_is_still_stopped() {
+    let Some(()) = local("r6_bypass_one_slow_op_per_row_is_still_stopped") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let (st, body, took) = query(&d, R6_SLOW_ROWS);
+    assert!(
+        took < Duration::from_millis(6_500),
+        "a query of slow single ops ran {took:?} against a 5 s limit ({st}: {body})"
+    );
+    assert!(st >= 400, "the stopped query answered {st}: {body}");
+    assert!(
+        body["error"].as_str().unwrap_or("").contains("time limit"),
+        "the refusal does not say why: {body}"
+    );
+}
+
+/// R6 bypass: clients that gave up left their queries running, four of
+/// them held the daemon at 400% CPU for 40 s. A query past its limit must
+/// stop, whoever is still waiting for it, and the daemon runs only a few
+/// at once, saying so to the rest.
+#[test]
+fn r6_bypass_abandoned_queries_do_not_pile_up() {
+    let Some(()) = local("r6_bypass_abandoned_queries_do_not_pile_up") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let s = d.as_server();
+    let t = Instant::now();
+    let statuses: Vec<Result<u16, String>> = std::thread::scope(|scope| {
+        let hs: Vec<_> = (0..12)
+            .map(|_| {
+                let s = s.clone();
+                scope.spawn(move || {
+                    s.try_request(
+                        "POST",
+                        "/api/v1/graphs/g/query",
+                        Some(&s.bearer()),
+                        &[("content-type", "application/json")],
+                        Some(json!({"sql": R6_SLOW_ROWS}).to_string().as_bytes()),
+                        Duration::from_secs(30),
+                    )
+                    .map(|r| r.status)
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let took = t.elapsed();
+    assert!(
+        took < Duration::from_secs(8),
+        "12 slow queries at once took {took:?}: {statuses:?}"
+    );
+    assert!(
+        statuses.iter().any(|s| s == &Ok(503)),
+        "12 slow queries all ran at once, none was turned away: {statuses:?}"
+    );
+    // A stopped query ends at its next op, and no op here runs longer than
+    // about 5 s, so the daemon is free again soon after the answers, not
+    // after the abandoned queries would have finished (35 s each).
+    let t = Instant::now();
+    loop {
+        let (st, body, _) = query(&d, "SELECT 1");
+        if st == 200 {
+            break;
+        }
+        assert_eq!(st, 503, "SELECT 1 got {st}: {body}");
+        assert!(
+            t.elapsed() < Duration::from_secs(7),
+            "stopped queries still held the daemon {:?} after they were answered",
+            t.elapsed()
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
 /// R7: /query ATTACH passed the read-only check, and its error told apart an
 /// existing file from a missing one; pragma_database_list leaked the data
 /// directory's absolute path.
