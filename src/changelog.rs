@@ -495,8 +495,9 @@ pub fn is_patch_only(current: &str, latest: &str) -> bool {
     cur_major == lat_major && cur_minor == lat_minor
 }
 
-/// Check if integration files are outdated and return a brief reminder message
-/// Returns None if up to date or if version file doesn't exist
+/// Names the gap between the deciduous that wrote this project's integration
+/// files (`.deciduous/.version`) and the binary running now. Returns None when
+/// they agree or the project has no version file.
 pub fn check_version_reminder(current_binary_version: &str) -> Option<String> {
     let version_file = std::path::Path::new(".deciduous/.version");
 
@@ -509,16 +510,34 @@ pub fn check_version_reminder(current_binary_version: &str) -> Option<String> {
         .trim()
         .to_string();
 
-    if installed_version == current_binary_version {
+    version_gap_notice(&installed_version, current_binary_version)
+}
+
+/// What to say about a project whose files came from `files` while the binary
+/// is `binary`. This is not news of a release: the newest deciduous there is
+/// still says it, because what is behind is the project, not the binary. So the
+/// notice names the files and the command that moves them, `deciduous update`.
+fn version_gap_notice(files: &str, binary: &str) -> Option<String> {
+    if files == binary {
         return None;
     }
 
-    let releases = get_releases_between(&installed_version, current_binary_version);
-    let feature_count: usize = releases.iter().map(|r| r.highlights.len()).sum();
+    if parse_version(files) > parse_version(binary) {
+        return Some(format!(
+            "This project's deciduous files are from v{files}, newer than this deciduous (v{binary}). \
+             Run 'cargo install deciduous --force' to catch the binary up."
+        ));
+    }
+
+    let releases = get_releases_between(files, binary);
+    let features = match releases.iter().map(|r| r.highlights.len()).sum::<usize>() {
+        0 => String::new(),
+        n => format!(" ({n} new features)"),
+    };
 
     Some(format!(
-        "Update available: v{} → v{} ({} new features). Run 'deciduous check-update' for details.",
-        installed_version, current_binary_version, feature_count
+        "This project's deciduous files are from v{files}; this deciduous is v{binary}{features}. \
+         Run 'deciduous update' to bring them up to date, or 'deciduous check-update' for the details."
     ))
 }
 
@@ -562,5 +581,41 @@ mod tests {
         let formatted = format_releases(&releases);
         assert!(formatted.contains("v0.9.5"));
         assert!(formatted.contains("check-update"));
+    }
+
+    #[test]
+    fn a_project_written_by_this_deciduous_says_nothing() {
+        assert_eq!(version_gap_notice("1.0.7", "1.0.7"), None);
+    }
+
+    #[test]
+    fn the_notice_names_the_files_and_update_not_a_new_release() {
+        let notice = version_gap_notice("1.0.6", "1.0.7").expect("a gap is worth saying");
+        assert!(notice.contains("deciduous update"), "{notice}");
+        assert!(
+            notice.contains("v1.0.6") && notice.contains("v1.0.7"),
+            "{notice}"
+        );
+        // The old wording read as news of a release, which the newest binary
+        // in the world would still have printed.
+        assert!(!notice.contains("Update available"), "{notice}");
+    }
+
+    #[test]
+    fn files_from_a_newer_deciduous_ask_for_the_binary_not_update() {
+        let notice = version_gap_notice("1.0.8", "1.0.7").expect("a gap is worth saying");
+        assert!(
+            notice.contains("cargo install deciduous --force"),
+            "{notice}"
+        );
+        // `deciduous update` would write older files over newer ones.
+        assert!(!notice.contains("deciduous update"), "{notice}");
+    }
+
+    #[test]
+    fn a_gap_the_changelog_does_not_cover_counts_no_features() {
+        // Nothing between 9.9.8 and 9.9.9, so no "(0 new features)".
+        let notice = version_gap_notice("9.9.8", "9.9.9").expect("a gap is worth saying");
+        assert!(!notice.contains("new features"), "{notice}");
     }
 }
