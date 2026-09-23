@@ -963,3 +963,87 @@ fn g7_sync_during_a_stopped_rebase_still_exports() {
     );
     let _ = p.git(&["rebase", "--abort"]);
 }
+
+/// G7, round 3: `add` on a detached old commit wrote the node straight into
+/// that commit's graph.json, so `git checkout main` aborted, and the `sync`
+/// after it said the file "was left as this commit has it".
+#[test]
+fn g7_add_on_an_old_commit_does_not_block_checkout() {
+    let Some(()) = local("g7_add_on_an_old_commit_does_not_block_checkout") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let e = p.add("goal", "added while looking at history");
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "add on a detached old commit wrote into its graph file"
+    );
+    let out = p.ok(&["sync"]);
+    assert!(out.contains("not exported"), "{out}");
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), before, "{out}");
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(
+        co.ok(),
+        "add on an old commit blocked checkout:\n{}",
+        co.all()
+    );
+    // Not lost: the next sync on the branch exports it.
+    p.ok(&["sync"]);
+    assert!(!node(&p.graph_doc(), &e).is_null());
+}
+
+/// G7, round 3: `remote pull` on a detached old commit wrote the server's
+/// records into that commit's graph.json (34 lines), and checkout aborted.
+#[test]
+fn g7_remote_pull_on_an_old_commit_does_not_block_checkout() {
+    let Some(server) = remote("g7_remote_pull_on_an_old_commit_does_not_block_checkout") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let ws = unique("g7pull");
+    let p = sb.project(&ws, None);
+    p.remote_init(&ws);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    server.session(Some(&ws)).call_ok(
+        "add_node",
+        json!({"node_type": "goal", "title": "server only"}),
+    );
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let out = p.ok(&["remote", "pull"]);
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "remote pull on a detached old commit dirtied the tree:\n{out}"
+    );
+    assert!(out.contains("detached"), "{out}");
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(
+        co.ok(),
+        "pull on an old commit blocked checkout:\n{}",
+        co.all()
+    );
+    p.ok(&["sync"]);
+    let doc = p.graph_doc();
+    assert!(
+        doc["nodes"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|n| n["title"] == "server only"),
+        "the pulled node never reached main's graph file"
+    );
+}

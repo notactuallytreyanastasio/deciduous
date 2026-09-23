@@ -780,6 +780,10 @@ pub struct Database {
     auto_attach: std::sync::atomic::AtomicBool,
     /// Author for a graph file attached later (see `set_store_author`).
     store_author: std::sync::RwLock<Option<String>>,
+    /// The HEAD file of the repository holding the graph file, found once:
+    /// reading it is how every write-through asks, cheaply, whether HEAD is
+    /// on a branch (see [`Self::write_store`]).
+    head_file: std::sync::OnceLock<Option<std::path::PathBuf>>,
 }
 
 /// Error type for database operations
@@ -886,6 +890,7 @@ impl Database {
             oplog: std::sync::RwLock::new(None),
             auto_attach: std::sync::atomic::AtomicBool::new(true),
             store_author: std::sync::RwLock::new(None),
+            head_file: std::sync::OnceLock::new(),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
@@ -1397,6 +1402,41 @@ impl Database {
         slot.clone()
     }
 
+    /// The graph file that writes are mirrored into: [`Self::store`], except
+    /// while HEAD is detached at a commit being looked at (G7), where the
+    /// file is that commit's and writing a new node into it made
+    /// `git checkout main` fail with "Your local changes ... would be
+    /// overwritten". Such a write stays in the database, and the next sync
+    /// on a branch exports it, as `deciduous sync` there already says.
+    ///
+    /// On a branch this costs one read of HEAD; git runs only when it is
+    /// detached, so a rebase (detached too, and whose file is being
+    /// merged on purpose) still writes through.
+    fn write_store(&self) -> Option<RecordStore> {
+        let store = self.store()?;
+        let head = self.head_file.get_or_init(|| {
+            let dir = store.path().parent()?;
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(["rev-parse", "--path-format=absolute", "--git-path", "HEAD"])
+                .stderr(std::process::Stdio::null())
+                .output()
+                .ok()?;
+            out.status
+                .success()
+                .then(|| std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
+        });
+        let Some(head) = head else {
+            return Some(store);
+        };
+        match std::fs::read_to_string(head) {
+            Ok(h) if h.starts_with("ref:") => Some(store),
+            _ if crate::records::viewing_history(store.path()).is_some() => None,
+            _ => Some(store),
+        }
+    }
+
     // ------------------------------------------------------------------
     // Record store write-through. A file that cannot be read refuses the
     // operation before the database is touched (require_readable_store).
@@ -1413,7 +1453,7 @@ impl Database {
     /// versions: a record stamped later than this clock wins, and the edit
     /// the CLI reported as done is reverted.
     fn require_readable_store(&self) -> Result<()> {
-        let Some(store) = self.store() else {
+        let Some(store) = self.write_store() else {
             return Ok(());
         };
         store
@@ -1434,7 +1474,9 @@ impl Database {
     /// was before the change, so the file can keep fields a teammate changed
     /// that this write did not touch.
     fn publish_node_edit(&self, node_id: i32, before: Option<DecisionNode>) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         match self.get_node(node_id) {
             Ok(Some(node)) => match store.publish_node_edit(before.as_ref(), &node) {
                 Ok((_, Some(stamp))) => {
@@ -1456,7 +1498,7 @@ impl Database {
     /// The row as it is now, for [`Self::publish_node_edit`]. Only read when
     /// a graph file is attached.
     fn node_before_edit(&self, node_id: i32) -> Option<DecisionNode> {
-        self.store()?;
+        self.write_store()?;
         self.get_node(node_id).ok().flatten()
     }
 
@@ -1469,7 +1511,9 @@ impl Database {
     }
 
     fn publish_edge_by_id(&self, edge_id: i32) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         match self.get_edge(edge_id) {
             Ok(Some(edge)) => {
                 if let Err(e) = store.publish_edge(&edge) {
@@ -1488,7 +1532,9 @@ impl Database {
     /// Tombstone edges; `with_node` names the node whose deletion took
     /// them, so they come back if that node does.
     fn tombstone_edges_of(&self, edges: &[DecisionEdge], with_node: Option<&str>) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         for edge in edges {
             if let Err(e) = store.tombstone_edge_of(edge, with_node) {
                 Self::store_warn("could not write edge tombstone", e);
@@ -1497,7 +1543,9 @@ impl Database {
     }
 
     fn publish_theme_by_id(&self, theme_id: i32) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         match self.get_theme_by_id(theme_id) {
             Ok(Some(theme)) => match store.publish_theme_edit(&theme) {
                 Ok((_, Some(stamp))) => {
@@ -1520,7 +1568,9 @@ impl Database {
     }
 
     fn publish_tag(&self, node_id: i32, theme_id: i32) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         let node = self.get_node(node_id).ok().flatten();
         let theme = self.get_theme_by_id(theme_id).ok().flatten();
         let tag = self.get_tag(node_id, theme_id).ok().flatten();
@@ -1537,7 +1587,9 @@ impl Database {
     }
 
     fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id, false) {
             Self::store_warn("could not write tag tombstone", e);
         }
@@ -3275,7 +3327,7 @@ impl Database {
         drop(conn);
 
         if publish {
-            if let Some(store) = self.store() {
+            if let Some(store) = self.write_store() {
                 if let Err(e) = store.tombstone_node(&node) {
                     Self::store_warn("could not write node tombstone", e);
                 }
@@ -3285,7 +3337,7 @@ impl Database {
             for u in unnamed {
                 self.not_queued(u);
             }
-            if let Some(store) = self.store() {
+            if let Some(store) = self.write_store() {
                 for tag in &doomed_tags {
                     if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
                         if let Err(e) = store.tombstone_tag(&node.change_id, &theme.change_id, true)
@@ -4413,7 +4465,7 @@ impl Database {
             diesel::delete(themes::table.filter(themes::id.eq(theme.id))).execute(&mut conn)?;
             drop(conn);
 
-            if let Some(store) = self.store() {
+            if let Some(store) = self.write_store() {
                 for t in &tagged {
                     if let Ok(Some(node)) = self.get_node(t.node_id) {
                         self.tombstone_tag(&node.change_id, &theme.change_id);

@@ -3315,37 +3315,7 @@ pub fn reconcile_viewing_history(
 ) -> std::result::Result<(SyncReport, Vec<String>), String> {
     let mut report = match store {
         Some(store) if dry_run => reconcile(db, store, true)?,
-        _ => {
-            let dir = std::env::temp_dir().join(format!(
-                "deciduous-history-{}-{}",
-                std::process::id(),
-                Utc::now().timestamp_nanos_opt().unwrap_or_default()
-            ));
-            fs::create_dir_all(&dir)
-                .map_err(|e| format!("creating a scratch directory {}: {e}", dir.display()))?;
-            let copy = dir.join(STORE_FILE_NAME);
-            let result = (|| {
-                let scratch = match store {
-                    Some(store) => {
-                        fs::copy(store.path(), &copy).map_err(|e| {
-                            format!(
-                                "copying {} to {}: {e}",
-                                store.path().display(),
-                                copy.display()
-                            )
-                        })?;
-                        RecordStore::open(&copy).ok_or_else(|| {
-                            format!("{} vanished while it was being read", copy.display())
-                        })?
-                    }
-                    None => RecordStore::create(&copy)
-                        .map_err(|e| format!("creating {}: {e}", copy.display()))?,
-                };
-                reconcile(db, &scratch, dry_run)
-            })();
-            let _ = fs::remove_dir_all(&dir);
-            result?
-        }
+        _ => with_scratch_store(store, |scratch| reconcile(db, scratch, dry_run))?,
     };
     let mut withheld = Vec::new();
     for (n, what) in [
@@ -3359,6 +3329,44 @@ pub fn reconcile_viewing_history(
         }
     }
     Ok((report, withheld))
+}
+
+/// Runs `f` against a throwaway copy of `store` (an empty one when there is
+/// none), so whatever it writes to the graph file never reaches the real
+/// one. For a commit being looked at: `sync` and `remote pull` both reconcile
+/// through this, and pull's absorbed server records are written here too.
+pub fn with_scratch_store<T>(
+    store: Option<&RecordStore>,
+    f: impl FnOnce(&RecordStore) -> std::result::Result<T, String>,
+) -> std::result::Result<T, String> {
+    let dir = std::env::temp_dir().join(format!(
+        "deciduous-history-{}-{}",
+        std::process::id(),
+        Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    fs::create_dir_all(&dir)
+        .map_err(|e| format!("creating a scratch directory {}: {e}", dir.display()))?;
+    let copy = dir.join(STORE_FILE_NAME);
+    let result = (|| {
+        let scratch = match store {
+            Some(store) => {
+                fs::copy(store.path(), &copy).map_err(|e| {
+                    format!(
+                        "copying {} to {}: {e}",
+                        store.path().display(),
+                        copy.display()
+                    )
+                })?;
+                RecordStore::open(&copy)
+                    .ok_or_else(|| format!("{} vanished while it was being read", copy.display()))?
+            }
+            None => RecordStore::create(&copy)
+                .map_err(|e| format!("creating {}: {e}", copy.display()))?,
+        };
+        f(&scratch)
+    })();
+    let _ = fs::remove_dir_all(&dir);
+    result
 }
 
 /// The sentence saying what a sync on a detached commit left out.

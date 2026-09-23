@@ -3378,10 +3378,14 @@ fn main() {
                         );
                         exit(1);
                     };
+                    // On a commit being looked at (G7), the server's records
+                    // reach the database but not that commit's graph file.
+                    let detached = deciduous::records::viewing_history(&store_path);
                     let store = match RecordStore::open(&store_path) {
-                        Some(s) => s,
+                        Some(s) => Some(s),
+                        None if detached.is_some() => None,
                         None => match RecordStore::create(&store_path) {
-                            Ok(s) => s,
+                            Ok(s) => Some(s),
                             Err(e) => {
                                 eprintln!(
                                     "{} could not open the graph file: {}",
@@ -3422,7 +3426,19 @@ fn main() {
                         }
                     }
 
-                    match deciduous::remote::pull(&remote, &db, &store) {
+                    let pulled = match (&detached, &store) {
+                        (None, Some(store)) => deciduous::remote::pull(&remote, &db, store),
+                        _ => deciduous::records::with_scratch_store(store.as_ref(), |scratch| {
+                            deciduous::remote::pull(&remote, &db, scratch)
+                        }),
+                    };
+                    if let (Some(at), Ok(_)) = (&detached, &pulled) {
+                        println!(
+                            "{} HEAD is detached at {at}, so the graph file was left as this commit has it; what was pulled is in the database, and the next `deciduous sync` on a branch exports it.",
+                            "Note:".yellow()
+                        );
+                    }
+                    match pulled {
                         Ok(r) => {
                             println!(
                                 "{} {} <- {}",
