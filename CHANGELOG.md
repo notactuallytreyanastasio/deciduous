@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.0.2] - 2026-09-23
+
+The shared graph server can be installed without Erlang, Elixir or a hand-built database, and no MCP call can hang long enough for Claude Code to background it. Both packages move to 1.0.2 together; the release workflow refuses to publish a tag that Cargo.toml and deciduous_mcp/mix.exs do not both declare.
+
+### Added
+- **The server ships as a single executable.** Burrito wraps the release with ERTS and Elixir for macOS (arm64, x86_64), Linux (arm64, x86_64) and Windows (x86_64). A native install bootstraps an empty PostgreSQL from the release's `STRUCTURE.sql`.
+- **One-command Docker setup.** `deciduous_mcp/scripts/setup.sh` generates private credentials, starts PostgreSQL 17 on a persistent volume, applies migrations and waits for readiness. It can use an existing database instead, and a repeat run keeps the saved token and password byte for byte.
+- **`GET /ready`** answers 200 only when the database responds and every required migration is applied, and 503 until then. `/health` stays unauthenticated liveness.
+- **Trigram indexes** (`pg_trgm` GIN) on node title, description and `metadata::text`. `query_nodes(search:)` and `ask_graph` were `ILIKE '%term%'` over every row: 84.5 ms on production across 30,249 nodes, now 3.0 ms, and 1.6 ms within one workspace.
+
+### Fixed
+- **A tool call that ran long was left to the client's timeout.** The transport waited up to four minutes, longer than Cloudflare's 100-second origin cut and Claude Code's 120-second background move. Hermes.Server.Base now stops any handler still running at 60 seconds, which rolls back its open transaction, and answers the request under its own id: `list_workspaces did not finish within 60s and was stopped; nothing it had not committed was kept`. The transport's own timeout is 90 seconds, as a backstop. The heaviest call measured on production is 7.2 seconds.
+- **The server never logged its own failures.** `Hermes.Logging.should_log?/1` compared log levels backwards, so at `:info` every warning and error Hermes emitted (`request_handler_crashed`, `server_call_failed`) was dropped before it reached Logger.
+- **`ask_graph` searched every workspace on the server.** Its search terms were added with `or_where`, which Ecto renders as `(workspace AND not deleted AND scope) OR term...`, so a question in one workspace returned nodes from others, deleted ones included.
+- **`query_nodes` with `limit` below 1** reached Postgres as `LIMIT -5` and came back as a raw Postgrex error. It is now `limit must be at least 1, got -5`.
+- **The events listener recovers after a database outage**, and `DB_SSL=true` now verifies the certificate and hostname by default.
+
+### Not in this release
+- Sessions still live in server memory, so a restart logs every client out. Claude Code reconnects and retries automatically, in about 0.3 s on production.
+- The CLI still keeps a local SQLite cache. Removing it is next.
+
 ## [1.0.0] - 2026-09-22
 
 The shared server is the product now. 0.19.0 put every project's graph in one Postgres; 1.0.0 is what happens when several agents write to it at once. The proof is the tetris arena: ten Claude Code sessions in ten git worktrees, one workspace, told to read each other's code and reasoning. Twenty-six minutes later there were ten playable games, 386 nodes, and 170 borrowed ideas with provenance. Write-up: https://notactuallytreyanastasio.github.io/tetris-arena/

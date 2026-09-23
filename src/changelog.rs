@@ -12,8 +12,12 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
-        version: "1.0.1",
+        version: "1.0.2",
         highlights: &[
+            "Every MCP tool call has a 60-second deadline: a handler still running is stopped, its uncommitted writes roll back, and the call is answered with an error under its own id instead of hanging past Claude Code's 120-second background cutoff",
+            "Server warnings and errors reach the log; the bundled Hermes library dropped every message above the configured level",
+            "ask_graph's text search stays in the workspace it was asked about and skips deleted nodes; it used to match every workspace on the server",
+            "Trigram indexes serve query_nodes search and ask_graph: a search across all workspaces went from 85 ms to 3 ms on production",
             "The shared graph server ships as a Burrito executable with Erlang/OTP and Elixir included; users no longer need to install them separately",
             "One-command Docker setup generates private credentials, starts persistent PostgreSQL 17, applies migrations, and waits for readiness; it also supports an existing database and preserves saved settings on repeat runs",
             "The server's /ready endpoint checks database access and required migrations; the event listener recovers after a database outage, and DB_SSL=true verifies the database certificate and hostname by default",

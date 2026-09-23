@@ -22,6 +22,20 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: pg_trgm; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION pg_trgm; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
+
+
+--
 -- Name: node_status; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -520,6 +534,27 @@ CREATE INDEX idx_nodes_branch ON public.decision_nodes USING btree (((metadata -
 
 
 --
+-- Name: idx_nodes_description_trgm; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nodes_description_trgm ON public.decision_nodes USING gin (description public.gin_trgm_ops);
+
+
+--
+-- Name: idx_nodes_metadata_text_trgm; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nodes_metadata_text_trgm ON public.decision_nodes USING gin (((metadata)::text) public.gin_trgm_ops);
+
+
+--
+-- Name: idx_nodes_title_trgm; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_nodes_title_trgm ON public.decision_nodes USING gin (title public.gin_trgm_ops);
+
+
+--
 -- Name: idx_nodes_ws_branch_inserted; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -848,7 +883,8 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260922120000, NOW()),
   (20260922130000, NOW()),
   (20260922200000, NOW()),
-  (20260922200100, NOW());
+  (20260922200100, NOW()),
+  (20260923010000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$
