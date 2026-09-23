@@ -132,8 +132,8 @@ defmodule DeciduousMcp.Sync.Ops do
 
     with {:ok, name} <- workspace_name(raw),
          :ok <- check_batch(ops),
-         {:ok, workspace} <- workspace_for(name, ops, payload["repo_roots"]) do
-      results = Enum.map(ops, &apply_one(workspace, &1))
+         {:ok, workspace, claim} <- workspace_for(name, ops, payload["repo_roots"]) do
+      {results, _claim} = Enum.map_reduce(ops, claim, &apply_one(workspace, &1, &2))
       record_activity(workspace, ops, results, payload["repo_roots"])
       {:ok, %{workspace: name, results: results}}
     end
@@ -175,20 +175,36 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  # The claim is checked before anything is applied (a workspace another
+  # repository holds is refused whole, as before) and recorded only by the
+  # first op that writes, in that op's transaction. It used to be recorded
+  # up front: on a workspace an agent had made over MCP, which no
+  # repository has claimed, an /ops batch that wrote nothing (empty, every
+  # op rejected, a delete of an absent node) claimed it for its roots, and
+  # the real repository's next push was 409 claimed_by_other_repository
+  # (verification of SERVER-N6). Recording it in the writing op's own
+  # transaction, rather than after the batch, means two repositories
+  # racing for an unclaimed workspace cannot both write: the second one's
+  # op is refused and rolled back.
+  #
+  # Returns {:ok, workspace or nil, roots still to record or nil}.
   defp workspace_for(name, ops, roots) do
     case Workspaces.get_by_name(name) do
       {:ok, workspace} ->
-        with {:ok, _claim} <- Workspaces.claim(workspace, roots, false), do: {:ok, workspace}
+        with {:ok, _status} <- Workspaces.check_claim(workspace, roots),
+             {:ok, valid} <- Workspaces.validate_roots(roots) do
+          {:ok, workspace, if(is_list(valid) and valid != [], do: roots)}
+        end
 
       {:error, :not_found} ->
         if Enum.any?(ops, &would_create?/1) do
           with {:ok, workspace} <- Workspaces.find_or_create(name),
                {:ok, _claim} <- Workspaces.claim(workspace, roots, false),
-               do: {:ok, workspace}
+               do: {:ok, workspace, nil}
         else
           # Checked all the same: a malformed repo_roots is an error
           # whether or not anything is written.
-          with {:ok, _} <- Workspaces.validate_roots(roots), do: {:ok, nil}
+          with {:ok, _} <- Workspaces.validate_roots(roots), do: {:ok, nil, nil}
         end
     end
   end
@@ -235,22 +251,23 @@ defmodule DeciduousMcp.Sync.Ops do
   # No workspace: nothing is recorded, since there is nowhere to record it,
   # and nothing is created (see run/1). The answers are the ones an empty
   # workspace would give, after the same malformed-op checks.
-  defp apply_one(nil, %{"op_id" => op_id} = op) do
+  defp apply_one(nil, %{"op_id" => op_id} = op, claim) do
     with nil <- malformed(op),
          {:ok, outcome} <- apply_op(nil, op["kind"], op) do
-      %{op_id: op_id, result: outcome}
+      {%{op_id: op_id, result: outcome}, claim}
     else
-      {:rejected, reason} -> %{op_id: op_id, result: "rejected", reason: reason}
-      reason when is_binary(reason) -> %{op_id: op_id, result: "rejected", reason: reason}
+      {:rejected, reason} -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+      reason when is_binary(reason) -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
     end
   end
 
   # An unknown kind is answered before anything is recorded: its name went
   # into applied_ops.kind (varchar(255)), and a 300-character one was an
   # empty 500.
-  defp apply_one(_workspace, %{"op_id" => op_id, "kind" => kind} = op) when kind not in @kinds do
+  defp apply_one(_workspace, %{"op_id" => op_id, "kind" => kind} = op, claim)
+       when kind not in @kinds do
     {:rejected, reason} = apply_op(nil, kind, op)
-    %{op_id: op_id, result: "rejected", reason: reason}
+    {%{op_id: op_id, result: "rejected", reason: reason}, claim}
   end
 
   # An op the database cannot store is an answer about that op, not a
@@ -260,10 +277,10 @@ defmodule DeciduousMcp.Sync.Ops do
   # answered an empty 500. The CLI resent that batch on every write, got the
   # same 500, and nothing after the bad op reached the server again
   # (SERVER-N1). They are refused here, by name, before anything is written.
-  defp apply_one(workspace, %{"op_id" => op_id} = op) do
+  defp apply_one(workspace, %{"op_id" => op_id} = op, claim) do
     case malformed(op) do
-      nil -> apply_checked(workspace, op)
-      reason -> %{op_id: op_id, result: "rejected", reason: reason}
+      nil -> apply_checked(workspace, op, claim)
+      reason -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
     end
   end
 
@@ -323,7 +340,7 @@ defmodule DeciduousMcp.Sync.Ops do
   defp render_path([]), do: "the top level"
   defp render_path(path), do: path |> Enum.reverse() |> Enum.map_join(".", &to_string/1)
 
-  defp apply_checked(workspace, %{"op_id" => op_id} = op) do
+  defp apply_checked(workspace, %{"op_id" => op_id} = op, claim) do
     kind = op["kind"]
 
     result =
@@ -348,6 +365,7 @@ defmodule DeciduousMcp.Sync.Ops do
             "duplicate"
           else
             case apply_op(workspace, kind, op) do
+              {:ok, "applied"} when claim != nil -> record_claim(workspace, claim)
               {:ok, outcome} -> outcome
               {:rejected, reason} -> Repo.rollback({:rejected, reason})
             end
@@ -372,9 +390,34 @@ defmodule DeciduousMcp.Sync.Ops do
       end
 
     case result do
-      {:ok, outcome} -> %{op_id: op_id, result: outcome}
-      {:error, {:rejected, reason}} -> %{op_id: op_id, result: "rejected", reason: reason}
-      {:error, other} -> %{op_id: op_id, result: "rejected", reason: describe(other)}
+      {:ok, "applied"} ->
+        {%{op_id: op_id, result: "applied"}, nil}
+
+      {:ok, outcome} ->
+        {%{op_id: op_id, result: outcome}, claim}
+
+      {:error, {:rejected, reason}} ->
+        {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+
+      {:error, other} ->
+        {%{op_id: op_id, result: "rejected", reason: describe(other)}, claim}
+    end
+  end
+
+  defp record_claim(workspace, roots) do
+    case Workspaces.claim(workspace, roots, false) do
+      {:ok, _} ->
+        "applied"
+
+      {:error, {:claimed_by_other_repository, held}} ->
+        Repo.rollback(
+          {:rejected,
+           "workspace #{workspace.name} was claimed by another repository (root commits " <>
+             "#{Enum.join(Enum.take(held, 5), ", ")}) while this batch ran; nothing was written"}
+        )
+
+      {:error, reason} ->
+        Repo.rollback({:rejected, describe(reason)})
     end
   end
 

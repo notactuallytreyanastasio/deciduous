@@ -161,4 +161,38 @@ defmodule DeciduousMcp.Web.OpsClaimNoGhostTest do
 
     assert conn.status == 409
   end
+
+  # Verification of SERVER-N6, the claim half: on a workspace that exists
+  # and is unclaimed (every workspace an agent makes over MCP), Ops.run
+  # claimed it for the batch's repo_roots before applying anything. A batch
+  # that wrote nothing then owned the workspace, and the real repository's
+  # next push was 409 claimed_by_other_repository.
+  test "SERVER-N6 claim: an /ops batch that writes nothing does not claim the workspace" do
+    {:ok, ws} = Workspaces.find_or_create("n6-claim")
+    {:ok, _} = DeciduousMcp.Graph.Nodes.create_node(ws.id, %{node_type: "goal", title: "by mcp"})
+
+    for {what, ops} <- [
+          {"empty", []},
+          {"all rejected", [update_op("no-such-node")]},
+          {"delete of an absent node",
+           [%{op_id: Ecto.UUID.generate(), kind: "delete_node", change_id: "absent"}]}
+        ] do
+      assert {200, _} = post("/ops", %{workspace: "n6-claim", ops: ops, repo_roots: [@a]}), what
+      {:ok, ws} = Workspaces.get_by_name("n6-claim")
+      assert (ws.settings || %{})["repo_roots"] in [nil, []], "#{what}: #{inspect(ws.settings)}"
+    end
+
+    # The real repository's push is not locked out, and it is the one that claims.
+    assert {200, %{"results" => [%{"result" => "applied"}]}} =
+             post("/ops", %{workspace: "n6-claim", ops: [create_op("real")], repo_roots: [@b]})
+
+    {:ok, ws} = Workspaces.get_by_name("n6-claim")
+    assert ws.settings["repo_roots"] == [@b]
+
+    # And once claimed, another repository is still refused, before it writes.
+    assert {409, %{"reason" => "claimed_by_other_repository"}} =
+             post("/ops", %{workspace: "n6-claim", ops: [create_op("other")], repo_roots: [@a]})
+
+    refute DeciduousMcp.Repo.get_by(DeciduousMcp.Schema.Node, change_id: "other")
+  end
 end
