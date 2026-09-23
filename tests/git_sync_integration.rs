@@ -1164,3 +1164,119 @@ fn a_merge_stopped_on_another_file_leaves_a_driver_merged_graph_alone() {
     // Nothing but what sync imported changed the file.
     assert_eq!(alice.graph_text(), merged);
 }
+
+#[test]
+fn a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "A", &[]);
+    let cid = alice.change_id(goal);
+    let good = alice.doc();
+
+    // A commit whose graph.json no reader can parse, not even by resolving
+    // markers: the ancestor of the merge below.
+    fs::write(alice.graph_path(), "{\"version\": 1, \"nodes\": {\n").unwrap();
+    alice.commit_graph("broken");
+    let at = |doc: &Value, field: &str, value: &str, when: &str| {
+        let mut d = doc.clone();
+        d["nodes"][&cid][field] = value.into();
+        d["nodes"][&cid]["updated_at"] = when.into();
+        d
+    };
+    alice.git(&["checkout", "-q", "-b", "theirs"]);
+    alice.write_doc(&at(
+        &good,
+        "status",
+        "completed",
+        "2026-09-23T20:00:00+00:00",
+    ));
+    alice.commit_graph("theirs: completed at 20:00");
+    alice.git(&["checkout", "-q", "main"]);
+    alice.write_doc(&at(
+        &good,
+        "title",
+        "OURS RENAMED",
+        "2026-09-23T19:00:00+00:00",
+    ));
+    alice.commit_graph("ours: renamed at 19:00");
+
+    // Without the ancestor, every differing field would go to the newer
+    // record: title "A", and our rename silently gone.
+    let out = alice.git_out(&["merge", "--no-edit", "theirs"]);
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !out.status.success(),
+        "the merge went through: {text}\n{}",
+        alice.graph_text()
+    );
+    assert!(text.contains("common ancestor"), "{text}");
+    assert!(!unmerged(&alice).is_empty());
+
+    // sync does not do behind git's back what the driver refused.
+    let (out, _) = alice.fails(&["sync", "--check"]);
+    assert!(out.contains("common ancestor"), "{out}");
+    let (out, err) = alice.fails(&["sync"]);
+    assert!(
+        format!("{out}{err}").contains("common ancestor"),
+        "{out}{err}"
+    );
+    assert!(!unmerged(&alice).is_empty());
+    assert!(alice.graph_text().contains("OURS RENAMED"));
+
+    // The same through the driver called by hand: a failure, not a note.
+    let base = alice.dir.join("base.json");
+    fs::write(&base, "{\"version\": 1, \"nodes\": {\n").unwrap();
+    let ours = alice.dir.join("ours.json");
+    let theirs = alice.dir.join("theirs.json");
+    fs::write(
+        &ours,
+        serde_json::to_string(&at(
+            &good,
+            "title",
+            "OURS RENAMED",
+            "2026-09-23T19:00:00+00:00",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        &theirs,
+        serde_json::to_string(&at(
+            &good,
+            "status",
+            "completed",
+            "2026-09-23T20:00:00+00:00",
+        ))
+        .unwrap(),
+    )
+    .unwrap();
+    let out = alice.run(&[
+        "merge-record",
+        base.to_str().unwrap(),
+        ours.to_str().unwrap(),
+        theirs.to_str().unwrap(),
+    ]);
+    assert!(
+        !out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(fs::read_to_string(&ours).unwrap().contains("OURS RENAMED"));
+
+    // The way out the message names, taken knowingly: a two-way merge.
+    let theirs_blob = alice.git(&["show", ":3:.deciduous/graph.json"]);
+    fs::write(&theirs, theirs_blob).unwrap();
+    alice.ok(&[
+        "merge-record",
+        "/dev/null",
+        ".deciduous/graph.json",
+        theirs.to_str().unwrap(),
+    ]);
+    alice.git(&["add", ".deciduous/graph.json"]);
+    alice.ok(&["sync"]);
+    assert_eq!(status_of(&alice, &goal.to_string()), "completed");
+}

@@ -2398,6 +2398,24 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
     Ok(Value::Object(out))
 }
 
+/// `ours` plus every record `theirs` has and `ours` lacks entirely.
+fn add_missing_records(ours: &Value, theirs: &Value) -> Value {
+    let mut out = ours.clone();
+    for kind in RECORD_KINDS {
+        let Some(incoming) = theirs.get(kind).and_then(Value::as_object) else {
+            continue;
+        };
+        if !out.get(kind).is_some_and(Value::is_object) {
+            out[kind] = Value::Object(Default::default());
+        }
+        let map = out[kind].as_object_mut().expect("just made an object");
+        for (key, rec) in incoming {
+            map.entry(key.clone()).or_insert_with(|| rec.clone());
+        }
+    }
+    out
+}
+
 /// Parse one version of the graph file. A version that still carries
 /// conflict markers is resolved first by merging its own sides: that is what
 /// a clone without the merge driver commits, and every later merge whose
@@ -2436,7 +2454,19 @@ fn parse_version(text: &str, what: &str) -> io::Result<Option<Value>> {
     };
     let o = side(&ours, "ours")?;
     let t = side(&theirs, "theirs")?;
-    let b = base.as_deref().and_then(|b| serde_json::from_str(b).ok());
+    let b = match base.as_deref().map(serde_json::from_str::<Value>) {
+        None => None,
+        Some(Ok(v)) => Some(v),
+        Some(Err(e)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{} has conflict markers and its common ancestor section is not JSON: {}",
+                    what, e
+                ),
+            ))
+        }
+    };
     merge_docs(b.as_ref(), &o, &t).map(Some)
 }
 
@@ -2450,11 +2480,12 @@ pub fn merge_record_files(base: &Path, ours: &Path, theirs: &Path) -> io::Result
 /// [`merge_record_files`], plus notes for the person running the merge
 /// (the driver prints them on stderr, which git shows).
 ///
-/// An ancestor that will not parse even after resolving its markers is
-/// merged without, two-way: both sides' records all survive, and only a
-/// record one side deleted outright (not tombstoned) can come back.
-/// Refusing it instead used to fail the driver, and a failed driver leaves
-/// our side in the file with no markers, which reads as a clean merge.
+/// An ancestor that will not parse even after resolving its markers is an
+/// error, not a two-way merge. Without the ancestor nothing says which side
+/// changed a field, so every field the sides differ on goes to the newer
+/// record and the older side's edits vanish into what git records as a
+/// clean merge. Failing leaves the file unmerged in git, which `sync` and
+/// `sync --check` report (see [`without_ancestor`] for the way out).
 pub fn merge_record_files_with_notes(
     base: &Path,
     ours: &Path,
@@ -2466,20 +2497,24 @@ pub fn merge_record_files_with_notes(
             &format!("{} ({})", what, p.display()),
         )
     };
-    let mut notes = Vec::new();
-    let base_v = match read(base, "the common ancestor") {
-        Ok(v) => v,
-        Err(e) => {
-            notes.push(format!("{}; merged without it", e));
-            None
-        }
-    };
+    let notes = Vec::new();
+    let base_v = read(base, "the common ancestor")
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, without_ancestor(&e)))?;
     let ours_v = read(ours, "ours")?
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ours is empty"))?;
     let theirs_v = read(theirs, "theirs")?
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "theirs is empty"))?;
     let merged = merge_docs(base_v.as_ref(), &ours_v, &theirs_v)?;
     Ok((to_stable_json(&merged)?, notes))
+}
+
+/// Why a merge whose common ancestor will not parse is refused, and how to
+/// do it anyway, knowingly.
+pub fn without_ancestor(e: &dyn std::fmt::Display) -> String {
+    format!(
+        "{}. Without the common ancestor every field the two sides differ on would go to the newer record and the older side's edits would be lost, so this merge is left to you. To merge the two sides without it anyway: `git show :3:.deciduous/graph.json > /tmp/theirs.json && deciduous merge-record /dev/null .deciduous/graph.json /tmp/theirs.json && git add .deciduous/graph.json`",
+        e
+    )
 }
 
 /// Split a file that contains git conflict markers into (ours, base, theirs).
@@ -2659,10 +2694,17 @@ impl RecordStore {
                 "unmerged in git, and one side deleted the graph file; restore it with `git checkout --ours` or `--theirs`, then `deciduous sync`".into(),
             ));
         };
-        let base = stages
+        let base = match stages
             .base
             .as_deref()
-            .and_then(|b| parse_version(b, "base").ok().flatten());
+            .map(|b| parse_version(b, "the common ancestor (git stage 1)"))
+        {
+            None => None,
+            Some(Ok(v)) => v,
+            Some(Err(e)) => {
+                return Ok(failed(format!("unmerged in git: {}", without_ancestor(&e))))
+            }
+        };
         let doc = merge_docs(base.as_ref(), &ours, &theirs).and_then(|v| {
             serde_json::from_value::<GraphDoc>(v)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
@@ -2777,12 +2819,19 @@ impl RecordStore {
             };
             let what = |w: &str| format!("the graph file in {} ({})", label, w);
             let theirs = parse_version(&theirs, &what("incoming"))?;
-            let base = match base.as_deref().and_then(|b| self.show_at(b)) {
-                Some(text) => parse_version(&text, &what("its base"))?,
-                None => None,
-            };
             let Some(theirs) = theirs else { continue };
-            let next = merge_docs(base.as_ref(), &merged, &theirs)?;
+            let base = base
+                .as_deref()
+                .and_then(|b| self.show_at(b))
+                .map(|text| parse_version(&text, &what("its base")));
+            let next = match base {
+                None => merge_docs(None, &merged, &theirs)?,
+                Some(Ok(base)) => merge_docs(base.as_ref(), &merged, &theirs)?,
+                // The driver refused this merge for its ancestor, and
+                // whoever resolved it chose how. Without the ancestor no
+                // field can be judged; a record missing outright still can.
+                Some(Err(_)) => add_missing_records(&merged, &theirs),
+            };
             let next = serde_json::from_value::<GraphDoc>(next)
                 .and_then(serde_json::to_value)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
@@ -2830,13 +2879,19 @@ impl RecordStore {
     /// What is wrong with the graph file as git left it, without changing
     /// anything: unmerged in git, or carrying conflict markers.
     pub fn pending_conflicts(&self) -> Vec<ConflictRepair> {
-        if self.is_unmerged_in_git() {
+        if let Some(stages) = self.unmerged_stages() {
+            let base = stages
+                .base
+                .as_deref()
+                .map(|b| parse_version(b, "the common ancestor (git stage 1)"));
+            let message = match base {
+                Some(Err(e)) => format!("unmerged in git: {}", without_ancestor(&e)),
+                _ => "unmerged in git: the merge driver failed or was not found (is `deciduous` on git's PATH?); `deciduous sync` will merge it".into(),
+            };
             return vec![ConflictRepair {
                 path: self.path.display().to_string(),
                 merged: false,
-                message: Some(
-                    "unmerged in git: the merge driver failed or was not found (is `deciduous` on git's PATH?); `deciduous sync` will merge it".into(),
-                ),
+                message: Some(message),
             }];
         }
         let markers: Vec<ConflictRepair> = self
@@ -2889,7 +2944,21 @@ impl RecordStore {
                     continue;
                 }
             };
-            let base_v = base.as_deref().and_then(|b| parse(b).ok());
+            let base_v = match base.as_deref().map(parse) {
+                None => None,
+                Some(Ok(v)) => Some(v),
+                Some(Err(e)) => {
+                    out.push(ConflictRepair {
+                        path: display,
+                        merged: false,
+                        message: Some(format!(
+                            "its common ancestor (the ||||||| section) is not JSON: {}. Without it every field the two sides differ on would go to the newer record and the older side's edits would be lost; delete that section by hand to merge without it anyway",
+                            e
+                        )),
+                    });
+                    continue;
+                }
+            };
             let merged = match merge_docs(base_v.as_ref(), &ours_v, &theirs_v).and_then(|v| {
                 serde_json::from_value::<GraphDoc>(v)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
