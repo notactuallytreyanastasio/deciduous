@@ -435,9 +435,10 @@ fn new_9_pull_counts_a_server_delete_once() {
         agent.call_ok("delete_node", json!({"node_id": u}));
     }
     // G: carol's copy is untouched, so reconcile applies the tombstone.
-    t.offline(&t.carol);
-    t.carol.ok(&["status", &f, "completed"]);
-    t.online(&t.carol);
+    // F: her edit is made with no [remote], so no op carries it. A queued
+    // one would now bring F back on the server (an edit made after a
+    // delete), and the pull would have one deletion to count, not two.
+    unlogged(&t.carol, &["status", &f, "completed"]);
     let out = t.carol.ok(&["remote", "pull"]);
     assert!(
         out.contains("removed 2"),
@@ -962,4 +963,62 @@ fn bridge_n6_a_stream_resumes_from_the_last_event_it_saw() {
         other => panic!("{other:?}"),
     };
     assert_eq!(first["seq"].as_u64(), Some(seqs[1]));
+}
+
+// ------------------------------------------- chapter 29 verification, round 2
+
+/// Finding "an edit made after a delete loses on the server when the delete
+/// arrived first": alice deletes C online, bob, offline and unaware, sets
+/// its status 1.1 s later. git keeps bob's edit; the server refused it as
+/// an edit to a deleted node, and the pulls that followed deleted C on
+/// every clone. NEW-2 is the same race with the edit arriving first.
+#[test]
+fn log_conflicts_an_edit_after_a_delete_that_reached_the_server_first_brings_it_back() {
+    let Some(server) = remote("log_conflicts_delete_first") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "lcdel");
+    let c = t.alice.add("goal", "C");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.bob, true);
+    t.exchange(&t.carol, true);
+
+    t.offline(&t.bob);
+    t.alice.ok(&["delete", &c]);
+    assert!(
+        t.server_node(&c).is_none(),
+        "alice's online delete did not apply"
+    );
+    t.exchange(&t.alice, true);
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+
+    t.bob.ok(&["status", &c, "completed"]);
+    t.exchange(&t.bob, false);
+    assert_eq!(
+        status_of(&t.bob, &c).as_deref(),
+        Some("completed"),
+        "git's merge should keep bob's edit made after the delete"
+    );
+    t.online(&t.bob);
+    let push = t.bob.dx(&["remote", "push"]);
+    assert!(push.ok(), "bob's later edit was refused:\n{}", push.all());
+    assert_eq!(
+        t.server_node(&c).map(|n| n["status"].clone()),
+        Some(json!("completed")),
+        "the server did not take bob's edit made after the delete"
+    );
+
+    for p in [&t.carol, &t.alice, &t.bob] {
+        t.exchange(p, true);
+        p.ok(&["remote", "pull"]);
+    }
+    for p in [&t.carol, &t.alice, &t.bob] {
+        assert_eq!(
+            status_of(p, &c).as_deref(),
+            Some("completed"),
+            "{} lost bob's edit",
+            p.dir.display()
+        );
+    }
 }

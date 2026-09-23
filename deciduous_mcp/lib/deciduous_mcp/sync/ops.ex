@@ -262,7 +262,7 @@ defmodule DeciduousMcp.Sync.Ops do
          :ok <- nonempty(cid, set, meta),
          {:ok, was} <- previous(op, "was", Map.keys(set)),
          {:ok, was_meta} <- previous(op, "was_metadata", Map.keys(meta)),
-         {:ok, node} <- live_node(ws, cid, lock: true),
+         {:ok, node} <- editable_node(ws, cid, op),
          {:ok, set} <- compare(cid, set, was, &Map.get(node, String.to_existing_atom(&1))),
          {:ok, meta} <-
            compare(cid, meta, was_meta, &Map.get(node.metadata || %{}, &1), "metadata.") do
@@ -271,11 +271,11 @@ defmodule DeciduousMcp.Sync.Ops do
           do: set,
           else: Map.put(set, "metadata", Map.merge(node.metadata || %{}, meta))
 
-      if attrs == %{} do
+      if attrs == %{} and is_nil(node.deleted_at) do
         # Every field already held the value this op sets.
         {:ok, "exists"}
       else
-        case Nodes.update_node(node.id, attrs) do
+        case Nodes.update_node(node.id, attrs, revive: true) do
           {:ok, _} -> {:ok, "applied"}
           {:error, %Ecto.Changeset{} = cs} -> {:rejected, "update_node #{cid}: #{errors(cs)}"}
           {:error, other} -> {:rejected, "update_node #{cid}: #{describe(other)}"}
@@ -290,7 +290,14 @@ defmodule DeciduousMcp.Sync.Ops do
   # a laptop won over an edit made after it anywhere else, and `remote pull`
   # then deleted the edited node on every clone (round-2 NEW-2). git's merge
   # driver keeps the edit in that race ("an edit after a delete brings the
-  # node back"); this is the same rule, decided by content instead of clocks.
+  # node back").
+  #
+  # Content settles it only when the edit reaches the server first. When
+  # the delete is first, the edit meets a tombstone, and content cannot say
+  # whether it was made before the delete or after it; that takes clocks,
+  # as git's driver uses. The tombstone is dated when the delete was made
+  # (the op's `at`, not its arrival), and `editable_node/3` lets an edit
+  # made after it bring the node back.
   #
   # A delete of a node this server never had leaves a tombstone. The node
   # reached the deleter through git, and its create is still queued on the
@@ -298,7 +305,8 @@ defmodule DeciduousMcp.Sync.Ops do
   # put the node back for good (NEW-3).
   defp apply_op(ws, "delete_node", op) do
     with {:ok, cid} <- change_id(op, "change_id"),
-         {:ok, was} <- deleted_state(op) do
+         {:ok, was} <- deleted_state(op),
+         {:ok, made} <- made_at(op) do
       case any_node(ws, cid, lock: true) do
         nil ->
           bury(ws, cid, op)
@@ -307,7 +315,7 @@ defmodule DeciduousMcp.Sync.Ops do
         %Node{deleted_at: nil} = node ->
           case delete_conflicts(node, was) do
             [] ->
-              case Nodes.delete_node(node.id) do
+              case Nodes.delete_node(node.id, at: made) do
                 {:ok, _} -> {:ok, "applied"}
                 {:error, other} -> {:rejected, "delete_node #{cid}: #{describe(other)}"}
               end
@@ -778,6 +786,50 @@ defmodule DeciduousMcp.Sync.Ops do
     q = if opts[:lock], do: lock(q, "FOR UPDATE"), else: q
     Repo.one(q)
   end
+
+  # The node an update_node op edits: a live one, or a deleted one when the
+  # edit was made after the delete (see the delete_node clause). A row
+  # `bury/3` left for a node this server never held is not brought back: it
+  # has no title or type to bring.
+  defp editable_node(ws, cid, op) do
+    case any_node(ws, cid, lock: true) do
+      nil ->
+        {:rejected, "no node #{cid} on the server"}
+
+      %Node{deleted_at: nil} = node ->
+        {:ok, node}
+
+      %Node{deleted_at: dead} = node ->
+        cond do
+          node.title == "" and node.inserted_at == dead ->
+            {:rejected,
+             "node #{cid} was deleted here, and this server never held it; an edit does not " <>
+               "bring it back"}
+
+          not is_binary(op["at"]) ->
+            {:rejected,
+             "node #{cid} was deleted on the server, and this edit has no `at` to say " <>
+               "whether it was made after the delete"}
+
+          true ->
+            with {:ok, made} <- instant(op, "at") do
+              if DateTime.compare(made, dead) == :gt do
+                {:ok, node}
+              else
+                {:rejected,
+                 "node #{cid} was deleted on the server at #{DateTime.to_iso8601(dead)}, " <>
+                   "after this edit was made at #{DateTime.to_iso8601(made)}"}
+              end
+            end
+        end
+    end
+  end
+
+  # When a CLI op was made, for dating what it does; nil (now) for an op
+  # that does not say. An `at` that is not a time is refused by name.
+  defp made_at(%{"at" => nil}), do: {:ok, nil}
+  defp made_at(%{"at" => _} = op), do: instant(op, "at")
+  defp made_at(_), do: {:ok, nil}
 
   defp live_node(ws, cid, opts \\ []) do
     case any_node(ws, cid, opts) do

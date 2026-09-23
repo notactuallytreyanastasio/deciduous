@@ -462,6 +462,96 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     refute is_nil(node(w, "c").deleted_at)
   end
 
+  # Verification of chapter 29 (delete first, edit later): alice deleted C
+  # online, bob, offline and unaware, set its status 1.1 s later. git keeps
+  # bob's edit; the server refused it as an edit to a deleted node, and the
+  # next pulls deleted his edit on every clone.
+  defp edit_at(cid, at, set, was) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "update_node",
+      change_id: cid,
+      at: at,
+      set: set,
+      was: was
+    }
+  end
+
+  defp iso(dt), do: DateTime.to_iso8601(dt)
+
+  test "log_conflicts_delete_first: an edit made after an agent's delete brings the node back",
+       %{token: token} do
+    ws = "ops-dfirst-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    {:ok, _} = Nodes.delete_node(node(w, "c").id)
+    later = DateTime.add(DateTime.utc_now(), 1, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(later), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "applied", inspect(r)
+    assert is_nil(node(w, "c").deleted_at)
+    assert node(w, "c").status == "completed"
+    assert node(w, "c").title == "C"
+  end
+
+  test "log_conflicts_delete_first: an edit made before the delete stays refused, with both times",
+       %{token: token} do
+    ws = "ops-dfirst2-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    earlier = DateTime.add(DateTime.utc_now(), -5, :second)
+    {:ok, _} = Nodes.delete_node(node(w, "c").id)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(earlier), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "was deleted on the server at"
+    assert r["reason"] =~ iso(DateTime.truncate(earlier, :microsecond))
+    refute is_nil(node(w, "c").deleted_at)
+  end
+
+  test "log_conflicts_delete_first: an offline delete is dated when it was made, not when it arrived",
+       %{token: token} do
+    ws = "ops-dfirst3-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    made = DateTime.add(DateTime.utc_now(), -60, :second)
+    edited = DateTime.add(made, 30, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [Map.put(delete("c", %{"title" => "C"}), :at, iso(made))])
+
+    assert r["result"] == "applied", inspect(r)
+    assert DateTime.compare(node(w, "c").deleted_at, DateTime.truncate(made, :microsecond)) == :eq
+
+    # Bob's edit was made after the delete and reached the server after it.
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(edited), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "applied", inspect(r)
+    assert node(w, "c").status == "completed"
+    assert is_nil(node(w, "c").deleted_at)
+  end
+
+  test "log_conflicts_delete_first: an edit does not bring back a node the server never had",
+       %{token: token} do
+    ws = "ops-dfirst4-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("t", %{"title" => "T"})])
+    assert r["result"] == "absent"
+    later = DateTime.add(DateTime.utc_now(), 1, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("t", iso(later), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "never held"
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    refute is_nil(node(w, "t").deleted_at)
+  end
+
   test "new_2: a delete that does not say what it deleted is refused", %{token: token} do
     ws = "ops-new2b-" <> Integer.to_string(System.unique_integer([:positive]))
     {200, _} = ops(token, ws, [create("c", "C")])
