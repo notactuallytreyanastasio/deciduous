@@ -359,6 +359,92 @@ fn new_4_pull_keeps_a_field_whose_op_is_still_queued() {
     assert_eq!(doc["nodes"][&c]["status"], json!("completed"));
 }
 
+/// NEW-1, the other side of the fix: what `sync` queues from git can be
+/// older than the server. Alice sets C completed offline and pushes git;
+/// meanwhile an agent sets C active. Bob's sync queues git's
+/// pending -> completed, which the server refuses: it holds a newer value.
+/// Nobody's write was lost (alice's own op is refused to her), so bob's
+/// sync and push must not report a failed write of his and exit 1.
+#[test]
+fn new_1_a_git_edit_older_than_the_server_is_not_bobs_refusal() {
+    let Some(server) = remote("new_1b") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "new1b");
+    let c = t.alice.add("goal", "C");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.bob, true);
+
+    t.offline(&t.alice);
+    t.alice.ok(&["status", &c, "completed"]);
+    t.exchange(&t.alice, false);
+    let mut agent = t.agent();
+    let u = agent.uuid_of(&t.ws, &c);
+    agent.call_ok("update_node", json!({"node_id": u, "status": "active"}));
+
+    let sync = t.bob.git(&["pull", "-q", "--no-rebase", "origin", "main"]);
+    assert!(sync.ok(), "{}", sync.all());
+    t.online(&t.bob);
+    let sync = t.bob.dx(&["sync"]);
+    let push = t.bob.dx(&["remote", "push"]);
+    for (what, out) in [("sync", &sync), ("push", &push)] {
+        assert!(out.ok(), "bob's {what} failed:\n{}", out.all());
+        assert!(
+            !out.all().contains("the server refused"),
+            "bob's {what} said the server refused his write; it was git's, and older:\n{}",
+            out.all()
+        );
+        assert!(
+            !out.all().contains("had not reached"),
+            "bob's {what} said a write made here had not been queued:\n{}",
+            out.all()
+        );
+    }
+    assert!(
+        sync.all().contains("Behind the server"),
+        "bob's sync did not say the server is ahead of git:\n{}",
+        sync.all()
+    );
+    assert_eq!(t.server_node(&c).unwrap()["status"], json!("active"));
+}
+
+// ---------------------------------------------------------------- NEW-9
+
+/// NEW-9: one node deleted on the server, one pull, "removed 2".
+#[test]
+fn new_9_pull_counts_a_server_delete_once() {
+    let Some(server) = remote("new_9") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "new9");
+    let f = t.alice.add("goal", "F");
+    t.alice.add("goal", "kept");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.carol, true);
+    // Carol's copy of F is edited after the agent's delete: the pull
+    // deletes it over that edit (the overridden path) and must count it
+    // once.
+    let g = t.alice.add("goal", "G");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.carol, true);
+    let mut agent = t.agent();
+    for cid in [&f, &g] {
+        let u = agent.uuid_of(&t.ws, cid);
+        agent.call_ok("delete_node", json!({"node_id": u}));
+    }
+    // G: carol's copy is untouched, so reconcile applies the tombstone.
+    t.offline(&t.carol);
+    t.carol.ok(&["status", &f, "completed"]);
+    t.online(&t.carol);
+    let out = t.carol.ok(&["remote", "pull"]);
+    assert!(
+        out.contains("removed 2"),
+        "two nodes were deleted on the server:\n{out}"
+    );
+}
+
 // ---------------------------------------------------------------- stack
 
 /// Stack report, model seeds 1790191170825091000 and 1790191560410294000:

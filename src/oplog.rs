@@ -94,9 +94,26 @@ pub struct Op {
     pub op_id: String,
     /// When the local write happened.
     pub at: String,
+    /// `git` for a write this machine applied from graph.json: a
+    /// teammate's edit that reached it through git, which the server may
+    /// already have, or have something newer than. The server ignores it;
+    /// a refusal of such an op means the server is ahead of git, which is
+    /// not a failure of anyone's write (see `remote::print_rejected`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
     #[serde(flatten)]
     pub body: OpBody,
 }
+
+impl Op {
+    /// Whether this op carries an edit that came through git.
+    pub fn from_git(&self) -> bool {
+        self.origin.as_deref() == Some(GIT)
+    }
+}
+
+/// [`Op::origin`] of an edit applied from graph.json.
+pub const GIT: &str = "git";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -370,6 +387,9 @@ pub fn is_set_aside(reason: &str) -> bool {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "entry", rename_all = "snake_case")]
+// Entries are read and written one at a time; boxing the op would only
+// move the allocation.
+#[allow(clippy::large_enum_variant)]
 enum Entry {
     Op(Op),
     Ack(Ack),
@@ -563,6 +583,7 @@ impl OpLog {
         Op {
             op_id: uuid::Uuid::new_v4().to_string(),
             at: chrono::Utc::now().to_rfc3339(),
+            origin: None,
             body,
         }
     }
@@ -1137,6 +1158,7 @@ mod tests {
         let v = serde_json::to_value(Entry::Op(Op {
             op_id: "o".into(),
             at: "t".into(),
+            origin: None,
             body: status("c", "completed"),
         }))
         .unwrap();

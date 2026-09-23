@@ -1066,10 +1066,16 @@ enum TagAction {
     },
 }
 
-/// `std::process::exit`, after sending what this process queued for the
-/// server. `exit` skips destructors, so every command that wrote and then
-/// failed (a pivot whose third step errors, say) left its first writes in the
-/// log unsent, while the same command succeeding sent them.
+/// The server's refusals of writes made here: not ops this machine set
+/// aside, and not edits it only applied from graph.json (a refusal of one
+/// of those means the server is ahead of git).
+fn own_refusals(rejected: &[(deciduous::oplog::Op, String)]) -> usize {
+    rejected
+        .iter()
+        .filter(|(op, why)| !deciduous::remote::is_set_aside(why) && !op.from_git())
+        .count()
+}
+
 /// Says which refused writes were dropped because they are over.
 fn print_settled(settled: &[deciduous::oplog::Op]) {
     if settled.is_empty() {
@@ -1084,6 +1090,10 @@ fn print_settled(settled: &[deciduous::oplog::Op]) {
     }
 }
 
+/// `std::process::exit`, after sending what this process queued for the
+/// server. `exit` skips destructors, so every command that wrote and then
+/// failed (a pivot whose third step errors, say) left its first writes in the
+/// log unsent, while the same command succeeding sent them.
 fn exit(code: i32) -> ! {
     if let Some(log) = deciduous::oplog::take_appended() {
         deciduous::remote::replay_after_write(&log);
@@ -2946,7 +2956,7 @@ fn main() {
                             );
                             deciduous::remote::print_rejected(&r.rejected, &log);
                             undelivered = aside > 0;
-                            refused = r.rejected.len() - aside;
+                            refused = own_refusals(&r.rejected);
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -3052,7 +3062,7 @@ fn main() {
                                         r.rejected.len()
                                     );
                                     deciduous::remote::print_rejected(&r.rejected, &log);
-                                    refused += r.rejected.len();
+                                    refused += own_refusals(&r.rejected);
                                 }
                                 Err(e) => {
                                     eprintln!(
@@ -3083,7 +3093,8 @@ fn main() {
                             .and_then(|g| deciduous::remote::drop_settled(&log, &db, &g));
                         match settled {
                             Ok(s) => {
-                                refused = refused.saturating_sub(s.len());
+                                refused = refused
+                                    .saturating_sub(s.iter().filter(|o| !o.from_git()).count());
                                 print_settled(&s);
                             }
                             Err(e) => eprintln!(

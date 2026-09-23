@@ -907,9 +907,28 @@ impl Database {
         conn: &mut SqliteConnection,
         bodies: Vec<crate::oplog::OpBody>,
     ) -> Result<Vec<Queued>> {
+        self.queue_in_tx_from(conn, bodies, None)
+    }
+
+    /// [`Self::queue_in_tx`] for what reconcile applies from graph.json.
+    fn queue_git_in_tx(
+        &self,
+        conn: &mut SqliteConnection,
+        bodies: Vec<crate::oplog::OpBody>,
+    ) -> Result<Vec<Queued>> {
+        self.queue_in_tx_from(conn, bodies, Some(crate::oplog::GIT))
+    }
+
+    fn queue_in_tx_from(
+        &self,
+        conn: &mut SqliteConnection,
+        bodies: Vec<crate::oplog::OpBody>,
+        origin: Option<&str>,
+    ) -> Result<Vec<Queued>> {
         let mut out = Vec::with_capacity(bodies.len());
         for body in bodies {
-            let op = crate::oplog::OpLog::new_op(body);
+            let mut op = crate::oplog::OpLog::new_op(body);
+            op.origin = origin.map(str::to_string);
             if let Some(at) = crate::oplog::nul_path(&op) {
                 return Err(DbError::Validation(format!(
                     "nothing was written: {at} holds a NUL character, which the shared server \
@@ -1007,15 +1026,18 @@ impl Database {
             .collect();
         log.append_ops(&missing)?;
         self.forget_queued(last).map_err(|e| e.to_string())?;
-        if !missing.is_empty() {
+        // What reconcile applied from graph.json reaches the log this way
+        // by design (one append per reconcile); only a write made here and
+        // not queued is news.
+        let lost: Vec<&crate::oplog::Op> = missing.iter().filter(|o| !o.from_git()).collect();
+        if !lost.is_empty() {
             eprintln!(
                 "Note: {} write(s) made here earlier had not reached {} (the process that made \
                  them stopped before queueing them, or the file could not be written); they are \
                  queued now: {}",
-                missing.len(),
+                lost.len(),
                 log.path().display(),
-                missing
-                    .iter()
+                lost.iter()
                     .map(|o| o.body.describe())
                     .collect::<Vec<_>>()
                     .join("; ")
@@ -2279,7 +2301,7 @@ impl Database {
                 "last_insert_rowid()",
             ))
             .first(conn)?;
-            self.queue_in_tx(conn, body.into_iter().collect())?;
+            self.queue_git_in_tx(conn, body.into_iter().collect())?;
             Ok(id)
         })
     }
@@ -2304,7 +2326,7 @@ impl Database {
                 Some(before) => Self::record_update_body(before, rec),
                 None => Vec::new(),
             };
-            self.queue_in_tx(conn, bodies)?;
+            self.queue_git_in_tx(conn, bodies)?;
             Ok(())
         })
     }
@@ -2449,7 +2471,7 @@ impl Database {
                 "last_insert_rowid()",
             ))
             .first(conn)?;
-            self.queue_in_tx(conn, body.into_iter().collect())?;
+            self.queue_git_in_tx(conn, body.into_iter().collect())?;
             Ok(id)
         })
     }
@@ -2485,7 +2507,7 @@ impl Database {
             };
             match (row.from_change_id.clone(), row.to_change_id.clone()) {
                 (Some(from_change_id), Some(to_change_id)) => {
-                    self.queue_in_tx(
+                    self.queue_git_in_tx(
                         conn,
                         vec![crate::oplog::OpBody::DeleteEdge {
                             from_change_id,
@@ -3098,7 +3120,12 @@ impl Database {
             // 5. Finally delete the node itself
             diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
                 .execute(conn)?;
-            let queued = self.queue_in_tx(conn, bodies)?;
+            // A delete that is not published came from graph.json.
+            let queued = if publish {
+                self.queue_in_tx(conn, bodies)?
+            } else {
+                self.queue_git_in_tx(conn, bodies)?
+            };
             Ok::<_, DbError>((doomed_tags, queued))
         })?;
         drop(conn);

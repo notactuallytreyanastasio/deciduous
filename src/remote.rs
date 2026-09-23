@@ -1813,6 +1813,24 @@ pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplo
     let (aside, refused): (Vec<_>, Vec<_>) = rejected
         .iter()
         .partition(|(_, reason)| is_set_aside(reason));
+    // What this machine applied from graph.json and the server refused:
+    // the server holds something newer than git brought here. Nobody's
+    // write was lost, so it is said apart, and it does not fail a push.
+    let (behind, refused): (Vec<_>, Vec<_>) =
+        refused.into_iter().partition(|(op, _)| op.from_git());
+    if !behind.is_empty() {
+        eprintln!(
+            "{} {} edit(s) that came here through git are older than what the server holds, which keeps its own:",
+            "Behind the server:".yellow(),
+            behind.len()
+        );
+        for (op, reason) in behind.iter().take(10) {
+            eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+        }
+        eprintln!(
+            "`deciduous remote pull` takes the server's values here and drops these; commit graph.json after it."
+        );
+    }
     if !refused.is_empty() {
         eprintln!(
             "{} the server refused {} write(s):",
