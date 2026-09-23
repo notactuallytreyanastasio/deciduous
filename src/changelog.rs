@@ -17,6 +17,7 @@ pub const RELEASES: &[Release] = &[
             "Every MCP tool call has a 60-second deadline: a handler still running is stopped, its uncommitted writes roll back, and the call is answered with an error under its own id instead of hanging past Claude Code's 120-second background cutoff",
             "Server warnings and errors reach the log; the bundled Hermes library dropped every message above the configured level",
             "ask_graph's text search stays in the workspace it was asked about and skips deleted nodes; it used to match every workspace on the server",
+            "Agents log as they work: the installed Claude Code hook denies the next tool call after ten actions or an unlogged commit without a graph write, and `deciduous update` merges it into existing projects",
             "Trigram indexes serve query_nodes search and ask_graph: a search across all workspaces went from 85 ms to 3 ms on production",
             "The shared graph server ships as a Burrito executable with Erlang/OTP and Elixir included; users no longer need to install them separately",
             "One-command Docker setup generates private credentials, starts persistent PostgreSQL 17, applies migrations, and waits for readiness; it also supports an existing database and preserves saved settings on repeat runs",
