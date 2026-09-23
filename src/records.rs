@@ -561,6 +561,13 @@ impl GraphDoc {
     }
 }
 
+/// Whether `text` holds git conflict markers as git writes them: at the
+/// start of a line. The one test for both "can sync merge this" and "should
+/// the error send you to sync", so they cannot disagree.
+fn has_conflict_markers(text: &str) -> bool {
+    text.starts_with("<<<<<<<") || text.contains("\n<<<<<<<")
+}
+
 /// Read the graph file. A missing or empty file is an empty graph; anything
 /// else that will not parse is an error, never an empty graph, so a corrupt
 /// file is reported instead of being overwritten with local rows.
@@ -576,8 +583,10 @@ fn load_doc(path: &Path) -> io::Result<GraphDoc> {
     serde_json::from_str(&text).map_err(|e| {
         // Not "run `deciduous sync`" for a file that is merely broken: that
         // is often the very command that just failed.
-        let hint = if text.contains("<<<<<<<") {
+        let hint = if has_conflict_markers(&text) {
             "; it still has git conflict markers, run `deciduous sync` to merge it"
+        } else if text.contains("<<<<<<<") {
+            "; it has conflict markers that are not at the start of a line, so they are not git's as written and `deciduous sync` cannot split them (a hand edit or reformat?). Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`"
         } else {
             "; left untouched. Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`; local rows missing from it are exported by the next sync"
         };
@@ -2643,7 +2652,7 @@ impl RecordStore {
     /// a clone where `deciduous merge-record` is not registered.
     pub fn conflicted_files(&self) -> Vec<PathBuf> {
         match fs::read_to_string(&self.path) {
-            Ok(text) if text.starts_with("<<<<<<<") || text.contains("\n<<<<<<<") => {
+            Ok(text) if has_conflict_markers(&text) => {
                 vec![self.path.clone()]
             }
             _ => Vec::new(),

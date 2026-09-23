@@ -1529,3 +1529,30 @@ fn remote_pull_merges_into_graph_json_instead_of_overwriting_it() {
     let out = alice.ok(&["sync", "--check"]);
     assert!(out.contains("already agree"), "{out}");
 }
+
+#[test]
+fn indented_conflict_markers_are_not_sent_back_to_the_sync_that_cannot_merge_them() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "Here", &[]);
+    // A reformatted or hand-edited conflict: the markers are not at the
+    // start of a line, so they are not git's and sync cannot split them.
+    let text = alice.graph_text().replacen(
+        "  \"nodes\": {",
+        "  \"nodes\": {\n    <<<<<<< HEAD\n    =======\n    >>>>>>> theirs",
+        1,
+    );
+    fs::write(alice.graph_path(), &text).unwrap();
+    for args in [&["sync"][..], &["sync", "--check"][..]] {
+        let out = alice.run(args);
+        assert!(!out.status.success());
+        let said = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert!(!said.contains("run `deciduous sync`"), "{args:?}: {said}");
+        assert!(said.contains("by hand"), "{args:?}: {said}");
+    }
+    assert_eq!(alice.graph_text(), text);
+}
