@@ -289,6 +289,101 @@ impl Remote {
     }
 }
 
+/// The part of a local graph (as `deciduous graph` emits it) the server does
+/// not have: nodes whose change_id it lacks, edges whose (from, to, type) it
+/// lacks, documents whose change_id it lacks. Returns the filtered graph and
+/// how many nodes and edges it holds.
+///
+/// This is what `remote push` sends unless told `--overwrite`. The server's
+/// import replaces a row it already has, so sending the whole local graph
+/// overwrote whatever had changed on the server since (a status set through
+/// MCP, a rationale edited) with the stale local copy.
+///
+/// Edges are keyed through the local node map first: an edge row's stored
+/// change ids can be stale or absent in older databases. Keyed by the stored
+/// ids alone, one 7,805-node workspace looked like 51,092 missing edges, every
+/// one of which already existed.
+pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, usize) {
+    use std::collections::{HashMap, HashSet};
+    let have_nodes: HashSet<&str> = server.nodes.iter().map(|n| n.change_id.as_str()).collect();
+    let have_edges: HashSet<(&str, &str, &str)> = server
+        .edges
+        .iter()
+        .filter_map(|e| {
+            Some((
+                e.from_change_id.as_deref()?,
+                e.to_change_id.as_deref()?,
+                e.edge_type.as_str(),
+            ))
+        })
+        .collect();
+    let have_docs: HashSet<&str> = server
+        .documents
+        .iter()
+        .filter_map(|d| d["change_id"].as_str())
+        .collect();
+
+    let empty = Vec::new();
+    let nodes = local["nodes"].as_array().unwrap_or(&empty);
+    let by_id: HashMap<i64, &str> = nodes
+        .iter()
+        .filter_map(|n| Some((n["id"].as_i64()?, n["change_id"].as_str()?)))
+        .collect();
+
+    let send_nodes: Vec<Value> = nodes
+        .iter()
+        .filter(|n| {
+            n["change_id"]
+                .as_str()
+                .is_some_and(|c| !have_nodes.contains(c))
+        })
+        .cloned()
+        .collect();
+
+    let mut send_edges = Vec::new();
+    for e in local["edges"].as_array().unwrap_or(&empty) {
+        let end = |id: &str, cid: &str| {
+            e[id]
+                .as_i64()
+                .and_then(|i| by_id.get(&i).copied())
+                .or_else(|| e[cid].as_str())
+        };
+        let (Some(f), Some(t)) = (
+            end("from_node_id", "from_change_id"),
+            end("to_node_id", "to_change_id"),
+        ) else {
+            continue;
+        };
+        let kind = e["edge_type"].as_str().unwrap_or("leads_to");
+        if have_edges.contains(&(f, t, kind)) {
+            continue;
+        }
+        let mut e = e.clone();
+        e["from_change_id"] = Value::String(f.to_string());
+        e["to_change_id"] = Value::String(t.to_string());
+        send_edges.push(e);
+    }
+
+    let send_docs: Vec<Value> = local["documents"]
+        .as_array()
+        .unwrap_or(&empty)
+        .iter()
+        .filter(|d| {
+            d["change_id"]
+                .as_str()
+                .is_some_and(|c| !have_docs.contains(c))
+        })
+        .cloned()
+        .collect();
+
+    let (n, m) = (send_nodes.len(), send_edges.len());
+    (
+        serde_json::json!({"nodes": send_nodes, "edges": send_edges, "documents": send_docs}),
+        n,
+        m,
+    )
+}
+
 #[derive(Debug, Default)]
 pub struct RemoteCounts {
     pub nodes: usize,
@@ -552,6 +647,65 @@ pub fn write_remote_url(project: &Path, url: &str) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
+
+    fn server(nodes: &[&str], edges: &[(&str, &str, &str)]) -> RemoteGraph {
+        RemoteGraph {
+            nodes: nodes
+                .iter()
+                .map(|c| RemoteNode {
+                    change_id: c.to_string(),
+                    node_type: "goal".into(),
+                    title: "t".into(),
+                    description: None,
+                    status: "pending".into(),
+                    metadata: None,
+                    created_at: "x".into(),
+                    updated_at: "x".into(),
+                    deleted_at: None,
+                })
+                .collect(),
+            edges: edges
+                .iter()
+                .map(|(f, t, k)| RemoteEdge {
+                    from_change_id: Some(f.to_string()),
+                    to_change_id: Some(t.to_string()),
+                    edge_type: k.to_string(),
+                    rationale: None,
+                    created_at: "x".into(),
+                })
+                .collect(),
+            documents: vec![],
+        }
+    }
+
+    #[test]
+    fn push_sends_only_what_the_server_lacks_and_never_an_existing_node() {
+        let local = serde_json::json!({
+            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}, {"id": 3, "change_id": "c"}],
+            "edges": [
+                {"from_node_id": 1, "to_node_id": 2, "edge_type": "leads_to"},
+                {"from_node_id": 2, "to_node_id": 3, "edge_type": "leads_to"}
+            ],
+            "documents": []
+        });
+        let (g, n, m) = missing_on_server(&local, &server(&["a", "b"], &[("a", "b", "leads_to")]));
+        assert_eq!((n, m), (1, 1));
+        assert_eq!(g["nodes"][0]["change_id"], "c");
+        assert_eq!(g["edges"][0]["from_change_id"], "b");
+        assert_eq!(g["edges"][0]["to_change_id"], "c");
+    }
+
+    #[test]
+    fn a_stale_stored_change_id_does_not_make_an_existing_edge_look_missing() {
+        // The edge row says "old-a" but node 1's change_id is now "a"; the
+        // server has a -> b. Keyed by the stored id, it would be resent.
+        let local = serde_json::json!({
+            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}],
+            "edges": [{"from_node_id": 1, "to_node_id": 2, "from_change_id": "old-a", "to_change_id": "b", "edge_type": "leads_to"}]
+        });
+        let (_, n, m) = missing_on_server(&local, &server(&["a", "b"], &[("a", "b", "leads_to")]));
+        assert_eq!((n, m), (0, 0));
+    }
     use super::*;
 
     #[test]
