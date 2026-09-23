@@ -141,6 +141,13 @@ fn two_machines_share_a_graph_and_link_across_it() {
     assert!(listing.contains(prefix), "{listing}");
 
     // Bob adds an action and links it to Alice's goal by prefix, not local id.
+    // An all-digit prefix (about 2% of uuids) reads as a local id by design,
+    // so name it with its hyphen then: still a prefix, never a number.
+    let prefix = if prefix.chars().all(|c| c.is_ascii_digit()) {
+        &goal_cid[..9]
+    } else {
+        prefix
+    };
     let action_id = parse_created_id(&bob.ok(&["add", "action", "Add token bucket middleware"]));
     let out = bob.ok(&[
         "link",
