@@ -596,11 +596,21 @@ pub fn run_server() -> io::Result<()> {
 struct Replayer {
     tx: Option<std::sync::mpsc::Sender<crate::oplog::OpLog>>,
     handle: Option<std::thread::JoinHandle<()>>,
+    /// Told when the thread has run its last replay.
+    done: Option<std::sync::mpsc::Receiver<()>>,
 }
+
+/// How long a closing stdio server waits for its last replay. The writes
+/// are on disk in the log either way; this is how long a client that waits
+/// for the process to exit waits on the network. It used to be the replay's
+/// own 10 s, plus a replay already running: about 10 s, and past 10 s for a
+/// second client, against a server that never answers.
+const FINISH_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
 
 impl Replayer {
     fn spawn() -> Self {
         let (tx, rx) = std::sync::mpsc::channel::<crate::oplog::OpLog>();
+        let (done_tx, done) = std::sync::mpsc::channel::<()>();
         let handle = std::thread::Builder::new()
             .name("deciduous-replay".into())
             .spawn(move || {
@@ -611,6 +621,7 @@ impl Replayer {
                     }
                     crate::remote::replay_after_write_quietly(&log, &mut last);
                 }
+                let _ = done_tx.send(());
             })
             .ok();
         if handle.is_none() {
@@ -621,6 +632,7 @@ impl Replayer {
         Replayer {
             tx: handle.as_ref().map(|_| tx),
             handle,
+            done: Some(done),
         }
     }
 
@@ -635,10 +647,27 @@ impl Replayer {
         }
     }
 
+    /// Lets a replay in progress, and one more for what it has not seen,
+    /// finish within [`FINISH_WAIT`]; after that the process exits and the
+    /// writes wait in the log for the next write or `remote push`. Stopping
+    /// a replay midway is safe: an answer not yet recorded is asked again
+    /// ("duplicate"), and a torn last line is mended by the next append.
     fn finish(mut self) {
         drop(self.tx.take());
-        if let Some(h) = self.handle.take() {
+        let Some(h) = self.handle.take() else { return };
+        let finished = self
+            .done
+            .take()
+            .is_some_and(|d| d.recv_timeout(FINISH_WAIT).is_ok());
+        if finished {
             let _ = h.join();
+        } else {
+            eprintln!(
+                "deciduous-mcp: the server did not answer within {} s of stdin closing; \
+                 the writes it has not acknowledged stay queued in the log and are sent \
+                 with the next write or `deciduous remote push`",
+                FINISH_WAIT.as_secs()
+            );
         }
     }
 }

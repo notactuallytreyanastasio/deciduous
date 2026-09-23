@@ -2489,3 +2489,112 @@ fn new_the_edits_of_a_set_aside_node_wait_with_it() {
     let ops = log_ops(&dir);
     assert_eq!(ops.len(), 2, "the create and its edit both kept: {ops:?}");
 }
+
+// RUST-N2 (a): with the server's database down, every /ops request answered
+// 500 after about 3.5 s, and the replay after a CLI write resent every
+// queued op alone: 108 s for 30 ops.
+#[test]
+fn rust_n2_a_cli_write_to_a_failing_server_is_bounded() {
+    let (url, _, _) = scripted_stub(|_, _| Some((500, 1500)));
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "slow500");
+    for i in 0..30 {
+        sb.dx_ok(&dir, &["add", "goal", &format!("q{i}")]);
+    }
+    set_remote_url(&dir, &url);
+    let t = std::time::Instant::now();
+    let out = sb.dx(&dir, &["add", "goal", "while-db-down"]);
+    let took = t.elapsed();
+    assert!(out.status.success(), "{}", all_of(&out));
+    assert!(
+        took < std::time::Duration::from_secs(15),
+        "took {took:?}: {}",
+        all_of(&out)
+    );
+    assert_eq!(queued_titles(&dir).len(), 31);
+}
+
+// RUST-N2 (b): a 1.0.7 config (a url, no workspace) asks the server where
+// its nodes are (/locate, 15 s) before the replay's own 10 s: 25 s per
+// write against a server that never answers.
+#[test]
+fn rust_n2_a_legacy_config_write_to_a_black_hole_is_bounded() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("legacy-bh");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\n", black_hole()),
+    )
+    .unwrap();
+    let t = std::time::Instant::now();
+    let out = sb.dx(&dir, &["add", "goal", "first"]);
+    let took = t.elapsed();
+    assert!(out.status.success(), "{}", all_of(&out));
+    assert!(
+        took < std::time::Duration::from_secs(15),
+        "took {took:?}: {}",
+        all_of(&out)
+    );
+    assert_eq!(queued_titles(&dir), ["first"]);
+}
+
+// NEW (low): stdin closed, the stdio server's last replay against a server
+// that never answers held the process about 10 s (20 s with a replay
+// already running).
+#[test]
+fn new_a_stdio_server_exits_promptly_when_stdin_closes() {
+    use std::io::{BufRead, BufReader, Write};
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("bh-exit");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\nworkspace = \"bh\"\n", black_hole()),
+    )
+    .unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .arg("mcp")
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &sb.token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    for (id, (m, p)) in [
+        ("initialize", serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}})),
+        ("tools/call", serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":"x1"}})),
+        ("tools/call", serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":"x2"}})),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        writeln!(stdin, "{}", serde_json::json!({"jsonrpc":"2.0","id":id,"method":m,"params":p})).unwrap();
+        stdin.flush().unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+    }
+    drop(stdin);
+    let t = std::time::Instant::now();
+    let mut exited = None;
+    while t.elapsed() < std::time::Duration::from_secs(15) {
+        if let Some(s) = child.try_wait().unwrap() {
+            exited = Some((s, t.elapsed()));
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    let (_, took) = exited.expect("still running 15 s after stdin closed");
+    assert!(
+        took < std::time::Duration::from_secs(5),
+        "exited after {took:?}"
+    );
+    assert_eq!(queued_titles(&dir), ["x1", "x2"]);
+}

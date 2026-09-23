@@ -263,7 +263,13 @@ fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
 /// pushed), the derived name is. If the server cannot be asked, nothing is
 /// recorded and the derived name is used for this call only, so the question
 /// is asked again next time.
-fn legacy_workspace(dir: &Path, url: &str, token: &str, derived: String) -> Result<String, String> {
+fn legacy_workspace(
+    dir: &Path,
+    url: &str,
+    token: &str,
+    derived: String,
+    deadline: Option<std::time::Instant>,
+) -> Result<String, String> {
     use colored::Colorize;
     let Some(config) = project_config(dir) else {
         return Ok(derived);
@@ -281,9 +287,12 @@ fn legacy_workspace(dir: &Path, url: &str, token: &str, derived: String) -> Resu
         struct Reply {
             workspaces: Vec<Held>,
         }
+        // Within the replay's budget when one is set: the /locate question
+        // and the ops after it used to take 15 s + 10 s per CLI write
+        // against a server that never answers (RUST-N2).
         let reply = ureq::post(&format!("{url}/locate"))
             .set("authorization", &format!("Bearer {token}"))
-            .timeout(std::time::Duration::from_secs(15))
+            .timeout(within(std::time::Duration::from_secs(15), deadline))
             .send_json(serde_json::json!({ "change_ids": ids }))
             .map_err(describe)
             .and_then(|r| {
@@ -381,16 +390,32 @@ pub struct Remote {
     pub repo_roots: Option<Vec<String>>,
     /// The longest one `POST /ops` request may take, connecting included.
     ops_timeout: std::time::Duration,
+    /// When everything this remote sends has to be done by: the replay after
+    /// a write, which someone is waiting behind. `None` for an explicit
+    /// command.
+    deadline: Option<std::time::Instant>,
+}
+
+/// `limit`, or less if `deadline` is nearer. Never zero: ureq reads a zero
+/// timeout as none.
+fn within(limit: std::time::Duration, deadline: Option<std::time::Instant>) -> std::time::Duration {
+    let left = deadline.map_or(limit, |d| {
+        d.saturating_duration_since(std::time::Instant::now())
+    });
+    limit.min(left).max(std::time::Duration::from_millis(1))
 }
 
 /// How long `deciduous remote push` lets one batch of ops take.
 const OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
 
-/// How long the replay after a write lets one batch take. A server that
-/// accepts connections and never answers (a paused container, a stalled
-/// tunnel, a captive portal) held every CLI write for 2:15 and every stdio
-/// MCP request behind one for as long, at 120 s plus a health check. An
-/// unanswered batch is only a delay: its ops stay pending and a later replay
+/// How long the replay after a write may take in all: resolving the
+/// workspace, every /ops request, and the one-op resends after a 500. A
+/// server that accepts connections and never answers (a paused container, a
+/// stalled tunnel, a captive portal) held every CLI write for 2:15 at 120 s
+/// plus a health check, a legacy config's /locate added 15 s to the ops'
+/// 10 s, and a server whose database was down answered each single-op
+/// resend 500 after 3.5 s: 108 s for a write with 30 ops queued. What is not
+/// sent within the budget waits: its ops stay pending, and a later replay
 /// that gets through is answered "duplicate" for any the server did apply.
 pub const QUICK_OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
@@ -422,13 +447,39 @@ impl Remote {
     /// fixed in config.toml, or a server that moved, must receive what was
     /// queued while it was wrong.
     pub fn for_data_dir(data_dir: &Path) -> Result<Self, String> {
+        Self::for_data_dir_by(data_dir, None)
+    }
+
+    /// [`Remote::for_data_dir`] for the replay after a write: everything it
+    /// sends, from resolving the workspace to the last op, within
+    /// [`QUICK_OPS_TIMEOUT`] from now.
+    pub fn for_replay_after_write(data_dir: &Path) -> Result<Self, String> {
+        let deadline = std::time::Instant::now() + QUICK_OPS_TIMEOUT;
+        let mut r = Self::for_data_dir_by(data_dir, Some(deadline))?;
+        r.ops_timeout = QUICK_OPS_TIMEOUT;
+        r.deadline = Some(deadline);
+        Ok(r)
+    }
+
+    fn for_data_dir_by(
+        data_dir: &Path,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Self, String> {
         let config = config_at(data_dir)?;
         let data_dir = std::path::absolute(data_dir).unwrap_or_else(|_| data_dir.to_path_buf());
         let project = data_dir.parent().unwrap_or(&data_dir);
-        Self::resolve(&config, project)
+        Self::resolve_by(&config, project, deadline)
     }
 
     pub fn resolve(config: &Config, dir: &Path) -> Result<Self, String> {
+        Self::resolve_by(config, dir, None)
+    }
+
+    fn resolve_by(
+        config: &Config,
+        dir: &Path,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Self, String> {
         let url = config.remote.url.clone().ok_or_else(|| {
             "no remote configured for this project.\n\nRun:\n\n    deciduous remote init <url>"
                 .to_string()
@@ -438,7 +489,7 @@ impl Remote {
         let token = token()?;
         let workspace = match &config.remote.workspace {
             Some(ws) => ws.clone(),
-            None => legacy_workspace(dir, &url, &token, workspace_for(dir))?,
+            None => legacy_workspace(dir, &url, &token, workspace_for(dir), deadline)?,
         };
 
         Ok(Self {
@@ -447,14 +498,8 @@ impl Remote {
             token,
             repo_roots: repo_roots(dir),
             ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         })
-    }
-
-    /// The same remote, with [`QUICK_OPS_TIMEOUT`] for ops: for a replay
-    /// that someone is waiting behind.
-    pub fn quick(mut self) -> Self {
-        self.ops_timeout = QUICK_OPS_TIMEOUT;
-        self
     }
 
     /// A `wss://…/events?workspace=…&token=…` URL for this project's
@@ -961,9 +1006,19 @@ impl Remote {
             "repo_roots": self.repo_roots,
             "ops": ops,
         });
+        if self
+            .deadline
+            .is_some_and(|d| std::time::Instant::now() >= d)
+        {
+            return Err(ReplayError::Unreachable(format!(
+                "the replay after a write gets {} s in all, and they are spent; \
+                 what was not answered waits",
+                QUICK_OPS_TIMEOUT.as_secs()
+            )));
+        }
         let reply: Reply = self
             .post("/ops")
-            .timeout(self.ops_timeout)
+            .timeout(within(self.ops_timeout, self.deadline))
             .send_json(payload)
             .map_err(|e| match e {
                 ureq::Error::Status(409, _) => ReplayError::Server(self.claim_refused()),
@@ -1422,7 +1477,7 @@ pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<S
     // The log's own project, not the current directory's: see
     // `Remote::for_data_dir`.
     let data_dir = log.path().parent().unwrap_or(Path::new("."));
-    let remote = Remote::for_data_dir(data_dir).map(Remote::quick);
+    let remote = Remote::for_replay_after_write(data_dir);
     let result = remote
         .as_ref()
         .map_err(|e| ReplayError::Config(e.clone()))
@@ -2400,6 +2455,7 @@ mod tests {
             token: "abc123".to_string(),
             repo_roots: None,
             ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         };
         assert_eq!(
             r.events_url(),
@@ -2415,6 +2471,7 @@ mod tests {
             token: "abc123".to_string(),
             repo_roots: None,
             ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         };
         assert_eq!(
             r.events_url(),
@@ -2434,6 +2491,7 @@ mod tests {
             token: "tok".to_string(),
             repo_roots: None,
             ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         };
         assert!(
             r.events_url().contains("workspace=a%20b"),
