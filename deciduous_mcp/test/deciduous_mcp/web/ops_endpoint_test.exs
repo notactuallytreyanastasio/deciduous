@@ -292,4 +292,61 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     assert name == "ops-case"
     assert {:ok, _} = Workspaces.normalize_name("Ops-Case")
   end
+
+  # SERVER-N1: an op carrying a NUL, an over-long id or a kind that is not a
+  # string raised inside Repo.transaction (Postgrex 22021, a varchar(255)
+  # overflow, Protocol.UndefinedError), and the whole request answered an
+  # empty 500. The CLI resent the batch on every write, got the same 500, and
+  # nothing after the bad op ever reached the server. Each is an answer about
+  # one op: rejected, with the reason, and the ops around it applied.
+  test "server_n1: a poisoned op is rejected alone and the ops around it are applied",
+       %{token: token} do
+    nul = "has" <> <<0>> <> "nul"
+    long = String.duplicate("x", 256)
+
+    poisons = [
+      {"nul in metadata", create("p1", "p1", %{metadata: %{"prompt" => nul}})},
+      {"nul in a metadata key", create("p2", "p2", %{metadata: %{nul => "v"}})},
+      {"nul in the title", create("p3", nul)},
+      {"op_id over 255", create("p4", "p4", %{op_id: long})},
+      {"op_id with nul", create("p5", "p5", %{op_id: "id" <> nul})},
+      {"kind an object", %{op_id: Ecto.UUID.generate(), kind: %{"a" => 1}, change_id: "p6"}},
+      {"kind over 255", %{op_id: Ecto.UUID.generate(), kind: long, change_id: "p7"}},
+      {"change_id over 255", create(long, "p8")},
+      {"change_id with nul", create("p9" <> nul, "p9")},
+      {"nul in set.title",
+       %{
+         op_id: Ecto.UUID.generate(),
+         kind: "update_node",
+         change_id: "a",
+         set: %{title: nul},
+         was: %{title: "a"}
+       }},
+      {"nul in a rationale",
+       %{
+         op_id: Ecto.UUID.generate(),
+         kind: "create_edge",
+         from_change_id: "a",
+         to_change_id: "c",
+         edge_type: "leads_to",
+         rationale: nul
+       }}
+    ]
+
+    for {label, poison} <- poisons do
+      ws = "ops-n1-" <> Integer.to_string(System.unique_integer([:positive]))
+      {200, _} = ops(token, ws, [create("a", "a"), create("c", "c")])
+      after_op = create("after", "after")
+      {status, body} = ops(token, ws, [poison, after_op])
+      assert status == 200, "#{label}: #{status} #{inspect(body)}"
+      [r, after_result] = body["results"]
+      assert r["result"] == "rejected", "#{label}: #{inspect(r)}"
+      assert is_binary(r["reason"]) and r["reason"] != "", "#{label}: #{inspect(r)}"
+      assert after_result["result"] == "applied", "#{label}: #{inspect(after_result)}"
+      # Sent again, the same answer: no 500 the second time either.
+      {200, %{"results" => [again, dup]}} = ops(token, ws, [poison, after_op])
+      assert again["result"] == "rejected", "#{label} again: #{inspect(again)}"
+      assert dup["result"] == "duplicate"
+    end
+  end
 end

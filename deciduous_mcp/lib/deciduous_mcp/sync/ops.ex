@@ -77,35 +77,115 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  # An op the database cannot store is an answer about that op, not a
+  # failure of the request. A NUL (Postgres text refuses it), an id or
+  # change_id longer than the varchar(255) it goes into, or a kind that is not
+  # a string used to raise inside the transaction, and the whole request
+  # answered an empty 500. The CLI resent that batch on every write, got the
+  # same 500, and nothing after the bad op reached the server again
+  # (SERVER-N1). They are refused here, by name, before anything is written.
   defp apply_one(workspace, %{"op_id" => op_id} = op) do
+    case malformed(op) do
+      nil -> apply_checked(workspace, op)
+      reason -> %{op_id: op_id, result: "rejected", reason: reason}
+    end
+  end
+
+  @max_id 255
+
+  defp malformed(op) do
+    cond do
+      path = nul_path(op, []) ->
+        "the op contains a NUL character (at #{path}), which the server cannot store; " <>
+          "nothing was written"
+
+      String.length(op["op_id"]) > @max_id ->
+        "op_id is #{String.length(op["op_id"])} characters; the limit is #{@max_id}"
+
+      not is_binary(op["kind"]) ->
+        "kind must be a string, got #{inspect(op["kind"])}"
+
+      String.length(op["kind"]) > @max_id ->
+        "kind is #{String.length(op["kind"])} characters; the limit is #{@max_id}"
+
+      key =
+          Enum.find(~w(change_id from_change_id to_change_id), fn k ->
+            is_binary(op[k]) and String.length(op[k]) > @max_id
+          end) ->
+        "#{key} is #{String.length(op[key])} characters; the limit is #{@max_id}"
+
+      true ->
+        nil
+    end
+  end
+
+  defp nul_path(v, path) when is_binary(v),
+    do: if(String.contains?(v, <<0>>), do: render_path(path))
+
+  defp nul_path(v, path) when is_map(v) do
+    Enum.find_value(v, fn {k, x} ->
+      if is_binary(k) and String.contains?(k, <<0>>),
+        do: render_path([inspect(k) | path]),
+        else: nul_path(x, [k | path])
+    end)
+  end
+
+  defp nul_path(v, path) when is_list(v) do
+    v |> Enum.with_index() |> Enum.find_value(fn {x, i} -> nul_path(x, [i | path]) end)
+  end
+
+  defp nul_path(_, _), do: nil
+
+  defp render_path([]), do: "the top level"
+  defp render_path(path), do: path |> Enum.reverse() |> Enum.map_join(".", &to_string/1)
+
+  defp apply_checked(workspace, %{"op_id" => op_id} = op) do
     kind = op["kind"]
 
     result =
-      Repo.transaction(fn ->
-        {recorded, _} =
-          Repo.insert_all(
-            "applied_ops",
-            [
-              %{
-                workspace_id: Ecto.UUID.dump!(workspace.id),
-                op_id: op_id,
-                kind: to_string(kind),
-                applied_at: DateTime.utc_now()
-              }
-            ],
-            on_conflict: :nothing,
-            conflict_target: [:workspace_id, :op_id]
-          )
+      try do
+        Repo.transaction(fn ->
+          {recorded, _} =
+            Repo.insert_all(
+              "applied_ops",
+              [
+                %{
+                  workspace_id: Ecto.UUID.dump!(workspace.id),
+                  op_id: op_id,
+                  kind: to_string(kind),
+                  applied_at: DateTime.utc_now()
+                }
+              ],
+              on_conflict: :nothing,
+              conflict_target: [:workspace_id, :op_id]
+            )
 
-        if recorded == 0 do
-          "duplicate"
-        else
-          case apply_op(workspace, kind, op) do
-            {:ok, outcome} -> outcome
-            {:rejected, reason} -> Repo.rollback({:rejected, reason})
+          if recorded == 0 do
+            "duplicate"
+          else
+            case apply_op(workspace, kind, op) do
+              {:ok, outcome} -> outcome
+              {:rejected, reason} -> Repo.rollback({:rejected, reason})
+            end
           end
-        end
-      end)
+        end)
+      rescue
+        # The database refusing this op's data (class 22, data exception, or
+        # 23, integrity) is about the op, and the checks above missed it: an
+        # answer, so the ops after it still apply. Anything else (a lost
+        # connection, a bug) is the server's failure and stays a 500, which
+        # the CLI retries rather than setting the op aside.
+        e in Postgrex.Error ->
+          case e.postgres do
+            %{code: code, message: message} when is_atom(code) ->
+              if data_error?(e.postgres),
+                do: {:error, {:rejected, "the database refused this op (#{code}): #{message}"}},
+                else: reraise(e, __STACKTRACE__)
+
+            _ ->
+              reraise(e, __STACKTRACE__)
+          end
+      end
 
     case result do
       {:ok, outcome} -> %{op_id: op_id, result: outcome}
@@ -394,6 +474,10 @@ defmodule DeciduousMcp.Sync.Ops do
     end)
     |> Enum.map_join("; ", fn {field, msgs} -> "#{field} #{Enum.join(msgs, ", ")}" end)
   end
+
+  defp data_error?(%{pg_code: "22" <> _}), do: true
+  defp data_error?(%{pg_code: "23" <> _}), do: true
+  defp data_error?(_), do: false
 
   defp describe(reason) when is_binary(reason), do: reason
   defp describe(reason), do: inspect(reason)
