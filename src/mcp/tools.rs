@@ -776,6 +776,30 @@ fn edit_distance(a: &str, b: &str) -> usize {
 mod tests {
     use super::*;
 
+    /// validate_tool_args checks the top level only. That is complete while
+    /// no argument is an object or an array: the server's MCP had nested
+    /// arguments, checked only at the top, and a misspelt key inside one
+    /// vanished (chapter 30 verification, T7/T11 nested). A tool that adds
+    /// one here must check its keys too, and this fails until it does.
+    #[test]
+    fn t7_t11_nested_no_tool_takes_an_object_or_array_argument() {
+        for tool in all_tool_definitions() {
+            let props = tool.input_schema["properties"].as_object().unwrap();
+            for (name, spec) in props {
+                let types: Vec<&str> = match &spec["type"] {
+                    Value::String(t) => vec![t.as_str()],
+                    Value::Array(ts) => ts.iter().filter_map(Value::as_str).collect(),
+                    _ => vec![],
+                };
+                assert!(
+                    !types.iter().any(|t| *t == "object" || *t == "array"),
+                    "{}.{name} is {types:?}; validate_tool_args would not see a misspelt key inside it",
+                    tool.name
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_all_tools_have_valid_schemas() {
         let tools = all_tool_definitions();

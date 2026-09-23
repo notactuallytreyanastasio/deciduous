@@ -50,6 +50,7 @@ defmodule DeciduousMcp.MCP.Component do
       def input_schema do
         definition()[:input_schema]
         |> DeciduousMcp.MCP.ArgCheck.with_limits()
+        |> DeciduousMcp.MCP.ArgCheck.closed()
         |> DeciduousMcp.MCP.Component.stringify()
       end
 
@@ -133,8 +134,20 @@ defmodule DeciduousMcp.MCP.Component do
       dispatch_known_tool(module, params, frame)
     else
       {:error, message} ->
-        {:error, Error.execution(message <> "; nothing was written"), frame}
+        {:error, Error.execution(refused(module, message)), frame}
     end
+  end
+
+  # "nothing was written" is the thing a caller retrying a write most needs
+  # to know. Said after a read's refusal ("max_depth must be at least 1,
+  # got 0; nothing was written") it suggested the read might have written.
+  @reads ~w(show_node query_nodes get_graph find_orphans get_ancestors get_descendants
+            ask_graph list_workspaces check_activity)
+
+  defp refused(module, message) do
+    if module.definition()[:name] in @reads,
+      do: message,
+      else: message <> "; nothing was written"
   end
 
   # The arguments as the client sent them. `params` is Peri's output, which
@@ -155,19 +168,22 @@ defmodule DeciduousMcp.MCP.Component do
          ), frame}
 
       nil ->
-        schema = DeciduousMcp.MCP.ArgCheck.with_limits(module.definition()[:input_schema] || %{})
+        definition = module.definition()
 
-        case DeciduousMcp.MCP.ArgCheck.check(schema, params) do
+        schema =
+          (definition[:input_schema] || %{})
+          |> DeciduousMcp.MCP.ArgCheck.with_limits()
+          |> DeciduousMcp.MCP.ArgCheck.closed()
+
+        case DeciduousMcp.MCP.ArgCheck.check(schema, params, definition[:name]) do
           :ok ->
             dispatch_valid_tool(module, params, frame)
 
           # Answered like every other refusal a tool makes (execution error,
           # the sentence as the message), not as -32602 with the sentence
           # tucked into `data`: the message is what a client shows the model.
-          # The suffix is true for reads too, and it is the thing a caller
-          # retrying a write most needs to know.
           {:error, message} ->
-            {:error, Error.execution(message <> "; nothing was written"), frame}
+            {:error, Error.execution(refused(module, message)), frame}
         end
     end
   end

@@ -67,6 +67,36 @@ defmodule DeciduousMcp.MCP.ArgCheck do
 
   def with_limits(other), do: other
 
+  @doc """
+  Closes every object a tool's schema describes: `additionalProperties:
+  false` on each one that declares `properties` and says nothing about
+  others, at every depth, in the schema the client is sent and the one
+  `check/2` holds a call to.
+
+  The top level was already closed by `unknown_arguments/3`; everything
+  inside an object argument was not, and a misspelt key there vanished.
+  capture_conversation_turn with options_considered
+  `[{"title": "a", "choosen": true}]` stored option a as rejected, under a
+  `rejected` edge, and answered "captured successfully" (verification of
+  T7/T11). An object whose keys are the caller's own (update_node's
+  metadata) says `additionalProperties: true` and is left open.
+
+  Only the MCP tools are closed. POST /ops holds its ops to schemas of the
+  same form, and there metadata is whatever the CLI's node carries.
+  """
+  def closed(%{} = schema) do
+    schema =
+      if Map.has_key?(schema, :properties) and not Map.has_key?(schema, :additionalProperties),
+        do: Map.put(schema, :additionalProperties, false),
+        else: schema
+
+    schema
+    |> maybe_update(:properties, fn props -> Map.new(props, fn {k, v} -> {k, closed(v)} end) end)
+    |> maybe_update(:items, &closed/1)
+  end
+
+  def closed(other), do: other
+
   defp limit_property(name, %{} = spec) do
     spec = with_limits(spec)
 
@@ -102,17 +132,57 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   `:ok`, or `{:error, message}` for the first argument that breaks the schema.
   `schema` uses atom keys, as the tools' `definition/0` maps do.
   """
-  def check(schema, args) when is_map(args) do
+  def check(schema, args, tool \\ nil)
+
+  def check(schema, args, tool) when is_map(args) do
     # Declared bounds first, so a title over its own limit is told that
     # limit rather than the general one.
     with :ok <- no_nul(args, "arguments"),
-         :ok <- check_object(schema, args, nil),
+         :ok <- check_object(schema, args, nil) |> describe_unknown(schema, tool),
          :ok <- no_oversized_string(args, "arguments") do
       within_call_limit(args)
     end
   end
 
-  def check(_schema, args), do: {:error, "arguments must be an object, got #{describe(args)}"}
+  def check(_schema, args, _tool),
+    do: {:error, "arguments must be an object, got #{describe(args)}"}
+
+  # An unknown key inside an object argument, said the way the top level
+  # says it (unknown_arguments/3): every one, each with the declared key it
+  # most likely meant, and the ones there are. A key that is an argument of
+  # the call itself, sent one level too deep (log_decision's rationale
+  # inside chosen_option), is told where it goes.
+  defp describe_unknown({:unknown, path, keys, props, closed?}, root, tool) do
+    declared = props |> Map.keys() |> Enum.map(&to_string/1)
+    root_keys = root |> Map.get(:properties, %{}) |> Map.keys() |> Enum.map(&to_string/1)
+    field = path |> String.split(".") |> List.last() |> String.replace(~r/\[\d+\]$/, "")
+
+    named =
+      keys
+      |> Enum.sort()
+      |> Enum.map_join("; ", fn key ->
+        case suggestions(key, props, declared) do
+          [] ->
+            if key in root_keys and tool,
+              do: "#{inspect(key)} (an argument of #{tool} itself, not of #{field})",
+              else: inspect(key)
+
+          meant ->
+            "#{inspect(key)} (did you mean #{Enum.join(meant, " or ")}?)"
+        end
+      end)
+
+    noun = if length(keys) == 1, do: "key", else: "keys"
+
+    tail =
+      if closed?,
+        do: ". Its keys are: " <> Enum.join(Enum.sort(declared), ", "),
+        else: ". Keys of your own are kept, but not one this close to a key it reads"
+
+    {:error, "#{path} has no #{noun} #{named}#{tail}"}
+  end
+
+  defp describe_unknown(other, _root, _tool), do: other
 
   # --- names ------------------------------------------------------------------
 
@@ -176,9 +246,15 @@ defmodule DeciduousMcp.MCP.ArgCheck do
 
         noun = if length(unknown) == 1, do: "argument", else: "arguments"
 
-        {:error,
-         "#{tool} has no #{noun} #{named}. Its arguments are: " <>
-           Enum.join(Enum.sort(declared), ", ")}
+        case declared do
+          [] ->
+            {:error, "#{tool} takes no arguments; it was sent #{named}"}
+
+          _ ->
+            {:error,
+             "#{tool} has no #{noun} #{named}. Its arguments are: " <>
+               Enum.join(Enum.sort(declared), ", ")}
+        end
     end
   end
 
@@ -224,26 +300,50 @@ defmodule DeciduousMcp.MCP.ArgCheck do
 
     missing = Enum.find(required, fn key -> is_nil(Map.get(map, key)) end)
 
-    if missing do
-      {:error, "#{join(path, missing)} is required"}
-    else
-      Enum.reduce_while(props, :ok, fn {key, spec}, :ok ->
-        key = to_string(key)
+    cond do
+      missing ->
+        {:error, "#{join(path, missing)} is required"}
 
-        case Map.get(map, key) do
-          # A JSON null is how several clients say "not given"; every tool
-          # already reads a missing argument and a null one the same way.
-          nil ->
-            {:cont, :ok}
+      (unknown = unknown_keys(schema, map, props)) != [] ->
+        {:unknown, path || "arguments", unknown, props,
+         Map.get(schema, :additionalProperties) == false}
 
-          value ->
-            case check_value(spec, value, join(path, key)) do
-              :ok -> {:cont, :ok}
-              error -> {:halt, error}
-            end
-        end
-      end)
+      true ->
+        check_properties(props, map, path)
     end
+  end
+
+  # Closed: every key the object does not declare. Open (`true`): only the
+  # ones a declared key is a near miss of, which are typos, not keys of the
+  # caller's own. Neither said: nothing, as for /ops.
+  defp unknown_keys(schema, map, props) do
+    declared = props |> Map.keys() |> Enum.map(&to_string/1)
+    extra = map |> Map.keys() |> Enum.map(&to_string/1) |> Enum.reject(&(&1 in declared))
+
+    case Map.get(schema, :additionalProperties) do
+      false -> extra
+      true -> Enum.filter(extra, &(suggestions(&1, props, declared) != []))
+      _ -> []
+    end
+  end
+
+  defp check_properties(props, map, path) do
+    Enum.reduce_while(props, :ok, fn {key, spec}, :ok ->
+      key = to_string(key)
+
+      case Map.get(map, key) do
+        # A JSON null is how several clients say "not given"; every tool
+        # already reads a missing argument and a null one the same way.
+        nil ->
+          {:cont, :ok}
+
+        value ->
+          case check_value(spec, value, join(path, key)) do
+            :ok -> {:cont, :ok}
+            error -> {:halt, error}
+          end
+      end
+    end)
   end
 
   defp check_nested(%{properties: _} = spec, value, path) when is_map(value),
