@@ -39,12 +39,61 @@ defmodule DeciduousMcp.Sync.Ops do
   import Ecto.Query
 
   alias DeciduousMcp.Graph.{Edges, Nodes, Workspaces}
+  alias DeciduousMcp.MCP.ArgCheck
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Document, Edge, Node}
   alias DeciduousMcp.Sync.Import
 
   @max_ops 5_000
   @settable ~w(title description status)
+
+  # What an op may carry, in the JSON Schema terms MCP's tools use, checked
+  # by the same DeciduousMcp.MCP.ArgCheck (with_limits adds the sizes: a
+  # title 10,000 characters and not blank, a branch 512, any other string
+  # 262,144, an array 1,000 items, 1 Mi of text in all). Before, /ops held
+  # an op to none of it: a 1,000,000-character title was applied and
+  # query_nodes served it back whole (SERVER-N3).
+  #
+  # create_node takes the node schema's vocabulary, which keeps the two
+  # legacy values (`feedback`, `done`) that exist in graphs on disk: the
+  # CLI refuses them for a new node, so a create carrying one is a seed of
+  # a node it already held, and refusing it would leave that op rejected
+  # in the log for good. An update sets a status the CLI chose now, and
+  # holds to the current vocabulary, as MCP does.
+  @metadata_schema %{
+    type: "object",
+    properties: %{
+      branch: %{type: "string"},
+      confidence: %{type: "number", minimum: 0, maximum: 100}
+    }
+  }
+
+  @create_schema %{
+    type: "object",
+    required: ["node_type", "title"],
+    properties: %{
+      node_type: %{type: "string", enum: Node.node_types()},
+      title: %{type: "string"},
+      description: %{type: "string"},
+      status: %{type: "string", enum: Node.statuses()},
+      metadata: @metadata_schema
+    }
+  }
+
+  @update_schema %{
+    type: "object",
+    properties: %{
+      set: %{
+        type: "object",
+        properties: %{
+          title: %{type: "string"},
+          description: %{type: "string"},
+          status: %{type: "string", enum: Node.statuses() -- ["done"]}
+        }
+      },
+      metadata: @metadata_schema
+    }
+  }
 
   def run(%{"ops" => ops} = payload) when is_list(ops) do
     with {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
@@ -205,7 +254,10 @@ defmodule DeciduousMcp.Sync.Ops do
   # --- Nodes ------------------------------------------------------------------
 
   defp apply_op(ws, "create_node", op) do
-    with {:ok, cid} <- change_id(op, "change_id") do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         :ok <- held_to(@create_schema, op, "create_node #{cid}"),
+         {:ok, inserted_at} <- time(op, "created_at", cid),
+         {:ok, updated_at} <- time(op, "updated_at", cid) do
       case any_node(ws, cid) do
         %Node{deleted_at: nil} ->
           {:ok, "exists"}
@@ -230,8 +282,8 @@ defmodule DeciduousMcp.Sync.Ops do
           |> Node.changeset(attrs)
           # Backdated archaeology nodes (`deciduous add --date`) keep their
           # date; the CLI's timestamp is the fact, the arrival time is not.
-          |> Ecto.Changeset.put_change(:inserted_at, Import.parse_time(op["created_at"], now))
-          |> Ecto.Changeset.put_change(:updated_at, Import.parse_time(op["updated_at"], now))
+          |> Ecto.Changeset.put_change(:inserted_at, inserted_at || now)
+          |> Ecto.Changeset.put_change(:updated_at, updated_at || now)
           |> Repo.insert()
           |> case do
             {:ok, _} -> {:ok, "applied"}
@@ -259,6 +311,7 @@ defmodule DeciduousMcp.Sync.Ops do
     with {:ok, cid} <- change_id(op, "change_id"),
          {:ok, set} <- settable(op["set"]),
          {:ok, meta} <- metadata(op["metadata"]),
+         :ok <- held_to(@update_schema, op, "update_node #{cid}"),
          :ok <- nonempty(cid, set, meta),
          {:ok, was} <- previous(op, "was", Map.keys(set)),
          {:ok, was_meta} <- previous(op, "was_metadata", Map.keys(meta)),
@@ -689,6 +742,45 @@ defmodule DeciduousMcp.Sync.Ops do
         {:rejected,
          "#{op["kind"]} needs #{key} as an ISO 8601 time, got #{inspect(op[key])}; it orders " <>
            "this op against a link or unlink of the same edge made elsewhere"}
+    end
+  end
+
+  defp held_to(schema, op, what) do
+    case ArgCheck.check(ArgCheck.with_limits(schema), op) do
+      :ok -> :ok
+      {:error, message} -> {:rejected, "#{what}: #{message}"}
+    end
+  end
+
+  # The CLI sends RFC 3339 with an offset; a database from before it may
+  # hold a naive "YYYY-MM-DD HH:MM:SS", which is UTC. Absent is the arrival
+  # time. Anything else is refused: "99999-01-01T00:00:00Z" and 12345 used
+  # to become the arrival time without a word, and so did the naive form.
+  defp time(op, key, cid) do
+    case op[key] do
+      nil ->
+        {:ok, nil}
+
+      value when is_binary(value) ->
+        case DateTime.from_iso8601(value) do
+          {:ok, dt, _offset} ->
+            {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+
+          _ ->
+            case NaiveDateTime.from_iso8601(value) do
+              {:ok, naive} ->
+                dt = DateTime.from_naive!(naive, "Etc/UTC")
+                {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+
+              _ ->
+                {:rejected,
+                 "create_node #{cid}: #{key} #{inspect(value)} is not an ISO 8601 time"}
+            end
+        end
+
+      other ->
+        {:rejected,
+         "create_node #{cid}: #{key} must be an ISO 8601 string, got #{inspect(other)}"}
     end
   end
 
