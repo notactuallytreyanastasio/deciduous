@@ -77,12 +77,18 @@ pub fn bin() -> PathBuf {
 /// A name no other test or run has used: workspaces on a shared server
 /// outlive the run, so collisions would read one test's graph as another's.
 pub fn unique(prefix: &str) -> String {
+    // The clock alone is not unique: macOS reports microseconds, and threads
+    // spawned together read the same one. s7's 40 writers then shared a
+    // branch name, and the server's branch lock refused the ones that
+    // collided, correctly. A per-process counter makes every name distinct.
+    static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
     format!(
-        "e2e-{prefix}-{}-{:x}",
+        "e2e-{prefix}-{}-{:x}-{n}",
         std::process::id(),
         nanos & 0xff_ffff_ffff
     )
@@ -1100,8 +1106,17 @@ pub fn wait_for<T>(timeout: Duration, mut f: impl FnMut() -> Option<T>) -> Optio
 }
 
 /// What `remote status` must say when the local and server content agree,
-/// and must not say when they do not. Deliberately loose about wording:
-/// "OK" without "Drift" means clean; anything else means not clean.
+/// and must not say when they do not. The load-bearing part is the exit
+/// code: status exits 1 whenever anything differs, is waiting or was
+/// refused, as `sync --check` does. The words are the operation log's
+/// ("In sync: no writes waiting, and every node, edge and document
+/// matches"); the count-comparing 1.0.7 said "OK: counts match", which is
+/// accepted too so the base run still means something. "Drift" or
+/// "Differs" anywhere means not clean.
 pub fn status_says_clean(o: &Out) -> bool {
-    o.ok() && o.stdout.contains("OK") && !o.all().contains("Drift")
+    let all = o.all();
+    o.ok()
+        && (o.stdout.contains("In sync") || o.stdout.contains("OK"))
+        && !all.contains("Drift")
+        && !all.contains("Differs")
 }

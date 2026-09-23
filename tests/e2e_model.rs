@@ -420,6 +420,23 @@ impl World<'_> {
         }
     }
 
+    /// A git exchange for one clone. config.toml is committed, so the pull
+    /// can bring the other clone's remote URL with it; when that clone was
+    /// offline, that is a dead port, and this clone would then fail to reach
+    /// a server the model says it can reach. Each clone's URL is put back to
+    /// what its own offline state says after every exchange.
+    fn exchange(&self, loc: Loc) {
+        self.clone_of(loc).git_exchange();
+        if let Some(server) = &self.server {
+            let url = if self.offline.contains(&loc) {
+                format!("http://127.0.0.1:{}", dead_port())
+            } else {
+                server.url.clone()
+            };
+            self.clone_of(loc).set_remote_url(&url);
+        }
+    }
+
     fn set_offline(&mut self, loc: Loc, off: bool) {
         let Some(server) = &self.server else { return };
         let url = if off {
@@ -615,9 +632,9 @@ fn barrier(w: &mut World, m: &mut Model, final_round: bool) {
         w.step_ok(&w.c1, &["remote", "push"]);
         w.step_ok(&w.c2, &["remote", "push"]);
     }
-    w.c1.git_exchange();
-    w.c2.git_exchange();
-    w.c1.git_exchange();
+    w.exchange(Loc::L1);
+    w.exchange(Loc::L2);
+    w.exchange(Loc::L1);
     if server {
         w.step_ok(&w.c1, &["remote", "pull"]);
         w.step_ok(&w.c2, &["remote", "pull"]);
@@ -709,7 +726,7 @@ fn run(server: Option<Server>, name: &str) {
                 }
                 w.log.push(format!("{loc:?} remote {cmd}"));
             } else {
-                w.clone_of(loc).git_exchange();
+                w.exchange(loc);
                 w.log.push(format!("{loc:?} git exchange"));
             }
         }

@@ -291,7 +291,12 @@ fn c5_same_basename_different_repos_never_share_a_graph() {
         let d = parent.join(n);
         std::fs::create_dir_all(&d).unwrap();
         sb.git_ok(&d, &["init", "-q"]);
-        sb.git_ok(&d, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        // Two repositories are told apart by their root commit. An empty
+        // commit with the same message, author and second is the same
+        // commit in both, which is one repository as far as git (and the
+        // claim) can tell; the parent directory makes them two.
+        let msg = format!("init {}", parent.display());
+        sb.git_ok(&d, &["commit", "-q", "--allow-empty", "-m", &msg]);
         let o = sb.cmd(bin(), &d).arg("init").output().unwrap();
         assert!(o.status.success());
         d

@@ -537,12 +537,14 @@ fn s11_reads_have_no_side_effects_and_input_is_validated() {
 
     let ws = unique("s11");
     let mut p = server.session(Some(&ws));
-    add(&mut p, &ws, "goal", "seed", None);
+    let seed = add(&mut p, &ws, "goal", "seed", None);
     let bad = [
         ("get_graph", json!({"max_nodes": 50000})),
         ("get_graph", json!({"max_nodes": 0})),
         ("get_graph", json!({"max_nodes": -1})),
-        ("get_graph", json!({"max_depth": 0})),
+        // get_descendants is the tool the finding named; get_graph takes no
+        // max_depth, and an argument a tool does not declare is ignored.
+        ("get_descendants", json!({"node_id": seed, "max_depth": 0})),
         ("add_node", json!({"node_type": "feedback", "title": "t"})),
         (
             "add_node",
