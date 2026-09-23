@@ -743,27 +743,74 @@ impl Database {
     }
 
     // ------------------------------------------------------------------
-    // Record store write-through. Failures never fail the operation: the
-    // database write already happened, and the next `deciduous sync` will
-    // export whatever is missing. They are reported on stderr so MCP/stdio
+    // Record store write-through. A file that cannot be read refuses the
+    // operation before the database is touched (require_readable_store).
+    // Any other failure does not fail it: the database write already
+    // happened, and the next `deciduous sync` will export what is missing. They are reported on stderr so MCP/stdio
     // transports stay clean.
     // ------------------------------------------------------------------
+
+    /// Refuse a graph mutation while the attached graph file cannot be read
+    /// (conflict markers, a bad hand edit). The write-through below would
+    /// fail with only a warning, the database would be ahead of the file,
+    /// and the sync that repairs the file would then compare the two
+    /// without this write ever having been stamped against the file's
+    /// versions: a record stamped later than this clock wins, and the edit
+    /// the CLI reported as done is reverted.
+    fn require_readable_store(&self) -> Result<()> {
+        let Some(store) = self.store() else {
+            return Ok(());
+        };
+        store
+            .read_doc_all()
+            .map(|_| ())
+            .map_err(|e| DbError::Validation(format!("nothing was changed: {}", e)))
+    }
 
     fn store_warn(what: &str, e: impl std::fmt::Display) {
         eprintln!("Warning: graph file: {} ({})", what, e);
     }
 
     fn publish_node_by_id(&self, node_id: i32) {
+        self.publish_node_edit(node_id, None);
+    }
+
+    /// Publish a node this process just changed. `before` is the row as it
+    /// was before the change, so the file can keep fields a teammate changed
+    /// that this write did not touch.
+    fn publish_node_edit(&self, node_id: i32, before: Option<DecisionNode>) {
         let Some(store) = self.store() else { return };
         match self.get_node(node_id) {
-            Ok(Some(node)) => {
-                if let Err(e) = store.publish_node(&node) {
-                    Self::store_warn("could not write node record", e);
+            Ok(Some(node)) => match store.publish_node_edit(before.as_ref(), &node) {
+                Ok((_, Some(stamp))) => {
+                    // The file held a version stamped after this clock; the
+                    // write went in just after it, and the row must agree or
+                    // the next sync would re-import the file's copy.
+                    if let Err(e) = self.set_node_updated_at(node_id, &stamp) {
+                        Self::store_warn("could not restamp node", e);
+                    }
                 }
-            }
+                Ok((_, None)) => {}
+                Err(e) => Self::store_warn("could not write node record", e),
+            },
             Ok(None) => {}
             Err(e) => Self::store_warn("could not read node for publishing", e),
         }
+    }
+
+    /// The row as it is now, for [`Self::publish_node_edit`]. Only read when
+    /// a graph file is attached.
+    fn node_before_edit(&self, node_id: i32) -> Option<DecisionNode> {
+        self.store()?;
+        self.get_node(node_id).ok().flatten()
+    }
+
+    fn set_node_updated_at(&self, node_id: i32, updated_at: &str) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+            .set(decision_nodes::updated_at.eq(updated_at))
+            .execute(&mut conn)?;
+        Ok(())
     }
 
     fn publish_edge_by_id(&self, edge_id: i32) {
@@ -780,9 +827,15 @@ impl Database {
     }
 
     fn tombstone_edges(&self, edges: &[DecisionEdge]) {
+        self.tombstone_edges_of(edges, None);
+    }
+
+    /// Tombstone edges; `with_node` names the node whose deletion took
+    /// them, so they come back if that node does.
+    fn tombstone_edges_of(&self, edges: &[DecisionEdge], with_node: Option<&str>) {
         let Some(store) = self.store() else { return };
         for edge in edges {
-            if let Err(e) = store.tombstone_edge(edge) {
+            if let Err(e) = store.tombstone_edge_of(edge, with_node) {
                 Self::store_warn("could not write edge tombstone", e);
             }
         }
@@ -791,11 +844,21 @@ impl Database {
     fn publish_theme_by_id(&self, theme_id: i32) {
         let Some(store) = self.store() else { return };
         match self.get_theme_by_id(theme_id) {
-            Ok(Some(theme)) => {
-                if let Err(e) = store.publish_theme(&theme) {
-                    Self::store_warn("could not write theme record", e);
+            Ok(Some(theme)) => match store.publish_theme_edit(&theme) {
+                Ok((_, Some(stamp))) => {
+                    let result = self.get_conn().and_then(|mut conn| {
+                        diesel::update(themes::table.filter(themes::id.eq(theme_id)))
+                            .set(themes::updated_at.eq(&stamp))
+                            .execute(&mut conn)
+                            .map_err(DbError::from)
+                    });
+                    if let Err(e) = result {
+                        Self::store_warn("could not restamp theme", e);
+                    }
                 }
-            }
+                Ok((_, None)) => {}
+                Err(e) => Self::store_warn("could not write theme record", e),
+            },
             Ok(None) => {}
             Err(e) => Self::store_warn("could not read theme for publishing", e),
         }
@@ -820,7 +883,7 @@ impl Database {
 
     fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) {
         let Some(store) = self.store() else { return };
-        if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id) {
+        if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id, false) {
             Self::store_warn("could not write tag tombstone", e);
         }
     }
@@ -1427,6 +1490,7 @@ impl Database {
         branch: Option<&str>,
         created_at: Option<&str>,
     ) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = created_at
             .map(|s| s.to_string())
@@ -1486,6 +1550,7 @@ impl Database {
         files: Option<&str>,
         branch: Option<&str>,
     ) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -1596,6 +1661,19 @@ impl Database {
         Ok(id)
     }
 
+    /// Take an edge's rationale and weight from its record, without
+    /// publishing (sync is applying the file, not changing it).
+    pub(crate) fn update_edge_record(&self, edge_id: i32, rec: &EdgeRecord) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(decision_edges::table.filter(decision_edges::id.eq(edge_id)))
+            .set((
+                decision_edges::rationale.eq(rec.rationale.as_deref()),
+                decision_edges::weight.eq(rec.weight.or(Some(1.0))),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
     /// Delete one edge row by primary key without writing a tombstone.
     pub(crate) fn delete_edge_local(&self, edge_id: i32) -> Result<()> {
         let mut conn = self.get_conn()?;
@@ -1695,33 +1773,165 @@ impl Database {
     /// Accepts a local integer id (`42`, `#42`) or a `change_id` prefix of
     /// at least four characters (`a1b2c3d4`). Local ids differ between
     /// machines; the prefix is how you point at a teammate's node.
+    ///
+    /// `#42` is always a local id. A bare number of four or more digits is
+    /// also a valid change_id prefix (about one change_id in seven starts
+    /// with four digits), so it is looked up both ways: if it names a local
+    /// node *and* prefixes a change_id, that is an error listing both,
+    /// never a guess, because a guess aims `delete` at the wrong node and
+    /// the tombstone reaches everyone. A full change_id wins over a longer
+    /// one it is a prefix of.
     pub fn resolve_node_ref(&self, reference: &str) -> Result<i32> {
-        let r = reference.trim().trim_start_matches('#');
-        // Digits always mean a local id, even when no such node exists:
-        // guessing a change_id prefix instead could aim a delete at the
-        // wrong node.
-        if let Ok(id) = r.parse::<i32>() {
-            return Ok(id);
+        let trimmed = reference.trim();
+        if let Some(explicit) = trimmed.strip_prefix('#') {
+            return explicit.parse::<i32>().map_err(|_| {
+                DbError::Validation(format!(
+                    "'{}' is not a local node id (after '#' comes an integer)",
+                    reference
+                ))
+            });
         }
+        let r = trimmed;
         let looks_like_prefix =
             r.len() >= 4 && r.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+        let as_id = r.parse::<i32>().ok().filter(|id| *id >= 0);
         if !looks_like_prefix {
-            return Err(DbError::Validation(format!(
-                "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
-                reference
-            )));
+            return as_id.ok_or_else(|| {
+                DbError::Validation(format!(
+                    "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
+                    reference
+                ))
+            });
         }
-        self.resolve_change_id_prefix(r)
+        let Some(id) = as_id else {
+            return self.resolve_change_id_prefix(r);
+        };
+        // Digits only, four or more: an id, a change_id prefix, or both.
+        let local = self.get_node(id)?;
+        let by_prefix = self.change_id_matches(r)?;
+        let pending = self.unsynced_matches(r)?;
+        if !pending.is_empty() {
+            return Err(Self::unsynced_error(
+                r,
+                local.as_ref(),
+                &by_prefix,
+                &pending,
+            ));
+        }
+        match (local, by_prefix.as_slice()) {
+            (_, []) => Ok(id),
+            (None, _) => self.resolve_change_id_prefix(r),
+            (Some(node), matches) => {
+                let mut list = vec![format!("local id #{} ({})", node.id, node.title)];
+                list.extend(matches.iter().take(5).map(Self::describe_match));
+                Err(DbError::Validation(format!(
+                    "'{}' is both a local id and a change_id prefix: {}. Use '#{}' for the local id, or more change_id characters",
+                    r,
+                    list.join("; "),
+                    id
+                )))
+            }
+        }
     }
 
-    fn resolve_change_id_prefix(&self, r: &str) -> Result<i32> {
+    fn describe_match(n: &DecisionNode) -> String {
+        format!(
+            "#{} {} ({})",
+            n.id,
+            n.change_id.chars().take(12).collect::<String>(),
+            n.title
+        )
+    }
+
+    /// Nodes whose change_id starts with `r` (at most six), with an exact
+    /// match, if any, first and alone.
+    fn change_id_matches(&self, r: &str) -> Result<Vec<DecisionNode>> {
         let mut conn = self.get_conn()?;
+        let exact: Option<DecisionNode> = decision_nodes::table
+            .filter(decision_nodes::change_id.eq(r))
+            .first(&mut conn)
+            .optional()?;
+        if let Some(node) = exact {
+            return Ok(vec![node]);
+        }
         let pattern = format!("{}%", r);
-        let matches: Vec<DecisionNode> = decision_nodes::table
+        Ok(decision_nodes::table
             .filter(decision_nodes::change_id.like(&pattern))
             .order(decision_nodes::id.asc())
             .limit(6)
-            .load(&mut conn)?;
+            .load(&mut conn)?)
+    }
+
+    /// Live nodes in the graph file whose change_id starts with `r` and
+    /// that the database does not hold yet: pulled, not synced. Resolving
+    /// against the database alone aimed `delete 0002` at local #2 when the
+    /// node meant was a teammate's that the next sync would import.
+    /// (At most six, like [`Self::change_id_matches`].)
+    fn unsynced_matches(&self, r: &str) -> Result<Vec<(String, String)>> {
+        let Some(store) = self.store() else {
+            return Ok(Vec::new());
+        };
+        // An unreadable file is reported by whatever reads or writes it
+        // next; resolving a reference is not the place to fail on it.
+        let Ok(doc) = store.read_doc_all() else {
+            return Ok(Vec::new());
+        };
+        let mut conn = self.get_conn()?;
+        let mut out = Vec::new();
+        for rec in doc
+            .nodes
+            .values()
+            .filter(|n| !n.is_tombstone() && n.change_id.starts_with(r))
+        {
+            let known: i64 = decision_nodes::table
+                .filter(decision_nodes::change_id.eq(&rec.change_id))
+                .count()
+                .get_result(&mut conn)?;
+            if known == 0 {
+                out.push((rec.change_id.clone(), rec.title.clone()));
+                if out.len() == 6 {
+                    break;
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    fn unsynced_error(
+        r: &str,
+        local: Option<&DecisionNode>,
+        in_db: &[DecisionNode],
+        pending: &[(String, String)],
+    ) -> DbError {
+        let mut list: Vec<String> = local
+            .map(|n| format!("local id #{} ({})", n.id, n.title))
+            .into_iter()
+            .collect();
+        list.extend(in_db.iter().take(5).map(Self::describe_match));
+        list.extend(pending.iter().take(5).map(|(cid, title)| {
+            format!(
+                "{} ({}, in graph.json, not synced yet)",
+                cid.chars().take(12).collect::<String>(),
+                title
+            )
+        }));
+        DbError::Validation(format!(
+            "'{}' matches a node that is in graph.json but not in this database yet: {}. Run `deciduous sync` first, then use more change_id characters{}",
+            r,
+            list.join("; "),
+            local.map(|n| format!(" (or '#{}' for the local id)", n.id)).unwrap_or_default()
+        ))
+    }
+
+    fn resolve_change_id_prefix(&self, r: &str) -> Result<i32> {
+        let matches = self.change_id_matches(r)?;
+        let exact = matches.len() == 1 && matches[0].change_id == r;
+        if !exact {
+            let pending = self.unsynced_matches(r)?;
+            if !pending.is_empty() {
+                return Err(Self::unsynced_error(r, None, &matches, &pending));
+            }
+        }
         match matches.len() {
             0 => Err(DbError::Validation(format!(
                 "No node has a change_id starting with '{}'. Run 'deciduous sync' if a teammate created it.",
@@ -1729,18 +1939,7 @@ impl Database {
             ))),
             1 => Ok(matches[0].id),
             _ => {
-                let list: Vec<String> = matches
-                    .iter()
-                    .take(5)
-                    .map(|n| {
-                        format!(
-                            "#{} {} ({})",
-                            n.id,
-                            n.change_id.chars().take(12).collect::<String>(),
-                            n.title
-                        )
-                    })
-                    .collect();
+                let list: Vec<String> = matches.iter().take(5).map(Self::describe_match).collect();
                 Err(DbError::Validation(format!(
                     "'{}' matches several nodes; use more characters: {}",
                     r,
@@ -1789,6 +1988,7 @@ impl Database {
         edge_type: &str,
         rationale: Option<&str>,
     ) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
 
         // Validate both nodes exist and get their change_ids
@@ -1861,6 +2061,7 @@ impl Database {
 
     /// Delete an edge between two nodes
     pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
 
         // Check if the edge exists
@@ -1922,6 +2123,9 @@ impl Database {
         dry_run: bool,
         publish: bool,
     ) -> Result<DeleteSummary> {
+        if !dry_run && publish {
+            self.require_readable_store()?;
+        }
         let mut conn = self.get_conn()?;
 
         // Check if node exists
@@ -2020,10 +2224,15 @@ impl Database {
                     Self::store_warn("could not write node tombstone", e);
                 }
             }
-            self.tombstone_edges(&doomed_edges);
-            for tag in &doomed_tags {
-                if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
-                    self.tombstone_tag(&node.change_id, &theme.change_id);
+            self.tombstone_edges_of(&doomed_edges, Some(&node.change_id));
+            if let Some(store) = self.store() {
+                for tag in &doomed_tags {
+                    if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
+                        if let Err(e) = store.tombstone_tag(&node.change_id, &theme.change_id, true)
+                        {
+                            Self::store_warn("could not write tag tombstone", e);
+                        }
+                    }
                 }
             }
         }
@@ -2033,6 +2242,8 @@ impl Database {
 
     /// Update node status
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
+        self.require_readable_store()?;
+        let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2044,12 +2255,14 @@ impl Database {
             .execute(&mut conn)?;
         drop(conn);
 
-        self.publish_node_by_id(node_id);
+        self.publish_node_edit(node_id, before);
         Ok(())
     }
 
     /// Update a node's commit hash in metadata_json
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
+        self.require_readable_store()?;
+        let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2081,12 +2294,14 @@ impl Database {
             .execute(&mut conn)?;
         drop(conn);
 
-        self.publish_node_by_id(node_id);
+        self.publish_node_edit(node_id, before);
         Ok(())
     }
 
     /// Update a node's prompt in metadata_json
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
+        self.require_readable_store()?;
+        let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2118,7 +2333,7 @@ impl Database {
             .execute(&mut conn)?;
         drop(conn);
 
-        self.publish_node_by_id(node_id);
+        self.publish_node_edit(node_id, before);
         Ok(())
     }
 
@@ -2963,6 +3178,7 @@ impl Database {
 
     /// Create a new theme
     pub fn create_theme(&self, name: &str, color: &str, description: Option<&str>) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
@@ -3015,6 +3231,7 @@ impl Database {
 
     /// Delete a theme by name (also removes all node_themes associations)
     pub fn delete_theme(&self, name: &str) -> Result<bool> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let normalized = name.to_lowercase().replace(' ', "-");
 
@@ -3052,6 +3269,7 @@ impl Database {
 
     /// Tag a node with a theme
     pub fn tag_node(&self, node_id: i32, theme_name: &str, source: &str) -> Result<()> {
+        self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?.ok_or_else(|| {
             DbError::Validation(format!(
                 "Theme '{}' not found. Create it with: deciduous themes create {}",
@@ -3085,6 +3303,7 @@ impl Database {
 
     /// Remove a theme from a node
     pub fn untag_node(&self, node_id: i32, theme_name: &str) -> Result<bool> {
+        self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?;
 
         if let Some(theme) = theme {
@@ -3109,6 +3328,7 @@ impl Database {
 
     /// Confirm a suggested tag (change source from "suggested" to "manual")
     pub fn confirm_tag(&self, node_id: i32, theme_name: &str) -> Result<bool> {
+        self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?;
 
         if let Some(theme) = theme {
@@ -4130,8 +4350,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
         // Fixed change_ids: a random UUID's first 8 hex characters are all
-        // digits about 2% of the time, and digits always resolve as a local
-        // id, so a random prefix would make this test flaky.
+        // digits about 2% of the time, which this test does not want to
+        // exercise by accident (the git_sync integration test does it on
+        // purpose).
         let a = db
             .create_node_with_change_id(
                 "a1b2c3d4-1111-4111-8111-111111111111",
@@ -4167,7 +4388,7 @@ mod tests {
 
         let err = db.resolve_node_ref("zz").unwrap_err().to_string();
         assert!(err.contains("not a node id"), "{err}");
-        // Digits are always an id, never a change_id guess.
+        // Digits that prefix no change_id are an id, even a missing one.
         assert_eq!(db.resolve_node_ref("99999").unwrap(), 99999);
         let err = db
             .resolve_node_ref("ffffffff-0000")

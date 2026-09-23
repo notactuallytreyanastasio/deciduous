@@ -773,8 +773,14 @@ pub struct DocReport {
     pub content_missing: usize,
 }
 
-/// Writes the server's graph into the repository's record store, then lets
+/// Merges the server's graph into the repository's record store, then lets
 /// `records::reconcile` fold it into the local database.
+///
+/// Merges, not writes: the server's records carry none of the fields it
+/// does not model (a newer version's, cascade markers), no local tombstone
+/// of an edge whose removal was local only, and no local relink since its
+/// last copy. Writing them over the file's records lost all three; the
+/// merge driver's rules keep them and still let a newer server copy win.
 ///
 /// Reusing reconcile rather than writing a second merge path is the whole
 /// point: it already resolves by `updated_at`, applies tombstones, and holds
@@ -797,8 +803,9 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 updated_at: n.updated_at.clone(),
                 author: None,
                 deleted_at: n.deleted_at.clone(),
+                extra: Default::default(),
             };
-            if store.write_node(&rec).map_err(|e| e.to_string())? {
+            if store.absorb_node(&rec).map_err(|e| e.to_string())? {
                 written += 1;
             }
         }
@@ -822,8 +829,9 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 created_at: e.created_at.clone(),
                 author: None,
                 deleted_at: None,
+                extra: Default::default(),
             };
-            if store.write_edge(&rec).map_err(|e| e.to_string())? {
+            if store.absorb_edge(&rec).map_err(|e| e.to_string())? {
                 written += 1;
             }
         }

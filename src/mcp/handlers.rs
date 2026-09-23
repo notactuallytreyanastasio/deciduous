@@ -129,10 +129,19 @@ fn require_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, HandlerError> 
 fn get_node_ref(db: &Database, args: &Value, key: &str) -> Result<Option<i32>, HandlerError> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(Value::Number(n)) => n
-            .as_i64()
-            .map(|v| Some(v as i32))
-            .ok_or_else(|| HandlerError::from(format!("{key} must be an integer id"))),
+        // A number is resolved like the same digits sent as a string: an
+        // id that does not fit is an error, never truncated onto another
+        // node (4294967298 as i32 is 2), and a digit-only CHANGE value is
+        // looked up as a change_id prefix, as the CLI does.
+        Some(Value::Number(n)) => {
+            let id = n
+                .as_i64()
+                .and_then(|v| i32::try_from(v).ok())
+                .ok_or_else(|| HandlerError::from(format!("{key}: {n} is not a node id")))?;
+            db.resolve_node_ref(&id.to_string())
+                .map(Some)
+                .map_err(|e| HandlerError::from(format!("{key}: {e}")))
+        }
         Some(Value::String(s)) => db
             .resolve_node_ref(s)
             .map(Some)
@@ -874,23 +883,33 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
         "legacy_events": store.has_legacy_events(),
         "conflicts": report.conflicts,
         "errors": report.errors,
-        "message": if report.is_clean() && report.conflicts.is_empty() {
+        "settled": report.is_settled(),
+        "message": if report.is_settled() {
             "Database and records agree.".to_string()
         } else if !report.conflicts.is_empty() {
             format!(
-                "{} carries git conflict markers. Call `sync` to merge the two sides record by record.",
+                "{}. Call `sync` to merge it record by record.",
                 report
                     .conflicts
                     .iter()
-                    .map(|c| c.path.as_str())
+                    .map(|c| match &c.message {
+                        Some(m) => format!("{}: {}", c.path, m),
+                        None => c.path.clone(),
+                    })
                     .collect::<Vec<_>>()
-                    .join(", ")
+                    .join("; ")
             )
-        } else {
+        } else if !report.is_clean() {
             format!(
                 "{} change(s) to import, {} to export. Call `sync` to apply.",
                 report.imported(),
                 report.exported()
+            )
+        } else {
+            format!(
+                "Nothing to import or export, but not settled: {} edge(s) wait for a node that is not here yet, {} record(s) could not be read.",
+                report.edges_pending,
+                report.read_errors.len()
             )
         }
     })))

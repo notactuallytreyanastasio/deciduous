@@ -94,6 +94,11 @@ pub struct NodeRecord {
     /// Set when the node was deleted; the record is then a tombstone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl NodeRecord {
@@ -110,6 +115,7 @@ impl NodeRecord {
             updated_at: node.updated_at.clone(),
             author: author.map(str::to_string),
             deleted_at: None,
+            extra: BTreeMap::new(),
         }
     }
 
@@ -149,9 +155,42 @@ pub struct EdgeRecord {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+/// Key, in a tombstone's extra fields, naming the node whose deletion wrote
+/// it: `"<node change_id>@<deleted_at>"`. Kept among the extra fields so the
+/// file format does not change shape and an older version that drops it
+/// only falls back to the old behaviour (the tombstone stands).
+pub const DELETED_WITH: &str = "deleted_with";
+
+/// The node a tombstone was written for, if it was a side effect of
+/// deleting that node and has not been superseded since. The marker names
+/// the deletion it belongs to; a later deliberate unlink moves deleted_at
+/// and leaves the marker stale, which then counts for nothing.
+fn cascade_node<'a>(
+    extra: &'a BTreeMap<String, Value>,
+    deleted_at: Option<&str>,
+) -> Option<&'a str> {
+    let marker = extra.get(DELETED_WITH)?.as_str()?;
+    let (node, at) = marker.split_once('@')?;
+    (Some(at) == deleted_at).then_some(node)
+}
+
+fn cascade_marker(node_change_id: &str, deleted_at: &str) -> Value {
+    Value::String(format!("{}@{}", node_change_id, deleted_at))
 }
 
 impl EdgeRecord {
+    /// If this tombstone was written because a node was deleted, that node.
+    pub fn deleted_with(&self) -> Option<&str> {
+        cascade_node(&self.extra, self.deleted_at.as_deref())
+    }
+
     /// Build a record from a database row. Returns `None` for legacy rows
     /// whose endpoints have no `change_id` (pre-migration databases).
     pub fn from_db(edge: &DecisionEdge, author: Option<&str>) -> Option<Self> {
@@ -167,6 +206,7 @@ impl EdgeRecord {
             created_at: edge.created_at.clone(),
             author: author.map(str::to_string),
             deleted_at: None,
+            extra: BTreeMap::new(),
         })
     }
 
@@ -189,6 +229,11 @@ pub struct ThemeRecord {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl ThemeRecord {
@@ -202,6 +247,7 @@ impl ThemeRecord {
             updated_at: theme.updated_at.clone(),
             author: author.map(str::to_string),
             deleted_at: None,
+            extra: BTreeMap::new(),
         }
     }
 
@@ -228,11 +274,21 @@ pub struct TagRecord {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl TagRecord {
     pub fn is_tombstone(&self) -> bool {
         self.deleted_at.is_some()
+    }
+
+    /// If this tombstone was written because its node was deleted.
+    pub fn deleted_with(&self) -> Option<&str> {
+        cascade_node(&self.extra, self.deleted_at.as_deref())
     }
 }
 
@@ -430,14 +486,57 @@ impl<T> StoreRead<T> {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GraphDoc {
     pub version: u32,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub nodes: BTreeMap<String, NodeRecord>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub edges: BTreeMap<String, EdgeRecord>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub themes: BTreeMap<String, ThemeRecord>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "record_map")]
     pub tags: BTreeMap<String, TagRecord>,
+    /// Top-level sections this version does not know about, kept as is.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
+}
+
+/// Deserialize one record map. JSON allows a key twice and serde keeps the
+/// last, so a record a bad hand merge left in the file twice silently
+/// became whichever copy came second, even when the first was newer. Two
+/// copies of one record are two versions of it: merge them with the same
+/// rules as the merge driver.
+fn record_map<'de, D, T>(deserializer: D) -> Result<BTreeMap<String, T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: serde::de::DeserializeOwned,
+{
+    struct Records<T>(std::marker::PhantomData<T>);
+    impl<'de, T: serde::de::DeserializeOwned> serde::de::Visitor<'de> for Records<T> {
+        type Value = BTreeMap<String, T>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a map of records")
+        }
+        fn visit_map<A: serde::de::MapAccess<'de>>(
+            self,
+            mut map: A,
+        ) -> Result<Self::Value, A::Error> {
+            let mut raw: BTreeMap<String, Value> = BTreeMap::new();
+            while let Some((key, value)) = map.next_entry::<String, Value>()? {
+                let merged = match raw.remove(&key) {
+                    Some(earlier) => merge_record_values(None, &earlier, &value),
+                    None => value,
+                };
+                raw.insert(key, merged);
+            }
+            raw.into_iter()
+                .map(|(k, v)| {
+                    serde_json::from_value(v)
+                        .map(|rec| (k.clone(), rec))
+                        .map_err(|e| serde::de::Error::custom(format!("record {}: {}", k, e)))
+                })
+                .collect()
+        }
+    }
+    deserializer.deserialize_map(Records(std::marker::PhantomData))
 }
 
 impl Default for GraphDoc {
@@ -448,6 +547,7 @@ impl Default for GraphDoc {
             edges: BTreeMap::new(),
             themes: BTreeMap::new(),
             tags: BTreeMap::new(),
+            extra: BTreeMap::new(),
         }
     }
 }
@@ -459,6 +559,13 @@ impl GraphDoc {
             && self.themes.is_empty()
             && self.tags.is_empty()
     }
+}
+
+/// Whether `text` holds git conflict markers as git writes them: at the
+/// start of a line. The one test for both "can sync merge this" and "should
+/// the error send you to sync", so they cannot disagree.
+fn has_conflict_markers(text: &str) -> bool {
+    text.starts_with("<<<<<<<") || text.contains("\n<<<<<<<")
 }
 
 /// Read the graph file. A missing or empty file is an empty graph; anything
@@ -474,10 +581,14 @@ fn load_doc(path: &Path) -> io::Result<GraphDoc> {
         return Ok(GraphDoc::default());
     }
     serde_json::from_str(&text).map_err(|e| {
-        let hint = if text.contains("<<<<<<<") {
+        // Not "run `deciduous sync`" for a file that is merely broken: that
+        // is often the very command that just failed.
+        let hint = if has_conflict_markers(&text) {
             "; it still has git conflict markers, run `deciduous sync` to merge it"
+        } else if text.contains("<<<<<<<") {
+            "; it has conflict markers that are not at the start of a line, so they are not git's as written and `deciduous sync` cannot split them (a hand edit or reformat?). Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`"
         } else {
-            "; left untouched, run `deciduous sync`"
+            "; left untouched. Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`; local rows missing from it are exported by the next sync"
         };
         io::Error::new(
             io::ErrorKind::InvalidData,
@@ -508,28 +619,121 @@ fn read_map<T: Clone + RecordIdentity>(path: &Path, map: &BTreeMap<String, T>) -
     out
 }
 
-/// Three-way merge of a record about to be written over one already in the
-/// document, with no known common ancestor: every differing field is a
-/// collision and the later `updated_at` wins.
-fn merged_record<T>(existing: Option<&T>, incoming: &T) -> io::Result<T>
+/// Merge a record produced by a local write into the one already in the
+/// document. `base` is what the database held before the write, when the
+/// caller knows it: with it, a field only the file changed (a teammate's
+/// edit that was pulled but not synced yet) survives the write. Without it
+/// every differing field is a collision.
+///
+/// The write is restamped first (see [`restamp_local_write`]), so it wins
+/// every collision. Returns the merged record and, when the write's
+/// `updated_at` had to move, the new value, which the database must adopt
+/// too or the next sync would see the file as newer and re-import it.
+fn merged_record<T>(
+    existing: Option<&T>,
+    incoming: &T,
+    base: Option<&T>,
+) -> io::Result<(T, Option<String>)>
 where
     T: Serialize + for<'de> Deserialize<'de>,
 {
-    let Some(existing) = existing else {
-        return serde_json::to_value(incoming)
-            .and_then(serde_json::from_value)
-            .map_err(io::Error::other);
-    };
     let bad = |e: serde_json::Error| io::Error::other(e);
+    let Some(existing) = existing else {
+        let rec = serde_json::to_value(incoming)
+            .and_then(serde_json::from_value)
+            .map_err(bad)?;
+        return Ok((rec, None));
+    };
     let ours = serde_json::to_value(existing).map_err(bad)?;
-    let theirs = serde_json::to_value(incoming).map_err(bad)?;
-    let merged = merge_record_values(None, &ours, &theirs);
-    serde_json::from_value(merged).map_err(|e| {
+    let mut theirs = serde_json::to_value(incoming).map_err(bad)?;
+    let base = base.map(serde_json::to_value).transpose().map_err(bad)?;
+    let restamped = restamp_local_write(base.as_ref(), &ours, &mut theirs);
+    let merged = merge_record_values(base.as_ref(), &ours, &theirs);
+    let rec = serde_json::from_value(merged).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("merging a record produced something unreadable: {}", e),
         )
-    })
+    })?;
+    Ok((rec, restamped))
+}
+
+/// Fields that say who wrote a record and when, not what it says.
+const STAMP_FIELDS: [&str; 3] = ["author", "created_at", "updated_at"];
+
+/// A local write happens after every version of its record that is already
+/// in the file, so it must carry a later timestamp than all of them.
+///
+/// Normally it does: the database stamps it with the current time. It does
+/// not when the file holds a version stamped ahead of this clock: a node
+/// backdated into the future with `add --date`, or a teammate whose clock
+/// runs fast. Last-writer-wins then picks the file's version, the write
+/// reports success, and the next `deciduous sync` reverts the database to
+/// the file. Every later edit is discarded the same way until the wall
+/// clock passes the bad timestamp.
+///
+/// So a write that changes anything is moved to just after the newest
+/// version it replaces (a Lamport clock, in effect). The field moved is the
+/// one that dates this kind of write: `deleted_at` for a tombstone,
+/// `updated_at` for an edit, `created_at` for an edge or tag (which have
+/// nothing else). Returns the new `updated_at` when that is what moved.
+fn restamp_local_write(
+    base: Option<&Value>,
+    existing: &Value,
+    incoming: &mut Value,
+) -> Option<String> {
+    let ex_ts = record_ts(existing);
+    let (Some(inc), Some(ex)) = (incoming.as_object(), existing.as_object()) else {
+        return None;
+    };
+    if record_ts(incoming) > ex_ts {
+        return None;
+    }
+    // Bringing a tombstone back to life is a change even when every field
+    // the write carries matches the file: a live record simply has no
+    // `deleted_at` key, so the key-by-key test below cannot see it. A relink
+    // or retag identical to what a teammate with a fast clock deleted is
+    // exactly that, and without the restamp their tombstone wins the merge.
+    let is_set =
+        |m: &serde_json::Map<String, Value>| m.get("deleted_at").is_some_and(|v| !v.is_null());
+    let revives = is_set(ex) && !is_set(inc);
+    // What does the write change? Against the database's previous state
+    // when known; otherwise against the file, where a field the write does
+    // not carry is someone else's addition, not a removal.
+    let changes = revives
+        || match base.and_then(Value::as_object) {
+            Some(b) => b
+                .keys()
+                .chain(inc.keys())
+                .filter(|k| !STAMP_FIELDS.contains(&k.as_str()))
+                .any(|k| b.get(k) != inc.get(k)),
+            None => inc
+                .iter()
+                .filter(|(k, _)| !STAMP_FIELDS.contains(&k.as_str()))
+                .any(|(k, v)| ex.get(k) != Some(v)),
+        };
+    if !changes {
+        return None;
+    }
+    let field = ["deleted_at", "updated_at", "created_at"]
+        .into_iter()
+        .find(|f| inc.contains_key(*f))?;
+    let stamp = (ex_ts + chrono::Duration::milliseconds(1))
+        .with_timezone(&chrono::Local)
+        .to_rfc3339();
+    if field == "deleted_at" {
+        // A cascade marker names the deletion it belongs to; keep it
+        // pointing at this one.
+        let old = inc.get("deleted_at").and_then(Value::as_str).unwrap_or("");
+        let marker = inc.get(DELETED_WITH).and_then(Value::as_str);
+        if let Some((node, at)) = marker.and_then(|m| m.split_once('@')) {
+            if at == old {
+                incoming[DELETED_WITH] = cascade_marker(node, &stamp);
+            }
+        }
+    }
+    incoming[field] = Value::String(stamp.clone());
+    (field == "updated_at").then_some(stamp)
 }
 
 /// Insert `rec` under `key`, reporting whether the document changed.
@@ -759,30 +963,96 @@ impl RecordStore {
         self.mutate(|doc| Ok(put(&mut doc.tags, key, rec.clone())))
     }
 
-    /// Write a record produced by a local mutation, merged with whatever is
-    /// already in the document. That entry may hold a teammate's version
-    /// that was pulled but not yet synced into the database; overwriting it
-    /// would lose their fields.
-    fn write_merged<T>(
+    /// Fold in a node record that came from somewhere other than this
+    /// clone's database (the shared server): merged with the file's version
+    /// by the merge driver's rules, without a base and without a restamp,
+    /// since it is not a local write. Fields only the file has (a newer
+    /// version's, a cascade marker) survive, and the newer side wins a
+    /// field both have. [`Self::write_node`] would replace the record.
+    pub fn absorb_node(&self, rec: &NodeRecord) -> io::Result<bool> {
+        self.absorb(|d| &mut d.nodes, rec.change_id.clone(), rec)
+    }
+
+    /// Like [`Self::absorb_node`], for an edge. A local tombstone newer than
+    /// the incoming copy stays a tombstone, and a local relink keeps its
+    /// rationale over an older copy of the edge.
+    pub fn absorb_edge(&self, rec: &EdgeRecord) -> io::Result<bool> {
+        self.absorb(|d| &mut d.edges, rec.edge_id.clone(), rec)
+    }
+
+    fn absorb<T>(
         &self,
         pick: impl FnOnce(&mut GraphDoc) -> &mut BTreeMap<String, T>,
         key: String,
         rec: &T,
     ) -> io::Result<bool>
     where
-        T: Serialize + for<'de> Deserialize<'de> + PartialEq,
+        T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone,
     {
         self.mutate(|doc| {
             let map = pick(doc);
-            let merged = merged_record(map.get(&key), rec)?;
+            let merged = match map.get(&key) {
+                None => rec.clone(),
+                Some(existing) => {
+                    let ours = serde_json::to_value(existing).map_err(io::Error::other)?;
+                    let theirs = serde_json::to_value(rec).map_err(io::Error::other)?;
+                    serde_json::from_value(merge_record_values(None, &ours, &theirs)).map_err(
+                        |e| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("merging a record produced something unreadable: {}", e),
+                            )
+                        },
+                    )?
+                }
+            };
             Ok(put(map, key, merged))
         })
     }
 
+    /// Write a record produced by a local mutation, merged with whatever is
+    /// already in the document. That entry may hold a teammate's version
+    /// that was pulled but not yet synced into the database; overwriting it
+    /// would lose their fields. Returns whether the file changed and, if the
+    /// write had to be restamped past a newer-looking version, its new
+    /// `updated_at`.
+    fn write_merged<T>(
+        &self,
+        pick: impl FnOnce(&mut GraphDoc) -> &mut BTreeMap<String, T>,
+        key: String,
+        rec: &T,
+        base: Option<&T>,
+    ) -> io::Result<(bool, Option<String>)>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + PartialEq,
+    {
+        let mut restamped = None;
+        let changed = self.mutate(|doc| {
+            let map = pick(doc);
+            let (merged, stamp) = merged_record(map.get(&key), rec, base)?;
+            restamped = stamp;
+            Ok(put(map, key, merged))
+        })?;
+        Ok((changed, restamped))
+    }
+
     /// Publish a live node from the database.
     pub fn publish_node(&self, node: &DecisionNode) -> io::Result<bool> {
+        Ok(self.publish_node_edit(None, node)?.0)
+    }
+
+    /// Publish a node the database just changed. `before` is the row as it
+    /// was before the change. Returns whether the file changed, and the
+    /// `updated_at` the database must take if the write had to be moved
+    /// past a version in the file stamped later than this clock.
+    pub fn publish_node_edit(
+        &self,
+        before: Option<&DecisionNode>,
+        node: &DecisionNode,
+    ) -> io::Result<(bool, Option<String>)> {
         let rec = NodeRecord::from_db(node, Some(self.author()));
-        self.write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec)
+        let base = before.map(|b| NodeRecord::from_db(b, None));
+        self.write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec, base.as_ref())
     }
 
     /// Mark a node deleted. Keeps the last known fields so history stays
@@ -790,36 +1060,65 @@ impl RecordStore {
     pub fn tombstone_node(&self, node: &DecisionNode) -> io::Result<bool> {
         let mut rec = NodeRecord::from_db(node, Some(self.author()));
         rec.deleted_at = Some(now_ts());
-        self.write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec)
+        let base = NodeRecord::from_db(node, None);
+        Ok(self
+            .write_merged(|d| &mut d.nodes, rec.change_id.clone(), &rec, Some(&base))?
+            .0)
     }
 
     /// Publish a live edge. Legacy edges without change ids are skipped.
     pub fn publish_edge(&self, edge: &DecisionEdge) -> io::Result<bool> {
         match EdgeRecord::from_db(edge, Some(self.author())) {
-            Some(rec) => self.write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec),
+            Some(rec) => Ok(self
+                .write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec, None)?
+                .0),
             None => Ok(false),
         }
     }
 
     pub fn tombstone_edge(&self, edge: &DecisionEdge) -> io::Result<bool> {
+        self.tombstone_edge_of(edge, None)
+    }
+
+    /// Tombstone an edge; `with_node` is the node whose deletion took it
+    /// (see [`DELETED_WITH`]), `None` for a deliberate unlink.
+    pub fn tombstone_edge_of(
+        &self,
+        edge: &DecisionEdge,
+        with_node: Option<&str>,
+    ) -> io::Result<bool> {
         match EdgeRecord::from_db(edge, Some(self.author())) {
             Some(mut rec) => {
-                rec.deleted_at = Some(now_ts());
-                self.write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec)
+                let now = now_ts();
+                if let Some(node) = with_node {
+                    rec.extra
+                        .insert(DELETED_WITH.into(), cascade_marker(node, &now));
+                }
+                rec.deleted_at = Some(now);
+                Ok(self
+                    .write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec, None)?
+                    .0)
             }
             None => Ok(false),
         }
     }
 
     pub fn publish_theme(&self, theme: &Theme) -> io::Result<bool> {
+        Ok(self.publish_theme_edit(theme)?.0)
+    }
+
+    /// Like [`Self::publish_node_edit`], for a theme.
+    pub fn publish_theme_edit(&self, theme: &Theme) -> io::Result<(bool, Option<String>)> {
         let rec = ThemeRecord::from_db(theme, Some(self.author()));
-        self.write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec)
+        self.write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec, None)
     }
 
     pub fn tombstone_theme(&self, theme: &Theme) -> io::Result<bool> {
         let mut rec = ThemeRecord::from_db(theme, Some(self.author()));
         rec.deleted_at = Some(now_ts());
-        self.write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec)
+        Ok(self
+            .write_merged(|d| &mut d.themes, rec.change_id.clone(), &rec, None)?
+            .0)
     }
 
     pub fn publish_tag(
@@ -836,9 +1135,10 @@ impl RecordStore {
             created_at: created_at.to_string(),
             author: Some(self.author().to_string()),
             deleted_at: None,
+            extra: Default::default(),
         };
         let key = tag_id(node_change_id, theme_change_id);
-        self.write_merged(|d| &mut d.tags, key, &rec)
+        Ok(self.write_merged(|d| &mut d.tags, key, &rec, None)?.0)
     }
 
     /// Two people created a theme with the same name before syncing. The
@@ -886,7 +1186,14 @@ impl RecordStore {
         Ok(moved)
     }
 
-    pub fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) -> io::Result<bool> {
+    /// Tombstone a tag. `with_node` says it goes because its node was
+    /// deleted (see [`DELETED_WITH`]), not because someone untagged it.
+    pub fn tombstone_tag(
+        &self,
+        node_change_id: &str,
+        theme_change_id: &str,
+        with_node: bool,
+    ) -> io::Result<bool> {
         let author = self.author().to_string();
         let now = now_ts();
         let key = tag_id(node_change_id, theme_change_id);
@@ -898,9 +1205,30 @@ impl RecordStore {
                 created_at: now.clone(),
                 author: None,
                 deleted_at: None,
+                extra: Default::default(),
             });
+            // Later than whatever version is there, even one stamped ahead
+            // of this clock (see restamp_local_write).
+            let prev = serde_json::to_value(&rec)
+                .map(|v| record_ts(&v))
+                .unwrap_or_default();
+            let deleted = if parse_ts(&now) > prev {
+                now
+            } else {
+                (prev + chrono::Duration::milliseconds(1))
+                    .with_timezone(&chrono::Local)
+                    .to_rfc3339()
+            };
+            if with_node {
+                rec.extra.insert(
+                    DELETED_WITH.into(),
+                    cascade_marker(node_change_id, &deleted),
+                );
+            } else {
+                rec.extra.remove(DELETED_WITH);
+            }
             rec.author = Some(author);
-            rec.deleted_at = Some(now);
+            rec.deleted_at = Some(deleted);
             Ok(put(&mut doc.tags, key, rec))
         })
     }
@@ -1123,6 +1451,7 @@ impl RecordStore {
                 updated_at: node.updated_at.to_rfc3339(),
                 author: node.author.clone(),
                 deleted_at,
+                extra: Default::default(),
             };
 
         self.mutate(|doc| {
@@ -1155,6 +1484,7 @@ impl RecordStore {
                     created_at: edge.created_at.to_rfc3339(),
                     author: edge.author.clone(),
                     deleted_at: None,
+                    extra: Default::default(),
                 };
                 if !doc.edges.contains_key(&rec.edge_id)
                     && put(&mut doc.edges, rec.edge_id.clone(), rec)
@@ -1175,6 +1505,7 @@ impl RecordStore {
                     created_at: edge.created_at.to_rfc3339(),
                     author: edge.author.clone(),
                     deleted_at: Some(deleted_at.to_rfc3339()),
+                    extra: Default::default(),
                 };
                 let keep = match doc.edges.get(&rec.edge_id) {
                     Some(existing) => {
@@ -1304,6 +1635,9 @@ pub struct SyncReport {
     pub nodes_deleted: usize,
     pub nodes_exported: usize,
     pub edges_imported: usize,
+    /// Edges both sides have whose rationale or weight changed in the file
+    /// (unlink + relink elsewhere).
+    pub edges_updated: usize,
     pub edges_deleted: usize,
     pub edges_exported: usize,
     /// Edges whose endpoint is not in the store or the database yet. They
@@ -1339,6 +1673,7 @@ impl SyncReport {
             + self.nodes_updated
             + self.nodes_deleted
             + self.edges_imported
+            + self.edges_updated
             + self.edges_deleted
             + self.themes_imported
             + self.themes_updated
@@ -1356,6 +1691,19 @@ impl SyncReport {
     /// Nothing moved in either direction.
     pub fn is_clean(&self) -> bool {
         self.imported() == 0 && self.exported() == 0
+    }
+
+    /// Nothing moved *and* nothing is left over: no edge waiting for a node,
+    /// no record that would not read, no record the database refused, no
+    /// conflict. This is what a pre-push `sync --check` must require.
+    /// `is_clean` alone passed a graph file whose edges point at a commit
+    /// nobody pushed, or whose records a bad merge left unreadable.
+    pub fn is_settled(&self) -> bool {
+        self.is_clean()
+            && self.edges_pending == 0
+            && self.read_errors.is_empty()
+            && self.errors.is_empty()
+            && self.conflicts.is_empty()
     }
 }
 
@@ -1390,19 +1738,17 @@ fn reconcile_inner(
     let io_err = |e: io::Error| format!("record store: {}", e);
     let db_err = |e: crate::db::DbError| format!("database: {}", e);
 
-    // Files merged by git without the merge driver still carry markers.
+    // A merge git left unresolved (the driver failed or was not found), or
+    // one done without the driver, which leaves conflict markers.
     if dry_run {
-        report.conflicts = store
-            .conflicted_files()
-            .into_iter()
-            .map(|p| ConflictRepair {
-                path: p.display().to_string(),
-                merged: false,
-                message: Some("has conflict markers; `deciduous sync` will merge it".into()),
-            })
-            .collect();
+        report.conflicts = store.pending_conflicts();
     } else {
         report.conflicts = store.repair_conflicted_files().map_err(io_err)?;
+        // Not merged means the file is not the merge result. Reconciling
+        // against it would export local rows into a half-merged file.
+        if report.conflicts.iter().any(|c| !c.merged) {
+            return Ok(report);
+        }
     }
 
     // Everything below compares the document with the database and writes
@@ -1478,6 +1824,9 @@ fn reconcile_inner(
                         let mut theirs = rec.clone();
                         theirs.author = None;
                         theirs.created_at = mine.created_at.clone();
+                        // Fields the database cannot hold are not a
+                        // difference it could ever resolve.
+                        theirs.extra.clear();
                         mine == theirs
                     };
                     if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
@@ -1625,6 +1974,9 @@ fn reconcile_inner(
                         let mut theirs = rec.clone();
                         theirs.author = None;
                         theirs.created_at = mine.created_at.clone();
+                        // Fields the database cannot hold are not a
+                        // difference it could ever resolve.
+                        theirs.extra.clear();
                         mine == theirs
                     };
                     if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
@@ -1689,10 +2041,19 @@ fn reconcile_inner(
         }
     }
 
+    // A tombstone written only because a node was deleted does not count
+    // once that node is back (edited after the delete, elsewhere): the
+    // node returns with the edges and tags its deletion took.
+    let node_is_back = |cid: Option<&str>| {
+        cid.and_then(|c| store_nodes.get(c))
+            .is_some_and(|n| !n.is_tombstone())
+    };
+
     for (eid, rec) in &store_edges {
+        let dead = rec.is_tombstone() && !node_is_back(rec.deleted_with());
         match db_edge_by_key.get(eid) {
             None => {
-                if rec.is_tombstone() {
+                if dead {
                     continue;
                 }
                 let from_dead = tombstoned_nodes.contains(&rec.from_change_id);
@@ -1732,7 +2093,7 @@ fn reconcile_inner(
                 }
             }
             Some(row) => {
-                if rec.is_tombstone() {
+                if dead {
                     let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
                     if deleted >= parse_ts(&row.created_at) {
                         if !dry_run {
@@ -1745,6 +2106,21 @@ fn reconcile_inner(
                         }
                         report.edges_exported += 1;
                     }
+                } else if rec.rationale != row.rationale
+                    || rec.weight.or(Some(1.0)) != row.weight.or(Some(1.0))
+                {
+                    // Both have the edge, saying different things: someone
+                    // unlinked and relinked it with a new rationale. The file
+                    // wins. Local writes reach the file as they happen, so a
+                    // row that differs from it is stale, not newer; and the
+                    // timestamps cannot say otherwise, because edges carry no
+                    // updated_at and a merge keeps the earliest created_at.
+                    // Letting a later row created_at win would export a
+                    // stale local relink over a teammate's newer one.
+                    if !dry_run {
+                        db.update_edge_record(row.id, rec).map_err(db_err)?;
+                    }
+                    report.edges_updated += 1;
                 }
             }
         }
@@ -1785,9 +2161,10 @@ fn reconcile_inner(
     }
 
     for (key, rec) in &store_tags {
+        let dead = rec.is_tombstone() && !node_is_back(rec.deleted_with());
         match db_tag_by_key.get(key) {
             None => {
-                if rec.is_tombstone() {
+                if dead {
                     continue;
                 }
                 if let (Some(&node_id), Some(&theme_id)) = (
@@ -1804,7 +2181,7 @@ fn reconcile_inner(
                 }
             }
             Some((row, node_cid, theme_cid)) => {
-                if rec.is_tombstone() {
+                if dead {
                     let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
                     if deleted >= parse_ts(&row.created_at) {
                         if !dry_run {
@@ -2044,32 +2421,156 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
         );
         out.insert(kind.into(), Value::Object(merged));
     }
+
+    // Sections this version does not know. A section that is a map of
+    // records merges like one; anything else takes the side that changed
+    // it, ours when both did.
+    let mut others: Vec<&String> = o
+        .keys()
+        .chain(t.keys())
+        .filter(|k| k.as_str() != "version" && !RECORD_KINDS.contains(&k.as_str()))
+        .collect();
+    others.sort();
+    others.dedup();
+    for key in others {
+        let bv = b.and_then(|m| m.get(key));
+        let merged = match (o.get(key), t.get(key)) {
+            (Some(ov), Some(tv)) if ov == tv => Some(ov.clone()),
+            (Some(Value::Object(om)), Some(Value::Object(tm))) => Some(Value::Object(
+                merge_record_maps(bv.and_then(Value::as_object), om, tm),
+            )),
+            (Some(ov), Some(tv)) => Some(if bv == Some(ov) {
+                tv.clone()
+            } else {
+                ov.clone()
+            }),
+            (Some(v), None) | (None, Some(v)) => (bv != Some(v)).then(|| v.clone()),
+            (None, None) => None,
+        };
+        if let Some(v) = merged {
+            out.insert(key.clone(), v);
+        }
+    }
     Ok(Value::Object(out))
+}
+
+/// `ours` plus every record `theirs` has and `ours` lacks entirely.
+fn add_missing_records(ours: &Value, theirs: &Value) -> Value {
+    let mut out = ours.clone();
+    for kind in RECORD_KINDS {
+        let Some(incoming) = theirs.get(kind).and_then(Value::as_object) else {
+            continue;
+        };
+        if !out.get(kind).is_some_and(Value::is_object) {
+            out[kind] = Value::Object(Default::default());
+        }
+        let map = out[kind].as_object_mut().expect("just made an object");
+        for (key, rec) in incoming {
+            map.entry(key.clone()).or_insert_with(|| rec.clone());
+        }
+    }
+    out
+}
+
+/// Parse one version of the graph file. A version that still carries
+/// conflict markers is resolved first by merging its own sides: that is what
+/// a clone without the merge driver commits, and every later merge whose
+/// ancestor is that commit hands it to the driver as `base`.
+fn parse_version(text: &str, what: &str) -> io::Result<Option<Value>> {
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    // Through GraphDoc first, which merges a record filed twice; a version
+    // that is JSON but not a graph document still merges as plain JSON.
+    if let Ok(doc) = serde_json::from_str::<GraphDoc>(text) {
+        return serde_json::to_value(doc)
+            .map(Some)
+            .map_err(io::Error::other);
+    }
+    let err = match serde_json::from_str(text) {
+        Ok(v) => return Ok(Some(v)),
+        Err(e) => e,
+    };
+    let Some((ours, base, theirs)) = split_conflict_markers(text) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{}: {}", what, err),
+        ));
+    };
+    let side = |t: &str, which: &str| -> io::Result<Value> {
+        serde_json::from_str(t).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{} has conflict markers and its {} side is not JSON: {}",
+                    what, which, e
+                ),
+            )
+        })
+    };
+    let o = side(&ours, "ours")?;
+    let t = side(&theirs, "theirs")?;
+    let b = match base.as_deref().map(serde_json::from_str::<Value>) {
+        None => None,
+        Some(Ok(v)) => Some(v),
+        Some(Err(e)) => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{} has conflict markers and its common ancestor section is not JSON: {}",
+                    what, e
+                ),
+            ))
+        }
+    };
+    merge_docs(b.as_ref(), &o, &t).map(Some)
 }
 
 /// Merge three graph files the way a git merge driver is called: `base`
 /// (may be empty for add/add), `ours`, `theirs`. Returns the merged document
 /// as stable JSON text.
 pub fn merge_record_files(base: &Path, ours: &Path, theirs: &Path) -> io::Result<String> {
-    let read = |p: &Path| -> io::Result<Option<Value>> {
-        let text = fs::read_to_string(p)?;
-        if text.trim().is_empty() {
-            return Ok(None);
-        }
-        serde_json::from_str(&text).map(Some).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("{}: {}", p.display(), e),
-            )
-        })
+    Ok(merge_record_files_with_notes(base, ours, theirs)?.0)
+}
+
+/// [`merge_record_files`], plus notes for the person running the merge
+/// (the driver prints them on stderr, which git shows).
+///
+/// An ancestor that will not parse even after resolving its markers is an
+/// error, not a two-way merge. Without the ancestor nothing says which side
+/// changed a field, so every field the sides differ on goes to the newer
+/// record and the older side's edits vanish into what git records as a
+/// clean merge. Failing leaves the file unmerged in git, which `sync` and
+/// `sync --check` report (see [`without_ancestor`] for the way out).
+pub fn merge_record_files_with_notes(
+    base: &Path,
+    ours: &Path,
+    theirs: &Path,
+) -> io::Result<(String, Vec<String>)> {
+    let read = |p: &Path, what: &str| -> io::Result<Option<Value>> {
+        parse_version(
+            &fs::read_to_string(p)?,
+            &format!("{} ({})", what, p.display()),
+        )
     };
-    let base_v = read(base)?;
-    let ours_v =
-        read(ours)?.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ours is empty"))?;
-    let theirs_v = read(theirs)?
+    let notes = Vec::new();
+    let base_v = read(base, "the common ancestor")
+        .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, without_ancestor(&e)))?;
+    let ours_v = read(ours, "ours")?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ours is empty"))?;
+    let theirs_v = read(theirs, "theirs")?
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "theirs is empty"))?;
     let merged = merge_docs(base_v.as_ref(), &ours_v, &theirs_v)?;
-    to_stable_json(&merged)
+    Ok((to_stable_json(&merged)?, notes))
+}
+
+/// Why a merge whose common ancestor will not parse is refused, and how to
+/// do it anyway, knowingly.
+pub fn without_ancestor(e: &dyn std::fmt::Display) -> String {
+    format!(
+        "{}. Without the common ancestor every field the two sides differ on would go to the newer record and the older side's edits would be lost, so this merge is left to you. To merge the two sides without it anyway: `git show :3:.deciduous/graph.json > /tmp/theirs.json && deciduous merge-record /dev/null .deciduous/graph.json /tmp/theirs.json && git add .deciduous/graph.json`",
+        e
+    )
 }
 
 /// Split a file that contains git conflict markers into (ours, base, theirs).
@@ -2137,22 +2638,349 @@ pub struct ConflictRepair {
     pub message: Option<String>,
 }
 
+/// Git's versions of the graph file while a merge of it is unresolved
+/// (`git ls-files -u`): stage 1 is the common ancestor, 2 ours, 3 theirs.
+#[derive(Debug, Default)]
+struct UnmergedStages {
+    base: Option<String>,
+    ours: Option<String>,
+    theirs: Option<String>,
+}
+
 impl RecordStore {
     /// The graph file, if git left conflict markers in it — a merge done in
     /// a clone where `deciduous merge-record` is not registered.
     pub fn conflicted_files(&self) -> Vec<PathBuf> {
         match fs::read_to_string(&self.path) {
-            Ok(text) if text.starts_with("<<<<<<<") || text.contains("\n<<<<<<<") => {
+            Ok(text) if has_conflict_markers(&text) => {
                 vec![self.path.clone()]
             }
             _ => Vec::new(),
         }
     }
 
-    /// Merge a graph file that still carries conflict markers, using the
-    /// same rules as the merge driver. A file whose sides do not parse as
-    /// JSON is left untouched and reported.
+    fn git(&self, args: &[&str]) -> Option<std::process::Output> {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(self.dir())
+            .output()
+            .ok()
+    }
+
+    fn file_name(&self) -> String {
+        self.path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| STORE_FILE_NAME.to_string())
+    }
+
+    /// Whether git holds the graph file unmerged. When the merge driver
+    /// fails, or is not found (git runs it through the shell, so a GUI
+    /// client or CI job without `deciduous` on PATH gets "command not
+    /// found"), git keeps our side in the file untouched, with no conflict
+    /// markers, and marks it unmerged. The file then parses fine and looks
+    /// like a clean result; committing it drops everything the other side
+    /// added. Outside a git repository, or with no git, this is `false`.
+    pub fn is_unmerged_in_git(&self) -> bool {
+        self.unmerged_stages().is_some()
+    }
+
+    fn unmerged_stages(&self) -> Option<UnmergedStages> {
+        let out = self.git(&["ls-files", "-u", "-z", "--", &self.file_name()])?;
+        if !out.status.success() || out.stdout.is_empty() {
+            return None;
+        }
+        let mut stages = UnmergedStages::default();
+        for entry in out.stdout.split(|b| *b == 0).filter(|e| !e.is_empty()) {
+            // "<mode> <sha> <stage>\t<path>"
+            let entry = String::from_utf8_lossy(entry);
+            let meta = entry.split('\t').next().unwrap_or("");
+            let mut parts = meta.split_whitespace();
+            let (_, Some(sha), Some(stage)) = (parts.next(), parts.next(), parts.next()) else {
+                continue;
+            };
+            let blob = self
+                .git(&["cat-file", "blob", sha])
+                .filter(|o| o.status.success());
+            let text = blob.map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+            match stage {
+                "1" => stages.base = text,
+                "2" => stages.ours = text,
+                "3" => stages.theirs = text,
+                _ => {}
+            }
+        }
+        Some(stages)
+    }
+
+    /// Finish a merge git left unresolved: merge its three versions the way
+    /// the driver would have, write the result and stage it (`git add`),
+    /// which is exactly the state a successful driver run leaves behind.
+    ///
+    /// Our side is the working file when it parses, since it may hold local
+    /// writes made after the failed merge; otherwise git's stage 2.
+    fn repair_unmerged(&self, stages: UnmergedStages) -> io::Result<ConflictRepair> {
+        let display = self.path.display().to_string();
+        let failed = |message: String| ConflictRepair {
+            path: display.clone(),
+            merged: false,
+            message: Some(message),
+        };
+        let working = fs::read_to_string(&self.path).unwrap_or_default();
+        let ours = match serde_json::from_str::<Value>(&working) {
+            Ok(v) => Some(v),
+            Err(_) => {
+                match parse_version(stages.ours.as_deref().unwrap_or(""), "ours (git stage 2)") {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Ok(failed(format!("unmerged in git and not mergeable: {}", e)))
+                    }
+                }
+            }
+        };
+        let theirs = match parse_version(
+            stages.theirs.as_deref().unwrap_or(""),
+            "theirs (git stage 3)",
+        ) {
+            Ok(v) => v,
+            Err(e) => return Ok(failed(format!("unmerged in git and not mergeable: {}", e))),
+        };
+        let (Some(ours), Some(theirs)) = (ours, theirs) else {
+            return Ok(failed(
+                "unmerged in git, and one side deleted the graph file; restore it with `git checkout --ours` or `--theirs`, then `deciduous sync`".into(),
+            ));
+        };
+        let base = match stages
+            .base
+            .as_deref()
+            .map(|b| parse_version(b, "the common ancestor (git stage 1)"))
+        {
+            None => None,
+            Some(Ok(v)) => v,
+            Some(Err(e)) => {
+                return Ok(failed(format!("unmerged in git: {}", without_ancestor(&e))))
+            }
+        };
+        let doc = merge_docs(base.as_ref(), &ours, &theirs).and_then(|v| {
+            serde_json::from_value::<GraphDoc>(v)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
+        });
+        let doc = match doc {
+            Ok(doc) => doc,
+            Err(e) => {
+                return Ok(failed(format!(
+                    "unmerged in git; merging its versions failed: {}",
+                    e
+                )))
+            }
+        };
+        self.replace_doc(doc)?;
+        // Inside a sync the write is batched; git must see it now.
+        {
+            let mut cache = self.lock();
+            self.flush(&mut cache)?;
+        }
+        let staged = self
+            .git(&["add", "--", &self.file_name()])
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        Ok(ConflictRepair {
+            path: display,
+            merged: true,
+            message: Some(if staged {
+                "git left it unmerged (the merge driver failed or was not found); merged git's three versions and staged the result".into()
+            } else {
+                "git left it unmerged (the merge driver failed or was not found); merged git's three versions, but `git add` failed: stage it yourself".into()
+            }),
+        })
+    }
+
+    /// The graph file as it is in `rev`, if `rev` has it.
+    fn show_at(&self, rev: &str) -> Option<String> {
+        self.git(&["show", &format!("{}:./{}", rev, self.file_name())])
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    }
+
+    /// Commits being brought in by a merge, rebase or cherry-pick that has
+    /// stopped, each with the commit its changes are measured from:
+    /// `(label, base, commit)`.
+    fn operations_in_progress(&self) -> Vec<(String, Option<String>, String)> {
+        let rev = |name: &str| {
+            self.git(&[
+                "rev-parse",
+                "-q",
+                "--verify",
+                &format!("{}^{{commit}}", name),
+            ])
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        };
+        let mut out = Vec::new();
+        // MERGE_HEAD holds one line per head (several for an octopus).
+        let merge_heads = self
+            .git(&[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "MERGE_HEAD",
+            ])
+            .filter(|o| o.status.success())
+            .and_then(|o| fs::read_to_string(String::from_utf8_lossy(&o.stdout).trim()).ok())
+            .unwrap_or_default();
+        for head in merge_heads.split_whitespace() {
+            let base = self
+                .git(&["merge-base", "HEAD", head])
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+            out.push((
+                format!("MERGE_HEAD {}", short(head)),
+                base,
+                head.to_string(),
+            ));
+        }
+        for name in ["REBASE_HEAD", "CHERRY_PICK_HEAD"] {
+            if let Some(commit) = rev(name) {
+                let base = rev(&format!("{}^", commit));
+                out.push((format!("{} {}", name, short(&commit)), base, commit));
+            }
+        }
+        out
+    }
+
+    /// A merge (or rebase, or cherry-pick) is in progress and the graph
+    /// file is no longer unmerged in git, but is it the merge result? When
+    /// the driver fails, git keeps our side with no markers; staging it by
+    /// hand clears the unmerged state that `ls-files -u` reports, and the
+    /// next commit records a merge without the other side's records.
+    ///
+    /// So fold each incoming commit's version into the working file with
+    /// the driver's rules, measured from its base. For a file the driver
+    /// did merge, this changes nothing: every change the incoming side made
+    /// is already there. When it does change something, the file was not
+    /// the merge result: `check` reports it, otherwise the fold is written
+    /// and staged, as the driver would have left it.
+    fn fold_in_progress(&self, check: bool) -> io::Result<Vec<ConflictRepair>> {
+        let ops = self.operations_in_progress();
+        if ops.is_empty() {
+            return Ok(Vec::new());
+        }
+        let display = self.path.display().to_string();
+        let current = serde_json::to_value(load_doc(&self.path)?).map_err(io::Error::other)?;
+        let mut merged = current.clone();
+        let mut from = Vec::new();
+        for (label, base, commit) in &ops {
+            let Some(theirs) = self.show_at(commit) else {
+                continue;
+            };
+            let what = |w: &str| format!("the graph file in {} ({})", label, w);
+            let theirs = parse_version(&theirs, &what("incoming"))?;
+            let Some(theirs) = theirs else { continue };
+            let base = base
+                .as_deref()
+                .and_then(|b| self.show_at(b))
+                .map(|text| parse_version(&text, &what("its base")));
+            let next = match base {
+                None => merge_docs(None, &merged, &theirs)?,
+                Some(Ok(base)) => merge_docs(base.as_ref(), &merged, &theirs)?,
+                // The driver refused this merge for its ancestor, and
+                // whoever resolved it chose how. Without the ancestor no
+                // field can be judged; a record missing outright still can.
+                Some(Err(_)) => add_missing_records(&merged, &theirs),
+            };
+            let next = serde_json::from_value::<GraphDoc>(next)
+                .and_then(serde_json::to_value)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+            if next != merged {
+                from.push(label.clone());
+                merged = next;
+            }
+        }
+        if from.is_empty() {
+            return Ok(Vec::new());
+        }
+        let what = from.join(", ");
+        if check {
+            return Ok(vec![ConflictRepair {
+                path: display,
+                merged: false,
+                message: Some(format!(
+                    "a merge is in progress and the file is missing records from {}: it was staged without being merged (the merge driver failed or was not found?); `deciduous sync` will merge it",
+                    what
+                )),
+            }]);
+        }
+        let doc: GraphDoc = serde_json::from_value(merged)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+        self.replace_doc(doc)?;
+        {
+            let mut cache = self.lock();
+            self.flush(&mut cache)?;
+        }
+        let staged = self
+            .git(&["add", "--", &self.file_name()])
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        Ok(vec![ConflictRepair {
+            path: display,
+            merged: true,
+            message: Some(format!(
+                "a merge is in progress and the file was missing records from {}; merged them in and {}",
+                what,
+                if staged { "staged the result" } else { "`git add` failed: stage it yourself" }
+            )),
+        }])
+    }
+
+    /// What is wrong with the graph file as git left it, without changing
+    /// anything: unmerged in git, or carrying conflict markers.
+    pub fn pending_conflicts(&self) -> Vec<ConflictRepair> {
+        if let Some(stages) = self.unmerged_stages() {
+            let base = stages
+                .base
+                .as_deref()
+                .map(|b| parse_version(b, "the common ancestor (git stage 1)"));
+            let message = match base {
+                Some(Err(e)) => format!("unmerged in git: {}", without_ancestor(&e)),
+                _ => "unmerged in git: the merge driver failed or was not found (is `deciduous` on git's PATH?); `deciduous sync` will merge it".into(),
+            };
+            return vec![ConflictRepair {
+                path: self.path.display().to_string(),
+                merged: false,
+                message: Some(message),
+            }];
+        }
+        let markers: Vec<ConflictRepair> = self
+            .conflicted_files()
+            .into_iter()
+            .map(|p| ConflictRepair {
+                path: p.display().to_string(),
+                merged: false,
+                message: Some("has conflict markers; `deciduous sync` will merge it".into()),
+            })
+            .collect();
+        if !markers.is_empty() {
+            return markers;
+        }
+        self.fold_in_progress(true).unwrap_or_else(|e| {
+            vec![ConflictRepair {
+                path: self.path.display().to_string(),
+                merged: false,
+                message: Some(e.to_string()),
+            }]
+        })
+    }
+
+    /// Merge a graph file that git left unmerged or that still carries
+    /// conflict markers, using the same rules as the merge driver. A file
+    /// whose sides do not parse as JSON is left untouched and reported.
     pub fn repair_conflicted_files(&self) -> io::Result<Vec<ConflictRepair>> {
+        if let Some(stages) = self.unmerged_stages() {
+            return Ok(vec![self.repair_unmerged(stages)?]);
+        }
+        if self.conflicted_files().is_empty() {
+            return self.fold_in_progress(false);
+        }
         let mut out = Vec::new();
         for path in self.conflicted_files() {
             let text = fs::read_to_string(&path)?;
@@ -2172,7 +3000,21 @@ impl RecordStore {
                     continue;
                 }
             };
-            let base_v = base.as_deref().and_then(|b| parse(b).ok());
+            let base_v = match base.as_deref().map(parse) {
+                None => None,
+                Some(Ok(v)) => Some(v),
+                Some(Err(e)) => {
+                    out.push(ConflictRepair {
+                        path: display,
+                        merged: false,
+                        message: Some(format!(
+                            "its common ancestor (the ||||||| section) is not JSON: {}. Without it every field the two sides differ on would go to the newer record and the older side's edits would be lost; delete that section by hand to merge without it anyway",
+                            e
+                        )),
+                    });
+                    continue;
+                }
+            };
             let merged = match merge_docs(base_v.as_ref(), &ours_v, &theirs_v).and_then(|v| {
                 serde_json::from_value::<GraphDoc>(v)
                     .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
@@ -2231,6 +3073,7 @@ mod tests {
             updated_at: updated_at.into(),
             author: Some("bob".into()),
             deleted_at: None,
+            extra: Default::default(),
         }
     }
 
@@ -2259,10 +3102,47 @@ mod tests {
         let on_disk = s.read_node(&row.change_id).unwrap().unwrap();
         assert_eq!(on_disk.description.as_deref(), Some("from alice"));
         assert_eq!(on_disk.status, "active");
-        // A graph file that does not parse is never overwritten.
+        // A graph file that does not parse is never overwritten, and the
+        // edit is refused rather than left in the database alone.
         fs::write(s.path(), "{broken").unwrap();
-        db.update_node_status(id, "completed").unwrap();
+        let err = db.update_node_status(id, "completed").unwrap_err();
+        assert!(err.to_string().contains("nothing was changed"), "{err}");
         assert_eq!(fs::read_to_string(s.path()).unwrap(), "{broken");
+        assert_eq!(db.get_node(id).unwrap().unwrap().status, "active");
+    }
+
+    #[test]
+    fn a_local_edit_keeps_a_pulled_change_to_a_field_it_did_not_touch() {
+        let (dir, s) = store();
+        let db = db_in(dir.path());
+        let id = db
+            .create_node("goal", "Old title", None, None, None)
+            .unwrap();
+        let row = db.get_node(id).unwrap().unwrap();
+        // Alice renamed it; her record is pulled but not synced yet, and her
+        // clock is a day ahead.
+        let mut theirs = s.read_node(&row.change_id).unwrap().unwrap();
+        theirs.title = "Alice's title".into();
+        theirs.updated_at = (Utc::now() + chrono::Duration::days(1)).to_rfc3339();
+        s.write_node(&theirs).unwrap();
+        // Bob changes the status. The database knows what it held before,
+        // so the title is Alice's change, not a collision.
+        db.update_node_status(id, "active").unwrap();
+        let on_disk = s.read_node(&row.change_id).unwrap().unwrap();
+        assert_eq!(on_disk.title, "Alice's title");
+        assert_eq!(on_disk.status, "active");
+        assert!(parse_ts(&on_disk.updated_at) > parse_ts(&theirs.updated_at));
+        // The row took the same stamp, so sync imports only Alice's title.
+        let row = db.get_node(id).unwrap().unwrap();
+        assert_eq!(row.updated_at, on_disk.updated_at);
+        let r = reconcile(&db, &s, false).unwrap();
+        assert_eq!(r.nodes_updated, 1, "{r:?}");
+        let row = db.get_node(id).unwrap().unwrap();
+        assert_eq!(
+            (row.title.as_str(), row.status.as_str()),
+            ("Alice's title", "active")
+        );
+        assert!(reconcile(&db, &s, false).unwrap().is_clean());
     }
 
     #[test]
@@ -2373,6 +3253,7 @@ mod tests {
             created_at: "2020-01-01T00:00:00+00:00".into(),
             author: None,
             deleted_at: Some("2020-01-02T00:00:00+00:00".into()),
+            extra: Default::default(),
         })
         .unwrap();
         db.tag_node(n, "ops", "manual").unwrap();
@@ -2389,6 +3270,7 @@ mod tests {
             created_at: "2020-01-01T00:00:00+00:00".into(),
             author: None,
             deleted_at: Some("2020-01-02T00:00:00+00:00".into()),
+            extra: Default::default(),
         })
         .unwrap();
         let r = reconcile(&db, &s, false).unwrap();
@@ -2588,6 +3470,7 @@ mod tests {
             created_at: "2026-01-02T00:00:00+00:00".into(),
             author: Some("alice".into()),
             deleted_at: None,
+            extra: Default::default(),
         })
         .unwrap();
 
@@ -2693,6 +3576,7 @@ mod tests {
             created_at: "2026-01-02T00:00:00+00:00".into(),
             author: None,
             deleted_at: None,
+            extra: Default::default(),
         })
         .unwrap();
         let r = reconcile(&db, &s, false).unwrap();
@@ -3124,6 +4008,7 @@ mod tests {
                 created_at: "2026-01-01T00:00:00+00:00".into(),
                 author: None,
                 deleted_at: None,
+                extra: Default::default(),
             })
             .unwrap(),
         )

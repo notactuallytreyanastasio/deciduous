@@ -154,8 +154,22 @@ the database by `change_id`:
 | tombstone before the row's `updated_at` | row | the row was edited after the delete: rewrite the record (resurrect) |
 
 Edges import once both endpoints exist locally. An edge whose endpoint has not
-arrived yet is reported as pending and imports on a later sync. An edge that points
-at a tombstoned node is skipped.
+arrived yet is reported as pending (and `sync --check` exits 1 until it arrives) and
+imports on a later sync. An edge that points at a tombstoned node is skipped.
+
+Edges have no `updated_at`. An edge both sides have whose rationale or weight differs
+(someone unlinked and relinked it) takes the file's version: local writes reach the
+file as they happen, so a row that differs is stale.
+
+Deleting a node tombstones its edges and tags with a `deleted_with` marker naming
+that deletion. If the node comes back (edited elsewhere after the delete), those
+tombstones no longer count and the edges and tags come back with it. A deliberate
+unlink or untag has no marker and stays.
+
+A local write is always stamped later than the version of its record already in the
+file, even when that version's timestamp is ahead of this clock (`add --date` in the
+future, a teammate whose clock runs fast). Otherwise last-writer-wins would keep the
+file's version and the next sync would revert the edit.
 
 Four details keep this honest:
 
@@ -221,8 +235,29 @@ one-sided change from a real collision:
 | One side deleted, the other edited **before** the delete | the tombstone stands, keeping the edited fields |
 | Both sides created the record independently (no ancestor) | every differing field is a collision: later `updated_at` wins, `metadata` still unions |
 
-The driver exits non-zero if either side is not valid JSON, and git then falls back
-to an ordinary conflict.
+A version that still carries conflict markers (someone committed a conflicted file)
+is resolved by merging its own sides first, so it does not poison every later merge
+whose ancestor it is. An ancestor that will not parse at all fails the driver: a
+merge without it would hand every field the sides differ on to the newer record and
+silently lose the older side's edits. The error names the way to do that anyway,
+knowingly (`deciduous merge-record /dev/null <ours> <theirs>`: an empty base is the
+two-way merge).
+
+When the driver does fail (a side is not JSON), or git cannot run it (`deciduous` is
+not on the PATH git sees: GUI clients, CI images), git does **not** fall back to an
+ordinary conflict. It leaves our side in the file untouched, with no markers, and
+marks the path unmerged (`UU` in `git status`). That file parses and looks clean;
+committing it silently drops the other side. `deciduous sync --check` reports the
+unmerged state and exits 1, and `deciduous sync` finishes the merge from git's own
+three versions (`git ls-files -u`), keeping any local writes made to the working file
+since, and stages the result.
+
+Staging that file by hand (`git add`) clears the unmerged state but not the problem.
+So while a merge, rebase or cherry-pick is stopped, `sync` and `sync --check` also
+fold the incoming commit's version (`MERGE_HEAD`, `REBASE_HEAD`, `CHERRY_PICK_HEAD`)
+into the working file, measured from its base. For a file the driver merged this
+changes nothing; for one that is missing the other side, `--check` exits 1 and
+`sync` merges and stages it. A merge already committed is out of reach.
 
 Git config is per clone, so a clone that has never run `deciduous sync` (or a GitHub
 web merge) can still produce conflict markers inside `graph.json`. That is not
