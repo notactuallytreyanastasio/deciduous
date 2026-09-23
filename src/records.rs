@@ -1819,6 +1819,11 @@ fn reconcile_inner(
                     // both sides, and the database has only ours.
                     // created_at is never rewritten by an import and author is
                     // attribution, so neither counts as a content difference.
+                    // Nor does updated_at: the same instant is spelled
+                    // "-04:00" here and "Z" by the server, and a server row
+                    // stamped later with the same fields changed nothing a
+                    // reader can see. Counting either made `remote pull`
+                    // report "updated 2" for a graph status called in sync.
                     let same_content = {
                         let mine = NodeRecord::from_db(row, None);
                         let mut theirs = rec.clone();
@@ -1827,13 +1832,16 @@ fn reconcile_inner(
                         // Fields the database cannot hold are not a
                         // difference it could ever resolve.
                         theirs.extra.clear();
+                        theirs.updated_at = mine.updated_at.clone();
                         mine == theirs
                     };
                     if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
                         if !dry_run {
                             db.update_node_record(row.id, rec).map_err(db_err)?;
                         }
-                        report.nodes_updated += 1;
+                        if !same_content {
+                            report.nodes_updated += 1;
+                        }
                     } else if row_ts > rec_ts {
                         if !dry_run {
                             store.publish_node(row).map_err(io_err)?;

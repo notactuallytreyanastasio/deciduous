@@ -133,6 +133,112 @@ defmodule DeciduousMcp.Graph.Workspaces do
     |> Repo.all()
   end
 
+  @doc """
+  Ties a workspace to the repository writing to it, by root commit ids.
+
+  Names come from directory names, so two unrelated repositories called
+  `bridge-api` asked for one workspace and 1.0.7 let both write to it. The
+  CLI sends `git rev-list --max-parents=0 HEAD`: the same in every clone and
+  every worktree of a repository, different for an unrelated one, and
+  unchanged by a rename.
+
+    * no `repo_roots` at all (`nil`: a 1.0.7 client, a shallow clone whose
+      root is not in its history, or a directory outside git):
+      `{:ok, :unchecked}`. There is nothing to compare, and refusing would
+      lock every 1.0.7 teammate out of their own workspace.
+    * an empty list (a repository with no commit yet): `{:ok, :unchecked}`
+      while the workspace is unclaimed, and refused once it is claimed. An
+      empty list is not "no information": it is a repository that cannot
+      show it is the one that claimed the workspace, and letting it in is
+      how a fresh `git init` of a same-named project wrote into another's
+      graph and pulled its nodes.
+    * workspace unclaimed: the roots are recorded, `{:ok, :claimed}`
+    * any root in common: `{:ok, :verified}` (new roots, from a merged-in
+      history, are added)
+    * none in common and `adopt?`: `{:ok, :adopted}`, the roots are added.
+      The CLI sets it only when the user named the workspace explicitly.
+    * none in common: `{:error, {:claimed_by_other_repository, held}}`
+
+  The row is locked for the check so two first claims cannot both win.
+  """
+  def claim(%Workspace{} = ws, roots, adopt?) do
+    with {:ok, roots} <- validate_roots(roots) do
+      cond do
+        roots == :none ->
+          {:ok, :unchecked}
+
+        roots == [] ->
+          case (ws.settings || %{})["repo_roots"] || [] do
+            [] -> {:ok, :unchecked}
+            held -> {:error, {:no_commit_yet, held}}
+          end
+
+        true ->
+          claim_roots(ws, roots, adopt?)
+      end
+    end
+  end
+
+  defp claim_roots(ws, roots, adopt?) do
+    Repo.transaction(fn ->
+      ws = Repo.one!(from w in Workspace, where: w.id == ^ws.id, lock: "FOR UPDATE")
+      settings = ws.settings || %{}
+      held = settings["repo_roots"] || []
+
+      {outcome, merged} =
+        cond do
+          held == [] -> {:claimed, roots}
+          Enum.any?(roots, &(&1 in held)) -> {:verified, Enum.uniq(held ++ roots)}
+          adopt? -> {:adopted, Enum.uniq(held ++ roots)}
+          true -> Repo.rollback({:claimed_by_other_repository, held})
+        end
+
+      if merged != held do
+        ws
+        |> Workspace.changeset(%{settings: Map.put(settings, "repo_roots", merged)})
+        |> Repo.update!()
+      end
+
+      outcome
+    end)
+  end
+
+  defp validate_roots(nil), do: {:ok, :none}
+
+  defp validate_roots(roots) when is_list(roots) do
+    case Enum.reject(
+           roots,
+           &(is_binary(&1) and Regex.match?(~r/\A[0-9a-f]{40}([0-9a-f]{24})?\z/, &1))
+         ) do
+      [] ->
+        {:ok, roots |> Enum.uniq() |> Enum.sort()}
+
+      bad ->
+        {:error,
+         "repo_roots must be git commit ids (40 or 64 lowercase hex); got #{inspect(bad)}"}
+    end
+  end
+
+  defp validate_roots(other), do: {:error, "repo_roots must be a list, got #{inspect(other)}"}
+
+  @doc """
+  Workspaces holding any of `change_ids`, with how many each holds, most
+  first. Deleted nodes count: they were written there.
+  """
+  def holding([]), do: []
+
+  def holding(change_ids) do
+    from(n in Node,
+      join: w in Workspace,
+      on: w.id == n.workspace_id,
+      where: n.change_id in ^change_ids,
+      group_by: w.name,
+      select: %{name: w.name, nodes: count(n.id)},
+      order_by: [desc: count(n.id), asc: w.name]
+    )
+    |> Repo.all()
+  end
+
   @max_name_length 128
 
   @doc """

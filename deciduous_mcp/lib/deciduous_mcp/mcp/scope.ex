@@ -37,7 +37,8 @@ defmodule DeciduousMcp.MCP.Scope do
   """
   def schema_property(opts \\ []) do
     base =
-      "Project this call belongs to: the basename of the git repo root " <>
+      "Project this call belongs to: `workspace` under [remote] in the repository's " <>
+        ".deciduous/config.toml when it has one, otherwise the basename of the git repo root " <>
         "(e.g. \"deciduous\", \"blog\"). Anything outside a git repo uses " <>
         "\"#{@fallback}\". Ignored when the client pinned a workspace via the " <>
         "X-Deciduous-Workspace header."

@@ -649,6 +649,9 @@ pub struct Database {
     /// Attached graph file, if any. Behind a lock so `deciduous sync` can
     /// attach a store it just created without a mutable handle.
     store: std::sync::RwLock<Option<RecordStore>>,
+    /// Log of writes bound for the shared server, attached when the
+    /// project has a `[remote]`. See [`crate::oplog`].
+    oplog: std::sync::RwLock<Option<crate::oplog::OpLog>>,
 }
 
 /// Error type for database operations
@@ -687,6 +690,16 @@ impl From<diesel::r2d2::Error> for DbError {
 
 pub type Result<T> = std::result::Result<T, DbError>;
 
+/// A one-entry JSON object, for an op that changes a single field.
+fn one_field(key: &str, value: &str) -> serde_json::Map<String, serde_json::Value> {
+    let mut m = serde_json::Map::new();
+    m.insert(
+        key.to_string(),
+        serde_json::Value::String(value.to_string()),
+    );
+    m
+}
+
 impl Database {
     /// Get the database path that will be used
     pub fn db_path() -> std::path::PathBuf {
@@ -722,12 +735,219 @@ impl Database {
         let db = Self {
             pool,
             store: std::sync::RwLock::new(None),
+            oplog: std::sync::RwLock::new(None),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
         db.set_store(RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open));
+        db.set_oplog(crate::oplog::OpLog::for_db(path.as_ref()));
         Ok(db)
+    }
+
+    /// Attach (or detach) the log that writes are queued in for the server.
+    pub fn set_oplog(&self, log: Option<crate::oplog::OpLog>) {
+        if let Ok(mut slot) = self.oplog.write() {
+            *slot = log;
+        }
+    }
+
+    /// The attached server log, if this project has a remote.
+    pub fn oplog(&self) -> Option<crate::oplog::OpLog> {
+        self.oplog.read().ok().and_then(|s| s.clone())
+    }
+
+    // ------------------------------------------------------------------
+    // Server log write-through. Like the record store, a failure here does
+    // not undo the local write; unlike it, the failure is not something a
+    // later sync repairs by itself (the op is what carries the change), so
+    // the warning says the server will not see this write.
+    // ------------------------------------------------------------------
+
+    fn log_op(&self, body: crate::oplog::OpBody) {
+        let Some(log) = self.oplog() else { return };
+        if let Err(e) = log.append(body.clone()) {
+            eprintln!(
+                "Warning: the local write succeeded but could not be queued for the server: {e}\n\
+                 The server will not get: {}",
+                body.describe()
+            );
+        }
+    }
+
+    fn log_node_created(&self, node_id: i32) {
+        if self.oplog().is_none() {
+            return;
+        }
+        match self.get_node(node_id) {
+            Ok(Some(n)) => {
+                let metadata = n
+                    .metadata_json
+                    .as_deref()
+                    .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+                    .and_then(|v| v.as_object().cloned())
+                    .unwrap_or_default();
+                self.log_op(crate::oplog::OpBody::CreateNode {
+                    change_id: n.change_id,
+                    node_type: n.node_type,
+                    title: n.title,
+                    description: n.description,
+                    status: n.status,
+                    metadata,
+                    created_at: n.created_at,
+                    updated_at: n.updated_at,
+                });
+            }
+            Ok(None) => {}
+            Err(e) => {
+                eprintln!("Warning: could not read node {node_id} to queue it for the server: {e}")
+            }
+        }
+    }
+
+    /// The node as it is before an edit, read only when there is a server
+    /// log to write the edit to: an update op says what it replaced.
+    fn before_update(&self, node_id: i32) -> Option<DecisionNode> {
+        self.oplog()?;
+        self.get_node(node_id).ok().flatten()
+    }
+
+    fn log_node_update(
+        &self,
+        node_id: i32,
+        before: Option<DecisionNode>,
+        set: serde_json::Map<String, serde_json::Value>,
+        metadata: serde_json::Map<String, serde_json::Value>,
+    ) {
+        if self.oplog().is_none() {
+            return;
+        }
+        let Some(before) = before else {
+            eprintln!(
+                "Warning: node {node_id} could not be read before its edit, so the edit was not queued for the server"
+            );
+            return;
+        };
+        let old_meta: serde_json::Map<String, serde_json::Value> = before
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let was = set
+            .keys()
+            .map(|k| {
+                let v = match k.as_str() {
+                    "title" => serde_json::Value::String(before.title.clone()),
+                    "status" => serde_json::Value::String(before.status.clone()),
+                    "description" => before
+                        .description
+                        .clone()
+                        .map(serde_json::Value::String)
+                        .unwrap_or(serde_json::Value::Null),
+                    other => unreachable!("update op sets an unknown column {other}"),
+                };
+                (k.clone(), v)
+            })
+            .collect();
+        let was_metadata = metadata
+            .keys()
+            .map(|k| {
+                (
+                    k.clone(),
+                    old_meta.get(k).cloned().unwrap_or(serde_json::Value::Null),
+                )
+            })
+            .collect();
+        self.log_op(crate::oplog::OpBody::UpdateNode {
+            change_id: before.change_id,
+            set,
+            metadata,
+            was,
+            was_metadata,
+        });
+    }
+
+    fn log_edge_created(&self, edge_id: i32) {
+        if self.oplog().is_none() {
+            return;
+        }
+        let edge = match self.get_edge(edge_id) {
+            Ok(Some(e)) => e,
+            Ok(None) => return,
+            Err(e) => {
+                eprintln!("Warning: could not read edge {edge_id} to queue it for the server: {e}");
+                return;
+            }
+        };
+        // Endpoints by the nodes' own change_ids, not the edge row's copies,
+        // which can be stale in older databases.
+        let (Some(from), Some(to)) = (
+            self.get_node(edge.from_node_id).ok().flatten(),
+            self.get_node(edge.to_node_id).ok().flatten(),
+        ) else {
+            eprintln!("Warning: edge {edge_id} has an endpoint that is not in the database; it was not queued for the server");
+            return;
+        };
+        self.log_op(crate::oplog::OpBody::CreateEdge {
+            from_change_id: from.change_id,
+            to_change_id: to.change_id,
+            edge_type: edge.edge_type,
+            rationale: edge.rationale,
+            weight: edge.weight,
+            created_at: edge.created_at,
+        });
+    }
+
+    fn log_edges_deleted(
+        &self,
+        edges: &[DecisionEdge],
+        change_ids: &std::collections::HashMap<i32, String>,
+    ) {
+        for e in edges {
+            let from = change_ids
+                .get(&e.from_node_id)
+                .cloned()
+                .or_else(|| e.from_change_id.clone());
+            let to = change_ids
+                .get(&e.to_node_id)
+                .cloned()
+                .or_else(|| e.to_change_id.clone());
+            match (from, to) {
+                (Some(from_change_id), Some(to_change_id)) => {
+                    self.log_op(crate::oplog::OpBody::DeleteEdge {
+                        from_change_id,
+                        to_change_id,
+                        edge_type: e.edge_type.clone(),
+                    })
+                }
+                _ => eprintln!(
+                    "Warning: edge {} ({} -> {}) has no change_id for an endpoint; its removal was not queued for the server",
+                    e.id, e.from_node_id, e.to_node_id
+                ),
+            }
+        }
+    }
+
+    /// change_ids of the endpoints of `edges`, read before they are deleted.
+    fn endpoint_change_ids(
+        &self,
+        edges: &[DecisionEdge],
+    ) -> std::collections::HashMap<i32, String> {
+        let mut out = std::collections::HashMap::new();
+        if self.oplog().is_none() {
+            return out;
+        }
+        for e in edges {
+            for id in [e.from_node_id, e.to_node_id] {
+                if let std::collections::hash_map::Entry::Vacant(v) = out.entry(id) {
+                    if let Ok(Some(n)) = self.get_node(id) {
+                        v.insert(n.change_id);
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Attach (or detach) the graph file that mutations are mirrored into.
@@ -1522,6 +1742,7 @@ impl Database {
         drop(conn);
 
         self.publish_node_by_id(id);
+        self.log_node_created(id);
         Ok(id)
     }
 
@@ -1579,6 +1800,7 @@ impl Database {
         drop(conn);
 
         self.publish_node_by_id(id);
+        self.log_node_created(id);
         Ok(id)
     }
 
@@ -2045,6 +2267,7 @@ impl Database {
         drop(conn);
 
         self.publish_edge_by_id(id);
+        self.log_edge_created(id);
         Ok(id)
     }
 
@@ -2100,6 +2323,10 @@ impl Database {
             .filter(decision_edges::to_node_id.eq(to_id))
             .load(&mut conn)?;
 
+        drop(conn);
+        let endpoints = self.endpoint_change_ids(&doomed);
+        let mut conn = self.get_conn()?;
+
         diesel::delete(
             decision_edges::table
                 .filter(decision_edges::from_node_id.eq(from_id))
@@ -2109,6 +2336,7 @@ impl Database {
         drop(conn);
 
         self.tombstone_edges(&doomed);
+        self.log_edges_deleted(&doomed, &endpoints);
         Ok(())
     }
 
@@ -2170,6 +2398,13 @@ impl Database {
                     .or(decision_edges::to_node_id.eq(node_id)),
             )
             .load(&mut conn)?;
+        drop(conn);
+        let endpoints = if publish {
+            self.endpoint_change_ids(&doomed_edges)
+        } else {
+            Default::default()
+        };
+        let mut conn = self.get_conn()?;
 
         // Delete in order to respect foreign key constraints:
 
@@ -2225,6 +2460,12 @@ impl Database {
                 }
             }
             self.tombstone_edges_of(&doomed_edges, Some(&node.change_id));
+            // Edges first, then the node: the server keeps a deleted node's
+            // edges unless told, and the local graph just lost them.
+            self.log_edges_deleted(&doomed_edges, &endpoints);
+            self.log_op(crate::oplog::OpBody::DeleteNode {
+                change_id: node.change_id.clone(),
+            });
             if let Some(store) = self.store() {
                 for tag in &doomed_tags {
                     if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
@@ -2244,6 +2485,7 @@ impl Database {
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
+        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2256,6 +2498,12 @@ impl Database {
         drop(conn);
 
         self.publish_node_edit(node_id, before);
+        self.log_node_update(
+            node_id,
+            replaced,
+            one_field("status", status),
+            Default::default(),
+        );
         Ok(())
     }
 
@@ -2263,6 +2511,7 @@ impl Database {
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
+        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2295,6 +2544,12 @@ impl Database {
         drop(conn);
 
         self.publish_node_edit(node_id, before);
+        self.log_node_update(
+            node_id,
+            replaced,
+            Default::default(),
+            one_field("commit", commit_hash),
+        );
         Ok(())
     }
 
@@ -2302,6 +2557,7 @@ impl Database {
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
+        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2334,6 +2590,12 @@ impl Database {
         drop(conn);
 
         self.publish_node_edit(node_id, before);
+        self.log_node_update(
+            node_id,
+            replaced,
+            Default::default(),
+            one_field("prompt", prompt),
+        );
         Ok(())
     }
 

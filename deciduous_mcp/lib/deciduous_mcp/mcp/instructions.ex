@@ -24,7 +24,7 @@ defmodule DeciduousMcp.MCP.Instructions do
 
   One step, one call: `capture_conversation_turn` writes a step's goal, observations, decision, action and outcome together, all or nothing. Pass `parent_node_id` to put it under the goal you are working on. For a single node, `add_node` with `parent_id` creates and links it in one call. Never send `add_edge` in the same batch as the `add_node` whose id it needs.
 
-  Pass `workspace` (the repository root's directory name, also from a worktree) and `branch` (the current branch) on every write. Do not log your own reading, searching or planning.
+  Pass `workspace` and `branch` (the current branch) on every write. The workspace is `workspace` under `[remote]` in the repository's `.deciduous/config.toml` when there is one (the CLI writes there, and it survives a rename), otherwise the repository root's directory name, also from a worktree. Do not log your own reading, searching or planning.
 
   At the start of a session, read before writing: `query_nodes` for this branch, `ask_graph` for the topic. If the work continues an existing goal, attach to it. When a line of work ends: `close_thread`, then `find_orphans`.
   """

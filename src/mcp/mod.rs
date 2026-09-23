@@ -445,6 +445,12 @@ pub fn run_server() -> io::Result<()> {
             writeln!(stdout, "{serialized}")?;
             stdout.flush()?;
         }
+
+        // After the answer, so the agent is not kept waiting on the network.
+        // Warnings go to stderr; stdout is the protocol.
+        if let Some(log) = crate::oplog::take_appended() {
+            crate::remote::replay_after_write(&log);
+        }
     }
 
     eprintln!("deciduous-mcp: stdin closed, shutting down");

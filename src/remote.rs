@@ -141,31 +141,233 @@ pub fn forget_token() -> Result<bool, String> {
     }
 }
 
+/// The main working tree of the repository `dir` is in, also when `dir` is
+/// inside a linked worktree.
+///
+/// `git rev-parse --show-toplevel` answers with the worktree's own directory,
+/// so 1.0.7 put `repo/` and `repo-feature/` (a `git worktree add` of it) in
+/// two workspaces, while the server's instructions tell agents in that
+/// worktree to use the main repository's name (C7). A linked worktree is the
+/// case where `--git-dir` and `--git-common-dir` differ; its main working tree
+/// is the first entry of `git worktree list`.
+pub fn repo_root(dir: &Path) -> Option<std::path::PathBuf> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+    };
+    let out = git(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--show-toplevel",
+        "--git-dir",
+        "--git-common-dir",
+    ])?;
+    let mut lines = out.lines();
+    let (top, git_dir, common) = (lines.next()?, lines.next()?, lines.next()?);
+    if git_dir == common {
+        return Some(std::path::PathBuf::from(top));
+    }
+    let list = git(&["worktree", "list", "--porcelain"])?;
+    list.lines()
+        .find_map(|l| l.strip_prefix("worktree "))
+        .map(std::path::PathBuf::from)
+}
+
 /// Workspace name for a directory: the git repository's root directory name,
 /// lowercased, or `scratch` outside a repository.
 ///
 /// The repository root rather than the current directory, so that running this
-/// from a subdirectory does not split one project across two workspaces.
+/// from a subdirectory does not split one project across two workspaces; and
+/// the main working tree rather than a linked worktree, for the same reason.
+///
+/// This is a default, computed once: `remote init` records the result in
+/// `.deciduous/config.toml`, and from then on that is the name. Deriving it on
+/// every call is what forked a renamed repository into a second workspace.
 pub fn workspace_for(dir: &Path) -> String {
-    let root = std::process::Command::new("git")
-        .args([
-            "-C",
-            &dir.display().to_string(),
-            "rev-parse",
-            "--show-toplevel",
-        ])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok());
-
-    match root {
-        Some(path) => Path::new(path.trim())
+    match repo_root(dir) {
+        Some(path) => path
             .file_name()
-            .map(|n| n.to_string_lossy().to_lowercase())
+            .map(|n| {
+                let n = n.to_string_lossy().to_lowercase();
+                // The main tree of a bare repository is `name.git`.
+                n.strip_suffix(".git").map(str::to_string).unwrap_or(n)
+            })
             .unwrap_or_else(|| FALLBACK_WORKSPACE.to_string()),
         None => FALLBACK_WORKSPACE.to_string(),
     }
+}
+
+/// The root commits of the repository `dir` is in: the same in every clone
+/// and worktree of it, different for an unrelated repository that happens to
+/// share its directory name, and unchanged by a rename. Sorted.
+///
+/// * `None` when there is nothing to compare: outside git, or a shallow
+///   clone. A shallow clone's `rev-list --max-parents=0` answers with its
+///   shallow boundary, a commit in the middle of the history, and sending
+///   that got CI clones (`--depth 1`) refused as "another repository".
+/// * `Some([])` in a repository with no commit yet. That is not the same as
+///   `None`: the server refuses it from a workspace another repository has
+///   claimed, since it cannot show it is that repository.
+pub fn repo_roots(dir: &Path) -> Option<Vec<String>> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .ok()
+    };
+    let inside = git(&["rev-parse", "--is-shallow-repository"])
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())?;
+    if inside.trim() == "true" {
+        return None;
+    }
+    let out = git(&["rev-list", "--max-parents=0", "HEAD"])?;
+    if !out.status.success() {
+        // Inside git, and HEAD resolves to nothing: no commit yet.
+        return Some(Vec::new());
+    }
+    let mut roots: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    roots.sort();
+    roots.dedup();
+    Some(roots)
+}
+
+/// The nearest `.deciduous/config.toml` at or above `dir`.
+fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
+    dir.ancestors()
+        .map(|d| d.join(".deciduous").join("config.toml"))
+        .find(|p| p.exists())
+}
+
+/// The workspace a config written by 1.0.7 (a `[remote] url` and no
+/// workspace) has been writing to, recorded in the config so it stops being
+/// derived.
+///
+/// 1.0.7 derived the name from the directory on every call. Recording the
+/// *current* directory name, as the first 1.0.8 build did, forked a project
+/// renamed since its last 1.0.7 write into a second, empty graph. So the
+/// server is asked first which workspaces hold this database's nodes
+/// (`POST /locate`), and the one that does is recorded. If none does (never
+/// pushed), the derived name is. If the server cannot be asked, nothing is
+/// recorded and the derived name is used for this call only, so the question
+/// is asked again next time.
+fn legacy_workspace(dir: &Path, url: &str, token: &str, derived: String) -> Result<String, String> {
+    use colored::Colorize;
+    let Some(config) = project_config(dir) else {
+        return Ok(derived);
+    };
+    let ids = local_change_ids(&config.with_file_name("deciduous.db"));
+    let chosen = if ids.is_empty() {
+        derived.clone()
+    } else {
+        #[derive(Deserialize)]
+        struct Held {
+            name: String,
+            nodes: usize,
+        }
+        #[derive(Deserialize)]
+        struct Reply {
+            workspaces: Vec<Held>,
+        }
+        let reply = ureq::post(&format!("{url}/locate"))
+            .set("authorization", &format!("Bearer {token}"))
+            .timeout(std::time::Duration::from_secs(15))
+            .send_json(serde_json::json!({ "change_ids": ids }))
+            .map_err(describe)
+            .and_then(|r| {
+                r.into_json::<Reply>()
+                    .map_err(|e| format!("the server's /locate answer was not a list: {e}"))
+            });
+        let held = match reply {
+            Ok(r) => r.workspaces,
+            // Asked again on the next call; see above.
+            Err(_) => return Ok(derived),
+        };
+        match held.as_slice() {
+            [] => derived.clone(),
+            _ if held.iter().any(|h| h.name == derived) => derived.clone(),
+            [one] => one.name.clone(),
+            many => {
+                return Err(format!(
+                    "this project's config names no workspace (it was written by 1.0.7, which used the \
+                     directory name), and this project's nodes are in more than one workspace on {url}: {}.\n\n\
+                     Record the one it should write to:\n\n    deciduous remote init {url} --workspace <name>",
+                    many.iter()
+                        .map(|h| format!("{} ({} nodes)", h.name, h.nodes))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        }
+    };
+
+    let Ok(text) = std::fs::read_to_string(&config) else {
+        return Ok(chosen);
+    };
+    let Ok(mut doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return Ok(chosen);
+    };
+    let same_url = doc
+        .get("remote")
+        .and_then(|r| r.get("url"))
+        .and_then(|u| u.as_str())
+        .is_some_and(|u| u.trim_end_matches('/') == url);
+    if !same_url || doc.get("remote").and_then(|r| r.get("workspace")).is_some() {
+        return Ok(chosen);
+    }
+    doc["remote"]["workspace"] = toml_edit::value(chosen.as_str());
+    let why = if chosen == derived {
+        String::new()
+    } else {
+        format!(
+            " (the server holds this project's nodes there: the name this directory had when 1.0.7 wrote them, not \"{derived}\")"
+        )
+    };
+    match std::fs::write(&config, doc.to_string()) {
+        Ok(()) => eprintln!(
+            "{} recorded workspace = \"{chosen}\"{why} in {}, so renaming or cloning this \
+             repository keeps writing to the same graph. Commit that file.",
+            "Note:".yellow(),
+            config.display()
+        ),
+        Err(e) => eprintln!(
+            "{} could not record workspace = \"{chosen}\" in {}: {e}. \
+             Until it is recorded, renaming this directory changes which graph it writes to.",
+            "Warning:".yellow(),
+            config.display()
+        ),
+    }
+    Ok(chosen)
+}
+
+/// Up to 1,000 change_ids from a local database, newest first; empty when
+/// there is no database or it cannot be read.
+fn local_change_ids(db: &Path) -> Vec<String> {
+    let Ok(conn) =
+        rusqlite::Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+    else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) =
+        conn.prepare("SELECT change_id FROM decision_nodes WHERE change_id IS NOT NULL ORDER BY id DESC LIMIT 1000")
+    else {
+        return Vec::new();
+    };
+    stmt.query_map([], |r| r.get::<_, String>(0))
+        .map(|rows| rows.flatten().collect())
+        .unwrap_or_default()
 }
 
 /// Resolved settings for a call: where to send it, as which workspace.
@@ -174,6 +376,9 @@ pub struct Remote {
     pub url: String,
     pub workspace: String,
     token: String,
+    /// This repository's root commit ids, sent so the server can tell two
+    /// repositories with the same directory name apart. See [`repo_roots`].
+    pub repo_roots: Option<Vec<String>>,
 }
 
 impl Remote {
@@ -183,14 +388,18 @@ impl Remote {
                 .to_string()
         })?;
 
+        let url = url.trim_end_matches('/').to_string();
+        let token = token()?;
+        let workspace = match &config.remote.workspace {
+            Some(ws) => ws.clone(),
+            None => legacy_workspace(dir, &url, &token, workspace_for(dir))?,
+        };
+
         Ok(Self {
-            url: url.trim_end_matches('/').to_string(),
-            workspace: config
-                .remote
-                .workspace
-                .clone()
-                .unwrap_or_else(|| workspace_for(dir)),
-            token: token()?,
+            url,
+            workspace,
+            token,
+            repo_roots: repo_roots(dir),
         })
     }
 
@@ -224,8 +433,14 @@ impl Remote {
     }
 
     fn get(&self, path: &str) -> ureq::Request {
-        ureq::get(&format!("{}{}", self.url, path))
-            .set("authorization", &format!("Bearer {}", self.token))
+        let req = ureq::get(&format!("{}{}", self.url, path))
+            .set("authorization", &format!("Bearer {}", self.token));
+        // The server checks the claim on /export too, so a pull or a status
+        // cannot read another repository's graph.
+        match &self.repo_roots {
+            Some(roots) => req.set("x-deciduous-repo-roots", &roots.join(",")),
+            None => req,
+        }
     }
 
     fn post(&self, path: &str) -> ureq::Request {
@@ -261,7 +476,7 @@ impl Remote {
             .get(&format!("/export?workspace={}", urlencode(&self.workspace)))
             .timeout(std::time::Duration::from_secs(300))
             .call()
-            .map_err(describe)?;
+            .map_err(|e| self.describe(e))?;
 
         resp.into_json::<RemoteGraph>()
             .map_err(|e| format!("the server's response was not a graph: {e}"))
@@ -272,13 +487,14 @@ impl Remote {
     pub fn import(&self, graph: Value) -> Result<ImportReport, String> {
         let payload = serde_json::json!({
             "workspace": self.workspace,
+            "repo_roots": self.repo_roots,
             "graph": graph,
         });
 
         self.post("/import")
             .timeout(std::time::Duration::from_secs(600))
             .send_json(payload)
-            .map_err(describe)?
+            .map_err(|e| self.describe(e))?
             .into_json::<ImportReport>()
             .map_err(|e| format!("the server's response was not an import report: {e}"))
     }
@@ -305,6 +521,8 @@ impl Remote {
 /// which `deleted_on_server` names.
 pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, usize) {
     use std::collections::{HashMap, HashSet};
+    // Tombstones count as "has": a node deleted on the server is not
+    // missing from it, and sending it would write into the deleted row.
     let have_nodes: HashSet<&str> = server.nodes.iter().map(|n| n.change_id.as_str()).collect();
     let dead = server.tombstones();
     let have_edges: HashSet<(&str, &str, &str)> = server
@@ -385,8 +603,9 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
     )
 }
 
-/// Sends the server everything in `graph` it does not already have. `None`
-/// means there was nothing to send.
+/// Sends the server everything in `graph` it does not already have: nodes,
+/// edges, and documents with their bytes. `None` means there was nothing to
+/// send.
 ///
 /// Shared by `remote push` and the automatic push after a write, so both decide
 /// what is missing the same way — `missing_on_server` earned its edge-keying
@@ -394,6 +613,10 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
 ///
 /// Also returns the local nodes the server has deleted. Nothing a push sends
 /// can change those; they are the user's to pull (see `deleted_on_server`).
+///
+/// Documents used to be computed and then ignored: `nodes == 0 && edges == 0`
+/// returned "nothing to send" with a document missing, and a document that
+/// was sent had no bytes behind it, because nothing uploaded them.
 pub fn push_missing(
     remote: &Remote,
     graph: &Value,
@@ -401,8 +624,33 @@ pub fn push_missing(
     let server = remote.export()?;
     let deleted = deleted_on_server(graph, &server);
     let (missing, nodes, edges) = missing_on_server(graph, &server);
-    if nodes == 0 && edges == 0 {
+    let docs = missing["documents"].as_array().cloned().unwrap_or_default();
+    if nodes == 0 && edges == 0 && docs.is_empty() {
         return Ok((None, deleted));
+    }
+    if !docs.is_empty() {
+        let dir = Database::db_path()
+            .parent()
+            .map(|p| p.join("documents"))
+            .ok_or("the database path has no directory, so there are no documents to read")?;
+        for d in &docs {
+            let (Some(hash), Some(file)) =
+                (d["content_hash"].as_str(), d["storage_filename"].as_str())
+            else {
+                return Err(format!(
+                    "a local document has no content_hash or storage_filename: {d}"
+                ));
+            };
+            let path = dir.join(file);
+            let bytes = std::fs::read(&path).map_err(|e| {
+                format!(
+                    "document {} ({}) cannot be sent: {e}. Nothing was sent.",
+                    d["original_filename"].as_str().unwrap_or("?"),
+                    path.display()
+                )
+            })?;
+            remote.upload_blob(hash, &bytes, d["mime_type"].as_str())?;
+        }
     }
     remote.import(missing).map(|r| (Some(r), deleted))
 }
@@ -458,7 +706,9 @@ pub fn counts_without(local: &Value, deleted: &[DeletedOnServer]) -> (usize, usi
     let edges = local["edges"].as_array().map_or(0, |e| {
         e.iter()
             .filter(|e| {
-                !e["from_node_id"].as_i64().is_some_and(|i| gone.contains(&i))
+                !e["from_node_id"]
+                    .as_i64()
+                    .is_some_and(|i| gone.contains(&i))
                     && !e["to_node_id"].as_i64().is_some_and(|i| gone.contains(&i))
             })
             .count()
@@ -497,44 +747,248 @@ pub fn report_refused(r: &ImportReport, graph: &Value) {
     }
 }
 
-/// Says that edits to nodes the server deleted were not sent.
-fn warn_edits_to_deleted(deleted: &[DeletedOnServer]) {
+/// What one replay of the log did.
+#[derive(Debug, Default)]
+pub struct ReplayReport {
+    /// Ops sent.
+    pub sent: usize,
+    /// Ops the server changed something for.
+    pub applied: usize,
+    /// Ops whose effect the server already had: a create for a row it holds,
+    /// a delete for one it does not, or an op id it applied before.
+    pub already: usize,
+    /// Ops the server refused, with its reason. They stay in the log.
+    pub rejected: Vec<(crate::oplog::Op, String)>,
+}
+
+/// Ops per request. The server takes up to 5,000; a smaller batch keeps one
+/// request well inside its body limit and gets acks written sooner.
+const REPLAY_BATCH: usize = 500;
+
+impl Remote {
+    /// A failed request, described; a 409 is the server refusing this
+    /// repository, and says so.
+    fn describe(&self, e: ureq::Error) -> String {
+        match e {
+            ureq::Error::Status(409, _) => self.claim_refused(),
+            e => describe(e),
+        }
+    }
+
+    /// What to say when the server refuses this repository's roots.
+    fn claim_refused(&self) -> String {
+        if self.repo_roots.as_ref().is_some_and(|r| r.is_empty()) {
+            return format!(
+                "workspace \"{ws}\" on {url} belongs to a repository, and this one has no commit yet, \
+                 so the server cannot tell whether it is that repository or an unrelated project \
+                 also called {ws}; nothing it sends is accepted until it can.\n\n\
+                 Make the first commit (a clone of that repository has its commits already), or give \
+                 this project its own workspace:\n\n    \
+                 deciduous remote init {url} --workspace <another-name>",
+                ws = self.workspace,
+                url = self.url
+            );
+        }
+        format!(
+            "workspace \"{ws}\" on {url} belongs to another repository: an unrelated project \
+             whose directory is also called {ws} (the name is the directory name, lowercased) \
+             claimed it first, and this repository shares none of its root commits.\n\n\
+             Give this project its own workspace:\n\n    \
+             deciduous remote init {url} --workspace <another-name>\n\n\
+             or, if the two repositories really should write one graph, say so by naming it:\n\n    \
+             deciduous remote init {url} --workspace {ws}",
+            ws = self.workspace,
+            url = self.url
+        )
+    }
+
+    /// Ties the workspace to this repository on the server, or finds out it
+    /// belongs to another one. `adopt` is for a workspace the user named
+    /// explicitly: sharing it is then a choice, not an accident.
+    ///
+    /// Returns the server's word for what happened: claimed, verified,
+    /// adopted, or unchecked (no root commits to send).
+    pub fn claim(&self, adopt: bool) -> Result<String, String> {
+        #[derive(Deserialize)]
+        struct Reply {
+            claim: String,
+        }
+        let payload = serde_json::json!({
+            "workspace": self.workspace,
+            "repo_roots": self.repo_roots,
+            "adopt": adopt,
+        });
+        match self
+            .post("/claim")
+            .timeout(std::time::Duration::from_secs(30))
+            .send_json(payload)
+        {
+            Ok(resp) => resp
+                .into_json::<Reply>()
+                .map(|r| r.claim)
+                .map_err(|e| format!("the server's response was not a claim: {e}")),
+            Err(e) => Err(self.describe(e)),
+        }
+    }
+
+    /// Uploads one document's bytes to `PUT /blob/:hash`. The server checks
+    /// them against the hash.
+    pub fn upload_blob(&self, hash: &str, bytes: &[u8], mime: Option<&str>) -> Result<(), String> {
+        ureq::put(&format!("{}/blob/{hash}", self.url))
+            .set("authorization", &format!("Bearer {}", self.token))
+            .set("content-type", mime.unwrap_or("application/octet-stream"))
+            .timeout(std::time::Duration::from_secs(300))
+            .send_bytes(bytes)
+            .map(|_| ())
+            .map_err(|e| format!("uploading document {hash}: {}", self.describe(e)))
+    }
+
+    /// Sends ops to `POST /ops` and returns the server's answer for each.
+    pub fn post_ops(&self, ops: &[crate::oplog::Op]) -> Result<Vec<crate::oplog::Ack>, String> {
+        #[derive(Deserialize)]
+        struct Answer {
+            op_id: String,
+            result: String,
+            #[serde(default)]
+            reason: Option<String>,
+        }
+        #[derive(Deserialize)]
+        struct Reply {
+            results: Vec<Answer>,
+        }
+
+        let payload = serde_json::json!({
+            "workspace": self.workspace,
+            "repo_roots": self.repo_roots,
+            "ops": ops,
+        });
+        let reply: Reply = self
+            .post("/ops")
+            .timeout(std::time::Duration::from_secs(120))
+            .send_json(payload)
+            .map_err(|e| match e {
+                ureq::Error::Status(409, _) => self.claim_refused(),
+                e => describe(e),
+            })?
+            .into_json()
+            .map_err(|e| format!("the server's response was not an ops report: {e}"))?;
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let answers: std::collections::HashMap<String, Answer> = reply
+            .results
+            .into_iter()
+            .map(|a| (a.op_id.clone(), a))
+            .collect();
+        ops.iter()
+            .map(|op| {
+                let a = answers.get(&op.op_id).ok_or_else(|| {
+                    format!(
+                        "the server answered for {} of {} ops and not for {} ({}); nothing was marked sent",
+                        answers.len(),
+                        ops.len(),
+                        op.op_id,
+                        op.body.describe()
+                    )
+                })?;
+                match a.result.as_str() {
+                    "applied" | "exists" | "absent" | "duplicate" | "rejected" => {}
+                    other => {
+                        return Err(format!(
+                            "the server answered {other:?} for {} ({}); this CLI knows applied, exists, absent, duplicate and rejected",
+                            op.op_id,
+                            op.body.describe()
+                        ))
+                    }
+                }
+                Ok(crate::oplog::Ack {
+                    op_id: op.op_id.clone(),
+                    result: a.result.clone(),
+                    reason: a.reason.clone(),
+                    at: now.clone(),
+                })
+            })
+            .collect()
+    }
+}
+
+/// Sends every pending op in the log to the server, in order, records the
+/// answers and compacts the log.
+///
+/// Acks are written batch by batch, so a failure halfway leaves the first
+/// half marked and the rest pending. A batch the server applied but whose
+/// answer never arrived is sent again next time and answered `duplicate`.
+pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, String> {
+    let state = log.read()?;
+    let mut report = ReplayReport::default();
+
+    for batch in state.pending.chunks(REPLAY_BATCH) {
+        let acks = remote.post_ops(batch)?;
+        log.record_acks(&acks)?;
+        report.sent += batch.len();
+        for (op, ack) in batch.iter().zip(&acks) {
+            match ack.result.as_str() {
+                "applied" => report.applied += 1,
+                "rejected" => report.rejected.push((
+                    op.clone(),
+                    ack.reason
+                        .clone()
+                        .unwrap_or_else(|| "no reason given".into()),
+                )),
+                _ => report.already += 1,
+            }
+        }
+    }
+
+    log.compact()?;
+    Ok(report)
+}
+
+/// Prints the ops a server refused, loudly, with what to do about them.
+pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplog::OpLog) {
     use colored::Colorize;
-    for d in deleted {
+    if rejected.is_empty() {
+        return;
+    }
+    eprintln!(
+        "{} the server refused {} write(s):",
+        "Rejected:".red().bold(),
+        rejected.len()
+    );
+    for (op, reason) in rejected {
+        eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+    }
+    eprintln!(
+        "They stay in {} and the local graph keeps them. \
+         `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
+        log.path().display()
+    );
+    // The one refusal with a fix that is not a choice: the node is gone on
+    // the server, so the write can never apply, and pull both removes the
+    // node here and drops the refusals that touch it.
+    if rejected
+        .iter()
+        .any(|(_, reason)| reason.contains("was deleted on the server"))
+    {
         eprintln!(
-            "{} node {} \"{}\" was deleted on the server at {}, so this edit was not sent. \
-             It stays in the local database until `deciduous remote pull` removes the node here; \
-             to keep the change, add it again as a new node.",
-            "Warning:".yellow(),
-            d.id,
-            d.title,
-            d.deleted_at
+            "A node these writes touch was deleted on the server: `deciduous remote pull` removes it here and drops the refusals with it."
         );
     }
 }
 
-/// Pushes to the server after a local write, without letting the server turn a
-/// successful write into a failed command.
+/// Replays the log after a command that wrote to it, without letting the
+/// server turn a successful local write into a failed command.
 ///
 /// The CLI writes to the local database and the agents write through the MCP
 /// server. A local write the server never sees is a fork, not a cache: this is
 /// how one workspace ended up with 502 nodes locally and 0 on the server, with
-/// neither side saying a word. So every write pushes.
+/// neither side saying a word. So every write is logged, and every command
+/// that logged one replays the log before it exits.
 ///
-/// `touched` names the nodes this command changed, by local id. They are sent
-/// even when the server already has them: `missing_on_server` only finds what
-/// the server lacks, so on its own it would push a new node but never a changed
-/// one, and `status`/`prompt` would go on diverging silently. The server's
-/// import replaces `status`, `title`, `description` and `metadata` on a
-/// change_id it already holds, so re-sending a node is what applies an edit.
-///
-/// Best effort deliberately. The local write has already happened and is not
-/// rolled back: the CLI has to keep working on a plane, and a server being down
-/// must not stop anyone recording a decision. A failure prints what is waiting
-/// and the command to send it; the records stay in the local database and the
-/// next successful push — automatic or manual — takes them, which is what the
-/// full-diff half of the payload is for.
-pub fn push_after_write(db: &Database, touched: &[i32]) {
+/// Best effort deliberately. The CLI has to keep working on a plane, and a
+/// server being down must not stop anyone recording a decision. A failure
+/// says how many writes are waiting and where; they stay in the log, and the
+/// next write or `deciduous remote push` sends them.
+pub fn replay_after_write(log: &crate::oplog::OpLog) {
     use colored::Colorize;
 
     let cfg = Config::load();
@@ -542,129 +996,352 @@ pub fn push_after_write(db: &Database, touched: &[i32]) {
         return;
     }
     let dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let pushed = Remote::resolve(&cfg, &dir).and_then(|remote| {
-        let graph = db
-            .get_graph()
-            .map_err(|e| format!("reading the local graph: {e}"))
-            .and_then(|g| {
-                serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
-            })?;
-        let server = remote.export()?;
-        let (mut payload, _, _) = missing_on_server(&graph, &server);
-        // A touched node the server has deleted is not re-sent: the server
-        // refuses it, and before it did, the push rewrote the tombstone and
-        // the next pull dropped the edit without a word. Say so instead.
-        let deleted: Vec<DeletedOnServer> = deleted_on_server(&graph, &server)
-            .into_iter()
-            .filter(|d| touched.contains(&(d.id as i32)))
-            .collect();
-        warn_edits_to_deleted(&deleted);
-        let live_touched: Vec<i32> = touched
-            .iter()
-            .copied()
-            .filter(|t| !deleted.iter().any(|d| d.id == *t as i64))
-            .collect();
-        let added = add_touched_nodes(&mut payload, &graph, &live_touched);
-        if payload["nodes"].as_array().is_some_and(|n| n.is_empty())
-            && payload["edges"].as_array().is_some_and(|e| e.is_empty())
-            && added == 0
-        {
-            return Ok((remote, None));
-        }
-        remote.import(payload).map(|r| {
-            report_refused(&r, &graph);
-            (remote, Some(r))
-        })
-    });
-    match pushed {
-        Ok((_, None)) => {}
-        Ok((remote, Some(r))) => {
-            // Quiet on the expected case: one command, one node or edge sent.
-            // A larger number means a backlog just cleared, which is worth
-            // saying, because the user was told about it when it built up.
-            if r.nodes.upserted + r.edges.upserted > 2 {
-                println!(
-                    "   {} {} node(s), {} edge(s) to {}",
-                    "Pushed".green(),
-                    r.nodes.upserted,
-                    r.edges.upserted,
-                    remote.workspace.cyan()
+    let remote = Remote::resolve(&cfg, &dir);
+    let result = remote
+        .as_ref()
+        .map_err(|e| e.clone())
+        .and_then(|r| replay(r, log));
+    match result {
+        Ok(report) => print_rejected(&report.rejected, log),
+        Err(e) => {
+            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
+            // Only a server that does not answer is an outage that passes by
+            // itself. A refusal (another repository's workspace, a bad
+            // token) or a config problem is answered the same way on every
+            // retry, and "once the server is reachable" sent people to wait
+            // for something that was never going to happen.
+            let unreachable = remote.as_ref().is_ok_and(|r| r.health().is_err());
+            if unreachable {
+                eprintln!(
+                    "{} the local write succeeded but the server did not get it: {e}\n\
+                     {waiting} write(s) queued in {}. They are sent on the next write, or now with \
+                     `deciduous remote push` once the server is reachable.",
+                    "Warning:".yellow(),
+                    log.path().display(),
+                );
+            } else {
+                eprintln!(
+                    "{} the local write succeeded but the server refused it: {e}\n\
+                     {waiting} write(s) wait in {}, and every later write will be refused the same way \
+                     until that is fixed. `deciduous remote status` lists them.",
+                    "Warning:".yellow(),
+                    log.path().display(),
                 );
             }
         }
-        Err(e) => eprintln!(
-            "{} the local write succeeded but the server did not get it: {e}\n\
-             {} `deciduous remote push` once the server is reachable. Until then the \
-             local graph and the graph the agents read are different graphs.",
-            "Warning:".yellow(),
-            "Run:".yellow(),
-        ),
     }
 }
 
-/// Adds the nodes `touched` names to a push payload, skipping any the diff
-/// already put there. Returns how many were added.
-fn add_touched_nodes(payload: &mut Value, graph: &Value, touched: &[i32]) -> usize {
-    use std::collections::HashSet;
-
-    if touched.is_empty() {
-        return 0;
-    }
-    let already: HashSet<String> = payload["nodes"]
-        .as_array()
-        .map(|n| {
-            n.iter()
-                .filter_map(|n| n["change_id"].as_str().map(str::to_string))
-                .collect()
-        })
-        .unwrap_or_default();
-    let extra: Vec<Value> = graph["nodes"]
-        .as_array()
-        .map(|nodes| {
-            nodes
-                .iter()
-                .filter(|n| {
-                    n["id"]
-                        .as_i64()
-                        .is_some_and(|id| touched.contains(&(id as i32)))
-                        && n["change_id"]
-                            .as_str()
-                            .is_some_and(|c| !already.contains(c))
-                })
-                .cloned()
-                .collect()
-        })
-        .unwrap_or_default();
-    let added = extra.len();
-    if let Some(nodes) = payload["nodes"].as_array_mut() {
-        nodes.extend(extra);
-    }
-    added
-}
-
-/// Says that a local removal stopped at the local database.
+/// Replays the log when dropped, if this process appended to it.
 ///
-/// `POST /import` upserts `status`, `title`, `description` and `metadata` on a
-/// change_id the server already holds, and nothing else: `deleted_at` is not in
-/// its replace list, and a hard-deleted local row has nothing left to send
-/// anyway. So a `delete` or `unlink` here cannot reach the server, and saying
-/// nothing would recreate exactly the silent divergence the automatic push
-/// exists to end.
-pub fn warn_removal_is_local_only(what: &str) {
-    use colored::Colorize;
+/// Held for the life of `main`, so every command that writes (add, link,
+/// status, prompt, delete, the archaeology commands, anything added later)
+/// sends its ops without each one having to remember to.
+pub struct ReplayOnExit;
 
-    let cfg = Config::load();
-    if !cfg.remote.is_configured() {
-        return;
+impl Drop for ReplayOnExit {
+    fn drop(&mut self) {
+        if let Some(log) = crate::oplog::take_appended() {
+            replay_after_write(&log);
+        }
     }
-    let url = cfg.remote.url.unwrap_or_default();
-    eprintln!(
-        "{} the {what} was removed locally only. {url} still has it, and \
-         `deciduous remote push` will not remove it there: the server's import \
-         applies additions and edits, not removals. Remove it through the agent \
-         (the deciduous MCP tools) as well, or the two graphs stay different.",
-        "Note:".yellow(),
-    );
+}
+
+/// How the local graph and the server's differ, row by row.
+///
+/// `remote status` used to compare counts, and said "OK: counts match" when
+/// one side had an unpushed node and the other an agent's different node
+/// (31 vs 31), or when every count matched and a status did not (C2, C9).
+/// Equal counts say nothing about equal content, so this compares content:
+/// live nodes by change_id, field by field, and edges by
+/// (from, to, type).
+#[derive(Debug, Default)]
+pub struct ContentDiff {
+    pub local_nodes: usize,
+    pub server_nodes: usize,
+    pub local_edges: usize,
+    pub server_edges: usize,
+    /// (change_id, "type \"title\"")
+    pub only_local: Vec<(String, String)>,
+    /// Here, and deleted on the server: a pull removes them here. Listed
+    /// apart from `only_local`, whose remedy (sending them) would write
+    /// into a deleted row.
+    pub deleted_on_server: Vec<(String, String)>,
+    pub only_server: Vec<(String, String)>,
+    pub differ: Vec<NodeDifference>,
+    pub edges_only_local: Vec<String>,
+    pub edges_only_server: Vec<String>,
+}
+
+impl ContentDiff {
+    pub fn is_empty(&self) -> bool {
+        self.only_local.is_empty()
+            && self.deleted_on_server.is_empty()
+            && self.only_server.is_empty()
+            && self.differ.is_empty()
+            && self.edges_only_local.is_empty()
+            && self.edges_only_server.is_empty()
+    }
+}
+
+/// One node both sides hold with different content.
+#[derive(Debug)]
+pub struct NodeDifference {
+    pub change_id: String,
+    pub title: String,
+    /// This copy's updated_at is later than the server's: the difference is
+    /// most likely an edit made here that never reached the server.
+    pub here_newer: bool,
+    /// (field, here, on the server)
+    pub fields: Vec<(String, String, String)>,
+}
+
+pub fn content_diff(
+    nodes: &[crate::db::DecisionNode],
+    edges: &[crate::db::DecisionEdge],
+    server: &RemoteGraph,
+) -> ContentDiff {
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+    let short = |c: &str| c.chars().take(8).collect::<String>();
+    let label = |t: &str, title: &str, cid: &str| format!("{t} {} \"{title}\"", short(cid));
+    let shown = |s: &str| {
+        let s: String = s.chars().take(60).collect();
+        format!("{s:?}")
+    };
+
+    // A server that exports tombstones marks them with deleted_at; they are
+    // not part of the live graph on either side.
+    let server_nodes: BTreeMap<&str, &RemoteNode> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_none())
+        .map(|n| (n.change_id.as_str(), n))
+        .collect();
+    let local_nodes: BTreeMap<&str, &crate::db::DecisionNode> =
+        nodes.iter().map(|n| (n.change_id.as_str(), n)).collect();
+
+    let mut d = ContentDiff {
+        local_nodes: local_nodes.len(),
+        server_nodes: server_nodes.len(),
+        ..Default::default()
+    };
+
+    let tombstones: BTreeSet<&str> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_some())
+        .map(|n| n.change_id.as_str())
+        .collect();
+
+    for (cid, n) in &local_nodes {
+        let Some(s) = server_nodes.get(cid) else {
+            let row = (cid.to_string(), label(&n.node_type, &n.title, cid));
+            if tombstones.contains(cid) {
+                d.deleted_on_server.push(row);
+            } else {
+                d.only_local.push(row);
+            }
+            continue;
+        };
+        let mut fields = Vec::new();
+        let mut cmp = |name: &str, here: &str, there: &str| {
+            if here != there {
+                fields.push((name.to_string(), shown(here), shown(there)));
+            }
+        };
+        cmp("type", &n.node_type, &s.node_type);
+        cmp("title", &n.title, &s.title);
+        cmp("status", &n.status, &s.status);
+        cmp(
+            "description",
+            n.description.as_deref().unwrap_or(""),
+            s.description.as_deref().unwrap_or(""),
+        );
+        let local_meta: serde_json::Map<String, Value> = n
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let server_meta = s
+            .metadata
+            .as_ref()
+            .and_then(|m| m.as_object().cloned())
+            .unwrap_or_default();
+        let keys: BTreeSet<&String> = local_meta.keys().chain(server_meta.keys()).collect();
+        for k in keys {
+            let here = local_meta.get(k).map(|v| v.to_string()).unwrap_or_default();
+            let there = server_meta
+                .get(k)
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            if here != there {
+                fields.push((format!("metadata.{k}"), here, there));
+            }
+        }
+        if !fields.is_empty() {
+            d.differ.push(NodeDifference {
+                change_id: cid.to_string(),
+                title: n.title.clone(),
+                here_newer: records::parse_ts(&n.updated_at) > records::parse_ts(&s.updated_at),
+                fields,
+            });
+        }
+    }
+    for (cid, s) in &server_nodes {
+        if !local_nodes.contains_key(cid) {
+            d.only_server
+                .push((cid.to_string(), label(&s.node_type, &s.title, cid)));
+        }
+    }
+
+    let by_id: HashMap<i32, &str> = nodes.iter().map(|n| (n.id, n.change_id.as_str())).collect();
+    let edge_label = |f: &str, t: &str, k: &str| format!("{} -> {} ({k})", short(f), short(t));
+    let local_edges: BTreeSet<(String, String, String)> = edges
+        .iter()
+        .filter_map(|e| {
+            Some((
+                by_id.get(&e.from_node_id)?.to_string(),
+                by_id.get(&e.to_node_id)?.to_string(),
+                e.edge_type.clone(),
+            ))
+        })
+        .collect();
+    // An edge from or to a node the server deleted is not in its live graph.
+    let server_edges: BTreeSet<(String, String, String)> = server
+        .edges
+        .iter()
+        .filter_map(|e| {
+            let (f, t) = (e.from_change_id.as_deref()?, e.to_change_id.as_deref()?);
+            (server_nodes.contains_key(f) && server_nodes.contains_key(t))
+                .then(|| (f.to_string(), t.to_string(), e.edge_type.clone()))
+        })
+        .collect();
+    d.local_edges = local_edges.len();
+    d.server_edges = server_edges.len();
+    // A local edge into a node the server deleted is not "only here" either:
+    // --seed will not send it (see `missing_on_server`), and the pull that
+    // removes the node removes it too, so it is listed with the node.
+    d.edges_only_local = local_edges
+        .difference(&server_edges)
+        .filter(|(f, t, _)| !tombstones.contains(f.as_str()) && !tombstones.contains(t.as_str()))
+        .map(|(f, t, k)| edge_label(f, t, k))
+        .collect();
+    d.edges_only_server = server_edges
+        .difference(&local_edges)
+        .map(|(f, t, k)| edge_label(f, t, k))
+        .collect();
+    d
+}
+
+/// Documents attached here that the server lacks, as "file on node" labels.
+pub fn documents_only_here(docs: &[crate::db::NodeDocument], server: &RemoteGraph) -> Vec<String> {
+    let have: std::collections::HashSet<&str> = server
+        .documents
+        .iter()
+        .filter_map(|d| d["change_id"].as_str())
+        .collect();
+    docs.iter()
+        .filter(|d| d.detached_at.is_none() && !have.contains(d.change_id.as_str()))
+        .map(|d| {
+            format!(
+                "{} on {}",
+                d.original_filename,
+                d.node_change_id.chars().take(8).collect::<String>()
+            )
+        })
+        .collect()
+}
+
+/// Update ops that make the server's copy of every node both sides hold
+/// match this one, field by field: what `remote push --repair` queues.
+///
+/// This is the remedy for a write whose op never reached the log: made
+/// before this clone's config had a `[remote]`, made while the log could not
+/// be written, lost to a crash between the local commit and the append, or
+/// in a log someone deleted. Each op says what it replaces (the server's
+/// current value), so an edit an agent makes between `remote status` and
+/// this is refused rather than overwritten.
+///
+/// Returns the ops and what they cannot carry: a node type (not settable
+/// over /ops) and a metadata key the server has and this copy lacks (an op
+/// merges keys; it does not remove them).
+pub fn repair_ops(
+    nodes: &[crate::db::DecisionNode],
+    server: &RemoteGraph,
+) -> (Vec<crate::oplog::OpBody>, Vec<String>) {
+    use serde_json::Map;
+    let live: std::collections::HashMap<&str, &RemoteNode> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_none())
+        .map(|n| (n.change_id.as_str(), n))
+        .collect();
+    let short = |c: &str| c.chars().take(8).collect::<String>();
+    let mut ops = Vec::new();
+    let mut skipped = Vec::new();
+    for n in nodes {
+        let Some(s) = live.get(n.change_id.as_str()) else {
+            continue;
+        };
+        let (mut set, mut was) = (Map::new(), Map::new());
+        let opt = |v: &Option<String>| v.clone().map(Value::String).unwrap_or(Value::Null);
+        if n.title != s.title {
+            set.insert("title".into(), Value::String(n.title.clone()));
+            was.insert("title".into(), Value::String(s.title.clone()));
+        }
+        if n.status != s.status {
+            set.insert("status".into(), Value::String(n.status.clone()));
+            was.insert("status".into(), Value::String(s.status.clone()));
+        }
+        if n.description.as_deref().unwrap_or("") != s.description.as_deref().unwrap_or("") {
+            set.insert("description".into(), opt(&n.description));
+            was.insert("description".into(), opt(&s.description));
+        }
+        if n.node_type != s.node_type {
+            skipped.push(format!(
+                "{} type: here {}, server {} (a node's type cannot be changed over /ops)",
+                short(&n.change_id),
+                n.node_type,
+                s.node_type
+            ));
+        }
+        let here: Map<String, Value> = n
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let there = s
+            .metadata
+            .as_ref()
+            .and_then(|m| m.as_object().cloned())
+            .unwrap_or_default();
+        let (mut meta, mut was_meta) = (Map::new(), Map::new());
+        for (k, v) in &here {
+            if there.get(k) != Some(v) {
+                meta.insert(k.clone(), v.clone());
+                was_meta.insert(k.clone(), there.get(k).cloned().unwrap_or(Value::Null));
+            }
+        }
+        for k in there.keys().filter(|k| !here.contains_key(*k)) {
+            skipped.push(format!(
+                "{} metadata.{k}: only on the server (an op merges keys and cannot remove one)",
+                short(&n.change_id)
+            ));
+        }
+        if !set.is_empty() || !meta.is_empty() {
+            ops.push(crate::oplog::OpBody::UpdateNode {
+                change_id: n.change_id.clone(),
+                set,
+                metadata: meta,
+                was,
+                was_metadata: was_meta,
+            });
+        }
+    }
+    (ops, skipped)
 }
 
 #[derive(Debug, Default)]
@@ -853,8 +1530,8 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
     // file anyone can write. It is wrong here: the server refuses every
     // write to a deleted node, so the resurrected node could never reach
     // it, and `remote status` reported the same deletion after every pull
-    // while pull did nothing. The edit was refused, and the user was told
-    // so when it was made (`push_after_write`); this is where it goes.
+    // while pull did nothing. The edit's op was refused by name when it
+    // was replayed; this is where the edit goes.
     let local = db
         .get_graph()
         .map_err(|e| format!("reading the local graph: {e}"))
@@ -862,9 +1539,20 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
             serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
         })?;
     let overridden = deleted_on_server(&local, &graph);
-    for d in &overridden {
+    // Applying the server's own delete is not a write the server needs to
+    // hear about: logged, the delete_node and delete_edge ops for it were
+    // refused ("was deleted on the server") and left `remote status`
+    // reporting rejected writes after every such pull.
+    let log = db.oplog();
+    db.set_oplog(None);
+    let deleted = overridden.iter().try_for_each(|d| {
         db.delete_node(d.id as i32, false)
-            .map_err(|e| format!("deleting node {} \"{}\": {e}", d.id, d.title))?;
+            .map(|_| ())
+            .map_err(|e| format!("deleting node {} \"{}\": {e}", d.id, d.title))
+    });
+    db.set_oplog(log.clone());
+    deleted?;
+    for d in &overridden {
         // The local tombstone keeps the row's last fields, prompt included;
         // the server's keeps none, because a delete is how a pasted secret
         // leaves the graph. Keep the local deleted_at (now, later than the
@@ -885,29 +1573,62 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
         }
     }
 
+    let dead: std::collections::HashSet<String> = graph
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_some())
+        .map(|n| n.change_id.clone())
+        .collect();
+    let dropped_rejected = match &log {
+        Some(log) if !dead.is_empty() => log.drop_rejected_touching(&dead)?,
+        _ => 0,
+    };
+
     Ok(PullReport {
-        fetched_nodes: graph.nodes.len(),
+        fetched_nodes: graph
+            .nodes
+            .iter()
+            .filter(|n| n.deleted_at.is_none())
+            .count(),
+        fetched_tombstones: graph
+            .nodes
+            .iter()
+            .filter(|n| n.deleted_at.is_some())
+            .count(),
         fetched_edges: graph.edges.len(),
         records_written,
         imported_nodes: report.nodes_imported,
+        updated_nodes: report.nodes_updated,
+        removed_nodes: report.nodes_deleted + overridden.len(),
         imported_edges: report.edges_imported,
-        deleted_nodes: report.nodes_deleted,
+        removed_edges: report.edges_deleted,
         deleted_over_local_edits: overridden,
+        dropped_rejected,
     })
 }
 
+/// What a pull changed locally. "imported 0 nodes" after a pull that applied
+/// an agent's edits read as "nothing happened"; edits and removals are
+/// counted separately so the report says what did.
 #[derive(Debug, Default)]
 pub struct PullReport {
     pub fetched_nodes: usize,
+    /// Nodes the server deleted, sent so the local copy can go too.
+    pub fetched_tombstones: usize,
     pub fetched_edges: usize,
     pub records_written: usize,
     pub imported_nodes: usize,
+    pub updated_nodes: usize,
+    pub removed_nodes: usize,
     pub imported_edges: usize,
-    /// Nodes the server had deleted that reconcile deleted here.
-    pub deleted_nodes: usize,
+    pub removed_edges: usize,
     /// Nodes the server had deleted that had been edited here after the
-    /// delete; deleted anyway, edit and all (see `pull`).
+    /// delete; deleted anyway, edit and all (see `pull`). Counted in
+    /// `removed_nodes` too.
     pub deleted_over_local_edits: Vec<DeletedOnServer>,
+    /// Refused ops in the log that touched a node the server deleted,
+    /// dropped because they can never apply.
+    pub dropped_rejected: usize,
 }
 
 /// ureq puts the useful part of an HTTP failure in the response body, which
@@ -934,12 +1655,19 @@ fn describe(e: ureq::Error) -> String {
     }
 }
 
+/// Percent-encodes a query value, byte by byte over its UTF-8.
+///
+/// 1.0.7 encoded each `char` as `%{code point}`, so `é` (U+00E9) became
+/// `%E9`, which is not UTF-8, and the server answered every request from a
+/// repository called `bridge-café` with a bare 400 (C8). A percent escape
+/// names one byte; `é` is two (`%C3%A9`).
 fn urlencode(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            'a'..='z' | 'A'..='Z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
-            '*' => "%2A".to_string(),
-            c => format!("%{:02X}", c as u32),
+    s.bytes()
+        .map(|b| match b {
+            b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            b => format!("%{b:02X}"),
         })
         .collect()
 }
@@ -1008,7 +1736,13 @@ pub fn write_remote_url(project: &Path, url: &str) -> Result<(), String> {
         .parse::<toml_edit::DocumentMut>()
         .map_err(|e| format!("{} is not valid TOML: {e}", path.display()))?;
 
-    doc["remote"].or_insert(toml_edit::table())["url"] = toml_edit::value(url.to_string());
+    let remote = doc["remote"].or_insert(toml_edit::table());
+    remote["url"] = toml_edit::value(url.to_string());
+    // Recorded now, while the directory still has the name it was set up
+    // under; see `workspace_for`.
+    if remote.get("workspace").is_none() {
+        remote["workspace"] = toml_edit::value(workspace_for(project));
+    }
 
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     std::fs::write(&path, doc.to_string()).map_err(|e| format!("{}: {e}", path.display()))
@@ -1065,44 +1799,6 @@ mod tests {
     }
 
     #[test]
-    fn a_changed_node_the_server_already_has_is_still_sent_when_touched() {
-        // The whole point of `touched`: `status`/`prompt` edit a node the
-        // server already holds, so the missing-diff finds nothing and the edit
-        // would never leave this machine.
-        let local = serde_json::json!({
-            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}],
-            "edges": [],
-            "documents": []
-        });
-        let (mut payload, n, m) = missing_on_server(&local, &server(&["a", "b"], &[]));
-        assert_eq!((n, m), (0, 0), "nothing is missing, by construction");
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[2]), 1);
-        assert_eq!(payload["nodes"][0]["change_id"], "b");
-    }
-
-    #[test]
-    fn a_touched_node_the_diff_already_sends_is_not_sent_twice() {
-        let local = serde_json::json!({
-            "nodes": [{"id": 1, "change_id": "a"}],
-            "edges": [],
-            "documents": []
-        });
-        let (mut payload, n, _) = missing_on_server(&local, &server(&[], &[]));
-        assert_eq!(n, 1);
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[1]), 0);
-        assert_eq!(payload["nodes"].as_array().unwrap().len(), 1);
-    }
-
-    #[test]
-    fn touching_nothing_adds_nothing() {
-        let local = serde_json::json!({"nodes": [{"id": 1, "change_id": "a"}], "edges": []});
-        let (mut payload, _, _) = missing_on_server(&local, &server(&["a"], &[]));
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[]), 0);
-        assert_eq!(add_touched_nodes(&mut payload, &local, &[99]), 0);
-        assert!(payload["nodes"].as_array().unwrap().is_empty());
-    }
-
-    #[test]
     fn a_stale_stored_change_id_does_not_make_an_existing_edge_look_missing() {
         // The edge row says "old-a" but node 1's change_id is now "a"; the
         // server has a -> b. Keyed by the stored id, it would be resent.
@@ -1135,6 +1831,13 @@ mod tests {
         assert_eq!(urlencode("*"), "%2A");
         assert_eq!(urlencode("blog"), "blog");
         assert_eq!(urlencode("a b"), "a%20b");
+    }
+
+    #[test]
+    fn non_ascii_is_encoded_as_utf8_bytes() {
+        assert_eq!(urlencode("café"), "caf%C3%A9");
+        assert_eq!(urlencode("ü"), "%C3%BC");
+        assert_eq!(urlencode("日"), "%E6%97%A5");
     }
 
     #[test]
@@ -1195,6 +1898,7 @@ mod tests {
             url: "https://example.com/deciduous-mcp".to_string(),
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
+            repo_roots: None,
         };
         assert_eq!(
             r.events_url(),
@@ -1208,6 +1912,7 @@ mod tests {
             url: "http://localhost:4111".to_string(),
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
+            repo_roots: None,
         };
         assert_eq!(
             r.events_url(),
@@ -1225,6 +1930,7 @@ mod tests {
             url: "https://example.com".to_string(),
             workspace: "a b".to_string(),
             token: "tok".to_string(),
+            repo_roots: None,
         };
         assert!(
             r.events_url().contains("workspace=a%20b"),

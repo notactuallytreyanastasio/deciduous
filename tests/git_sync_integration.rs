@@ -1398,8 +1398,10 @@ fn an_mcp_node_id_is_never_truncated_to_another_node() {
     assert!(text.contains("all digits"), "{text}");
 }
 
-/// A real HTTP server on 127.0.0.1 that answers `GET /export` with `body`
-/// and anything else with an empty object, for as long as the test runs.
+/// A real HTTP server on 127.0.0.1 that answers `GET /export` with `body`,
+/// `/claim` and `/locate` as a server does for a repository it has no
+/// record of, and anything else with an empty object, for as long as the
+/// test runs.
 fn serve_export(body: String) -> String {
     use std::io::{BufRead, BufReader, Read, Write};
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -1424,6 +1426,11 @@ fn serve_export(body: String) -> String {
             let _ = reader.read_exact(&mut sink);
             let payload = if request_line.starts_with("GET /export") {
                 body.clone()
+            } else if request_line.starts_with("POST /claim") {
+                // What a server says to a CLI that sends no repository roots.
+                r#"{"claim":"unchecked"}"#.to_string()
+            } else if request_line.starts_with("POST /locate") {
+                r#"{"workspaces":[]}"#.to_string()
             } else {
                 "{}".to_string()
             };

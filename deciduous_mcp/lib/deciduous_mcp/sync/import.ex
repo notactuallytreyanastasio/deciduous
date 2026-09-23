@@ -64,6 +64,16 @@ defmodule DeciduousMcp.Sync.Import do
               {:error, reason} -> Repo.rollback(Workspaces.describe_name_error(name, reason))
             end
 
+          # The same check /ops makes. Without it, `remote push --seed` (or
+          # --overwrite) from an unrelated repository with the same directory
+          # name wrote into a workspace its /ops writes were refused from.
+          # Made here, after the workspace exists, because a refused import
+          # creates nothing: the rollback takes a new workspace with it.
+          case Workspaces.claim(workspace, payload["repo_roots"], false) do
+            {:ok, _claim} -> :ok
+            {:error, reason} -> Repo.rollback(reason)
+          end
+
           deleted = deleted_change_ids(workspace.id)
           node_report = upsert_nodes(workspace.id, nodes, deleted)
           edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)
@@ -662,9 +672,11 @@ defmodule DeciduousMcp.Sync.Import do
   # The CLI writes timestamps with an offset ("2016-02-01T00:00:00-05:00") and
   # backdated archaeology nodes reach back years, so these are parsed rather
   # than stamped with the import time.
-  defp parse_time(nil, fallback), do: fallback
+  @doc false
+  # Shared with `DeciduousMcp.Sync.Ops`, which receives the same timestamps.
+  def parse_time(nil, fallback), do: fallback
 
-  defp parse_time(value, fallback) when is_binary(value) do
+  def parse_time(value, fallback) when is_binary(value) do
     case DateTime.from_iso8601(value) do
       # The columns are :utc_datetime_usec, which rejects anything that is not
       # 6-digit precision. CLI timestamps carry none ("2016-02-01T00:00:00-05:00"),
@@ -676,7 +688,7 @@ defmodule DeciduousMcp.Sync.Import do
     end
   end
 
-  defp parse_time(_, fallback), do: fallback
+  def parse_time(_, fallback), do: fallback
 
   defp as_float(nil), do: 1.0
   defp as_float(n) when is_float(n), do: n

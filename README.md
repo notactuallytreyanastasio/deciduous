@@ -127,7 +127,9 @@ is no terminal to ask, so give the answer instead:
 **3. Restart Claude Code.** When it connects, the server sends the logging
 instructions (when to write, and how to write one step in one call). There is
 no hook to install. Agents write through the MCP tools. `deciduous add` from
-the CLI writes to the local database until you run `deciduous remote push`.
+the CLI writes to the local database and queues the change in
+`.deciduous/remote-log.jsonl`, which is sent to the server before the command
+exits (or, if the server is down, on the next write or `deciduous remote push`).
 
 If anything is missing (no Docker, a server that does not answer, no token),
 `init` and `update` stop with exit 1 and say how to fix it. Upgrading later is

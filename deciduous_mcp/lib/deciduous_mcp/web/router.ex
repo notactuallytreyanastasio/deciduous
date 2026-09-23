@@ -10,6 +10,13 @@ defmodule DeciduousMcp.Web.Router do
     * `ALL  /mcp`    — the MCP endpoint, forwarded to Hermes' Streamable HTTP
       plug.
     * `POST /import` — bulk ingest of one project's graph.
+    * `POST /ops` — a CLI's queued writes, applied field by field, each at
+      most once (see `DeciduousMcp.Sync.Ops`).
+    * `POST /locate` — which workspaces hold a set of change_ids, so a
+      1.0.7 project that was renamed can find the graph it wrote to.
+    * `POST /claim` — ties a workspace to a repository's root commits, so two
+      repositories with the same directory name cannot share one by accident
+      (see `DeciduousMcp.Graph.Workspaces.claim/3`).
     * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
     * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
@@ -31,7 +38,7 @@ defmodule DeciduousMcp.Web.Router do
 
   @session_guard SessionGuard.init(server: DeciduousMcp.MCP.Server)
   alias DeciduousMcp.Storage
-  alias DeciduousMcp.Sync.Import
+  alias DeciduousMcp.Sync.{Import, Ops}
   alias DeciduousMcp.Web.{Auth, GraphSocket, WorkspacePlug}
 
   # 64MB: the largest graph on disk today is 24MB of SQLite, which is smaller
@@ -79,6 +86,85 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
+  post "/ops" do
+    conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          handle_ops(conn, body)
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "ops batch exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
+      end
+    end
+  end
+
+  post "/claim" do
+    conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          handle_claim(conn, body)
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "claim exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
+      end
+    end
+  end
+
+  # Which workspaces hold these change_ids. A 1.0.7 config names no
+  # workspace; 1.0.7 derived it from the directory name on every call, so
+  # after a rename the name it wrote under is known only to the server.
+  post "/locate" do
+    conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          case Jason.decode(body) do
+            {:ok, %{"change_ids" => ids}} when is_list(ids) and length(ids) <= 1000 ->
+              held = Workspaces.holding(Enum.filter(ids, &is_binary/1))
+
+              # A pinned client learns nothing about the other workspaces,
+              # as with list_workspaces.
+              held =
+                case conn.assigns[:pinned_workspace_name] do
+                  nil -> held
+                  pinned -> Enum.filter(held, &(&1.name == pinned))
+                end
+
+              json(conn, 200, %{workspaces: held})
+
+            _ ->
+              json(conn, 422, %{error: "body must be {\"change_ids\": [...]}, at most 1000"})
+          end
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "locate exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
+      end
+    end
+  end
+
   # Bytes arrive here rather than inside the graph payload: the largest
   # document on disk is 16MB and the largest graph is already megabytes of
   # JSON, and base64 inside that would be a 22MB string inside a 50MB body.
@@ -121,20 +207,55 @@ defmodule DeciduousMcp.Web.Router do
 
       case Scope.read_target(conn_frame(conn), conn.query_params) do
         {:ok, scope} ->
-          # Tombstones: without them a node deleted on the server never
-          # left a pulled graph, and the next push re-sent it.
-          json(conn, 200, Query.get_full_graph(scope, tombstones: true))
+          case export_claim(conn, scope) do
+            # Tombstones: without them a node deleted on the server never
+            # left a pulled graph, and the next push re-sent it.
+            :ok -> json(conn, 200, Query.get_full_graph(scope, tombstones: true))
+            {:refused, claim} -> claim_refused(conn, claim)
+            {:error, message} -> json(conn, 422, %{error: message})
+          end
 
         # Nothing has been pushed here yet. That is an empty graph, and the
         # CLI's first `remote push` diffs against exactly this answer, so it
         # is returned rather than refused; `exists: false` says which kind of
-        # empty it is. Before, this read created the workspace.
+        # empty it is. Before, this read created the workspace. There is no
+        # claim to check on a workspace that does not exist.
         {:absent, name} ->
           json(conn, 200, empty_graph(name))
 
         {:error, message} ->
           json(conn, 422, %{error: message})
       end
+    end
+  end
+
+  # A 1.0.8 CLI names its repository's root commits in this header, so a
+  # pull or a status of a workspace another repository claimed is refused
+  # here, the same check /ops and /import make, instead of being left to
+  # the client calling /claim first. No header (1.0.7, a browser, the
+  # global view) is not checked.
+  defp export_claim(conn, scope) do
+    case {get_req_header(conn, "x-deciduous-repo-roots"), scope} do
+      {[], _} ->
+        :ok
+
+      {_, :global} ->
+        :ok
+
+      {[header | _], id} ->
+        roots = header |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+        with {:ok, ws} <- Workspaces.get_workspace(id),
+             {:ok, _} <- Workspaces.claim(ws, roots, false) do
+          :ok
+        else
+          {:error, {refusal, _} = claim}
+          when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+            {:refused, claim}
+
+          {:error, other} ->
+            {:error, to_string_reason(other)}
+        end
     end
   end
 
@@ -261,6 +382,10 @@ defmodule DeciduousMcp.Web.Router do
       {:error, {:pinned, message}} ->
         json(conn, 403, %{error: message})
 
+      {:error, {refusal, _} = claim}
+      when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+        claim_refused(conn, claim)
+
       # The vocabulary refusal is a map of examples; sent as JSON, not as
       # Elixir's inspect of it.
       {:error, %{} = reason} ->
@@ -269,6 +394,103 @@ defmodule DeciduousMcp.Web.Router do
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
     end
+  end
+
+  defp handle_ops(conn, body) do
+    with {:ok, payload} <- Jason.decode(body),
+         {:ok, payload} <- held_to_pin(conn, payload),
+         {:ok, report} <- Ops.run(payload) do
+      json(conn, 200, report)
+    else
+      {:error, %Jason.DecodeError{} = err} ->
+        json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
+
+      {:error, {refusal, _} = claim}
+      when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+        claim_refused(conn, claim)
+
+      {:error, reason} ->
+        json(conn, 422, %{error: to_string_reason(reason)})
+    end
+  end
+
+  defp handle_claim(conn, body) do
+    with {:ok, payload} <- Jason.decode(body),
+         {:ok, payload} <- held_to_pin(conn, payload),
+         {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
+         {:ok, workspace} <- Workspaces.find_or_create(name),
+         {:ok, outcome} <-
+           Workspaces.claim(workspace, payload["repo_roots"], payload["adopt"] == true) do
+      json(conn, 200, %{workspace: workspace.name, claim: outcome})
+    else
+      {:error, %Jason.DecodeError{} = err} ->
+        json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
+
+      {:error, {refusal, _} = claim}
+      when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+        claim_refused(conn, claim)
+
+      {:error, reason} ->
+        json(conn, 422, %{error: to_string_reason(reason)})
+    end
+  end
+
+  # /ops and /claim name their workspace in the body, as /import does, and
+  # are held to an X-Deciduous-Workspace pin the same way: a body naming
+  # another workspace is refused, and one naming none goes to the pin.
+  defp held_to_pin(conn, payload) when is_map(payload) do
+    case {conn.assigns[:pinned_workspace_name], payload["workspace"]} do
+      {nil, _} ->
+        {:ok, payload}
+
+      {pinned, nil} ->
+        {:ok, Map.put(payload, "workspace", pinned)}
+
+      {pinned, name} ->
+        case Workspaces.normalize_name(name) do
+          {:ok, ^pinned} ->
+            {:ok, Map.put(payload, "workspace", pinned)}
+
+          {:ok, other} ->
+            {:error,
+             {:pinned,
+              "this client is pinned to workspace \"#{pinned}\" by " <>
+                "X-Deciduous-Workspace; the request names \"#{other}\". Nothing was written."}}
+
+          {:error, reason} ->
+            {:error, Workspaces.describe_name_error(name, reason)}
+        end
+    end
+  end
+
+  defp held_to_pin(_conn, payload), do: {:ok, payload}
+
+  defp claim_refused(conn, {:no_commit_yet, held}) do
+    json(conn, 409, %{
+      error:
+        "this workspace belongs to a repository, and this one has no commit yet, " <>
+          "so it cannot show it is that repository. Commit first, or name this one's " <>
+          "workspace explicitly",
+      reason: "no_commit_yet",
+      held_by_roots: held
+    })
+  end
+
+  defp claim_refused(conn, {:claimed_by_other_repository, held}) do
+    json(conn, 409, %{
+      error:
+        "this workspace belongs to another repository (different root commits). " <>
+          "Two repositories with the same directory name derive the same workspace name; " <>
+          "name this one's workspace explicitly",
+      reason: "claimed_by_other_repository",
+      held_by_roots: held
+    })
   end
 
   # --- Documents --------------------------------------------------------------
