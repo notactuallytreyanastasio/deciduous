@@ -5,6 +5,25 @@ project on it is a **workspace**, and a workspace's branches are where
 different agents write side by side. Use it when more than one agent, or more
 than one machine, needs to see the others' reasoning while it is happening.
 
+Since 1.0.5 `deciduous init` points every project at one. With no remote
+configured it sets up a server on this machine with Docker (see
+[Set up the project](project.md#the-server-step)). To use a team's server, run
+`deciduous remote init <url>` before `init`, or let the user run the wizard:
+
+```
+deciduous remote setup
+
+Where should this project's graph live?
+
+  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1:4000
+  2) A server someone else runs: you need its URL and token
+```
+
+It reads the token with echo off and checks it against the server before
+storing anything. A wrong token leaves the credentials and config untouched.
+`--local` or `--url <url>` answer the question without a terminal.
+
+The rest of this page is what those steps do, for when you set them up by hand.
 Two separate things have to be configured, and they do not know about each other:
 
 1. **The MCP client**, so your tool calls reach the server. This is how nodes

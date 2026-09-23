@@ -8,7 +8,7 @@ worse than one that fails loudly.
 ## Every project
 
 ```sh
-deciduous --version                 # 1.0.2 or newer
+deciduous --version                 # 1.0.5 or newer
 deciduous check-update; echo $?     # 0: integration files match the binary
 git ls-files --error-unmatch .deciduous/config.toml
 ```

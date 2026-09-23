@@ -2,8 +2,9 @@
 
 You need one binary, `deciduous`: the CLI that sets up a project, points it at
 the shared server and installs the agent instructions. The shared server is a
-separate program, covered in [Shared graph](shared-graph.md), and most machines
-never run it.
+separate program. `deciduous init` sets one up on this machine with Docker when
+the project has no remote (see [Set up the project](project.md#the-server-step)),
+so Docker must be installed and running unless the project uses a team's server.
 
 ## Check what is already there
 
@@ -17,9 +18,11 @@ cargo and one from Homebrew, and the first one wins. If they report different
 versions, tell the user which one runs, and fix `PATH` or remove the stale copy
 rather than installing a third.
 
-Use **1.0.3 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
-until it writes to the graph; 1.0.3 removes them, and `deciduous update` on
-1.0.3 takes them out of a project that has them.
+Use **1.0.5 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
+until it writes to the graph. 1.0.3 removed them, 1.0.4 moved the logging
+guidance into the server's `initialize` reply, and 1.0.5 made `init` set up or
+check the server and dropped GitHub Pages. `deciduous update` on 1.0.5 brings
+an older project up to date.
 
 ## Install or upgrade
 
@@ -46,7 +49,7 @@ Then confirm:
 
 ```sh
 deciduous --version
-# deciduous 1.0.2
+# deciduous 1.0.5
 ```
 
 ## Upgrading a project that was set up by an older version
@@ -59,12 +62,15 @@ deciduous check-update   # exit 0: files current; exit 1: run update
 deciduous update
 ```
 
-On 1.0.3, `deciduous update` replaces only files deciduous wrote
+`deciduous update` replaces only files deciduous wrote
 (`.claude/commands/`, `.claude/skills/`, the section of `CLAUDE.md` between
 `<!-- deciduous:start -->` and `<!-- deciduous:end -->`). A file the user
 changed is kept; Markdown gets the new template appended in a marked block.
 Every file it changes is copied to `.deciduous/update-backups/<time>/` first.
 It removes the logging hook scripts it once installed and their entries in
-`.claude/settings.json`, and keeps any hook script the user wrote. In a project
-with a `[remote]` it leaves `.gitignore` and `.gitattributes` alone. `deciduous update --all ~/code` does every project under a directory.
+`.claude/settings.json`, and keeps any hook script the user wrote. It removes
+`/sync-graph` and `.github/workflows/deploy-pages.yml` when deciduous wrote them,
+and leaves `docs/` alone. In a project with a `[remote]` it leaves `.gitignore`
+and `.gitattributes` alone. It then checks the project's server, the same way
+`init` does. `deciduous update --all ~/code` does every project under a directory.
 Show the user `git diff` afterwards. The changes are theirs to commit.
