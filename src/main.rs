@@ -1106,6 +1106,84 @@ fn exit(code: i32) -> ! {
     std::process::exit(code)
 }
 
+/// The short hash of HEAD when it is detached and git is not in the middle
+/// of a merge, rebase, cherry-pick or revert: someone looking at an old
+/// commit (`git checkout HEAD~15`, bisect, a CI checkout). None on a branch,
+/// outside a repository, or while an operation is in progress, since a
+/// rebase is detached too and its graph file does need writing (conflict
+/// markers merged, edits kept).
+fn detached_head() -> Option<String> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+    };
+    let on_branch = git(&["symbolic-ref", "-q", "HEAD"])?;
+    if on_branch.status.success() {
+        return None;
+    }
+    for op in [
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+    ] {
+        let path = git(&["rev-parse", "--git-path", op])?;
+        if !path.status.success() {
+            return None;
+        }
+        let path = String::from_utf8_lossy(&path.stdout).trim().to_string();
+        if std::path::Path::new(&path).exists() {
+            return None;
+        }
+    }
+    let head = git(&["rev-parse", "--short", "HEAD"])?;
+    head.status
+        .success()
+        .then(|| String::from_utf8_lossy(&head.stdout).trim().to_string())
+}
+
+/// `reconcile` with imports applied to the database and every export
+/// discarded: it runs against a scratch copy of the graph file, which is
+/// dropped afterwards. Imports never write the file, so the real one is left
+/// byte for byte as the checked-out commit has it.
+fn reconcile_without_exporting(db: &Database, store: &RecordStore) -> Result<SyncReport, String> {
+    let dir = check_scratch_dir()?;
+    let copy = dir.join("graph.json");
+    std::fs::copy(store.path(), &copy).map_err(|e| {
+        format!(
+            "copying {} to {}: {e}",
+            store.path().display(),
+            copy.display()
+        )
+    })?;
+    let scratch = RecordStore::open(&copy)
+        .ok_or_else(|| format!("{} vanished while it was being read", copy.display()))?;
+    let result = reconcile(db, &scratch, false);
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
+/// Moves the export counts out of `report` (they did not happen) and
+/// describes them.
+fn take_exports(report: &mut SyncReport) -> Vec<String> {
+    let mut out = Vec::new();
+    for (n, what) in [
+        (std::mem::take(&mut report.nodes_exported), "node(s)"),
+        (std::mem::take(&mut report.edges_exported), "edge(s)"),
+        (std::mem::take(&mut report.themes_exported), "theme(s)"),
+        (std::mem::take(&mut report.tags_exported), "tag(s)"),
+    ] {
+        if n > 0 {
+            out.push(format!("{n} {what}"));
+        }
+    }
+    out
+}
+
 /// Where `sync --check` keeps the empty database it compares against when
 /// the project has none. Removed by `exit()`, which every path of that
 /// command ends in.
@@ -3532,8 +3610,14 @@ fn main() {
                 }
             }
 
+            // On a detached commit that is not mid-merge or mid-rebase, the
+            // graph file is a historical version, not the place new rows go
+            // (G7): sync imports from it and writes nothing into it.
+            let detached = detached_head();
+            let viewing_history = detached.is_some() && store.pending_conflicts().is_empty();
+
             if store.has_legacy_record_dir() {
-                if check {
+                if check || viewing_history {
                     println!(
                         "{} .deciduous/sync/ (0.17 per-record files) present; `deciduous sync` will fold it into the graph file",
                         "Note:".yellow()
@@ -3550,7 +3634,7 @@ fn main() {
             }
 
             if store.has_legacy_events() {
-                if check {
+                if check || viewing_history {
                     println!(
                         "{} Legacy event log present; `deciduous sync` will import it",
                         "Note:".yellow()
@@ -3566,14 +3650,33 @@ fn main() {
                 }
             }
 
-            let report = match reconcile(&db, &store, check) {
+            let reconciled = if viewing_history && !check {
+                reconcile_without_exporting(&db, &store)
+            } else {
+                reconcile(&db, &store, check)
+            };
+            let mut report = match reconciled {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("{} Sync: {}", "Error:".red(), e);
                     exit(1);
                 }
             };
+            let withheld = if viewing_history {
+                take_exports(&mut report)
+            } else {
+                Vec::new()
+            };
             print_sync_report(&report, &store);
+            if let (Some(at), false) = (&detached, withheld.is_empty()) {
+                println!(
+                    "  {} HEAD is detached at {at}, so the graph file was left as this commit has it: \
+                     {} not exported. They are still in the database; check out a branch and \
+                     run `deciduous sync` to export them there.",
+                    "Note:".yellow(),
+                    withheld.join(", ")
+                );
+            }
 
             if !check && report.conflicts.iter().any(|c| !c.merged) {
                 eprintln!(

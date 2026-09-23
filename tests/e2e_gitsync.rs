@@ -428,7 +428,6 @@ fn g6_nodes_do_not_leak_across_branches() {
 
 /// G7: `sync` on an old commit dirtied the tree so `git checkout main` aborted.
 #[test]
-#[ignore = "G7: expected behaviour of sync on a detached old commit not decided; run with --ignored"]
 fn g7_sync_on_an_old_commit_does_not_block_checkout() {
     let Some(()) = local("g7_sync_on_an_old_commit_does_not_block_checkout") else {
         return;
@@ -438,16 +437,37 @@ fn g7_sync_on_an_old_commit_does_not_block_checkout() {
     p.add("goal", "one");
     p.commit_graph("one");
     let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
-    p.add("goal", "two");
+    let two = p.add("goal", "two");
     p.commit_graph("two");
     p.git_ok(&["checkout", "-q", &old]);
-    p.ok(&["sync"]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let check = p.dx(&["sync", "--check"]);
+    let out = p.ok(&["sync"]);
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "sync on a detached old commit dirtied the tree:\n{out}"
+    );
+    assert!(
+        out.contains("detached") && out.contains("not exported"),
+        "sync on a detached commit does not say what it left out:\n{out}"
+    );
+    assert!(
+        check.ok(),
+        "sync --check on the old commit disagrees with the sync that followed:\n{}",
+        check.all()
+    );
     let co = p.git(&["checkout", "-q", "main"]);
     assert!(
         co.ok(),
         "sync on an old commit blocked checkout:\n{}",
         co.all()
     );
+    // Nothing was lost: "two" is still in the database and back in the
+    // file on main, and main needs no sync.
+    assert!(!node(&p.graph_doc(), &two).is_null());
+    let settled = p.dx(&["sync", "--check"]);
+    assert!(settled.ok(), "{}", settled.all());
 }
 
 // ---------------------------------------------------------------- G8 / G9
@@ -702,4 +722,39 @@ fn t8_commit_resolves_any_rev_and_is_shown_whole() {
         bad.all()
     );
     assert_eq!(p.graph()["nodes"].as_array().unwrap().len(), before);
+}
+
+/// G7's fix leaves the graph file alone on a detached HEAD. A rebase that
+/// stopped is detached too, and there the file is being rewritten on
+/// purpose: sync must still export into it.
+#[test]
+fn g7_sync_during_a_stopped_rebase_still_exports() {
+    let Some(()) = local("g7_sync_during_a_stopped_rebase_still_exports") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    std::fs::write(p.dir.join("x.txt"), "base\n").unwrap();
+    p.git_ok(&["add", "x.txt"]);
+    p.git_ok(&["commit", "-q", "-m", "base"]);
+    p.git_ok(&["checkout", "-q", "-b", "feat"]);
+    std::fs::write(p.dir.join("x.txt"), "feat\n").unwrap();
+    p.git_ok(&["commit", "-q", "-am", "feat"]);
+    p.git_ok(&["checkout", "-q", "main"]);
+    std::fs::write(p.dir.join("x.txt"), "main\n").unwrap();
+    p.git_ok(&["commit", "-q", "-am", "main"]);
+    p.git_ok(&["checkout", "-q", "feat"]);
+    let stopped = p.git(&["rebase", "main"]);
+    assert!(!stopped.ok(), "the rebase was meant to stop on x.txt");
+    // A row the database has and the file does not: written, then the
+    // file put back, as a rebase step can.
+    let late = p.add("goal", "written mid-rebase");
+    p.git_ok(&["checkout", "--", ".deciduous/graph.json"]);
+    assert!(node(&p.graph_doc(), &late).is_null());
+    let out = p.ok(&["sync"]);
+    assert!(
+        !node(&p.graph_doc(), &late).is_null(),
+        "sync during a stopped rebase did not export:\n{out}"
+    );
+    let _ = p.git(&["rebase", "--abort"]);
 }

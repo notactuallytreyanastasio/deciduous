@@ -1570,7 +1570,6 @@ fn a_node_added_on_a_branch_stays_on_that_branch() {
 }
 
 #[test]
-#[ignore = "G7 deferred: needs a record of which rows are unpublished local writes"]
 fn sync_on_an_older_commit_leaves_the_tree_clean() {
     let team = Team::new();
     let alice = team.founder("alice");
@@ -1579,8 +1578,9 @@ fn sync_on_an_older_commit_leaves_the_tree_clean() {
     alice.add("goal", "Second", &[]);
     alice.commit_graph("second");
     alice.git(&["checkout", "-q", "HEAD~1"]);
+    let before = alice.git(&["status", "--porcelain"]);
     let out = alice.ok(&["sync"]);
-    assert!(alice.git(&["status", "--porcelain"]).is_empty(), "{out}");
+    assert_eq!(alice.git(&["status", "--porcelain"]), before, "{out}");
     alice.git(&["checkout", "-q", "main"]);
 }
 
