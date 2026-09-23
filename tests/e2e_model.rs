@@ -221,12 +221,27 @@ struct World<'a> {
     server: Option<Server>,
     ws: String,
     offline: BTreeSet<Loc>,
+    /// The one unreachable URL both clones use while offline. config.toml
+    /// is committed; two different dead ports written by the two clones
+    /// were a merge conflict in config.toml, a harness failure and not a
+    /// deciduous one (seeds 3404453406259474800, 6255140207903928422).
+    dead_url: String,
     log: Vec<String>,
     uuid: Mutex<BTreeMap<String, String>>,
 }
 
 impl World<'_> {
     fn fail(&self, msg: impl std::fmt::Display) -> ! {
+        // `DECIDUOUS_E2E_KEEP=<dir>` keeps both clones (their databases,
+        // graph.json and remote-log.jsonl) for a failure to be read after.
+        if let Ok(dest) = std::env::var("DECIDUOUS_E2E_KEEP") {
+            if let Some(base) = self.c1.dir.parent() {
+                let _ = std::process::Command::new("cp")
+                    .args(["-R", &base.display().to_string(), &dest])
+                    .status();
+                eprintln!("kept the sandbox in {dest}");
+            }
+        }
         let tail: Vec<&String> = self.log.iter().rev().take(40).collect::<Vec<_>>();
         let tail: Vec<&String> = tail.into_iter().rev().collect();
         panic!(
@@ -429,7 +444,7 @@ impl World<'_> {
         self.clone_of(loc).git_exchange();
         if let Some(server) = &self.server {
             let url = if self.offline.contains(&loc) {
-                format!("http://127.0.0.1:{}", dead_port())
+                self.dead_url.clone()
             } else {
                 server.url.clone()
             };
@@ -440,7 +455,7 @@ impl World<'_> {
     fn set_offline(&mut self, loc: Loc, off: bool) {
         let Some(server) = &self.server else { return };
         let url = if off {
-            format!("http://127.0.0.1:{}", dead_port())
+            self.dead_url.clone()
         } else {
             server.url.clone()
         };
@@ -700,6 +715,7 @@ fn run(server: Option<Server>, name: &str) {
         server,
         ws,
         offline: BTreeSet::new(),
+        dead_url: format!("http://127.0.0.1:{}", dead_port()),
         log: Vec::new(),
         uuid: Mutex::new(BTreeMap::new()),
     };
