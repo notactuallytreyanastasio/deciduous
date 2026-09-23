@@ -81,22 +81,177 @@ pub fn ensure(project: &Path, caller: Caller) -> Result<(), String> {
 
     match remote::read_remote_url(project) {
         Some(url) => check_configured(project, &url, caller),
-        None => {
-            let (url, token) = local_server()?;
-            if remote::token().ok().as_deref() != Some(token.as_str()) {
-                let path = remote::store_token(&token)?;
-                println!("   {} token in {}", "Stored".green(), path.display());
-            }
-            remote::write_remote_url(project, &url)?;
-            println!(
-                "   {} .deciduous/config.toml [remote] url = {url}",
-                "Wrote".green()
-            );
-            check_configured(project, &url, Caller::Init)?;
-            register_claude_code(&url, &token);
-            Ok(())
-        }
+        None => connect_local(project),
     }
+}
+
+/// Points the project at this machine's server, setting it up if needed.
+fn connect_local(project: &Path) -> Result<(), String> {
+    let (url, token) = local_server()?;
+    connect(project, &url, &token)
+}
+
+/// Stores the token, writes `[remote]`, verifies, registers with Claude Code.
+fn connect(project: &Path, url: &str, token: &str) -> Result<(), String> {
+    if remote::token().ok().as_deref() != Some(token) {
+        let path = remote::store_token(token)?;
+        println!("   {} token in {}", "Stored".green(), path.display());
+    }
+    remote::write_remote_url(project, url)?;
+    println!(
+        "   {} .deciduous/config.toml [remote] url = {url}",
+        "Wrote".green()
+    );
+    check_configured(project, url, Caller::Init)?;
+    register_claude_code(url, token);
+    Ok(())
+}
+
+/// What `deciduous remote setup` was told on the command line, if anything.
+pub enum SetupChoice {
+    Ask,
+    Local,
+    Url(String),
+}
+
+/// `deciduous remote setup`: the same end state as `init`'s server step,
+/// chosen interactively (or by `--local` / `--url` in a script).
+pub fn setup_wizard(project: &Path, choice: SetupChoice) -> Result<(), String> {
+    use std::io::IsTerminal;
+    let interactive = std::io::stdin().is_terminal();
+
+    println!("{}", "deciduous remote setup".cyan().bold());
+    println!(
+        "Every project writes its decision graph to a shared server. This connects {}\n\
+         to one: a server on this machine (PostgreSQL in Docker), or one someone else runs.\n",
+        project.display()
+    );
+
+    let choice = match choice {
+        SetupChoice::Ask if !interactive => {
+            return Err("stdin is not a terminal, so there is no one to ask. Use\n\n    \
+                 deciduous remote setup --local          # this machine's server, via Docker\n    \
+                 deciduous remote setup --url <url>      # token from DECIDUOUS_MCP_TOKEN or `remote login`"
+                .into())
+        }
+        SetupChoice::Ask => {
+            if let Some(current) = remote::read_remote_url(project) {
+                println!("This project already points at {}", current.cyan());
+                if ask_yes("Keep it?", true)? {
+                    check_configured(project, &current, Caller::Init)?;
+                    let token = remote::token()?;
+                    register_claude_code(&current, &token);
+                    return done(&current);
+                }
+            }
+            println!("Where should this project's graph live?\n");
+            println!("  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1:4000");
+            println!("  2) A server someone else runs: you need its URL and token\n");
+            match ask("Choose 1 or 2", Some("1"))?.as_str() {
+                "1" => SetupChoice::Local,
+                "2" => SetupChoice::Url(ask("Server URL (e.g. https://example.com/deciduous-mcp)", None)?),
+                other => return Err(format!("expected 1 or 2, got {other:?}")),
+            }
+        }
+        c => c,
+    };
+
+    match choice {
+        SetupChoice::Local => {
+            println!();
+            connect_local(project)?;
+            let url = remote::read_remote_url(project).unwrap_or_default();
+            done(&url)
+        }
+        SetupChoice::Url(url) => {
+            let url = url.trim().trim_end_matches('/').to_string();
+            if !(url.starts_with("http://") || url.starts_with("https://")) {
+                return Err(format!("{url:?} is not an http(s) URL"));
+            }
+            let token = match remote::token() {
+                Ok(t)
+                    if !interactive
+                        || ask_yes("Use the token already stored on this machine?", true)? =>
+                {
+                    t
+                }
+                Ok(_) | Err(_) if interactive => ask_secret("Token (not shown)")?,
+                _ => {
+                    return Err(format!(
+                        "no token: set {} or run `deciduous remote login --url {url}` first",
+                        remote::TOKEN_ENV
+                    ))
+                }
+            };
+            // Checked against the server before anything is stored or written.
+            std::env::set_var(remote::TOKEN_ENV, &token);
+            let mut cfg = Config::load();
+            cfg.remote.url = Some(url.clone());
+            Remote::resolve(&cfg, project)
+                .and_then(|r| r.check())
+                .map_err(|e| format!("{e}\n\nNothing was stored or written."))?;
+            println!();
+            connect(project, &url, &token)?;
+            done(&url)
+        }
+        SetupChoice::Ask => unreachable!("resolved above"),
+    }
+}
+
+fn done(url: &str) -> Result<(), String> {
+    println!(
+        "\n{} this project writes to {url}. Restart Claude Code so it picks up the server;\n\
+         it sends the logging instructions when it connects.",
+        "Done:".green().bold()
+    );
+    Ok(())
+}
+
+fn ask(question: &str, default: Option<&str>) -> Result<String, String> {
+    use std::io::Write;
+    match default {
+        Some(d) => print!("{question} [{d}]: "),
+        None => print!("{question}: "),
+    }
+    let _ = std::io::stdout().flush();
+    let mut line = String::new();
+    std::io::stdin()
+        .read_line(&mut line)
+        .map_err(|e| format!("reading the answer: {e}"))?;
+    let line = line.trim();
+    match (line.is_empty(), default) {
+        (true, Some(d)) => Ok(d.to_string()),
+        (true, None) => Err(format!("{question}: no answer given")),
+        _ => Ok(line.to_string()),
+    }
+}
+
+fn ask_yes(question: &str, default: bool) -> Result<bool, String> {
+    let a = ask(question, Some(if default { "Y/n" } else { "y/N" }))?;
+    Ok(match a.to_lowercase().as_str() {
+        "y/n" | "y/n " => default,
+        "y" | "yes" => true,
+        "n" | "no" => false,
+        _ => default,
+    })
+}
+
+/// Reads a line with terminal echo off, so the token is not shown or left on
+/// screen. Echo is restored even when reading fails.
+fn ask_secret(question: &str) -> Result<String, String> {
+    let stty = |arg: &str| {
+        Command::new("stty")
+            .arg(arg)
+            .stdin(
+                std::fs::File::open("/dev/tty").map_or(std::process::Stdio::inherit(), Into::into),
+            )
+            .status()
+    };
+    let _ = stty("-echo");
+    let answer = ask(question, None);
+    let _ = stty("echo");
+    println!();
+    answer
 }
 
 fn check_configured(project: &Path, url: &str, caller: Caller) -> Result<(), String> {

@@ -500,6 +500,23 @@ enum Command {
 
 #[derive(Subcommand, Debug)]
 enum RemoteAction {
+    /// Connect this project to a shared graph server, step by step
+    ///
+    /// Asks whether the graph lives on this machine (PostgreSQL and the server
+    /// in Docker, set up if needed) or on a server someone else runs (URL and
+    /// token, checked before anything is stored). Then it writes [remote],
+    /// stores the token and registers the server with Claude Code. --local or
+    /// --url answer the question for scripts.
+    Setup {
+        /// Use this machine's server, set up with Docker if it is not running
+        #[arg(long, conflicts_with = "url")]
+        local: bool,
+
+        /// Use the server at this URL (token from DECIDUOUS_MCP_TOKEN or the stored one)
+        #[arg(long)]
+        url: Option<String>,
+    },
+
     /// Store the API token outside every repository (mode 0600)
     ///
     /// Reads the token from stdin so it never lands in shell history.
@@ -1039,6 +1056,24 @@ fn main() {
             deciduous::init::init_project(setup_claude, setup_opencode, windsurf, no_auto_update)
                 .and_then(|_| deciduous::server::ensure(&cwd, deciduous::server::Caller::Init))
         {
+            eprintln!("{} {}", "Error:".red(), e);
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    // `remote setup` may run in a project with no .deciduous yet.
+    if let Command::Remote {
+        action: RemoteAction::Setup { local, url },
+    } = &args.command
+    {
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+        let choice = match (local, url) {
+            (true, _) => deciduous::server::SetupChoice::Local,
+            (false, Some(u)) => deciduous::server::SetupChoice::Url(u.clone()),
+            (false, None) => deciduous::server::SetupChoice::Ask,
+        };
+        if let Err(e) = deciduous::server::setup_wizard(&cwd, choice) {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
         }
@@ -1878,6 +1913,7 @@ fn main() {
             let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
 
             match action {
+                RemoteAction::Setup { .. } => unreachable!(), // Handled before the database opens
                 RemoteAction::Login { url } => {
                     // stdin, not an argument: a token passed on the command
                     // line lands in shell history and in the process list,
