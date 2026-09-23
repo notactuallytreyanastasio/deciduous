@@ -105,6 +105,15 @@ start_server() {
     -e DECIDUOUS_MCP_TOKEN="$token" "$@" "$image" >/dev/null
 }
 stop_server() { docker rm -f "$server" >/dev/null; }
+# A bare `test a = b` under `set -e` exits without saying what it compared;
+# in CI that read as a silent exit 1 between two PASS lines.
+expect_eq() {
+  if [ "$1" != "$2" ]; then
+    printf 'FAIL %s: expected %s, got %s\n' "$3" "$2" "$1" >&2
+    exit 1
+  fi
+}
+
 data_fingerprint() {
   docker exec "$db" pg_dump -U postgres --data-only --no-owner --no-privileges \
     --exclude-table=public.schema_migrations "$1" |
@@ -126,13 +135,15 @@ if docker run --rm --network "$network" \
   -e DECIDUOUS_MCP_TOKEN=short "$otp_image"; then
   printf '%s\n' 'ERROR: short token was accepted' >&2; exit 1
 fi
-test "$(sql invalid "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" = 0
+expect_eq "$(sql invalid "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" 0 \
+  "tables created by a server refused for a short token"
 if docker run --rm --network "$network" \
   -e DATABASE_URL="ecto://postgres:$password@db:5432/invalid" \
   -e DECIDUOUS_MCP_TOKEN="$token" -e DB_SSL=TRUE "$otp_image"; then
   printf '%s\n' 'ERROR: invalid TLS configuration was accepted' >&2; exit 1
 fi
-test "$(sql invalid "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" = 0
+expect_eq "$(sql invalid "SELECT count(*) FROM pg_tables WHERE schemaname='public'")" 0 \
+  "tables created by a server refused for DB_SSL=TRUE"
 
 printf '%s\n' 'Fresh install: initialize empty PostgreSQL using the packaged OTP release...'
 start_server "$otp_image" fresh
@@ -149,15 +160,19 @@ stop_server
 printf '%s\n' "Existing install: seed actual v1.0.0 ($baseline_ref), then upgrade in place..."
 start_server "$baseline_image" existing
 client wait --path /health
-test "$(sql existing 'SELECT count(*) FROM schema_migrations')" = 15
+expect_eq "$(sql existing 'SELECT count(*) FROM schema_migrations')" 15 "migrations applied by v1.0.0"
 client seed --case upgrade
 before_upgrade="$(data_fingerprint existing)"
 stop_server
 start_server "$otp_image" existing
 client wait
-test "$(sql existing 'SELECT count(*) FROM schema_migrations')" = 17
+# Every migration in this checkout, not a hardcoded count: 17 was right for
+# 1.0.1 and silently wrong the moment 1.0.2 added TrigramSearch.
+expected_migrations="$(find "$project_dir/priv/repo/migrations" -name '[0-9]*_*.exs' | wc -l | tr -d ' ')"
+expect_eq "$(sql existing 'SELECT count(*) FROM schema_migrations')" "$expected_migrations" \
+  "migrations applied after upgrading v1.0.0 in place"
 after_upgrade="$(data_fingerprint existing)"
-test "$before_upgrade" = "$after_upgrade"
+expect_eq "$after_upgrade" "$before_upgrade" "data fingerprint across the upgrade"
 client verify --case upgrade --replaced
 docker restart "$server" >/dev/null
 client wait
