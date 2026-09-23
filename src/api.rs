@@ -48,10 +48,68 @@ pub struct ApiConfig {
 }
 
 /// A running API server (owned by tests or by the CLI loop).
+///
+/// The listening socket is owned here, and each tiny_http server accepts on
+/// a duplicate of it. tiny_http 0.12 ends its accept thread for good on the
+/// first error accept() returns (EMFILE when descriptors run out,
+/// ECONNABORTED when a queued client resets), and panics in it when the
+/// descriptors run out just after an accept. Either way it drops its copy of
+/// the listener. With the only copy, that closed the socket: every
+/// connection queued on it was reset ("Connection reset by peer"), `run`
+/// returned, and `serve --api` exited 0 without a word. Holding our own
+/// copy keeps the socket and its queue open while `run` starts another
+/// tiny_http on a new duplicate.
 pub struct ApiServer {
-    server: Arc<Server>,
+    listener: std::net::TcpListener,
+    first: Mutex<Option<Server>>,
     registry: Arc<Registry>,
     token: String,
+}
+
+/// Set by the panic hook when a panic comes from inside tiny_http, whose
+/// accept thread dies that way without telling `recv`.
+static TINY_HTTP_PANICKED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn watch_tiny_http_panics() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if info
+                .location()
+                .is_some_and(|l| l.file().contains("tiny_http"))
+            {
+                TINY_HTTP_PANICKED.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            previous(info);
+        }));
+    });
+}
+
+/// A tiny_http server accepting on a duplicate of `listener`.
+fn serve_on(listener: &std::net::TcpListener) -> std::io::Result<Server> {
+    Server::from_listener(listener.try_clone()?, None).map_err(std::io::Error::other)
+}
+
+/// Raises this process's open-file soft limit to its hard limit. macOS
+/// starts processes at 256, and every connection, request thread and SQLite
+/// file costs descriptors; running out is what makes accept() fail.
+fn raise_open_file_limit() {
+    // SAFETY: getrlimit/setrlimit on a local struct; no pointers retained.
+    unsafe {
+        let mut lim = std::mem::zeroed::<libc::rlimit>();
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 || lim.rlim_cur >= lim.rlim_max {
+            return;
+        }
+        let wanted = lim.rlim_max;
+        lim.rlim_cur = wanted;
+        if libc::setrlimit(libc::RLIMIT_NOFILE, &lim) != 0 {
+            // macOS refuses more than OPEN_MAX for the soft limit.
+            lim.rlim_cur = wanted.min(10_240);
+            let _ = libc::setrlimit(libc::RLIMIT_NOFILE, &lim);
+        }
+    }
 }
 
 impl ApiServer {
@@ -61,9 +119,13 @@ impl ApiServer {
             .to_socket_addrs()?
             .next()
             .ok_or_else(|| std::io::Error::other("could not resolve bind address"))?;
-        let server = Server::http(addr).map_err(std::io::Error::other)?;
+        raise_open_file_limit();
+        watch_tiny_http_panics();
+        let listener = std::net::TcpListener::bind(addr)?;
+        let server = serve_on(&listener)?;
         Ok(Self {
-            server: Arc::new(server),
+            listener,
+            first: Mutex::new(Some(server)),
             registry: Arc::new(Registry::new(config.data_dir)),
             token: config.token,
         })
@@ -71,22 +133,74 @@ impl ApiServer {
 
     /// The actual port bound (useful when configured with port 0).
     pub fn port(&self) -> u16 {
-        self.server
-            .server_addr()
-            .to_ip()
-            .map(|a| a.port())
-            .unwrap_or(0)
+        self.listener.local_addr().map(|a| a.port()).unwrap_or(0)
     }
 
     /// Serve forever on the current thread.
     pub fn run(&self) {
-        for request in self.server.incoming_requests() {
-            let registry = Arc::clone(&self.registry);
-            let token = self.token.clone();
-            // one thread per request is plenty for a graph API
-            std::thread::spawn(move || {
-                let _ = handle(request, &registry, &token);
-            });
+        let first = self
+            .first
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .expect("ApiServer::run called twice");
+        // Every tiny_http server started so far. One whose accept thread
+        // died still owns connections accepted before, whose next requests
+        // arrive in its queue, so all of them are read, not only the newest.
+        let mut servers = vec![first];
+        let mut backoff = std::time::Duration::from_millis(50);
+        loop {
+            let mut accept_died =
+                TINY_HTTP_PANICKED.swap(false, std::sync::atomic::Ordering::SeqCst);
+            if accept_died {
+                eprintln!(
+                    "deciduous api: the HTTP accept thread panicked (see above); accepting again"
+                );
+            }
+            let wait = if servers.len() == 1 {
+                std::time::Duration::from_millis(250)
+            } else {
+                std::time::Duration::from_millis(5)
+            };
+            for server in &servers {
+                match server.recv_timeout(wait) {
+                    Ok(Some(request)) => {
+                        backoff = std::time::Duration::from_millis(50);
+                        let registry = Arc::clone(&self.registry);
+                        let token = self.token.clone();
+                        // one thread per request is plenty for a graph API
+                        std::thread::spawn(move || {
+                            let _ = handle(request, &registry, &token);
+                        });
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        eprintln!(
+                            "deciduous api: accepting a connection failed ({e}); accepting again"
+                        );
+                        accept_died = true;
+                    }
+                }
+            }
+            if accept_died {
+                // Descriptors that ran out come back as connections close,
+                // so retry with backoff until an accept thread runs again.
+                loop {
+                    std::thread::sleep(backoff);
+                    backoff = (backoff * 2).min(std::time::Duration::from_secs(2));
+                    match serve_on(&self.listener) {
+                        Ok(server) => {
+                            servers.push(server);
+                            break;
+                        }
+                        Err(e) => eprintln!(
+                            "deciduous api: could not accept on the socket yet ({e}); \
+                             retrying in {} ms",
+                            backoff.as_millis()
+                        ),
+                    }
+                }
+            }
         }
     }
 }

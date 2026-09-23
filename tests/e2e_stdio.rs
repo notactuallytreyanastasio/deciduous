@@ -710,6 +710,88 @@ fn r14_racing_graph_creates_report_one_creation() {
     );
 }
 
+/// The r14 flake: in one of six whole-battery runs, one of the 30 racing
+/// PUTs above got "Connection reset by peer". The mechanism found behind
+/// it: tiny_http ends its accept thread on the first accept() error
+/// (EMFILE, ECONNABORTED), which closes the listening socket, resets every
+/// connection queued on it, and makes `serve --api` exit 0 without a word.
+/// Driven here with EMFILE, the one accept error a test can cause at will:
+/// a descriptor limit of 64 and 80 idle connections.
+#[test]
+fn r14_flake_an_accept_error_does_not_stop_the_daemon() {
+    let Some(()) = local("r14_flake_an_accept_error_does_not_stop_the_daemon") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let data = sb.base().join("fd");
+    std::fs::create_dir_all(&data).unwrap();
+    let port = dead_port();
+    let mut c = sb.cmd("/bin/sh", &data);
+    c.args([
+        "-c",
+        "ulimit -n 64 && exec \"$0\" serve --api --port \"$1\" --data-dir \"$2\"",
+        bin().to_str().unwrap(),
+        &port.to_string(),
+        data.to_str().unwrap(),
+    ])
+    .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    let s = Server {
+        url: format!("http://127.0.0.1:{port}"),
+        token: API_TOKEN.to_string(),
+    };
+    let up = wait_for(Duration::from_secs(10), || {
+        std::net::TcpStream::connect(("127.0.0.1", port))
+            .ok()
+            .map(|_| ())
+    });
+    assert!(up.is_some(), "serve --api never listened");
+
+    // More connections than the daemon has descriptors: its accept() fails.
+    let idle: Vec<_> = (0..80)
+        .filter_map(|_| std::net::TcpStream::connect(("127.0.0.1", port)).ok())
+        .collect();
+    std::thread::sleep(Duration::from_millis(500));
+    drop(idle);
+
+    let exited = child.try_wait().unwrap();
+    let answered = wait_for(Duration::from_secs(10), || {
+        s.try_request(
+            "GET",
+            "/api/v1/graphs",
+            Some(&s.bearer()),
+            &[],
+            None,
+            Duration::from_secs(2),
+        )
+        .ok()
+        .filter(|r| r.status == 200)
+    });
+    let _ = child.kill();
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        exited.is_none(),
+        "serve --api exited ({exited:?}) after an accept error; stderr:\n{stderr}"
+    );
+    assert!(
+        answered.is_some(),
+        "serve --api stopped answering after an accept error; stderr:\n{stderr}"
+    );
+    // Whether accept() failed, or tiny_http panicked just after an accept,
+    // or the kernel kept the extra connections queued, depends on timing;
+    // what must hold in every case is the two assertions above. When it
+    // did fail, it says so.
+    if !stderr.is_empty() {
+        assert!(
+            stderr.contains("accepting again") || stderr.contains("Too many open files"),
+            "unexpected daemon stderr:\n{stderr}"
+        );
+    }
+}
+
 /// R14: `--token ""` did not fall back to DECIDUOUS_API_TOKEN, and a token
 /// of only whitespace started a daemon nobody could authenticate to.
 #[test]
