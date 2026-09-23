@@ -1734,6 +1734,49 @@ fn request_ids_survive_a_lone_surrogate_a_bom_and_trailing_bytes() {
     m.close();
 }
 
+/// A graph whose graph.json did not exist when the daemon opened it was
+/// never written to again, even after `deciduous sync` created the file.
+#[test]
+fn api_daemon_writes_to_a_graph_file_created_after_it_opened_the_graph() {
+    let p = Project::new();
+    let data = p.root().join("data");
+    let daemon = Daemon::start(&p, 4834, &data);
+    let (s, b) = http(4834, "PUT", "/api/v1/graphs/late", API_TOKEN, &json!({}));
+    assert_eq!(s, 201, "{b}");
+    let (s, b) = daemon.tool(
+        "late",
+        "add_node",
+        json!({"node_type":"goal","title":"before-sync","branch":"b"}),
+    );
+    assert_eq!(s, 200, "{b}");
+
+    let db = data.join("graphs/late/deciduous.db");
+    let out = p
+        .command(p.root())
+        .env("DECIDUOUS_DB_PATH", &db)
+        .args(["sync", "--no-pages"])
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let graph = db.with_file_name("graph.json");
+    assert!(graph.is_file());
+
+    let (s, b) = daemon.tool(
+        "late",
+        "add_node",
+        json!({"node_type":"goal","title":"after-sync","branch":"b"}),
+    );
+    assert_eq!(s, 200, "{b}");
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&graph).unwrap()).unwrap();
+    let rec = doc["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .find(|r| r["title"] == "after-sync")
+        .unwrap_or_else(|| panic!("after-sync never reached graph.json: {doc}"));
+    assert_eq!(rec["author"], "deciduous-api", "{rec}");
+}
+
 // ============================================================================
 // R4, again: the file checked is the file read
 // ============================================================================

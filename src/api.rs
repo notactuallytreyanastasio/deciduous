@@ -184,10 +184,9 @@ impl Registry {
         let db = Database::open_at(self.db_path(graph_id))
             .map_err(|e| ApiError::internal(&format!("open graph db: {e}")))?;
         // Records written through the API are attributed to the API, never
-        // to whoever `git config user.name` names in the daemon's cwd.
-        if let Some(store) = db.store() {
-            db.set_store(Some(store.with_author(API_AUTHOR)));
-        }
+        // to whoever `git config user.name` names in the daemon's cwd. Also
+        // for a graph.json that `deciduous sync` creates after this open.
+        db.set_store_author(API_AUTHOR);
         let db = Arc::new(db);
         open.insert(graph_id.to_string(), Arc::clone(&db));
         Ok((db, !on_disk))

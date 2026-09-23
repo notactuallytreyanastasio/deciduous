@@ -732,6 +732,14 @@ pub struct Database {
     /// Log of writes bound for the shared server, attached when the
     /// project has a `[remote]`. See [`crate::oplog`].
     oplog: std::sync::RwLock<Option<crate::oplog::OpLog>>,
+    /// Whether to attach the graph file next to the database once it
+    /// appears. A long-lived handle (the API daemon's per-graph cache, an
+    /// MCP server) that opened before `deciduous sync` created graph.json
+    /// otherwise never wrote to it: every record after that was missing
+    /// until someone ran sync again. `set_store(None)` turns it off.
+    auto_attach: std::sync::atomic::AtomicBool,
+    /// Author for a graph file attached later (see `set_store_author`).
+    store_author: std::sync::RwLock<Option<String>>,
 }
 
 /// Error type for database operations
@@ -825,11 +833,15 @@ impl Database {
                 .unwrap_or_else(|_| path.as_ref().to_path_buf()),
             store: std::sync::RwLock::new(None),
             oplog: std::sync::RwLock::new(None),
+            auto_attach: std::sync::atomic::AtomicBool::new(true),
+            store_author: std::sync::RwLock::new(None),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
-        db.set_store(RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open));
+        if let Some(store) = RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open) {
+            db.set_store(Some(store));
+        }
         db.set_oplog(crate::oplog::OpLog::for_db(path.as_ref()));
         Ok(db)
     }
@@ -1066,15 +1078,49 @@ impl Database {
     }
 
     /// Attach (or detach) the graph file that mutations are mirrored into.
+    /// Detaching also stops the graph file being attached when it appears.
     pub fn set_store(&self, store: Option<RecordStore>) {
+        self.auto_attach
+            .store(store.is_some(), std::sync::atomic::Ordering::SeqCst);
         if let Ok(mut slot) = self.store.write() {
             *slot = store;
         }
     }
 
-    /// The attached graph file, if sync is enabled for this database.
+    /// Attribute records in the graph file to `author`, including a graph
+    /// file that is only attached later. Setting it on the store alone was
+    /// lost when a store was attached after the fact.
+    pub fn set_store_author(&self, author: &str) {
+        if let Ok(mut a) = self.store_author.write() {
+            *a = Some(author.to_string());
+        }
+        if let Ok(mut slot) = self.store.write() {
+            if let Some(store) = slot.take() {
+                *slot = Some(store.with_author(author));
+            }
+        }
+    }
+
+    /// The attached graph file, if sync is enabled for this database. If
+    /// none is attached yet but one now exists next to the database, it is
+    /// attached here: one `stat` per write while there is none.
     pub fn store(&self) -> Option<RecordStore> {
-        self.store.read().ok().and_then(|s| s.clone())
+        if let Some(store) = self.store.read().ok().and_then(|s| s.clone()) {
+            return Some(store);
+        }
+        if !self.auto_attach.load(std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
+        let found = RecordStore::path_for_db(&self.path).and_then(RecordStore::open)?;
+        let mut slot = self.store.write().ok()?;
+        if slot.is_none() {
+            let author = self.store_author.read().ok().and_then(|a| a.clone());
+            *slot = Some(match author {
+                Some(a) => found.with_author(a),
+                None => found,
+            });
+        }
+        slot.clone()
     }
 
     // ------------------------------------------------------------------
