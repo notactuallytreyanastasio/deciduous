@@ -12,6 +12,12 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.6",
+        highlights: &[
+            "`init` and `update` ask where a project's graph lives (this machine via Docker, or a server someone else runs) when it has no [remote], instead of setting up a local server unasked; with no terminal they stop and name `remote setup --local` / `--url`",
+        ],
+    },
+    Release {
         version: "1.0.5",
         highlights: &[
             "`deciduous init` and `update` make sure the project points at a shared graph server that answers, and fail if it does not. With no remote configured, init sets up PostgreSQL and the server on this machine with Docker from the release's verified bundle, stores the token and registers it with Claude Code",
