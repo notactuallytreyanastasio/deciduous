@@ -20,16 +20,19 @@ defmodule DeciduousMcp.Test.McpHttp do
   @doc "POST a raw body to /mcp. Returns `{status, headers, body}`."
   def post(body, headers \\ []) do
     body = if is_binary(body), do: body, else: Jason.encode!(body)
+    request("POST", "/mcp", body, [{"content-type", "application/json"} | headers])
+  end
 
+  @doc "Any request to the listener, authenticated. Returns `{status, headers, body}`."
+  def request(method, path, body \\ nil, headers \\ []) do
     headers =
       [
         {"authorization", "Bearer " <> token()},
-        {"accept", "application/json, text/event-stream"},
-        {"content-type", "application/json"}
+        {"accept", "application/json, text/event-stream"}
       ] ++ headers
 
     {:ok, conn} = Mint.HTTP.connect(:http, "127.0.0.1", port(), mode: :passive)
-    {:ok, conn, ref} = Mint.HTTP.request(conn, "POST", "/mcp", headers, body)
+    {:ok, conn, ref} = Mint.HTTP.request(conn, method, path, headers, body)
     {status, resp_headers, resp_body} = receive_all(conn, ref, {nil, [], []})
     Mint.HTTP.close(conn)
     {status, Map.new(resp_headers), IO.iodata_to_binary(resp_body)}
@@ -81,8 +84,10 @@ defmodule DeciduousMcp.Test.McpHttp do
   end
 
   @doc """
-  Calls a tool. Returns `{:ok, decoded_result}`, `{:tool_error, text}` for an
-  isError result, or `{:rpc_error, error_map}` for a JSON-RPC error.
+  Calls a tool. Returns `{:ok, decoded_result}`; `{:tool_error, message}`
+  when the tool refused (this server answers a tool's own error as JSON-RPC
+  -32000 "execution error", and an isError result is treated the same); or
+  `{:rpc_error, error_map}` for any other JSON-RPC error.
   """
   def call(sid, tool, args, headers \\ [], id \\ 1) do
     {_status, _h, body} =
@@ -92,6 +97,10 @@ defmodule DeciduousMcp.Test.McpHttp do
       )
 
     case decode(body) do
+      %{"error" => %{"code" => -32000, "message" => message} = error}
+      when not is_map_key(error, "data") ->
+        {:tool_error, message}
+
       %{"error" => error} ->
         {:rpc_error, error}
 

@@ -13,12 +13,16 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
     * nothing — the workspace comes from each tool's `workspace` argument
       instead, resolved in `DeciduousMcp.MCP.Scope`.
 
-  This plug only handles the first case. It assigns `:pinned_workspace_id`,
-  which `Hermes.Server.Frame` inherits from `Plug.Conn.assigns` on HTTP
-  transports, so every tool sees it without the tools knowing about HTTP.
+  This plug only handles the first case. It assigns `:pinned_workspace_name`
+  and, when that workspace already exists, `:pinned_workspace_id`, which
+  `Hermes.Server.Frame` inherits from `Plug.Conn.assigns` on HTTP transports,
+  so every tool sees them without the tools knowing about HTTP.
 
-  An unknown workspace name is created rather than rejected: a new repo should
-  start logging on its first call, not fail until someone provisions it.
+  An unknown workspace name is not rejected, and not created here either: a
+  new repo should start logging on its first call, not fail until someone
+  provisions it, so `DeciduousMcp.MCP.Scope` creates it on the first write.
+  Creating it here made every connect a write, and 30 connects at once to a
+  new name raced on the unique index (23 of them got an empty HTTP 500).
   """
   @behaviour Plug
 
@@ -37,10 +41,15 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
       [raw | _] ->
         case Workspaces.normalize_name(raw) do
           {:ok, name} ->
-            case Workspaces.find_or_create(name) do
-              {:ok, workspace} -> assign(conn, :pinned_workspace_id, workspace.id)
-              {:error, _} -> unavailable(conn, name)
-            end
+            id =
+              case Workspaces.get_by_name(name) do
+                {:ok, workspace} -> workspace.id
+                {:error, :not_found} -> nil
+              end
+
+            conn
+            |> assign(:pinned_workspace_id, id)
+            |> assign(:pinned_workspace_name, name)
 
           {:error, reason} ->
             reject(conn, raw, reason)
@@ -55,17 +64,10 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
       # got epstein's nodes. Writing nil here overwrites the leaked pin on
       # every request that does not carry the header.
       [] ->
-        assign(conn, :pinned_workspace_id, nil)
+        conn
+        |> assign(:pinned_workspace_id, nil)
+        |> assign(:pinned_workspace_name, nil)
     end
-  end
-
-  # A match here used to be `{:ok, workspace} = ...`, and any failure became
-  # Bandit's empty 500. Say what failed instead.
-  defp unavailable(conn, name) do
-    conn
-    |> put_resp_content_type("application/json")
-    |> send_resp(503, Jason.encode!(%{error: "could not resolve workspace", value: name}))
-    |> halt()
   end
 
   defp reject(conn, raw, reason) do

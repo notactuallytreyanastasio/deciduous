@@ -128,6 +128,12 @@ defmodule DeciduousMcp.Graph.Workspaces do
       String.contains?(trimmed, ["/", "\\"]) ->
         {:error, :looks_like_a_path}
 
+      # NUL reached Postgres and came back as a Postgrex struct with a stack
+      # trace; a right-to-left override made a workspace whose name displays
+      # as a different one. Neither is ever part of a repo's basename.
+      String.match?(trimmed, ~r/[\p{Cc}\p{Cf}]/u) ->
+        {:error, :control_character}
+
       String.length(trimmed) > @max_name_length ->
         {:error, :too_long}
 
@@ -137,4 +143,18 @@ defmodule DeciduousMcp.Graph.Workspaces do
   end
 
   def normalize_name(_), do: {:error, :not_a_string}
+
+  @doc "One sentence for a `normalize_name/1` refusal, naming the input."
+  def describe_name_error(raw, reason) do
+    why =
+      case reason do
+        :blank -> "is blank"
+        :looks_like_a_path -> "looks like a path; pass the repo root's basename"
+        :too_long -> "is longer than #{@max_name_length} characters"
+        :control_character -> "contains a control or formatting character"
+        :not_a_string -> "is not a string"
+      end
+
+    "invalid workspace name #{inspect(raw, binaries: :as_strings)}: it #{why}"
+  end
 end

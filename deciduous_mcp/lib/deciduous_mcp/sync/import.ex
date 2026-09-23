@@ -45,7 +45,8 @@ defmodule DeciduousMcp.Sync.Import do
   def run(payload, opts \\ [])
 
   def run(%{"graph" => graph} = payload, opts) when is_map(graph) do
-    with {:ok, workspace} <- target_workspace(payload["workspace"], opts[:pinned_workspace_id]),
+    with {:ok, workspace} <-
+           target_workspace(payload["workspace"], opts[:pinned_workspace_id], opts[:pinned_workspace_name]),
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []) do
       Repo.transaction(
         fn ->
@@ -71,9 +72,22 @@ defmodule DeciduousMcp.Sync.Import do
   def run(_, _), do: {:error, "payload must contain a \"graph\" object"}
 
   # Unpinned: the body names the workspace, as it always has.
-  defp target_workspace(name, nil) do
+  defp target_workspace(name, nil, nil) do
     with {:ok, name} <- Workspaces.normalize_name(name || "") do
       Workspaces.find_or_create(name)
+    end
+  end
+
+  # Pinned to a name nothing has been written to yet. The plug no longer
+  # creates the pinned workspace, so it hands over a name and no id; read as
+  # "no id, so no pin", this let a client pinned to a new name import into
+  # any workspace its body named.
+  defp target_workspace(name, nil, pinned_name) do
+    case name && Workspaces.normalize_name(name) do
+      nil -> Workspaces.find_or_create(pinned_name)
+      {:ok, same} when same == pinned_name -> Workspaces.find_or_create(pinned_name)
+      {:ok, other} -> {:error, {:pinned, pinned_refusal(pinned_name, other)}}
+      {:error, _} = err -> err
     end
   end
 
@@ -82,7 +96,7 @@ defmodule DeciduousMcp.Sync.Import do
   # into the pin would report success for a push the sender meant for
   # somewhere else; the MCP tools can ignore their workspace argument
   # because it is a default, but this one names where every row goes.
-  defp target_workspace(name, pinned_id) do
+  defp target_workspace(name, pinned_id, _pinned_name) do
     {:ok, pinned} = Workspaces.get_workspace(pinned_id)
 
     case name && Workspaces.normalize_name(name) do
@@ -93,14 +107,16 @@ defmodule DeciduousMcp.Sync.Import do
         {:ok, pinned}
 
       {:ok, other} ->
-        {:error,
-         {:pinned,
-          "this client is pinned to workspace \"#{pinned.name}\" by " <>
-            "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."}}
+        {:error, {:pinned, pinned_refusal(pinned.name, other)}}
 
       {:error, _} = err ->
         err
     end
+  end
+
+  defp pinned_refusal(pinned, other) do
+    "this client is pinned to workspace \"#{pinned}\" by " <>
+      "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."
   end
 
   @doc """

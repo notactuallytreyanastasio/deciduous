@@ -30,9 +30,10 @@ defmodule DeciduousMcp.MCP.Tools.ListWorkspaces do
     # project's name and size, which is exactly the neighbour-reading a pin
     # exists to rule out.
     workspaces =
-      case Scope.pinned_workspace_id(frame) do
+      case Scope.pin_status(frame) do
         nil -> Workspaces.list_with_counts()
-        pinned -> Enum.filter(Workspaces.list_with_counts(), &(&1.id == pinned))
+        {:ok, pinned} -> Enum.filter(Workspaces.list_with_counts(), &(&1.id == pinned))
+        :absent -> []
       end
 
     result = %{
