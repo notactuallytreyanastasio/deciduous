@@ -204,46 +204,17 @@ while read local_ref local_sha remote_ref remote_sha; do
         fi
 
         echo ""
-        echo "6/6 Syncing decision graph for GitHub Pages..."
-        # Run deciduous sync to update docs/graph-data.json
+        echo "6/6 Checking the decision graph file is committed..."
         if command -v deciduous &> /dev/null; then
             deciduous sync > /dev/null 2>&1 || true
 
-            # Graph records are how teammates receive decisions; pushing without them is a silent loss
-            if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- .deciduous/sync 2>/dev/null)" ]; then
+            # The graph file is how teammates receive decisions; pushing without it is a silent loss
+            if [ -n "$(git -C "$REPO_ROOT" status --porcelain -- .deciduous/graph.json 2>/dev/null)" ]; then
                 echo ""
-                echo "WARNING: .deciduous/sync/ has uncommitted graph records."
-                echo "  git add .deciduous/sync && git commit -m 'graph: sync records'"
+                echo "WARNING: .deciduous/graph.json has uncommitted graph records."
+                echo "  git add .deciduous/graph.json && git commit -m 'graph: sync records'"
             fi
-
-            # Check if graph files have uncommitted changes
-            GRAPH_FILES="docs/graph-data.json docs/demo/graph-data.json docs/git-history.json docs/demo/git-history.json"
-            CHANGED_FILES=""
-            for f in $GRAPH_FILES; do
-                if [ -f "$REPO_ROOT/$f" ] && ! git diff --quiet "$REPO_ROOT/$f" 2>/dev/null; then
-                    CHANGED_FILES="$CHANGED_FILES $f"
-                fi
-            done
-
-            if [ -n "$CHANGED_FILES" ]; then
-                echo ""
-                echo "WARNING: Decision graph files have uncommitted changes after sync:"
-                for f in $CHANGED_FILES; do
-                    echo "  - $f"
-                done
-                echo ""
-                echo "GitHub Pages will show stale data without these changes."
-                echo ""
-                echo "To fix, run:"
-                echo "  git add docs/graph-data.json docs/demo/graph-data.json docs/git-history.json docs/demo/git-history.json"
-                echo "  git commit --amend --no-edit"
-                echo ""
-                echo "Or to push anyway (not recommended):"
-                echo "  git push --no-verify"
-                echo ""
-                exit 1
-            fi
-            echo "✓ Decision graph is synced for GitHub Pages"
+            echo "✓ Decision graph checked"
         else
             echo "⚠ deciduous not found, skipping graph sync check"
         fi

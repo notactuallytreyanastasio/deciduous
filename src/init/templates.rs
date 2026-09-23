@@ -2,9 +2,6 @@
 //!
 //! All templates embedded at compile time for project initialization.
 
-/// Static HTML viewer for GitHub Pages (embedded at compile time)
-pub const PAGES_VIEWER_HTML: &str = include_str!("../pages_viewer.html");
-
 /// Default configuration file content
 pub const DEFAULT_CONFIG: &str = r#"# Deciduous Configuration
 # This file controls branch detection and grouping behavior
@@ -21,116 +18,6 @@ auto_detect = true
 [updates]
 # Version checking is always-on (once per 24h, non-blocking)
 # Patch updates show a quiet one-liner; minor/major updates show a prominent banner
-"#;
-
-/// GitHub Pages deploy workflow (deploys to gh-pages branch, safe for project repos)
-pub const DEPLOY_PAGES_WORKFLOW: &str = r#"name: Deploy Decision Graph to Pages
-
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'docs/**'
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs
-          publish_branch: gh-pages
-          force_orphan: true
-"#;
-
-/// Cleanup workflow for PR graph assets
-pub const CLEANUP_WORKFLOW: &str = r#"name: Cleanup Decision Graph PNGs
-
-on:
-  pull_request:
-    types: [closed]
-
-jobs:
-  cleanup:
-    # Only run if PR was merged (not just closed)
-    if: github.event.pull_request.merged == true
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Find and remove decision graph PNGs
-        id: find-pngs
-        run: |
-          # Find decision graph PNGs (in docs/ or root)
-          PNGS=$(find . -name "decision-graph*.png" -o -name "deciduous-graph*.png" 2>/dev/null | grep -v node_modules || true)
-
-          if [ -z "$PNGS" ]; then
-            echo "No decision graph PNGs found"
-            echo "found=false" >> $GITHUB_OUTPUT
-          else
-            echo "Found PNGs to clean up:"
-            echo "$PNGS"
-            echo "found=true" >> $GITHUB_OUTPUT
-
-            # Remove the files
-            echo "$PNGS" | xargs rm -f
-
-            # Also remove corresponding .dot files
-            for png in $PNGS; do
-              dot_file="${png%.png}.dot"
-              if [ -f "$dot_file" ]; then
-                rm -f "$dot_file"
-                echo "Also removed: $dot_file"
-              fi
-            done
-          fi
-
-      - name: Create cleanup PR
-        if: steps.find-pngs.outputs.found == 'true'
-        run: |
-          # Check if there are changes to commit
-          if git diff --quiet && git diff --staged --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-
-          # Configure git
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create branch and commit
-          BRANCH="cleanup/decision-graphs-pr-${{ github.event.pull_request.number }}"
-          git checkout -b "$BRANCH"
-          git add -A
-          git commit -m "chore: cleanup decision graph assets from PR #${{ github.event.pull_request.number }}"
-          git push origin "$BRANCH"
-
-          # Create and auto-merge PR
-          gh pr create \
-            --title "chore: cleanup decision graph assets from PR #${{ github.event.pull_request.number }}" \
-            --body "Automated cleanup of decision graph PNG/DOT files that were used in PR #${{ github.event.pull_request.number }}.
-
-          These files served their purpose for PR review and are no longer needed." \
-            --head "$BRANCH" \
-            --base main
-
-          # Auto-merge (requires auto-merge enabled on repo)
-          gh pr merge "$BRANCH" --auto --squash --delete-branch || echo "Auto-merge not enabled, PR created for manual merge"
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 "#;
 
 /// Claude Code decision.md slash command template
@@ -305,10 +192,9 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
-### Sync (teammates + GitHub Pages)
-- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways, then export `docs/graph-data.json`)
+### Sync (teammates)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways)
 - `sync --check` -> report pending changes without writing (exit 1 if any)
-- `sync --no-pages` -> reconcile only, skip the Pages export
 - Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
 
 ### Export & Visualization
@@ -426,7 +312,7 @@ deciduous nodes                          # 57   a1b2c3d4  goal  ...  (a1b2c3d4 i
 deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
+**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way.
 
 **Upgrading from 0.17 or earlier:** `deciduous sync` folds `.deciduous/sync/` (0.17's per-record files) and, before that, `.deciduous/sync/events/` with `checkpoint.json` into `.deciduous/graph.json` once, then removes them (only if everything parsed). `git rm -r` them afterwards.
 
@@ -612,7 +498,7 @@ SESSION END -> Final audit
 Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
 
 ```bash
-deciduous sync            # import their records, export yours, refresh docs/graph-data.json
+deciduous sync            # import their records, export yours
 deciduous sync --check    # just report what is pending
 ```
 
@@ -644,7 +530,6 @@ pub const CLAUDE_MD_SECTION: &str = r#"
 | `/document` | Generate comprehensive documentation for a file or directory |
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
-| `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history |
 | `/sync` | Multi-user sync - pull events, rebuild, push |
 
@@ -815,7 +700,7 @@ deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live (auto-refreshes every 30s)
-deciduous sync    # Export for static hosting
+deciduous sync    # Reconcile .deciduous/graph.json with teammates
 
 # Metadata flags
 # -c, --confidence 0-100   Confidence level
@@ -841,24 +726,6 @@ deciduous link <goal_id> <action_id> -r "Implementation"
 ```
 
 The `--commit HEAD` flag captures the commit hash and links it to the node. The web viewer will show commit messages, authors, and dates.
-
-### Git History & Deployment
-
-```bash
-# Export graph AND git history for web viewer
-deciduous sync
-
-# This creates:
-# - docs/graph-data.json (decision graph)
-# - docs/git-history.json (commit info for linked nodes)
-```
-
-To deploy to GitHub Pages:
-1. `deciduous sync` to export
-2. Push to GitHub
-3. Settings > Pages > Deploy from branch > /docs folder
-
-Your graph will be live at `https://<user>.github.io/<repo>/`
 
 ### Branch-Based Grouping
 
@@ -1286,30 +1153,7 @@ Launch the deciduous web server for viewing and navigating the decision graph.
   - Connected nodes (incoming/outgoing edges)
   - Timestamps and status
 
-## Alternative: Static Hosting
-
-For GitHub Pages or other static hosting:
-```bash
-deciduous sync  # Exports to docs/graph-data.json
-```
-
-Then push to GitHub - the graph is viewable at your GitHub Pages URL.
-
 $ARGUMENTS
-"#;
-
-/// Claude Code sync-graph.md slash command template
-pub const SYNC_GRAPH_MD: &str = r#"# Sync Decision Graph to GitHub Pages
-
-Export the current decision graph to docs/graph-data.json so it's deployed to GitHub Pages.
-
-## Steps
-
-1. Run `deciduous sync` to export the graph
-2. Show the user how many nodes/edges were exported
-3. If there are changes, stage them: `git add docs/graph-data.json`
-
-This should be run before any push to main to ensure the live site has the latest decisions.
 "#;
 
 /// Claude Code decision-graph.md slash command template
@@ -1737,7 +1581,6 @@ This does, in order:
 2. Imports the pre-0.17 JSONL event log / checkpoint if present, then removes them
 3. Imports records you do not have (teammates' nodes get *local* ids here)
 4. Exports database rows that have no record yet
-5. Regenerates `docs/graph-data.json` for GitHub Pages
 
 Read the summary. "Pending" edges are waiting for a node that has not been pulled yet; they import on a later sync.
 
@@ -1753,7 +1596,7 @@ deciduous link a1b2c3d4 42 -r "our action implements their goal"
 ## Step 4: Commit and push
 
 ```bash
-git add .deciduous/graph.json docs/graph-data.json docs/git-history.json
+git add .deciduous/graph.json
 git commit -m "graph: <what was decided>"
 git push
 ```
@@ -1763,7 +1606,6 @@ git push
 ## Merge conflicts
 
 - **`.deciduous/graph.json`**: two people changed the graph. Normally git merges it record by record through the `deciduous` merge driver (registered by `deciduous sync`), so you never see this. If a merge was done without the driver and the file has `<<<<<<<` markers, just run `deciduous sync`: it merges the sides the same way and imports the result.
-- **`docs/graph-data.json`**: never hand-merge it. Take either side and run `deciduous sync` to regenerate.
 
 ## Troubleshooting
 
@@ -2345,7 +2187,7 @@ deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"  # DO THIS IMMEDIATELY!
 deciduous serve   # View live
-deciduous sync    # Export for static hosting
+deciduous sync    # Reconcile .deciduous/graph.json with teammates
 
 # Metadata flags
 # -c, --confidence 0-100   Confidence level
@@ -2544,4 +2386,87 @@ work around the check or start sessions another way.
 
 This is a demonstration, not work on this project: log nothing to the graph
 for it.
+"#;
+
+/// GitHub Actions workflow that removes the PR decision-graph images
+/// (`dot --auto`, `writeup --png`) once their PR is merged.
+pub const CLEANUP_WORKFLOW: &str = r#"name: Cleanup Decision Graph PNGs
+
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  cleanup:
+    # Only run if PR was merged (not just closed)
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Find and remove decision graph PNGs
+        id: find-pngs
+        run: |
+          # Find decision graph PNGs (in docs/ or root)
+          PNGS=$(find . -name "decision-graph*.png" -o -name "deciduous-graph*.png" 2>/dev/null | grep -v node_modules || true)
+
+          if [ -z "$PNGS" ]; then
+            echo "No decision graph PNGs found"
+            echo "found=false" >> $GITHUB_OUTPUT
+          else
+            echo "Found PNGs to clean up:"
+            echo "$PNGS"
+            echo "found=true" >> $GITHUB_OUTPUT
+
+            # Remove the files
+            echo "$PNGS" | xargs rm -f
+
+            # Also remove corresponding .dot files
+            for png in $PNGS; do
+              dot_file="${png%.png}.dot"
+              if [ -f "$dot_file" ]; then
+                rm -f "$dot_file"
+                echo "Also removed: $dot_file"
+              fi
+            done
+          fi
+
+      - name: Create cleanup PR
+        if: steps.find-pngs.outputs.found == 'true'
+        run: |
+          # Check if there are changes to commit
+          if git diff --quiet && git diff --staged --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Create branch and commit
+          BRANCH="cleanup/decision-graphs-pr-${{ github.event.pull_request.number }}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: cleanup decision graph assets from PR #${{ github.event.pull_request.number }}"
+          git push origin "$BRANCH"
+
+          # Create and auto-merge PR
+          gh pr create \
+            --title "chore: cleanup decision graph assets from PR #${{ github.event.pull_request.number }}" \
+            --body "Automated cleanup of decision graph PNG/DOT files that were used in PR #${{ github.event.pull_request.number }}.
+
+          These files served their purpose for PR review and are no longer needed." \
+            --head "$BRANCH" \
+            --base main
+
+          # Auto-merge (requires auto-merge enabled on repo)
+          gh pr merge "$BRANCH" --auto --squash --delete-branch || echo "Auto-merge not enabled, PR created for manual merge"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 "#;

@@ -246,15 +246,15 @@ enum Command {
     },
 
     /// Sync the decision graph: reconcile .deciduous/graph.json with the
-    /// local database (both directions), then export docs/graph-data.json
+    /// local database, in both directions
     ///
     /// Run it after `git pull` to receive teammates' decisions and before
     /// `git push` to make sure yours are written out. The graph file is
     /// created on first run; the pre-0.17 JSONL event log is imported and
     /// removed automatically.
     Sync {
-        /// Path for the GitHub Pages export (default: docs/graph-data.json)
-        #[arg(short, long)]
+        /// Removed in 1.0.5 with the GitHub Pages export; accepted and ignored
+        #[arg(short, long, hide = true)]
         output: Option<PathBuf>,
 
         /// Report what would change without writing anything.
@@ -262,8 +262,8 @@ enum Command {
         #[arg(long)]
         check: bool,
 
-        /// Skip the docs/graph-data.json (GitHub Pages) export
-        #[arg(long)]
+        /// Removed in 1.0.5 with the GitHub Pages export; accepted and ignored
+        #[arg(long, hide = true)]
         no_pages: bool,
     },
 
@@ -2382,11 +2382,7 @@ fn main() {
             }
         }
 
-        Command::Sync {
-            output,
-            check,
-            no_pages,
-        } => {
+        Command::Sync { check, .. } => {
             let Some(store_path) = RecordStore::path_for_db(&Database::db_path()) else {
                 eprintln!(
                     "{} The database path has no directory of its own, so there is nowhere to keep the graph file. Set DECIDUOUS_DB_PATH to a path inside a directory.",
@@ -2488,10 +2484,6 @@ fn main() {
                     store_path.display()
                 );
                 std::process::exit(1);
-            }
-
-            if !no_pages {
-                export_pages(&db, output);
             }
         }
 
@@ -4908,109 +4900,6 @@ fn keyword_match_score(node_title: &str, commit_message: &str) -> f64 {
 }
 
 // =============================================================================
-// Git history export helpers
-// =============================================================================
-
-/// Git commit info for timeline view (matches web/src/types/graph.ts GitCommit)
-#[derive(serde::Serialize)]
-struct GitCommit {
-    hash: String,
-    short_hash: String,
-    author: String,
-    date: String,
-    message: String,
-    files_changed: Option<u32>,
-}
-
-/// Extract all unique commit hashes from nodes' metadata_json
-fn extract_commit_hashes(nodes: &[deciduous::DecisionNode]) -> Vec<String> {
-    let mut hashes = std::collections::HashSet::new();
-    for node in nodes {
-        if let Some(ref meta_json) = node.metadata_json {
-            if let Ok(meta) = serde_json::from_str::<serde_json::Value>(meta_json) {
-                if let Some(commit) = meta.get("commit").and_then(|c| c.as_str()) {
-                    if !commit.is_empty() {
-                        hashes.insert(commit.to_string());
-                    }
-                }
-            }
-        }
-    }
-    hashes.into_iter().collect()
-}
-
-/// Get commit info from git for a given hash
-fn get_git_commit_info(hash: &str) -> Option<GitCommit> {
-    // Get commit info: hash, author, date (ISO), full message body
-    // Use %x00 (null byte) as separator since message can have newlines
-    let output = ProcessCommand::new("git")
-        .args(["log", "-1", "--format=%H%x00%an%x00%aI%x00%B", hash])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = stdout.trim().split('\x00').collect();
-    if parts.len() < 4 {
-        return None;
-    }
-
-    // Clean up the message - trim whitespace
-    let message = parts[3].trim().to_string();
-
-    // Get files changed count
-    let files_output = ProcessCommand::new("git")
-        .args(["diff-tree", "--no-commit-id", "--name-only", "-r", hash])
-        .output()
-        .ok();
-
-    let files_changed = files_output.and_then(|o| {
-        if o.status.success() {
-            let count = String::from_utf8_lossy(&o.stdout).trim().lines().count();
-            Some(count as u32)
-        } else {
-            None
-        }
-    });
-
-    Some(GitCommit {
-        hash: parts[0].to_string(),
-        short_hash: parts[0].chars().take(7).collect(),
-        author: parts[1].to_string(),
-        date: parts[2].to_string(),
-        message,
-        files_changed,
-    })
-}
-
-/// Generate git-history.json for all commits linked to nodes
-fn export_git_history(
-    nodes: &[deciduous::DecisionNode],
-    output_dir: &std::path::Path,
-) -> Result<usize, Box<dyn std::error::Error>> {
-    let hashes = extract_commit_hashes(nodes);
-    let mut commits: Vec<GitCommit> = Vec::new();
-
-    for hash in &hashes {
-        if let Some(commit) = get_git_commit_info(hash) {
-            commits.push(commit);
-        }
-    }
-
-    // Sort by date (newest first)
-    commits.sort_by(|a, b| b.date.cmp(&a.date));
-
-    let json = serde_json::to_string_pretty(&commits)?;
-    let output_path = output_dir.join("git-history.json");
-    std::fs::write(&output_path, &json)?;
-
-    Ok(commits.len())
-}
-
-// =============================================================================
 // Tests
 // =============================================================================
 
@@ -5151,115 +5040,6 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
         );
         for e in &report.read_errors {
             println!("    {}", e);
-        }
-    }
-}
-
-/// Export the graph (and linked git history) for the GitHub Pages viewer.
-fn export_pages(db: &Database, output: Option<PathBuf>) {
-    // Default to docs/ for GitHub Pages compatibility
-    let output_path = output.unwrap_or_else(|| PathBuf::from("docs/graph-data.json"));
-
-    // Create parent directories if needed
-    if let Some(parent) = output_path.parent() {
-        std::fs::create_dir_all(parent).ok();
-    }
-
-    // Load config and include it in export (for external repo support, etc.)
-    let config = Config::load();
-    let include_config = config.github.commit_repo.is_some();
-
-    match db.get_graph_with_config(if include_config { Some(config) } else { None }) {
-        Ok(graph) => {
-            match serde_json::to_string_pretty(&graph) {
-                Ok(json) => {
-                    match std::fs::write(&output_path, &json) {
-                        Ok(()) => {
-                            println!("{} graph to {}", "Exported".green(), output_path.display());
-                            println!("  {} nodes, {} edges", graph.nodes.len(), graph.edges.len());
-
-                            // Also sync to docs/demo/ if it exists (for GitHub Pages demo)
-                            let demo_path = PathBuf::from("docs/demo/graph-data.json");
-                            if demo_path.parent().map(|p| p.exists()).unwrap_or(false) {
-                                if let Err(e) = std::fs::write(&demo_path, &json) {
-                                    eprintln!(
-                                        "{} Also writing to demo/: {}",
-                                        "Warning:".yellow(),
-                                        e
-                                    );
-                                }
-                            }
-
-                            // Export git history for linked commits
-                            // Skip when external repo is configured (commits won't be in local git)
-                            if !include_config {
-                                if let Some(output_dir) = output_path.parent() {
-                                    match export_git_history(&graph.nodes, output_dir) {
-                                        Ok(count) => {
-                                            if count > 0 {
-                                                println!(
-                                                    "{} git-history.json ({} commits)",
-                                                    "Exported".green(),
-                                                    count
-                                                );
-                                            }
-                                            // Also sync to docs/demo/ if it exists
-                                            let demo_dir = PathBuf::from("docs/demo");
-                                            if demo_dir.exists() {
-                                                if let Err(e) =
-                                                    export_git_history(&graph.nodes, &demo_dir)
-                                                {
-                                                    eprintln!(
-                                                        "{} Also writing git history to demo/: {}",
-                                                        "Warning:".yellow(),
-                                                        e
-                                                    );
-                                                }
-                                            }
-                                        }
-                                        Err(e) => {
-                                            // Non-fatal: git history is optional
-                                            eprintln!(
-                                                "{} Exporting git history: {}",
-                                                "Warning:".yellow(),
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                            } else {
-                                // External repo mode: preserve existing git-history.json
-                                if let Some(output_dir) = output_path.parent() {
-                                    let git_history_path = output_dir.join("git-history.json");
-                                    if git_history_path.exists() {
-                                        println!(
-                                            "{} git-history.json (external repo mode - manually managed)",
-                                            "Preserved".cyan()
-                                        );
-                                    } else {
-                                        println!(
-                                            "{} Create docs/git-history.json manually for external repo commits",
-                                            "Note:".yellow()
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("{} Writing file: {}", "Error:".red(), e);
-                            std::process::exit(1);
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("{} Serializing graph: {}", "Error:".red(), e);
-                    std::process::exit(1);
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
         }
     }
 }

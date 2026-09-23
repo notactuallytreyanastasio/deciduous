@@ -9,9 +9,9 @@
 
 ## See It In Action
 
-**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 1,100+ decisions from building deciduous itself
+**[Browse the Live Decision Graph](https://deciduous.dev/demo/)** — 1,100+ decisions from building deciduous itself
 
-**[Interactive Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** — Learn the workflow in 15 minutes
+**[Interactive Tutorial](https://deciduous.dev/tutorial/)** — Learn the workflow in 15 minutes
 
 **[Watch the Demo](https://asciinema.org/a/761574)** — Full session walkthrough
 
@@ -50,7 +50,7 @@ This isn't documentation written after the fact. It's a real-time record of *how
 
 Ten Claude Code sessions, started at the same second in ten git worktrees of one repository, each building a Tetris from nothing, all logging to one shared deciduous workspace and told to read each other's code and reasoning. Twenty-six minutes later: ten playable games, 386 graph nodes, 170 borrowed ideas with provenance. One finding (some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at the ceiling) reached eight of the nine other branches in eighteen minutes (agent-1 started with a forty-row board and never needed it), and two of the agents that took it used it to find the same silent bug in their own `merge()`.
 
-**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://notactuallytreyanastasio.github.io/deciduous/remote.html#alongside)**
+**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://deciduous.dev/remote.html#alongside)**
 
 What made it work is one server, reachable over MCP from every directory, with the branch as the unit of coordination:
 
@@ -97,6 +97,10 @@ the first build). It stores the token in `~/.config/deciduous/credentials`
 (mode 0600), and registers the server with Claude Code. Every later project on
 the machine finds the running server in about a second. Commit the project
 files (by path, not `git add -A`) so every clone gets them.
+
+To choose interactively instead, run `deciduous remote setup`. It asks whether
+the graph lives on this machine or on a server someone else runs, then does the
+rest (`--local` or `--url <url>` answer the question in a script).
 
 **2b. Or point the project at a team's server** before running `init`:
 
@@ -276,7 +280,7 @@ deciduous init --both --windsurf   # All three
 
 ### MCP Server
 
-Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph. The [shared graph server](https://notactuallytreyanastasio.github.io/deciduous/remote.html) is a second endpoint, over HTTP, with 18 tools of its own and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
+Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph. The [shared graph server](https://deciduous.dev/remote.html) is a second endpoint, over HTTP, with 18 tools of its own and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
 
 > **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
 
@@ -370,7 +374,7 @@ deciduous add outcome "Rate limiting working in prod" -c 95
 deciduous link 5 6 -r "Implementation complete"
 
 # Share it: .deciduous/graph.json is written as you go;
-# sync imports teammates' records and refreshes docs/graph-data.json
+# sync imports teammates' records into the local database
 deciduous sync
 ```
 
@@ -616,7 +620,7 @@ The `update` command auto-detects which assistants are installed and updates the
 
 | Files | What's Updated |
 |-------|----------------|
-| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/sync-graph`, `/decision-graph`, `/sync`) |
+| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/decision-graph`, `/sync`) |
 | `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
 | `.claude/hooks/version-check.sh` | Once-a-day update check (the logging hooks earlier versions installed are removed) |
 | `.claude/agents.toml` | Subagent configurations |
@@ -803,4 +807,4 @@ It almost has the word "decision" in it, and they're trees.
 
 ---
 
-**[Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** · **[Live Demo](https://notactuallytreyanastasio.github.io/deciduous/demo/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**
+**[Tutorial](https://deciduous.dev/tutorial/)** · **[Live Demo](https://deciduous.dev/demo/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**

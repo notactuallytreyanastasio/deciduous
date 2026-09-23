@@ -397,7 +397,7 @@ SESSION END -> Final audit
 Teammates' decisions arrive in `.deciduous/graph.json`. After `git pull`, pull them into your database:
 
 ```bash
-deciduous sync            # import their records, export yours, refresh docs/graph-data.json
+deciduous sync            # import their records, export yours
 deciduous sync --check    # just report what is pending
 ```
 
@@ -568,10 +568,9 @@ The graph viewer shows a branch dropdown in the stats bar:
 - `doc detach <id>` -> `deciduous doc detach <id>` (soft-delete)
 - `doc gc` -> `deciduous doc gc` (garbage-collect orphaned files)
 
-### Sync (teammates + GitHub Pages)
-- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways, then export `docs/graph-data.json`)
+### Sync (teammates)
+- `sync` -> `deciduous sync` (reconcile `.deciduous/graph.json` with the local DB both ways)
 - `sync --check` -> report pending changes without writing (exit 1 if any)
-- `sync --no-pages` -> reconcile only, skip the Pages export
 - Node references: every command that takes a node id also takes a `change_id` prefix (the CHANGE column in `deciduous nodes`). Use the prefix to point at a teammate's node, since local ids differ per machine.
 
 ### Export & Visualization
@@ -686,7 +685,7 @@ git push
 deciduous link a1b2c3d4 58 -r "builds on their goal"
 ```
 
-**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way. Never hand-merge `docs/graph-data.json`; rerun `deciduous sync` to regenerate it.
+**Two people edited the graph?** Git hands both versions to the `deciduous` merge driver (`deciduous sync` registers it in each clone), which merges them record by record: additions from both sides survive, and one record both sides changed merges field by field. If the file still shows `<<<<<<<` markers, run `deciduous sync`; it merges them the same way.
 
 ## The Rule
 
@@ -781,34 +780,6 @@ Launch the deciduous web server for viewing and navigating the decision graph.
   - Connected nodes (incoming/outgoing edges)
   - Timestamps and status
   - Attached documents
-
-## Alternative: Static Hosting
-
-For GitHub Pages or other static hosting:
-```bash
-deciduous sync  # Exports to docs/graph-data.json
-```
-
-Then push to GitHub - the graph is viewable at your GitHub Pages URL.
-"#;
-
-/// OpenCode command template: /sync-graph
-pub const COMMAND_SYNC_GRAPH: &str = r#"---
-description: Sync the decision graph to GitHub Pages
-arguments: []
----
-
-# Sync Decision Graph to GitHub Pages
-
-Export the current decision graph to docs/graph-data.json so it's deployed to GitHub Pages.
-
-## Steps
-
-1. Run `deciduous sync` to export the graph
-2. Show the user how many nodes/edges were exported
-3. If there are changes, stage them: `git add docs/graph-data.json`
-
-This should be run before any push to main to ensure the live site has the latest decisions.
 "#;
 
 /// OpenCode command template: /document
@@ -1144,7 +1115,7 @@ git pull --rebase
 deciduous sync
 ```
 
-This creates `.deciduous/graph.json` if needed, folds in a 0.17 `.deciduous/sync/` directory or a pre-0.17 JSONL event log once, imports records you do not have (teammates' nodes get *local* ids here), exports database rows that have no record yet, and regenerates `docs/graph-data.json`. "Pending" edges are waiting for a node that has not been pulled yet.
+This creates `.deciduous/graph.json` if needed, folds in a 0.17 `.deciduous/sync/` directory or a pre-0.17 JSONL event log once, imports records you do not have (teammates' nodes get *local* ids here), and exports database rows that have no record yet. "Pending" edges are waiting for a node that has not been pulled yet.
 
 ## Step 3: Link across users if needed
 
@@ -1158,7 +1129,7 @@ deciduous link a1b2c3d4 42 -r "our action implements their goal"
 ## Step 4: Commit and push
 
 ```bash
-git add .deciduous/graph.json docs/graph-data.json docs/git-history.json
+git add .deciduous/graph.json
 git commit -m "graph: <what was decided>"
 git push
 ```
@@ -1168,7 +1139,6 @@ git push
 ## Merge conflicts
 
 - **`.deciduous/graph.json`**: two people changed the graph. Normally git merges it record by record through the `deciduous` merge driver, so you never see this. If it has `<<<<<<<` markers, run `deciduous sync`: it merges the sides the same way and imports the result.
-- **`docs/graph-data.json`**: never hand-merge it. Take either side and run `deciduous sync` to regenerate.
 
 ## Troubleshooting
 
@@ -2366,29 +2336,6 @@ fn ensure_core_infrastructure(project_root: &Path) -> Result<(), String> {
         println!("   {} .gitignore", "Creating".green());
     }
 
-    // Create docs/ directory for GitHub Pages viewer
-    let docs_dir = project_root.join("docs");
-    if !docs_dir.exists() {
-        fs::create_dir_all(&docs_dir).map_err(|e| format!("Could not create docs/: {}", e))?;
-        println!("   {} docs/", "Creating".green());
-    }
-
-    // Create empty graph-data.json
-    let graph_data_path = docs_dir.join("graph-data.json");
-    if !graph_data_path.exists() {
-        let empty_graph = r#"{"nodes":[],"edges":[]}"#;
-        fs::write(&graph_data_path, empty_graph)
-            .map_err(|e| format!("Could not write graph-data.json: {}", e))?;
-        println!("   {} docs/graph-data.json", "Creating".green());
-    }
-
-    // Create .nojekyll for GitHub Pages
-    let nojekyll_path = docs_dir.join(".nojekyll");
-    if !nojekyll_path.exists() {
-        fs::write(&nojekyll_path, "").map_err(|e| format!("Could not write .nojekyll: {}", e))?;
-        println!("   {} docs/.nojekyll", "Creating".green());
-    }
-
     Ok(())
 }
 
@@ -2447,7 +2394,6 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         ("decision.md", COMMAND_DECISION),
         ("build-test.md", COMMAND_BUILD_TEST),
         ("serve-ui.md", COMMAND_SERVE_UI),
-        ("sync-graph.md", COMMAND_SYNC_GRAPH),
         ("document.md", COMMAND_DOCUMENT),
         ("sync.md", COMMAND_SYNC),
         ("decision-graph.md", COMMAND_DECISION_GRAPH),
@@ -2671,6 +2617,19 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
         }
     }
 
+    // /sync-graph exported for GitHub Pages, which is gone since 1.0.5.
+    match crate::init::guard::remove(project_root, &command_dir.join("sync-graph.md"))? {
+        Some(crate::init::guard::Outcome::KeptYours) => println!(
+            "   {} .opencode/commands/sync-graph.md (yours; deciduous no longer ships it)",
+            "Kept".yellow()
+        ),
+        Some(outcome) => println!(
+            "   {} .opencode/commands/sync-graph.md",
+            outcome.label().green()
+        ),
+        None => {}
+    }
+
     let plugin_path = plugin_dir.join("version-check.ts");
     crate::init::guard::write(project_root, &plugin_path, PLUGIN_VERSION_CHECK, false)?;
     println!(
@@ -2685,7 +2644,6 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
         ("decision.md", COMMAND_DECISION),
         ("build-test.md", COMMAND_BUILD_TEST),
         ("serve-ui.md", COMMAND_SERVE_UI),
-        ("sync-graph.md", COMMAND_SYNC_GRAPH),
         ("document.md", COMMAND_DOCUMENT),
         ("sync.md", COMMAND_SYNC),
         ("decision-graph.md", COMMAND_DECISION_GRAPH),
@@ -2779,7 +2737,6 @@ fn get_agents_workflow_section() -> String {
 | `/document` | Generate comprehensive documentation for a file or directory |
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
-| `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history |
 | `/sync` | Multi-user sync - pull events, rebuild, push |
 
@@ -2901,7 +2858,7 @@ deciduous add goal "Title" -c 90 -p "User's original request"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"
 deciduous serve   # View live graph
-deciduous sync    # Export for static hosting
+deciduous sync    # Reconcile .deciduous/graph.json with teammates
 ```
 
 ### Node Types
@@ -2960,7 +2917,6 @@ fn generate_basic_agents_md() -> String {
 | `/document` | Generate comprehensive documentation for a file or directory |
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
-| `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history |
 | `/sync` | Multi-user sync - pull events, rebuild, push |
 
@@ -3001,7 +2957,7 @@ deciduous link <goal_id> <option_id> -r "Possible approach"
 deciduous add action "Title" -c 85
 deciduous link FROM TO -r "reason"
 deciduous serve   # View live graph
-deciduous sync    # Export for static hosting
+deciduous sync    # Reconcile .deciduous/graph.json with teammates
 ```
 
 ### Node Types
@@ -3330,9 +3286,6 @@ mod tests {
             .join(".opencode/commands/build-test.md")
             .exists());
         assert!(project_root.join(".opencode/commands/serve-ui.md").exists());
-        assert!(project_root
-            .join(".opencode/commands/sync-graph.md")
-            .exists());
         assert!(project_root.join(".opencode/commands/document.md").exists());
         assert!(project_root.join(".opencode/commands/sync.md").exists());
         assert!(project_root
@@ -3422,7 +3375,6 @@ mod tests {
         assert!(section.contains("/document"));
         assert!(section.contains("/build-test"));
         assert!(section.contains("/serve-ui"));
-        assert!(section.contains("/sync-graph"));
         assert!(section.contains("/decision-graph"));
         assert!(section.contains("/sync"));
 

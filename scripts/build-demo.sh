@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-demo.sh - Build and deploy web viewer to docs/demo for GitHub Pages
+# build-demo.sh - Build the web viewer into docs/demo (served on deciduous.dev)
 #
 # Usage:
 #   ./scripts/build-demo.sh

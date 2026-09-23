@@ -14,10 +14,9 @@ use std::path::Path;
 
 use templates::{
     BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
-    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEMO_SWARM_MD, DEPLOY_PAGES_WORKFLOW,
-    DOCUMENT_MD, HOOK_VERSION_CHECK, PAGES_VIEWER_HTML, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
-    SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD, SYNC_MD, WINDSURF_HOOKS_JSON,
-    WINDSURF_RULES_DECIDUOUS, WORK_MD,
+    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEMO_SWARM_MD, DOCUMENT_MD, HOOK_VERSION_CHECK,
+    RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_MD,
+    WINDSURF_HOOKS_JSON, WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -122,14 +121,6 @@ pub fn init_project(
         let serve_ui_path = claude_dir.join("serve-ui.md");
         write_file_if_missing(&serve_ui_path, SERVE_UI_MD, ".claude/commands/serve-ui.md")?;
 
-        // Write sync-graph.md slash command
-        let sync_graph_path = claude_dir.join("sync-graph.md");
-        write_file_if_missing(
-            &sync_graph_path,
-            SYNC_GRAPH_MD,
-            ".claude/commands/sync-graph.md",
-        )?;
-
         // Write decision-graph.md slash command
         let decision_graph_path = claude_dir.join("decision-graph.md");
         write_file_if_missing(
@@ -232,51 +223,17 @@ pub fn init_project(
     }
     ensure_graph_file(&cwd)?;
 
-    // 5. Create GitHub workflows directory and workflows
-    let github_dir = cwd.join(".github");
-    if github_dir.exists() || cwd.join(".git").exists() {
-        let workflows_dir = github_dir.join("workflows");
+    // No GitHub Pages viewer, docs/ export or deploy workflow since 1.0.5: the
+    // graph lives on the shared server and is viewed with `deciduous serve`.
+    // The cleanup workflow stays: it removes the PR images `dot --auto` makes.
+    if cwd.join(".github").exists() || cwd.join(".git").exists() {
+        let workflows_dir = cwd.join(".github").join("workflows");
         create_dir_if_missing(&workflows_dir)?;
-
-        // Cleanup workflow for PR graph assets
-        let cleanup_path = workflows_dir.join("cleanup-decision-graphs.yml");
         write_file_if_missing(
-            &cleanup_path,
+            &workflows_dir.join("cleanup-decision-graphs.yml"),
             CLEANUP_WORKFLOW,
             ".github/workflows/cleanup-decision-graphs.yml",
         )?;
-
-        // Deploy workflow for GitHub Pages
-        let deploy_path = workflows_dir.join("deploy-pages.yml");
-        write_file_if_missing(
-            &deploy_path,
-            DEPLOY_PAGES_WORKFLOW,
-            ".github/workflows/deploy-pages.yml",
-        )?;
-    }
-
-    // 6. Create docs/ directory for GitHub Pages
-    let docs_dir = cwd.join("docs");
-    create_dir_if_missing(&docs_dir)?;
-
-    // 7. Write static viewer HTML to docs/index.html
-    let viewer_path = docs_dir.join("index.html");
-    write_file_if_missing(&viewer_path, PAGES_VIEWER_HTML, "docs/index.html")?;
-
-    // 8. Create empty graph-data.json (will be populated by sync)
-    let graph_data_path = docs_dir.join("graph-data.json");
-    if !graph_data_path.exists() {
-        let empty_graph = r#"{"nodes":[],"edges":[]}"#;
-        fs::write(&graph_data_path, empty_graph)
-            .map_err(|e| format!("Could not write graph-data.json: {}", e))?;
-        println!("   {} docs/graph-data.json", "Creating".green());
-    }
-
-    // 9. Create .nojekyll for GitHub Pages (prevents Jekyll processing)
-    let nojekyll_path = docs_dir.join(".nojekyll");
-    if !nojekyll_path.exists() {
-        fs::write(&nojekyll_path, "").map_err(|e| format!("Could not write .nojekyll: {}", e))?;
-        println!("   {} docs/.nojekyll", "Creating".green());
     }
 
     // Check if Windsurf was set up (use the flag we already computed)
@@ -296,41 +253,25 @@ pub fn init_project(
     );
     println!("\nNext steps:");
     println!(
-        "  1. Run {} to start the local graph viewer",
-        "deciduous serve".cyan()
+        "  1. Restart your assistant so it connects to the server; it sends the logging instructions"
     );
     println!(
-        "  2. Run {} to export graph for GitHub Pages",
-        "deciduous sync".cyan()
-    );
-    println!(
-        "  3. Use slash commands: {}, {}, {}, {}, etc.",
+        "  2. Use slash commands: {}, {}, {}, {}, etc.",
         "/decision".cyan(),
         "/recover".cyan(),
         "/work".cyan(),
         "/document".cyan()
     );
-    println!();
     println!(
-        "  4. Commit and push: {}",
-        "git add docs/ .github/ && git push".cyan()
-    );
-    println!(
-        "  5. Enable GitHub Pages (Settings -> Pages -> Source: Deploy from branch, gh-pages)"
-    );
-    println!();
-    println!(
-        "Your graph will be live at: {}",
-        "https://<user>.github.io/<repo>/".cyan()
+        "  3. Run {} to browse the graph locally",
+        "deciduous serve".cyan()
     );
 
     if windsurf_configured {
         println!();
         println!("{}", "Windsurf integration:".cyan().bold());
-        println!("  - Hooks configured in .windsurf/hooks.json");
         println!("  - Always-on rules in .windsurf/rules/deciduous.md");
-        println!("  - Pre-write hook blocks edits without action nodes");
-        println!("  - Post-command hook reminds to link commits");
+        println!("  - Version check in .windsurf/hooks.json");
     }
 
     println!();
@@ -457,7 +398,7 @@ pub fn update_tooling() -> Result<(), String> {
             .bold()
     );
     println!("\nUpdated files contain the latest:");
-    println!("  - Slash commands (/decision, /recover, /work, /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync)");
+    println!("  - Slash commands (/decision, /recover, /work, /document, /build-test, /serve-ui, /decision-graph, /sync, /demo-swarm)");
     println!("  - Skills (/pulse, /narratives, /archaeology)");
     if has_claude {
         println!("  - Agent configurations (agents.toml)");
@@ -533,13 +474,19 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     let serve_ui_path = claude_dir.join("serve-ui.md");
     write_file_overwrite(&serve_ui_path, SERVE_UI_MD, ".claude/commands/serve-ui.md")?;
 
-    // Overwrite sync-graph.md slash command
-    let sync_graph_path = claude_dir.join("sync-graph.md");
-    write_file_overwrite(
-        &sync_graph_path,
-        SYNC_GRAPH_MD,
+    // GitHub Pages is gone since 1.0.5: /sync-graph and the Pages workflow init
+    // wrote are removed when deciduous wrote them, kept when someone edited
+    // them. docs/ is left alone: graph-data.json is the project's own data.
+    remove_guarded(
+        &claude_dir.join("sync-graph.md"),
         ".claude/commands/sync-graph.md",
     )?;
+    for name in RETIRED_WORKFLOWS {
+        remove_guarded(
+            &cwd.join(".github/workflows").join(name),
+            &format!(".github/workflows/{name}"),
+        )?;
+    }
 
     // Overwrite decision-graph.md slash command
     let decision_graph_path = claude_dir.join("decision-graph.md");
@@ -713,6 +660,10 @@ fn create_dir_if_missing(path: &Path) -> Result<(), String> {
 /// instructions and the tool replies now, not enforced by a hook, so
 /// `update` removes the ones it wrote.
 pub const RETIRED_HOOK_SCRIPTS: [&str; 2] = ["require-action-node.sh", "post-commit-reminder.sh"];
+
+/// The GitHub Pages workflow `init` wrote before 1.0.5; `update` removes it
+/// when deciduous wrote it.
+pub const RETIRED_WORKFLOWS: [&str; 1] = ["deploy-pages.yml"];
 
 /// Takes the retired logging hooks out of `.claude/settings.json`: every
 /// command that runs `deciduous log-loop`, and every command that runs a

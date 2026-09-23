@@ -11,6 +11,12 @@ A project is not set up until it points at a server that answers. Since 1.0.3 ag
   - No Docker, Docker not running, a checksum mismatch, or a server that does not answer is an error with the fix in it, exit 1. The project files are already written by then. Measured: the first `init` on a machine takes 1 min 35 s (image build); the next project finds the running server in 1.2 s.
   - `DECIDUOUS_NO_SERVER=1` skips the step, for tests and CI. `DECIDUOUS_SERVER_BUNDLE` points at a local bundle, for builds that are not releases.
 
+### Added
+- **`deciduous remote setup`, a wizard.** It asks whether the graph lives on this machine (PostgreSQL and the server in Docker, set up if needed) or on a server someone else runs (URL and token, the token read with echo off). A project that already has a remote is asked "Keep it?" first. It ends where `init`'s server step ends. A token is checked against the server before anything is stored or written; a wrong one leaves the credentials and config untouched. `--local` and `--url <url>` answer the question for scripts; with neither and no terminal it stops and names them.
+
+### Removed
+- **GitHub Pages.** The graph lives on the shared server, so `init` no longer writes the Pages viewer (`docs/index.html`), `docs/graph-data.json`, `docs/.nojekyll`, `.github/workflows/deploy-pages.yml` or the `/sync-graph` command (Claude Code and OpenCode). `deciduous sync` only reconciles `.deciduous/graph.json` with the local database; it no longer exports `docs/graph-data.json` and `docs/git-history.json`. `--no-pages` and `--output` are accepted and ignored, so existing scripts keep working. `update` removes `/sync-graph` and `deploy-pages.yml` when deciduous wrote them, keeps them when someone edited them, and leaves `docs/` alone. The PR image cleanup workflow stays; `dot --auto` and `writeup --png` still use it. Browse a graph with `deciduous serve`.
+
 ### Fixed
 - **The README's Claude Code MCP setup never connected anything.** It put `mcpServers` in `.claude/settings.local.json`, which Claude Code does not read for MCP. It now uses `claude mcp add`. The README also gains a first-time setup section.
 

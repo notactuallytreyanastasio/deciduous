@@ -77,7 +77,6 @@ All slash commands are bootstrapped by `deciduous init` and updated by `deciduou
 | `/document` | Generate comprehensive documentation for a file or directory |
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
-| `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history (archaeology) |
 | `/sync` | Multi-user sync - pull events, rebuild, push |
 
@@ -141,7 +140,6 @@ deciduous nodes --type revisit
 | `/document` | Generate comprehensive documentation for a file or directory |
 | `/build-test` | Build the project and run the test suite |
 | `/serve-ui` | Start the decision graph web viewer |
-| `/sync-graph` | Export decision graph to GitHub Pages |
 | `/decision-graph` | Build a decision graph from commit history |
 | `/sync` | Multi-user sync - pull events, rebuild, push |
 
@@ -334,24 +332,6 @@ deciduous link <goal_id> <action_id> -r "Implementation"
 
 The `--commit HEAD` flag captures the commit hash and links it to the node. The web viewer will show commit messages, authors, and dates.
 
-### Git History & Deployment
-
-```bash
-# Export graph AND git history for web viewer
-deciduous sync
-
-# This creates:
-# - docs/graph-data.json (decision graph)
-# - docs/git-history.json (commit info for linked nodes)
-```
-
-To deploy to GitHub Pages:
-1. `deciduous sync` to export
-2. Push to GitHub
-3. Settings > Pages > Deploy from branch > /docs folder
-
-Your graph will be live at `https://<user>.github.io/<repo>/`
-
 ### Branch-Based Grouping
 
 Nodes are auto-tagged with the current git branch. Configure in `.deciduous/config.toml`:
@@ -532,7 +512,7 @@ web/                     # React/TypeScript web viewer source
 | `web/src/utils/graphProcessing.ts` | Chain building, BFS traversal, session grouping |
 | `web/src/types/graph.ts` | TypeScript interfaces for nodes, edges, chains |
 | `src/viewer.html` | Embedded viewer served by `deciduous serve` |
-| `docs/demo/index.html` | Static demo viewer for GitHub Pages |
+| `docs/demo/index.html` | Static demo viewer served on deciduous.dev |
 
 ### Rebuild Process
 

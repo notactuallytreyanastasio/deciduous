@@ -390,7 +390,6 @@ mod tests {
             ("DOCUMENT_MD", t::DOCUMENT_MD),
             ("BUILD_TEST_MD", t::BUILD_TEST_MD),
             ("SERVE_UI_MD", t::SERVE_UI_MD),
-            ("SYNC_GRAPH_MD", t::SYNC_GRAPH_MD),
             ("DECISION_GRAPH_MD", t::DECISION_GRAPH_MD),
             ("SYNC_MD", t::SYNC_MD),
             ("WORK_MD", t::WORK_MD),
