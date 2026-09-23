@@ -49,7 +49,8 @@ defmodule DeciduousMcp.Sync.Ops do
   def run(%{"ops" => ops} = payload) when is_list(ops) do
     with {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
          :ok <- check_batch(ops),
-         {:ok, workspace} <- Workspaces.find_or_create(name) do
+         {:ok, workspace} <- Workspaces.find_or_create(name),
+         {:ok, _claim} <- Workspaces.claim(workspace, payload["repo_roots"], false) do
       {:ok,
        %{
          workspace: workspace.name,

@@ -133,6 +133,74 @@ defmodule DeciduousMcp.Graph.Workspaces do
     |> Repo.all()
   end
 
+  @doc """
+  Ties a workspace to the repository writing to it, by root commit ids.
+
+  Names come from directory names, so two unrelated repositories called
+  `bridge-api` asked for one workspace and 1.0.7 let both write to it. The
+  CLI sends `git rev-list --max-parents=0 HEAD`: the same in every clone and
+  every worktree of a repository, different for an unrelated one, and
+  unchanged by a rename.
+
+    * no roots sent (outside git, or a repository with no commit yet):
+      `{:ok, :unchecked}`; there is nothing to compare
+    * workspace unclaimed: the roots are recorded, `{:ok, :claimed}`
+    * any root in common: `{:ok, :verified}` (new roots, from a merged-in
+      history, are added)
+    * none in common and `adopt?`: `{:ok, :adopted}`, the roots are added.
+      The CLI sets it only when the user named the workspace explicitly.
+    * none in common: `{:error, {:claimed_by_other_repository, held}}`
+
+  The row is locked for the check so two first claims cannot both win.
+  """
+  def claim(%Workspace{} = ws, roots, adopt?) do
+    with {:ok, roots} <- validate_roots(roots) do
+      if roots == [] do
+        {:ok, :unchecked}
+      else
+        Repo.transaction(fn ->
+          ws = Repo.one!(from w in Workspace, where: w.id == ^ws.id, lock: "FOR UPDATE")
+          settings = ws.settings || %{}
+          held = settings["repo_roots"] || []
+
+          {outcome, merged} =
+            cond do
+              held == [] -> {:claimed, roots}
+              Enum.any?(roots, &(&1 in held)) -> {:verified, Enum.uniq(held ++ roots)}
+              adopt? -> {:adopted, Enum.uniq(held ++ roots)}
+              true -> Repo.rollback({:claimed_by_other_repository, held})
+            end
+
+          if merged != held do
+            ws
+            |> Workspace.changeset(%{settings: Map.put(settings, "repo_roots", merged)})
+            |> Repo.update!()
+          end
+
+          outcome
+        end)
+      end
+    end
+  end
+
+  defp validate_roots(nil), do: {:ok, []}
+
+  defp validate_roots(roots) when is_list(roots) do
+    case Enum.reject(
+           roots,
+           &(is_binary(&1) and Regex.match?(~r/\A[0-9a-f]{40}([0-9a-f]{24})?\z/, &1))
+         ) do
+      [] ->
+        {:ok, roots |> Enum.uniq() |> Enum.sort()}
+
+      bad ->
+        {:error,
+         "repo_roots must be git commit ids (40 or 64 lowercase hex); got #{inspect(bad)}"}
+    end
+  end
+
+  defp validate_roots(other), do: {:error, "repo_roots must be a list, got #{inspect(other)}"}
+
   @max_name_length 128
 
   @doc """

@@ -12,6 +12,9 @@ defmodule DeciduousMcp.Web.Router do
     * `POST /import` — bulk ingest of one project's graph.
     * `POST /ops` — a CLI's queued writes, applied field by field, each at
       most once (see `DeciduousMcp.Sync.Ops`).
+    * `POST /claim` — ties a workspace to a repository's root commits, so two
+      repositories with the same directory name cannot share one by accident
+      (see `DeciduousMcp.Graph.Workspaces.claim/3`).
     * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
     * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
@@ -93,6 +96,25 @@ defmodule DeciduousMcp.Web.Router do
 
         {:too_large, conn} ->
           json(conn, 413, %{error: "ops batch exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
+      end
+    end
+  end
+
+  post "/claim" do
+    conn = Auth.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          handle_claim(conn, body)
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "claim exceeds #{@max_import_bytes} bytes"})
 
         {:error, _} ->
           json(conn, 400, %{error: "could not read body"})
@@ -300,9 +322,41 @@ defmodule DeciduousMcp.Web.Router do
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
 
+      {:error, {:claimed_by_other_repository, _} = claim} ->
+        claim_refused(conn, claim)
+
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
     end
+  end
+
+  defp handle_claim(conn, body) do
+    with {:ok, payload} <- Jason.decode(body),
+         {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
+         {:ok, workspace} <- Workspaces.find_or_create(name),
+         {:ok, outcome} <-
+           Workspaces.claim(workspace, payload["repo_roots"], payload["adopt"] == true) do
+      json(conn, 200, %{workspace: workspace.name, claim: outcome})
+    else
+      {:error, %Jason.DecodeError{} = err} ->
+        json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:claimed_by_other_repository, _} = claim} ->
+        claim_refused(conn, claim)
+
+      {:error, reason} ->
+        json(conn, 422, %{error: to_string_reason(reason)})
+    end
+  end
+
+  defp claim_refused(conn, {:claimed_by_other_repository, held}) do
+    json(conn, 409, %{
+      error:
+        "this workspace belongs to another repository (different root commits). " <>
+          "Two repositories with the same directory name derive the same workspace name; " <>
+          "name this one's workspace explicitly",
+      held_by_roots: held
+    })
   end
 
   # --- Documents --------------------------------------------------------------

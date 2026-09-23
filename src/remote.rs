@@ -203,6 +203,31 @@ pub fn workspace_for(dir: &Path) -> String {
     }
 }
 
+/// The root commits of the repository `dir` is in: the same in every clone
+/// and worktree of it, different for an unrelated repository that happens to
+/// share its directory name, and unchanged by a rename. Sorted; empty outside
+/// git and before the first commit.
+pub fn repo_roots(dir: &Path) -> Vec<String> {
+    let mut roots: Vec<String> = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-list", "--max-parents=0", "HEAD"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| String::from_utf8(o.stdout).ok())
+        .map(|out| {
+            out.lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    roots.sort();
+    roots.dedup();
+    roots
+}
+
 /// The nearest `.deciduous/config.toml` at or above `dir`.
 fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
     dir.ancestors()
@@ -257,6 +282,10 @@ pub struct Remote {
     pub url: String,
     pub workspace: String,
     token: String,
+    /// This repository's root commit ids, sent so the server can tell two
+    /// repositories with the same directory name apart. Empty outside git
+    /// or before the first commit.
+    pub repo_roots: Vec<String>,
 }
 
 impl Remote {
@@ -280,6 +309,7 @@ impl Remote {
             url,
             workspace,
             token: token()?,
+            repo_roots: repo_roots(dir),
         })
     }
 
@@ -605,6 +635,51 @@ pub struct ReplayReport {
 const REPLAY_BATCH: usize = 500;
 
 impl Remote {
+    /// What to say when the server refuses this repository's roots.
+    fn claim_refused(&self) -> String {
+        format!(
+            "workspace \"{ws}\" on {url} belongs to another repository: an unrelated project \
+             whose directory is also called {ws} (the name is the directory name, lowercased) \
+             claimed it first, and this repository shares none of its root commits.\n\n\
+             Give this project its own workspace:\n\n    \
+             deciduous remote init {url} --workspace <another-name>\n\n\
+             or, if the two repositories really should write one graph, say so by naming it:\n\n    \
+             deciduous remote init {url} --workspace {ws}",
+            ws = self.workspace,
+            url = self.url
+        )
+    }
+
+    /// Ties the workspace to this repository on the server, or finds out it
+    /// belongs to another one. `adopt` is for a workspace the user named
+    /// explicitly: sharing it is then a choice, not an accident.
+    ///
+    /// Returns the server's word for what happened: claimed, verified,
+    /// adopted, or unchecked (no root commits to send).
+    pub fn claim(&self, adopt: bool) -> Result<String, String> {
+        #[derive(Deserialize)]
+        struct Reply {
+            claim: String,
+        }
+        let payload = serde_json::json!({
+            "workspace": self.workspace,
+            "repo_roots": self.repo_roots,
+            "adopt": adopt,
+        });
+        match self
+            .post("/claim")
+            .timeout(std::time::Duration::from_secs(30))
+            .send_json(payload)
+        {
+            Ok(resp) => resp
+                .into_json::<Reply>()
+                .map(|r| r.claim)
+                .map_err(|e| format!("the server's response was not a claim: {e}")),
+            Err(ureq::Error::Status(409, _)) => Err(self.claim_refused()),
+            Err(e) => Err(describe(e)),
+        }
+    }
+
     /// Sends ops to `POST /ops` and returns the server's answer for each.
     pub fn post_ops(&self, ops: &[crate::oplog::Op]) -> Result<Vec<crate::oplog::Ack>, String> {
         #[derive(Deserialize)]
@@ -621,13 +696,17 @@ impl Remote {
 
         let payload = serde_json::json!({
             "workspace": self.workspace,
+            "repo_roots": self.repo_roots,
             "ops": ops,
         });
         let reply: Reply = self
             .post("/ops")
             .timeout(std::time::Duration::from_secs(120))
             .send_json(payload)
-            .map_err(describe)?
+            .map_err(|e| match e {
+                ureq::Error::Status(409, _) => self.claim_refused(),
+                e => describe(e),
+            })?
             .into_json()
             .map_err(|e| format!("the server's response was not an ops report: {e}"))?;
 
@@ -1434,6 +1513,7 @@ mod tests {
             url: "https://example.com/deciduous-mcp".to_string(),
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
+            repo_roots: vec![],
         };
         assert_eq!(
             r.events_url(),
@@ -1447,6 +1527,7 @@ mod tests {
             url: "http://localhost:4111".to_string(),
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
+            repo_roots: vec![],
         };
         assert_eq!(
             r.events_url(),
@@ -1464,6 +1545,7 @@ mod tests {
             url: "https://example.com".to_string(),
             workspace: "a b".to_string(),
             token: "tok".to_string(),
+            repo_roots: vec![],
         };
         assert!(
             r.events_url().contains("workspace=a%20b"),

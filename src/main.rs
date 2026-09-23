@@ -2122,6 +2122,21 @@ fn main() {
                         }
                     };
 
+                    // Before anything is written: a workspace another
+                    // repository owns is refused here, not discovered later
+                    // as someone else's nodes in this project's graph.
+                    let claim = remote
+                        .health()
+                        .and_then(|_| remote.claim(workspace.is_some()));
+                    let claim = match claim {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            eprintln!("\nNothing was written; the project is unchanged.");
+                            std::process::exit(1);
+                        }
+                    };
+
                     match remote.check() {
                         Ok(counts) => {
                             if let Err(e) = cfg.save_remote() {
@@ -2130,6 +2145,16 @@ fn main() {
                             }
                             println!("{} {}", "Remote:".green(), url);
                             println!("  workspace: {}", ws.cyan());
+                            if claim == "unchecked" {
+                                println!(
+                                    "  {} this repository has no commit yet, so the server cannot tell it \
+                                     from another project called {ws}. The first write after the first \
+                                     commit claims the workspace, or is refused if another repository has.",
+                                    "note:".yellow()
+                                );
+                            } else {
+                                println!("  claim: {claim} (by this repository's root commit)");
+                            }
                             println!(
                                 "  server holds {} nodes, {} edges, {} documents",
                                 counts.nodes, counts.edges, counts.documents
@@ -2256,6 +2281,10 @@ fn main() {
                             std::process::exit(1);
                         }
                     };
+                    if let Err(e) = remote.claim(false) {
+                        eprintln!("{} {}", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
                     let d = deciduous::remote::content_diff(&nodes, &edges, &server);
 
                     println!("\n              {:>8}  {:>8}", "local", "server");
@@ -2523,6 +2552,14 @@ fn main() {
                             }
                         },
                     };
+
+                    // Refuse another repository's graph before touching the
+                    // local one: importing it would put its nodes into this
+                    // project's committed graph.json.
+                    if let Err(e) = remote.claim(false) {
+                        eprintln!("{} {}\n\nNothing was pulled.", "Error:".red(), e);
+                        std::process::exit(1);
+                    }
 
                     // Unsent local writes go up first. Otherwise the pull
                     // reads a server that lacks them and reports a

@@ -106,7 +106,19 @@ impl Sandbox {
         let dir = self.path().join(rel);
         std::fs::create_dir_all(&dir).unwrap();
         self.git(&dir, &["init", "-q", "-b", "main"]);
-        self.git(&dir, &["commit", "-q", "--allow-empty", "-m", "init"]);
+        // The directory in the message: two empty commits with the same
+        // message in the same second are the same commit, and root commits
+        // are what tells repositories apart.
+        self.git(
+            &dir,
+            &[
+                "commit",
+                "-q",
+                "--allow-empty",
+                "-m",
+                &format!("init {rel}"),
+            ],
+        );
         self.dx_ok(&dir, &["init"]);
         dir
     }
@@ -600,5 +612,60 @@ fn a_worktree_uses_the_main_repositorys_workspace() {
     assert!(
         out.contains("wt-main"),
         "the recorded name is announced: {out}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// C5: two repositories with the same directory name do not share a
+// workspace by accident.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn same_named_repositories_do_not_share_a_workspace_unless_named() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let name = unique("wal-c5");
+
+    let a = sb.repo(&format!("a/{name}"));
+    sb.dx_ok(&a, &["remote", "init", &url]);
+    sb.dx_ok(&a, &["add", "goal", "a's goal"]);
+
+    // Same name, unrelated history: refused, and nothing is written.
+    let b = sb.repo(&format!("b/{name}"));
+    let out = sb.dx(&b, &["remote", "init", &url]);
+    let err = text(&out.stderr);
+    assert!(!out.status.success(), "{}{err}", text(&out.stdout));
+    assert!(err.contains("another repository"), "{err}");
+    assert!(err.contains("--workspace"), "the fix is named: {err}");
+    assert_eq!(config_workspace(&b), None);
+
+    // A case-only difference derives the same name and is refused too.
+    let c = sb.repo(&format!("c/{}", name.to_uppercase()));
+    assert!(!sb.dx(&c, &["remote", "init", &url]).status.success());
+
+    // A 1.0.7 config (URL only) in B: its writes are refused loudly and
+    // stay queued; a pull refuses rather than import A's graph.
+    std::fs::write(
+        b.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\n"),
+    )
+    .unwrap();
+    let out = sb.dx_ok(&b, &["add", "goal", "b's goal"]);
+    assert!(out.contains("another repository"), "{out}");
+    assert!(out.contains("queued"), "{out}");
+    let pull = sb.dx(&b, &["remote", "pull"]);
+    assert!(!pull.status.success());
+    let local: Value = serde_json::from_str(&sb.dx_ok(&b, &["graph"])).unwrap();
+    assert_eq!(live_titles(&local), ["b's goal"]);
+
+    // Naming the workspace is how two repositories share one on purpose.
+    let d = sb.repo(&format!("d/{name}"));
+    sb.dx_ok(&d, &["remote", "init", &url, "--workspace", &name]);
+    sb.dx_ok(&d, &["add", "goal", "d's goal"]);
+
+    assert_eq!(
+        live_titles(&export(&url, &token, &name)),
+        ["a's goal", "d's goal"]
     );
 }
