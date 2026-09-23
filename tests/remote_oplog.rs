@@ -2664,3 +2664,27 @@ fn new_a_nul_row_does_not_stop_seed_sending_the_others() {
         "{said}"
     );
 }
+
+// NEW (low): with the only difference an unreadable-lines file, `remote
+// status` listed push, --seed, --repair and pull, none of which touches it,
+// and its "set aside" line had a doubled verb.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn new_status_says_what_to_do_about_unreadable_lines() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-unreadable");
+    let dir = sb.remote_repo("unreadable", &url, &ws);
+    sb.dx_ok(&dir, &["add", "goal", "fine"]);
+    std::fs::write(
+        dir.join(".deciduous").join("remote-log.unreadable"),
+        "{\"entry\":\"op\",\"op_\n",
+    )
+    .unwrap();
+    let out = sb.dx(&dir, &["remote", "status"]);
+    let st = all_of(&out);
+    assert!(!out.status.success(), "{st}");
+    assert!(!st.contains("were moved to"), "{st}");
+    assert!(!st.contains("sends what is waiting"), "{st}");
+    assert!(st.contains("remote-log.unreadable"), "{st}");
+}

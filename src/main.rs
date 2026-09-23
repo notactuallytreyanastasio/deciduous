@@ -2415,9 +2415,9 @@ fn main() {
                         }
                         if st.set_aside > 0 {
                             println!(
-                                "  {} {} line(s) that were not log entries were moved to {}; \
+                                "  {} {} line(s) that were not log entries are in {}; \
                                  repair and re-append any that is a write, then delete that file",
-                                "set aside".red(),
+                                "unreadable".red(),
                                 st.set_aside,
                                 log.unreadable_path().display()
                             );
@@ -2598,12 +2598,53 @@ fn main() {
                             "In sync:".green()
                         );
                     } else {
-                        println!(
-                            "\n{} `deciduous remote push` sends what is waiting; `--seed` adds what only this copy has; \
-                             `--repair` makes the server's fields match this copy's; `deciduous remote pull` \
-                             takes the server's side (newer edit wins per node).",
-                            "Differs:".yellow()
-                        );
+                        // Only the remedies for what does differ: with only
+                        // an unreadable-lines file, this listed push, --seed,
+                        // --repair and pull, none of which touches it.
+                        let mut todo = Vec::new();
+                        if waiting > 0 || set_aside > 0 {
+                            todo.push("`deciduous remote push` sends what is waiting and what this machine set aside".to_string());
+                        }
+                        if rejected > set_aside {
+                            todo.push("`deciduous remote push --drop-rejected` discards the server's refusals, once read".to_string());
+                        }
+                        let unlogged = d.only_local.iter().any(|(cid, _)| {
+                            !queued.contains(cid)
+                                && !held.contains_key(cid)
+                                && !nul_at.contains_key(cid)
+                        });
+                        if unlogged || !docs_here.is_empty() || !d.edges_only_local.is_empty() {
+                            todo.push(
+                                "`deciduous remote push --seed` adds what only this copy has"
+                                    .to_string(),
+                            );
+                        }
+                        if d.differ.iter().any(|nd| nd.here_newer) {
+                            todo.push("`deciduous remote push --repair` makes the server's fields match this copy's".to_string());
+                        }
+                        if !d.only_server.is_empty()
+                            || !d.deleted_on_server.is_empty()
+                            || !d.edges_only_server.is_empty()
+                            || d.differ.iter().any(|nd| !nd.here_newer)
+                        {
+                            todo.push("`deciduous remote pull` takes the server's side (newer edit wins per node)".to_string());
+                        }
+                        if !nul_at.is_empty() {
+                            todo.push("a node holding a NUL has to be changed here before anything can send it".to_string());
+                        }
+                        if damaged {
+                            if let Some((log, _)) = &log_state {
+                                todo.push(format!(
+                                    "lines of the log that are not entries are listed above: no push or pull \
+                                     changes them; repair and re-append any that is a write, then delete {}",
+                                    log.unreadable_path().display()
+                                ));
+                            }
+                        }
+                        if todo.is_empty() {
+                            todo.push("`deciduous remote push` sends what this copy has; `deciduous remote pull` takes the server's side".to_string());
+                        }
+                        println!("\n{} {}.", "Differs:".yellow(), todo.join("; "));
                         // Scripts read drift from the exit code, like `sync --check`.
                         exit(1);
                     }
