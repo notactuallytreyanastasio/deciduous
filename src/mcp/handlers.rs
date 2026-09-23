@@ -580,6 +580,68 @@ fn handle_search_nodes(db: &Database, args: &Value) -> HandlerResult {
 // Document handlers
 // ---------------------------------------------------------------------------
 
+/// Largest file `attach_document` will copy into `.deciduous/documents/`.
+pub const MAX_DOCUMENT_BYTES: u64 = 25 * 1024 * 1024;
+
+/// Resolve and read a file an MCP client asked to attach.
+///
+/// The client is an agent, and the path is whatever it was told. Only a
+/// regular file whose real location (symlinks followed) is inside the
+/// project is read, and only up to [`MAX_DOCUMENT_BYTES`]. Without this,
+/// `../../etc/passwd` or a symlink named `innocent.png` was copied into the
+/// project, a FIFO hung the single-threaded server forever, and `/dev/zero`
+/// grew it by gigabytes until it was killed.
+fn read_attachable(
+    db: &Database,
+    file_path: &str,
+) -> Result<(std::path::PathBuf, Vec<u8>), HandlerError> {
+    use std::io::Read;
+
+    let root = db.project_root().ok_or_else(|| {
+        HandlerError::from(format!(
+            "attach_document needs a project: the database {} is not in a .deciduous/ directory",
+            db.path().display()
+        ))
+    })?;
+    let root = root.canonicalize().map_err(|e| {
+        HandlerError::from(format!("cannot resolve project {}: {e}", root.display()))
+    })?;
+    let real = std::path::Path::new(file_path)
+        .canonicalize()
+        .map_err(|e| HandlerError::from(format!("File not found: {file_path} ({e})")))?;
+    if !real.starts_with(&root) {
+        return Err(HandlerError::from(format!(
+            "{file_path} resolves to {}, which is outside the project {}; only files inside it can be attached",
+            real.display(),
+            root.display()
+        )));
+    }
+    let meta = std::fs::metadata(&real)
+        .map_err(|e| HandlerError::from(format!("Failed to read {file_path}: {e}")))?;
+    if !meta.is_file() {
+        return Err(HandlerError::from(format!(
+            "{file_path} is not a regular file; only regular files can be attached"
+        )));
+    }
+    if meta.len() > MAX_DOCUMENT_BYTES {
+        return Err(HandlerError::from(format!(
+            "{file_path} is {} bytes, larger than the {} byte limit for attachments",
+            meta.len(),
+            MAX_DOCUMENT_BYTES
+        )));
+    }
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    std::fs::File::open(&real)
+        .and_then(|f| f.take(MAX_DOCUMENT_BYTES + 1).read_to_end(&mut bytes))
+        .map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
+    if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
+        return Err(HandlerError::from(format!(
+            "{file_path} grew past the {MAX_DOCUMENT_BYTES} byte limit for attachments while it was read"
+        )));
+    }
+    Ok((real, bytes))
+}
+
 fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     use sha2::{Digest, Sha256};
 
@@ -587,18 +649,15 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     let file_path = require_str(args, "file_path")?;
     let description = get_str(args, "description");
 
+    let (_real, file_bytes) = read_attachable(db, file_path)?;
+    // Named as the caller named it; the real path only decided whether it
+    // may be read at all.
     let path = std::path::Path::new(file_path);
-    if !path.exists() {
-        return Err(HandlerError::from(format!("File not found: {file_path}")));
-    }
 
     let original_filename = path
         .file_name()
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-
-    let file_bytes =
-        std::fs::read(path).map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
 
     let hash = format!("{:x}", Sha256::digest(&file_bytes));
     let hash_prefix = &hash[..8];

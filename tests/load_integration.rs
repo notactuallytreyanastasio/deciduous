@@ -745,3 +745,63 @@ fn mcp_in_a_subdirectory_keeps_documents_and_sessions_in_the_project() {
         text(&out.stdout)
     );
 }
+
+// ============================================================================
+// R4: attach_document only reads regular files inside the project
+// ============================================================================
+
+#[cfg(unix)]
+#[test]
+fn attach_document_refuses_anything_but_a_regular_file_in_the_project() {
+    let p = Project::new();
+    assert!(p.cli(&["add", "goal", "g"]).status.success());
+    let outside = p.home.path().join("id_rsa");
+    std::fs::write(&outside, "PRIVATE KEY").unwrap();
+    std::os::unix::fs::symlink(&outside, p.root().join("innocent.png")).unwrap();
+    let fifo = p.root().join("pipe");
+    assert!(Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap()
+        .success());
+    std::fs::create_dir(p.root().join("adir")).unwrap();
+    let big = std::fs::File::create(p.root().join("big.bin")).unwrap();
+    big.set_len(200 * 1024 * 1024).unwrap();
+
+    let mut m = p.mcp();
+    let rel_outside = format!(
+        "../{}/id_rsa",
+        p.home.path().file_name().unwrap().to_str().unwrap()
+    );
+    let cases = [
+        ("/etc/hosts", "outside"),
+        (outside.to_str().unwrap(), "outside"),
+        (rel_outside.as_str(), "outside"),
+        ("innocent.png", "outside"),
+        ("pipe", "regular file"),
+        ("/dev/zero", "outside"),
+        ("adir", "regular file"),
+        ("big.bin", "larger than"),
+    ];
+    for (path, why) in cases {
+        let started = Instant::now();
+        let e = m
+            .call("attach_document", json!({"node_id": 1, "file_path": path}))
+            .expect_err(path);
+        assert!(e.contains(why), "{path}: expected '{why}' in: {e}");
+        assert!(
+            started.elapsed() < Duration::from_secs(5),
+            "{path} took {:?}",
+            started.elapsed()
+        );
+    }
+    m.close();
+    assert_eq!(p.sql("select count(*) from node_documents"), 0);
+    assert!(
+        !p.root().join(".deciduous/documents").exists()
+            || std::fs::read_dir(p.root().join(".deciduous/documents"))
+                .unwrap()
+                .next()
+                .is_none()
+    );
+}
