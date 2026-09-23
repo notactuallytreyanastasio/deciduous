@@ -23,6 +23,9 @@ const BIN: &str = env!("CARGO_BIN_EXE_deciduous");
 struct Project {
     dir: TempDir,
     home: TempDir,
+    /// When set, every process gets `DECIDUOUS_DB_PATH` pointing here
+    /// instead of finding `.deciduous/` from its working directory.
+    db_override: Option<PathBuf>,
 }
 
 impl Project {
@@ -30,8 +33,23 @@ impl Project {
         let p = Self {
             dir: TempDir::new().unwrap(),
             home: TempDir::new().unwrap(),
+            db_override: None,
         };
         std::fs::create_dir_all(p.dir.path().join(".deciduous")).unwrap();
+        p
+    }
+
+    /// A graph laid out the way the API daemon keeps it,
+    /// `<data>/graphs/<id>/deciduous.db`, with every CLI and MCP process
+    /// pointed at the same file, so all three transports write one graph.
+    fn api_shared(graph_id: &str) -> Self {
+        let mut p = Self::new();
+        let dir = p.root().join("data/graphs").join(graph_id);
+        std::fs::create_dir_all(&dir).unwrap();
+        p.db_override = Some(dir.join("deciduous.db"));
+        let out = p.cli(&["sync", "--no-pages"]);
+        assert!(out.status.success(), "sync failed: {}", text(&out.stderr));
+        assert!(p.graph_path().is_file(), "{}", text(&out.stdout));
         p
     }
 
@@ -49,11 +67,13 @@ impl Project {
     }
 
     fn db_path(&self) -> PathBuf {
-        self.root().join(".deciduous/deciduous.db")
+        self.db_override
+            .clone()
+            .unwrap_or_else(|| self.root().join(".deciduous/deciduous.db"))
     }
 
     fn graph_path(&self) -> PathBuf {
-        self.root().join(".deciduous/graph.json")
+        self.db_path().with_file_name("graph.json")
     }
 
     fn graph_doc(&self) -> Value {
@@ -70,6 +90,9 @@ impl Project {
             .env_remove("DECIDUOUS_API_TOKEN")
             .env_remove("DECIDUOUS_API_DATA_DIR")
             .env("GIT_CONFIG_NOSYSTEM", "1");
+        if let Some(db) = &self.db_override {
+            c.env("DECIDUOUS_DB_PATH", db);
+        }
         c
     }
 
@@ -401,5 +424,195 @@ fn backup_includes_writes_still_in_the_wal() {
         rusqlite_like_count(&backup, "select count(*) from decision_nodes"),
         6,
         "the backup lost the writes that were still in the WAL"
+    );
+}
+
+// ============================================================================
+// The API daemon, as a real process
+// ============================================================================
+
+const API_TOKEN: &str = "load-test-token";
+
+/// `deciduous serve --api` on a fixed port (4825-4829 are reserved for this
+/// suite), killed on drop.
+struct Daemon {
+    child: Child,
+    port: u16,
+}
+
+impl Daemon {
+    fn start(p: &Project, port: u16, data_dir: &Path) -> Self {
+        let child = p
+            .command(p.root())
+            .args(["serve", "--api", "--port", &port.to_string(), "--data-dir"])
+            .arg(data_dir)
+            .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .expect("spawn serve --api");
+        let d = Self { child, port };
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while TcpStream::connect(("127.0.0.1", port)).is_err() {
+            assert!(Instant::now() < deadline, "daemon never listened on {port}");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        d
+    }
+
+    fn tool(&self, graph: &str, tool: &str, args: Value) -> (u16, Value) {
+        api_tool(self.port, graph, tool, args)
+    }
+}
+
+fn api_tool(port: u16, graph: &str, tool: &str, args: Value) -> (u16, Value) {
+    http(
+        port,
+        "POST",
+        &format!("/api/v1/graphs/{graph}/tools/{tool}"),
+        API_TOKEN,
+        &args,
+    )
+}
+
+impl Drop for Daemon {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+// ============================================================================
+// R1: concurrent writers never drop graph.json records
+// ============================================================================
+
+/// Titles of live node records in graph.json starting with `prefix`.
+fn graph_titles(p: &Project, prefix: &str) -> std::collections::BTreeSet<String> {
+    p.graph_doc()["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .filter(|r| r["deleted_at"].is_null())
+        .filter_map(|r| r["title"].as_str())
+        .filter(|t| t.starts_with(prefix))
+        .map(str::to_string)
+        .collect()
+}
+
+#[test]
+fn mcp_cli_and_api_writing_at_once_lose_nothing_from_graph_json() {
+    let p = Project::api_shared("shared");
+    let data = p.root().join("data");
+    let daemon = Daemon::start(&p, 4825, &data);
+    let per = 30;
+
+    let mut threads = Vec::new();
+    for k in 0..2 {
+        let mut m = p.mcp();
+        threads.push(std::thread::spawn(move || {
+            for i in 0..per {
+                m.call(
+                    "add_node",
+                    json!({"node_type":"action","title":format!("c-mcp{k}-{i}"),"branch":"b"}),
+                )
+                .expect("mcp add_node");
+            }
+            m.close();
+        }));
+    }
+    let port = daemon.port;
+    for k in 0..2 {
+        threads.push(std::thread::spawn(move || {
+            for i in 0..per / 2 {
+                let (status, body) = api_tool(
+                    port,
+                    "shared",
+                    "add_node",
+                    json!({"node_type":"action","title":format!("c-api{k}-{i}"),"branch":"b"}),
+                );
+                assert_eq!(status, 200, "{body}");
+                assert_eq!(body["data"]["is_error"], false, "{body}");
+            }
+        }));
+    }
+    let cli_cmds: Vec<Command> = (0..per)
+        .map(|i| {
+            let mut c = p.command(p.root());
+            c.args(["add", "action", &format!("c-cli-{i}"), "-b", "b"]);
+            c
+        })
+        .collect();
+    threads.push(std::thread::spawn(move || {
+        for mut c in cli_cmds {
+            let out = c.output().unwrap();
+            assert!(out.status.success(), "cli add: {}", text(&out.stderr));
+        }
+    }));
+    for t in threads {
+        t.join().unwrap();
+    }
+
+    let expected = 2 * per + 2 * (per / 2) + per;
+    assert_eq!(
+        p.sql("select count(*) from decision_nodes where title like 'c-%'"),
+        expected as i64
+    );
+    let in_file = graph_titles(&p, "c-");
+    assert_eq!(
+        in_file.len(),
+        expected,
+        "{} of {expected} committed nodes are missing from graph.json",
+        expected - in_file.len()
+    );
+    drop(daemon);
+}
+
+#[test]
+fn a_delete_racing_other_writers_is_not_resurrected_by_sync() {
+    let p = Project::with_graph();
+    let mut deleter = p.mcp();
+    let mut ids = Vec::new();
+    for i in 0..30 {
+        let r = deleter
+            .call(
+                "add_node",
+                json!({"node_type":"action","title":format!("doomed-{i}"),"branch":"b"}),
+            )
+            .unwrap();
+        ids.push(r["node_id"].as_i64().unwrap());
+    }
+    let mut adder = p.mcp();
+    let adding = std::thread::spawn(move || {
+        for i in 0..150 {
+            adder
+                .call(
+                    "add_node",
+                    json!({"node_type":"action","title":format!("kept-{i}"),"branch":"b"}),
+                )
+                .unwrap();
+        }
+        adder.close();
+    });
+    for id in &ids {
+        deleter.call("delete_node", json!({"node_id": id})).unwrap();
+    }
+    deleter.close();
+    adding.join().unwrap();
+
+    let alive = graph_titles(&p, "doomed-");
+    assert!(
+        alive.is_empty(),
+        "{} deleted nodes are live again in graph.json: {:?}",
+        alive.len(),
+        alive
+    );
+    assert_eq!(graph_titles(&p, "kept-").len(), 150);
+    let out = p.cli(&["sync", "--no-pages"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert_eq!(
+        p.sql("select count(*) from decision_nodes where title like 'doomed-%'"),
+        0,
+        "sync brought deleted nodes back: {}",
+        text(&out.stdout)
     );
 }
