@@ -2403,12 +2403,23 @@ fn record_ts(v: &Value) -> DateTime<Utc> {
 }
 
 /// Two versions of one record that differ in `updated_at` and nothing else.
+///
+/// A field that is absent, `null` or `{}` says the same thing (nothing), and
+/// counts as equal across the three. A record written where HEAD was unborn
+/// has no `metadata` key, and the server serves every node with
+/// `"metadata": {}`; comparing keys literally made every pull of such a node
+/// take the server's copy and stamp for content that had not changed.
 fn same_but_stamp(a: &Value, b: &Value) -> bool {
     match (a, b) {
         (Value::Object(a), Value::Object(b)) => {
             let strip = |m: &serde_json::Map<String, Value>| {
                 let mut m = m.clone();
                 m.remove("updated_at");
+                m.retain(|_, v| match v {
+                    Value::Null => false,
+                    Value::Object(o) => !o.is_empty(),
+                    _ => true,
+                });
                 m
             };
             strip(a) == strip(b)
