@@ -1,0 +1,162 @@
+name: Integration battery
+
+# The cross-surface battery in tests/e2e_*.rs, run against a graph server
+# built from the same commit. Plain `cargo test` skips it (it is gated on
+# DECIDUOUS_E2E / DECIDUOUS_E2E_SERVER); this is where it runs for real.
+# How to run it locally: docs/ARCHITECTURE.md, "The integration battery".
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: Replay one randomized run (DECIDUOUS_E2E_SEED)
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  battery:
+    name: Battery against a server from this commit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      COMPOSE_PROJECT_NAME: dx-ci
+      DECIDUOUS_PORT: '4816'
+      DECIDUOUS_IMAGE: deciduous-mcp:ci
+      DECIDUOUS_ENV_FILE: ${{ github.workspace }}/../dx-ci-server.env
+      DECIDUOUS_E2E: '1'
+      DECIDUOUS_E2E_SERVER: http://127.0.0.1:4816
+      DECIDUOUS_E2E_SEED: ${{ inputs.seed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Start PostgreSQL and the server (setup.sh, same recipe as a user install)
+        run: sh deciduous_mcp/scripts/setup.sh
+
+      - name: Hand the battery the server's token
+        run: |
+          token=$(sed -n "s/^DECIDUOUS_MCP_TOKEN='\(.*\)'$/\1/p" "$DECIDUOUS_ENV_FILE")
+          test -n "$token" || { echo "no token in $DECIDUOUS_ENV_FILE"; exit 1; }
+          echo "::add-mask::$token"
+          echo "DECIDUOUS_E2E_TOKEN=$token" >> "$GITHUB_ENV"
+          curl -fsS "$DECIDUOUS_E2E_SERVER/health"
+
+      # Every file runs even when an earlier one fails, so one red run
+      # shows the whole picture.
+      - name: Build
+        run: cargo build --tests
+
+      - name: Bridge (CLI -> server)
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_bridge
+
+      - name: Server (HTTP MCP)
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_server
+
+      - name: Git sync
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_gitsync
+
+      - name: Stdio MCP and API daemon
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_stdio
+
+      - name: Concurrency stress
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_concurrency
+
+      - name: Model-based interleavings
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_model -- --nocapture
+
+      - name: Protocol fuzz
+        if: ${{ !cancelled() }}
+        run: cargo test --test e2e_fuzz -- --nocapture
+
+      - name: Server logs on failure
+        if: failure()
+        run: docker compose -p dx-ci logs --no-color --tail 300 server || true
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker compose -p dx-ci down -v || true
+          docker image rm deciduous-mcp:ci || true
+
+  swarm:
+    name: demo-swarm lead-gated start (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      DECIDUOUS_E2E: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Swarm harness with a stub claude
+        run: cargo test --test e2e_swarm
+
+  mix-test:
+    name: Server test suite (mix test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MIX_ENV: test
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      # The application refuses to boot without a 32-byte token, tests too.
+      DECIDUOUS_MCP_TOKEN: mix-test-token-not-a-secret-0000000000000000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Erlang and Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28.3.3'
+          elixir-version: '1.18.4'
+          version-type: strict
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deciduous_mcp/deps
+            deciduous_mcp/_build
+          key: mix-${{ runner.os }}-${{ hashFiles('deciduous_mcp/mix.lock') }}
+
+      - name: mix test
+        working-directory: deciduous_mcp
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+          mix test
