@@ -16,8 +16,10 @@ defmodule DeciduousMcp.Graph.Edges do
 
     Repo.transaction(fn ->
       # Verify both nodes exist and are in the same workspace
-      with {:ok, from_node} <- get_workspace_node(workspace_id, attrs[:from_node_id] || attrs["from_node_id"]),
-           {:ok, to_node} <- get_workspace_node(workspace_id, attrs[:to_node_id] || attrs["to_node_id"]) do
+      with {:ok, from_node} <-
+             get_workspace_node(workspace_id, attrs[:from_node_id] || attrs["from_node_id"]),
+           {:ok, to_node} <-
+             get_workspace_node(workspace_id, attrs[:to_node_id] || attrs["to_node_id"]) do
         edge_attrs =
           edge_attrs
           |> Map.put(:from_change_id, from_node.change_id)
@@ -111,14 +113,26 @@ defmodule DeciduousMcp.Graph.Edges do
 
   # --- Private helpers ---
 
+  # A non-UUID id would raise Ecto.Query.CastError in the query below; the
+  # tools refuse those before they get here, this is the belt for callers
+  # that do not go through a tool.
+  defp get_workspace_node(_workspace_id, node_id) when not is_binary(node_id),
+    do: {:error, {:node_not_found, node_id}}
+
   defp get_workspace_node(workspace_id, node_id) do
-    Node
-    |> where([n], n.id == ^node_id and n.workspace_id == ^workspace_id)
-    |> where([n], is_nil(n.deleted_at))
-    |> Repo.one()
-    |> case do
-      nil -> {:error, {:node_not_found, node_id}}
-      node -> {:ok, node}
+    case Ecto.UUID.cast(node_id) do
+      :error ->
+        {:error, {:node_not_found, node_id}}
+
+      {:ok, _} ->
+        Node
+        |> where([n], n.id == ^node_id and n.workspace_id == ^workspace_id)
+        |> where([n], is_nil(n.deleted_at))
+        |> Repo.one()
+        |> case do
+          nil -> {:error, {:node_not_found, node_id}}
+          node -> {:ok, node}
+        end
     end
   end
 

@@ -84,11 +84,13 @@ defmodule DeciduousMcp.Graph.Nodes do
   Gets a single node by ID, with optional preloads.
   """
   def get_node(node_id, preloads \\ []) do
-    Node
-    |> Repo.get(node_id)
-    |> case do
-      nil -> {:error, :not_found}
-      node -> {:ok, Repo.preload(node, preloads)}
+    # Repo.get raises Ecto.Query.CastError on a non-UUID; not found is the
+    # honest answer for an id that cannot name a row.
+    with {:ok, _} <- if(is_binary(node_id), do: Ecto.UUID.cast(node_id), else: :error),
+         %Node{} = node <- Repo.get(Node, node_id) do
+      {:ok, Repo.preload(node, preloads)}
+    else
+      _ -> {:error, :not_found}
     end
   end
 
