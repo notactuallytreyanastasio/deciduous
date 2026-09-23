@@ -6,8 +6,27 @@ Match the message, apply the fix, and tell the user what you changed.
 ## "DECIDUOUS: 10 actions since your last graph write"
 
 A project set up by 1.0.2 still has its logging hooks. Upgrade the binary to
-1.0.3 and run `deciduous update` in the project. It removes the hook scripts it
+1.0.5 and run `deciduous update` in the project. It removes the hook scripts it
 wrote and their `settings.json` entries, and keeps the rest.
+
+## "Docker is required" from `init` or `update`
+
+```
+Error: Docker is required: deciduous keeps every project's graph in a PostgreSQL server, and without a remote configured `init` sets one up on this machine with Docker.
+```
+
+The project has no `[remote]`, so `init` tried to set up a local server. Ask
+the user whether to install and start Docker, or to point the project at a
+team's server first (`deciduous remote login --url <url>`, then
+`deciduous remote init <url>`, then `init` again). The project files are
+already written; only the server step is left. Do not set
+`DECIDUOUS_NO_SERVER` to get past it: that leaves a project with nowhere to write.
+
+## "cannot reach ..." from `init` or `update`
+
+The project's `[remote]` server does not answer, or the stored token is wrong.
+The message names the URL. Tell the user. Starting the server or fixing the
+token (`deciduous remote login --url <url>`) is theirs to do.
 
 ## A write is refused with a placeholder id
 

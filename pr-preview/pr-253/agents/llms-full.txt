@@ -5,9 +5,8 @@
 This section is written for you, the coding agent, not for the person you work
 for. It tells you how to install deciduous, wire it into the project you are
 in, connect to a shared graph if there is one, and keep the graph current while
-you work. The commands on these pages were run against deciduous 1.0.2 and the
-output shown is what it printed. 1.0.3 removes the logging hooks; where that
-changes something, the page says so.
+you work. These pages describe deciduous 1.0.5, and the output shown is what
+it printed. Where an older version behaves differently, the page says so.
 
 The pages for people are at [the main site](../index.html). They explain what the
 graph is for. You do not need them to set it up.
@@ -32,9 +31,9 @@ it, and `deciduous remote status` shows the gap. Log through MCP only. See
 
 ## Do it in this order
 
-1. [Install](install.md) the `deciduous` binary, 1.0.3 or newer, and check it.
-2. [Set up the project](project.md): `deciduous init`, then commit the right files.
-3. [Connect to the shared server](shared-graph.md) and register it with your MCP client.
+1. [Install](install.md) the `deciduous` binary, 1.0.5 or newer, and check it. Docker must be running unless the project uses someone else's server.
+2. [Set up the project](project.md): `deciduous init`. It will not finish until the project points at a server that answers. With no remote configured, it sets one up on this machine.
+3. To use a team's server instead, [connect to it](shared-graph.md) before `init`, or run `deciduous remote setup`.
 4. Read [Logging while you work](logging.md). Nothing enforces it; the graph is only as good as what you write.
 5. Run the checks in [Verify](verify.md) and report each result to the user.
 6. When something fails, look in [Troubleshooting](troubleshooting.md) before improvising.
@@ -43,10 +42,12 @@ it, and `deciduous remote status` shows the gap. Log through MCP only. See
 
 ## Before you start, ask the user two things
 
-- What is the shared server's URL, and is the token
-  already on this machine (`~/.config/deciduous/credentials`, or
+- Should the graph live on a server on this machine (`init` sets one up with
+  Docker), or on a team's server? For a team's server: what is its URL, and is
+  the token already on this machine (`~/.config/deciduous/credentials`, or
   `DECIDUOUS_MCP_TOKEN` in the environment)? Never ask them to paste the token
-  into the chat. Have them run `deciduous remote login` themselves.
+  into the chat. Have them run `deciduous remote login` or
+  `deciduous remote setup` themselves.
 - Should the integration files (`.claude/`, `CLAUDE.md`) be committed
   for the whole team, or kept to this checkout?
 
@@ -65,8 +66,9 @@ Do not guess either answer. The first one decides where every node lands.
 
 You need one binary, `deciduous`: the CLI that sets up a project, points it at
 the shared server and installs the agent instructions. The shared server is a
-separate program, covered in [Shared graph](shared-graph.md), and most machines
-never run it.
+separate program. `deciduous init` sets one up on this machine with Docker when
+the project has no remote (see [Set up the project](project.md#the-server-step)),
+so Docker must be installed and running unless the project uses a team's server.
 
 ## Check what is already there
 
@@ -80,9 +82,11 @@ cargo and one from Homebrew, and the first one wins. If they report different
 versions, tell the user which one runs, and fix `PATH` or remove the stale copy
 rather than installing a third.
 
-Use **1.0.3 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
-until it writes to the graph; 1.0.3 removes them, and `deciduous update` on
-1.0.3 takes them out of a project that has them.
+Use **1.0.5 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
+until it writes to the graph. 1.0.3 removed them, 1.0.4 moved the logging
+guidance into the server's `initialize` reply, and 1.0.5 made `init` set up or
+check the server and dropped GitHub Pages. `deciduous update` on 1.0.5 brings
+an older project up to date.
 
 ## Install or upgrade
 
@@ -109,7 +113,7 @@ Then confirm:
 
 ```sh
 deciduous --version
-# deciduous 1.0.2
+# deciduous 1.0.5
 ```
 
 ## Upgrading a project that was set up by an older version
@@ -122,14 +126,17 @@ deciduous check-update   # exit 0: files current; exit 1: run update
 deciduous update
 ```
 
-On 1.0.3, `deciduous update` replaces only files deciduous wrote
+`deciduous update` replaces only files deciduous wrote
 (`.claude/commands/`, `.claude/skills/`, the section of `CLAUDE.md` between
 `<!-- deciduous:start -->` and `<!-- deciduous:end -->`). A file the user
 changed is kept; Markdown gets the new template appended in a marked block.
 Every file it changes is copied to `.deciduous/update-backups/<time>/` first.
 It removes the logging hook scripts it once installed and their entries in
-`.claude/settings.json`, and keeps any hook script the user wrote. In a project
-with a `[remote]` it leaves `.gitignore` and `.gitattributes` alone. `deciduous update --all ~/code` does every project under a directory.
+`.claude/settings.json`, and keeps any hook script the user wrote. It removes
+`/sync-graph` and `.github/workflows/deploy-pages.yml` when deciduous wrote them,
+and leaves `docs/` alone. In a project with a `[remote]` it leaves `.gitignore`
+and `.gitattributes` alone. It then checks the project's server, the same way
+`init` does. `deciduous update --all ~/code` does every project under a directory.
 Show the user `git diff` afterwards. The changes are theirs to commit.
 
 
@@ -169,8 +176,31 @@ writes:
 | `CLAUDE.md` | Workflow instructions between `<!-- deciduous:start -->` and `<!-- deciduous:end -->` | Yes |
 | `.claude/settings.json`, `.claude/hooks/version-check.sh` | A once-a-day update check, nothing else | Yes |
 | `.claude/commands/*.md`, `.claude/skills/*.md` | `/recover`, `/work`, `/decision`, `/pulse`, ... | Yes |
-| `docs/index.html`, `docs/graph-data.json` | A static graph viewer for GitHub Pages | Only if the user wants the graph published |
-| `.github/workflows/deploy-pages.yml`, `cleanup-decision-graphs.yml` | Pages deploy and PNG cleanup | Only with the viewer |
+| `.github/workflows/cleanup-decision-graphs.yml` | Removes the PR graph images `dot --auto` makes, after merge | If the team uses `dot --auto` |
+
+Since 1.0.5 `init` writes no GitHub Pages viewer, `docs/` export or Pages
+workflow, and no `/sync-graph`. On an older project, `deciduous update` removes
+the ones deciduous wrote and leaves `docs/` alone.
+
+## The server step
+
+After writing the files, `init` makes sure the project points at a server that
+answers. It fails with exit 1 and the fix if it cannot:
+
+- **`[remote] url` already set:** the server must answer and accept the stored token.
+- **No remote, a server already running on this machine:** the project is pointed at it (about a second).
+- **No remote, no server:** it downloads the release's `deciduous-mcp-docker.tar.gz` for its own version and checks it against `checksums.txt`. It then starts PostgreSQL and the server on `127.0.0.1:4000` with Docker (a few minutes, the first time on a machine). It stores the token, writes `[remote]`, and registers the server with Claude Code.
+
+```
+Shared graph server
+   Found local server at http://127.0.0.1:4000
+   Wrote .deciduous/config.toml [remote] url = http://127.0.0.1:4000
+   Connected http://127.0.0.1:4000 holds 0 nodes, 0 edges in workspace my-project
+```
+
+`deciduous update` runs the same check. `DECIDUOUS_NO_SERVER=1` skips it, and
+exists only for tests and CI in throwaway directories. Do not set it to get
+past a failure; fix what the message names.
 
 Show the user the list of new files before you commit any of them. Commit
 explicitly by path, never with `git add -A` or `git add .`:
@@ -202,6 +232,25 @@ project on it is a **workspace**, and a workspace's branches are where
 different agents write side by side. Use it when more than one agent, or more
 than one machine, needs to see the others' reasoning while it is happening.
 
+Since 1.0.5 `deciduous init` points every project at one. With no remote
+configured it sets up a server on this machine with Docker (see
+[Set up the project](project.md#the-server-step)). To use a team's server, run
+`deciduous remote init <url>` before `init`, or let the user run the wizard:
+
+```
+deciduous remote setup
+
+Where should this project's graph live?
+
+  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1:4000
+  2) A server someone else runs: you need its URL and token
+```
+
+It reads the token with echo off and checks it against the server before
+storing anything. A wrong token leaves the credentials and config untouched.
+`--local` or `--url <url>` answer the question without a terminal.
+
+The rest of this page is what those steps do, for when you set them up by hand.
 Two separate things have to be configured, and they do not know about each other:
 
 1. **The MCP client**, so your tool calls reach the server. This is how nodes
@@ -544,7 +593,7 @@ worse than one that fails loudly.
 ## Every project
 
 ```sh
-deciduous --version                 # 1.0.2 or newer
+deciduous --version                 # 1.0.5 or newer
 deciduous check-update; echo $?     # 0: integration files match the binary
 git ls-files --error-unmatch .deciduous/config.toml
 ```
@@ -595,8 +644,27 @@ Match the message, apply the fix, and tell the user what you changed.
 ## "DECIDUOUS: 10 actions since your last graph write"
 
 A project set up by 1.0.2 still has its logging hooks. Upgrade the binary to
-1.0.3 and run `deciduous update` in the project. It removes the hook scripts it
+1.0.5 and run `deciduous update` in the project. It removes the hook scripts it
 wrote and their `settings.json` entries, and keeps the rest.
+
+## "Docker is required" from `init` or `update`
+
+```
+Error: Docker is required: deciduous keeps every project's graph in a PostgreSQL server, and without a remote configured `init` sets one up on this machine with Docker.
+```
+
+The project has no `[remote]`, so `init` tried to set up a local server. Ask
+the user whether to install and start Docker, or to point the project at a
+team's server first (`deciduous remote login --url <url>`, then
+`deciduous remote init <url>`, then `init` again). The project files are
+already written; only the server step is left. Do not set
+`DECIDUOUS_NO_SERVER` to get past it: that leaves a project with nowhere to write.
+
+## "cannot reach ..." from `init` or `update`
+
+The project's `[remote]` server does not answer, or the stored token is wrong.
+The message names the URL. Tell the user. Starting the server or fixing the
+token (`deciduous remote login --url <url>`) is theirs to do.
 
 ## A write is refused with a placeholder id
 
