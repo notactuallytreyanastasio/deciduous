@@ -411,11 +411,13 @@ impl OpLog {
     /// server. `None` otherwise: a project with no remote keeps no log, and a
     /// log started later would lack everything before it anyway (that history
     /// is what `remote init` seeds).
+    ///
+    /// A bare file name (`DECIDUOUS_DB_PATH=deciduous.db` from inside
+    /// `.deciduous/`) is in the current directory. Its empty parent used to
+    /// mean "no log": the write was made, never queued, and nothing said so.
     pub fn for_db(db_path: &Path) -> Option<Self> {
+        let db_path = std::path::absolute(db_path).ok()?;
         let dir = db_path.parent()?;
-        if dir.as_os_str().is_empty() {
-            return None;
-        }
         let config = std::fs::read_to_string(dir.join("config.toml")).ok()?;
         let doc: toml::Value = toml::from_str(&config).ok()?;
         doc.get("remote")?.get("url")?.as_str()?;

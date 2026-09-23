@@ -95,8 +95,12 @@ pub fn get_current_git_commit() -> Option<String> {
 /// Can be overridden with DECIDUOUS_DB_PATH env var
 fn get_db_path() -> std::path::PathBuf {
     // Check env var first - always takes priority
+    // Made absolute: a bare `deciduous.db` has an empty parent, and every
+    // file found beside the database (the server log, graph.json) went
+    // missing with it.
     if let Ok(path) = std::env::var("DECIDUOUS_DB_PATH") {
-        return std::path::PathBuf::from(path);
+        let path = std::path::PathBuf::from(path);
+        return std::path::absolute(&path).unwrap_or(path);
     }
 
     // Walk up directory tree to find .deciduous folder
@@ -849,7 +853,7 @@ impl Database {
         if let Some(store) = RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open) {
             db.set_store(Some(store));
         }
-        db.set_oplog(crate::oplog::OpLog::for_db(path.as_ref()));
+        db.set_oplog(crate::oplog::OpLog::for_db(&db.path));
         db.drain_outbox_at_open();
         Ok(db)
     }

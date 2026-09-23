@@ -2311,3 +2311,29 @@ fn new_wal_a_killed_writer_leaves_no_local_write_without_its_op() {
         no_delete.len()
     );
 }
+
+// RUST-N1 / BRIDGE-N3, another spelling: DECIDUOUS_DB_PATH=deciduous.db from
+// inside .deciduous/ has no directory part, and the log was not attached at
+// all: "Created node 7", no warning, and the write never queued.
+#[test]
+fn rust_n1_a_db_path_with_no_directory_part_still_queues() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "bare-db-path");
+    let inside = dir.join(".deciduous");
+    let out = sb.dx_db(
+        &inside,
+        Path::new("deciduous.db"),
+        &["add", "goal", "relative-db-path"],
+    );
+    assert!(out.status.success(), "{}", all_of(&out));
+    assert_eq!(
+        queued_titles(&dir),
+        ["relative-db-path"],
+        "{}",
+        all_of(&out)
+    );
+}
+
+fn all_of(out: &Output) -> String {
+    format!("{}{}", text(&out.stdout), text(&out.stderr))
+}
