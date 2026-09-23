@@ -105,8 +105,8 @@ defmodule DeciduousMcp.MCP.Scope do
   """
   def write_scope_for_node(frame, node_id, args) do
     with {:ok, node} <- lookup_node(node_id),
-         :ok <- check_live(node),
-         :ok <- check_pin(frame, node) do
+         :ok <- check_pin(frame, node),
+         :ok <- check_live(node) do
       claim_lock(node.workspace_id, frame, args)
     else
       {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
@@ -132,6 +132,11 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
+  # Always asked after check_pin, never before. The other order told a
+  # client pinned to one workspace which of another workspace's node ids
+  # were deleted, and when: "was deleted at T" for those, "belongs to
+  # another workspace" for live ones, "not found" for the rest.
+  #
   # A soft-deleted row is kept for audit and for /export's tombstones, not
   # to be read or edited by id. Reading one answered with no sign it was
   # deleted; editing one said "Node updated"; deleting one again reset
@@ -243,8 +248,8 @@ defmodule DeciduousMcp.MCP.Scope do
   """
   def read_node(frame, node_id, preloads \\ []) do
     with {:ok, node} <- Nodes.get_node(node_id, preloads),
-         :ok <- check_live(node),
-         :ok <- check_pin(frame, node) do
+         :ok <- check_pin(frame, node),
+         :ok <- check_live(node) do
       {:ok, node}
     else
       {:error, :not_found} -> {:error, "Node not found: #{node_id}"}

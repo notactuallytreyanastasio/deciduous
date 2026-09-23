@@ -94,4 +94,28 @@ defmodule DeciduousMcp.Web.PinnedReadsTest do
 
     assert "pr-mine" in names and "pr-theirs" in names
   end
+
+  # check_live ran before check_pin, so a pinned client got a three-way
+  # answer about another workspace: "not found" for a random id, "belongs to
+  # another workspace" for a live node, and "was deleted at <time>" for a
+  # deleted one. The pin has to be the first thing asked.
+  test "a deleted node in another workspace answers like a live one there", %{
+    pinned: pinned,
+    child: child
+  } do
+    {:ok, _} = Nodes.delete_node(child.id)
+
+    for {tool, args} <- [
+          {"show_node", %{"node_id" => child.id}},
+          {"get_descendants", %{"node_id" => child.id}},
+          {"get_ancestors", %{"node_id" => child.id}},
+          {"update_node", %{"node_id" => child.id, "status" => "completed"}},
+          {"delete_node", %{"node_id" => child.id}},
+          {"delete_edge", %{"from_node_id" => child.id, "to_node_id" => child.id}}
+        ] do
+      assert {:error, message} = McpClient.call(pinned, tool, args)
+      assert message =~ "another workspace", "#{tool}: #{message}"
+      refute message =~ "deleted", "#{tool}: #{message}"
+    end
+  end
 end
