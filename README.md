@@ -54,7 +54,7 @@ Ten Claude Code sessions, started at the same second in ten git worktrees of one
 
 What made it work is one server, reachable over MCP from every directory, with the branch as the unit of coordination:
 
-- **Locks.** Every write claims an advisory lock on `(workspace, branch)` with a ten second lease. Ten agents on ten branches never wait for each other; two on one branch are told who is there. `check_activity` reports the holders and the last node on each of the twenty most recent branches.
+- **Activity.** Every write, MCP or CLI, records who wrote which branch; none is refused because someone else is writing. `check_activity` lists who wrote in the last five minutes and the last node on each of the twenty most recent branches.
 - **Events.** Postgres triggers push every write over a WebSocket the moment it lands. `deciduous remote watch` prints one quoted line per write; Claude Code's `Monitor` tool can sit on the same URL.
 - **Provenance.** A `took_from` edge records a borrow across branches, and `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression; that is the wrong place for them.
 

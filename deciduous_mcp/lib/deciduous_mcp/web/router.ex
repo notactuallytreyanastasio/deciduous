@@ -140,17 +140,7 @@ defmodule DeciduousMcp.Web.Router do
         {:ok, body, conn} ->
           case Jason.decode(body) do
             {:ok, %{"change_ids" => ids}} when is_list(ids) and length(ids) <= 1000 ->
-              held = Workspaces.holding(Enum.filter(ids, &is_binary/1))
-
-              # A pinned client learns nothing about the other workspaces,
-              # as with list_workspaces.
-              held =
-                case conn.assigns[:pinned_workspace_name] do
-                  nil -> held
-                  pinned -> Enum.filter(held, &(&1.name == pinned))
-                end
-
-              json(conn, 200, %{workspaces: held})
+              locate(conn, ids)
 
             _ ->
               json(conn, 422, %{error: "body must be {\"change_ids\": [...]}, at most 1000"})
@@ -162,6 +152,31 @@ defmodule DeciduousMcp.Web.Router do
         {:error, _} ->
           json(conn, 400, %{error: "could not read body"})
       end
+    end
+  end
+
+  # A NUL went into `change_id IN (...)`, which Postgres cannot take in
+  # text, and came back as an empty HTTP 500 (SERVER-N5). No change_id can
+  # hold one, so asking for one is an error, said by position.
+  defp locate(conn, ids) do
+    case Enum.find_index(ids, &(is_binary(&1) and String.contains?(&1, <<0>>))) do
+      nil ->
+        held = Workspaces.holding(Enum.filter(ids, &is_binary/1))
+
+        # A pinned client learns nothing about the other workspaces,
+        # as with list_workspaces.
+        held =
+          case conn.assigns[:pinned_workspace_name] do
+            nil -> held
+            pinned -> Enum.filter(held, &(&1.name == pinned))
+          end
+
+        json(conn, 200, %{workspaces: held})
+
+      i ->
+        json(conn, 422, %{
+          error: "change_ids[#{i}] contains a NUL character (U+0000); no change_id can hold one"
+        })
     end
   end
 
@@ -233,7 +248,10 @@ defmodule DeciduousMcp.Web.Router do
   # pull or a status of a workspace another repository claimed is refused
   # here, the same check /ops and /import make, instead of being left to
   # the client calling /claim first. No header (1.0.7, a browser, the
-  # global view) is not checked.
+  # global view) is not checked. A read checks the claim and never makes
+  # one (Workspaces.check_claim/2): it used to record the roots on an
+  # unclaimed workspace, so whichever repository of that name pulled first
+  # owned it (SERVER-N7).
   defp export_claim(conn, scope) do
     case {get_req_header(conn, "x-deciduous-repo-roots"), scope} do
       {[], _} ->
@@ -246,7 +264,7 @@ defmodule DeciduousMcp.Web.Router do
         roots = header |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
 
         with {:ok, ws} <- Workspaces.get_workspace(id),
-             {:ok, _} <- Workspaces.claim(ws, roots, false) do
+             {:ok, _} <- Workspaces.check_claim(ws, roots) do
           :ok
         else
           {:error, {refusal, _} = claim}
@@ -429,14 +447,34 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
+  # A claim with roots to record is a write, and creates the workspace it
+  # names (`remote init` reserves the name for its repository this way).
+  # One with nothing to record (no roots, or a repository with no commit
+  # yet) against a workspace that does not exist has nothing to check
+  # either: it answers `unchecked` and creates nothing (SERVER-N6).
   defp handle_claim(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
          {:ok, payload} <- held_to_pin(conn, payload),
-         {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
-         {:ok, workspace} <- Workspaces.find_or_create(name),
-         {:ok, outcome} <-
-           Workspaces.claim(workspace, payload["repo_roots"], payload["adopt"] == true) do
-      json(conn, 200, %{workspace: workspace.name, claim: outcome})
+         {:ok, name} <- claim_name(payload["workspace"] || ""),
+         {:ok, roots} <- Workspaces.validate_roots(payload["repo_roots"]) do
+      case {Workspaces.get_by_name(name), roots} do
+        {{:error, :not_found}, roots} when roots in [:none, []] ->
+          json(conn, 200, %{workspace: name, claim: "unchecked"})
+
+        _ ->
+          with {:ok, workspace} <- Workspaces.find_or_create(name),
+               {:ok, outcome} <-
+                 Workspaces.claim(workspace, payload["repo_roots"], payload["adopt"] == true) do
+            json(conn, 200, %{workspace: workspace.name, claim: outcome})
+          else
+            {:error, {refusal, _} = claim}
+            when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+              claim_refused(conn, claim)
+
+            {:error, reason} ->
+              json(conn, 422, %{error: to_string_reason(reason)})
+          end
+      end
     else
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
@@ -450,6 +488,14 @@ defmodule DeciduousMcp.Web.Router do
 
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
+    end
+  end
+
+  defp claim_name(raw) do
+    case Workspaces.normalize_name(raw) do
+      {:ok, "*"} -> {:error, Workspaces.describe_name_error(raw, :global)}
+      {:ok, name} -> {:ok, name}
+      {:error, reason} -> {:error, Workspaces.describe_name_error(raw, reason)}
     end
   end
 

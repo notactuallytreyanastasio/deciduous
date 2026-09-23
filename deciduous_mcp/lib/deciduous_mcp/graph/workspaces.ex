@@ -103,6 +103,21 @@ defmodule DeciduousMcp.Graph.Workspaces do
         group_by: n.workspace_id,
         select: %{workspace_id: n.workspace_id, count: count(n.id)}
 
+    # updated_at is the last write: the workspace row is written once, when
+    # it is created, and list_workspaces showed that time for a workspace
+    # written to a minute ago (team probe T10). A delete is a write too
+    # (it sets deleted_at and updated_at), so deleted nodes count here.
+    # An edge delete leaves no row and is the one write this cannot see.
+    last_node_write =
+      from n in Node,
+        group_by: n.workspace_id,
+        select: %{workspace_id: n.workspace_id, at: max(n.updated_at)}
+
+    last_edge_write =
+      from e in Edge,
+        group_by: e.workspace_id,
+        select: %{workspace_id: e.workspace_id, at: max(e.updated_at)}
+
     # An edge counts when both its ends are live, the rule /export and
     # get_graph already apply; counting every row put edges through a
     # deleted node into edge_count beside a live-only node_count.
@@ -120,6 +135,10 @@ defmodule DeciduousMcp.Graph.Workspaces do
       on: n.workspace_id == w.id,
       left_join: e in subquery(edge_counts),
       on: e.workspace_id == w.id,
+      left_join: ln in subquery(last_node_write),
+      on: ln.workspace_id == w.id,
+      left_join: le in subquery(last_edge_write),
+      on: le.workspace_id == w.id,
       order_by: [desc: coalesce(n.count, 0)],
       select: %{
         id: w.id,
@@ -127,7 +146,8 @@ defmodule DeciduousMcp.Graph.Workspaces do
         description: w.description,
         node_count: coalesce(n.count, 0),
         edge_count: coalesce(e.count, 0),
-        updated_at: w.updated_at
+        updated_at:
+          type(fragment("GREATEST(?, ?, ?)", w.updated_at, ln.at, le.at), :utc_datetime_usec)
       }
     )
     |> Repo.all()
@@ -203,9 +223,44 @@ defmodule DeciduousMcp.Graph.Workspaces do
     end)
   end
 
-  defp validate_roots(nil), do: {:ok, :none}
+  @doc """
+  Checks a claim without making one: the answer `claim/3` would give, but
+  an unclaimed workspace stays unclaimed and no root is added.
 
-  defp validate_roots(roots) when is_list(roots) do
+  For reads. GET /export with the CLI's X-Deciduous-Repo-Roots header used
+  `claim/3`, so the first repository of a name to run `remote status` or
+  `pull` owned the workspace, including an unrelated one, and the real
+  repository then got 409 on its own workspace (SERVER-N7).
+  """
+  def check_claim(%Workspace{} = ws, roots) do
+    with {:ok, roots} <- validate_roots(roots) do
+      held = (ws.settings || %{})["repo_roots"] || []
+
+      cond do
+        roots == :none -> {:ok, :unchecked}
+        held == [] -> {:ok, :unchecked}
+        roots == [] -> {:error, {:no_commit_yet, held}}
+        Enum.any?(roots, &(&1 in held)) -> {:ok, :verified}
+        true -> {:error, {:claimed_by_other_repository, held}}
+      end
+    end
+  end
+
+  # A repository has one root commit, a few when histories were merged.
+  # 20,000 were stored without complaint (SERVER-N6), and every later
+  # claim check reads them all.
+  @max_roots 100
+
+  @doc "`{:ok, sorted_roots}`, `{:ok, :none}` for nil, or `{:error, sentence}`."
+  def validate_roots(nil), do: {:ok, :none}
+
+  def validate_roots(roots) when is_list(roots) and length(roots) > @max_roots,
+    do:
+      {:error,
+       "repo_roots has #{length(roots)} entries; a repository has a handful of root " <>
+         "commits at most, and the limit is #{@max_roots}"}
+
+  def validate_roots(roots) when is_list(roots) do
     case Enum.reject(
            roots,
            &(is_binary(&1) and Regex.match?(~r/\A[0-9a-f]{40}([0-9a-f]{24})?\z/, &1))
@@ -215,11 +270,14 @@ defmodule DeciduousMcp.Graph.Workspaces do
 
       bad ->
         {:error,
-         "repo_roots must be git commit ids (40 or 64 lowercase hex); got #{inspect(bad)}"}
+         "repo_roots must be git commit ids (40 or 64 lowercase hex); got " <>
+           inspect(bad, limit: 5, printable_limit: 80)}
     end
   end
 
-  defp validate_roots(other), do: {:error, "repo_roots must be a list, got #{inspect(other)}"}
+  def validate_roots(other),
+    do:
+      {:error, "repo_roots must be a list, got #{inspect(other, limit: 5, printable_limit: 80)}"}
 
   @doc """
   Workspaces holding any of `change_ids`, with how many each holds, most
@@ -278,7 +336,8 @@ defmodule DeciduousMcp.Graph.Workspaces do
       String.match?(trimmed, ~r/[\p{Cc}\p{Cf}]/u) ->
         {:error, :control_character}
 
-      String.length(trimmed) > @max_name_length ->
+      # Codepoints, not graphemes: the column is varchar(255).
+      DeciduousMcp.MCP.ArgCheck.chars(trimmed) > @max_name_length ->
         {:error, :too_long}
 
       true ->
@@ -318,5 +377,30 @@ defmodule DeciduousMcp.Graph.Workspaces do
         else: inspect(raw, binaries: :as_strings)
 
     "invalid workspace name #{shown}: it #{why}"
+  end
+
+  @doc """
+  Shares the workspace's write lock until the calling transaction ends.
+  Every create keyed by a change_id or by a pair of nodes takes it
+  (`Nodes.lock_change_id/2`, `Edges.lock_pair/3`) before its own key, so
+  a bulk import, which takes it exclusively (`lock_exclusively/1`), runs
+  alone against them.
+
+  One exclusive lock per import, not one lock per row it writes: an
+  advisory lock takes a slot in the shared lock table, and a graph of
+  51,158 edges would run it out ("out of shared memory").
+  """
+  def lock_shared(workspace_id) do
+    Repo.query!("SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 0))", [
+      "ws|#{workspace_id}"
+    ])
+
+    :ok
+  end
+
+  @doc "The exclusive side of `lock_shared/1`, for POST /import."
+  def lock_exclusively(workspace_id) do
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["ws|#{workspace_id}"])
+    :ok
   end
 end

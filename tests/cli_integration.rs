@@ -166,6 +166,38 @@ fn test_add_and_list_nodes() {
     assert!(out.contains("action"));
 }
 
+/// SERVER-N3 (verification), the CLI's half: `--date` it cannot read was
+/// stored as typed ("use as-is and hope for the best") and queued for the
+/// server, whose POST /ops refuses a created_at that is not a time, so the
+/// op stayed rejected in the log. It is refused here instead, and no node
+/// is made.
+#[test]
+fn server_n3_add_refuses_a_date_it_cannot_read() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let db_path = temp_dir.path().join("test.db");
+
+    let output = run_deciduous(&["add", "goal", "Dated", "--date", "yesterday"], &db_path);
+    assert!(!output.status.success(), "{}", stdout(&output));
+    assert!(
+        stderr(&output).contains("could not read --date \"yesterday\""),
+        "{}",
+        stderr(&output)
+    );
+
+    let output = run_deciduous(&["nodes"], &db_path);
+    assert!(!stdout(&output).contains("Dated"), "{}", stdout(&output));
+
+    // The forms it documents still work.
+    for d in [
+        "2024-01-02",
+        "2024-01-02 03:04:05",
+        "2024-01-02T03:04:05+00:00",
+    ] {
+        let output = run_deciduous(&["add", "goal", "ok", "--date", d], &db_path);
+        assert!(output.status.success(), "{d}: {}", stderr(&output));
+    }
+}
+
 #[test]
 fn test_add_node_with_all_metadata() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");

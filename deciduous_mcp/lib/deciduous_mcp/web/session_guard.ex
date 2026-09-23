@@ -182,6 +182,10 @@ defmodule DeciduousMcp.Web.SessionGuard do
         {:refuse, 400, @invalid_request_code,
          "Invalid Request: id must be a string or an integer, got #{describe(id)}", nil}
 
+      method == "initialize" and client_info_problem(message) != nil ->
+        {:refuse, 200, @invalid_params_code,
+         "Invalid params for initialize: " <> client_info_problem(message), id}
+
       method == "tools/call" ->
         case tool_call_params_problem(Map.get(message, "params")) do
           nil -> check_request_params(message)
@@ -335,6 +339,37 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   defp tool_call_params_problem(other),
     do: "tools/call params must be an object, got #{describe(other)}"
+
+  # clientInfo is stored with every write the session makes (the activity
+  # record check_activity reads), in columns Postgres cannot put a NUL
+  # into. Accepted as it was, a 256-character or
+  # NUL-holding name let the session initialize and then failed every
+  # write it made with "add_node failed (MatchError)" (SERVER-N2). It is
+  # refused here instead, where the client can still pick another.
+  @client_info_max 255
+
+  defp client_info_problem(%{"params" => %{"clientInfo" => %{} = info}}) do
+    Enum.find_value(["name", "version"], fn key ->
+      case info[key] do
+        v when is_binary(v) ->
+          cond do
+            String.contains?(v, <<0>>) ->
+              "clientInfo.#{key} contains a NUL character (U+0000), which cannot be stored"
+
+            DeciduousMcp.MCP.ArgCheck.chars(v) > @client_info_max ->
+              "clientInfo.#{key} is #{DeciduousMcp.MCP.ArgCheck.chars(v)} characters; the limit is #{@client_info_max}"
+
+            true ->
+              nil
+          end
+
+        _ ->
+          nil
+      end
+    end)
+  end
+
+  defp client_info_problem(_), do: nil
 
   defp usable_id(%{"id" => id}) when is_binary(id) or is_integer(id), do: id
   defp usable_id(_), do: nil

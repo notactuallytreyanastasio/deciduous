@@ -9,7 +9,7 @@ defmodule DeciduousMcp.MCP.Protocol do
 
   @mcp_version "2024-11-05"
   @server_name "deciduous-mcp"
-  @server_version "1.0.7"
+  @server_version Mix.Project.config()[:version]
 
   def mcp_version, do: @mcp_version
   def server_name, do: @server_name

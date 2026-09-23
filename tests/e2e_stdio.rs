@@ -290,6 +290,54 @@ fn r6_api_query_has_a_time_and_size_limit() {
     );
 }
 
+/// The r6 flake (chapter 30 verification): the first request to a freshly
+/// spawned API daemon was refused, "Connection refused (os error 61)", in 1
+/// run of 4. ApiDaemon::spawn chose a free port by binding and releasing it
+/// (dead_port) and handed it to the child, and took any successful TCP
+/// connect to it as the child listening. Many daemons started at once, with
+/// other sockets opening beside them, is the shape of a battery run.
+#[test]
+fn r6_flake_daemons_started_at_once_each_answer_their_first_request() {
+    let Some(()) = local("r6_flake_daemons_started_at_once_each_answer_their_first_request") else {
+        return;
+    };
+    let sb = std::sync::Arc::new(Sandbox::new());
+    let threads: Vec<_> = (0..12)
+        .map(|i| {
+            let sb = sb.clone();
+            std::thread::spawn(move || {
+                let d = ApiDaemon::spawn(&sb, &sb.base().join(format!("flake{i}")), API_TOKEN);
+                let s = d.as_server();
+                let r = s.try_request(
+                    "PUT",
+                    &format!("/api/v1/graphs/g{i}"),
+                    Some(&s.bearer()),
+                    &[],
+                    None,
+                    Duration::from_secs(20),
+                );
+                match r {
+                    Ok(r) if r.status == 201 || r.status == 200 => {}
+                    other => panic!(
+                        "daemon {i} on port {}: {:?}",
+                        d.port,
+                        other.map(|r| r.status)
+                    ),
+                }
+                // Its own data directory, not a neighbour's.
+                assert!(
+                    sb.base().join(format!("flake{i}/graphs/g{i}")).exists(),
+                    "daemon {i} on port {} wrote somewhere else",
+                    d.port
+                );
+            })
+        })
+        .collect();
+    for t in threads {
+        t.join().unwrap();
+    }
+}
+
 /// R7: /query ATTACH passed the read-only check, and its error told apart an
 /// existing file from a missing one; pragma_database_list leaked the data
 /// directory's absolute path.

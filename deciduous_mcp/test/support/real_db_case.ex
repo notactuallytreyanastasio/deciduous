@@ -25,6 +25,14 @@ defmodule DeciduousMcp.RealDbCase do
     Ecto.Adapters.SQL.Sandbox.mode(DeciduousMcp.Repo, :auto)
 
     on_exit(fn ->
+      # Edges first: deleting one writes a tombstone (chapter 29's trigger),
+      # which fails its foreign key once the workspace row is gone, as it
+      # is while a workspace delete cascades to the edges.
+      DeciduousMcp.Repo.query!(
+        "DELETE FROM decision_edges WHERE workspace_id IN (SELECT id FROM workspaces WHERE name LIKE $1)",
+        [prefix <> "%"]
+      )
+
       DeciduousMcp.Repo.query!("DELETE FROM workspaces WHERE name LIKE $1", [prefix <> "%"])
       Ecto.Adapters.SQL.Sandbox.mode(DeciduousMcp.Repo, :manual)
     end)

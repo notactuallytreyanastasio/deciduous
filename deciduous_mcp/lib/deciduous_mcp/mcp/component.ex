@@ -50,6 +50,7 @@ defmodule DeciduousMcp.MCP.Component do
       def input_schema do
         definition()[:input_schema]
         |> DeciduousMcp.MCP.ArgCheck.with_limits()
+        |> DeciduousMcp.MCP.ArgCheck.closed()
         |> DeciduousMcp.MCP.Component.stringify()
       end
 
@@ -121,7 +122,44 @@ defmodule DeciduousMcp.MCP.Component do
 
   def dispatch_tool(module, params, frame) do
     params = params || %{}
+    definition = module.definition()
 
+    with :ok <-
+           DeciduousMcp.MCP.ArgCheck.unknown_arguments(
+             definition[:name],
+             definition[:input_schema] || %{},
+             sent_arguments(frame, params)
+           ),
+         :ok <- DeciduousMcp.MCP.Scope.check_node_workspace(definition[:name], params) do
+      dispatch_known_tool(module, params, frame)
+    else
+      {:error, message} ->
+        {:error, Error.execution(refused(module, message)), frame}
+    end
+  end
+
+  # "nothing was written" is the thing a caller retrying a write most needs
+  # to know. Said after a read's refusal ("max_depth must be at least 1,
+  # got 0; nothing was written") it suggested the read might have written.
+  @reads ~w(show_node query_nodes get_graph find_orphans get_ancestors get_descendants
+            ask_graph list_workspaces check_activity)
+
+  defp refused(module, message) do
+    if module.definition()[:name] in @reads,
+      do: message,
+      else: message <> "; nothing was written"
+  end
+
+  # The arguments as the client sent them. `params` is Peri's output, which
+  # holds only the declared keys; the request on the frame is the original.
+  defp sent_arguments(frame, params) do
+    case frame do
+      %{request: %{params: %{"arguments" => args}}} when is_map(args) -> args
+      _ -> params
+    end
+  end
+
+  defp dispatch_known_tool(module, params, frame) do
     case invalid_id(params) do
       {key, value} ->
         {:error,
@@ -130,19 +168,22 @@ defmodule DeciduousMcp.MCP.Component do
          ), frame}
 
       nil ->
-        schema = DeciduousMcp.MCP.ArgCheck.with_limits(module.definition()[:input_schema] || %{})
+        definition = module.definition()
 
-        case DeciduousMcp.MCP.ArgCheck.check(schema, params) do
+        schema =
+          (definition[:input_schema] || %{})
+          |> DeciduousMcp.MCP.ArgCheck.with_limits()
+          |> DeciduousMcp.MCP.ArgCheck.closed()
+
+        case DeciduousMcp.MCP.ArgCheck.check(schema, params, definition[:name]) do
           :ok ->
             dispatch_valid_tool(module, params, frame)
 
           # Answered like every other refusal a tool makes (execution error,
           # the sentence as the message), not as -32602 with the sentence
           # tucked into `data`: the message is what a client shows the model.
-          # The suffix is true for reads too, and it is the thing a caller
-          # retrying a write most needs to know.
           {:error, message} ->
-            {:error, Error.execution(message <> "; nothing was written"), frame}
+            {:error, Error.execution(refused(module, message)), frame}
         end
     end
   end
@@ -185,6 +226,7 @@ defmodule DeciduousMcp.MCP.Component do
   # for a failed insert the row being written. The client gets one line
   # naming the tool and the exception's type; the log gets the rest.
   defp dispatch_valid_tool(module, params, frame) do
+    DeciduousMcp.MCP.Scope.discard_activity()
     call = fn -> module.call(%{arguments: params, server: frame}) end
 
     # Only a tool that takes a workspace can create one; update_node and
@@ -198,6 +240,8 @@ defmodule DeciduousMcp.MCP.Component do
     end
   rescue
     exception ->
+      DeciduousMcp.MCP.Scope.discard_activity()
+
       crashed(
         module,
         frame,
@@ -206,9 +250,18 @@ defmodule DeciduousMcp.MCP.Component do
       )
   catch
     kind, reason ->
+      DeciduousMcp.MCP.Scope.discard_activity()
       crashed(module, frame, Exception.format(kind, reason, __STACKTRACE__), kind)
   else
-    result -> translate_tool_result(result, frame)
+    # Who wrote where is recorded once the write has happened, and only
+    # then (Scope.record_activity/3 holds it until here).
+    {:ok, _} = result ->
+      DeciduousMcp.MCP.Scope.flush_activity()
+      translate_tool_result(result, frame)
+
+    result ->
+      DeciduousMcp.MCP.Scope.discard_activity()
+      translate_tool_result(result, frame)
   end
 
   # A call that creates a workspace runs in one transaction with it. The
@@ -248,9 +301,14 @@ defmodule DeciduousMcp.MCP.Component do
     end
   end
 
+  # A tool that names its node by id takes `workspace` only to check it
+  # (Scope.check_node_workspace/2); it never creates one.
   defp names_workspace?(module) do
-    props = get_in(module.definition(), [:input_schema, :properties]) || %{}
-    Map.has_key?(props, :workspace) or Map.has_key?(props, "workspace")
+    definition = module.definition()
+    props = get_in(definition, [:input_schema, :properties]) || %{}
+
+    (Map.has_key?(props, :workspace) or Map.has_key?(props, "workspace")) and
+      not DeciduousMcp.MCP.Scope.node_scoped?(definition[:name])
   end
 
   defp has_nodes?(name) do
@@ -397,6 +455,14 @@ defmodule DeciduousMcp.MCP.Component do
   end
 
   def describe_error({:node_not_found, id}), do: "#{id} is not a node in this workspace"
+
+  def describe_error({:edge_exists, edge}),
+    do: "#{edge.from_node_id} -> #{edge.to_node_id} (#{edge.edge_type}) already exists"
+
+  def describe_error({:reverse_exists, edge}),
+    do:
+      "#{edge.from_node_id} -> #{edge.to_node_id} (#{edge.edge_type}) already exists, and " <>
+        "#{edge.to_node_id} -> #{edge.from_node_id} would make the two nodes each other's parent"
 
   def describe_error(reason) do
     Logger.error("unrecognised tool error: " <> inspect(reason, limit: :infinity))

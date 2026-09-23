@@ -61,4 +61,13 @@ defmodule DeciduousMcp.MCP.InstructionsTest do
     desc = DeciduousMcp.MCP.Scope.schema_property()[:workspace][:description]
     assert desc =~ ".deciduous/config.toml"
   end
+
+  # T2, T3, T7: what an agent needs to know about the three changes this
+  # chapter made to how writes behave, before its first write.
+  test "T2 T3 T7: agents are told a busy branch never blocks, retries take a change_id, and unknown arguments are refused" do
+    text = DeciduousMcp.MCP.Instructions.text()
+    assert text =~ "check_activity"
+    assert text =~ "change_id"
+    assert text =~ "unknown argument"
+  end
 end

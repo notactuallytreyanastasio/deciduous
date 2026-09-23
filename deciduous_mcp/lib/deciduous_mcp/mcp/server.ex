@@ -26,9 +26,13 @@ defmodule DeciduousMcp.MCP.Server do
 
   deciduous_always_on — injects always-on capture instructions into any client
   """
+  # The version is mix.exs's, read at compile time, so a release bumps it
+  # in one place and a server built from any commit reports the version
+  # that commit carries (SERVER-N9: three copies, and serverInfo said
+  # 1.0.7 on the 1.0.8 stack).
   use Hermes.Server,
     name: "deciduous-mcp",
-    version: "1.0.7",
+    version: Mix.Project.config()[:version],
     capabilities: [:tools, :prompts]
 
   require Logger

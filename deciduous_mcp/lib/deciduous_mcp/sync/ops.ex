@@ -38,7 +38,9 @@ defmodule DeciduousMcp.Sync.Ops do
   """
   import Ecto.Query
 
+  alias DeciduousMcp.Activity
   alias DeciduousMcp.Graph.{Edges, Nodes, Workspaces}
+  alias DeciduousMcp.MCP.ArgCheck
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Document, Edge, Node}
   alias DeciduousMcp.Sync.Import
@@ -46,20 +48,195 @@ defmodule DeciduousMcp.Sync.Ops do
   @max_ops 5_000
   @settable ~w(title description status)
 
+  # What an op may carry, in the JSON Schema terms MCP's tools use, checked
+  # by the same DeciduousMcp.MCP.ArgCheck (with_limits adds the sizes: a
+  # title 10,000 characters and not blank, a branch 512, any other string
+  # 262,144, an array 1,000 items, 1 Mi of text in all). Before, /ops held
+  # an op to none of it: a 1,000,000-character title was applied and
+  # query_nodes served it back whole (SERVER-N3).
+  #
+  # create_node takes the node schema's vocabulary, which keeps the two
+  # legacy values (`feedback`, `done`) that exist in graphs on disk: the
+  # CLI refuses them for a new node, so a create carrying one is a seed of
+  # a node it already held, and refusing it would leave that op rejected
+  # in the log for good. An update sets a status the CLI chose now, and
+  # holds to the current vocabulary, as MCP does.
+  #
+  # The metadata keys MCP's add_node writes are held to its types (files
+  # "notalist" and prompt {"a": 1} were applied; add_node refuses both).
+  # Other keys are the node's own and pass, bounded like every string.
+  @metadata_schema %{
+    type: "object",
+    properties: %{
+      branch: %{type: "string"},
+      confidence: %{type: "number", minimum: 0, maximum: 100},
+      prompt: %{type: "string"},
+      commit: %{type: "string"},
+      files: %{type: "array", items: %{type: "string"}}
+    }
+  }
+
+  # Only creates and updates of nodes went through held_to/3; a create_edge
+  # with a 2,000,000-character rationale was applied (add_edge refuses it
+  # at 262,144). The weight is a number and not negative, as the edge
+  # changeset has it; no upper bound, since a finite float is stored and
+  # read back exactly and no client writes anything but 1.0.
+  @edge_schema %{
+    type: "object",
+    properties: %{
+      edge_type: %{type: "string", enum: Edge.edge_types()},
+      rationale: %{type: "string"},
+      weight: %{type: "number", minimum: 0}
+    }
+  }
+
+  @kinds ~w(create_node update_node delete_node create_edge delete_edge
+             attach_document detach_document describe_document)
+
+  @create_schema %{
+    type: "object",
+    required: ["node_type", "title"],
+    properties: %{
+      node_type: %{type: "string", enum: Node.node_types()},
+      title: %{type: "string"},
+      description: %{type: "string"},
+      status: %{type: "string", enum: Node.statuses()},
+      metadata: @metadata_schema
+    }
+  }
+
+  @update_schema %{
+    type: "object",
+    properties: %{
+      set: %{
+        type: "object",
+        properties: %{
+          title: %{type: "string"},
+          description: %{type: "string"},
+          status: %{type: "string", enum: Node.statuses() -- ["done"]}
+        }
+      },
+      metadata: @metadata_schema
+    }
+  }
+
+  # A workspace is created here only when the batch holds a create_node
+  # that would be applied. Before, find_or_create ran first, so an empty
+  # batch, or one whose every op was refused, left a workspace behind
+  # (SERVER-N6), against chapter 22's rule that a failed write creates
+  # none. Against a workspace that does not exist every other op has its
+  # answer already: an update or an edge names a node the server does not
+  # hold, and a delete finds nothing to delete.
   def run(%{"ops" => ops} = payload) when is_list(ops) do
-    with {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
+    raw = payload["workspace"] || ""
+
+    with {:ok, name} <- workspace_name(raw),
          :ok <- check_batch(ops),
-         {:ok, workspace} <- Workspaces.find_or_create(name),
-         {:ok, _claim} <- Workspaces.claim(workspace, payload["repo_roots"], false) do
-      {:ok,
-       %{
-         workspace: workspace.name,
-         results: Enum.map(ops, &apply_one(workspace, &1))
-       }}
+         {:ok, workspace, claim} <- workspace_for(name, ops, payload["repo_roots"]) do
+      {results, _claim} = Enum.map_reduce(ops, claim, &apply_one(workspace, &1, &2))
+      record_activity(workspace, ops, results, payload["repo_roots"])
+      {:ok, %{workspace: name, results: results}}
     end
   end
 
   def run(_), do: {:error, "payload must contain an \"ops\" list"}
+
+  # The CLI shows up in check_activity beside the MCP sessions (team probe
+  # T10: its writes never appeared). One entry per branch a batch wrote a
+  # node on, or the no-branch entry when what it applied names none (an
+  # update or an edge op carries no branch). A CLI has no session; a
+  # repository's root commits name it across runs, and all 1.0.7-style
+  # clients that send none share one entry.
+  defp record_activity(nil, _ops, _results, _roots), do: :ok
+
+  defp record_activity(workspace, ops, results, roots) do
+    applied =
+      ops
+      |> Enum.zip(results)
+      |> Enum.filter(fn {_op, r} -> r.result == "applied" end)
+      |> Enum.map(fn {op, _} -> get_in(op, ["metadata", "branch"]) end)
+      |> Enum.map(&if(is_binary(&1), do: &1, else: ""))
+      |> Enum.uniq()
+
+    session =
+      case roots do
+        [root | _] when is_binary(root) -> "cli:" <> String.slice(root, 0, 12)
+        _ -> "cli"
+      end
+
+    Enum.each(applied, &Activity.record(workspace.id, &1, session, "deciduous CLI", nil))
+  end
+
+  defp workspace_name(raw) do
+    case Workspaces.normalize_name(raw) do
+      {:ok, "*"} -> {:error, Workspaces.describe_name_error(raw, :global)}
+      {:ok, name} -> {:ok, name}
+      {:error, reason} -> {:error, Workspaces.describe_name_error(raw, reason)}
+    end
+  end
+
+  # The claim is checked before anything is applied (a workspace another
+  # repository holds is refused whole, as before) and recorded only by the
+  # first op that writes, in that op's transaction. It used to be recorded
+  # up front: on a workspace an agent had made over MCP, which no
+  # repository has claimed, an /ops batch that wrote nothing (empty, every
+  # op rejected, a delete of an absent node) claimed it for its roots, and
+  # the real repository's next push was 409 claimed_by_other_repository
+  # (verification of SERVER-N6). Recording it in the writing op's own
+  # transaction, rather than after the batch, means two repositories
+  # racing for an unclaimed workspace cannot both write: the second one's
+  # op is refused and rolled back.
+  #
+  # Returns {:ok, workspace or nil, roots still to record or nil}.
+  defp workspace_for(name, ops, roots) do
+    case Workspaces.get_by_name(name) do
+      {:ok, workspace} ->
+        with {:ok, _status} <- Workspaces.check_claim(workspace, roots),
+             {:ok, valid} <- Workspaces.validate_roots(roots) do
+          {:ok, workspace, if(is_list(valid) and valid != [], do: roots)}
+        end
+
+      {:error, :not_found} ->
+        if Enum.any?(ops, &would_create?/1) do
+          with {:ok, workspace} <- Workspaces.find_or_create(name),
+               {:ok, _claim} <- Workspaces.claim(workspace, roots, false),
+               do: {:ok, workspace, nil}
+        else
+          # Checked all the same: a malformed repo_roots is an error
+          # whether or not anything is written.
+          with {:ok, _} <- Workspaces.validate_roots(roots), do: {:ok, nil, nil}
+        end
+    end
+  end
+
+  defp would_create?(%{"kind" => "create_node"} = op) do
+    with nil <- malformed(op),
+         {:ok, cid} <- change_id(op, "change_id"),
+         :ok <- held_to(@create_schema, op, cid),
+         {:ok, _} <- time(op, "created_at", cid),
+         {:ok, _} <- time(op, "updated_at", cid) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  # A delete of a node the server never had writes a tombstone (bury/3),
+  # so a create of it replayed later from another log meets the delete
+  # instead of bringing the node into being. That is a write, and it needs
+  # the workspace to hold it.
+  defp would_create?(%{"kind" => "delete_node"} = op) do
+    with nil <- malformed(op),
+         {:ok, _cid} <- change_id(op, "change_id"),
+         {:ok, _} <- deleted_state(op),
+         {:ok, _} <- made_at(op) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  defp would_create?(_op), do: false
 
   defp check_batch(ops) do
     cond do
@@ -72,9 +249,35 @@ defmodule DeciduousMcp.Sync.Ops do
       Enum.any?(ops, fn op -> not (is_binary(op["op_id"]) and op["op_id"] != "") end) ->
         {:error, "every op needs an op_id; without one it cannot be applied at most once"}
 
+      # An op_id too long for applied_ops.op_id (varchar(255)) or holding a
+      # NUL is refused per op by malformed/1, not here for the whole batch:
+      # the CLI resends a refused batch as it was, so one bad op_id would
+      # stop every op queued after it (SERVER-N1).
       true ->
         :ok
     end
+  end
+
+  # No workspace: nothing is recorded, since there is nowhere to record it,
+  # and nothing is created (see run/1). The answers are the ones an empty
+  # workspace would give, after the same malformed-op checks.
+  defp apply_one(nil, %{"op_id" => op_id} = op, claim) do
+    with nil <- malformed(op),
+         {:ok, outcome} <- apply_op(nil, op["kind"], op) do
+      {%{op_id: op_id, result: outcome}, claim}
+    else
+      {:rejected, reason} -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+      reason when is_binary(reason) -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+    end
+  end
+
+  # An unknown kind is answered before anything is recorded: its name went
+  # into applied_ops.kind (varchar(255)), and a 300-character one was an
+  # empty 500.
+  defp apply_one(_workspace, %{"op_id" => op_id, "kind" => kind} = op, claim)
+       when kind not in @kinds do
+    {:rejected, reason} = apply_op(nil, kind, op)
+    {%{op_id: op_id, result: "rejected", reason: reason}, claim}
   end
 
   # An op the database cannot store is an answer about that op, not a
@@ -84,10 +287,10 @@ defmodule DeciduousMcp.Sync.Ops do
   # answered an empty 500. The CLI resent that batch on every write, got the
   # same 500, and nothing after the bad op reached the server again
   # (SERVER-N1). They are refused here, by name, before anything is written.
-  defp apply_one(workspace, %{"op_id" => op_id} = op) do
+  defp apply_one(workspace, %{"op_id" => op_id} = op, claim) do
     case malformed(op) do
-      nil -> apply_checked(workspace, op)
-      reason -> %{op_id: op_id, result: "rejected", reason: reason}
+      nil -> apply_checked(workspace, op, claim)
+      reason -> {%{op_id: op_id, result: "rejected", reason: reason}, claim}
     end
   end
 
@@ -100,14 +303,14 @@ defmodule DeciduousMcp.Sync.Ops do
         "the op contains a NUL character (at #{path}), which the server cannot store; " <>
           "nothing was written"
 
-      String.length(op["op_id"]) > @max_id ->
-        "op_id is #{String.length(op["op_id"])} characters; the limit is #{@max_id}"
+      ArgCheck.chars(op["op_id"]) > @max_id ->
+        "op_id is #{ArgCheck.chars(op["op_id"])} characters; the limit is #{@max_id}"
 
       not is_binary(op["kind"]) ->
         "kind must be a string, got #{inspect(op["kind"])}"
 
-      String.length(op["kind"]) > @max_id ->
-        "kind is #{String.length(op["kind"])} characters; the limit is #{@max_id}"
+      ArgCheck.chars(op["kind"]) > @max_id ->
+        "kind is #{ArgCheck.chars(op["kind"])} characters; the limit is #{@max_id}"
 
       # Ecto casts the weight with :erlang.float/1, which raises (an empty
       # 500 for the whole request) on an integer past the float range.
@@ -117,9 +320,9 @@ defmodule DeciduousMcp.Sync.Ops do
 
       key =
           Enum.find(~w(change_id from_change_id to_change_id), fn k ->
-            is_binary(op[k]) and String.length(op[k]) > @max_id
+            is_binary(op[k]) and ArgCheck.chars(op[k]) > @max_id
           end) ->
-        "#{key} is #{String.length(op[key])} characters; the limit is #{@max_id}"
+        "#{key} is #{ArgCheck.chars(op[key])} characters; the limit is #{@max_id}"
 
       true ->
         nil
@@ -147,7 +350,7 @@ defmodule DeciduousMcp.Sync.Ops do
   defp render_path([]), do: "the top level"
   defp render_path(path), do: path |> Enum.reverse() |> Enum.map_join(".", &to_string/1)
 
-  defp apply_checked(workspace, %{"op_id" => op_id} = op) do
+  defp apply_checked(workspace, %{"op_id" => op_id} = op, claim) do
     kind = op["kind"]
 
     result =
@@ -172,6 +375,7 @@ defmodule DeciduousMcp.Sync.Ops do
             "duplicate"
           else
             case apply_op(workspace, kind, op) do
+              {:ok, "applied"} when claim != nil -> record_claim(workspace, claim)
               {:ok, outcome} -> outcome
               {:rejected, reason} -> Repo.rollback({:rejected, reason})
             end
@@ -196,17 +400,66 @@ defmodule DeciduousMcp.Sync.Ops do
       end
 
     case result do
-      {:ok, outcome} -> %{op_id: op_id, result: outcome}
-      {:error, {:rejected, reason}} -> %{op_id: op_id, result: "rejected", reason: reason}
-      {:error, other} -> %{op_id: op_id, result: "rejected", reason: describe(other)}
+      {:ok, "applied"} ->
+        {%{op_id: op_id, result: "applied"}, nil}
+
+      {:ok, outcome} ->
+        {%{op_id: op_id, result: outcome}, claim}
+
+      {:error, {:rejected, reason}} ->
+        {%{op_id: op_id, result: "rejected", reason: reason}, claim}
+
+      {:error, other} ->
+        {%{op_id: op_id, result: "rejected", reason: describe(other)}, claim}
+    end
+  end
+
+  defp record_claim(workspace, roots) do
+    case Workspaces.claim(workspace, roots, false) do
+      {:ok, _} ->
+        "applied"
+
+      {:error, {:claimed_by_other_repository, held}} ->
+        Repo.rollback(
+          {:rejected,
+           "workspace #{workspace.name} was claimed by another repository (root commits " <>
+             "#{Enum.join(Enum.take(held, 5), ", ")}) while this batch ran; nothing was written"}
+        )
+
+      {:error, reason} ->
+        Repo.rollback({:rejected, describe(reason)})
     end
   end
 
   # --- Nodes ------------------------------------------------------------------
 
   defp apply_op(ws, "create_node", op) do
-    with {:ok, cid} <- change_id(op, "change_id") do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         :ok <- held_to(@create_schema, op, "create_node #{cid}"),
+         {:ok, inserted_at} <- time(op, "created_at", cid),
+         {:ok, updated_at} <- time(op, "updated_at", cid) do
+      Nodes.lock_change_id(ws.id, cid)
+
+      wanted_type = op["node_type"]
+
       case any_node(ws, cid) do
+        # A node of another type is another node. Before add_node took a
+        # change_id, only the CLI and the server made them, and whatever
+        # was under one was this op's node; an agent can now choose one,
+        # and `exists` for an agent's goal answered the CLI's action under
+        # the same id: the CLI believed its action was on the server
+        # (verification of chapter 30). The type is what can be compared:
+        # no path changes a node's type. The title cannot: a seed or a
+        # replayed create carries the title the CLI had, and a retitle on
+        # either side since then is the normal case, not another node.
+        %Node{deleted_at: nil, node_type: type} = node when type != wanted_type ->
+          {:rejected,
+           "create_node #{cid}: change_id #{cid} is already #{article(type)} #{type} " <>
+             "#{inspect(node.title)} on the server; this op creates " <>
+             "#{article(op["node_type"])} #{op["node_type"]} #{inspect(op["title"])}. " <>
+             "Nothing was written. Two nodes cannot share a change_id: one of the two " <>
+             "writers reused it"}
+
         %Node{deleted_at: nil} ->
           {:ok, "exists"}
 
@@ -230,8 +483,8 @@ defmodule DeciduousMcp.Sync.Ops do
           |> Node.changeset(attrs)
           # Backdated archaeology nodes (`deciduous add --date`) keep their
           # date; the CLI's timestamp is the fact, the arrival time is not.
-          |> Ecto.Changeset.put_change(:inserted_at, Import.parse_time(op["created_at"], now))
-          |> Ecto.Changeset.put_change(:updated_at, Import.parse_time(op["updated_at"], now))
+          |> Ecto.Changeset.put_change(:inserted_at, inserted_at || now)
+          |> Ecto.Changeset.put_change(:updated_at, updated_at || now)
           |> Repo.insert()
           |> case do
             {:ok, _} -> {:ok, "applied"}
@@ -259,6 +512,7 @@ defmodule DeciduousMcp.Sync.Ops do
     with {:ok, cid} <- change_id(op, "change_id"),
          {:ok, set} <- settable(op["set"]),
          {:ok, meta} <- metadata(op["metadata"]),
+         :ok <- held_to(@update_schema, op, "update_node #{cid}"),
          :ok <- nonempty(cid, set, meta),
          {:ok, was} <- previous(op, "was", Map.keys(set)),
          {:ok, was_meta} <- previous(op, "was_metadata", Map.keys(meta)),
@@ -352,9 +606,14 @@ defmodule DeciduousMcp.Sync.Ops do
     with {:ok, from_cid} <- change_id(op, "from_change_id"),
          {:ok, to_cid} <- change_id(op, "to_change_id"),
          {:ok, made} <- instant(op, "created_at"),
+         :ok <- held_to(@edge_schema, op, "create_edge #{from_cid} -> #{to_cid}"),
          {:ok, from} <- live_node(ws, from_cid),
          {:ok, to} <- live_node(ws, to_cid) do
       type = op["edge_type"] || "leads_to"
+      # The lock Edges.create_edge takes too, on the pair in either
+      # direction: taken here first so the check below and the insert are
+      # one step against every other writer of an edge between these two.
+      Edges.lock_pair(ws.id, from.id, to.id)
 
       cond do
         edge(from.id, to.id, type) ->
@@ -384,8 +643,31 @@ defmodule DeciduousMcp.Sync.Ops do
             {:ok, _} ->
               {:ok, "applied"}
 
+            {:error, {:edge_exists, _}} ->
+              {:ok, "exists"}
+
+            # A 2-cycle, refused as MCP's add_edge refuses it (T6: MCP
+            # add_edge A -> B, then this op B -> A, was applied). Said by
+            # change_id, which is what the CLI knows the nodes by.
+            {:error, {:reverse_exists, rev}} ->
+              {:rejected,
+               "create_edge #{from_cid} -> #{to_cid}: #{to_cid} -> #{from_cid} " <>
+                 "(#{rev.edge_type}) already exists, and the two nodes cannot be each " <>
+                 "other's parent; nothing was written. `deciduous unlink` the local one, then " <>
+                 "`deciduous remote push --drop-rejected`"}
+
             {:error, %Ecto.Changeset{} = cs} ->
               {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{errors(cs)}"}
+
+            # Edges.create_edge reads both ends again, FOR SHARE, and finds
+            # one gone when a delete committed after the check above. Said
+            # as the check above says it, by change_id; it was the inspected
+            # tuple with a server UUID the CLI has never seen (SERVER-N8).
+            {:error, {:node_not_found, id}} ->
+              cid = if id == from.id, do: from_cid, else: to_cid
+
+              {:rejected,
+               "create_edge #{from_cid} -> #{to_cid}: node #{cid} was deleted on the server"}
 
             {:error, other} ->
               {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{describe(other)}"}
@@ -549,7 +831,7 @@ defmodule DeciduousMcp.Sync.Ops do
 
   defp apply_op(_ws, kind, _op) do
     {:rejected,
-     "unknown op kind #{inspect(kind)}; this server applies create_node, update_node, " <>
+     "unknown op kind #{inspect(kind, printable_limit: 60)}; this server applies create_node, update_node, " <>
        "delete_node, create_edge, delete_edge, attach_document, detach_document and " <>
        "describe_document. A newer CLI than this server?"}
   end
@@ -692,10 +974,67 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  defp held_to(schema, op, what) do
+    case ArgCheck.check(ArgCheck.with_limits(schema), op) do
+      :ok -> :ok
+      {:error, message} -> {:rejected, "#{what}: #{message}"}
+    end
+  end
+
+  # The CLI sends RFC 3339 with an offset; a database from before it may
+  # hold a naive "YYYY-MM-DD HH:MM:SS", which is UTC. Absent is the arrival
+  # time. Anything else is refused: "99999-01-01T00:00:00Z" and 12345 used
+  # to become the arrival time without a word, and so did the naive form.
+  defp time(op, key, cid) do
+    case op[key] do
+      nil ->
+        {:ok, nil}
+
+      value when is_binary(value) ->
+        case DateTime.from_iso8601(value) do
+          {:ok, dt, _offset} ->
+            {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+
+          _ ->
+            case NaiveDateTime.from_iso8601(value) do
+              {:ok, naive} ->
+                dt = DateTime.from_naive!(naive, "Etc/UTC")
+                {:ok, %{dt | microsecond: {elem(dt.microsecond, 0), 6}}}
+
+              _ ->
+                {:rejected,
+                 "create_node #{cid}: #{key} #{inspect(value)} is not an ISO 8601 time"}
+            end
+        end
+
+      other ->
+        {:rejected,
+         "create_node #{cid}: #{key} must be an ISO 8601 string, got #{inspect(other)}"}
+    end
+  end
+
+  # The column is varchar(255), and Postgres cannot hold a NUL in text: a
+  # 300-character change_id was an empty HTTP 500 (and, before the
+  # workspace was created only for a create that would apply, an empty
+  # workspace left behind).
   defp change_id(op, key) do
     case op[key] do
-      cid when is_binary(cid) and cid != "" -> {:ok, cid}
-      other -> {:rejected, "#{op["kind"]} needs #{key}, got #{inspect(other)}"}
+      cid when is_binary(cid) and cid != "" ->
+        cond do
+          String.contains?(cid, <<0>>) ->
+            {:rejected,
+             "#{op["kind"]} #{key} contains a NUL character (U+0000); no change_id can hold one"}
+
+          ArgCheck.chars(cid) > 255 ->
+            {:rejected,
+             "#{op["kind"]} #{key} is #{ArgCheck.chars(cid)} characters; the limit is 255"}
+
+          true ->
+            {:ok, cid}
+        end
+
+      other ->
+        {:rejected, "#{op["kind"]} needs #{key}, got #{inspect(other, printable_limit: 60)}"}
     end
   end
 
@@ -781,7 +1120,10 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
-  defp any_node(ws, cid, opts \\ []) do
+  defp any_node(ws, cid, opts \\ [])
+  defp any_node(nil, _cid, _opts), do: nil
+
+  defp any_node(ws, cid, opts) do
     q = from n in Node, where: n.workspace_id == ^ws.id and n.change_id == ^cid
     q = if opts[:lock], do: lock(q, "FOR UPDATE"), else: q
     Repo.one(q)
@@ -859,6 +1201,9 @@ defmodule DeciduousMcp.Sync.Ops do
   defp data_error?(%{pg_code: "22" <> _}), do: true
   defp data_error?(%{pg_code: "23" <> _}), do: true
   defp data_error?(_), do: false
+
+  defp article(<<first, _::binary>>) when first in ~c"aeiou", do: "an"
+  defp article(_), do: "a"
 
   defp describe(reason) when is_binary(reason), do: reason
   defp describe(reason), do: inspect(reason)

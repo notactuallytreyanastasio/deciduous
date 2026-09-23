@@ -21,7 +21,9 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
             description: "New status"
           },
           # The keys add_node writes, with add_node's types. Other keys are
-          # still accepted; every string is bounded, and so is the call. A
+          # the caller's own and are stored (additionalProperties: true),
+          # except one a declared key is a near miss of ("confidance"),
+          # which is a typo; every string is bounded, and so is the call. A
           # key sent as null passes the type check and removes the key.
           metadata: %{
             type: "object",
@@ -29,6 +31,7 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
               "Metadata keys to change. Merged into the node's existing metadata: keys " <>
                 "sent are set, a key sent as null is removed, keys not sent are kept " <>
                 "(branch, prompt, commit, files). confidence must be a number 0-100.",
+            additionalProperties: true,
             properties: %{
               confidence: %{type: "integer", minimum: 0, maximum: 100},
               commit: %{type: "string"},
@@ -40,12 +43,13 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
           branch: %{
             type: "string",
             description:
-              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+              "Git branch this write belongs to; check_activity shows who else is writing it"
           }
         },
         required: ["node_id"]
       }
     }
+    |> DeciduousMcp.MCP.Scope.with_node_workspace_arg()
   end
 
   def call(%{arguments: args, server: frame}) do

@@ -278,31 +278,32 @@ into isolation cannot be made to read its neighbours.
 
 ## Working alongside other agents
 
-Two sessions writing to one workspace need three things: not to interleave,
-to know the other exists, and to find out when it writes. The branch is the
-unit for all three.
+Two sessions writing to one workspace need to know the other exists and to
+find out when it writes. The branch is the unit for both.
 
-### Locks
+### No locks: every write is recorded, none is refused
 
-Every write claims an advisory lock on `(workspace, branch)` with a ten second
-lease. The same session writing again renews it, so one lease covers a run of
-writes; a different session on the same branch is refused and told who holds
-it:
+Until 1.0.8 every write claimed an advisory lock on `(workspace, branch)` with
+a ten-second lease, and a second session on the branch was refused with the
+holder's name. It stopped the writer it should never stop and could not stop
+the other one:
 
-```
-workspace "blog" (branch "feat/auth") is locked by claude-code (2.1.278),
-session GNeD3Qwg. Releases in 8s if that session goes idle, or finishes sooner.
-Retry shortly, or write to a different branch.
-```
+- A one-shot client (initialize, one call, exit) left its lease behind, and
+  its own next process was refused for ten seconds: `locked by battery (0),
+  session GNgCXo-N`. A server cannot tell that a session's process is gone.
+- The CLI took no lock: its writes are replayed from `.deciduous/remote-log.jsonl`
+  through `POST /ops`, possibly days after they were made.
 
-Sessions on different branches never contend. Pass `branch` on every write:
-without it a session locks the empty-branch bucket, with everyone else who
-forgot. A workspace can set `lock_scope: "workspace"` to make branches contend.
+And nothing needs the exclusion. Every write is atomic on its own: a node
+insert, an update read `FOR UPDATE`, `capture_conversation_turn` and
+`log_decision` in one transaction each, `/ops` compare-and-set field by field.
+Two agents on one branch interleave their nodes, as two people on one branch
+do, and no write is lost or torn.
 
-Fixed in 1.0: `update_node`, `delete_node` and `delete_edge` did not claim the
-lock at all. The 0.19 commit that said it closed this gap had only added the
-`branch` argument to their schemas; the tools never called the lock. They
-resolve the node's workspace and claim it now.
+So a write now records who wrote where: workspace, branch, session and
+clientInfo for MCP; `deciduous CLI` and the repository's root commit for
+`/ops`. It never refuses. Pass `branch` on every write so the record says
+which one. The workspace setting `lock_scope` no longer does anything.
 
 ### check_activity
 
@@ -310,11 +311,12 @@ The read side. Call it before a burst of writes.
 
 | Field | What it holds |
 |---|---|
-| `sessions` | every unexpired lock: branch, client, version, whether it is you, seconds left |
-| `branches` | the twenty most recently written branches: each with its last node (type, title, change_id, created_at) and who holds its lock. `branches: N` for more; `branches_total` says how many exist |
+| `sessions` | every session, MCP or CLI, that wrote in the last five minutes (`window_seconds`): branch, client, version, whether it is you, first and last write, seconds since |
+| `active_sessions` | how many distinct sessions that is |
+| `branches` | the twenty most recently written branches: each with its last node (type, title, change_id, created_at) and `writers`, the sessions above that wrote it. `branches: N` for more; `branches_total` says how many exist |
 
-`branches` is new in 1.0. In the arena the agents polled `query_nodes` for
-decisions because the lock list was all `check_activity` returned.
+It used to list unexpired locks, which had always lapsed by the time anyone
+looked, so a run of short-lived clients read `active_sessions: 0` throughout.
 
 ### Events
 
@@ -415,8 +417,8 @@ importer would have to re-earn all of that and would drift from it.
   `LISTEN`s against notifications issued at the same moment. A gap in the
   stream is not proof that nothing happened; call `check_activity` or
   `query_nodes` to catch up.
-- **Locks are advisory too.** A client that ignores the refusal and writes
-  anyway still can.
+- **Activity is a record, not a lock.** Two sessions can write one branch at
+  once; `check_activity` is how each learns of the other.
 - **Documents live in Postgres**, keyed by sha256 and shared across workspaces.
   Five on this machine are referenced by rows whose bytes are gone; they answer
   `410 Gone`, not `404`.

@@ -17,12 +17,13 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
           branch: %{
             type: "string",
             description:
-              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+              "Git branch this write belongs to; check_activity shows who else is writing it"
           }
         },
         required: ["node_id"]
       }
     }
+    |> DeciduousMcp.MCP.Scope.with_node_workspace_arg()
   end
 
   def call(%{arguments: %{"node_id" => node_id} = args, server: frame}) do

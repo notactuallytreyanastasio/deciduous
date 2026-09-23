@@ -1,16 +1,17 @@
 defmodule DeciduousMcp.MCP.MultiAgentTest do
   @moduledoc """
-  The multi-agent surface: branch locks on every write tool, the per-branch
-  view in check_activity, and borrows as took_from edges.
+  The multi-agent surface: every write tool records who wrote which branch
+  (never refusing), the per-branch view in check_activity, and borrows as
+  took_from edges.
 
   Tool `call/1` is exercised directly with a hand-built `Hermes.Server.Frame`,
   the same shape Hermes hands a tool at runtime: `private.session_id` is what
-  the lock is keyed on, and `assigns` is where a header pin would land.
+  the activity record is keyed on, and `assigns` is where a header pin would land.
   """
   use DeciduousMcp.DataCase
 
   alias DeciduousMcp.Graph.{Edges, Nodes}
-  alias DeciduousMcp.Locks
+  alias DeciduousMcp.Activity
   alias DeciduousMcp.MCP.Tools.{CheckActivity, DeleteEdge, DeleteNode, LogObservation, UpdateNode}
 
   setup do
@@ -49,83 +50,66 @@ defmodule DeciduousMcp.MCP.MultiAgentTest do
     }
   end
 
-  defp call(tool, args, session_id), do: tool.call(%{arguments: args, server: frame(session_id)})
+  # What DeciduousMcp.MCP.Component does around a tool: the activity a
+  # call holds is recorded when it succeeds, and dropped when it fails.
+  defp call(tool, args, session_id),
+    do: around(fn -> tool.call(%{arguments: args, server: frame(session_id)}) end)
+
+  defp around(fun) do
+    DeciduousMcp.MCP.Scope.discard_activity()
+    result = fun.()
+
+    case result do
+      {:ok, _} -> DeciduousMcp.MCP.Scope.flush_activity()
+      _ -> DeciduousMcp.MCP.Scope.discard_activity()
+    end
+
+    result
+  end
 
   defp pinned_frame(session_id, workspace_id) do
     %{frame(session_id) | assigns: %{pinned_workspace_id: workspace_id}}
   end
 
   defp call_pinned(tool, args, session_id, workspace_id),
-    do: tool.call(%{arguments: args, server: pinned_frame(session_id, workspace_id)})
+    do:
+      around(fn ->
+        tool.call(%{arguments: args, server: pinned_frame(session_id, workspace_id)})
+      end)
 
-  describe "the branch lock covers the tools that name a row by id" do
+  describe "the tools that name a row by id record the write and never refuse it" do
     setup %{workspace: ws} do
-      {:ok, _} = Locks.acquire(ws.id, "x", "session_A", "holder", "1")
+      :ok = Activity.record(ws.id, "x", "session_A", "holder", "1")
       :ok
     end
 
-    test "update_node refuses while another session holds the branch", %{b: b} do
-      assert {:error, %{message: message}} =
+    test "update_node, delete_edge and delete_node go through while another session writes the branch",
+         %{workspace: ws, a: a, b: b} do
+      assert {:ok, _} =
                call(
                  UpdateNode,
-                 %{"node_id" => b.id, "title" => "Stolen", "branch" => "x"},
+                 %{"node_id" => b.id, "title" => "Rotation table v2", "branch" => "x"},
                  "session_B"
                )
 
-      assert message =~ ~s(branch "x") and message =~ "locked by holder"
-      assert {:ok, %{title: "Rotation table"}} = Nodes.get_node(b.id)
-    end
-
-    test "delete_node refuses while another session holds the branch", %{b: b} do
-      assert {:error, %{message: message}} =
-               call(DeleteNode, %{"node_id" => b.id, "branch" => "x"}, "session_B")
-
-      assert message =~ "locked by holder"
-      assert {:ok, %{deleted_at: nil}} = Nodes.get_node(b.id)
-    end
-
-    test "delete_edge refuses while another session holds the branch", %{a: a, b: b} do
-      assert {:error, %{message: message}} =
+      assert {:ok, _} =
                call(
                  DeleteEdge,
                  %{"from_node_id" => a.id, "to_node_id" => b.id, "branch" => "x"},
                  "session_B"
                )
 
-      assert message =~ "locked by holder"
-      assert [_] = Edges.edges_from(a.id)
-    end
-
-    test "the three tools go through on a branch nobody holds", %{a: a, b: b} do
-      assert {:ok, _} =
-               call(
-                 UpdateNode,
-                 %{"node_id" => b.id, "title" => "Rotation table v2", "branch" => "y"},
-                 "session_B"
-               )
-
-      assert {:ok, _} =
-               call(
-                 DeleteEdge,
-                 %{"from_node_id" => a.id, "to_node_id" => b.id, "branch" => "y"},
-                 "session_B"
-               )
-
-      assert {:ok, _} = call(DeleteNode, %{"node_id" => b.id, "branch" => "y"}, "session_B")
+      assert {:ok, _} = call(DeleteNode, %{"node_id" => b.id, "branch" => "x"}, "session_B")
       assert {:ok, %{title: "Rotation table v2", deleted_at: %DateTime{}}} = Nodes.get_node(b.id)
       assert [] = Edges.edges_from(a.id)
+
+      sessions =
+        ws.id |> Activity.recent() |> Enum.map(&{&1.branch, &1.session_id}) |> Enum.sort()
+
+      assert sessions == [{"x", "session_A"}, {"x", "session_B"}]
     end
 
-    test "the holder itself is not blocked by its own lock", %{b: b} do
-      assert {:ok, _} =
-               call(
-                 UpdateNode,
-                 %{"node_id" => b.id, "status" => "completed", "branch" => "x"},
-                 "session_A"
-               )
-    end
-
-    test "a node that does not exist is refused before any lock is taken" do
+    test "a node that does not exist is refused, and nothing is recorded", %{workspace: ws} do
       missing = Ecto.UUID.generate()
 
       assert {:error, %{message: "Node not found: " <> _}} =
@@ -137,12 +121,18 @@ defmodule DeciduousMcp.MCP.MultiAgentTest do
 
       assert {:error, %{message: "Node not found: " <> _}} =
                call(DeleteNode, %{"node_id" => "not-a-uuid"}, "session_B")
+
+      refute Enum.any?(Activity.recent(ws.id), &(&1.session_id == "session_B"))
     end
   end
 
   describe "check_activity" do
-    test "lists the last node on every branch, locked or not", %{workspace: ws, a: a, b: b} do
-      {:ok, _} = Locks.acquire(ws.id, "agent-6", "session_A", "claude-code", "2.1")
+    test "lists the last node on every branch, and who has been writing it", %{
+      workspace: ws,
+      a: a,
+      b: b
+    } do
+      :ok = Activity.record(ws.id, "agent-6", "session_A", "claude-code", "2.1")
 
       {:ok, newer} =
         Nodes.create_node(ws.id, %{
@@ -163,11 +153,10 @@ defmodule DeciduousMcp.MCP.MultiAgentTest do
       assert by_branch["agent-6"]["last_node"]["id"] == newer.id
       refute by_branch["agent-6"]["last_node"]["id"] == a.id
       assert by_branch["agent-6"]["last_node"]["title"] == "Kicks work"
-      assert by_branch["agent-6"]["locked_by"]["client"] == "claude-code"
-      assert by_branch["agent-6"]["locked_by"]["is_you"] == true
+      assert [%{"client" => "claude-code", "is_you" => true}] = by_branch["agent-6"]["writers"]
 
       assert by_branch["agent-3"]["last_node"]["id"] == b.id
-      assert by_branch["agent-3"]["locked_by"] == nil
+      assert by_branch["agent-3"]["writers"] == []
 
       assert by_branch[nil]["last_node"]["id"] == loose.id
     end
@@ -254,25 +243,7 @@ defmodule DeciduousMcp.MCP.MultiAgentTest do
     end
   end
 
-  describe "check_activity under a workspace-wide lock" do
-    test "every branch row shows the holder, not nil", %{workspace: ws} do
-      {:ok, ws} =
-        DeciduousMcp.Repo.update(
-          Ecto.Changeset.change(ws, settings: %{"lock_scope" => "workspace"})
-        )
-
-      {:ok, _} = Locks.acquire(ws.id, Locks.lock_key_for(ws, "agent-6"), "session_A", "cc", "1")
-
-      assert {:ok, json} = call(CheckActivity, %{"workspace" => "multi-agent"}, "session_B")
-
-      %{"branches" => branches, "sessions" => [%{"workspace_wide_lock" => true}]} =
-        Jason.decode!(json)
-
-      assert branches != []
-      assert Enum.all?(branches, &(&1["locked_by"]["client"] == "cc"))
-      assert Enum.all?(branches, &(&1["locked_by"]["is_you"] == false))
-    end
-
+  describe "check_activity arguments" do
     test "a negative branches argument is clamped to zero, not defaulted" do
       assert {:ok, json} =
                call(CheckActivity, %{"workspace" => "multi-agent", "branches" => -1}, "session_A")
