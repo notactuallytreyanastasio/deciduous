@@ -70,7 +70,8 @@ defmodule DeciduousMcp.Web.OpsClaimNoGhostTest do
             %{
               "results" => [
                 %{"result" => "rejected"},
-                %{"result" => "absent"},
+                # No `was`: refused since chapter 29, and it writes nothing.
+                %{"result" => "rejected"},
                 %{"result" => "rejected"}
               ]
             }} =

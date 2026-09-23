@@ -58,8 +58,12 @@ defmodule DeciduousMcp.Web.CodepointBoundsTest do
 
   test "SERVER-N3: an op_id of 1 grapheme and 301 codepoints is refused by name" do
     op = %{create_op("n3-op") | op_id: @stacked}
-    assert {422, body} = post("/ops", %{workspace: "n3-opid", ops: [op]})
-    assert body =~ "ops[0].op_id is 301 characters; the limit is 255"
+    # Refused per op, as chapter 28 refuses every op the database cannot
+    # store, so the ops queued after it still apply.
+    assert {200, body} = post("/ops", %{workspace: "n3-opid", ops: [op]})
+    assert %{"results" => [%{"result" => "rejected", "reason" => reason}]} = Jason.decode!(body)
+    assert reason =~ "op_id is 301 characters; the limit is 255"
+    refute exists?("n3-opid")
   end
 
   test "SERVER-N3/N6: a change_id of 301 codepoints is rejected on /ops and leaves no workspace" do

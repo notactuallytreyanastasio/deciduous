@@ -210,10 +210,26 @@ defmodule DeciduousMcp.Sync.Ops do
   end
 
   defp would_create?(%{"kind" => "create_node"} = op) do
-    with {:ok, cid} <- change_id(op, "change_id"),
+    with nil <- malformed(op),
+         {:ok, cid} <- change_id(op, "change_id"),
          :ok <- held_to(@create_schema, op, cid),
          {:ok, _} <- time(op, "created_at", cid),
          {:ok, _} <- time(op, "updated_at", cid) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  # A delete of a node the server never had writes a tombstone (bury/3),
+  # so a create of it replayed later from another log meets the delete
+  # instead of bringing the node into being. That is a write, and it needs
+  # the workspace to hold it.
+  defp would_create?(%{"kind" => "delete_node"} = op) do
+    with nil <- malformed(op),
+         {:ok, _cid} <- change_id(op, "change_id"),
+         {:ok, _} <- deleted_state(op),
+         {:ok, _} <- made_at(op) do
       true
     else
       _ -> false
@@ -233,16 +249,10 @@ defmodule DeciduousMcp.Sync.Ops do
       Enum.any?(ops, fn op -> not (is_binary(op["op_id"]) and op["op_id"] != "") end) ->
         {:error, "every op needs an op_id; without one it cannot be applied at most once"}
 
-      # applied_ops.op_id is varchar(255) and text cannot hold a NUL; both
-      # were an empty 500 from the insert.
-      (i = Enum.find_index(ops, &String.contains?(&1["op_id"], <<0>>))) != nil ->
-        {:error, "ops[#{i}].op_id contains a NUL character (U+0000); nothing was applied"}
-
-      (i = Enum.find_index(ops, &(ArgCheck.chars(&1["op_id"]) > 255))) != nil ->
-        {:error,
-         "ops[#{i}].op_id is #{ArgCheck.chars(Enum.at(ops, i)["op_id"])} characters; " <>
-           "the limit is 255; nothing was applied"}
-
+      # An op_id too long for applied_ops.op_id (varchar(255)) or holding a
+      # NUL is refused per op by malformed/1, not here for the whole batch:
+      # the CLI resends a refused batch as it was, so one bad op_id would
+      # stop every op queued after it (SERVER-N1).
       true ->
         :ok
     end
@@ -293,14 +303,14 @@ defmodule DeciduousMcp.Sync.Ops do
         "the op contains a NUL character (at #{path}), which the server cannot store; " <>
           "nothing was written"
 
-      String.length(op["op_id"]) > @max_id ->
-        "op_id is #{String.length(op["op_id"])} characters; the limit is #{@max_id}"
+      ArgCheck.chars(op["op_id"]) > @max_id ->
+        "op_id is #{ArgCheck.chars(op["op_id"])} characters; the limit is #{@max_id}"
 
       not is_binary(op["kind"]) ->
         "kind must be a string, got #{inspect(op["kind"])}"
 
-      String.length(op["kind"]) > @max_id ->
-        "kind is #{String.length(op["kind"])} characters; the limit is #{@max_id}"
+      ArgCheck.chars(op["kind"]) > @max_id ->
+        "kind is #{ArgCheck.chars(op["kind"])} characters; the limit is #{@max_id}"
 
       # Ecto casts the weight with :erlang.float/1, which raises (an empty
       # 500 for the whole request) on an integer past the float range.
@@ -310,9 +320,9 @@ defmodule DeciduousMcp.Sync.Ops do
 
       key =
           Enum.find(~w(change_id from_change_id to_change_id), fn k ->
-            is_binary(op[k]) and String.length(op[k]) > @max_id
+            is_binary(op[k]) and ArgCheck.chars(op[k]) > @max_id
           end) ->
-        "#{key} is #{String.length(op[key])} characters; the limit is #{@max_id}"
+        "#{key} is #{ArgCheck.chars(op[key])} characters; the limit is #{@max_id}"
 
       true ->
         nil

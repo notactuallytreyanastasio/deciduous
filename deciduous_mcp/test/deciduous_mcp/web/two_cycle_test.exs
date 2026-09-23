@@ -115,6 +115,7 @@ defmodule DeciduousMcp.Web.TwoCycleTest do
         %{
           op_id: Ecto.UUID.generate(),
           kind: "create_edge",
+          created_at: DateTime.to_iso8601(DateTime.utc_now()),
           from_change_id: b_cid,
           to_change_id: a_cid,
           edge_type: "leads_to"
@@ -221,6 +222,7 @@ defmodule DeciduousMcp.Web.TwoCycleTest do
           %{
             op_id: Ecto.UUID.generate(),
             kind: "create_edge",
+            created_at: DateTime.to_iso8601(DateTime.utc_now()),
             from_change_id: a_cid,
             to_change_id: b_cid,
             edge_type: "leads_to"

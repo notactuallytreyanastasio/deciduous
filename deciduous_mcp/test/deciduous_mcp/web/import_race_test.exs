@@ -88,6 +88,7 @@ defmodule DeciduousMcp.Web.ImportRaceTest do
             %{
               op_id: Ecto.UUID.generate(),
               kind: "create_edge",
+              created_at: DateTime.to_iso8601(DateTime.utc_now()),
               from_change_id: a,
               to_change_id: b,
               edge_type: "leads_to"

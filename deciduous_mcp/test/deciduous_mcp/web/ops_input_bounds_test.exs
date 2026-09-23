@@ -136,6 +136,7 @@ defmodule DeciduousMcp.Web.OpsInputBoundsTest do
         %{
           "op_id" => Ecto.UUID.generate(),
           "kind" => "create_edge",
+          "created_at" => DateTime.to_iso8601(DateTime.utc_now()),
           "from_change_id" => "n3-ea",
           "to_change_id" => "n3-eb",
           "edge_type" => "leads_to"
@@ -197,10 +198,10 @@ defmodule DeciduousMcp.Web.OpsInputBoundsTest do
 
     for {ws, op, says} <- [
           {"vg-cid300", create(long, %{}), "change_id is 300 characters; the limit is 255"},
-          {"vg-cidnul", create("a\u0000b", %{}), "change_id contains a NUL"},
+          {"vg-cidnul", create("a\u0000b", %{}), "NUL character (at change_id)"},
           {"vg-opid300", create("ok-cid", %{"op_id" => long}), "op_id is 300 characters"},
-          {"vg-opidnul", create("ok-cid", %{"op_id" => "a\u0000b"}), "op_id contains a NUL"},
-          {"vg-kind300", Map.put(create("ok-cid", %{}), "kind", long), "unknown op kind"}
+          {"vg-opidnul", create("ok-cid", %{"op_id" => "a\u0000b"}), "NUL character (at op_id)"},
+          {"vg-kind300", Map.put(create("ok-cid", %{}), "kind", long), "kind is 300 characters"}
         ] do
       {status, body} = post.(ws, [op])
       assert status in [200, 422], "#{ws}: #{status} #{inspect(body)}"

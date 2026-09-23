@@ -45,11 +45,18 @@ defmodule DeciduousMcp.Web.OpsDeleteEdgeRaceTest do
           b = "n8-b#{round}"
           [_, _] = post_ops(ws, [create(a), create(b)])
 
-          delete = %{op_id: Ecto.UUID.generate(), kind: "delete_node", change_id: a}
+          delete = %{
+            op_id: Ecto.UUID.generate(),
+            kind: "delete_node",
+            change_id: a,
+            was: %{title: a, description: nil, status: "pending"},
+            was_metadata: %{}
+          }
 
           edge = %{
             op_id: Ecto.UUID.generate(),
             kind: "create_edge",
+            created_at: DateTime.to_iso8601(DateTime.utc_now()),
             from_change_id: a,
             to_change_id: b,
             edge_type: "leads_to"
