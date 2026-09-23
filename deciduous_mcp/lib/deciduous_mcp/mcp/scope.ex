@@ -29,7 +29,7 @@ defmodule DeciduousMcp.MCP.Scope do
   alias DeciduousMcp.Locks
 
   @fallback "scratch"
-  @global "*"
+  @global Workspaces.global_token()
 
   @doc """
   The `workspace` property to merge into a tool's `input_schema`.
@@ -370,8 +370,14 @@ defmodule DeciduousMcp.MCP.Scope do
 
   defp create(name) do
     case Workspaces.find_or_create(name) do
-      {:ok, workspace} -> {:ok, workspace.id}
-      {:error, _} -> {:error, "could not create workspace #{inspect(name)}"}
+      {:ok, workspace} ->
+        {:ok, workspace.id}
+
+      {:error, reason} when is_atom(reason) ->
+        {:error, Workspaces.describe_name_error(name, reason)}
+
+      {:error, _} ->
+        {:error, "could not create workspace #{inspect(name)}"}
     end
   end
 

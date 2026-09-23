@@ -40,6 +40,13 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
     case get_req_header(conn, @header) do
       [raw | _] ->
         case Workspaces.normalize_name(raw) do
+          # "*" is the global view. A pin is where writes land, and the
+          # normalized header was pinned as it came: `*` became a literal
+          # workspace named "*" on the first add_node, reachable only through
+          # the pin, while the same token as an argument read everything.
+          {:ok, "*"} ->
+            reject(conn, raw, :global)
+
           {:ok, name} ->
             id =
               case Workspaces.get_by_name(name) do
@@ -75,7 +82,7 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
       Jason.encode!(%{
         error: "invalid #{@header} header",
         value: raw,
-        reason: to_string(reason)
+        reason: Workspaces.describe_name_error(raw, reason)
       })
 
     conn

@@ -73,7 +73,7 @@ defmodule DeciduousMcp.Sync.Import do
 
   # Unpinned: the body names the workspace, as it always has.
   defp target_workspace(name, nil, nil) do
-    with {:ok, name} <- Workspaces.normalize_name(name || "") do
+    with {:ok, name} <- workspace_name(name || "") do
       Workspaces.find_or_create(name)
     end
   end
@@ -83,7 +83,7 @@ defmodule DeciduousMcp.Sync.Import do
   # "no id, so no pin", this let a client pinned to a new name import into
   # any workspace its body named.
   defp target_workspace(name, nil, pinned_name) do
-    case name && Workspaces.normalize_name(name) do
+    case name && workspace_name(name) do
       nil -> Workspaces.find_or_create(pinned_name)
       {:ok, same} when same == pinned_name -> Workspaces.find_or_create(pinned_name)
       {:ok, other} -> {:error, {:pinned, pinned_refusal(pinned_name, other)}}
@@ -99,7 +99,7 @@ defmodule DeciduousMcp.Sync.Import do
   defp target_workspace(name, pinned_id, _pinned_name) do
     {:ok, pinned} = Workspaces.get_workspace(pinned_id)
 
-    case name && Workspaces.normalize_name(name) do
+    case name && workspace_name(name) do
       nil ->
         {:ok, pinned}
 
@@ -117,6 +117,16 @@ defmodule DeciduousMcp.Sync.Import do
   defp pinned_refusal(pinned, other) do
     "this client is pinned to workspace \"#{pinned}\" by " <>
       "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."
+  end
+
+  # Before, "*" normalized to a name like any other and the import created a
+  # workspace called "*", which a read of "*" (the global view) never shows.
+  defp workspace_name(raw) do
+    case Workspaces.normalize_name(raw) do
+      {:ok, "*"} -> {:error, Workspaces.describe_name_error(raw, :global)}
+      {:ok, name} -> {:ok, name}
+      {:error, reason} -> {:error, Workspaces.describe_name_error(raw, reason)}
+    end
   end
 
   @doc """
@@ -446,7 +456,8 @@ defmodule DeciduousMcp.Sync.Import do
         {count, _} =
           Repo.insert_all(Document, chunk,
             on_conflict:
-              {:replace, [:description, :description_source, :detached_at, :content_missing, :updated_at]},
+              {:replace,
+               [:description, :description_source, :detached_at, :content_missing, :updated_at]},
             conflict_target: [:workspace_id, :change_id]
           )
 

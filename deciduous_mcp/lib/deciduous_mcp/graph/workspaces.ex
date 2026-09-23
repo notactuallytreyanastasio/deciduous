@@ -7,6 +7,14 @@ defmodule DeciduousMcp.Graph.Workspaces do
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Workspace, Node, Edge}
 
+  # The global view, readable across every project. It is a valid name to
+  # read with and never one to write to: find_or_create/1 refuses it, so no
+  # path (argument, header pin, import) can create a workspace called "*".
+  @global "*"
+
+  @doc "The token that names every workspace at once."
+  def global_token, do: @global
+
   @doc """
   Finds a workspace by name, or creates it if it doesn't exist.
 
@@ -19,6 +27,8 @@ defmodule DeciduousMcp.Graph.Workspaces do
   is read back afterwards, because on a conflict Ecto still returns the
   struct it tried to insert, with a client-generated id that names nothing.
   """
+  def find_or_create(@global), do: {:error, :global}
+
   def find_or_create(name) do
     case get_by_name(name) do
       {:ok, workspace} ->
@@ -148,11 +158,23 @@ defmodule DeciduousMcp.Graph.Workspaces do
   def describe_name_error(raw, reason) do
     why =
       case reason do
-        :blank -> "is blank"
-        :looks_like_a_path -> "looks like a path; pass the repo root's basename"
-        :too_long -> "is longer than #{@max_name_length} characters"
-        :control_character -> "contains a control or formatting character"
-        :not_a_string -> "is not a string"
+        :blank ->
+          "is blank"
+
+        :looks_like_a_path ->
+          "looks like a path; pass the repo root's basename"
+
+        :too_long ->
+          "is longer than #{@max_name_length} characters"
+
+        :control_character ->
+          "contains a control or formatting character"
+
+        :not_a_string ->
+          "is not a string"
+
+        :global ->
+          "is \"#{@global}\", the global view across every project, which can be read but not written to or pinned"
       end
 
     "invalid workspace name #{inspect(raw, binaries: :as_strings)}: it #{why}"
