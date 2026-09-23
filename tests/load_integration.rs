@@ -1068,3 +1068,105 @@ fn a_second_server_taking_over_the_session_file_says_so() {
     a.close();
     b.close();
 }
+
+// ============================================================================
+// R12: invalid writes are refused, not stored or reported as done
+// ============================================================================
+
+#[test]
+fn invalid_writes_are_refused_through_mcp_and_cli() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    m.call(
+        "add_node",
+        json!({"node_type":"goal","title":"real","branch":"b"}),
+    )
+    .unwrap();
+
+    let refused = [
+        (
+            "add_node",
+            json!({"node_type":"banana","title":"x","branch":"b"}),
+            "banana",
+        ),
+        (
+            "add_node",
+            json!({"node_type":"goal","title":"","branch":"b"}),
+            "title",
+        ),
+        (
+            "add_node",
+            json!({"node_type":"goal","title":"   ","branch":"b"}),
+            "title",
+        ),
+        (
+            "add_node",
+            json!({"node_type":"goal","title":"c","confidence":-5,"branch":"b"}),
+            "confidence",
+        ),
+        (
+            "add_node",
+            json!({"node_type":"goal","title":"c","confidence":"90","branch":"b"}),
+            "confidence",
+        ),
+        (
+            "add_node",
+            json!({"node_type":"goal","title":"c","confidence":150,"branch":"b"}),
+            "confidence",
+        ),
+        ("link_nodes", json!({"from_id":1,"to_id":1}), "itself"),
+        (
+            "link_nodes",
+            json!({"from_id":1,"to_id":1,"edge_type":"likes"}),
+            "likes",
+        ),
+        (
+            "update_status",
+            json!({"node_id":99999,"status":"active"}),
+            "99999",
+        ),
+        (
+            "update_status",
+            json!({"node_id":1,"status":"frobbed"}),
+            "frobbed",
+        ),
+        (
+            "update_prompt",
+            json!({"node_id":99999,"prompt":"p"}),
+            "99999",
+        ),
+    ];
+    for (tool, args, why) in refused {
+        let e = m
+            .call(tool, args.clone())
+            .expect_err(&format!("{tool} {args} was accepted"));
+        assert!(e.contains(why), "{tool} {args}: expected '{why}' in: {e}");
+    }
+    // Valid values still go through.
+    m.call(
+        "add_node",
+        json!({"node_type":"revisit","title":"ok","confidence":0,"branch":"b"}),
+    )
+    .unwrap();
+    m.call("update_status", json!({"node_id":1,"status":"superseded"}))
+        .unwrap();
+    m.close();
+    assert_eq!(p.sql("select count(*) from decision_nodes"), 2);
+    assert_eq!(p.sql("select count(*) from decision_edges"), 0);
+
+    for args in [
+        &["add", "banana", "x"][..],
+        &["add", "goal", ""][..],
+        &["link", "1", "1"][..],
+        &["status", "1", "frobbed"][..],
+        &["status", "99", "active"][..],
+    ] {
+        let out = p.cli(args);
+        assert!(
+            !out.status.success(),
+            "cli {args:?} succeeded: {}",
+            text(&out.stdout)
+        );
+    }
+    assert_eq!(p.sql("select count(*) from decision_nodes"), 2);
+}

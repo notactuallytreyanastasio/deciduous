@@ -120,6 +120,49 @@ fn get_db_path() -> std::path::PathBuf {
     std::path::PathBuf::from(".deciduous/deciduous.db")
 }
 
+/// Node types a new node may have.
+pub const NODE_TYPES: &[&str] = &[
+    "goal",
+    "decision",
+    "option",
+    "action",
+    "outcome",
+    "observation",
+    "revisit",
+];
+
+/// Statuses a node may be set to.
+pub const NODE_STATUSES: &[&str] = &[
+    "pending",
+    "active",
+    "completed",
+    "rejected",
+    "superseded",
+    "abandoned",
+];
+
+/// Edge types a new edge may have.
+pub const EDGE_TYPES: &[&str] = &[
+    "leads_to",
+    "requires",
+    "chosen",
+    "rejected",
+    "blocks",
+    "enables",
+    "took_from",
+];
+
+fn one_of(what: &str, value: &str, allowed: &[&str]) -> Result<()> {
+    if allowed.contains(&value) {
+        Ok(())
+    } else {
+        Err(DbError::Validation(format!(
+            "unknown {what} '{value}'; expected one of: {}",
+            allowed.join(", ")
+        )))
+    }
+}
+
 /// Current schema version for deciduous
 pub const CURRENT_SCHEMA: DecisionSchema = DecisionSchema {
     major: 1,
@@ -735,6 +778,12 @@ fn one_field(key: &str, value: &str) -> serde_json::Map<String, serde_json::Valu
         serde_json::Value::String(value.to_string()),
     );
     m
+}
+
+fn node_not_found(node_id: i32) -> DbError {
+    DbError::Validation(format!(
+        "Node {node_id} does not exist. Run 'deciduous nodes' to see existing nodes."
+    ))
 }
 
 impl Database {
@@ -1795,6 +1844,12 @@ impl Database {
         branch: Option<&str>,
         created_at: Option<&str>,
     ) -> Result<i32> {
+        one_of("node type", node_type, NODE_TYPES)?;
+        if title.trim().is_empty() {
+            return Err(DbError::Validation(
+                "a node needs a non-empty title".to_string(),
+            ));
+        }
         self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = created_at
@@ -2295,6 +2350,12 @@ impl Database {
         edge_type: &str,
         rationale: Option<&str>,
     ) -> Result<i32> {
+        one_of("edge type", edge_type, EDGE_TYPES)?;
+        if from_id == to_id {
+            return Err(DbError::Validation(format!(
+                "cannot link node {from_id} to itself"
+            )));
+        }
         self.require_readable_store()?;
         let mut conn = self.get_conn()?;
 
@@ -2568,19 +2629,23 @@ impl Database {
 
     /// Update node status
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
+        one_of("status", status, NODE_STATUSES)?;
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
         let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+        let updated = diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
             .set((
                 decision_nodes::status.eq(status),
                 decision_nodes::updated_at.eq(&now),
             ))
             .execute(&mut conn)?;
         drop(conn);
+        if updated == 0 {
+            return Err(node_not_found(node_id));
+        }
 
         self.publish_node_edit(node_id, before);
         self.log_node_update(
@@ -2604,7 +2669,9 @@ impl Database {
         let current_meta: Option<String> = decision_nodes::table
             .filter(decision_nodes::id.eq(node_id))
             .select(decision_nodes::metadata_json)
-            .first(&mut conn)?;
+            .first(&mut conn)
+            .optional()?
+            .ok_or_else(|| node_not_found(node_id))?;
 
         // Parse existing metadata or create new
         let mut meta: serde_json::Value = current_meta
@@ -2650,7 +2717,9 @@ impl Database {
         let current_meta: Option<String> = decision_nodes::table
             .filter(decision_nodes::id.eq(node_id))
             .select(decision_nodes::metadata_json)
-            .first(&mut conn)?;
+            .first(&mut conn)
+            .optional()?
+            .ok_or_else(|| node_not_found(node_id))?;
 
         // Parse existing metadata or create new
         let mut meta: serde_json::Value = current_meta

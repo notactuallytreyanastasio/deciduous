@@ -166,10 +166,20 @@ fn get_bool(args: &Value, key: &str) -> Option<bool> {
     args.get(key).and_then(Value::as_bool)
 }
 
-fn get_u8(args: &Value, key: &str) -> Option<u8> {
-    args.get(key)
-        .and_then(Value::as_u64)
-        .map(|v| v.min(100) as u8)
+/// A 0-100 confidence. Anything else is an error, not silently dropped:
+/// `-5`, `"90"` and `150` all used to produce a node with no confidence (or
+/// 100) and a success reply.
+fn get_confidence(args: &Value, key: &str) -> Result<Option<u8>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .filter(|n| *n <= 100)
+            .map(|n| Some(n as u8))
+            .ok_or_else(|| {
+                HandlerError::from(format!("{key} must be an integer from 0 to 100, got {v}"))
+            }),
+    }
 }
 
 fn require_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, HandlerError> {
@@ -270,7 +280,7 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
     let node_type = require_str(args, "node_type")?;
     let title = require_str(args, "title")?;
     let description = get_str(args, "description");
-    let confidence = get_u8(args, "confidence");
+    let confidence = get_confidence(args, "confidence")?;
     let prompt = get_str(args, "prompt");
     let files = get_str(args, "files");
     let branch = get_str(args, "branch");
