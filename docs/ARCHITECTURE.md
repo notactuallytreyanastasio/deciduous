@@ -451,6 +451,52 @@ Tests verify:
 - Graph queries return expected results
 - Export formats are valid
 
+### The integration battery
+
+`tests/e2e_*.rs` drive real processes across real boundaries: the built
+binary, `deciduous mcp` over stdio, `deciduous serve --api` over TCP, git
+clones of a bare origin with the merge driver, and a shared graph server over
+HTTP MCP. A plain `cargo test` skips all of it (each test prints one
+`skipped:` line), so the normal suite stays fast and needs no network.
+
+| File | What it holds to account |
+|------|--------------------------|
+| `e2e_bridge.rs` | CLI writes reaching the server: offline replay, deletes, no stale overwrites, `remote status` |
+| `e2e_server.rs` | The HTTP MCP server: workspace pins, atomicity, validation, protocol edges, auth on every route |
+| `e2e_gitsync.rs` | Teammates through git: merge driver failures, clock skew, `sync --check` |
+| `e2e_stdio.rs` | The stdio server and API daemon: id range, path confinement, hangs, error ids |
+| `e2e_concurrency.rs` | Many processes on one project: every acknowledged write lands, no "database is locked" |
+| `e2e_model.rs` | Seeded random interleavings of every surface, checked against a model at each sync |
+| `e2e_fuzz.rs` | Malformed, huge and invalid-UTF-8 input to both MCP servers |
+| `e2e_swarm.rs` | `demo-swarm`'s trust-gated start with a stub `claude` (macOS) |
+
+Local-only parts (no server):
+
+```bash
+DECIDUOUS_E2E=1 cargo test --test e2e_gitsync --test e2e_stdio \
+  --test e2e_concurrency --test e2e_model --test e2e_fuzz --test e2e_swarm
+```
+
+Everything, against a throwaway server built from your checkout (never
+production; every test writes its own fresh workspaces, but they stay):
+
+```bash
+cd deciduous_mcp
+COMPOSE_PROJECT_NAME=dx-e2e DECIDUOUS_PORT=4816 DECIDUOUS_IMAGE=deciduous-mcp:e2e \
+  DECIDUOUS_ENV_FILE=/tmp/dx-e2e.env sh scripts/setup.sh
+cd ..
+export DECIDUOUS_E2E=1 DECIDUOUS_E2E_SERVER=http://127.0.0.1:4816
+export DECIDUOUS_E2E_TOKEN=$(sed -n "s/^DECIDUOUS_MCP_TOKEN='\(.*\)'$/\1/p" /tmp/dx-e2e.env)
+cargo test --test 'e2e_*'
+docker compose -p dx-e2e down -v && docker image rm deciduous-mcp:e2e
+```
+
+The randomized tests print their seed first and again in any failure.
+`DECIDUOUS_E2E_SEED=<seed>` replays that run exactly; `DECIDUOUS_E2E_STEPS=<n>`
+makes it longer. CI runs the whole battery on every pull request
+(`.github/workflows/integration.yml`) against a server built from the same
+commit, plus `mix test` for the server itself.
+
 ---
 
 ## Development Workflow
