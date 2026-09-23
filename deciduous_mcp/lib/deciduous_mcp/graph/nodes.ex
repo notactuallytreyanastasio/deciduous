@@ -126,17 +126,46 @@ defmodule DeciduousMcp.Graph.Nodes do
   def latest_per_branch(workspace_id, opts \\ []) do
     limit = Keyword.get(opts, :limit, 20)
 
+    # A loose index scan, hand-written because Postgres 17 has no skip scan
+    # and Ecto has no LATERAL-in-recursive-CTE. The DISTINCT ON this replaces
+    # read every live row in the workspace and sorted them to disk before
+    # keeping one per branch: 7,805 rows, a 9,424 kB external merge, 36.9 ms
+    # for epstein, on every check_activity call. This walks
+    # idx_nodes_ws_branchkey_latest instead: the first row of the index is
+    # the newest node on the lowest branch key; each recursion step asks for
+    # the first row with a strictly greater branch key, which is the newest
+    # node on the next branch. One index probe per branch, 0.065 ms for the
+    # same workspace. Same result set as the DISTINCT ON, checked with EXCEPT
+    # in both directions.
+    #
+    # `coalesce(metadata ->> 'branch', '')` must be spelled exactly as it is
+    # in the index expression or the planner will not match it.
+    sql = """
+    WITH RECURSIVE per_branch AS (
+      (SELECT n.*
+         FROM decision_nodes n
+        WHERE n.workspace_id = $1 AND n.deleted_at IS NULL
+        ORDER BY coalesce(n.metadata ->> 'branch', ''), n.inserted_at DESC, n.id DESC
+        LIMIT 1)
+      UNION ALL
+      SELECT nx.*
+        FROM per_branch pb,
+             LATERAL (SELECT n.*
+                        FROM decision_nodes n
+                       WHERE n.workspace_id = $1 AND n.deleted_at IS NULL
+                         AND coalesce(n.metadata ->> 'branch', '') > coalesce(pb.metadata ->> 'branch', '')
+                       ORDER BY coalesce(n.metadata ->> 'branch', ''), n.inserted_at DESC, n.id DESC
+                       LIMIT 1) nx
+    )
+    SELECT * FROM per_branch
+    """
+
+    {:ok, %{rows: raw_rows, columns: cols}} =
+      Ecto.Adapters.SQL.query(Repo, sql, [Ecto.UUID.dump!(workspace_id)])
+
     rows =
-      Node
-      |> where([n], n.workspace_id == ^workspace_id)
-      |> where([n], is_nil(n.deleted_at))
-      |> distinct([n], asc: fragment("coalesce(? ->> 'branch', '')", n.metadata))
-      |> order_by([n],
-        asc: fragment("coalesce(? ->> 'branch', '')", n.metadata),
-        desc: n.inserted_at,
-        desc: n.id
-      )
-      |> Repo.all()
+      raw_rows
+      |> Enum.map(&Repo.load(Node, {cols, &1}))
       |> Enum.sort_by(& &1.inserted_at, {:desc, DateTime})
 
     # One row per branch is already the cheap part; the expensive part is a
