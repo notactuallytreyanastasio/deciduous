@@ -1112,7 +1112,7 @@ fn replace_config_md_section(
                 if after.is_empty() {
                     String::new()
                 } else {
-                    format!("\n{}", after.trim_start())
+                    format!("\n{}", after) // everything after the end marker is the user's, blank lines included
                 }
             );
 
@@ -1494,6 +1494,27 @@ mod tests {
         let after = fs::read_to_string(&p).unwrap();
         assert!(after.contains("require-action-node.sh"), "{after}");
         assert!(!after.contains("log-loop"), "{after}");
+    }
+
+    #[test]
+    fn replacing_the_marked_section_leaves_everything_after_it_byte_for_byte() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        let user_before = "# Mine\n\nRules.\n\n";
+        let user_after = "\n## My Section\n\nText.\n";
+        fs::write(
+            &md,
+            format!(
+                "{user_before}<!-- deciduous:start -->\nold\n<!-- deciduous:end -->\n{user_after}"
+            ),
+        )
+        .unwrap();
+        let section = "<!-- deciduous:start -->\nnew\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
+        let once = fs::read_to_string(&md).unwrap();
+        assert_eq!(once, format!("{user_before}{section}\n{user_after}"));
+        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
+        assert_eq!(fs::read_to_string(&md).unwrap(), once);
     }
 
     #[test]
