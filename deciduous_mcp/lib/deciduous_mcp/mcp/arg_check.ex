@@ -23,15 +23,22 @@ defmodule DeciduousMcp.MCP.ArgCheck do
       back as `%Postgrex.Error{code: :character_not_in_repertoire}` with the
       stack trace attached, from every tool that writes a string.
     * a size. `with_limits/1` gives every string property that does not
-      declare a `maxLength` one (titles 10,000, anything else 262,144
-      characters) and titles a `minLength` of 1, in the schema the client is
-      sent as well as the one enforced here, so the two cannot disagree.
+      declare a `maxLength` one (titles 10,000, branches 512, anything
+      else 262,144 characters) and titles a `minLength` of 1, in the
+      schema the client is sent as well as the one enforced here, so the
+      two cannot disagree.
 
   The first violation is reported, naming the argument path and the value's
   offending property, never the whole value.
   """
 
   @title_max 10_000
+  # A branch is a key: the write lock's, and the btree expression index
+  # idx_nodes_ws_branchkey_latest over metadata->>'branch', whose entries
+  # cannot pass about 2,700 bytes. 512 characters is at most 2,048 bytes of
+  # UTF-8 and longer than any branch name a person types; a 300-character
+  # one used to fail every write with MatchError (SERVER-N2).
+  @branch_max 512
   @text_max 262_144
   # Every string in one call, keys included. Each string was bounded, the
   # call was not: update_node's metadata took 28 keys of 262,144 characters
@@ -66,7 +73,7 @@ defmodule DeciduousMcp.MCP.ArgCheck do
     cond do
       string_type?(spec[:type]) and not Map.has_key?(spec, :maxLength) ->
         spec
-        |> Map.put(:maxLength, if(name == "title", do: @title_max, else: @text_max))
+        |> Map.put(:maxLength, default_max(name))
         |> then(fn s -> if name == "title", do: Map.put_new(s, :minLength, 1), else: s end)
 
       spec[:type] == "array" ->
@@ -78,6 +85,10 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   end
 
   defp limit_property(_name, spec), do: spec
+
+  defp default_max("title"), do: @title_max
+  defp default_max("branch"), do: @branch_max
+  defp default_max(_), do: @text_max
 
   defp string_type?("string"), do: true
   defp string_type?(types) when is_list(types), do: "string" in types
