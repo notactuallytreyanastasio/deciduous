@@ -906,11 +906,47 @@ impl Database {
         }
     }
 
-    /// The node as it is before an edit, read only when there is a server
-    /// log to write the edit to: an update op says what it replaced.
-    fn before_update(&self, node_id: i32) -> Option<DecisionNode> {
-        self.oplog()?;
-        self.get_node(node_id).ok().flatten()
+    /// Holds the server log's lock from before a write changes the database
+    /// until its op is appended; `None` when there is no log.
+    ///
+    /// Without it, two local writers (two MCP servers and the CLI on one
+    /// project) could commit in one order and append in the other, and an
+    /// update op's `was` could be a value read before another writer's
+    /// commit. The server applies an update only over its `was`, so either
+    /// made it refuse an edit "changed on the server after this edit was
+    /// made" when nobody had touched the server (RUST-N5). Held across the
+    /// write, the log's order is the commit order.
+    ///
+    /// If the lock cannot be had, the write is refused before anything is
+    /// written: a write made and then not queued is the silent fork this
+    /// log exists to prevent.
+    fn hold_log(&self) -> Result<Option<crate::oplog::LockGuard>> {
+        let Some(log) = self.oplog() else {
+            return Ok(None);
+        };
+        log.lock().map(Some).map_err(|e| {
+            DbError::Validation(format!(
+                "nothing was written: this write would have to be queued for the server in {}, \
+                 and its lock could not be taken: {e}",
+                log.path().display()
+            ))
+        })
+    }
+
+    /// Reads the node inside a write's transaction, when there is a server
+    /// log to record what the write replaced; `None` otherwise.
+    fn replaced_in_tx(
+        &self,
+        conn: &mut SqliteConnection,
+        node_id: i32,
+    ) -> Result<Option<DecisionNode>> {
+        if self.oplog().is_none() {
+            return Ok(None);
+        }
+        Ok(decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(conn)
+            .optional()?)
     }
 
     fn log_node_update(
@@ -1897,6 +1933,7 @@ impl Database {
             ));
         }
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = created_at
             .map(|s| s.to_string())
@@ -1958,6 +1995,7 @@ impl Database {
         branch: Option<&str>,
     ) -> Result<i32> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2403,6 +2441,7 @@ impl Database {
             )));
         }
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
         // Validate both nodes exist and get their change_ids
@@ -2477,6 +2516,7 @@ impl Database {
     /// Delete an edge between two nodes
     pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
         // Check if the edge exists
@@ -2546,6 +2586,7 @@ impl Database {
         if !dry_run && publish {
             self.require_readable_store()?;
         }
+        let _log = if dry_run { None } else { self.hold_log()? };
         let mut conn = self.get_conn()?;
 
         // Check if node exists
@@ -2677,21 +2718,28 @@ impl Database {
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
         one_of("status", status, NODE_STATUSES)?;
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
-        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        let updated = diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::status.eq(status),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+        // `was` is read in the transaction that writes, so it is the value
+        // this write replaced, whatever wrote in between.
+        let replaced = conn.immediate_transaction(|conn| {
+            let replaced = self.replaced_in_tx(conn, node_id)?;
+            let updated =
+                diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                    .set((
+                        decision_nodes::status.eq(status),
+                        decision_nodes::updated_at.eq(&now),
+                    ))
+                    .execute(conn)?;
+            if updated == 0 {
+                return Err(node_not_found(node_id));
+            }
+            Ok(replaced)
+        })?;
         drop(conn);
-        if updated == 0 {
-            return Err(node_not_found(node_id));
-        }
 
         self.publish_node_edit(node_id, before);
         self.log_node_update(
@@ -2706,39 +2754,44 @@ impl Database {
     /// Update a node's commit hash in metadata_json
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
-        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        // Get current metadata
-        let current_meta: Option<String> = decision_nodes::table
-            .filter(decision_nodes::id.eq(node_id))
-            .select(decision_nodes::metadata_json)
-            .first(&mut conn)
-            .optional()?
-            .ok_or_else(|| node_not_found(node_id))?;
+        // Read, merge and write in one transaction: the map read is the map
+        // replaced, so neither a concurrent key nor `was` goes stale.
+        let replaced = conn.immediate_transaction(|conn| {
+            let replaced = self.replaced_in_tx(conn, node_id)?;
+            let current_meta: Option<String> = decision_nodes::table
+                .filter(decision_nodes::id.eq(node_id))
+                .select(decision_nodes::metadata_json)
+                .first(conn)
+                .optional()?
+                .ok_or_else(|| node_not_found(node_id))?;
 
-        // Parse existing metadata or create new
-        let mut meta: serde_json::Value = current_meta
-            .as_ref()
-            .and_then(|m| serde_json::from_str(m).ok())
-            .unwrap_or_else(|| serde_json::json!({}));
+            // Parse existing metadata or create new
+            let mut meta: serde_json::Value = current_meta
+                .as_ref()
+                .and_then(|m| serde_json::from_str(m).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
 
-        // Add/update commit field
-        if let Some(obj) = meta.as_object_mut() {
-            obj.insert("commit".to_string(), serde_json::json!(commit_hash));
-        }
+            // Add/update commit field
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert("commit".to_string(), serde_json::json!(commit_hash));
+            }
 
-        let new_meta = serde_json::to_string(&meta)
-            .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
+            let new_meta = serde_json::to_string(&meta)
+                .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::metadata_json.eq(Some(new_meta)),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set((
+                    decision_nodes::metadata_json.eq(Some(new_meta)),
+                    decision_nodes::updated_at.eq(&now),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(replaced)
+        })?;
         drop(conn);
 
         self.publish_node_edit(node_id, before);
@@ -2754,39 +2807,44 @@ impl Database {
     /// Update a node's prompt in metadata_json
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
-        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        // Get current metadata
-        let current_meta: Option<String> = decision_nodes::table
-            .filter(decision_nodes::id.eq(node_id))
-            .select(decision_nodes::metadata_json)
-            .first(&mut conn)
-            .optional()?
-            .ok_or_else(|| node_not_found(node_id))?;
+        // Read, merge and write in one transaction: the map read is the map
+        // replaced, so neither a concurrent key nor `was` goes stale.
+        let replaced = conn.immediate_transaction(|conn| {
+            let replaced = self.replaced_in_tx(conn, node_id)?;
+            let current_meta: Option<String> = decision_nodes::table
+                .filter(decision_nodes::id.eq(node_id))
+                .select(decision_nodes::metadata_json)
+                .first(conn)
+                .optional()?
+                .ok_or_else(|| node_not_found(node_id))?;
 
-        // Parse existing metadata or create new
-        let mut meta: serde_json::Value = current_meta
-            .as_ref()
-            .and_then(|m| serde_json::from_str(m).ok())
-            .unwrap_or_else(|| serde_json::json!({}));
+            // Parse existing metadata or create new
+            let mut meta: serde_json::Value = current_meta
+                .as_ref()
+                .and_then(|m| serde_json::from_str(m).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
 
-        // Add/update prompt field
-        if let Some(obj) = meta.as_object_mut() {
-            obj.insert("prompt".to_string(), serde_json::json!(prompt));
-        }
+            // Add/update prompt field
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert("prompt".to_string(), serde_json::json!(prompt));
+            }
 
-        let new_meta = serde_json::to_string(&meta)
-            .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
+            let new_meta = serde_json::to_string(&meta)
+                .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::metadata_json.eq(Some(new_meta)),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set((
+                    decision_nodes::metadata_json.eq(Some(new_meta)),
+                    decision_nodes::updated_at.eq(&now),
+                ))
+                .execute(conn)?;
+            Ok::<_, DbError>(replaced)
+        })?;
         drop(conn);
 
         self.publish_node_edit(node_id, before);

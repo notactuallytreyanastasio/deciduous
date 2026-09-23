@@ -1533,3 +1533,58 @@ fn rust_n4_a_lock_left_by_a_killed_process_neither_stalls_nor_drops_a_write() {
         "took {took:?}: {out}"
     );
 }
+
+// RUST-N5: an update op says what it replaced (`was`), and the server applies
+// it only over that value. db.rs read `was` before the write's transaction
+// and appended the op after the commit, so two local writers racing on one
+// node queued ops whose `was` was not what they replaced, or in an order
+// that was not the order of the writes. The server refused them as edits
+// made "on the server after this edit" when nobody had touched the server.
+//
+// Checked offline, on the log itself: read in order, each update's `was`
+// must be the previous update's value, and the last one must be what the
+// database holds. That is exactly what the server's compare-and-set needs.
+#[test]
+fn rust_n5_concurrent_local_writers_queue_a_true_was_in_commit_order() {
+    let sb = std::sync::Arc::new(Sandbox::new("0123456789abcdef0123456789abcdef"));
+    let dir = offline_repo(&sb, "stale-was");
+    sb.dx_ok(&dir, &["add", "goal", "raced"]);
+    let statuses = ["active", "completed", "rejected", "pending", "superseded"];
+    let writers: Vec<_> = (0..4)
+        .map(|w| {
+            let (sb, dir) = (sb.clone(), dir.clone());
+            std::thread::spawn(move || {
+                for i in 0..12 {
+                    let s = statuses[(w + i) % statuses.len()];
+                    sb.dx_ok(&dir, &["status", "1", s]);
+                }
+            })
+        })
+        .collect();
+    for w in writers {
+        w.join().unwrap();
+    }
+
+    let updates: Vec<Value> = log_lines(&dir)
+        .into_iter()
+        .filter(|l| l["kind"] == "update_node")
+        .collect();
+    assert_eq!(updates.len(), 48);
+    let mut expect = Value::String("pending".into());
+    let mut broken = Vec::new();
+    for (i, op) in updates.iter().enumerate() {
+        if op["was"]["status"] != expect {
+            broken.push(format!(
+                "op {i}: was {} after {}",
+                op["was"]["status"], expect
+            ));
+        }
+        expect = op["set"]["status"].clone();
+    }
+    let g: Value = serde_json::from_str(&sb.dx_ok(&dir, &["graph"])).unwrap();
+    assert_eq!(
+        g["nodes"][0]["status"], expect,
+        "the last op is not the last write"
+    );
+    assert!(broken.is_empty(), "{} stale: {broken:?}", broken.len());
+}
