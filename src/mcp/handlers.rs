@@ -909,17 +909,22 @@ fn handle_get_branch_summary(db: &Database, args: &Value) -> HandlerResult {
 // Export handlers
 // ---------------------------------------------------------------------------
 
-/// `"1,4,9"` into ids. A part that is not an id is an error: dropping it
-/// exported a different subgraph than the one asked for, silently.
-fn parse_root_ids(spec: &str) -> Result<Vec<i32>, HandlerError> {
-    spec.split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| {
-            s.parse::<i32>()
-                .map_err(|_| HandlerError::from(format!("roots: {s:?} is not a node id")))
-        })
-        .collect()
+/// The subgraph an export names with `nodes` (ids and ranges) or `roots`
+/// (ids to walk down from), or the whole graph. An unparseable spec is an
+/// error naming the part it could not read.
+fn export_subgraph(
+    graph: crate::db::DecisionGraph,
+    args: &Value,
+) -> Result<crate::db::DecisionGraph, HandlerError> {
+    if let Some(nodes_spec) = get_str(args, "nodes") {
+        let spec = crate::export::parse_node_range(nodes_spec).map_err(HandlerError::from)?;
+        Ok(crate::export::filter_graph_by_ids(&graph, &spec.select(&graph)))
+    } else if let Some(roots_spec) = get_str(args, "roots") {
+        let root_ids = crate::export::parse_root_ids(roots_spec).map_err(HandlerError::from)?;
+        Ok(crate::export::filter_graph_from_roots(&graph, &root_ids))
+    } else {
+        Ok(graph)
+    }
 }
 
 fn handle_export_dot(db: &Database, args: &Value) -> HandlerResult {
@@ -927,19 +932,7 @@ fn handle_export_dot(db: &Database, args: &Value) -> HandlerResult {
     let title = get_str(args, "title");
     let rankdir = get_str(args, "rankdir").unwrap_or("TB");
     crate::export::validate_rankdir(rankdir).map_err(HandlerError::from)?;
-    let roots_str = get_str(args, "roots");
-    let nodes_str = get_str(args, "nodes");
-
-    // Filter graph if roots or nodes specified
-    let filtered_graph = if let Some(nodes_spec) = nodes_str {
-        let node_ids = crate::export::parse_node_range(nodes_spec);
-        crate::export::filter_graph_by_ids(&graph, &node_ids)
-    } else if let Some(roots_spec) = roots_str {
-        let root_ids = parse_root_ids(roots_spec)?;
-        crate::export::filter_graph_from_roots(&graph, &root_ids)
-    } else {
-        graph
-    };
+    let filtered_graph = export_subgraph(graph, args)?;
 
     let config = crate::export::DotConfig {
         title: title.map(|s| s.to_string()),
@@ -957,21 +950,9 @@ fn handle_export_dot(db: &Database, args: &Value) -> HandlerResult {
 fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
     let graph = db.get_graph()?;
     let title = get_str(args, "title");
-    let roots_str = get_str(args, "roots");
-    let nodes_str = get_str(args, "nodes");
     let no_dot = get_bool(args, "no_dot").unwrap_or(false);
     let no_test_plan = get_bool(args, "no_test_plan").unwrap_or(false);
-
-    // Filter graph if specified
-    let filtered_graph = if let Some(nodes_spec) = nodes_str {
-        let node_ids = crate::export::parse_node_range(nodes_spec);
-        crate::export::filter_graph_by_ids(&graph, &node_ids)
-    } else if let Some(roots_spec) = roots_str {
-        let root_ids = parse_root_ids(roots_spec)?;
-        crate::export::filter_graph_from_roots(&graph, &root_ids)
-    } else {
-        graph
-    };
+    let filtered_graph = export_subgraph(graph, args)?;
 
     let config = crate::export::WriteupConfig {
         title: title

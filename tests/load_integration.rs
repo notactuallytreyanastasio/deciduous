@@ -1515,6 +1515,69 @@ fn api_query_response_size_is_bounded() {
     assert_eq!(b["data"]["rows"][0][0], "g");
 }
 
+/// `nodes` specs dropped what they could not parse, and a range was expanded
+/// into a Vec of every id in it before looking at the graph.
+#[test]
+fn export_node_specs_refuse_what_they_cannot_parse_and_do_not_expand_ranges() {
+    let p = Project::new();
+    for t in ["one", "two", "three"] {
+        assert!(p.cli(&["add", "goal", t]).status.success());
+    }
+    let mut m = p.mcp();
+    for (tool, args, why) in [
+        ("export_dot", json!({"nodes":"abc"}), "abc"),
+        ("export_dot", json!({"nodes":"1,abc,3"}), "abc"),
+        ("export_dot", json!({"nodes":"5-1"}), "5-1"),
+        ("export_dot", json!({"nodes":""}), "nodes"),
+        ("generate_writeup", json!({"nodes":"zz"}), "zz"),
+        ("generate_writeup", json!({"roots":""}), "roots"),
+    ] {
+        let e = m
+            .call(tool, args.clone())
+            .expect_err(&format!("{tool} {args} was accepted"));
+        assert!(e.contains(why), "{tool} {args}: expected '{why}' in: {e}");
+    }
+
+    let started = Instant::now();
+    let dot = m
+        .call("export_dot", json!({"nodes":"0-2147483647"}))
+        .unwrap();
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "a wide range took {:?}",
+        started.elapsed()
+    );
+    let dot = dot.as_str().unwrap();
+    for t in ["one", "two", "three"] {
+        assert!(dot.contains(t), "{dot}");
+    }
+    let dot = m.call("export_dot", json!({"nodes":"1,3"})).unwrap();
+    assert!(!dot.as_str().unwrap().contains("two"));
+    m.ping_alive();
+    m.close();
+
+    for args in [
+        &["dot", "--roots", "zz"][..],
+        &["dot", "--roots", "1,zz"][..],
+        &["dot", "--nodes", "abc"][..],
+        &["writeup", "--nodes", "1,abc"][..],
+        &["writeup", "--roots", "x"][..],
+    ] {
+        let out = p.cli(args);
+        assert!(
+            !out.status.success(),
+            "cli {args:?} succeeded: {}",
+            text(&out.stdout)
+        );
+        let bad = args[2].split(',').next_back().unwrap();
+        assert!(
+            text(&out.stderr).contains(bad),
+            "{args:?}: {}",
+            text(&out.stderr)
+        );
+    }
+}
+
 impl Mcp {
     fn ping_alive(&mut self) {
         self.next_id += 1;
@@ -1551,6 +1614,64 @@ impl Mcp {
             Ok(serde_json::from_str(body).unwrap_or(Value::String(body.to_string())))
         })
     }
+}
+
+/// A goal description is markdown the writeup did not write: an unclosed
+/// fence in it swallowed every goal after it, and the ```dot block after
+/// that was parsed inside out.
+#[test]
+fn a_description_cannot_swallow_the_rest_of_the_writeup() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    m.call(
+        "add_node",
+        json!({"node_type":"goal","title":"First","description":"# Heading\n\n```\nfence","branch":"b"}),
+    )
+    .unwrap();
+    m.call(
+        "add_node",
+        json!({"node_type":"goal","title":"Second","branch":"b"}),
+    )
+    .unwrap();
+    let md = m.call("generate_writeup", json!({})).unwrap();
+    let md = md.as_str().unwrap().to_string();
+    m.close();
+
+    // Every line of the description sits inside a block quote, which closes
+    // an unclosed fence at its end (CommonMark 4.5), and the quote ends
+    // with a blank line before the next goal.
+    let lines: Vec<&str> = md.lines().collect();
+    for want in ["> # Heading", "> ```", "> fence"] {
+        assert!(lines.contains(&want), "{want:?} not quoted:\n{md}");
+    }
+    assert!(
+        !lines.iter().any(|l| *l == "fence" || *l == "# Heading"),
+        "description text escaped its quote:\n{md}"
+    );
+    let second = lines.iter().position(|l| *l == "**Goal:** Second").unwrap();
+    assert_eq!(lines[second - 1], "", "{md}");
+}
+
+/// The commit badge cut the commit string at byte 7, which panicked on a
+/// multi-byte character and killed the stdio server, every time.
+#[test]
+fn a_non_ascii_commit_does_not_kill_the_server_in_generate_writeup() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    m.call(
+        "add_node",
+        json!({"node_type":"action","title":"a","commit":"ééééé","branch":"b"}),
+    )
+    .unwrap();
+    let md = m
+        .call_within("generate_writeup", json!({}), Duration::from_secs(10))
+        .expect("generate_writeup never answered")
+        .unwrap();
+    assert!(md.as_str().unwrap().contains("`ééééé`"), "{md}");
+    m.ping_alive();
+    let (code, stderr) = m.close();
+    assert!(!stderr.contains("panicked"), "{stderr}");
+    assert_eq!(code, Some(0));
 }
 
 // ============================================================================

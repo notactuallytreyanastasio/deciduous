@@ -1063,6 +1063,29 @@ fn exit(code: i32) -> ! {
     std::process::exit(code)
 }
 
+/// The subgraph `dot` and `writeup` export: `--nodes`, `--roots`, or all
+/// of it. A part of either spec that is not an id exits with an error
+/// naming it; it used to be dropped, and `--roots zz` printed an empty
+/// digraph with exit code 0.
+fn cli_export_subgraph(
+    graph: deciduous::DecisionGraph,
+    nodes: Option<String>,
+    roots: Option<String>,
+) -> deciduous::DecisionGraph {
+    let result = if let Some(node_spec) = nodes {
+        parse_node_range(&node_spec).map(|spec| filter_graph_by_ids(&graph, &spec.select(&graph)))
+    } else if let Some(root_spec) = roots {
+        deciduous::parse_root_ids(&root_spec)
+            .map(|ids| deciduous::filter_graph_from_roots(&graph, &ids))
+    } else {
+        Ok(graph)
+    };
+    result.unwrap_or_else(|e| {
+        eprintln!("{} {}", "Error:".red(), e);
+        exit(1);
+    })
+}
+
 /// `deciduous serve --api`. Returns the process exit code.
 fn run_api_daemon(
     port: u16,
@@ -3078,19 +3101,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = if let Some(node_spec) = nodes {
-                        let node_ids = parse_node_range(&node_spec);
-                        filter_graph_by_ids(&graph, &node_ids)
-                    } else if let Some(root_spec) = roots {
-                        // Parse root IDs and traverse
-                        let root_ids: Vec<i32> = root_spec
-                            .split(',')
-                            .filter_map(|s| s.trim().parse().ok())
-                            .collect();
-                        deciduous::filter_graph_from_roots(&graph, &root_ids)
-                    } else {
-                        graph
-                    };
+                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
 
                     let config = DotConfig {
                         title,
@@ -3209,18 +3220,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = if let Some(node_spec) = nodes {
-                        let node_ids = parse_node_range(&node_spec);
-                        filter_graph_by_ids(&graph, &node_ids)
-                    } else if let Some(root_spec) = roots {
-                        let root_ids: Vec<i32> = root_spec
-                            .split(',')
-                            .filter_map(|s| s.trim().parse().ok())
-                            .collect();
-                        deciduous::filter_graph_from_roots(&graph, &root_ids)
-                    } else {
-                        graph
-                    };
+                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
 
                     // Auto-detect GitHub repo from git remote
                     let github_repo = ProcessCommand::new("git")

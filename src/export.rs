@@ -290,30 +290,88 @@ pub fn filter_graph_by_ids(graph: &DecisionGraph, node_ids: &[i32]) -> DecisionG
     }
 }
 
-/// Parse a node range specification (e.g., "1-11" or "1,2,5-10,15")
-pub fn parse_node_range(spec: &str) -> Vec<i32> {
-    let mut ids = Vec::new();
+/// A set of node ids written as `"1-11"` or `"1,2,5-10,15"`, kept as
+/// ranges. Expanding `0-2147483647` into a Vec of every id in it took 8.6 GB
+/// before the graph was even looked at; a range is only ever compared
+/// against the ids the graph has.
+#[derive(Debug, Clone, PartialEq)]
+pub struct NodeSpec {
+    /// Sorted by start, overlapping ranges merged.
+    ranges: Vec<(i32, i32)>,
+}
 
-    for part in spec.split(',') {
-        let part = part.trim();
-        if part.contains('-') {
-            let parts: Vec<&str> = part.split('-').collect();
-            if parts.len() == 2 {
-                if let (Ok(start), Ok(end)) = (
-                    parts[0].trim().parse::<i32>(),
-                    parts[1].trim().parse::<i32>(),
-                ) {
-                    for id in start..=end {
-                        ids.push(id);
-                    }
-                }
-            }
-        } else if let Ok(id) = part.parse::<i32>() {
-            ids.push(id);
-        }
+impl NodeSpec {
+    pub fn contains(&self, id: i32) -> bool {
+        let i = self.ranges.partition_point(|&(start, _)| start <= id);
+        i > 0 && id <= self.ranges[i - 1].1
     }
 
-    ids
+    /// The ids in `graph` this spec names, in graph order.
+    pub fn select(&self, graph: &DecisionGraph) -> Vec<i32> {
+        graph
+            .nodes
+            .iter()
+            .map(|n| n.id)
+            .filter(|&id| self.contains(id))
+            .collect()
+    }
+}
+
+/// Parse a node range specification (e.g., "1-11" or "1,2,5-10,15").
+///
+/// A part that is not an id or a range is an error that names it. Skipping
+/// it exported a different subgraph than the one asked for, and `"abc"`
+/// gave an empty graph with no error at all.
+pub fn parse_node_range(spec: &str) -> Result<NodeSpec, String> {
+    let id = |s: &str, part: &str| {
+        s.trim()
+            .parse::<i32>()
+            .map_err(|_| format!("nodes: {part:?} is not a node id or a range like 3-7"))
+    };
+    let mut ranges = Vec::new();
+    for part in spec.split(',').map(str::trim).filter(|p| !p.is_empty()) {
+        let range = match part.split_once('-') {
+            Some((a, b)) => (id(a, part)?, id(b, part)?),
+            None => {
+                let n = id(part, part)?;
+                (n, n)
+            }
+        };
+        if range.0 > range.1 {
+            return Err(format!("nodes: {part:?} is an empty range (it runs backwards)"));
+        }
+        ranges.push(range);
+    }
+    if ranges.is_empty() {
+        return Err(format!("nodes: {spec:?} names no node ids"));
+    }
+    ranges.sort_unstable();
+    let mut merged: Vec<(i32, i32)> = Vec::with_capacity(ranges.len());
+    for (start, end) in ranges {
+        match merged.last_mut() {
+            Some(last) if start <= last.1.saturating_add(1) => last.1 = last.1.max(end),
+            _ => merged.push((start, end)),
+        }
+    }
+    Ok(NodeSpec { ranges: merged })
+}
+
+/// `"1,4,9"` into root ids. A part that is not an id is an error, and so is
+/// a spec with no ids in it: both used to export an empty graph, silently.
+pub fn parse_root_ids(spec: &str) -> Result<Vec<i32>, String> {
+    let ids = spec
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| {
+            s.parse::<i32>()
+                .map_err(|_| format!("roots: {s:?} is not a node id"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if ids.is_empty() {
+        return Err(format!("roots: {spec:?} names no node ids"));
+    }
+    Ok(ids)
 }
 
 /// Configuration for PR writeup generation
@@ -359,6 +417,26 @@ fn one_line(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// A description as a block quote. It is markdown the writeup did not
+/// write: an unclosed ``` in it swallowed every goal after it, and the
+/// ```dot fence further down then opened where it should have closed. Inside
+/// a block quote a fence ends with the quote (CommonMark 4.5), and so does a
+/// heading, so nothing in it reaches the rest of the document. Escaping it
+/// instead would be the obvious fix and would also mangle the markdown the
+/// author meant to write.
+fn quote_block(s: &str) -> String {
+    s.lines()
+        .map(|l| {
+            if l.trim().is_empty() {
+                ">".to_string()
+            } else {
+                format!("> {l}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Generate a PR writeup from a decision graph
 pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> String {
     let filtered = if config.root_ids.is_empty() {
@@ -383,7 +461,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         for goal in &goals {
             wln!(writeup, "**Goal:** {}", one_line(&goal.title));
             if let Some(desc) = &goal.description {
-                wln!(writeup, "\n{}\n", desc);
+                wln!(writeup, "\n{}\n", quote_block(desc));
             }
         }
         wln!(writeup);
@@ -469,7 +547,9 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
             let commit = extract_commit(&action.metadata_json);
             let commit_badge = commit
                 .as_ref()
-                .map(|c| format!(" `{}`", &c[..7.min(c.len())]))
+                // Seven characters, not seven bytes: a byte slice panicked
+                // on a multi-byte commit value and killed the MCP server.
+                .map(|c| format!(" `{}`", c.chars().take(7).collect::<String>()))
                 .unwrap_or_default();
 
             wln!(writeup, "- {}{}", one_line(&action.title), commit_badge);
@@ -693,6 +773,25 @@ mod tests {
         assert!(writeup.contains("Build feature X"));
         assert!(writeup.contains("## Decision Graph"));
         assert!(writeup.contains("```dot"));
+    }
+
+    #[test]
+    fn node_spec_keeps_ranges_and_refuses_what_it_cannot_read() {
+        let spec = parse_node_range("1-3, 5, 2-4, 2147483640-2147483647").unwrap();
+        for id in [1, 2, 3, 4, 5, 2147483647] {
+            assert!(spec.contains(id), "{id}");
+        }
+        for id in [0, 6, -1, 2147483639] {
+            assert!(!spec.contains(id), "{id}");
+        }
+        assert_eq!(spec.ranges, vec![(1, 5), (2147483640, 2147483647)]);
+        for bad in ["abc", "1,abc", "5-1", "", " , ", "1-", "-3", "1-2-3"] {
+            assert!(parse_node_range(bad).is_err(), "{bad:?}");
+        }
+        assert!(parse_root_ids("1, 2").is_ok());
+        for bad in ["", "x", "1,x"] {
+            assert!(parse_root_ids(bad).is_err(), "{bad:?}");
+        }
     }
 
     #[test]
