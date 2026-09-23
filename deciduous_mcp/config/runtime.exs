@@ -66,6 +66,7 @@ if config_env() == :prod do
     # The database lives on the same private docker network as this container
     # and is not reachable from outside it, so TLS to Postgres is off by
     # default here. Set DB_SSL=true if that ever stops being true.
-    ssl: ssl?,
-    ssl_opts: ssl_opts
+    # Postgrex 0.22 takes the TLS options as the value of :ssl; the separate
+    # :ssl_opts key is deprecated and logged a warning on every connection.
+    ssl: if(ssl?, do: ssl_opts, else: false)
 end

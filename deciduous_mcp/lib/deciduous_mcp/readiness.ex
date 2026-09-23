@@ -26,9 +26,12 @@ defmodule DeciduousMcp.Readiness do
   def __mix_recompile__?, do: Path.wildcard(@migration_pattern) != @migration_files
 
   def check do
+    # Waits its turn in the pool (bounded by the 1s timeout) rather than
+    # `queue: false`: a burst of tool calls holding every connection is a
+    # busy server, not an unready one, and a 503 then made healthchecks and
+    # proxies route away from a working instance.
     case Ecto.Adapters.SQL.query(Repo, "SELECT version FROM schema_migrations", [],
            timeout: 1_000,
-           queue: false,
            log: false
          ) do
       {:ok, %{rows: rows}} ->

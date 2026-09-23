@@ -4,7 +4,7 @@
   "description": "Shared decision graphs for team development. Track every goal, decision, and outcome in a collaborative PostgreSQL-backed graph that survives context loss.",
   "author": "notactuallytreyanastasio",
   "homepage": "https://github.com/notactuallytreyanastasio/deciduous",
-  "license": "MIT",
+  "license": "Apache-2.0",
   "mcp": {
     "stdio": {
       "command": "./deciduous_mcp",

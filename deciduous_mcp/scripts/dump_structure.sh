@@ -91,7 +91,7 @@ psql -X --no-password -v ON_ERROR_STOP=1 -Atc "
   # Version banners and random psql guard tokens change across patch releases.
   # The source is a disposable database built from this repository's migrations.
   pg_dump --no-password --schema-only --no-owner --no-privileges --no-tablespaces |
-    sed '/^\\restrict /d; /^\\unrestrict /d; /^-- Dumped from database version /d; /^-- Dumped by pg_dump version /d'
+    sed '/^\\restrict /d; /^\\unrestrict /d; /^-- Dumped from database version /d; /^-- Dumped by pg_dump version /d; /^SET transaction_timeout = 0;$/d'
 
   printf '%s' '-- Ecto migration ledger ------------------------------------------------------'
   printf '\n'
