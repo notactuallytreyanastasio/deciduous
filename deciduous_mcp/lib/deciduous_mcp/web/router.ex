@@ -115,7 +115,9 @@ defmodule DeciduousMcp.Web.Router do
 
       case Scope.read_scope(conn_frame(conn), conn.query_params) do
         {:ok, scope} ->
-          json(conn, 200, Query.get_full_graph(scope))
+          # Tombstones: without them a node deleted on the server never
+          # left a pulled graph, and the next push re-sent it.
+          json(conn, 200, Query.get_full_graph(scope, tombstones: true))
 
         {:error, message} ->
           json(conn, 422, %{error: message})

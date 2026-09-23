@@ -252,12 +252,7 @@ impl Remote {
     }
 
     pub fn counts(&self) -> Result<RemoteCounts, String> {
-        let graph = self.export()?;
-        Ok(RemoteCounts {
-            nodes: graph.nodes.len(),
-            edges: graph.edges.len(),
-            documents: graph.documents.len(),
-        })
+        Ok(self.export()?.live_counts())
     }
 
     /// The whole workspace as the server holds it.
@@ -552,6 +547,23 @@ pub struct RemoteGraph {
     pub edges: Vec<RemoteEdge>,
     #[serde(default)]
     pub documents: Vec<Value>,
+}
+
+impl RemoteGraph {
+    /// Counts what the server holds, not what it remembers deleting.
+    ///
+    /// `/export` carries a node deleted on the server as a tombstone (the row
+    /// with `deleted_at` set) so that `pull` can delete it here. Counting
+    /// those as nodes would compare a local graph that no longer has the node
+    /// with a server total that still does, and `remote status` would report
+    /// drift forever: the same symptom tombstones exist to end.
+    pub fn live_counts(&self) -> RemoteCounts {
+        RemoteCounts {
+            nodes: self.nodes.iter().filter(|n| n.deleted_at.is_none()).count(),
+            edges: self.edges.len(),
+            documents: self.documents.len(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -1015,5 +1027,25 @@ mod tests {
             "got: {}",
             r.events_url()
         );
+    }
+
+    /// A node deleted on the server arrives from /export as a tombstone. It
+    /// is not counted as held, and its change_id is not "missing" either, so
+    /// a local copy that has not been pulled away yet is not pushed back.
+    #[test]
+    fn a_server_tombstone_is_not_counted_and_not_pushed_back() {
+        let mut graph = server(&["a", "b"], &[]);
+        graph.nodes[1].deleted_at = Some("2026-09-23T17:38:04Z".into());
+
+        let c = graph.live_counts();
+        assert_eq!((c.nodes, c.edges), (1, 0));
+
+        let local = serde_json::json!({
+            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}],
+            "edges": [],
+            "documents": []
+        });
+        let (_, n, _) = missing_on_server(&local, &graph);
+        assert_eq!(n, 0);
     }
 }

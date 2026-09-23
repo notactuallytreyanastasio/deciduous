@@ -14,7 +14,9 @@ defmodule DeciduousMcp.Graph.Query do
 
   Options:
   - `:branch` — filter nodes/edges to a specific git branch
-  - `:include_deleted` — include soft-deleted nodes (default false)
+  - `:tombstones` — also return soft-deleted nodes, each carrying
+    `deleted_at` (default false; `GET /export` sets it). Edges touching a
+    deleted node are never returned.
   """
   def get_full_graph(scope, opts \\ []) do
     # `details: false` drops description, metadata and rationale. On the
@@ -22,15 +24,35 @@ defmodule DeciduousMcp.Graph.Query do
     # and the MCP client re-parses the body as a string inside JSON-RPC, so
     # every byte is paid for three times (encode, escape, decode).
     details? = Keyword.get(opts, :details, true)
-    nodes = fetch_nodes(scope, opts)
+    tombstones? = Keyword.get(opts, :tombstones, false)
+
+    fetched =
+      fetch_nodes(scope, if(tombstones?, do: [{:include_deleted, true} | opts], else: opts))
+
+    {nodes, dead} = Enum.split_with(fetched, &is_nil(&1.deleted_at))
     node_ids = Enum.map(nodes, & &1.id)
     edges = fetch_edges(scope, node_ids)
     themes = fetch_themes(scope)
     documents = fetch_documents(scope, node_ids)
     node_themes = fetch_node_themes(node_ids)
 
+    serialize = &serialize_node(&1, details?)
+
+    # A tombstone is the whole row with `deleted_at` set, in `nodes` beside
+    # the live ones: the shape the CLI's pull already reads (RemoteNode has
+    # a deleted_at field and hands it to reconcile, which deletes). Only
+    # /export asks for them; `deleted_at` is on every node there, nil for a
+    # live one, so a reader need not guess what a missing key means.
+    serialized =
+      if tombstones?,
+        do:
+          Enum.map(fetched, fn n ->
+            Map.put(serialize.(n), :deleted_at, n.deleted_at && DateTime.to_iso8601(n.deleted_at))
+          end),
+        else: Enum.map(nodes, serialize)
+
     %{
-      nodes: Enum.map(nodes, &serialize_node(&1, details?)),
+      nodes: serialized,
       edges: Enum.map(edges, &serialize_edge(&1, details?)),
       themes: Enum.map(themes, &serialize_theme/1),
       documents: Enum.map(documents, &serialize_document/1),
@@ -38,6 +60,7 @@ defmodule DeciduousMcp.Graph.Query do
       metadata: %{
         workspace_id: scope,
         node_count: length(nodes),
+        deleted_node_count: length(dead),
         edge_count: length(edges),
         exported_at: DateTime.utc_now() |> DateTime.to_iso8601()
       }
