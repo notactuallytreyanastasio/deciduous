@@ -1203,8 +1203,8 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
     // file anyone can write. It is wrong here: the server refuses every
     // write to a deleted node, so the resurrected node could never reach
     // it, and `remote status` reported the same deletion after every pull
-    // while pull did nothing. The edit was refused, and the user was told
-    // so when it was made (`push_after_write`); this is where it goes.
+    // while pull did nothing. The edit's op was refused by name when it
+    // was replayed; this is where the edit goes.
     let local = db
         .get_graph()
         .map_err(|e| format!("reading the local graph: {e}"))
@@ -1236,27 +1236,45 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
     }
 
     Ok(PullReport {
-        fetched_nodes: graph.nodes.len(),
+        fetched_nodes: graph
+            .nodes
+            .iter()
+            .filter(|n| n.deleted_at.is_none())
+            .count(),
+        fetched_tombstones: graph
+            .nodes
+            .iter()
+            .filter(|n| n.deleted_at.is_some())
+            .count(),
         fetched_edges: graph.edges.len(),
         records_written,
         imported_nodes: report.nodes_imported,
+        updated_nodes: report.nodes_updated,
+        removed_nodes: report.nodes_deleted + overridden.len(),
         imported_edges: report.edges_imported,
-        deleted_nodes: report.nodes_deleted,
+        removed_edges: report.edges_deleted,
         deleted_over_local_edits: overridden,
     })
 }
 
+/// What a pull changed locally. "imported 0 nodes" after a pull that applied
+/// an agent's edits read as "nothing happened"; edits and removals are
+/// counted separately so the report says what did.
 #[derive(Debug, Default)]
 pub struct PullReport {
     pub fetched_nodes: usize,
+    /// Nodes the server deleted, sent so the local copy can go too.
+    pub fetched_tombstones: usize,
     pub fetched_edges: usize,
     pub records_written: usize,
     pub imported_nodes: usize,
+    pub updated_nodes: usize,
+    pub removed_nodes: usize,
     pub imported_edges: usize,
-    /// Nodes the server had deleted that reconcile deleted here.
-    pub deleted_nodes: usize,
+    pub removed_edges: usize,
     /// Nodes the server had deleted that had been edited here after the
-    /// delete; deleted anyway, edit and all (see `pull`).
+    /// delete; deleted anyway, edit and all (see `pull`). Counted in
+    /// `removed_nodes` too.
     pub deleted_over_local_edits: Vec<DeletedOnServer>,
 }
 

@@ -698,3 +698,133 @@ fn a_non_ascii_repository_name_reaches_the_server() {
         .collect();
     assert_eq!(live_titles(&export(&url, &token, &encoded)), ["accented"]);
 }
+
+// ---------------------------------------------------------------------------
+// C4 (the pull half): a node an agent deleted on the server leaves the
+// local graph on the next pull. The server half, /export carrying the
+// tombstone, is chapter 21's; this stands in for it with a stub that sends
+// the shape that chapter emits: the row, in `nodes`, with `deleted_at` set.
+// ---------------------------------------------------------------------------
+
+/// A minimal HTTP server with the routes pull touches, on a free port.
+fn stub_server(export: Value) -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/ops" => {
+                    let v: Value = serde_json::from_str(&body).unwrap();
+                    let results: Vec<Value> = v["ops"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|op| serde_json::json!({"op_id": op["op_id"], "result": "applied"}))
+                        .collect();
+                    serde_json::json!({"workspace": "stub", "results": results}).to_string()
+                }
+                "/export" => export.to_string(),
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    format!("http://127.0.0.1:{port}")
+}
+
+#[test]
+fn pull_removes_a_node_the_server_deleted() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("tomb");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\nworkspace = \"tomb\"\n", dead_url()),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "deleted by an agent"]);
+    sb.dx_ok(&dir, &["add", "goal", "still here"]);
+    let dead = local_change_id(&sb, &dir, 1);
+    let kept = local_change_id(&sb, &dir, 2);
+
+    let node = |cid: &str, title: &str, deleted_at: Value| {
+        serde_json::json!({
+            "id": format!("srv-{cid}"), "change_id": cid, "node_type": "goal", "title": title,
+            "description": null, "status": "pending", "metadata": {"branch": "main"},
+            "created_at": "2026-09-23T10:00:00Z", "updated_at": "2026-09-23T10:00:00Z",
+            "deleted_at": deleted_at
+        })
+    };
+    // Deleted after the local copy was last written, as it would be.
+    let mut tombstone = node(
+        &dead,
+        "deleted by an agent",
+        Value::String("2099-01-01T00:00:00Z".into()),
+    );
+    tombstone["updated_at"] = Value::String("2099-01-01T00:00:00Z".into());
+    let url = stub_server(serde_json::json!({
+        "nodes": [
+            tombstone,
+            node(&kept, "still here", Value::Null),
+            node("agent-node-0001", "an agent's goal", Value::Null),
+        ],
+        "edges": [],
+        "documents": []
+    }));
+    set_remote_url(&dir, &url);
+
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    let local: Value = serde_json::from_str(&sb.dx_ok(&dir, &["graph"])).unwrap();
+    assert_eq!(
+        live_titles(&local),
+        ["an agent's goal", "still here"],
+        "pull said: {out}"
+    );
+    assert!(out.contains("removed 1"), "the removal is reported: {out}");
+    assert!(out.contains("imported 1"), "{out}");
+}
+
+// C4 (the push half): a node an agent deleted is not re-sent by later
+// writes, and an edit to it is refused by the server loudly, not applied to
+// the tombstone or silently dropped.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_node_deleted_on_the_server_is_not_resent_and_edits_to_it_are_refused_loudly() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-c4");
+    let dir = sb.remote_repo("c4", &url, &ws);
+
+    sb.dx_ok(&dir, &["add", "goal", "doomed by an agent"]);
+    let g = export(&url, &token, &ws);
+    let id = server_node(&g, "doomed by an agent")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[("delete_node", serde_json::json!({"node_id": id}))],
+    );
+
+    let out = sb.dx_ok(&dir, &["add", "goal", "unrelated"]);
+    assert!(!out.contains("Pushed"), "{out}");
+    assert_eq!(live_titles(&export(&url, &token, &ws)), ["unrelated"]);
+
+    let out = sb.dx_ok(&dir, &["status", "1", "completed"]);
+    assert!(out.contains("Rejected"), "{out}");
+    assert!(out.contains("deleted on the server"), "{out}");
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("1 rejected"), "{out}");
+    sb.dx_ok(&dir, &["remote", "push", "--drop-rejected"]);
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("0 rejected"), "{out}");
+}

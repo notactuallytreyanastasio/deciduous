@@ -2587,17 +2587,17 @@ fn main() {
                                 remote.url
                             );
                             println!(
-                                "  fetched {} nodes, {} edges",
-                                r.fetched_nodes, r.fetched_edges
+                                "  fetched {} nodes, {} edges, {} deletion(s)",
+                                r.fetched_nodes, r.fetched_edges, r.fetched_tombstones
                             );
                             println!(
-                                "  imported {} nodes, {} edges into the local database",
-                                r.imported_nodes, r.imported_edges
+                                "  imported {} new node(s), updated {}, removed {}; imported {} edge(s), removed {}",
+                                r.imported_nodes,
+                                r.updated_nodes,
+                                r.removed_nodes,
+                                r.imported_edges,
+                                r.removed_edges
                             );
-                            let deleted = r.deleted_nodes + r.deleted_over_local_edits.len();
-                            if deleted > 0 {
-                                println!("  deleted {} node(s) the server had deleted", deleted);
-                            }
                             for d in &r.deleted_over_local_edits {
                                 println!(
                                     "  {} node {} \"{}\" was edited here after the server deleted it at {}; the server refuses edits to a deleted node, so it is deleted here too and the edit with it",
