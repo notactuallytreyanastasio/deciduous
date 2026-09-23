@@ -292,6 +292,12 @@ whether it is a server id, and it prints which node that turned out to be. A
 server node this clone has not pulled yet is an error that says to run
 `deciduous remote pull`; it is never taken as some other node.
 
+Because a change_id prefix wins, a short server-id prefix that is also the
+start of some local node's change_id names that local node, with no note: a
+server id `0ccdf488-...` quoted as `0ccd` resolves to a teammate's node whose
+change_id is `0ccd1111-...` once that node is imported. Quote server ids in
+full, or at least 8 characters, when you link, delete or change status.
+
 Digits are no exception: `89346034` is tried as local id 89346034 first, and
 when there is no such node, as a change_id and then a server id prefix. A
 zero-padded number such as `0012` is not taken as local id 12 (write `12` or `#12`).
