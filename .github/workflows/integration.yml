@@ -160,3 +160,62 @@ jobs:
           mix local.rebar --force
           mix deps.get
           mix test
+
+  structure:
+    name: STRUCTURE.sql matches the migrations
+    # Release acceptance runs the same check, but only when a tag is pushed;
+    # 1.0.8's release run was the first to see five migrations missing from
+    # STRUCTURE.sql. This runs it on every PR, against the Postgres version
+    # the release check and the Docker install use.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      MIX_ENV: test
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: structure_check
+      DECIDUOUS_MCP_TOKEN: mix-test-token-not-a-secret-0000000000000000
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Erlang and Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28.3.3'
+          elixir-version: '1.18.4'
+          version-type: strict
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deciduous_mcp/deps
+            deciduous_mcp/_build
+          key: mix-${{ runner.os }}-${{ hashFiles('deciduous_mcp/mix.lock') }}
+
+      - name: Migrate a fresh database
+        working-directory: deciduous_mcp
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get
+          mix ecto.create
+          mix ecto.migrate
+
+      - name: Diff a pg_dump of it against STRUCTURE.sql
+        # pg_dump from the same 17.11 image, so client and server agree.
+        run: |
+          docker run --rm --network host \
+            -e PGHOST=127.0.0.1 -e PGUSER=postgres -e PGPASSWORD=postgres -e PGDATABASE=structure_check \
+            -v "$PWD/deciduous_mcp:/source:ro" \
+            postgres:17.11 bash /source/test/release/check_structure.sh --empty

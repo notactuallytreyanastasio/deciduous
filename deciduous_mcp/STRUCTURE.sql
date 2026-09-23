@@ -64,6 +64,51 @@ CREATE TYPE public.node_type AS ENUM (
 
 
 --
+-- Name: edge_tombstone_on_delete(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.edge_tombstone_on_delete() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+  stamp timestamp;
+BEGIN
+  IF OLD.from_change_id IS NULL OR OLD.to_change_id IS NULL THEN
+    RETURN OLD;
+  END IF;
+  -- The column is a UTC timestamp without a zone, like every other here.
+  stamp := coalesce(
+    nullif(current_setting('deciduous.unlinked_at', true), '')::timestamptz,
+    now()
+  ) AT TIME ZONE 'UTC';
+  INSERT INTO edge_tombstones (workspace_id, from_change_id, to_change_id, edge_type, deleted_at)
+    VALUES (OLD.workspace_id, OLD.from_change_id, OLD.to_change_id, OLD.edge_type, stamp)
+    ON CONFLICT (workspace_id, from_change_id, to_change_id, edge_type)
+    DO UPDATE SET deleted_at = greatest(edge_tombstones.deleted_at, EXCLUDED.deleted_at);
+  RETURN OLD;
+END;
+$$;
+
+
+--
+-- Name: edge_tombstone_on_insert(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.edge_tombstone_on_insert() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+BEGIN
+  DELETE FROM edge_tombstones
+    WHERE workspace_id = NEW.workspace_id
+      AND from_change_id = NEW.from_change_id
+      AND to_change_id = NEW.to_change_id
+      AND edge_type = NEW.edge_type;
+  RETURN NEW;
+END;
+$$;
+
+
+--
 -- Name: notify_graph_event(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -73,46 +118,92 @@ CREATE FUNCTION public.notify_graph_event() RETURNS trigger
 DECLARE
   ws_name text;
   from_branch text;
-  payload json;
+  body jsonb;
+  op text := TG_OP;
+  changed text[] := ARRAY[]::text[];
+  n decision_nodes%ROWTYPE;
+  e decision_edges%ROWTYPE;
+  new_seq bigint;
 BEGIN
   IF TG_TABLE_NAME = 'decision_nodes' THEN
-    SELECT name INTO ws_name FROM workspaces WHERE id = NEW.workspace_id;
+    n := NEW;
+    IF TG_OP = 'UPDATE' AND OLD.deleted_at IS NULL AND NEW.deleted_at IS NOT NULL THEN
+      op := 'DELETE';
+    ELSIF TG_OP = 'INSERT' AND NEW.deleted_at IS NOT NULL THEN
+      op := 'DELETE';
+    ELSIF TG_OP = 'UPDATE' THEN
+      IF OLD.title IS DISTINCT FROM NEW.title THEN changed := array_append(changed, 'title'); END IF;
+      IF OLD.status IS DISTINCT FROM NEW.status THEN changed := array_append(changed, 'status'); END IF;
+      IF OLD.description IS DISTINCT FROM NEW.description THEN changed := array_append(changed, 'description'); END IF;
+      IF OLD.metadata IS DISTINCT FROM NEW.metadata THEN changed := array_append(changed, 'metadata'); END IF;
+      IF OLD.node_type IS DISTINCT FROM NEW.node_type THEN changed := array_append(changed, 'node_type'); END IF;
+      IF OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NULL THEN changed := array_append(changed, 'restored'); END IF;
+    END IF;
+    SELECT name INTO ws_name FROM workspaces WHERE id = n.workspace_id;
 
-    payload := json_build_object(
+    body := jsonb_build_object(
       'table', 'decision_nodes',
-      'op', TG_OP,
+      'op', op,
       'workspace', ws_name,
-      'id', NEW.id,
-      'change_id', NEW.change_id,
-      'node_type', NEW.node_type,
-      'title', left(NEW.title, 200),
-      'status', NEW.status,
-      'branch', left(NEW.metadata ->> 'branch', 200)
+      'id', n.id,
+      'change_id', n.change_id,
+      'node_type', n.node_type,
+      'title', left(n.title, 200),
+      'status', n.status,
+      'branch', left(n.metadata ->> 'branch', 200)
     );
+    IF TG_OP = 'UPDATE' AND op = 'UPDATE' THEN
+      body := body || jsonb_build_object('changed', to_jsonb(changed));
+    END IF;
   ELSIF TG_TABLE_NAME = 'decision_edges' THEN
-    SELECT name INTO ws_name FROM workspaces WHERE id = NEW.workspace_id;
+    IF TG_OP = 'DELETE' THEN e := OLD; ELSE e := NEW; END IF;
+    SELECT name INTO ws_name FROM workspaces WHERE id = e.workspace_id;
     SELECT left(metadata ->> 'branch', 200) INTO from_branch
-      FROM decision_nodes WHERE id = NEW.from_node_id;
+      FROM decision_nodes WHERE id = e.from_node_id;
 
-    payload := json_build_object(
+    body := jsonb_build_object(
       'table', 'decision_edges',
-      'op', TG_OP,
+      'op', op,
       'workspace', ws_name,
-      'id', NEW.id,
-      'edge_type', NEW.edge_type,
-      'from_change_id', NEW.from_change_id,
-      'to_change_id', NEW.to_change_id,
+      'id', e.id,
+      'edge_type', e.edge_type,
+      'from_change_id', e.from_change_id,
+      'to_change_id', e.to_change_id,
       'branch', from_branch
     );
   END IF;
 
-  PERFORM pg_notify('graph_events', payload::text);
-  RETURN NEW;
+  new_seq := nextval(pg_get_serial_sequence('graph_events', 'seq'));
+  body := body || jsonb_build_object(
+    'seq', new_seq,
+    'at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+  );
+  INSERT INTO graph_events (seq, workspace, payload)
+    VALUES (new_seq, coalesce(ws_name, ''), body);
+
+  IF new_seq % 1000 = 0 THEN
+    DELETE FROM graph_events WHERE inserted_at < (now() AT TIME ZONE 'UTC') - interval '7 days';
+  END IF;
+
+  PERFORM pg_notify('graph_events', body::text);
+  RETURN NULL;
 END;
 $$;
 
 
 SET default_table_access_method = heap;
+
+--
+-- Name: applied_ops; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.applied_ops (
+    workspace_id uuid NOT NULL,
+    op_id character varying(255) NOT NULL,
+    kind character varying(255) NOT NULL,
+    applied_at timestamp without time zone NOT NULL
+);
+
 
 --
 -- Name: audit_log; Type: TABLE; Schema: public; Owner: -
@@ -204,6 +295,50 @@ CREATE TABLE public.document_blobs (
     mime_type character varying(255),
     inserted_at timestamp without time zone NOT NULL
 );
+
+
+--
+-- Name: edge_tombstones; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.edge_tombstones (
+    workspace_id uuid NOT NULL,
+    from_change_id character varying(255) NOT NULL,
+    to_change_id character varying(255) NOT NULL,
+    edge_type character varying(255) NOT NULL,
+    deleted_at timestamp without time zone NOT NULL
+);
+
+
+--
+-- Name: graph_events; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.graph_events (
+    seq bigint NOT NULL,
+    workspace text NOT NULL,
+    payload jsonb NOT NULL,
+    inserted_at timestamp without time zone DEFAULT (now() AT TIME ZONE 'UTC'::text) NOT NULL
+);
+
+
+--
+-- Name: graph_events_seq_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+CREATE SEQUENCE public.graph_events_seq_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+--
+-- Name: graph_events_seq_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: -
+--
+
+ALTER SEQUENCE public.graph_events_seq_seq OWNED BY public.graph_events.seq;
 
 
 --
@@ -317,18 +452,33 @@ CREATE TABLE public.workspaces (
 
 
 --
--- Name: write_locks; Type: TABLE; Schema: public; Owner: -
+-- Name: write_activity; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.write_locks (
+CREATE TABLE public.write_activity (
     workspace_id uuid NOT NULL,
-    lock_key character varying(255) NOT NULL,
+    branch text NOT NULL,
     session_id character varying(255) NOT NULL,
-    client_name character varying(255),
-    client_version character varying(255),
-    acquired_at timestamp without time zone NOT NULL,
-    expires_at timestamp without time zone NOT NULL
+    client_name text,
+    client_version text,
+    first_seen_at timestamp without time zone NOT NULL,
+    last_seen_at timestamp without time zone NOT NULL
 );
+
+
+--
+-- Name: graph_events seq; Type: DEFAULT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.graph_events ALTER COLUMN seq SET DEFAULT nextval('public.graph_events_seq_seq'::regclass);
+
+
+--
+-- Name: applied_ops applied_ops_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.applied_ops
+    ADD CONSTRAINT applied_ops_pkey PRIMARY KEY (workspace_id, op_id);
 
 
 --
@@ -369,6 +519,22 @@ ALTER TABLE ONLY public.decision_nodes
 
 ALTER TABLE ONLY public.document_blobs
     ADD CONSTRAINT document_blobs_pkey PRIMARY KEY (content_hash);
+
+
+--
+-- Name: edge_tombstones edge_tombstones_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.edge_tombstones
+    ADD CONSTRAINT edge_tombstones_pkey PRIMARY KEY (workspace_id, from_change_id, to_change_id, edge_type);
+
+
+--
+-- Name: graph_events graph_events_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.graph_events
+    ADD CONSTRAINT graph_events_pkey PRIMARY KEY (seq);
 
 
 --
@@ -420,11 +586,11 @@ ALTER TABLE ONLY public.workspaces
 
 
 --
--- Name: write_locks write_locks_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: write_activity write_activity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.write_locks
-    ADD CONSTRAINT write_locks_pkey PRIMARY KEY (workspace_id, lock_key);
+ALTER TABLE ONLY public.write_activity
+    ADD CONSTRAINT write_activity_pkey PRIMARY KEY (workspace_id, branch, session_id);
 
 
 --
@@ -516,6 +682,13 @@ CREATE INDEX decision_nodes_workspace_id_node_type_index ON public.decision_node
 --
 
 CREATE INDEX decision_nodes_workspace_id_status_index ON public.decision_nodes USING btree (workspace_id, status);
+
+
+--
+-- Name: graph_events_workspace_seq_index; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX graph_events_workspace_seq_index ON public.graph_events USING btree (workspace, seq);
 
 
 --
@@ -687,10 +860,17 @@ CREATE UNIQUE INDEX workspaces_name_index ON public.workspaces USING btree (name
 
 
 --
--- Name: write_locks_expires_at_index; Type: INDEX; Schema: public; Owner: -
+-- Name: write_activity_workspace_id_last_seen_at_index; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX write_locks_expires_at_index ON public.write_locks USING btree (expires_at);
+CREATE INDEX write_activity_workspace_id_last_seen_at_index ON public.write_activity USING btree (workspace_id, last_seen_at);
+
+
+--
+-- Name: decision_edges decision_edges_notify_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER decision_edges_notify_delete AFTER DELETE ON public.decision_edges FOR EACH ROW EXECUTE FUNCTION public.notify_graph_event();
 
 
 --
@@ -708,6 +888,20 @@ CREATE TRIGGER decision_edges_notify_update AFTER UPDATE ON public.decision_edge
 
 
 --
+-- Name: decision_edges decision_edges_tombstone_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER decision_edges_tombstone_delete AFTER DELETE ON public.decision_edges FOR EACH ROW EXECUTE FUNCTION public.edge_tombstone_on_delete();
+
+
+--
+-- Name: decision_edges decision_edges_tombstone_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER decision_edges_tombstone_insert AFTER INSERT ON public.decision_edges FOR EACH ROW EXECUTE FUNCTION public.edge_tombstone_on_insert();
+
+
+--
 -- Name: decision_nodes decision_nodes_notify_insert; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -719,6 +913,14 @@ CREATE TRIGGER decision_nodes_notify_insert AFTER INSERT ON public.decision_node
 --
 
 CREATE TRIGGER decision_nodes_notify_update AFTER UPDATE ON public.decision_nodes FOR EACH ROW WHEN ((old.* IS DISTINCT FROM new.*)) EXECUTE FUNCTION public.notify_graph_event();
+
+
+--
+-- Name: applied_ops applied_ops_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.applied_ops
+    ADD CONSTRAINT applied_ops_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 
 --
@@ -794,6 +996,14 @@ ALTER TABLE ONLY public.decision_nodes
 
 
 --
+-- Name: edge_tombstones edge_tombstones_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.edge_tombstones
+    ADD CONSTRAINT edge_tombstones_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
+
+
+--
 -- Name: node_documents node_documents_node_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -850,10 +1060,10 @@ ALTER TABLE ONLY public.users
 
 
 --
--- Name: write_locks write_locks_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: write_activity write_locks_workspace_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.write_locks
+ALTER TABLE ONLY public.write_activity
     ADD CONSTRAINT write_locks_workspace_id_fkey FOREIGN KEY (workspace_id) REFERENCES public.workspaces(id) ON DELETE CASCADE;
 
 
@@ -883,11 +1093,17 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
   (20260922130000, NOW()),
   (20260922200000, NOW()),
   (20260922200100, NOW()),
-  (20260923010000, NOW());
+  (20260923010000, NOW()),
+  (20260923120000, NOW()),
+  (20260924010000, NOW()),
+  (20260924020000, NOW()),
+  (20260924100000, NOW()),
+  (20260924110000, NOW());
 
 -- Database defaults from the migrated database -------------------------------
 DO $$
 BEGIN
+  EXECUTE format('ALTER DATABASE %I SET %I = %L', current_database(), 'TimeZone', 'Etc/UTC');
   EXECUTE format('ALTER DATABASE %I SET %I = %L', current_database(), 'random_page_cost', '1.1');
   EXECUTE format('ALTER DATABASE %I SET %I = %L', current_database(), 'work_mem', '16MB');
 END
