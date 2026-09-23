@@ -44,7 +44,8 @@ defmodule DeciduousMcp.Web.NewNamePinTest do
       "nodes" => [%{"change_id" => goal.change_id, "node_type" => "goal", "title" => "HIJACKED"}]
     }
 
-    {status, body} = McpClient.post_json(pinned, "/import", %{"workspace" => "np-o", "graph" => graph})
+    {status, body} =
+      McpClient.post_json(pinned, "/import", %{"workspace" => "np-o", "graph" => graph})
 
     assert status == 403, inspect(body)
     assert {:ok, %{title: "their goal"}} = Nodes.get_node(goal.id)

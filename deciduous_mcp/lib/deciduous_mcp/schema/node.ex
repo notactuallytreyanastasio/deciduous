@@ -41,8 +41,7 @@ defmodule DeciduousMcp.Schema.Node do
     has_many :edges_to, DeciduousMcp.Schema.Edge, foreign_key: :to_node_id
     has_many :documents, DeciduousMcp.Schema.Document
 
-    many_to_many :themes, DeciduousMcp.Schema.Theme,
-      join_through: DeciduousMcp.Schema.NodeTheme
+    many_to_many :themes, DeciduousMcp.Schema.Theme, join_through: DeciduousMcp.Schema.NodeTheme
 
     timestamps(type: :utc_datetime_usec)
   end
@@ -50,8 +49,15 @@ defmodule DeciduousMcp.Schema.Node do
   def changeset(node, attrs) do
     node
     |> cast(attrs, [
-      :change_id, :node_type, :title, :description, :status,
-      :metadata, :workspace_id, :created_by_id, :deleted_at
+      :change_id,
+      :node_type,
+      :title,
+      :description,
+      :status,
+      :metadata,
+      :workspace_id,
+      :created_by_id,
+      :deleted_at
     ])
     |> validate_required([:change_id, :node_type, :title, :workspace_id])
     |> validate_inclusion(:node_type, @node_types)
@@ -63,11 +69,23 @@ defmodule DeciduousMcp.Schema.Node do
   def update_changeset(node, attrs) do
     node
     |> cast(attrs, [:title, :description, :status, :metadata, :deleted_at])
-    # title is NOT NULL; without this an update to "" reached Postgres and
-    # came back as a not_null_violation echoing the whole row.
-    |> validate_required([:title])
+    |> validate_title_if_changed()
     |> validate_inclusion(:status, @statuses)
     |> validate_metadata()
+  end
+
+  # title is NOT NULL; an update to "" (cast turns it into nil) reached
+  # Postgres and came back as a not_null_violation echoing the whole row.
+  #
+  # Only an update that sets the title is checked. validate_required/2 also
+  # looks at the stored value, and POST /import stores "" titles (insert_all
+  # skips the changeset, and the CLI's title is a plain String), so every
+  # later update of such a node, a status change or the soft delete, was
+  # refused with "title: can't be blank" over a field it did not touch.
+  defp validate_title_if_changed(changeset) do
+    if Map.has_key?(changeset.params || %{}, "title"),
+      do: validate_required(changeset, [:title]),
+      else: changeset
   end
 
   defp validate_metadata(changeset) do

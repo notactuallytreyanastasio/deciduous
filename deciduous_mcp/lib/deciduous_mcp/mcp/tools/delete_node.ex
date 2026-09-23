@@ -45,6 +45,15 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
       {:error, :already_deleted} ->
         {:error, %{code: -1, message: "node #{node_id} was already deleted"}}
 
+      # Nodes.delete_node goes through update_changeset; a refusal there was
+      # a CaseClauseError before.
+      {:error, %Ecto.Changeset{} = changeset} ->
+        {:error,
+         %{
+           code: -1,
+           message: "Delete failed: #{DeciduousMcp.MCP.Component.describe_error(changeset)}"
+         }}
+
       {:error, reason} ->
         {:error, %{code: -1, message: "Delete failed: #{inspect(reason)}"}}
     end

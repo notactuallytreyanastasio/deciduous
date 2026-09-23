@@ -261,6 +261,11 @@ defmodule DeciduousMcp.Web.Router do
       {:error, {:pinned, message}} ->
         json(conn, 403, %{error: message})
 
+      # The vocabulary refusal is a map of examples; sent as JSON, not as
+      # Elixir's inspect of it.
+      {:error, %{} = reason} ->
+        json(conn, 422, %{error: reason})
+
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
     end
@@ -290,7 +295,10 @@ defmodule DeciduousMcp.Web.Router do
   # A pin naming a workspace that does not exist yet has no id, and a nil
   # workspace_id means "any workspace" to Documents.fetch. Such a client has
   # no documents to read.
-  defp serve_document(%{assigns: %{pinned_workspace_id: nil, pinned_workspace_name: name}} = conn, _id)
+  defp serve_document(
+         %{assigns: %{pinned_workspace_id: nil, pinned_workspace_name: name}} = conn,
+         _id
+       )
        when is_binary(name) do
     json(conn, 404, %{error: "no such document"})
   end
