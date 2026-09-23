@@ -424,6 +424,8 @@ impl Remote {
 /// which `deleted_on_server` names.
 pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, usize) {
     use std::collections::{HashMap, HashSet};
+    // Tombstones count as "has": a node deleted on the server is not
+    // missing from it, and sending it would write into the deleted row.
     let have_nodes: HashSet<&str> = server.nodes.iter().map(|n| n.change_id.as_str()).collect();
     let dead = server.tombstones();
     let have_edges: HashSet<(&str, &str, &str)> = server
@@ -869,6 +871,10 @@ pub struct ContentDiff {
     pub server_edges: usize,
     /// (change_id, "type \"title\"")
     pub only_local: Vec<(String, String)>,
+    /// Here, and deleted on the server: a pull removes them here. Listed
+    /// apart from `only_local`, whose remedy (sending them) would write
+    /// into a deleted row.
+    pub deleted_on_server: Vec<(String, String)>,
     pub only_server: Vec<(String, String)>,
     pub differ: Vec<NodeDifference>,
     pub edges_only_local: Vec<String>,
@@ -878,6 +884,7 @@ pub struct ContentDiff {
 impl ContentDiff {
     pub fn is_empty(&self) -> bool {
         self.only_local.is_empty()
+            && self.deleted_on_server.is_empty()
             && self.only_server.is_empty()
             && self.differ.is_empty()
             && self.edges_only_local.is_empty()
@@ -925,10 +932,21 @@ pub fn content_diff(
         ..Default::default()
     };
 
+    let tombstones: BTreeSet<&str> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_some())
+        .map(|n| n.change_id.as_str())
+        .collect();
+
     for (cid, n) in &local_nodes {
         let Some(s) = server_nodes.get(cid) else {
-            d.only_local
-                .push((cid.to_string(), label(&n.node_type, &n.title, cid)));
+            let row = (cid.to_string(), label(&n.node_type, &n.title, cid));
+            if tombstones.contains(cid) {
+                d.deleted_on_server.push(row);
+            } else {
+                d.only_local.push(row);
+            }
             continue;
         };
         let mut fields = Vec::new();

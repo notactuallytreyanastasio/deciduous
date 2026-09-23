@@ -2333,6 +2333,13 @@ fn main() {
                             .collect(),
                     );
                     list(
+                        "Deleted on the server",
+                        d.deleted_on_server
+                            .iter()
+                            .map(|(_, l)| format!("{l}  (`deciduous remote pull` removes it here)"))
+                            .collect(),
+                    );
+                    list(
                         "Only on the server",
                         d.only_server.iter().map(|(_, l)| l.clone()).collect(),
                     );

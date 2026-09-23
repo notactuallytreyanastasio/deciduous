@@ -828,3 +828,82 @@ fn a_node_deleted_on_the_server_is_not_resent_and_edits_to_it_are_refused_loudly
     let out = sb.dx_ok(&dir, &["remote", "status"]);
     assert!(out.contains("0 rejected"), "{out}");
 }
+
+// ===========================================================================
+// Findings from the verifiers of this chapter. Each test reproduces one.
+// ===========================================================================
+
+fn server_id(g: &Value, title: &str) -> String {
+    server_node(g, title)["id"].as_str().unwrap().to_string()
+}
+
+fn export_with_tombstones(url: &str, token: &str, workspace: &str) -> Value {
+    ureq::get(&format!("{url}/export?workspace={workspace}&tombstones=1"))
+        .set("authorization", &format!("Bearer {token}"))
+        .call()
+        .unwrap()
+        .into_json()
+        .unwrap()
+}
+
+// `remote status` sent a node an agent had deleted to `push --seed`, which
+// wrote into the soft-deleted row through /import and linked an edge to it;
+// status still said "Only here" afterwards, so the advice looped.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_node_the_server_deleted_is_not_seeded_back_and_pull_removes_it() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-del3");
+    let dir = sb.remote_repo("del3", &url, &ws);
+
+    sb.dx_ok(&dir, &["add", "action", "a1"]);
+    let g = export(&url, &token, &ws);
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[(
+            "delete_node",
+            serde_json::json!({"node_id": server_id(&g, "a1")}),
+        )],
+    );
+    sb.dx_ok(&dir, &["add", "goal", "g2"]);
+    sb.dx(&dir, &["status", "1", "completed"]);
+    sb.dx(&dir, &["link", "2", "1"]);
+    sb.dx_ok(&dir, &["remote", "push", "--drop-rejected"]);
+
+    let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
+    assert!(
+        !out.contains("push --seed"),
+        "status does not send a deleted node to --seed: {out}"
+    );
+    assert!(out.contains("Deleted on the server"), "{out}");
+
+    let before = export_with_tombstones(&url, &token, &ws);
+    let out = sb.dx_ok(&dir, &["remote", "push", "--seed"]);
+    let after = export_with_tombstones(&url, &token, &ws);
+    let row = |g: &Value| {
+        g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| !n["deleted_at"].is_null())
+            .cloned()
+            .unwrap_or_else(|| panic!("no tombstone in {g}"))
+    };
+    assert_eq!(
+        row(&before),
+        row(&after),
+        "seed wrote into the deleted row: {out}"
+    );
+    assert!(
+        after["edges"].as_array().unwrap().is_empty(),
+        "an edge to the deleted node was written: {out}"
+    );
+
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    assert!(out.contains("removed 1"), "{out}");
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("In sync"), "{out}");
+}
