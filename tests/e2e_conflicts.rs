@@ -967,6 +967,63 @@ fn bridge_n6_a_stream_resumes_from_the_last_event_it_saw() {
 
 // ------------------------------------------- chapter 29 verification, round 2
 
+/// Finding "push exits 0 while a refusal sits in the log": a second `remote
+/// push` printed "Nothing to push" and exited 0 while `remote status`
+/// exited 1 on the refusal the first push got, and a refusal that had since
+/// settled (the server came round to this copy's value) stayed in the log
+/// until a pull. Finding "status header counts a settled refusal": the
+/// header said "1 rejected" above "In sync".
+#[test]
+fn log_conflicts_push_names_a_refusal_still_standing_and_drops_a_settled_one() {
+    let Some(server) = remote("log_conflicts_push") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "lcpush");
+    let a = t.alice.add("goal", "A");
+    let mut agent = t.agent();
+    let u = agent.uuid_of(&t.ws, &a);
+    agent.call_ok("update_node", json!({"node_id": u, "status": "active"}));
+
+    t.offline(&t.alice);
+    t.alice.ok(&["status", &a, "completed"]);
+    t.online(&t.alice);
+    let first = t.alice.dx(&["remote", "push"]);
+    assert!(!first.ok(), "{}", first.all());
+
+    let again = t.alice.dx(&["remote", "push"]);
+    assert!(
+        !again.ok(),
+        "a push exited 0 while the server's refusal still stands:\n{}",
+        again.all()
+    );
+    assert!(
+        again.all().contains("refused before this push still stand"),
+        "{}",
+        again.all()
+    );
+
+    // The server comes round to alice's value: the refusal is settled.
+    agent.call_ok("update_node", json!({"node_id": u, "status": "completed"}));
+    let st = t.alice.dx(&["remote", "status"]);
+    assert!(
+        st.stdout.contains("0 rejected") && !st.stdout.contains("1 rejected"),
+        "the header counts a settled refusal:\n{}",
+        st.all()
+    );
+    assert!(status_says_clean(&st), "{}", st.all());
+
+    let push = t.alice.dx(&["remote", "push"]);
+    assert!(push.ok(), "{}", push.all());
+    assert!(push.all().contains("settled"), "{}", push.all());
+    let log = std::fs::read_to_string(t.alice.dir.join(".deciduous/remote-log.jsonl"))
+        .unwrap_or_default();
+    assert!(
+        log.trim().is_empty(),
+        "push left the settled refusal in the log:\n{log}"
+    );
+}
+
 /// Finding "an edit made after a delete loses on the server when the delete
 /// arrived first": alice deletes C online, bob, offline and unaware, sets
 /// its status 1.1 s later. git keeps bob's edit; the server refused it as

@@ -1736,7 +1736,10 @@ fn server_n1_a_nul_in_one_write_does_not_stop_the_writes_after_it() {
     assert_eq!(live_titles(&export(&url, &token, &ws)), ["after"]);
     let st = sb.dx(&dir, &["remote", "status"]);
     let st = text(&st.stdout);
-    assert!(st.contains("0 write(s) waiting, 1 rejected"), "{st}");
+    // The node is on neither side, so the refusal is settled: listed, and
+    // not counted in the header (round-2 verification of chapter 29).
+    assert!(st.contains("0 write(s) waiting, 0 rejected"), "{st}");
+    assert!(st.contains("settled"), "{st}");
 }
 
 impl Sandbox {

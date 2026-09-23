@@ -2399,12 +2399,42 @@ fn main() {
                     let set_aside = log_state.as_ref().map_or(0, |(_, st)| {
                         st.rejected.iter().filter(|(_, a)| a.is_set_aside()).count()
                     });
+
+                    let (nodes, edges) = match (db.get_all_nodes(), db.get_all_edges()) {
+                        (Ok(n), Ok(e)) => (n, e),
+                        (Err(e), _) | (_, Err(e)) => {
+                            eprintln!("{} reading the local graph: {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
+                    // Health first, so a down server and a wrong token
+                    // read as the different problems they are. Read before
+                    // the log is printed, so its count leaves out refusals
+                    // that are settled; a server that cannot be read is
+                    // reported after the log, which needs no server.
+                    let server = remote.health().and_then(|_| {
+                        remote
+                            .export()
+                            .map_err(|e| format!("reached {} but {}", remote.url, e))
+                    });
+                    // Refusals whose rows now agree: listed, not counted.
+                    // The header said "1 rejected" above "In sync" (round-2
+                    // verification of chapter 29).
+                    let settled: std::collections::HashSet<String> = match (&log_state, &server) {
+                        (Some((_, st)), Ok(g)) => {
+                            deciduous::remote::settled_refusals(&st.rejected, &nodes, &edges, g)
+                                .into_iter()
+                                .map(|o| o.op_id)
+                                .collect()
+                        }
+                        _ => Default::default(),
+                    };
                     if let Some((log, st)) = &log_state {
                         println!(
                             "{} {} write(s) waiting, {} rejected{}  ({})",
                             "Log:".bold(),
                             waiting,
-                            rejected - set_aside,
+                            rejected - set_aside - settled.len(),
                             if set_aside > 0 {
                                 format!(
                                     ", {set_aside} set aside by this machine \
@@ -2430,6 +2460,8 @@ fn main() {
                                 "  {}  {}  {}  {}",
                                 if ack.is_set_aside() {
                                     "set aside".red()
+                                } else if settled.contains(&op.op_id) {
+                                    "settled ".green()
                                 } else {
                                     "rejected".red()
                                 },
@@ -2455,20 +2487,7 @@ fn main() {
                         .as_ref()
                         .is_some_and(|(_, st)| !st.unreadable.is_empty() || st.set_aside > 0);
 
-                    let (nodes, edges) = match (db.get_all_nodes(), db.get_all_edges()) {
-                        (Ok(n), Ok(e)) => (n, e),
-                        (Err(e), _) | (_, Err(e)) => {
-                            eprintln!("{} reading the local graph: {}", "Error:".red(), e);
-                            exit(1);
-                        }
-                    };
-                    // Health first, so a down server and a wrong token
-                    // read as the different problems they are.
-                    let server = match remote.health().and_then(|_| {
-                        remote
-                            .export()
-                            .map_err(|e| format!("reached {} but {}", remote.url, e))
-                    }) {
+                    let server = match server {
                         Ok(g) => g,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2480,24 +2499,9 @@ fn main() {
                         exit(1);
                     }
                     let d = deciduous::remote::content_diff(&nodes, &edges, &server);
-                    // Refusals whose rows now agree: listed, not counted.
-                    let settled: std::collections::HashSet<String> = log_state
-                        .as_ref()
-                        .map(|(_, st)| {
-                            deciduous::remote::settled_refusals(
-                                &st.rejected,
-                                &nodes,
-                                &edges,
-                                &server,
-                            )
-                            .into_iter()
-                            .map(|o| o.op_id)
-                            .collect()
-                        })
-                        .unwrap_or_default();
                     if !settled.is_empty() {
                         println!(
-                            "  {} {} of the refusals above: this copy and the server now agree on \
+                            "  {} {} refusal(s) above: this copy and the server now agree on \
                              what they wrote; the next `deciduous remote push` or `pull` drops them",
                             "settled".green(),
                             settled.len()
@@ -2928,6 +2932,9 @@ fn main() {
 
                     let mut undelivered = false;
                     let mut refused = 0usize;
+                    // Refusals this run printed, so the ones still standing
+                    // from earlier are named apart.
+                    let mut shown_now: Vec<String> = Vec::new();
                     match deciduous::remote::replay(&remote, &log) {
                         Ok(r) if r.sent == 0 => println!(
                             "{} no writes are waiting in {}",
@@ -2957,6 +2964,7 @@ fn main() {
                             deciduous::remote::print_rejected(&r.rejected, &log);
                             undelivered = aside > 0;
                             refused = own_refusals(&r.rejected);
+                            shown_now.extend(r.rejected.iter().map(|(op, _)| op.op_id.clone()));
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -3063,6 +3071,8 @@ fn main() {
                                     );
                                     deciduous::remote::print_rejected(&r.rejected, &log);
                                     refused += own_refusals(&r.rejected);
+                                    shown_now
+                                        .extend(r.rejected.iter().map(|(op, _)| op.op_id.clone()));
                                 }
                                 Err(e) => {
                                     eprintln!(
@@ -3086,22 +3096,65 @@ fn main() {
 
                     // A refusal whose rows now agree on both sides asks
                     // nothing of anyone: dropped, and said. What is left is
-                    // a write the server did not take.
-                    if refused > 0 {
+                    // a write the server did not take, whether it was
+                    // refused by this push or an earlier one: "Nothing to
+                    // push", exit 0, while `remote status` exited 1 on an
+                    // earlier refusal, and a settled one stayed until a
+                    // pull (round-2 verification of chapter 29).
+                    let standing = match log.read() {
+                        Ok(st) => st.rejected.iter().any(|(_, a)| !a.is_set_aside()),
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
+                    if standing {
                         let settled = remote
                             .export()
                             .and_then(|g| deciduous::remote::drop_settled(&log, &db, &g));
                         match settled {
-                            Ok(s) => {
-                                refused = refused
-                                    .saturating_sub(s.iter().filter(|o| !o.from_git()).count());
-                                print_settled(&s);
+                            Ok(s) => print_settled(&s),
+                            Err(e) => {
+                                eprintln!(
+                                    "{} could not check whether the refusals are settled: {e}",
+                                    "Error:".red()
+                                );
+                                exit(1);
                             }
-                            Err(e) => eprintln!(
-                                "{} could not check whether the refusals are settled: {e}",
-                                "Warning:".yellow()
-                            ),
                         }
+                        let earlier: Vec<(deciduous::oplog::Op, String)> = match log.read() {
+                            Ok(st) => st
+                                .rejected
+                                .into_iter()
+                                .filter(|(op, a)| !a.is_set_aside() && !op.from_git())
+                                .map(|(op, a)| (op, a.reason.unwrap_or_default()))
+                                .collect(),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        };
+                        let shown: std::collections::HashSet<&str> =
+                            shown_now.iter().map(String::as_str).collect();
+                        let before: Vec<_> = earlier
+                            .iter()
+                            .filter(|(op, _)| !shown.contains(op.op_id.as_str()))
+                            .collect();
+                        if !before.is_empty() {
+                            eprintln!(
+                                "{} {} write(s) the server refused before this push still stand:",
+                                "Rejected:".red().bold(),
+                                before.len()
+                            );
+                            for (op, reason) in before.iter().take(10) {
+                                eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+                            }
+                            eprintln!(
+                                "`deciduous remote pull` takes the server's values; \
+                                 `deciduous remote status` shows them"
+                            );
+                        }
+                        refused = earlier.len();
                     }
 
                     // Scripts read the exit code. A write set aside has not
