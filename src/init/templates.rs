@@ -682,6 +682,11 @@ CONNECT immediately -> Link every node to its parent
 AUDIT regularly -> Check for missing connections
 ```
 
+Through the MCP tools, create and link in one call: `add_node` with
+`parent_id` set to the node it belongs under. Never send `add_edge` in the
+same batch as the `add_node` whose id it needs: the id does not exist yet,
+and whatever stands in for it (a placeholder, a guess) is refused.
+
 ### Behavioral Triggers - MUST LOG WHEN:
 
 | Trigger | Log Type | Example |
@@ -2465,6 +2470,11 @@ AFTER it succeeds/fails -> Log the outcome
 CONNECT immediately -> Link every node to its parent
 AUDIT regularly -> Check for missing connections
 ```
+
+Through the MCP tools, create and link in one call: `add_node` with
+`parent_id` set to the node it belongs under. Never send `add_edge` in the
+same batch as the `add_node` whose id it needs: the id does not exist yet,
+and whatever stands in for it (a placeholder, a guess) is refused.
 
 ## Behavioral Triggers - MUST LOG WHEN:
 

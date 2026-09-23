@@ -111,14 +111,15 @@ defmodule DeciduousMcp.MCP.Component do
   # server process down and every session with it. Handlers now run in their
   # own task, so the same input is a contained error, but it is still a
   # crash and still a stack trace where a one-line answer belongs.
-  @id_keys ~w(node_id from_node_id to_node_id related_to took_from parent_node_id)
+  @id_keys ~w(node_id from_node_id to_node_id related_to took_from parent_node_id parent_id)
 
   def dispatch_tool(module, params, frame) do
     params = params || %{}
 
     case invalid_id(params) do
       {key, value} ->
-        {:error, Error.execution("#{key} is not a node id: #{inspect(value)}"), frame}
+        {:error, Error.execution("#{key} is not a node id: #{inspect(value)}#{id_hint(key)}"),
+         frame}
 
       nil ->
         dispatch_valid_tool(module, params, frame)
@@ -139,6 +140,15 @@ defmodule DeciduousMcp.MCP.Component do
       end
     end)
   end
+
+  # The usual way to get here: add_node and add_edge sent in one batch, the
+  # edge carrying a placeholder for an id that did not exist yet.
+  defp id_hint(key) when key in ["from_node_id", "to_node_id"],
+    do:
+      ". To link a node you are creating now, pass parent_id to add_node instead; " <>
+        "an id must come from a previous answer, not be written ahead of it"
+
+  defp id_hint(_key), do: ""
 
   # Only the 36-character text form. Ecto.UUID.cast/1 also accepts any
   # 16-byte binary as a raw UUID, so "PLACEHOLDER_SKIP" passed this guard and

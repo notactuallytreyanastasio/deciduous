@@ -146,9 +146,11 @@ impl Place {
 
     fn how(&self) -> String {
         format!(
-            "Log it: mcp__deciduous__add_node with workspace: \"{}\", branch: \"{}\" (node_type action for \
-             what you did, outcome for a result, observation for a finding; the why goes in description), \
-             then mcp__deciduous__add_edge to its parent. Without MCP: `deciduous add action \"...\"`.",
+            "Log it: mcp__deciduous__add_node with workspace: \"{}\", branch: \"{}\", and parent_id set to \
+             the node it belongs under, so it is created and linked in one call (node_type action for what \
+             you did, outcome for a result, observation for a finding; the why goes in description). Never \
+             send add_edge in the same batch as the add_node whose id it needs. Without MCP: \
+             `deciduous add action \"...\"`.",
             self.workspace, self.branch
         )
     }
