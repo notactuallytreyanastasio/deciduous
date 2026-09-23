@@ -1006,10 +1006,57 @@ impl HttpMcp {
 
 // ---------------------------------------------------------------- API daemon
 
-/// A port nothing is listening on (bound, read, released).
+/// A port nothing is listening on (bound, read, released). Only for a URL
+/// that must refuse connections: a daemon given one races every other
+/// socket for it (see [`spawn_listening`]).
 pub fn dead_port() -> u16 {
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
     l.local_addr().unwrap().port()
+}
+
+/// Spawns `serve --api --port 0 ...` (as `c` says) and returns it with the
+/// port the daemon itself bound, read from its "API daemon on http://..:N"
+/// line; stdout is drained after that.
+///
+/// Why not `dead_port()` and pass it in: macOS hands out ephemeral ports in
+/// sequence (59081, 59082, ...), so between the release and the daemon's
+/// bind the port is free for any other test's socket. The r14 flake: all 30
+/// racing PUTs "Connection reset by peer" in one battery run, and a
+/// ulimit-64 daemon that "never answered" in another, both consistent with
+/// a test talking to a port some other test's daemon or client held.
+pub fn spawn_listening(mut c: Command) -> (Child, u16) {
+    c.stdout(Stdio::piped());
+    let mut child = c.spawn().expect("spawn serve --api");
+    let stdout = child.stdout.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        let mut tx = Some(tx);
+        for line in std::io::BufReader::new(stdout).lines() {
+            let Ok(line) = line else { break };
+            if let Some(tx) = tx.take_if(|_| line.contains("API daemon on http://")) {
+                let port = line
+                    .split("http://")
+                    .nth(1)
+                    .and_then(|r| r.split_whitespace().next())
+                    .and_then(|hp| hp.rsplit(':').next())
+                    .map(|p| p.trim_matches(|c: char| !c.is_ascii_digit()).to_string())
+                    .and_then(|p| p.parse::<u16>().ok());
+                let _ = tx.send(port.unwrap_or_else(|| panic!("no port in {line:?}")));
+            }
+        }
+    });
+    match rx.recv_timeout(Duration::from_secs(10)) {
+        Ok(port) => (child, port),
+        Err(_) => {
+            let _ = child.kill();
+            let out = child.wait_with_output().unwrap();
+            panic!(
+                "serve --api never said where it listens; stderr:\n{}",
+                String::from_utf8_lossy(&out.stderr)
+            );
+        }
+    }
 }
 
 /// `deciduous serve --api` as its own process.
@@ -1032,8 +1079,6 @@ impl ApiDaemon {
     /// The r6 flake (a first request "Connection refused", or "reset by
     /// peer" with twelve daemons starting at once) came through it.
     pub fn spawn(sb: &Sandbox, data_dir: &Path, token: &str) -> Self {
-        use std::io::BufRead;
-
         std::fs::create_dir_all(data_dir).unwrap();
         let mut c = sb.cmd(bin(), data_dir);
         c.args([
@@ -1046,45 +1091,8 @@ impl ApiDaemon {
         ])
         .env("DECIDUOUS_API_TOKEN", token)
         .env("NO_COLOR", "1")
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-        let mut child = c.spawn().expect("spawn serve --api");
-        let stdout = child.stdout.take().unwrap();
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let mut lines = std::io::BufReader::new(stdout).lines();
-            let first = lines.next();
-            let _ = tx.send(first);
-            // Keep draining, so a daemon that prints more never blocks on
-            // a full pipe.
-            for _ in lines {}
-        });
-        let line = match rx.recv_timeout(Duration::from_secs(20)) {
-            Ok(Some(Ok(line))) => line,
-            other => {
-                let _ = child.kill();
-                let out = child.wait_with_output().unwrap();
-                panic!(
-                    "serve --api printed no address ({other:?}); stderr: {}",
-                    String::from_utf8_lossy(&out.stderr)
-                );
-            }
-        };
-        let port: u16 = line
-            .rsplit_once("http://")
-            .and_then(|(_, rest)| rest.split_once(':'))
-            .and_then(|(_, rest)| {
-                rest.split(|c: char| !c.is_ascii_digit())
-                    .next()
-                    .and_then(|p| p.parse().ok())
-            })
-            .unwrap_or_else(|| panic!("no port in serve --api's first line: {line:?}"));
-        // stderr is not read after this; drain it so it cannot fill up.
-        if let Some(err) = child.stderr.take() {
-            std::thread::spawn(move || {
-                let _ = std::io::copy(&mut std::io::BufReader::new(err), &mut std::io::sink());
-            });
-        }
+        .stderr(Stdio::null());
+        let (child, port) = spawn_listening(c);
         ApiDaemon {
             child,
             port,

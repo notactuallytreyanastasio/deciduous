@@ -398,13 +398,22 @@ fn r6_bypass_abandoned_queries_do_not_pile_up() {
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
     let took = t.elapsed();
+    // Either the twelve arrived together, four ran and the rest were turned
+    // away (503), in about one 5 s limit; or, on a loaded machine, they
+    // arrived spread out and ran in waves of four, each stopped at 5 s: at
+    // most three waves. Both show the bound. What must never happen is a
+    // query running to its end (35 s) or more than four at once with none
+    // turned away (all done in one wave).
+    // (r6 pile-up flake: one loaded run took 15.05 s with 12 x 400, three
+    // waves, no 503, and failed the old "under 8 s and some 503" check.)
     assert!(
-        took < Duration::from_secs(8),
+        took < Duration::from_secs(20),
         "12 slow queries at once took {took:?}: {statuses:?}"
     );
+    let waited_in_waves = took > Duration::from_secs(9);
     assert!(
-        statuses.iter().any(|s| s == &Ok(503)),
-        "12 slow queries all ran at once, none was turned away: {statuses:?}"
+        statuses.iter().any(|s| s == &Ok(503)) || waited_in_waves,
+        "12 slow queries all ran at once in {took:?}, none was turned away: {statuses:?}"
     );
     // A stopped query's process is killed at the limit, so the daemon is
     // free again soon after the answers, not after the abandoned queries
@@ -787,19 +796,18 @@ fn r14_flake_an_accept_error_does_not_stop_the_daemon() {
     let sb = Sandbox::new();
     let data = sb.base().join("fd");
     std::fs::create_dir_all(&data).unwrap();
-    let port = dead_port();
+
     let mut c = sb.cmd("/bin/sh", &data);
     c.args([
         "-c",
         "ulimit -n 64 && exec \"$0\" serve --api --port \"$1\" --data-dir \"$2\"",
         bin().to_str().unwrap(),
-        &port.to_string(),
+        "0",
         data.to_str().unwrap(),
     ])
     .env("DECIDUOUS_API_TOKEN", API_TOKEN)
-    .stdout(std::process::Stdio::null())
     .stderr(std::process::Stdio::piped());
-    let mut child = c.spawn().unwrap();
+    let (mut child, port) = spawn_listening(c);
     let s = Server {
         url: format!("http://127.0.0.1:{port}"),
         token: API_TOKEN.to_string(),
@@ -867,19 +875,18 @@ fn r14_restarts_do_not_slow_every_later_request() {
     let sb = Sandbox::new();
     let data = sb.base().join("fd2");
     std::fs::create_dir_all(&data).unwrap();
-    let port = dead_port();
+
     let mut c = sb.cmd("/bin/sh", &data);
     c.args([
         "-c",
         "ulimit -n 64 && exec \"$0\" serve --api --port \"$1\" --data-dir \"$2\"",
         bin().to_str().unwrap(),
-        &port.to_string(),
+        "0",
         data.to_str().unwrap(),
     ])
     .env("DECIDUOUS_API_TOKEN", API_TOKEN)
-    .stdout(std::process::Stdio::null())
     .stderr(std::process::Stdio::piped());
-    let mut child = c.spawn().unwrap();
+    let (mut child, port) = spawn_listening(c);
     let s = Server {
         url: format!("http://127.0.0.1:{port}"),
         token: API_TOKEN.to_string(),
