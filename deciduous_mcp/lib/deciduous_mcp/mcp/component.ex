@@ -32,6 +32,8 @@ defmodule DeciduousMcp.MCP.Component do
   alias Hermes.MCP.Error
   alias Hermes.Server.Response
 
+  require Logger
+
   defmacro __using__(type: :tool) do
     quote do
       @behaviour Hermes.Server.Component.Tool
@@ -46,7 +48,9 @@ defmodule DeciduousMcp.MCP.Component do
 
       @impl Hermes.Server.Component.Tool
       def input_schema do
-        DeciduousMcp.MCP.Component.stringify(definition()[:input_schema])
+        definition()[:input_schema]
+        |> DeciduousMcp.MCP.ArgCheck.with_limits()
+        |> DeciduousMcp.MCP.Component.stringify()
       end
 
       @doc false
@@ -120,11 +124,26 @@ defmodule DeciduousMcp.MCP.Component do
 
     case invalid_id(params) do
       {key, value} ->
-        {:error, Error.execution("#{key} is not a node id: #{inspect(value)}#{id_hint(key)}"),
-         frame}
+        {:error,
+         Error.execution(
+           "#{key} is not a node id: #{inspect(value, binaries: :as_strings, limit: 5, printable_limit: 60)}#{id_hint(key)}"
+         ), frame}
 
       nil ->
-        dispatch_valid_tool(module, params, frame)
+        schema = DeciduousMcp.MCP.ArgCheck.with_limits(module.definition()[:input_schema] || %{})
+
+        case DeciduousMcp.MCP.ArgCheck.check(schema, params) do
+          :ok ->
+            dispatch_valid_tool(module, params, frame)
+
+          # Answered like every other refusal a tool makes (execution error,
+          # the sentence as the message), not as -32602 with the sentence
+          # tucked into `data`: the message is what a client shows the model.
+          # The suffix is true for reads too, and it is the thing a caller
+          # retrying a write most needs to know.
+          {:error, message} ->
+            {:error, Error.execution(message <> "; nothing was written"), frame}
+        end
     end
   end
 
@@ -159,8 +178,108 @@ defmodule DeciduousMcp.MCP.Component do
     byte_size(value) == 36 and match?({:ok, _}, Ecto.UUID.cast(value))
   end
 
+  # The try is the last line of defence, not the handling: a tool that can
+  # fail says why itself. Without it, an exception reached Hermes, which
+  # answers "request handler crashed" with the inspected exception and stack
+  # trace in `data` — for a Postgres error that is the Postgrex struct, and
+  # for a failed insert the row being written. The client gets one line
+  # naming the tool and the exception's type; the log gets the rest.
   defp dispatch_valid_tool(module, params, frame) do
-    case module.call(%{arguments: params, server: frame}) do
+    call = fn -> module.call(%{arguments: params, server: frame}) end
+
+    # Only a tool that takes a workspace can create one; update_node and
+    # the other by-id tools resolve the node's own workspace.
+    new_workspace =
+      if names_workspace?(module), do: DeciduousMcp.MCP.Scope.workspace_to_create(frame, params)
+
+    case new_workspace do
+      nil -> call.()
+      name -> in_new_workspace(name, call)
+    end
+  rescue
+    exception ->
+      crashed(
+        module,
+        frame,
+        Exception.format(:error, exception, __STACKTRACE__),
+        exception.__struct__
+      )
+  catch
+    kind, reason ->
+      crashed(module, frame, Exception.format(kind, reason, __STACKTRACE__), kind)
+  else
+    result -> translate_tool_result(result, frame)
+  end
+
+  # A call that creates a workspace runs in one transaction with it. The
+  # workspace is kept only if the call succeeded and a node is in it now;
+  # otherwise everything the call did is rolled back, the workspace row with
+  # it, and the call's own answer is returned unchanged.
+  #
+  # Deleting an empty workspace afterwards looks simpler and is wrong: a
+  # second caller that found the new row between the insert and the delete
+  # would have its node insert fail on the foreign key. Inside the
+  # transaction the row is not visible to anyone until it is kept, and a
+  # concurrent creator of the same name waits on the unique index for this
+  # one to commit or roll back (then finds it, or inserts it itself).
+  @result_key {__MODULE__, :new_workspace_result}
+
+  defp in_new_workspace(name, call) do
+    transaction =
+      DeciduousMcp.Repo.transaction(fn ->
+        result = call.()
+        Process.put(@result_key, result)
+
+        if match?({:ok, _}, result) and has_nodes?(name),
+          do: result,
+          else: DeciduousMcp.Repo.rollback(:not_kept)
+      end)
+
+    case transaction do
+      {:ok, result} ->
+        Process.delete(@result_key)
+        result
+
+      # :not_kept is ours; :rollback means a tool's own inner transaction
+      # rolled back, which in a nested transaction rolls back this one too.
+      # Either way the tool's answer is what the client gets.
+      {:error, reason} when reason in [:not_kept, :rollback] ->
+        Process.delete(@result_key)
+    end
+  end
+
+  defp names_workspace?(module) do
+    props = get_in(module.definition(), [:input_schema, :properties]) || %{}
+    Map.has_key?(props, :workspace) or Map.has_key?(props, "workspace")
+  end
+
+  defp has_nodes?(name) do
+    import Ecto.Query
+
+    case DeciduousMcp.Graph.Workspaces.get_by_name(name) do
+      {:ok, workspace} ->
+        DeciduousMcp.Repo.exists?(
+          from n in DeciduousMcp.Schema.Node, where: n.workspace_id == ^workspace.id
+        )
+
+      {:error, :not_found} ->
+        false
+    end
+  end
+
+  defp crashed(module, frame, formatted, what) do
+    name = module.definition()[:name]
+    Logger.error("tool #{name} crashed: " <> formatted)
+
+    {:error,
+     Error.execution(
+       "#{name} failed (#{inspect(what)}); nothing it had not committed was kept, " <>
+         "and the details are in the server log"
+     ), frame}
+  end
+
+  defp translate_tool_result(result, frame) do
+    case result do
       {:ok, payload} when is_binary(payload) ->
         {:reply, Response.text(Response.tool(), payload), frame}
 
@@ -178,12 +297,20 @@ defmodule DeciduousMcp.MCP.Component do
   @doc """
   Invokes a prompt's `call/1` and unwraps the `messages` list Hermes expects.
   """
+  # Hermes's prompts handler matches `{:reply, %Response{}, frame}` and
+  # nothing else. The bare message list this returned was a CaseClauseError
+  # on every prompts/get that reached it, answered with the session's Frame
+  # in `data`; no client had ever been sent this prompt.
   def dispatch_prompt(module, args, frame) do
     case module.call(%{arguments: args || %{}, server: frame}) do
-      {:ok, %{messages: messages}} -> {:reply, messages, frame}
-      {:ok, other} -> {:reply, other, frame}
-      {:error, %{message: message}} -> {:error, Error.execution(message), frame}
-      {:error, other} -> {:error, Error.execution(describe_error(other)), frame}
+      {:ok, %{messages: messages}} ->
+        {:reply, %{Response.prompt() | messages: stringify(messages)}, frame}
+
+      {:error, %{message: message}} ->
+        {:error, Error.execution(message), frame}
+
+      {:error, other} ->
+        {:error, Error.execution(describe_error(other)), frame}
     end
   end
 
@@ -248,7 +375,44 @@ defmodule DeciduousMcp.MCP.Component do
   defp to_string_key(k) when is_atom(k), do: Atom.to_string(k)
   defp to_string_key(k), do: k
 
-  @doc false
+  @doc """
+  One sentence for a tool failure, without the internals.
+
+  An `Ecto.Changeset` used to be `inspect`ed into the message, which prints
+  the changes being written and the struct they were written to; the
+  client only needs the validation errors, field by field. Anything this
+  does not recognise is logged in full and answered with its shape only.
+  """
   def describe_error(reason) when is_binary(reason), do: reason
-  def describe_error(reason), do: inspect(reason)
+  def describe_error(reason) when is_atom(reason), do: to_string(reason)
+
+  def describe_error(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string_safe(value))
+      end)
+    end)
+    |> Enum.map_join("; ", fn {field, messages} -> "#{field}: #{Enum.join(messages, ", ")}" end)
+  end
+
+  def describe_error({:node_not_found, id}), do: "#{id} is not a node in this workspace"
+
+  def describe_error(reason) do
+    Logger.error("unrecognised tool error: " <> inspect(reason, limit: :infinity))
+    "unexpected error (#{error_shape(reason)}); the details are in the server log"
+  end
+
+  defp error_shape(reason) when is_tuple(reason) and tuple_size(reason) > 0,
+    do: "tuple starting #{inspect(elem(reason, 0), limit: 3)}"
+
+  defp error_shape(%{__struct__: struct}), do: inspect(struct)
+  defp error_shape(reason) when is_map(reason), do: "map"
+  defp error_shape(reason) when is_list(reason), do: "list"
+  defp error_shape(_), do: "term"
+
+  defp to_string_safe(value) when is_binary(value) or is_number(value) or is_atom(value),
+    do: to_string(value)
+
+  defp to_string_safe(value), do: inspect(value, limit: 5)
 end

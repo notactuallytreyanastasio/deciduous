@@ -128,7 +128,7 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
          }}
 
       {:error, reason} ->
-        {:error, %{code: -1, message: "Failed to create node: #{inspect(reason)}"}}
+        {:error, %{code: -1, message: "Failed to create node: #{DeciduousMcp.MCP.Component.describe_error(reason)}"}}
     end
   end
 

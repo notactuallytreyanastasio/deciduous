@@ -30,8 +30,8 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
           },
           rationale: %{type: "string", description: "Why the chosen option was selected"},
           chosen_option: %{
-            type: "object",
-            description: "The option that was selected",
+            type: ["object", "string"],
+            description: "The option that was selected: an object, or just its title",
             properties: %{
               title: %{type: "string"},
               description: %{type: "string"}
@@ -42,7 +42,7 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
             type: "array",
             description: "Options that were considered but not selected",
             items: %{
-              type: "object",
+              type: ["object", "string"],
               properties: %{
                 title: %{type: "string"},
                 description: %{type: "string"},
@@ -138,7 +138,7 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
           {:error, %{code: -1, message: message}}
 
         {:error, other} ->
-          {:error, %{code: -1, message: "Decision not logged: #{inspect(other)}"}}
+          {:error, %{code: -1, message: "Decision not logged: #{DeciduousMcp.MCP.Component.describe_error(other)}"}}
       end
     else
       {:error, message} -> {:error, %{code: -1, message: message}}
@@ -180,7 +180,7 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
         node
 
       {:error, reason} ->
-        Repo.rollback("Decision not logged, nothing was written: #{inspect(reason)}")
+        Repo.rollback("Decision not logged, nothing was written: #{DeciduousMcp.MCP.Component.describe_error(reason)}")
     end
   end
 
@@ -198,7 +198,7 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
         Repo.rollback("#{inspect(id)} is not a node in this workspace; nothing was written")
 
       {:error, reason} ->
-        Repo.rollback("Decision not logged, nothing was written: #{inspect(reason)}")
+        Repo.rollback("Decision not logged, nothing was written: #{DeciduousMcp.MCP.Component.describe_error(reason)}")
     end
   end
 

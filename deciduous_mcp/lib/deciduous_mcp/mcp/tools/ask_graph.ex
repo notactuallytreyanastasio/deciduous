@@ -22,6 +22,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
   import Ecto.Query
   alias DeciduousMcp.MCP.Scope
+  alias DeciduousMcp.Graph.Nodes
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Node, Edge}
 
@@ -176,12 +177,23 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
     # matched every workspace on the server, deleted nodes included.
     any_term =
       Enum.reduce(terms, dynamic(false), fn term, acc ->
-        pattern = "%#{term}%"
+        pattern = Nodes.contains_pattern(term)
 
+        # Metadata values, not the JSON text: `metadata::text` includes the
+        # key names, and every node add_node writes has "branch", so asking
+        # about "branch" (or "prompt", "confidence", "files") matched every
+        # node in the workspace. jsonb_each_text gives the top-level values
+        # as text (an array value as its JSON, so a file path still
+        # matches). A metadata that is not an object has no values to match.
         dynamic(
           [n],
           ^acc or ilike(n.title, ^pattern) or ilike(n.description, ^pattern) or
-            ilike(fragment("?::text", n.metadata), ^pattern)
+            fragment(
+              "EXISTS (SELECT 1 FROM jsonb_each_text(CASE WHEN jsonb_typeof(?) = 'object' THEN ? ELSE '{}'::jsonb END) AS kv WHERE kv.value ILIKE ?)",
+              n.metadata,
+              n.metadata,
+              ^pattern
+            )
         )
       end)
 

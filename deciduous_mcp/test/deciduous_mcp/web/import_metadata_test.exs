@@ -83,11 +83,11 @@ defmodule DeciduousMcp.Web.ImportMetadataTest do
     assert %{} =
              McpClient.call!(client, "update_node", %{
                "node_id" => legacy.id,
-               "metadata" => %{"files" => "a"},
+               "metadata" => %{"files" => ["a"]},
                "branch" => "im"
              })
 
-    assert %{metadata: %{"files" => "a", "confidence" => "high", "prompt" => "keep me"}} =
+    assert %{metadata: %{"files" => ["a"], "confidence" => "high", "prompt" => "keep me"}} =
              Repo.get!(Node, legacy.id)
 
     # Setting it to another bad value is still refused.

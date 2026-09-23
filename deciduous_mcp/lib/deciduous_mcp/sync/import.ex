@@ -45,10 +45,25 @@ defmodule DeciduousMcp.Sync.Import do
   def run(payload, opts \\ [])
 
   def run(%{"graph" => graph} = payload, opts) when is_map(graph) do
-    with {:ok, workspace} <- target_workspace(payload["workspace"], opts[:pinned_workspace_id]),
+    # Everything is checked before anything is written, and the workspace is
+    # created inside the transaction: a refused import used to leave its
+    # workspace behind, empty, because find_or_create ran first.
+    with {:ok, name} <-
+           target_workspace(
+             payload["workspace"],
+             opts[:pinned_workspace_id],
+             opts[:pinned_workspace_name]
+           ),
+         :ok <- validate_shapes(graph),
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []) do
       Repo.transaction(
         fn ->
+          workspace =
+            case Workspaces.find_or_create(name) do
+              {:ok, workspace} -> workspace
+              {:error, reason} -> Repo.rollback(Workspaces.describe_name_error(name, reason))
+            end
+
           deleted = deleted_change_ids(workspace.id)
           node_report = upsert_nodes(workspace.id, nodes, deleted)
           edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)
@@ -70,36 +85,49 @@ defmodule DeciduousMcp.Sync.Import do
 
   def run(_, _), do: {:error, "payload must contain a \"graph\" object"}
 
+  # Where the import goes, as a name: find_or_create runs inside the
+  # transaction, after validation, so a refused import creates nothing.
+  #
   # Unpinned: the body names the workspace, as it always has.
-  defp target_workspace(name, nil) do
-    with {:ok, name} <- Workspaces.normalize_name(name || "") do
-      Workspaces.find_or_create(name)
-    end
-  end
+  defp target_workspace(name, nil, nil), do: workspace_name(name || "")
+
+  # Pinned to a name nothing has been written to yet. The plug no longer
+  # creates the pinned workspace, so it hands over a name and no id; read as
+  # "no id, so no pin", this let a client pinned to a new name import into
+  # any workspace its body named.
+  defp target_workspace(name, nil, pinned_name), do: held_to_pin(name, pinned_name)
 
   # Pinned by X-Deciduous-Workspace: the pinned workspace, and a body naming
   # a different one is refused rather than redirected. Quietly importing
   # into the pin would report success for a push the sender meant for
   # somewhere else; the MCP tools can ignore their workspace argument
   # because it is a default, but this one names where every row goes.
-  defp target_workspace(name, pinned_id) do
+  defp target_workspace(name, pinned_id, _pinned_name) do
     {:ok, pinned} = Workspaces.get_workspace(pinned_id)
+    held_to_pin(name, pinned.name)
+  end
 
-    case name && Workspaces.normalize_name(name) do
-      nil ->
-        {:ok, pinned}
+  defp held_to_pin(name, pinned_name) do
+    case name && workspace_name(name) do
+      nil -> {:ok, pinned_name}
+      {:ok, same} when same == pinned_name -> {:ok, pinned_name}
+      {:ok, other} -> {:error, {:pinned, pinned_refusal(pinned_name, other)}}
+      {:error, _} = err -> err
+    end
+  end
 
-      {:ok, same} when same == pinned.name ->
-        {:ok, pinned}
+  defp pinned_refusal(pinned, other) do
+    "this client is pinned to workspace \"#{pinned}\" by " <>
+      "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."
+  end
 
-      {:ok, other} ->
-        {:error,
-         {:pinned,
-          "this client is pinned to workspace \"#{pinned.name}\" by " <>
-            "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."}}
-
-      {:error, _} = err ->
-        err
+  # Before, "*" normalized to a name like any other and the import created a
+  # workspace called "*", which a read of "*" (the global view) never shows.
+  defp workspace_name(raw) do
+    case Workspaces.normalize_name(raw) do
+      {:ok, "*"} -> {:error, Workspaces.describe_name_error(raw, :global)}
+      {:ok, name} -> {:ok, name}
+      {:error, reason} -> {:error, Workspaces.describe_name_error(raw, reason)}
     end
   end
 
@@ -118,6 +146,154 @@ defmodule DeciduousMcp.Sync.Import do
 
     count
   end
+
+  # --- Shapes -----------------------------------------------------------------
+
+  # The types `deciduous graph` writes (src/db.rs: DecisionNode, DecisionEdge,
+  # NodeDocument). `insert_all` skips the changeset, so before this a value of
+  # another type, or a NUL, reached Postgres and the import answered an
+  # empty HTTP 500: a title "a\u0000b", a NUL inside metadata_json, an
+  # integer change_id, an object title. nil is allowed everywhere here;
+  # change_id's presence is checked in validate_nodes/1.
+  @node_fields %{
+    "change_id" => :string,
+    "node_type" => :string,
+    "title" => :string,
+    "description" => :string,
+    "status" => :string,
+    "created_at" => :string,
+    "updated_at" => :string,
+    "metadata_json" => :json_object
+  }
+
+  @edge_fields %{
+    "from_change_id" => :string,
+    "to_change_id" => :string,
+    "edge_type" => :string,
+    "rationale" => :string,
+    "created_at" => :string,
+    "weight" => :number
+  }
+
+  @document_fields %{
+    "change_id" => :string,
+    "node_change_id" => :string,
+    "content_hash" => :string,
+    "original_filename" => :string,
+    "storage_filename" => :string,
+    "mime_type" => :string,
+    "description" => :string,
+    "description_source" => :string,
+    "attached_at" => :string,
+    "attached_by" => :string,
+    "detached_at" => :string,
+    "file_size" => :integer
+  }
+
+  defp validate_shapes(graph) do
+    Enum.reduce_while(
+      [{"nodes", @node_fields}, {"edges", @edge_fields}, {"documents", @document_fields}],
+      :ok,
+      fn {key, fields}, :ok ->
+        case check_records(graph[key], key, fields) do
+          :ok -> {:cont, :ok}
+          error -> {:halt, error}
+        end
+      end
+    )
+  end
+
+  defp check_records(nil, _key, _fields), do: :ok
+
+  defp check_records(records, key, fields) when is_list(records) do
+    records
+    |> Enum.with_index()
+    |> Enum.reduce_while(:ok, fn {record, i}, :ok ->
+      case check_record(record, "#{key}[#{i}]", fields) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp check_records(_other, key, _fields), do: {:error, "graph.#{key} must be an array"}
+
+  defp check_record(record, path, fields) when is_map(record) do
+    Enum.reduce_while(fields, :ok, fn {field, type}, :ok ->
+      case check_field(Map.get(record, field), type) do
+        :ok ->
+          {:cont, :ok}
+
+        {:error, why} ->
+          {:halt,
+           {:error, "#{path}.#{field} #{why}#{change_id_hint(record)}; nothing was imported"}}
+      end
+    end)
+  end
+
+  defp check_record(_record, path, _fields),
+    do: {:error, "#{path} must be an object; nothing was imported"}
+
+  defp check_field(nil, _type), do: :ok
+
+  defp check_field(value, :string) when is_binary(value) do
+    if String.contains?(value, <<0>>),
+      do: {:error, "contains a NUL character (U+0000), which cannot be stored"},
+      else: :ok
+  end
+
+  defp check_field(value, :integer) when is_integer(value), do: :ok
+  defp check_field(value, :number) when is_number(value), do: :ok
+
+  defp check_field(value, :json_object) when is_binary(value) do
+    with :ok <- check_field(value, :string) do
+      case Jason.decode(value) do
+        {:ok, map} when is_map(map) ->
+          if contains_nul?(map),
+            do: {:error, "decodes to a value containing NUL (U+0000), which cannot be stored"},
+            else: :ok
+
+        # Unparseable metadata was, and still is, imported as {}; that is a
+        # separate question from values Postgres refuses.
+        _ ->
+          :ok
+      end
+    end
+  end
+
+  defp check_field(value, :json_object) when is_map(value) do
+    if contains_nul?(value),
+      do: {:error, "contains NUL (U+0000), which cannot be stored"},
+      else: :ok
+  end
+
+  defp check_field(value, type),
+    do: {:error, "must be #{describe_type(type)}, got #{kind(value)}"}
+
+  defp describe_type(:string), do: "a string"
+  defp describe_type(:integer), do: "an integer"
+  defp describe_type(:number), do: "a number"
+  defp describe_type(:json_object), do: "a JSON object as a string"
+
+  defp kind(v) when is_binary(v), do: "a string"
+  defp kind(v) when is_integer(v), do: "an integer"
+  defp kind(v) when is_number(v), do: "a number"
+  defp kind(v) when is_boolean(v), do: "a boolean"
+  defp kind(v) when is_list(v), do: "an array"
+  defp kind(v) when is_map(v), do: "an object"
+
+  defp change_id_hint(%{"change_id" => cid}) when is_binary(cid),
+    do: " (change_id #{inspect(String.slice(cid, 0, 40))})"
+
+  defp change_id_hint(_), do: ""
+
+  defp contains_nul?(v) when is_binary(v), do: String.contains?(v, <<0>>)
+
+  defp contains_nul?(v) when is_map(v),
+    do: Enum.any?(v, fn {k, x} -> contains_nul?(k) or contains_nul?(x) end)
+
+  defp contains_nul?(v) when is_list(v), do: Enum.any?(v, &contains_nul?/1)
+  defp contains_nul?(_), do: false
 
   # --- Nodes ------------------------------------------------------------------
 
@@ -238,7 +414,9 @@ defmodule DeciduousMcp.Sync.Import do
       refused_deleted_examples:
         refused
         |> Enum.take(20)
-        |> Enum.map(&%{change_id: &1["change_id"], deleted_at: Map.fetch!(deleted, &1["change_id"])})
+        |> Enum.map(
+          &%{change_id: &1["change_id"], deleted_at: Map.fetch!(deleted, &1["change_id"])}
+        )
     }
   end
 
@@ -384,7 +562,8 @@ defmodule DeciduousMcp.Sync.Import do
 
     # A document on a deleted node is refused like an edge to one: it would
     # be attached to content the delete was meant to hide.
-    {refused, documents} = Enum.split_with(documents, &Map.has_key?(deleted, &1["node_change_id"]))
+    {refused, documents} =
+      Enum.split_with(documents, &Map.has_key?(deleted, &1["node_change_id"]))
 
     {rows, orphaned} =
       Enum.reduce(documents, {[], []}, fn d, {ok, bad} ->
@@ -430,7 +609,8 @@ defmodule DeciduousMcp.Sync.Import do
         {count, _} =
           Repo.insert_all(Document, chunk,
             on_conflict:
-              {:replace, [:description, :description_source, :detached_at, :content_missing, :updated_at]},
+              {:replace,
+               [:description, :description_source, :detached_at, :content_missing, :updated_at]},
             conflict_target: [:workspace_id, :change_id]
           )
 
@@ -463,14 +643,21 @@ defmodule DeciduousMcp.Sync.Import do
 
   defp decode_metadata(json) when is_binary(json) do
     case Jason.decode(json) do
-      {:ok, map} when is_map(map) -> {:ok, map}
-      {:ok, other} -> {:error, "metadata_json must be a JSON object, got #{inspect(other)}"}
-      {:error, _} -> {:error, "metadata_json is not valid JSON: #{inspect(String.slice(json, 0, 80))}"}
+      {:ok, map} when is_map(map) ->
+        {:ok, map}
+
+      {:ok, other} ->
+        {:error, "metadata_json must be a JSON object, got #{inspect(other)}"}
+
+      {:error, _} ->
+        {:error, "metadata_json is not valid JSON: #{inspect(String.slice(json, 0, 80))}"}
     end
   end
 
   defp decode_metadata(other),
-    do: {:error, "metadata_json must be a JSON object or a string holding one, got #{inspect(other)}"}
+    do:
+      {:error,
+       "metadata_json must be a JSON object or a string holding one, got #{inspect(other)}"}
 
   # The CLI writes timestamps with an offset ("2016-02-01T00:00:00-05:00") and
   # backdated archaeology nodes reach back years, so these are parsed rather

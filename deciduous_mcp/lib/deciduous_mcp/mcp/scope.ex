@@ -29,7 +29,7 @@ defmodule DeciduousMcp.MCP.Scope do
   alias DeciduousMcp.Locks
 
   @fallback "scratch"
-  @global "*"
+  @global Workspaces.global_token()
 
   @doc """
   The `workspace` property to merge into a tool's `input_schema`.
@@ -75,16 +75,8 @@ defmodule DeciduousMcp.MCP.Scope do
   silently retrying into the same collision.
   """
   def write_workspace_id(frame, args) do
-    case Map.get(args, "workspace") do
-      @global ->
-        {:error,
-         "workspace \"#{@global}\" is read-only: a node must be written to one " <>
-           "project. Pass the repo name."}
-
-      _ ->
-        with {:ok, workspace_id} <- resolve_single(frame, args) do
-          claim_lock(workspace_id, frame, args)
-        end
+    with {:ok, workspace_id} <- resolve_for_write(frame, args) do
+      claim_lock(workspace_id, frame, args)
     end
   end
 
@@ -139,16 +131,19 @@ defmodule DeciduousMcp.MCP.Scope do
   # the other way round: a client pinned to `blog` naming a node in
   # `deciduous` would take `deciduous`'s lock and edit `deciduous`'s row.
   defp check_pin(frame, node) do
-    case pinned_id(frame) do
+    case pinned(frame) do
       nil ->
         :ok
 
-      pinned when pinned == node.workspace_id ->
-        :ok
+      pin ->
+        case pinned_existing_id(pin) do
+          {:ok, id} when id == node.workspace_id ->
+            :ok
 
-      _ ->
-        {:error,
-         "node #{node.id} belongs to another workspace than the one this client is pinned to"}
+          _ ->
+            {:error,
+             "node #{node.id} belongs to another workspace than the one this client is pinned to"}
+        end
     end
   end
 
@@ -240,17 +235,21 @@ defmodule DeciduousMcp.MCP.Scope do
   Returns `{:ok, :global}` for the cross-project view or `{:ok, id}` for one
   workspace. A header pin beats `"*"` — a pinned repo stays pinned on reads too,
   so a project that opted into isolation cannot be made to read its neighbours.
+
+  A read never creates a workspace. An unknown name is an error that says so:
+  before, every read went through find_or_create, and a typo, a probe for
+  `proto-%`, or a name with a right-to-left override each left a permanent
+  empty project behind in list_workspaces.
   """
   def read_scope(frame, args) do
-    cond do
-      pinned = pinned_id(frame) ->
-        {:ok, pinned}
+    case read_target(frame, args) do
+      {:absent, name} ->
+        {:error,
+         "no workspace named #{inspect(name)}: nothing has been written to it yet. " <>
+           "The first write creates it; list_workspaces shows the ones that exist."}
 
-      Map.get(args, "workspace") == @global ->
-        {:ok, :global}
-
-      true ->
-        resolve_single(frame, args)
+      other ->
+        other
     end
   end
 
@@ -277,32 +276,164 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
-  @doc "The workspace id a client pinned by header, or nil."
-  def pinned_workspace_id(frame), do: pinned_id(frame)
+  @doc """
+  How the client is pinned: `nil` when it is not, `{:ok, id}` when its
+  workspace exists, `:absent` when the header names one nothing has been
+  written to yet.
 
-  defp resolve_single(frame, args) do
-    case pinned_id(frame) do
-      nil -> resolve_by_name(Map.get(args, "workspace"))
-      id -> {:ok, id}
+  Three answers, not an id or nil: the plug no longer creates the pinned
+  workspace, so "no id" no longer means "no pin". A caller that read nil as
+  unpinned would show a client pinned to a new name every other workspace.
+  """
+  def pin_status(frame) do
+    case pinned(frame) do
+      nil ->
+        nil
+
+      pin ->
+        case pinned_existing_id(pin) do
+          {:ok, id} -> {:ok, id}
+          {:error, :not_found} -> :absent
+        end
     end
   end
 
-  defp resolve_by_name(name) do
-    raw = if is_binary(name) and String.trim(name) != "", do: name, else: @fallback
+  @doc """
+  `read_scope/2`, but an unknown workspace is `{:absent, name}` rather than
+  an error, for callers with a truthful empty answer to give (GET /export of
+  a workspace nothing has been pushed to yet is an empty graph).
+  """
+  def read_target(frame, args) do
+    case pinned(frame) do
+      nil ->
+        case requested_name(args) do
+          {:ok, @global} -> {:ok, :global}
+          {:ok, name} -> lookup(name)
+          {:error, message} -> {:error, message}
+        end
 
-    with {:ok, normalized} <- Workspaces.normalize_name(raw),
-         {:ok, workspace} <- Workspaces.find_or_create(normalized) do
-      {:ok, workspace.id}
-    else
-      {:error, reason} -> {:error, "could not resolve workspace: #{inspect(reason)}"}
+      pin ->
+        case pinned_existing_id(pin) do
+          {:ok, id} -> {:ok, id}
+          {:error, :not_found} -> {:absent, pin_name(pin)}
+        end
     end
   end
 
-  defp pinned_id(frame) do
-    frame.assigns
-    |> Map.new()
-    |> Map.get(:pinned_workspace_id)
+  defp resolve_for_write(frame, args) do
+    case pinned(frame) do
+      nil ->
+        case requested_name(args) do
+          {:ok, @global} ->
+            {:error,
+             "workspace \"#{@global}\" is read-only: a node must be written to one " <>
+               "project. Pass the repo name."}
+
+          {:ok, name} ->
+            create(name)
+
+          {:error, message} ->
+            {:error, message}
+        end
+
+      {:id, id} ->
+        {:ok, id}
+
+      {:name, name} ->
+        create(name)
+    end
   end
+
+  @doc """
+  The workspace a write with these arguments would have to create, or nil
+  when it names one that exists (or none, or "*", or an invalid name).
+
+  `DeciduousMcp.MCP.Component` runs a call that would create one inside a
+  transaction, and keeps the workspace only if the call succeeded and left
+  a node in it. Creation has to happen before the tool's own checks (the
+  tool needs the id to look anything up), so without that, a refused
+  add_edge or a capture_conversation_turn that wrote nothing still left
+  a permanent empty project in list_workspaces.
+  """
+  def workspace_to_create(frame, args) do
+    target =
+      case pinned(frame) do
+        {:id, _} ->
+          nil
+
+        {:name, name} ->
+          name
+
+        nil ->
+          case requested_name(args) do
+            {:ok, @global} -> nil
+            {:ok, name} -> name
+            {:error, _} -> nil
+          end
+      end
+
+    if target && match?({:error, :not_found}, Workspaces.get_by_name(target)), do: target
+  end
+
+  # The `workspace` argument, normalized. Compared with "*" only after
+  # normalizing: `" *"` used to pass the write tools' read-only check as a
+  # different string and then trim to a literal workspace named "*".
+  defp requested_name(args) do
+    raw =
+      case Map.get(args, "workspace") do
+        nil -> @fallback
+        name when is_binary(name) -> if String.trim(name) == "", do: @fallback, else: name
+        other -> other
+      end
+
+    case Workspaces.normalize_name(raw) do
+      {:ok, name} -> {:ok, name}
+      {:error, reason} -> {:error, Workspaces.describe_name_error(raw, reason)}
+    end
+  end
+
+  defp lookup(name) do
+    case Workspaces.get_by_name(name) do
+      {:ok, workspace} -> {:ok, workspace.id}
+      {:error, :not_found} -> {:absent, name}
+    end
+  end
+
+  defp create(name) do
+    case Workspaces.find_or_create(name) do
+      {:ok, workspace} ->
+        {:ok, workspace.id}
+
+      {:error, reason} when is_atom(reason) ->
+        {:error, Workspaces.describe_name_error(name, reason)}
+
+      {:error, _} ->
+        {:error, "could not create workspace #{inspect(name)}"}
+    end
+  end
+
+  # What `DeciduousMcp.Web.WorkspacePlug` put in assigns. The plug no longer
+  # creates the pinned workspace on connect (that made every initialize a
+  # write), so a pin may name a workspace that does not exist yet:
+  # `{:name, name}`. One that did exist when the request arrived is
+  # `{:id, id}`.
+  defp pinned(frame) do
+    assigns = Map.new(frame.assigns)
+
+    case {Map.get(assigns, :pinned_workspace_id), Map.get(assigns, :pinned_workspace_name)} do
+      {id, _} when is_binary(id) -> {:id, id}
+      {nil, name} when is_binary(name) -> {:name, name}
+      _ -> nil
+    end
+  end
+
+  defp pinned_existing_id({:id, id}), do: {:ok, id}
+
+  defp pinned_existing_id({:name, name}) do
+    with {:ok, workspace} <- Workspaces.get_by_name(name), do: {:ok, workspace.id}
+  end
+
+  defp pin_name({:name, name}), do: name
 
   def fallback_name, do: @fallback
   def global_token, do: @global

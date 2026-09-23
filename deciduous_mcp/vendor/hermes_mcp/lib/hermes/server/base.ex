@@ -320,7 +320,15 @@ defmodule Hermes.Server.Base do
       level: :error
     )
 
-    error = Error.execution("request handler crashed", %{reason: inspect(reason)})
+    # deciduous patch 6: the reason stays in the log above. Inspected into
+    # `data` it carried the session's #Frame<...>, the request and a stack
+    # trace to the client (a tools/call without `arguments` was enough).
+    error =
+      Error.execution(
+        "#{method} failed inside the server; nothing it had not committed was kept, " <>
+          "and the details are in the server log"
+      )
+
     complete_request(session, request_id)
     GenServer.reply(from, encode_reply({:ok, Error.build_json_rpc(error, request_id)}, request_id))
 

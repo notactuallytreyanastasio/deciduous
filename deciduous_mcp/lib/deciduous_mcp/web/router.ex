@@ -119,11 +119,18 @@ defmodule DeciduousMcp.Web.Router do
       # the same workspace on a pull as it does on every MCP call.
       conn = conn |> WorkspacePlug.call([]) |> fetch_query_params()
 
-      case Scope.read_scope(conn_frame(conn), conn.query_params) do
+      case Scope.read_target(conn_frame(conn), conn.query_params) do
         {:ok, scope} ->
           # Tombstones: without them a node deleted on the server never
           # left a pulled graph, and the next push re-sent it.
           json(conn, 200, Query.get_full_graph(scope, tombstones: true))
+
+        # Nothing has been pushed here yet. That is an empty graph, and the
+        # CLI's first `remote push` diffs against exactly this answer, so it
+        # is returned rather than refused; `exists: false` says which kind of
+        # empty it is. Before, this read created the workspace.
+        {:absent, name} ->
+          json(conn, 200, empty_graph(name))
 
         {:error, message} ->
           json(conn, 422, %{error: message})
@@ -157,8 +164,11 @@ defmodule DeciduousMcp.Web.Router do
     else
       conn = conn |> WorkspacePlug.call([]) |> fetch_query_params()
 
-      case Scope.read_scope(conn_frame(conn), conn.query_params) do
+      case Scope.read_target(conn_frame(conn), conn.query_params) do
         {:ok, scope} -> upgrade_to_event_stream(conn, scope)
+        # Topics are keyed by name, so a stream can wait for a workspace's
+        # first write without the subscription creating it.
+        {:absent, name} -> subscribe_by_name(conn, name)
         {:error, message} -> json(conn, 422, %{error: message})
       end
     end
@@ -239,7 +249,10 @@ defmodule DeciduousMcp.Web.Router do
   defp handle_import(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
          {:ok, report} <-
-           Import.run(payload, pinned_workspace_id: conn.assigns[:pinned_workspace_id]) do
+           Import.run(payload,
+             pinned_workspace_id: conn.assigns[:pinned_workspace_id],
+             pinned_workspace_name: conn.assigns[:pinned_workspace_name]
+           ) do
       json(conn, 200, report)
     else
       {:error, %Jason.DecodeError{} = err} ->
@@ -247,6 +260,11 @@ defmodule DeciduousMcp.Web.Router do
 
       {:error, {:pinned, message}} ->
         json(conn, 403, %{error: message})
+
+      # The vocabulary refusal is a map of examples; sent as JSON, not as
+      # Elixir's inspect of it.
+      {:error, %{} = reason} ->
+        json(conn, 422, %{error: reason})
 
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
@@ -272,6 +290,17 @@ defmodule DeciduousMcp.Web.Router do
           actual: actual
         })
     end
+  end
+
+  # A pin naming a workspace that does not exist yet has no id, and a nil
+  # workspace_id means "any workspace" to Documents.fetch. Such a client has
+  # no documents to read.
+  defp serve_document(
+         %{assigns: %{pinned_workspace_id: nil, pinned_workspace_name: name}} = conn,
+         _id
+       )
+       when is_binary(name) do
+    json(conn, 404, %{error: "no such document"})
   end
 
   defp serve_document(conn, id) do
@@ -346,16 +375,31 @@ defmodule DeciduousMcp.Web.Router do
 
   defp upgrade_to_event_stream(conn, workspace_id) do
     case Workspaces.get_workspace(workspace_id) do
-      {:ok, workspace} ->
-        conn
-        |> Plug.Conn.upgrade_adapter(
-          :websocket,
-          {GraphSocket, %{topic: "graph:" <> workspace.name}, []}
-        )
-
-      {:error, :not_found} ->
-        json(conn, 404, %{error: "no such workspace"})
+      {:ok, workspace} -> subscribe_by_name(conn, workspace.name)
+      {:error, :not_found} -> json(conn, 404, %{error: "no such workspace"})
     end
+  end
+
+  defp subscribe_by_name(conn, name) do
+    Plug.Conn.upgrade_adapter(conn, :websocket, {GraphSocket, %{topic: "graph:" <> name}, []})
+  end
+
+  defp empty_graph(name) do
+    %{
+      nodes: [],
+      edges: [],
+      themes: [],
+      documents: [],
+      node_themes: [],
+      metadata: %{
+        workspace_id: nil,
+        workspace: name,
+        exists: false,
+        node_count: 0,
+        edge_count: 0,
+        exported_at: DateTime.utc_now() |> DateTime.to_iso8601()
+      }
+    }
   end
 
   defp content_type(conn) do
