@@ -22,6 +22,8 @@ RUN mix local.hex --force && mix local.rebar --force
 ENV MIX_ENV=prod
 
 COPY mix.exs mix.lock ./
+# hermes_mcp is vendored (a path dependency) so deps.get needs it before it runs.
+COPY vendor vendor
 RUN mix deps.get --only prod
 RUN mix deps.compile
 

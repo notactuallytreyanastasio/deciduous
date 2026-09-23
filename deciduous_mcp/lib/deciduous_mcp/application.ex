@@ -41,8 +41,19 @@ defmodule DeciduousMcp.Application do
       # to find every call refused (see DeciduousMcp.Web.SessionGuard for what
       # that refusal has to look like). A day covers a working session; a
       # restart still drops everything, and the guard handles that case.
+      #
+      # `request_timeout` is how long the transport's per-request task waits on
+      # `GenServer.call(Base, ...)`. Hermes' default is 30s. With handlers run
+      # in tasks (vendor/hermes_mcp, DECIDUOUS-PATCHES.md) that is the budget
+      # for one call's own work; before, it was queue time plus work, and a
+      # caller queued behind a slow `get_graph` got `:server_unavailable` at
+      # 30s while the server then ran its request anyway for nobody. Claude
+      # Code itself gives up at 300s, so four minutes keeps the server's budget
+      # under the client's.
       {DeciduousMcp.MCP.Server,
-       transport: :streamable_http, session_idle_timeout: to_timeout(hour: 24)},
+       transport: :streamable_http,
+       session_idle_timeout: to_timeout(hour: 24),
+       request_timeout: to_timeout(minute: 4)},
 
       # Bridges Postgres NOTIFY to PubSub, for the WebSocket event stream
       DeciduousMcp.Events.Listener,
