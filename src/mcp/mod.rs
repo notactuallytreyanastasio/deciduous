@@ -203,6 +203,11 @@ impl McpServer {
         // Associate root node with session
         let _ = self.db.add_node_to_session(session_id, node_id);
 
+        // One file per project, so two servers in one project share it. Say
+        // when this start displaces another server's live session: a
+        // restart of that server will now resume this one instead.
+        let replaced = load_session_from_disk(&self.db, &self.session_file)
+            .filter(|&other| Some(other) != self.active_session_id);
         self.active_session_id = Some(session_id);
         if let Err(e) = save_session_to_disk(&self.session_file, session_id) {
             return protocol::tool_result_error(format!(
@@ -217,11 +222,23 @@ impl McpServer {
             name, node_id
         );
 
+        let mut message = format!(
+            "Started session #{} '{}' with root goal #{}",
+            session_id, name, node_id
+        );
+        if let Some(other) = replaced {
+            message.push_str(&format!(
+                ". Session #{other}, started by another deciduous server in this project, \
+                 is still open but is no longer the one {} resumes after a restart",
+                self.session_file.display()
+            ));
+        }
         protocol::tool_result_json(&json!({
             "session_id": session_id,
             "root_node_id": node_id,
             "name": name,
-            "message": format!("Started session #{} '{}' with root goal #{}", session_id, name, node_id)
+            "replaced_session_id": replaced,
+            "message": message
         }))
     }
 
@@ -280,15 +297,15 @@ impl McpServer {
             Err(e) => return protocol::tool_result_error(format!("Error: {e}")),
         };
 
-        // Reopen if it was ended
-        if session.ended_at.is_some() {
-            // Clear ended_at to reactivate
-            if let Err(e) = self.db.end_session(session_id, None) {
+        // Reopen if it was ended. This used to call end_session(id, None),
+        // which stamped a new ended_at and wiped the summary while the reply
+        // said "Resumed", and the file check at the next start then threw the
+        // ended session away.
+        let reopened = session.ended_at.is_some();
+        if reopened {
+            if let Err(e) = self.db.reopen_session(session_id) {
                 return protocol::tool_result_error(format!("Failed to reopen session: {e}"));
             }
-            // end_session sets ended_at, but we want to clear it — use raw update
-            // For now, just create a fresh session that continues the tree
-            eprintln!("deciduous-mcp: note - session #{session_id} was ended, resuming anyway");
         }
 
         self.active_session_id = Some(session_id);
@@ -313,7 +330,13 @@ impl McpServer {
             "name": session.name,
             "root_node_id": session.root_node_id,
             "node_count": node_count,
-            "message": format!("Resumed session #{} ({} nodes)", session_id, node_count)
+            "reopened": reopened,
+            "message": format!(
+                "Resumed session #{} ({} nodes){}",
+                session_id,
+                node_count,
+                if reopened { "; it had been ended and is open again" } else { "" }
+            )
         }))
     }
 

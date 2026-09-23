@@ -3787,6 +3787,21 @@ impl Database {
         Ok(())
     }
 
+    /// Reopen an ended session: clear `ended_at`, keep its summary.
+    pub fn reopen_session(&self, session_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let n =
+            diesel::update(decision_sessions::table.filter(decision_sessions::id.eq(session_id)))
+                .set(decision_sessions::ended_at.eq(None::<String>))
+                .execute(&mut conn)?;
+        if n == 0 {
+            return Err(DbError::Validation(format!(
+                "Session {session_id} not found"
+            )));
+        }
+        Ok(())
+    }
+
     /// Associate a node with a session.
     pub fn add_node_to_session(&self, session_id: i32, node_id: i32) -> Result<()> {
         let mut conn = self.get_conn()?;

@@ -1012,3 +1012,59 @@ fn malformed_requests_are_answered_with_their_id() {
     let (code, stderr) = m.close();
     assert_eq!(code, Some(0), "{stderr}");
 }
+
+// ============================================================================
+// R11: resume_session reopens what it says it resumed
+// ============================================================================
+
+#[test]
+fn resuming_an_ended_session_reopens_it_and_survives_a_restart() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    let s = m
+        .call("start_session", json!({"name":"long","goal_title":"g"}))
+        .unwrap();
+    let sid = s["session_id"].as_i64().unwrap();
+    m.call("end_session", json!({"summary":"paused for lunch"}))
+        .unwrap();
+    let r = m
+        .call("resume_session", json!({"session_id": sid}))
+        .unwrap();
+    assert_eq!(r["reopened"], true, "{r}");
+    let got = m.call("get_session", json!({})).unwrap();
+    assert_eq!(
+        got["is_active"], true,
+        "resumed session is still ended: {got}"
+    );
+    assert_eq!(got["ended_at"], Value::Null, "{got}");
+    assert_eq!(
+        got["summary"], "paused for lunch",
+        "resume wiped the summary: {got}"
+    );
+    m.close();
+
+    let mut m = p.mcp();
+    let got = m.call("get_session", json!({})).unwrap();
+    assert_eq!(got["session_id"], sid, "not resumed after restart: {got}");
+    assert_eq!(got["is_active"], true, "{got}");
+    m.close();
+}
+
+#[test]
+fn a_second_server_taking_over_the_session_file_says_so() {
+    let p = Project::new();
+    let mut a = p.mcp();
+    let mut b = p.mcp();
+    let sa = a
+        .call("start_session", json!({"name":"a","goal_title":"ga"}))
+        .unwrap();
+    let sb = b
+        .call("start_session", json!({"name":"b","goal_title":"gb"}))
+        .unwrap();
+    assert_eq!(
+        sb["replaced_session_id"], sa["session_id"],
+        "b silently took over a's session file: {sb}"
+    );
+    a.close();
+    b.close();
+}
