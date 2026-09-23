@@ -1098,7 +1098,27 @@ fn exit(code: i32) -> ! {
     if let Some(log) = deciduous::oplog::take_appended() {
         deciduous::remote::replay_after_write(&log);
     }
+    if let Some(dir) = CHECK_SCRATCH.get() {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     std::process::exit(code)
+}
+
+/// Where `sync --check` keeps the empty database it compares against when
+/// the project has none. Removed by `exit()`, which every path of that
+/// command ends in.
+static CHECK_SCRATCH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+fn check_scratch_dir() -> Result<PathBuf, String> {
+    let dir = std::env::temp_dir().join(format!(
+        "deciduous-sync-check-{}-{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("creating a scratch directory {}: {e}", dir.display()))?;
+    let _ = CHECK_SCRATCH.set(dir.clone());
+    Ok(dir)
 }
 
 /// The subgraph `dot` and `writeup` export: `--nodes`, `--roots`, or all
@@ -1462,7 +1482,16 @@ fn main() {
         std::process::exit(run_api_daemon(port, data_dir, token, bind));
     }
 
-    let db = match Database::open() {
+    // `sync --check` answers "what would sync do" and changes nothing. With
+    // no database yet (a fresh clone), opening one to ask would create it,
+    // so the check runs against an empty one in a scratch directory
+    // instead, which is exactly what `sync` would start from.
+    let opened = match &args.command {
+        Command::Sync { check: true, .. } if !Database::db_path().exists() => check_scratch_dir()
+            .and_then(|dir| Database::open_at(dir.join("deciduous.db")).map_err(|e| e.to_string())),
+        _ => Database::open().map_err(|e| e.to_string()),
+    };
+    let db = match opened {
         Ok(db) => db,
         Err(e) => {
             eprintln!("{} Failed to open database: {}", "Error:".red(), e);

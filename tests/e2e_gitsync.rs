@@ -569,9 +569,37 @@ fn g10_sync_check_writes_nothing() {
         dir: dir.clone(),
         sb: &sb,
     };
-    let _ = fresh.dx(&["sync", "--check"]);
+    let listing = |d: &Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d.join(".deciduous"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    };
+    let before = listing(&dir);
+    let out = fresh.dx(&["sync", "--check"]);
     assert!(
         !Path::new(&dir).join(".deciduous/deciduous.db").exists(),
         "sync --check created deciduous.db"
     );
+    assert_eq!(listing(&dir), before, "sync --check changed .deciduous/");
+    // A clone that has never synced is not settled: the graph file holds a
+    // node its (absent) database does not.
+    assert!(
+        !out.ok(),
+        "sync --check in a clone that never synced exited 0:\n{}",
+        out.all()
+    );
+    assert!(
+        out.all().contains("deciduous sync"),
+        "sync --check does not say what to run:\n{}",
+        out.all()
+    );
+    // And the check agrees with the sync that follows.
+    let synced = fresh.dx(&["sync"]);
+    assert!(synced.ok(), "{}", synced.all());
+    let again = fresh.dx(&["sync", "--check"]);
+    assert!(again.ok(), "sync --check after sync:\n{}", again.all());
 }
