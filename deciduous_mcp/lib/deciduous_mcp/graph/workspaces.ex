@@ -9,17 +9,38 @@ defmodule DeciduousMcp.Graph.Workspaces do
 
   @doc """
   Finds a workspace by name, or creates it if it doesn't exist.
-  Used during MCP initialization to resolve the active workspace.
+
+  Safe under concurrency. The first calls to a new project arrive together
+  (a swarm starting in a fresh repo, a client reconnecting several sessions),
+  and a check-then-insert lets several of them see "absent" and all but one
+  lose on the unique index: 5 of 120 parallel add_node calls failed with
+  "has already been taken", and 23 of 30 parallel pinned initializes got an
+  empty HTTP 500. The insert is `ON CONFLICT DO NOTHING` instead, and the row
+  is read back afterwards, because on a conflict Ecto still returns the
+  struct it tried to insert, with a client-generated id that names nothing.
   """
   def find_or_create(name) do
-    case Repo.one(from w in Workspace, where: w.name == ^name) do
-      nil ->
-        %Workspace{}
-        |> Workspace.changeset(%{name: name})
-        |> Repo.insert()
-
-      workspace ->
+    case get_by_name(name) do
+      {:ok, workspace} ->
         {:ok, workspace}
+
+      {:error, :not_found} ->
+        changeset = Workspace.changeset(%Workspace{}, %{name: name})
+
+        with {:ok, _maybe_phantom} <-
+               Repo.insert(changeset, on_conflict: :nothing, conflict_target: :name) do
+          {:ok, Repo.get_by!(Workspace, name: name)}
+        end
+    end
+  end
+
+  @doc """
+  Looks a workspace up by its (already normalized) name, never creating it.
+  """
+  def get_by_name(name) do
+    case Repo.get_by(Workspace, name: name) do
+      nil -> {:error, :not_found}
+      workspace -> {:ok, workspace}
     end
   end
 

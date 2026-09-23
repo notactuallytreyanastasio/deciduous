@@ -37,8 +37,10 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
       [raw | _] ->
         case Workspaces.normalize_name(raw) do
           {:ok, name} ->
-            {:ok, workspace} = Workspaces.find_or_create(name)
-            assign(conn, :pinned_workspace_id, workspace.id)
+            case Workspaces.find_or_create(name) do
+              {:ok, workspace} -> assign(conn, :pinned_workspace_id, workspace.id)
+              {:error, _} -> unavailable(conn, name)
+            end
 
           {:error, reason} ->
             reject(conn, raw, reason)
@@ -55,6 +57,15 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
       [] ->
         assign(conn, :pinned_workspace_id, nil)
     end
+  end
+
+  # A match here used to be `{:ok, workspace} = ...`, and any failure became
+  # Bandit's empty 500. Say what failed instead.
+  defp unavailable(conn, name) do
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(503, Jason.encode!(%{error: "could not resolve workspace", value: name}))
+    |> halt()
   end
 
   defp reject(conn, raw, reason) do
