@@ -494,6 +494,7 @@ pub fn run_server() -> io::Result<()> {
     };
 
     let mut server = McpServer::new(db);
+    let replayer = Replayer::spawn();
 
     eprintln!(
         "deciduous-mcp: server started (v{})",
@@ -545,15 +546,79 @@ pub fn run_server() -> io::Result<()> {
             stdout.flush()?;
         }
 
-        // After the answer, so the agent is not kept waiting on the network.
+        // Handed to the replay thread, so no answer waits on the network.
         // Warnings go to stderr; stdout is the protocol.
         if let Some(log) = crate::oplog::take_appended() {
-            crate::remote::replay_after_write(&log);
+            replayer.send(log);
         }
     }
 
     eprintln!("deciduous-mcp: stdin closed, shutting down");
+    // What is still waiting gets one last try, bounded by the replay's own
+    // timeout, so closing the session does not strand the last writes.
+    replayer.finish();
     Ok(())
+}
+
+/// Sends the log to the server on its own thread.
+///
+/// The loop used to replay after each answer, on the loop's thread. Against a
+/// server that accepts connections and never answers, every request after a
+/// write, reads and pings included, then waited out the replay: about 135 s,
+/// and again after every write (RUST-N2), well past an MCP client's
+/// timeout. A write's answer does not depend on the server; the local write
+/// and its op are already on disk when it is sent.
+///
+/// Requests that arrive while a replay is running are coalesced: one replay
+/// sends everything pending, so a burst of writes costs one more replay, not
+/// one each.
+struct Replayer {
+    tx: Option<std::sync::mpsc::Sender<crate::oplog::OpLog>>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl Replayer {
+    fn spawn() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<crate::oplog::OpLog>();
+        let handle = std::thread::Builder::new()
+            .name("deciduous-replay".into())
+            .spawn(move || {
+                while let Ok(mut log) = rx.recv() {
+                    while let Ok(newer) = rx.try_recv() {
+                        log = newer;
+                    }
+                    crate::remote::replay_after_write(&log);
+                }
+            })
+            .ok();
+        if handle.is_none() {
+            eprintln!(
+                "deciduous-mcp: could not start the replay thread; writes are sent on this thread instead"
+            );
+        }
+        Replayer {
+            tx: handle.as_ref().map(|_| tx),
+            handle,
+        }
+    }
+
+    fn send(&self, log: crate::oplog::OpLog) {
+        match &self.tx {
+            Some(tx) => {
+                if let Err(e) = tx.send(log) {
+                    crate::remote::replay_after_write(&e.0);
+                }
+            }
+            None => crate::remote::replay_after_write(&log),
+        }
+    }
+
+    fn finish(mut self) {
+        drop(self.tx.take());
+        if let Some(h) = self.handle.take() {
+            let _ = h.join();
+        }
+    }
 }
 
 fn handle_notification(method: &str) {

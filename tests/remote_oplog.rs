@@ -1836,3 +1836,118 @@ fn bridge_n3_a_stdio_server_started_elsewhere_sends_to_its_databases_workspace()
     let _ = child.wait();
     assert_eq!(titles, ["desktop-style"]);
 }
+
+/// A server that accepts connections and never answers: a paused
+/// container, a stalled tunnel, a captive portal.
+fn black_hole() -> String {
+    let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    std::thread::spawn(move || {
+        let mut held = Vec::new();
+        for s in l.incoming() {
+            held.push(s);
+        }
+    });
+    format!("http://127.0.0.1:{port}")
+}
+
+// RUST-N2: the stdio server replayed the log on its only thread, after each
+// write's answer, with a 120 s timeout and a health check behind it. Against
+// a server that accepts and never answers, every request after a write,
+// reads and pings included, waited about 135 s, and again after every write.
+#[test]
+fn rust_n2_a_black_hole_server_does_not_delay_stdio_replies() {
+    use std::io::{BufRead, BufReader, Write};
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("blackhole");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\nworkspace = \"bh\"\n", black_hole()),
+    )
+    .unwrap();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .arg("mcp")
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", "0123456789abcdef0123456789abcdef")
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            if tx.send(line.unwrap()).is_err() {
+                break;
+            }
+        }
+    });
+    let mut calls = vec![(
+        "initialize",
+        serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}),
+    )];
+    for i in 0..3 {
+        calls.push((
+            "tools/call",
+            serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":format!("bh{i}")}}),
+        ));
+    }
+    calls.push(("ping", serde_json::json!({})));
+    calls.push((
+        "tools/call",
+        serde_json::json!({"name":"list_nodes","arguments":{}}),
+    ));
+    let mut slow = None;
+    for (id, (method, params)) in calls.iter().enumerate() {
+        let msg = serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+        writeln!(stdin, "{msg}").unwrap();
+        stdin.flush().unwrap();
+        let t = std::time::Instant::now();
+        if rx.recv_timeout(std::time::Duration::from_secs(5)).is_err() {
+            slow = Some(format!(
+                "call {id} ({method}) had no answer after {:?}",
+                t.elapsed()
+            ));
+            break;
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(slow, None);
+    assert_eq!(queued_titles(&dir), ["bh0", "bh1", "bh2"]);
+}
+
+// RUST-N2, the CLI: `deciduous add` against the same server took 2:15.
+#[test]
+fn rust_n2_a_cli_write_to_a_black_hole_server_returns_promptly() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("blackhole-cli");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\nworkspace = \"bh\"\n", black_hole()),
+    )
+    .unwrap();
+    let t = std::time::Instant::now();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let d = dir.clone();
+    std::thread::spawn(move || {
+        let _ = tx.send(sb.dx(&d, &["add", "goal", "bh-cli"]));
+    });
+    let out = rx
+        .recv_timeout(std::time::Duration::from_secs(20))
+        .unwrap_or_else(|_| panic!("deciduous add still running after {:?}", t.elapsed()));
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    let err = text(&out.stderr);
+    assert!(
+        err.contains("did not get it") && err.contains("1 write(s) queued"),
+        "{err}"
+    );
+    assert_eq!(queued_titles(&dir), ["bh-cli"]);
+}

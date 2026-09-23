@@ -379,7 +379,20 @@ pub struct Remote {
     /// This repository's root commit ids, sent so the server can tell two
     /// repositories with the same directory name apart. See [`repo_roots`].
     pub repo_roots: Option<Vec<String>>,
+    /// The longest one `POST /ops` request may take, connecting included.
+    ops_timeout: std::time::Duration,
 }
+
+/// How long `deciduous remote push` lets one batch of ops take.
+const OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// How long the replay after a write lets one batch take. A server that
+/// accepts connections and never answers (a paused container, a stalled
+/// tunnel, a captive portal) held every CLI write for 2:15 and every stdio
+/// MCP request behind one for as long, at 120 s plus a health check. An
+/// unanswered batch is only a delay: its ops stay pending and a later replay
+/// that gets through is answered "duplicate" for any the server did apply.
+pub const QUICK_OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// The config of the project whose database lives in `data_dir` (its
 /// `.deciduous/`), read from `data_dir/config.toml`, not found by walking up
@@ -433,7 +446,15 @@ impl Remote {
             workspace,
             token,
             repo_roots: repo_roots(dir),
+            ops_timeout: OPS_TIMEOUT,
         })
+    }
+
+    /// The same remote, with [`QUICK_OPS_TIMEOUT`] for ops: for a replay
+    /// that someone is waiting behind.
+    pub fn quick(mut self) -> Self {
+        self.ops_timeout = QUICK_OPS_TIMEOUT;
+        self
     }
 
     /// A `wss://…/events?workspace=…&token=…` URL for this project's
@@ -942,7 +963,7 @@ impl Remote {
         });
         let reply: Reply = self
             .post("/ops")
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(self.ops_timeout)
             .send_json(payload)
             .map_err(|e| match e {
                 ureq::Error::Status(409, _) => ReplayError::Server(self.claim_refused()),
@@ -1163,7 +1184,7 @@ pub fn replay_after_write(log: &crate::oplog::OpLog) {
     // The log's own project, not the current directory's: see
     // `Remote::for_data_dir`.
     let data_dir = log.path().parent().unwrap_or(Path::new("."));
-    let remote = Remote::for_data_dir(data_dir);
+    let remote = Remote::for_data_dir(data_dir).map(Remote::quick);
     let result = remote
         .as_ref()
         .map_err(|e| ReplayError::Config(e.clone()))
@@ -2086,6 +2107,7 @@ mod tests {
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
             repo_roots: None,
+            ops_timeout: OPS_TIMEOUT,
         };
         assert_eq!(
             r.events_url(),
@@ -2100,6 +2122,7 @@ mod tests {
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
             repo_roots: None,
+            ops_timeout: OPS_TIMEOUT,
         };
         assert_eq!(
             r.events_url(),
@@ -2118,6 +2141,7 @@ mod tests {
             workspace: "a b".to_string(),
             token: "tok".to_string(),
             repo_roots: None,
+            ops_timeout: OPS_TIMEOUT,
         };
         assert!(
             r.events_url().contains("workspace=a%20b"),
