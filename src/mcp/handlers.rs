@@ -294,12 +294,18 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
         // Any rev, resolved in the caller's own checkout, as the CLI's
         // --commit does; one git cannot resolve is refused by name.
         (Some(c), Caller::Local) => Some(db::resolve_git_commit(c).map_err(HandlerError::from)?),
-        (Some("HEAD"), Caller::Remote) => {
-            return Err(HandlerError::from(
-                "commit \"HEAD\" would name the server's checkout, not yours; pass the commit hash",
-            ))
+        // Only a hash: any other rev ("HEAD~1", "@", "main") would name
+        // the server's checkout, not the caller's, and was stored literally.
+        (Some(c), Caller::Remote) => {
+            let hex = c.len() >= 7 && c.len() <= 64 && c.bytes().all(|b| b.is_ascii_hexdigit());
+            if !hex {
+                return Err(HandlerError::from(format!(
+                    "commit {c:?} is not a commit hash; a rev would name the server's checkout, \
+                     not yours, so resolve it where you are (git rev-parse {c}) and pass the hash"
+                )));
+            }
+            Some(c.to_ascii_lowercase())
         }
-        (Some(c), _) => Some(c.to_string()),
         (None, _) => None,
     };
 

@@ -606,6 +606,50 @@ fn r8_api_never_injects_the_daemons_branch() {
     );
 }
 
+/// A remote caller's add_node refused only the exact string "HEAD"; "HEAD~1",
+/// "@" and "main" were stored as the commit, literally. A remote caller's
+/// revs cannot be resolved (the daemon's checkout is not theirs), so only a
+/// hash is taken.
+#[test]
+fn remote_add_node_stores_no_unresolved_rev() {
+    let Some(()) = local("remote_add_node_stores_no_unresolved_rev") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    for rev in [
+        "HEAD~1",
+        "@",
+        "main",
+        "origin/main",
+        "abc",
+        "0123456789abcdefg",
+    ] {
+        let (st, body) = d.tool(
+            "g",
+            "add_node",
+            json!({"node_type": "goal", "title": rev, "commit": rev}),
+        );
+        let text = body.to_string();
+        assert!(
+            st != 200 || body["data"]["result"]["node_id"].is_null(),
+            "commit {rev:?} was accepted: {text}"
+        );
+        assert!(
+            text.contains(rev),
+            "the refusal does not name {rev:?}: {text}"
+        );
+    }
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let (st, body) = d.tool(
+        "g",
+        "add_node",
+        json!({"node_type": "goal", "title": "hash", "commit": sha}),
+    );
+    assert_eq!(st, 200, "{body}");
+    assert!(!body["data"]["result"]["node_id"].is_null(), "{body}");
+}
+
 // ---------------------------------------------------------------- R9 / R10
 
 /// R9: errors for missing/invalid params and for a lone surrogate replied
