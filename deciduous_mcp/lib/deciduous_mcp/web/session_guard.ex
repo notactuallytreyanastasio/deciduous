@@ -56,8 +56,17 @@ defmodule DeciduousMcp.Web.SessionGuard do
   JSON-RPC says what a server does with a method it does not implement:
   answer `-32601 Method not found` under the request's id. The guard does
   that for any request whose method Hermes does not know, and the client
-  moves on at once. Notifications with unknown methods are left to Hermes,
-  which ignores them.
+  moves on at once. A notification with an unknown method is accepted with
+  202 and dropped, as JSON-RPC requires; this comment used to say Hermes
+  ignored them, and Hermes in fact answered 400 "Parse error".
+
+  ## Everything else a POST can be
+
+  The guard is the first thing to decode the body, so it answers the
+  malformed shapes too (`classify/1`): an empty body, a batch, an id that is
+  null or an object, a tools/call without usable params, and a request with
+  no session header. Each gets the JSON-RPC error the protocol prescribes,
+  under the request's id when it has a usable one.
 
   Reading the body here would normally starve Hermes, which reads it itself.
   `Hermes.Server.Transport.StreamableHTTP.Plug` accepts an already-fetched
@@ -82,14 +91,33 @@ defmodule DeciduousMcp.Web.SessionGuard do
   @impl true
   def init(opts), do: Keyword.fetch!(opts, :server)
 
+  # Hermes.MCP.Message's notification_schema, 0.14.1.
+  @known_notifications ~w(notifications/initialized notifications/cancelled
+    notifications/progress notifications/message notifications/roots/list_changed)
+
+  @parse_error_code -32700
+  @invalid_request_code -32600
+  @invalid_params_code -32602
+
   @impl true
   def call(%Plug.Conn{method: "POST"} = conn, server) do
     case read_body(conn) do
       {:ok, body, conn} ->
-        # Hermes' plug accepts an already-fetched binary here and skips its
-        # own read (maybe_read_request_body/2).
-        conn = %{conn | body_params: body}
-        route(conn, server, decode(body))
+        case classify(body) do
+          {:pass, message} ->
+            # Hermes' plug accepts already-fetched body_params and skips its
+            # own read (maybe_read_request_body/2). The decoded map, not the
+            # raw binary: given a binary, Hermes splits it on newlines and
+            # parses each line, so a pretty-printed request was a -32700.
+            conn = %{conn | body_params: message}
+            route(conn, server, {:ok, message})
+
+          {:ignore, method} ->
+            ignore_notification(conn, method)
+
+          {:refuse, status, code, message, id} ->
+            jsonrpc_error(conn, status, code, message, id)
+        end
 
       # Bandit hands back at most 8 MB per read; a body past that cannot be
       # a request this server would ever answer.
@@ -103,9 +131,101 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   def call(conn, _server), do: conn
 
-  defp route(conn, server, {:ok, %{"method" => method, "id" => id} = message})
+  # What the protocol prescribes for each shape of message, before Hermes
+  # sees it. Hermes answered every one of these that it did not crash on
+  # with 400 "Parse error" under an id it made up: an empty body (a 500 with
+  # no body: its `{:ok, [message]}` match fails on zero messages), a batch,
+  # an id of null, a request without an id, an unknown notification. A
+  # tools/call without params reached the handler and came back as
+  # "request handler crashed" with the session's Frame inspected into `data`.
+  defp classify(body) do
+    if String.trim(body) == "" do
+      {:refuse, 400, @parse_error_code, "Parse error: the request body is empty", nil}
+    else
+      case Jason.decode(body) do
+        {:ok, %{} = message} -> classify_message(message)
+        {:ok, list} when is_list(list) -> {:refuse, 400, @invalid_request_code, batch_text(), nil}
+        {:ok, _} -> {:refuse, 400, @invalid_request_code, "Invalid Request: not an object", nil}
+        {:error, _} -> {:refuse, 400, @parse_error_code, "Parse error: the body is not JSON", nil}
+      end
+    end
+  end
+
+  defp batch_text,
+    do:
+      "Invalid Request: JSON-RPC batches are not supported by this server; " <>
+        "send one message per POST"
+
+  defp classify_message(%{"jsonrpc" => version} = message) when version != "2.0" do
+    {:refuse, 400, @invalid_request_code, ~s(Invalid Request: "jsonrpc" must be "2.0"),
+     usable_id(message)}
+  end
+
+  defp classify_message(%{"method" => method} = message) when not is_binary(method) do
+    {:refuse, 400, @invalid_request_code, "Invalid Request: method must be a string",
+     usable_id(message)}
+  end
+
+  defp classify_message(%{"method" => method, "id" => id} = message) do
+    cond do
+      not (is_binary(id) or is_integer(id)) ->
+        {:refuse, 400, @invalid_request_code,
+         "Invalid Request: id must be a string or an integer, got #{describe(id)}", nil}
+
+      method == "tools/call" ->
+        case tool_call_params_problem(Map.get(message, "params")) do
+          nil -> {:pass, message}
+          problem -> {:refuse, 200, @invalid_params_code, "Invalid params: " <> problem, id}
+        end
+
+      true ->
+        {:pass, message}
+    end
+  end
+
+  # No id: a notification. JSON-RPC forbids answering one, including with an
+  # error, and a request method sent without an id is a notification too.
+  defp classify_message(%{"method" => method} = message) do
+    if method in @known_notifications, do: {:pass, message}, else: {:ignore, method}
+  end
+
+  # A response to a request the server sent. This server sends none, but
+  # Hermes owns that answer.
+  defp classify_message(%{"id" => _} = message)
+       when is_map_key(message, "result") or is_map_key(message, "error"),
+       do: {:pass, message}
+
+  defp classify_message(message) do
+    {:refuse, 400, @invalid_request_code, "Invalid Request: no method", usable_id(message)}
+  end
+
+  defp tool_call_params_problem(%{"name" => name} = params) when is_binary(name) do
+    case Map.get(params, "arguments") do
+      nil -> nil
+      %{} -> nil
+      other -> "tools/call arguments must be an object, got #{describe(other)}"
+    end
+  end
+
+  defp tool_call_params_problem(%{"name" => name}),
+    do: "tools/call params.name must be a string, got #{describe(name)}"
+
+  defp tool_call_params_problem(nil), do: "tools/call needs params with the tool's name"
+  defp tool_call_params_problem(%{}), do: "tools/call params.name is required"
+
+  defp tool_call_params_problem(other),
+    do: "tools/call params must be an object, got #{describe(other)}"
+
+  defp usable_id(%{"id" => id}) when is_binary(id) or is_integer(id), do: id
+  defp usable_id(_), do: nil
+
+  defp describe(nil), do: "null"
+  defp describe(v) when is_list(v), do: "an array"
+  defp describe(v) when is_map(v), do: "an object"
+  defp describe(v), do: inspect(v, limit: 5, printable_limit: 40)
+
+  defp route(conn, _server, {:ok, %{"method" => method, "id" => id}})
        when is_binary(method) and method not in @known_request_methods do
-    _ = {server, message}
     method_not_found(conn, method, id)
   end
 
@@ -119,9 +239,27 @@ defmodule DeciduousMcp.Web.SessionGuard do
         end
 
       _ ->
-        conn
+        refuse_sessionless_request(conn, decoded)
     end
   end
+
+  # The spec: a server that requires sessions answers a request without one
+  # (other than initialize) with 400. Hermes answered 200 "Server not
+  # initialized" under an id it generated, which the client cannot match to
+  # anything it sent.
+  defp refuse_sessionless_request(conn, {:ok, %{"method" => method, "id" => id}})
+       when method != "initialize" do
+    jsonrpc_error(
+      conn,
+      400,
+      @invalid_request_code,
+      "Bad Request: no Mcp-Session-Id header. Send initialize first and use the " <>
+        "session id it returns.",
+      id
+    )
+  end
+
+  defp refuse_sessionless_request(conn, _decoded), do: conn
 
   # The registry drops a dead process's key when it gets the :DOWN message,
   # not at the instant the process dies, so a lookup can still return a pid
@@ -217,12 +355,23 @@ defmodule DeciduousMcp.Web.SessionGuard do
     end
   end
 
-  defp decode(body) do
-    case Jason.decode(body) do
-      {:ok, %{} = message} -> {:ok, message}
-      {:ok, [%{} = message | _]} -> {:ok, message}
-      _ -> :error
-    end
+  defp ignore_notification(conn, method) do
+    require Logger
+    Logger.info("ignored notification #{inspect(method)}: not one this server handles")
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(202, "")
+    |> halt()
+  end
+
+  defp jsonrpc_error(conn, status, code, message, id) do
+    body = %{jsonrpc: "2.0", id: id, error: %{code: code, message: message}}
+
+    conn
+    |> put_resp_content_type("application/json")
+    |> send_resp(status, Jason.encode!(body))
+    |> halt()
   end
 
   defp method_not_found(conn, method, id) do
