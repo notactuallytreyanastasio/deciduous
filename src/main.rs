@@ -569,6 +569,15 @@ enum RemoteAction {
         /// row it already has (the pre-1.0.3 behaviour)
         #[arg(long)]
         overwrite: bool,
+
+        /// Also make the server's copy of every node `remote status` lists as
+        /// Different match this one, field by field: for an edit whose write
+        /// never reached the log (made before this clone had a [remote], or
+        /// while the log could not be written). Each field is sent with the
+        /// server's current value, so an edit made there since is refused,
+        /// not overwritten.
+        #[arg(long, conflicts_with_all = ["drop_rejected", "overwrite"])]
+        repair: bool,
     },
 
     /// Refresh the local database from the server
@@ -2297,6 +2306,13 @@ fn main() {
                         exit(1);
                     }
                     let d = deciduous::remote::content_diff(&nodes, &edges, &server);
+                    let docs_here = match db.get_node_documents(None, false) {
+                        Ok(docs) => deciduous::remote::documents_only_here(&docs, &server),
+                        Err(e) => {
+                            eprintln!("{} reading local documents: {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
 
                     println!("\n              {:>8}  {:>8}", "local", "server");
                     println!("  nodes       {:>8}  {:>8}", d.local_nodes, d.server_nodes);
@@ -2367,28 +2383,44 @@ fn main() {
                                     })
                                     .collect();
                                 format!(
-                                    "{} \"{}\"  {}",
+                                    "{} \"{}\"  {}  ({})",
                                     nd.change_id.chars().take(8).collect::<String>(),
                                     nd.title,
-                                    f.join("; ")
+                                    f.join("; "),
+                                    if nd.here_newer {
+                                        "edited here later: `deciduous remote push --repair` sends it"
+                                    } else {
+                                        "edited on the server later: `deciduous remote pull` takes it"
+                                    }
                                 )
                             })
                             .collect(),
                     );
                     list("Edges only here", d.edges_only_local.clone());
                     list("Edges only on the server", d.edges_only_server.clone());
+                    list(
+                        "Documents only here",
+                        docs_here
+                            .iter()
+                            .map(|l| format!("{l}  (`deciduous remote push --seed` sends it)"))
+                            .collect(),
+                    );
 
-                    if d.is_empty() && waiting == 0 && rejected == 0 {
+                    if d.is_empty() && docs_here.is_empty() && waiting == 0 && rejected == 0 {
                         println!(
-                            "\n{} no writes waiting, and every node and edge matches field by field.",
+                            "\n{} no writes waiting, and every node, edge and document matches field by field.\n\
+                             Themes and tags are not sent to the server, so they are not compared.",
                             "In sync:".green()
                         );
                     } else {
                         println!(
-                            "\n{} `deciduous remote push` sends what is waiting; `deciduous remote pull` \
+                            "\n{} `deciduous remote push` sends what is waiting; `--seed` adds what only this copy has; \
+                             `--repair` makes the server's fields match this copy's; `deciduous remote pull` \
                              takes the server's side (newer edit wins per node).",
                             "Differs:".yellow()
                         );
+                        // Scripts read drift from the exit code, like `sync --check`.
+                        exit(1);
                     }
                 }
 
@@ -2396,6 +2428,7 @@ fn main() {
                     overwrite,
                     drop_rejected,
                     seed,
+                    repair,
                 } => {
                     let cfg = Config::load();
                     let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
@@ -2459,6 +2492,51 @@ fn main() {
                         }
                     }
 
+                    if repair {
+                        let (nodes, server) = match (db.get_all_nodes(), remote.export()) {
+                            (Ok(n), Ok(g)) => (n, g),
+                            (Err(e), _) => {
+                                eprintln!("{} reading the local graph: {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                            (_, Err(e)) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        };
+                        let (ops, skipped) = deciduous::remote::repair_ops(&nodes, &server);
+                        for op in &ops {
+                            if let Err(e) = log.append(op.clone()) {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        match deciduous::remote::replay(&remote, &log) {
+                            Ok(r) => {
+                                println!(
+                                    "{} {} node(s) to match this copy: {} applied, {} already there, {} rejected",
+                                    "Repaired".green(),
+                                    ops.len(),
+                                    r.applied,
+                                    r.already,
+                                    r.rejected.len()
+                                );
+                                deciduous::remote::print_rejected(&r.rejected, &log);
+                            }
+                            Err(e) => {
+                                eprintln!(
+                                    "{} {e}\nThe repair ops wait in {}.",
+                                    "Error:".red(),
+                                    log.path().display()
+                                );
+                                exit(1);
+                            }
+                        }
+                        for s in &skipped {
+                            println!("  {} not repaired: {s}", "note:".yellow());
+                        }
+                    }
+
                     if !(seed || overwrite) {
                         return;
                     }
@@ -2502,7 +2580,7 @@ fn main() {
                     match sent {
                         Ok((None, _)) => {
                             println!(
-                                "{} the server already has every live node and edge in the local graph ({})",
+                                "{} the server already has every live node, edge and document in the local graph ({})",
                                 "Nothing to seed:".green(),
                                 remote.workspace.cyan()
                             );
@@ -2517,6 +2595,11 @@ fn main() {
                             );
                             println!("  nodes {} of {}", r.nodes.upserted, r.nodes.received);
                             println!("  edges {} of {}", r.edges.upserted, r.edges.received);
+                            if let Some(d) = &r.documents {
+                                if d.received > 0 {
+                                    println!("  documents {} of {}", d.upserted, d.received);
+                                }
+                            }
                             if r.edges.unresolved > 0 {
                                 println!(
                                     "  {} {} edges were not written (self-loops or missing endpoints)",

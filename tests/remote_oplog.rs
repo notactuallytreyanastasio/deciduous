@@ -490,7 +490,9 @@ fn status_reports_waiting_writes_and_content_differences_when_counts_match() {
         ],
     );
 
-    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    let st = sb.dx(&dir, &["remote", "status"]);
+    assert_eq!(st.status.code(), Some(1), "drift exits 1");
+    let out = text(&st.stdout);
     assert!(!out.contains("OK"), "counts match, content does not: {out}");
     assert!(out.contains("1 write(s) waiting"), "{out}");
     assert!(out.contains("bobs unpushed goal"), "{out}");
@@ -826,10 +828,10 @@ fn a_node_deleted_on_the_server_is_not_resent_and_edits_to_it_are_refused_loudly
     let out = sb.dx_ok(&dir, &["status", "1", "completed"]);
     assert!(out.contains("Rejected"), "{out}");
     assert!(out.contains("deleted on the server"), "{out}");
-    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
     assert!(out.contains("1 rejected"), "{out}");
     sb.dx_ok(&dir, &["remote", "push", "--drop-rejected"]);
-    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
     assert!(out.contains("0 rejected"), "{out}");
 }
 
@@ -1005,6 +1007,112 @@ fn a_pull_that_changes_no_content_reports_no_updates() {
     );
     let out = sb.dx_ok(&dir, &["remote", "pull"]);
     assert!(out.contains("updated 1,"), "{out}");
+}
+
+// An edit whose op never reached the log (written before this clone had a
+// [remote], or the log could not be written) showed as "Different" in
+// status, and neither push, --seed nor pull could send it.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn an_edit_the_log_never_got_is_sent_by_push_repair() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-repair");
+    let dir = sb.remote_repo("repair", &url, &ws);
+    sb.dx_ok(&dir, &["add", "goal", "shared goal"]);
+    sb.dx_ok(&dir, &["prompt", "1", "first words"]);
+
+    // The edit happens with no [remote] in the config: no op is logged.
+    let cfg = dir.join(".deciduous").join("config.toml");
+    let saved = std::fs::read_to_string(&cfg).unwrap();
+    std::fs::write(&cfg, "").unwrap();
+    sb.dx_ok(&dir, &["status", "1", "completed"]);
+    sb.dx_ok(&dir, &["prompt", "1", "second words"]);
+    std::fs::write(&cfg, saved).unwrap();
+
+    let st = sb.dx(&dir, &["remote", "status"]);
+    let out = text(&st.stdout);
+    assert!(out.contains("Different"), "{out}");
+    assert!(
+        out.contains("push --repair"),
+        "status names the command that fixes it: {out}"
+    );
+
+    let out = sb.dx_ok(&dir, &["remote", "push", "--repair"]);
+    assert!(out.contains("applied"), "{out}");
+    let g = export(&url, &token, &ws);
+    let n = server_node(&g, "shared goal");
+    assert_eq!(n["status"], "completed");
+    assert_eq!(n["metadata"]["prompt"], "second words");
+
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("In sync"), "{out}");
+}
+
+// `remote status` exited 0 whatever it found, so a script could not tell
+// drift from a clean state.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn remote_status_exits_nonzero_when_anything_differs() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-rc");
+    let dir = sb.remote_repo("rc", &url, &ws);
+    sb.dx_ok(&dir, &["add", "goal", "g"]);
+    assert!(sb.dx(&dir, &["remote", "status"]).status.success());
+
+    let g = export(&url, &token, &ws);
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[(
+            "update_node",
+            serde_json::json!({"node_id": server_id(&g, "g"), "status": "completed"}),
+        )],
+    );
+    let st = sb.dx(&dir, &["remote", "status"]);
+    assert_eq!(st.status.code(), Some(1), "{}", text(&st.stdout));
+}
+
+// A document attached here never reached the server, and status said
+// "In sync"; --seed said "Nothing to seed" because it only looked at nodes
+// and edges.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn an_attached_document_is_reported_and_seeded_with_its_bytes() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-doc");
+    let dir = sb.remote_repo("doc", &url, &ws);
+    sb.dx_ok(&dir, &["add", "goal", "has a spec"]);
+    std::fs::write(dir.join("spec.txt"), "the spec, in full\n").unwrap();
+    sb.dx_ok(&dir, &["doc", "attach", "1", "spec.txt"]);
+
+    let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
+    assert!(!out.contains("In sync"), "{out}");
+    assert!(out.contains("spec.txt"), "the document is named: {out}");
+
+    let out = sb.dx_ok(&dir, &["remote", "push", "--seed"]);
+    assert!(out.contains("documents 1"), "{out}");
+    let g = export(&url, &token, &ws);
+    let docs = g["documents"].as_array().unwrap();
+    assert_eq!(docs.len(), 1, "{g}");
+    let id = docs[0]["id"].as_str().unwrap();
+    let bytes = ureq::get(&format!("{url}/documents/{id}"))
+        .set("authorization", &format!("Bearer {token}"))
+        .call()
+        .unwrap()
+        .into_string()
+        .unwrap();
+    assert_eq!(bytes, "the spec, in full\n");
+
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("In sync"), "{out}");
+    assert!(
+        out.to_lowercase().contains("themes and tags"),
+        "what is not compared is said: {out}"
+    );
 }
 
 // `deciduous mcp`, the stdio server agents use, returned before the replay

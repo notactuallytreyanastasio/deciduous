@@ -603,8 +603,9 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
     )
 }
 
-/// Sends the server everything in `graph` it does not already have. `None`
-/// means there was nothing to send.
+/// Sends the server everything in `graph` it does not already have: nodes,
+/// edges, and documents with their bytes. `None` means there was nothing to
+/// send.
 ///
 /// Shared by `remote push` and the automatic push after a write, so both decide
 /// what is missing the same way — `missing_on_server` earned its edge-keying
@@ -612,6 +613,10 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
 ///
 /// Also returns the local nodes the server has deleted. Nothing a push sends
 /// can change those; they are the user's to pull (see `deleted_on_server`).
+///
+/// Documents used to be computed and then ignored: `nodes == 0 && edges == 0`
+/// returned "nothing to send" with a document missing, and a document that
+/// was sent had no bytes behind it, because nothing uploaded them.
 pub fn push_missing(
     remote: &Remote,
     graph: &Value,
@@ -619,8 +624,33 @@ pub fn push_missing(
     let server = remote.export()?;
     let deleted = deleted_on_server(graph, &server);
     let (missing, nodes, edges) = missing_on_server(graph, &server);
-    if nodes == 0 && edges == 0 {
+    let docs = missing["documents"].as_array().cloned().unwrap_or_default();
+    if nodes == 0 && edges == 0 && docs.is_empty() {
         return Ok((None, deleted));
+    }
+    if !docs.is_empty() {
+        let dir = Database::db_path()
+            .parent()
+            .map(|p| p.join("documents"))
+            .ok_or("the database path has no directory, so there are no documents to read")?;
+        for d in &docs {
+            let (Some(hash), Some(file)) =
+                (d["content_hash"].as_str(), d["storage_filename"].as_str())
+            else {
+                return Err(format!(
+                    "a local document has no content_hash or storage_filename: {d}"
+                ));
+            };
+            let path = dir.join(file);
+            let bytes = std::fs::read(&path).map_err(|e| {
+                format!(
+                    "document {} ({}) cannot be sent: {e}. Nothing was sent.",
+                    d["original_filename"].as_str().unwrap_or("?"),
+                    path.display()
+                )
+            })?;
+            remote.upload_blob(hash, &bytes, d["mime_type"].as_str())?;
+        }
     }
     remote.import(missing).map(|r| (Some(r), deleted))
 }
@@ -797,6 +827,18 @@ impl Remote {
                 .map_err(|e| format!("the server's response was not a claim: {e}")),
             Err(e) => Err(self.describe(e)),
         }
+    }
+
+    /// Uploads one document's bytes to `PUT /blob/:hash`. The server checks
+    /// them against the hash.
+    pub fn upload_blob(&self, hash: &str, bytes: &[u8], mime: Option<&str>) -> Result<(), String> {
+        ureq::put(&format!("{}/blob/{hash}", self.url))
+            .set("authorization", &format!("Bearer {}", self.token))
+            .set("content-type", mime.unwrap_or("application/octet-stream"))
+            .timeout(std::time::Duration::from_secs(300))
+            .send_bytes(bytes)
+            .map(|_| ())
+            .map_err(|e| format!("uploading document {hash}: {}", self.describe(e)))
     }
 
     /// Sends ops to `POST /ops` and returns the server's answer for each.
@@ -1034,6 +1076,9 @@ impl ContentDiff {
 pub struct NodeDifference {
     pub change_id: String,
     pub title: String,
+    /// This copy's updated_at is later than the server's: the difference is
+    /// most likely an edit made here that never reached the server.
+    pub here_newer: bool,
     /// (field, here, on the server)
     pub fields: Vec<(String, String, String)>,
 }
@@ -1126,6 +1171,7 @@ pub fn content_diff(
             d.differ.push(NodeDifference {
                 change_id: cid.to_string(),
                 title: n.title.clone(),
+                here_newer: records::parse_ts(&n.updated_at) > records::parse_ts(&s.updated_at),
                 fields,
             });
         }
@@ -1170,6 +1216,115 @@ pub fn content_diff(
         .map(|(f, t, k)| edge_label(f, t, k))
         .collect();
     d
+}
+
+/// Documents attached here that the server lacks, as "file on node" labels.
+pub fn documents_only_here(docs: &[crate::db::NodeDocument], server: &RemoteGraph) -> Vec<String> {
+    let have: std::collections::HashSet<&str> = server
+        .documents
+        .iter()
+        .filter_map(|d| d["change_id"].as_str())
+        .collect();
+    docs.iter()
+        .filter(|d| d.detached_at.is_none() && !have.contains(d.change_id.as_str()))
+        .map(|d| {
+            format!(
+                "{} on {}",
+                d.original_filename,
+                d.node_change_id.chars().take(8).collect::<String>()
+            )
+        })
+        .collect()
+}
+
+/// Update ops that make the server's copy of every node both sides hold
+/// match this one, field by field: what `remote push --repair` queues.
+///
+/// This is the remedy for a write whose op never reached the log: made
+/// before this clone's config had a `[remote]`, made while the log could not
+/// be written, lost to a crash between the local commit and the append, or
+/// in a log someone deleted. Each op says what it replaces (the server's
+/// current value), so an edit an agent makes between `remote status` and
+/// this is refused rather than overwritten.
+///
+/// Returns the ops and what they cannot carry: a node type (not settable
+/// over /ops) and a metadata key the server has and this copy lacks (an op
+/// merges keys; it does not remove them).
+pub fn repair_ops(
+    nodes: &[crate::db::DecisionNode],
+    server: &RemoteGraph,
+) -> (Vec<crate::oplog::OpBody>, Vec<String>) {
+    use serde_json::Map;
+    let live: std::collections::HashMap<&str, &RemoteNode> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_none())
+        .map(|n| (n.change_id.as_str(), n))
+        .collect();
+    let short = |c: &str| c.chars().take(8).collect::<String>();
+    let mut ops = Vec::new();
+    let mut skipped = Vec::new();
+    for n in nodes {
+        let Some(s) = live.get(n.change_id.as_str()) else {
+            continue;
+        };
+        let (mut set, mut was) = (Map::new(), Map::new());
+        let opt = |v: &Option<String>| v.clone().map(Value::String).unwrap_or(Value::Null);
+        if n.title != s.title {
+            set.insert("title".into(), Value::String(n.title.clone()));
+            was.insert("title".into(), Value::String(s.title.clone()));
+        }
+        if n.status != s.status {
+            set.insert("status".into(), Value::String(n.status.clone()));
+            was.insert("status".into(), Value::String(s.status.clone()));
+        }
+        if n.description.as_deref().unwrap_or("") != s.description.as_deref().unwrap_or("") {
+            set.insert("description".into(), opt(&n.description));
+            was.insert("description".into(), opt(&s.description));
+        }
+        if n.node_type != s.node_type {
+            skipped.push(format!(
+                "{} type: here {}, server {} (a node's type cannot be changed over /ops)",
+                short(&n.change_id),
+                n.node_type,
+                s.node_type
+            ));
+        }
+        let here: Map<String, Value> = n
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let there = s
+            .metadata
+            .as_ref()
+            .and_then(|m| m.as_object().cloned())
+            .unwrap_or_default();
+        let (mut meta, mut was_meta) = (Map::new(), Map::new());
+        for (k, v) in &here {
+            if there.get(k) != Some(v) {
+                meta.insert(k.clone(), v.clone());
+                was_meta.insert(k.clone(), there.get(k).cloned().unwrap_or(Value::Null));
+            }
+        }
+        for k in there.keys().filter(|k| !here.contains_key(*k)) {
+            skipped.push(format!(
+                "{} metadata.{k}: only on the server (an op merges keys and cannot remove one)",
+                short(&n.change_id)
+            ));
+        }
+        if !set.is_empty() || !meta.is_empty() {
+            ops.push(crate::oplog::OpBody::UpdateNode {
+                change_id: n.change_id.clone(),
+                set,
+                metadata: meta,
+                was,
+                was_metadata: was_meta,
+            });
+        }
+    }
+    (ops, skipped)
 }
 
 #[derive(Debug, Default)]
