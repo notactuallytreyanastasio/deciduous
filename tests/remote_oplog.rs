@@ -1526,7 +1526,10 @@ fn rust_n4_a_lock_left_by_a_killed_process_neither_stalls_nor_drops_a_write() {
     let t = std::time::Instant::now();
     let out = sb.dx_ok(&dir, &["add", "goal", "after-kill"]);
     let took = t.elapsed();
-    assert!(!out.contains("could not be queued"), "{out}");
+    assert!(
+        !out.contains("could not be queued") && !out.contains("not queued"),
+        "{out}"
+    );
     assert_eq!(queued_titles(&dir), ["before", "after-kill"], "{out}");
     assert!(
         took < std::time::Duration::from_secs(5),
@@ -1950,4 +1953,218 @@ fn rust_n2_a_cli_write_to_a_black_hole_server_returns_promptly() {
         "{err}"
     );
     assert_eq!(queued_titles(&dir), ["bh-cli"]);
+}
+
+/// A server that applies creates and refuses every update, the way the real
+/// one refuses an edit to a node an agent deleted.
+fn refusing_stub() -> String {
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    std::thread::spawn(move || {
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
+                "/ops" => {
+                    let v: Value = serde_json::from_str(&body).unwrap();
+                    let results: Vec<Value> = v["ops"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|op| {
+                            if op["kind"] == "update_node" {
+                                serde_json::json!({"op_id": op["op_id"], "result": "rejected",
+                                    "reason": format!("node {} was deleted on the server", op["change_id"].as_str().unwrap())})
+                            } else {
+                                serde_json::json!({"op_id": op["op_id"], "result": "applied"})
+                            }
+                        })
+                        .collect();
+                    serde_json::json!({"workspace": "stub", "results": results}).to_string()
+                }
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    format!("http://127.0.0.1:{port}")
+}
+
+/// A stdio MCP server in `dir`, and a function that sends one request and
+/// returns its answer.
+fn stdio_mcp(sb: &Sandbox, dir: &Path) -> (std::process::Child, impl FnMut(&str, Value) -> Value) {
+    use std::io::{BufRead, BufReader, Write};
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .arg("mcp")
+        .current_dir(dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &sb.token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut id = 0;
+    let call = move |method: &str, params: Value| {
+        id += 1;
+        let msg = serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+        writeln!(stdin, "{msg}").unwrap();
+        stdin.flush().unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        serde_json::from_str::<Value>(&line).unwrap()
+    };
+    (child, call)
+}
+
+fn tool_text(reply: &Value) -> String {
+    reply["result"]["content"]
+        .as_array()
+        .map(|c| {
+            c.iter()
+                .filter_map(|x| x["text"].as_str())
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .unwrap_or_default()
+}
+
+// RUST-N7: the refusal of an agent's write went to stderr, which the agent
+// never reads. update_status on a node deleted on the server returned plain
+// success, and so did every call after it.
+#[test]
+fn rust_n7_a_write_the_server_refused_is_reported_in_a_tool_result() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("refused-mcp");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!(
+            "[remote]\nurl = \"{}\"\nworkspace = \"r\"\n",
+            refusing_stub()
+        ),
+    )
+    .unwrap();
+    let (mut child, mut call) = stdio_mcp(&sb, &dir);
+    call(
+        "initialize",
+        serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}),
+    );
+    call(
+        "tools/call",
+        serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":"g"}}),
+    );
+    call(
+        "tools/call",
+        serde_json::json!({"name":"update_status","arguments":{"node_id":1,"status":"completed"}}),
+    );
+    // The refusal arrives after the answer (the replay runs beside the
+    // loop); it is in the next tool result, whichever tool that is.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut seen = String::new();
+    while std::time::Instant::now() < deadline && !seen.contains("refused") {
+        seen = tool_text(&call(
+            "tools/call",
+            serde_json::json!({"name":"list_nodes","arguments":{}}),
+        ));
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(
+        seen.contains("refused") && seen.contains("was deleted on the server"),
+        "no tool result said so: {seen}"
+    );
+}
+
+// RUST-N7 / RUST-N4: a write made locally and then not queued (the log could
+// not be written) answered plain success; the warning went to stderr only.
+#[test]
+fn rust_n7_a_write_that_could_not_be_queued_is_an_error_result() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "unqueued-mcp");
+    // The log path is a directory: every append fails.
+    std::fs::create_dir_all(log_path(&dir)).unwrap();
+    let (mut child, mut call) = stdio_mcp(&sb, &dir);
+    call(
+        "initialize",
+        serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}),
+    );
+    let r = call(
+        "tools/call",
+        serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":"unqueued"}}),
+    );
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(r["result"]["isError"], true, "{r}");
+    let t = tool_text(&r);
+    assert!(t.to_lowercase().contains("not queued"), "{t}");
+}
+
+// RUST-N7, the volume: offline, every write of a stdio server printed the
+// same ~430-byte warning to stderr. A client that does not drain stderr
+// (the probe's first harness) stopped the server after about 150 writes.
+// The same failure is said once, and again only when it changes.
+#[test]
+fn rust_n7_an_offline_stdio_server_says_it_is_offline_once() {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "quiet");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .arg("mcp")
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &sb.token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut send = |id: usize, method: &str, params: Value| {
+        let msg = serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+        writeln!(stdin, "{msg}").unwrap();
+        stdin.flush().unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+    };
+    send(
+        0,
+        "initialize",
+        serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}),
+    );
+    for i in 1..=20 {
+        send(
+            i,
+            "tools/call",
+            serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":format!("q{i}")}}),
+        );
+        std::thread::sleep(std::time::Duration::from_millis(30));
+    }
+    drop(stdin);
+    let mut err = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut err)
+        .unwrap();
+    child.wait().unwrap();
+    assert_eq!(queued_titles(&dir).len(), 20);
+    assert_eq!(err.matches("did not get it").count(), 1, "{err}");
 }

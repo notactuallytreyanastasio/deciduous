@@ -1179,6 +1179,15 @@ pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplo
 /// says how many writes are waiting and where; they stay in the log, and the
 /// next write or `deciduous remote push` sends them.
 pub fn replay_after_write(log: &crate::oplog::OpLog) {
+    replay_after_write_quietly(log, &mut None);
+}
+
+/// [`replay_after_write`] for a process that replays after every write for
+/// hours (the stdio MCP server): a failure that is the same as the previous
+/// replay's is not printed again. Offline, each write printed about 430
+/// bytes of the same warning to stderr, and a client that does not read
+/// stderr stopped the server after about 150 writes (RUST-N7).
+pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<String>) {
     use colored::Colorize;
 
     // The log's own project, not the current directory's: see
@@ -1193,6 +1202,51 @@ pub fn replay_after_write(log: &crate::oplog::OpLog) {
         Ok(s) => format!("{} write(s)", s.pending.len()),
         Err(e) => format!("an unknown number of writes (the log could not be read: {e})"),
     };
+    let unsent = |text: String| crate::oplog::notice(crate::oplog::NoticeKind::Unsent, text);
+    match &result {
+        Ok(report) => {
+            if !report.rejected.is_empty() {
+                let mut text = format!(
+                    "The shared server refused {} earlier write(s); they were made here and are not on the server:",
+                    report.rejected.len()
+                );
+                for (op, reason) in &report.rejected {
+                    text.push_str(&format!("\n  {}: {reason}", op.body.describe()));
+                }
+                text.push_str(&format!(
+                    "\nThey stay in {}. `deciduous remote status` lists them.",
+                    log.path().display()
+                ));
+                unsent(text);
+            }
+            if !report.unreadable.is_empty() {
+                unsent(format!(
+                    "{} line(s) of {} are not log entries and were not sent (the file is damaged): {}",
+                    report.unreadable.len(),
+                    log.path().display(),
+                    report
+                        .unreadable
+                        .iter()
+                        .map(|u| u.describe())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                ));
+            }
+        }
+        // An outage passes by itself; the writes are queued and go later.
+        Err(ReplayError::Unreachable(_)) => {}
+        Err(e) => unsent(format!(
+            "Writes made here did not reach the shared server, and will not until this is fixed: {e}\n{} wait in {}.",
+            waiting(),
+            log.path().display()
+        )),
+    }
+    let this = result.as_ref().err().map(|e| e.to_string());
+    let repeat = this.is_some() && *last == this;
+    *last = this;
+    if repeat {
+        return;
+    }
     match result {
         Ok(report) => print_rejected(&report.rejected, log),
         // Only a server that does not answer is an outage that passes by

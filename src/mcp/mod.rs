@@ -160,6 +160,8 @@ impl McpServer {
                 result
             }
         };
+        let mut result = result;
+        attach_notices(&mut result);
 
         serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}))
     }
@@ -469,6 +471,25 @@ fn clear_session_from_disk(file: &std::path::Path, session_id: i32) -> io::Resul
     }
 }
 
+/// Puts what the server log has to say into a tool result, which the agent
+/// reads; stderr, where it used to go only, the agent never sees (RUST-N7).
+///
+/// A write this call made that was not queued makes the call an error: its
+/// text says the local write happened, so it is not retried. A refusal
+/// found by the replay thread is about an earlier write, and is added to
+/// whichever call comes next without changing that call's own outcome.
+fn attach_notices(result: &mut protocol::ToolCallResult) {
+    for n in crate::oplog::take_notices() {
+        if n.kind == crate::oplog::NoticeKind::Unqueued {
+            result.is_error = Some(true);
+        }
+        result.content.push(protocol::ToolResultContent {
+            content_type: "text".to_string(),
+            text: n.text,
+        });
+    }
+}
+
 /// Run the MCP server on stdin/stdout.
 pub fn run_server() -> io::Result<()> {
     let stdin = io::stdin();
@@ -583,11 +604,12 @@ impl Replayer {
         let handle = std::thread::Builder::new()
             .name("deciduous-replay".into())
             .spawn(move || {
+                let mut last = None;
                 while let Ok(mut log) = rx.recv() {
                     while let Ok(newer) = rx.try_recv() {
                         log = newer;
                     }
-                    crate::remote::replay_after_write(&log);
+                    crate::remote::replay_after_write_quietly(&log, &mut last);
                 }
             })
             .ok();

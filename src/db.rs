@@ -868,12 +868,23 @@ impl Database {
     fn log_op(&self, body: crate::oplog::OpBody) {
         let Some(log) = self.oplog() else { return };
         if let Err(e) = log.append(body.clone()) {
-            eprintln!(
-                "Warning: the local write succeeded but could not be queued for the server: {e}\n\
-                 The server will not get: {}",
-                body.describe()
-            );
+            self.not_queued(format!("{e}\nThe server will not get: {}", body.describe()));
         }
+    }
+
+    /// A write that was made here and will not reach the server: said on
+    /// stderr, and kept for the stdio MCP server to put in the tool result
+    /// of the call that made it, which an agent does read.
+    fn not_queued(&self, what: String) {
+        eprintln!("Warning: the local write succeeded but was not queued for the server: {what}");
+        crate::oplog::notice(
+            crate::oplog::NoticeKind::Unqueued,
+            format!(
+                "The write WAS made in the local database, but it was NOT queued for the shared \
+                 server: {what}\nDo not repeat it (that would write it twice here). \
+                 `deciduous remote status` shows what differs from the server."
+            ),
+        );
     }
 
     fn log_node_created(&self, node_id: i32) {
@@ -900,9 +911,7 @@ impl Database {
                 });
             }
             Ok(None) => {}
-            Err(e) => {
-                eprintln!("Warning: could not read node {node_id} to queue it for the server: {e}")
-            }
+            Err(e) => self.not_queued(format!("node {node_id} could not be read to queue it: {e}")),
         }
     }
 
@@ -960,9 +969,7 @@ impl Database {
             return;
         }
         let Some(before) = before else {
-            eprintln!(
-                "Warning: node {node_id} could not be read before its edit, so the edit was not queued for the server"
-            );
+            self.not_queued(format!("node {node_id} could not be read before its edit"));
             return;
         };
         let old_meta: serde_json::Map<String, serde_json::Value> = before
@@ -1013,7 +1020,7 @@ impl Database {
             Ok(Some(e)) => e,
             Ok(None) => return,
             Err(e) => {
-                eprintln!("Warning: could not read edge {edge_id} to queue it for the server: {e}");
+                self.not_queued(format!("edge {edge_id} could not be read to queue it: {e}"));
                 return;
             }
         };
@@ -1023,7 +1030,9 @@ impl Database {
             self.get_node(edge.from_node_id).ok().flatten(),
             self.get_node(edge.to_node_id).ok().flatten(),
         ) else {
-            eprintln!("Warning: edge {edge_id} has an endpoint that is not in the database; it was not queued for the server");
+            self.not_queued(format!(
+                "edge {edge_id} has an endpoint that is not in the database"
+            ));
             return;
         };
         self.log_op(crate::oplog::OpBody::CreateEdge {
@@ -1058,10 +1067,10 @@ impl Database {
                         edge_type: e.edge_type.clone(),
                     })
                 }
-                _ => eprintln!(
-                    "Warning: edge {} ({} -> {}) has no change_id for an endpoint; its removal was not queued for the server",
+                _ => self.not_queued(format!(
+                    "edge {} ({} -> {}) has no change_id for an endpoint, so its removal cannot be named to the server",
                     e.id, e.from_node_id, e.to_node_id
-                ),
+                )),
             }
         }
     }

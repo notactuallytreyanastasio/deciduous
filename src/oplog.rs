@@ -322,6 +322,47 @@ fn parse(text: &str) -> Parsed {
     out
 }
 
+/// What a long-lived process (the stdio MCP server) has to tell whoever made
+/// a write, beyond stderr, which an agent never reads.
+#[derive(Debug, Clone, PartialEq)]
+pub enum NoticeKind {
+    /// A write was made locally and not queued: the server will never get
+    /// it from this log. The call that made it did not succeed.
+    Unqueued,
+    /// Queued writes did not get through, and waiting will not change that:
+    /// the server refused them, failed on them, or the log is damaged.
+    Unsent,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Notice {
+    pub kind: NoticeKind,
+    pub text: String,
+}
+
+static NOTICES: std::sync::Mutex<Vec<Notice>> = std::sync::Mutex::new(Vec::new());
+
+/// At most this many notices wait to be taken; a process nobody asks (the
+/// CLI) must not grow without bound.
+const MAX_NOTICES: usize = 50;
+
+/// Records a notice for [`take_notices`].
+pub fn notice(kind: NoticeKind, text: impl Into<String>) {
+    let mut n = NOTICES.lock().unwrap_or_else(|e| e.into_inner());
+    if n.len() >= MAX_NOTICES {
+        n.remove(0);
+    }
+    n.push(Notice {
+        kind,
+        text: text.into(),
+    });
+}
+
+/// The notices recorded since the last call, oldest first.
+pub fn take_notices() -> Vec<Notice> {
+    std::mem::take(&mut *NOTICES.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
 /// Set when this process appends an op, so the CLI knows to replay on exit
 /// without re-reading the file after every command.
 static APPENDED: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
