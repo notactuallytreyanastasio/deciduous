@@ -662,9 +662,11 @@ defmodule DeciduousMcp.Sync.Import do
   # The CLI writes timestamps with an offset ("2016-02-01T00:00:00-05:00") and
   # backdated archaeology nodes reach back years, so these are parsed rather
   # than stamped with the import time.
-  defp parse_time(nil, fallback), do: fallback
+  @doc false
+  # Shared with `DeciduousMcp.Sync.Ops`, which receives the same timestamps.
+  def parse_time(nil, fallback), do: fallback
 
-  defp parse_time(value, fallback) when is_binary(value) do
+  def parse_time(value, fallback) when is_binary(value) do
     case DateTime.from_iso8601(value) do
       # The columns are :utc_datetime_usec, which rejects anything that is not
       # 6-digit precision. CLI timestamps carry none ("2016-02-01T00:00:00-05:00"),
@@ -676,7 +678,7 @@ defmodule DeciduousMcp.Sync.Import do
     end
   end
 
-  defp parse_time(_, fallback), do: fallback
+  def parse_time(_, fallback), do: fallback
 
   defp as_float(nil), do: 1.0
   defp as_float(n) when is_float(n), do: n

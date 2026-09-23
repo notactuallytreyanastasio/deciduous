@@ -10,6 +10,8 @@ defmodule DeciduousMcp.Web.Router do
     * `ALL  /mcp`    — the MCP endpoint, forwarded to Hermes' Streamable HTTP
       plug.
     * `POST /import` — bulk ingest of one project's graph.
+    * `POST /ops` — a CLI's queued writes, applied field by field, each at
+      most once (see `DeciduousMcp.Sync.Ops`).
     * `PUT  /blob/:hash` — raw document bytes, verified against the hash.
     * `GET  /documents/:id` — a document's bytes, by its id or content hash.
     * `GET  /export` — one workspace's whole graph, for refreshing a local cache.
@@ -31,7 +33,7 @@ defmodule DeciduousMcp.Web.Router do
 
   @session_guard SessionGuard.init(server: DeciduousMcp.MCP.Server)
   alias DeciduousMcp.Storage
-  alias DeciduousMcp.Sync.Import
+  alias DeciduousMcp.Sync.{Import, Ops}
   alias DeciduousMcp.Web.{Auth, GraphSocket, WorkspacePlug}
 
   # 64MB: the largest graph on disk today is 24MB of SQLite, which is smaller
@@ -75,6 +77,25 @@ defmodule DeciduousMcp.Web.Router do
 
         {:too_large, conn} ->
           json(conn, 413, %{error: "import exceeds #{@max_import_bytes} bytes"})
+      end
+    end
+  end
+
+  post "/ops" do
+    conn = Auth.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          handle_ops(conn, body)
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "ops batch exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
       end
     end
   end
@@ -265,6 +286,19 @@ defmodule DeciduousMcp.Web.Router do
       # Elixir's inspect of it.
       {:error, %{} = reason} ->
         json(conn, 422, %{error: reason})
+
+      {:error, reason} ->
+        json(conn, 422, %{error: to_string_reason(reason)})
+    end
+  end
+
+  defp handle_ops(conn, body) do
+    with {:ok, payload} <- Jason.decode(body),
+         {:ok, report} <- Ops.run(payload) do
+      json(conn, 200, report)
+    else
+      {:error, %Jason.DecodeError{} = err} ->
+        json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
 
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
