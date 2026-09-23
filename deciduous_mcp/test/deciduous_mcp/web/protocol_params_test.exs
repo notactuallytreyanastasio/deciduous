@@ -103,6 +103,45 @@ defmodule DeciduousMcp.Web.ProtocolParamsTest do
     assert {200, %{"id" => 9, "result" => %{}}} = rpc(%{jsonrpc: "2.0", id: 9, method: "ping"}, h)
   end
 
+  # Found by the battery's HTTP fuzz once every chapter was stacked: an
+  # empty list is a keyword list to Peri, which crashed validating it
+  # (Keyword.get([], "reason")) and took the session down with an empty
+  # 500. A later message on the same session got 404 "session expired".
+  test "a notification whose params are a list is dropped, and the session lives", %{h: h} do
+    for {method, params} <- [
+          {"notifications/cancelled", []},
+          {"notifications/progress", []},
+          {"notifications/message", []},
+          {"notifications/cancelled", [["reason", "x"]]},
+          {"notifications/cancelled", %{"requestId" => 1, "reason" => []}}
+        ] do
+      assert {202, ""} = rpc(%{jsonrpc: "2.0", method: method, params: params}, h),
+             "#{method} #{inspect(params)}"
+    end
+
+    assert {200, %{"id" => 9, "result" => %{}}} =
+             rpc(%{jsonrpc: "2.0", id: 9, method: "ping"}, h)
+  end
+
+  # The same Peri crash, on the request path: an empty 500 instead of
+  # invalid params under the request's id.
+  test "a request whose nested member is a list where an object goes is invalid params",
+       %{h: h} do
+    cases = [
+      %{method: "completion/complete", params: %{ref: [], argument: []}},
+      %{method: "initialize", params: %{protocolVersion: "x", capabilities: [], clientInfo: []}}
+    ]
+
+    for {c, id} <- Enum.with_index(cases, 70) do
+      result = rpc(Map.merge(%{jsonrpc: "2.0", id: id}, c), h)
+      assert {200, %{"id" => ^id, "error" => %{"code" => -32602}} = reply} = result, inspect(c)
+      refute_internals(reply)
+    end
+
+    assert {200, %{"id" => 9, "result" => %{}}} =
+             rpc(%{jsonrpc: "2.0", id: 9, method: "ping"}, h)
+  end
+
   test "tools/call without arguments runs the tool with none", %{h: h} do
     assert {200, %{"id" => 70, "result" => %{"content" => [_ | _]}} = reply} =
              rpc(

@@ -201,9 +201,14 @@ defmodule DeciduousMcp.Web.SessionGuard do
   # error, and a request method sent without an id is a notification too.
   # One Hermes would reject is dropped here for the same reason:
   # notifications/cancelled with params "x" got 400 "Parse error".
+  #
+  # Params that are not an object are dropped before Peri sees them: an
+  # empty list is a keyword list to Peri, which crashed on it
+  # (Keyword.get([], "reason")) and took the session down with an empty 500.
   defp classify_message(%{"method" => method} = message) do
     with true <- method in @known_notifications,
-         {:ok, _} <- Message.notification_schema(message) do
+         true <- is_map(Map.get(message, "params", %{})),
+         {:ok, _} <- notification_schema(message) do
       {:pass, message}
     else
       _ -> {:ignore, method}
@@ -218,6 +223,32 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   defp classify_message(message) do
     {:refuse, 400, @invalid_request_code, "Invalid Request: no method", usable_id(message)}
+  end
+
+  # Peri validating a shape it does not expect can raise rather than return
+  # an error: an empty list where it wants an object is a keyword list to
+  # it, and Keyword.get on it has no clause for a string key. The battery's
+  # fuzz found it through notifications/cancelled with params [] (an empty
+  # 500, and the session gone); initialize with clientInfo [] and
+  # completion/complete with ref [] crashed the same way. A notification
+  # that raises is dropped; a request that raises is invalid params. Both
+  # are logged, since Peri's message is not one a client can act on.
+  defp notification_schema(message), do: validated(&Message.notification_schema/1, message)
+
+  defp request_schema(message), do: validated(&Message.request_schema/1, message)
+
+  defp validated(schema, message) do
+    schema.(message)
+  rescue
+    e ->
+      require Logger
+
+      Logger.warning(
+        "#{inspect(message["method"])} params failed validation with " <>
+          Exception.format_banner(:error, e)
+      )
+
+      {:error, :raised}
   end
 
   # A request for a method Hermes knows is held to the params schema Hermes
@@ -238,9 +269,14 @@ defmodule DeciduousMcp.Web.SessionGuard do
       %{} = params ->
         message = Map.put(message, "params", with_default_arguments(message["method"], params))
 
-        case Message.request_schema(message) do
+        case request_schema(message) do
           {:ok, _} ->
             {:pass, message}
+
+          {:error, :raised} ->
+            {:refuse, 200, @invalid_params_code,
+             "Invalid params for #{message["method"]}: a member that must be an object " <>
+               "was a list or another type", id}
 
           {:error, errors} ->
             {:refuse, 200, @invalid_params_code,
