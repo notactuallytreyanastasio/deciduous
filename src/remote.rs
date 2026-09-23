@@ -2166,6 +2166,32 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
     let graph = remote.export()?;
     let mut written = 0usize;
 
+    // First what git brought (a `git pull` with no `deciduous sync` after
+    // it), applied and queued as edits that came through git; then the
+    // server's rows, which are not queued: the server has them.
+    let git = records::reconcile(db, store, false)?;
+    let log = db.oplog();
+    db.set_oplog(None);
+    let result = pull_server_rows(db, store, &graph, &mut written, log.as_ref());
+    db.set_oplog(log.clone());
+    let mut report = result?;
+    report.imported_nodes += git.nodes_imported;
+    report.updated_nodes += git.nodes_updated;
+    report.removed_nodes += git.nodes_deleted;
+    report.imported_edges += git.edges_imported;
+    report.removed_edges += git.edges_deleted;
+    Ok(report)
+}
+
+fn pull_server_rows(
+    db: &Database,
+    store: &RecordStore,
+    graph: &RemoteGraph,
+    written: &mut usize,
+    log: Option<&crate::oplog::OpLog>,
+) -> Result<PullReport, String> {
+    let written_before = *written;
+
     let result = store.batch(|| -> Result<usize, String> {
         for n in &graph.nodes {
             let rec = NodeRecord {
@@ -2182,7 +2208,7 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 extra: Default::default(),
             };
             if store.absorb_node(&rec).map_err(|e| e.to_string())? {
-                written += 1;
+                *written += 1;
             }
         }
 
@@ -2208,7 +2234,7 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 extra: Default::default(),
             };
             if store.absorb_edge(&rec).map_err(|e| e.to_string())? {
-                written += 1;
+                *written += 1;
             }
         }
 
@@ -2225,11 +2251,11 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
             }
             rec.deleted_at = Some(t.deleted_at.clone());
             if store.absorb_edge(&rec).map_err(|e| e.to_string())? {
-                written += 1;
+                *written += 1;
             }
         }
 
-        Ok(written)
+        Ok(*written - written_before)
     });
 
     let records_written = match result {
@@ -2254,20 +2280,17 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
         .and_then(|g| {
             serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
         })?;
-    let overridden = deleted_on_server(&local, &graph);
-    // Applying the server's own delete is not a write the server needs to
-    // hear about: logged, the delete_node and delete_edge ops for it were
-    // refused ("was deleted on the server") and left `remote status`
-    // reporting rejected writes after every such pull.
-    let log = db.oplog();
-    db.set_oplog(None);
-    let deleted = overridden.iter().try_for_each(|d| {
+    let overridden = deleted_on_server(&local, graph);
+    // The log is detached (see `pull`): applying the server's own delete
+    // is not a write the server needs to hear about. Logged, the
+    // delete_node and delete_edge ops for it were refused ("was deleted on
+    // the server") and left `remote status` reporting rejected writes after
+    // every such pull.
+    overridden.iter().try_for_each(|d| {
         db.delete_node(d.id as i32, false)
             .map(|_| ())
             .map_err(|e| format!("deleting node {} \"{}\": {e}", d.id, d.title))
-    });
-    db.set_oplog(log.clone());
-    deleted?;
+    })?;
     for d in &overridden {
         // The local tombstone keeps the row's last fields, prompt included;
         // the server's keeps none, because a delete is how a pasted secret
@@ -2295,7 +2318,7 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
         .filter(|n| n.deleted_at.is_some())
         .map(|n| n.change_id.clone())
         .collect();
-    let dropped_rejected = match &log {
+    let dropped_rejected = match log {
         Some(log) if !dead.is_empty() => log.drop_rejected_touching(&dead)?,
         _ => 0,
     };

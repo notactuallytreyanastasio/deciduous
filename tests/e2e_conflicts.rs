@@ -88,6 +88,60 @@ fn has_edge(v: &View, from: &str, to: &str) -> bool {
         .any(|(f, t, _)| f.as_str() == from && t.as_str() == to)
 }
 
+// ---------------------------------------------------------------- NEW-1
+
+/// NEW-1: alice queues `status C completed` offline and pushes git. Bob
+/// pulls git and sets C to rejected, online. On 28 the server refused bob
+/// (its C was still pending, bob's op said completed), then accepted
+/// alice's older op when she came back, and `remote pull` spread
+/// "completed" to every clone: bob's later edit was gone everywhere.
+#[test]
+fn new_1_a_queued_update_does_not_overwrite_a_newer_edit_that_came_through_git() {
+    let Some(server) = remote("new_1") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "new1");
+    let c = t.alice.add("goal", "C");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.bob, true);
+    t.exchange(&t.carol, true);
+
+    t.offline(&t.alice);
+    t.alice.ok(&["status", &c, "completed"]);
+    t.exchange(&t.alice, false);
+
+    t.exchange(&t.bob, true);
+    assert_eq!(status_of(&t.bob, &c).as_deref(), Some("completed"));
+    let out = t.bob.dx(&["status", &c, "rejected"]);
+    assert!(
+        !out.all().contains("refused"),
+        "bob's edit, made over the value git brought him, was refused:\n{}",
+        out.all()
+    );
+
+    t.online(&t.alice);
+    t.alice.dx(&["remote", "push"]);
+    assert_eq!(
+        t.server_node(&c).unwrap()["status"],
+        json!("rejected"),
+        "alice's older queued op overwrote bob's newer edit on the server"
+    );
+
+    for p in [&t.carol, &t.alice, &t.bob] {
+        t.exchange(p, true);
+        p.ok(&["remote", "pull"]);
+    }
+    for p in [&t.carol, &t.alice, &t.bob] {
+        assert_eq!(
+            status_of(p, &c).as_deref(),
+            Some("rejected"),
+            "{} lost bob's edit",
+            p.dir.display()
+        );
+    }
+}
+
 // ---------------------------------------------------------------- NEW-2
 
 /// NEW-2: a delete queued offline carried no precondition, so it won over
@@ -220,6 +274,89 @@ fn new_3_an_offline_link_replayed_after_an_unlink_through_git_stays_unlinked() {
             p.dir.display()
         );
     }
+}
+
+// ---------------------------------------------------------------- NEW-4
+
+/// NEW-4: `remote pull` took the server's whole node because its stamp was
+/// newer (bob changed the prompt), and so reverted the status alice had
+/// set, which carol had from git and the server did not have yet.
+#[test]
+fn new_4_pull_keeps_a_git_edit_the_server_has_not_got_yet() {
+    let Some(server) = remote("new_4") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "new4");
+    let c = t.alice.add("goal", "C");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.bob, true);
+    t.exchange(&t.carol, true);
+
+    t.offline(&t.alice);
+    t.alice.ok(&["status", &c, "completed"]);
+    t.exchange(&t.alice, false);
+
+    t.exchange(&t.bob, true);
+    t.bob.ok(&["prompt", &c, "bob's prompt"]);
+
+    t.exchange(&t.carol, true);
+    assert_eq!(status_of(&t.carol, &c).as_deref(), Some("completed"));
+    t.carol.ok(&["remote", "pull"]);
+    let v = t.carol.view();
+    assert_eq!(
+        v.nodes[&c].status, "completed",
+        "pull reverted a committed git edit"
+    );
+    assert_eq!(v.nodes[&c].prompt.as_deref(), Some("bob's prompt"));
+}
+
+/// NEW-4, the same with carol's copy of alice's edit still queued: carol
+/// syncs git while her server is unreachable, so the edit git brought her
+/// waits in her log, and then pulls. The pull must keep a field an op in
+/// the log is still carrying.
+#[test]
+fn new_4_pull_keeps_a_field_whose_op_is_still_queued() {
+    let Some(server) = remote("new_4_queued") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "new4q");
+    let c = t.alice.add("goal", "C");
+    t.exchange(&t.alice, true);
+    t.exchange(&t.bob, true);
+    t.exchange(&t.carol, true);
+
+    t.offline(&t.alice);
+    t.alice.ok(&["status", &c, "completed"]);
+    t.exchange(&t.alice, false);
+
+    t.exchange(&t.bob, true);
+    t.bob.ok(&["prompt", &c, "bob's prompt"]);
+
+    // git first (the merge driver needs no server), then the sync that
+    // applies it with the server unreachable.
+    t.carol
+        .git_ok(&["pull", "-q", "--no-rebase", "origin", "main"]);
+    t.online(&t.carol);
+    t.offline(&t.carol);
+    t.carol.ok(&["sync"]);
+    t.online(&t.carol);
+    let log = std::fs::read_to_string(t.carol.dir.join(".deciduous/remote-log.jsonl"))
+        .unwrap_or_default();
+    assert!(
+        log.contains("completed"),
+        "the git edit is not queued:\n{log}"
+    );
+    t.carol.ok(&["remote", "pull"]);
+    let v = t.carol.view();
+    assert_eq!(
+        v.nodes[&c].status, "completed",
+        "pull reverted a field whose op is still queued"
+    );
+    assert_eq!(v.nodes[&c].prompt.as_deref(), Some("bob's prompt"));
+    let doc = t.carol.graph_doc();
+    assert_eq!(doc["nodes"][&c]["status"], json!("completed"));
 }
 
 // ---------------------------------------------------------------- stack

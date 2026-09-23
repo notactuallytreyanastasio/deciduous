@@ -2230,6 +2230,21 @@ impl Database {
     // database only; they never publish back to the store.
     // ========================================================================
 
+    // What these apply came through git, and with a server log attached it
+    // is queued for the server like a local write: an edit that arrived
+    // through git is newer than anything the server holds from before it.
+    // Without that, bob's `status C rejected`, made over the "completed"
+    // alice's commit brought him, was refused (the server still had
+    // "pending": alice's own op was still queued on her laptop), and
+    // alice's op, replayed later, overwrote bob's edit on the server and
+    // then, through `remote pull`, everywhere (round-2 NEW-1).
+    //
+    // The ops go into remote_outbox in the row's own transaction and reach
+    // the log in one append when the reconcile ends (`flush_outbox`), not
+    // one fsync per row: a fresh clone's first sync imports every node.
+    // `remote pull` detaches the log while it applies the server's rows,
+    // which the server does not need to hear about.
+
     /// Insert a node exactly as recorded (timestamps, status, metadata kept).
     pub(crate) fn import_node_record(&self, rec: &NodeRecord) -> Result<i32> {
         let mut conn = self.get_conn()?;
@@ -2244,34 +2259,106 @@ impl Database {
             updated_at: &rec.updated_at,
             metadata_json: metadata.as_deref(),
         };
-        diesel::insert_into(decision_nodes::table)
-            .values(&new_node)
-            .execute(&mut conn)?;
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
-        Ok(id)
+        let body = self.node_created_body(&new_node);
+        conn.immediate_transaction(|conn| {
+            diesel::insert_into(decision_nodes::table)
+                .values(&new_node)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            self.queue_in_tx(conn, body.into_iter().collect())?;
+            Ok(id)
+        })
     }
 
     /// Overwrite a node's fields exactly as recorded.
     pub(crate) fn update_node_record(&self, node_id: i32, rec: &NodeRecord) -> Result<()> {
         let mut conn = self.get_conn()?;
         let metadata = rec.metadata_json();
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::node_type.eq(&rec.node_type),
-                decision_nodes::title.eq(&rec.title),
-                decision_nodes::description.eq(rec.description.as_deref()),
-                decision_nodes::status.eq(&rec.status),
-                decision_nodes::metadata_json.eq(metadata.as_deref()),
-                decision_nodes::updated_at.eq(&rec.updated_at),
-            ))
-            .execute(&mut conn)?;
-        Ok(())
+        conn.immediate_transaction(|conn| {
+            let before = self.replaced_in_tx(conn, node_id)?;
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set((
+                    decision_nodes::node_type.eq(&rec.node_type),
+                    decision_nodes::title.eq(&rec.title),
+                    decision_nodes::description.eq(rec.description.as_deref()),
+                    decision_nodes::status.eq(&rec.status),
+                    decision_nodes::metadata_json.eq(metadata.as_deref()),
+                    decision_nodes::updated_at.eq(&rec.updated_at),
+                ))
+                .execute(conn)?;
+            let bodies = match before {
+                Some(before) => Self::record_update_body(before, rec),
+                None => Vec::new(),
+            };
+            self.queue_in_tx(conn, bodies)?;
+            Ok(())
+        })
     }
 
-    /// Delete a node (and its edges) without writing tombstones.
+    /// The update op for applying `rec` over `before`: every column and
+    /// metadata key whose value changes, with the value it replaces. A key
+    /// `rec` lacks is left out (an op merges keys and cannot remove one),
+    /// and so is the node type (not settable over /ops).
+    fn record_update_body(before: DecisionNode, rec: &NodeRecord) -> Vec<crate::oplog::OpBody> {
+        use serde_json::{Map, Value};
+        let mut set = Map::new();
+        if before.title != rec.title {
+            set.insert("title".into(), Value::String(rec.title.clone()));
+        }
+        if before.status != rec.status {
+            set.insert("status".into(), Value::String(rec.status.clone()));
+        }
+        if before.description.as_deref().unwrap_or("") != rec.description.as_deref().unwrap_or("") {
+            set.insert(
+                "description".into(),
+                rec.description
+                    .clone()
+                    .map(Value::String)
+                    .unwrap_or(Value::Null),
+            );
+        }
+        let old: Map<String, Value> = before
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let new: Map<String, Value> = rec
+            .metadata
+            .as_ref()
+            .and_then(|m| m.as_object().cloned())
+            .unwrap_or_default();
+        let metadata: Map<String, Value> = new
+            .into_iter()
+            .filter(|(k, v)| old.get(k) != Some(v))
+            .collect();
+        if set.is_empty() && metadata.is_empty() {
+            return Vec::new();
+        }
+        Self::node_update_body(Some(before), set, metadata)
+    }
+
+    /// Moves what reconcile queued in remote_outbox to the log, in one
+    /// append. A failure leaves them in the outbox, where the next logged
+    /// write or the next process to open the database finds them.
+    pub(crate) fn flush_outbox(&self) {
+        if self.oplog().is_none() {
+            return;
+        }
+        if let Err(e) = self.hold_log() {
+            eprintln!(
+                "Warning: edits applied from graph.json are kept in this database and queued for \
+                 the server by the next write: {e}"
+            );
+        }
+    }
+
+    /// Delete a node (and its edges) without writing tombstones: a delete
+    /// that came through git. With a log, the node's delete is queued (its
+    /// edges go with it on the server, which hides a deleted node's edges).
     pub(crate) fn delete_node_local(&self, node_id: i32) -> Result<()> {
         self.delete_node_impl(node_id, false, false).map(|_| ())
     }
@@ -2294,14 +2381,25 @@ impl Database {
             rationale: rec.rationale.as_deref(),
             created_at: &rec.created_at,
         };
-        diesel::insert_into(decision_edges::table)
-            .values(&new_edge)
-            .execute(&mut conn)?;
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
-        Ok(id)
+        let body = self.oplog().map(|_| crate::oplog::OpBody::CreateEdge {
+            from_change_id: rec.from_change_id.clone(),
+            to_change_id: rec.to_change_id.clone(),
+            edge_type: rec.edge_type.clone(),
+            rationale: rec.rationale.clone(),
+            weight: new_edge.weight,
+            created_at: rec.created_at.clone(),
+        });
+        conn.immediate_transaction(|conn| {
+            diesel::insert_into(decision_edges::table)
+                .values(&new_edge)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            self.queue_in_tx(conn, body.into_iter().collect())?;
+            Ok(id)
+        })
     }
 
     /// Take an edge's rationale and weight from its record, without
@@ -2318,10 +2416,43 @@ impl Database {
     }
 
     /// Delete one edge row by primary key without writing a tombstone.
-    pub(crate) fn delete_edge_local(&self, edge_id: i32) -> Result<()> {
+    /// `deleted_at` is when the unlink in graph.json was made, which the
+    /// server orders against a link of the same edge.
+    pub(crate) fn delete_edge_local(&self, edge_id: i32, deleted_at: Option<&str>) -> Result<()> {
         let mut conn = self.get_conn()?;
-        diesel::delete(decision_edges::table.filter(decision_edges::id.eq(edge_id)))
-            .execute(&mut conn)?;
+        let logged = self.oplog().is_some();
+        let unnamed = conn.immediate_transaction(|conn| {
+            let row = decision_edges::table
+                .filter(decision_edges::id.eq(edge_id))
+                .first::<DecisionEdge>(conn)
+                .optional()?;
+            diesel::delete(decision_edges::table.filter(decision_edges::id.eq(edge_id)))
+                .execute(conn)?;
+            let Some(row) = row.filter(|_| logged) else {
+                return Ok(None);
+            };
+            match (row.from_change_id.clone(), row.to_change_id.clone()) {
+                (Some(from_change_id), Some(to_change_id)) => {
+                    self.queue_in_tx(
+                        conn,
+                        vec![crate::oplog::OpBody::DeleteEdge {
+                            from_change_id,
+                            to_change_id,
+                            edge_type: row.edge_type.clone(),
+                            deleted_at: deleted_at.map(str::to_string),
+                        }],
+                    )?;
+                    Ok(None)
+                }
+                _ => Ok::<_, DbError>(Some(format!(
+                    "edge {} ({} -> {}) has no change_id for an endpoint, so its removal cannot be named to the server",
+                    row.id, row.from_node_id, row.to_node_id
+                ))),
+            }
+        })?;
+        if let Some(u) = unnamed {
+            self.not_queued(u);
+        }
         Ok(())
     }
 
@@ -2862,7 +2993,7 @@ impl Database {
         } else {
             Default::default()
         };
-        if publish && self.oplog().is_some() {
+        if self.oplog().is_some() {
             bodies.push(Self::node_deleted_body(&node));
         }
         let mut conn = self.get_conn()?;

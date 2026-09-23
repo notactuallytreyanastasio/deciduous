@@ -2247,7 +2247,8 @@ fn reconcile_inner(
                     let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
                     if deleted >= parse_ts(&row.created_at) {
                         if !dry_run {
-                            db.delete_edge_local(row.id).map_err(db_err)?;
+                            db.delete_edge_local(row.id, rec.deleted_at.as_deref())
+                                .map_err(db_err)?;
                         }
                         report.edges_deleted += 1;
                     } else {
@@ -2364,6 +2365,11 @@ fn reconcile_inner(
         }
     }
 
+    // What was applied from the file was queued in the database, row by
+    // row; one append puts it in the server log.
+    if !dry_run {
+        db.flush_outbox();
+    }
     Ok(report)
 }
 
