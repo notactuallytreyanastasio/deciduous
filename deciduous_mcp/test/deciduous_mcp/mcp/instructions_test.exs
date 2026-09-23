@@ -49,4 +49,16 @@ defmodule DeciduousMcp.MCP.InstructionsTest do
     assert result["instructions"] =~ "parent_id"
     assert result["serverInfo"]["name"] == "deciduous-mcp"
   end
+
+  # After a rename, or a `remote init --workspace`, the CLI writes to the
+  # name recorded in .deciduous/config.toml. An agent told to use the
+  # directory name wrote to a different graph than the CLI beside it.
+  test "agents are told to take the workspace from the project's config first" do
+    text = DeciduousMcp.MCP.Instructions.text()
+    assert text =~ ".deciduous/config.toml"
+    refute text =~ "(the repository root's directory name, also from a worktree)"
+
+    desc = DeciduousMcp.MCP.Scope.schema_property()[:workspace][:description]
+    assert desc =~ ".deciduous/config.toml"
+  end
 end
