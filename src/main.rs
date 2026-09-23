@@ -1034,8 +1034,10 @@ fn main() {
             (true, true)
         };
 
+        let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         if let Err(e) =
             deciduous::init::init_project(setup_claude, setup_opencode, windsurf, no_auto_update)
+                .and_then(|_| deciduous::server::ensure(&cwd, deciduous::server::Caller::Init))
         {
             eprintln!("{} {}", "Error:".red(), e);
             std::process::exit(1);
@@ -1048,7 +1050,10 @@ fn main() {
     if let Command::Update { all } = &args.command {
         match all {
             None => {
-                if let Err(e) = deciduous::init::update_tooling() {
+                let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+                if let Err(e) = deciduous::init::update_tooling().and_then(|_| {
+                    deciduous::server::ensure(&cwd, deciduous::server::Caller::Update)
+                }) {
                     eprintln!("{} {}", "Error:".red(), e);
                     std::process::exit(1);
                 }

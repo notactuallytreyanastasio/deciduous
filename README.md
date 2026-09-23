@@ -64,10 +64,10 @@ Set it up with `deciduous remote init <url>` once the server is running (`decidu
 
 ## First-time setup
 
-Five steps, from nothing to agents logging to a graph. Steps 3 and 4 are only
-for a shared graph; skip them to keep the graph in the repository.
+Every project writes to a shared graph server, and `deciduous init` does not
+finish until the project points at one that answers.
 
-**1. Install the binary** (1.0.4 or newer):
+**1. Install the binary** (1.0.5 or newer), and Docker:
 
 ```bash
 brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
@@ -78,47 +78,49 @@ deciduous --version
 which -a deciduous    # with both installed, the first one on PATH runs
 ```
 
-Upgrading later is `brew upgrade deciduous` or the same `cargo install` line.
-Then run `deciduous update` in each project.
+[Docker Desktop](https://docs.docker.com/get-docker/) (or Docker Engine with
+Compose) must be installed and running, unless you only use a server someone
+else runs (step 2b).
 
-**2. Set up a project:**
+**2a. Set up a project on this machine's server:**
 
 ```bash
 cd your-project
 deciduous init            # Claude Code; --opencode, --windsurf or --both for others
 ```
 
-This writes the slash commands, skills and a `CLAUDE.md` section. Commit them
-(by path, not `git add -A`) so every clone gets them.
+`init` writes the slash commands, skills and a `CLAUDE.md` section, then sets
+up the server. The first time on a machine, it downloads the server bundle for
+its own version and checks it against the release's checksums. It then starts
+PostgreSQL 17 and the server on `127.0.0.1:4000` with Docker (a few minutes for
+the first build). It stores the token in `~/.config/deciduous/credentials`
+(mode 0600), and registers the server with Claude Code. Every later project on
+the machine finds the running server in about a second. Commit the project
+files (by path, not `git add -A`) so every clone gets them.
 
-**3. Store the shared server's token** (once per machine):
-
-```bash
-deciduous remote login --url https://your-server.example/deciduous-mcp
-```
-
-It reads the token from stdin and stores it in `~/.config/deciduous/credentials`
-(mode 0600), outside every repository. Running your own server is covered in
-[Self-host the shared graph server](#self-host-the-shared-graph-server).
-
-**4. Connect Claude Code to the server, and the project to its workspace:**
+**2b. Or point the project at a team's server** before running `init`:
 
 ```bash
+deciduous remote login --url https://your-server.example/deciduous-mcp   # token on stdin, once per machine
+cd your-project
+deciduous remote init https://your-server.example/deciduous-mcp
+deciduous init            # finds the remote, checks it, installs nothing
 claude mcp add --scope user --transport http deciduous \
   https://your-server.example/deciduous-mcp/mcp \
   --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
-claude mcp get deciduous      # Status: ✔ Connected
-
-cd your-project
-deciduous remote init https://your-server.example/deciduous-mcp
 ```
 
-Restart Claude Code afterwards. When it connects, the server sends the logging
+**3. Restart Claude Code.** When it connects, the server sends the logging
 instructions (when to write, and how to write one step in one call). There is
 no hook to install. Agents write through the MCP tools. `deciduous add` from
 the CLI writes to the local database until you run `deciduous remote push`.
 
-**5. See several agents work together** (macOS, in iTerm2 or Ghostty):
+If anything is missing (no Docker, a server that does not answer, no token),
+`init` and `update` stop with exit 1 and say how to fix it. Upgrading later is
+`brew upgrade deciduous` or the same `cargo install` line, then
+`deciduous update` in each project (`deciduous update --all ~/code` for many).
+
+**4. See several agents work together** (macOS, in iTerm2 or Ghostty):
 
 ```bash
 deciduous demo-swarm --preview   # the walkthrough, in this terminal; nothing is started

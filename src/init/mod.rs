@@ -1004,7 +1004,8 @@ pub fn update_all(root: &Path) -> usize {
         println!("\n{} {}", "==>".cyan(), d.display());
         let result = std::env::set_current_dir(&d)
             .map_err(|e| format!("cannot enter {}: {e}", d.display()))
-            .and_then(|_| update_tooling());
+            .and_then(|_| update_tooling())
+            .and_then(|_| crate::server::ensure(&d, crate::server::Caller::Update));
         match result {
             Ok(()) => ok += 1,
             Err(e) => {

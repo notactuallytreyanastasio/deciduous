@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.5] - 2026-09-23
+
+A project is not set up until it points at a server that answers. Since 1.0.3 agents write through the HTTP MCP server, so a project with no server gives its agents nowhere to write, and `init` used to finish without one.
+
+### Changed
+- **`deciduous init` and `deciduous update` set up or check the shared graph server, and fail if they cannot.** They write their files first, then:
+  - A project with `[remote] url` is checked. On `init` the server must answer and accept the stored token; on `update` it must answer and a token must be stored. `update --all` checks every project.
+  - A project without a remote gets this machine's local server. If one is running (`~/.config/deciduous/server/.env`, `/health` answering), the project is pointed at it. If not, `init` downloads the `deciduous-mcp-docker.tar.gz` for its own version and checks it against the release's `checksums.txt`. It then runs the bundle's `scripts/setup.sh`, which starts PostgreSQL 17 and the server on `127.0.0.1:4000` with credentials in that `.env` (mode 0600). It stores the token, writes `[remote]`, and registers the server with Claude Code at user scope unless a `deciduous` server is already registered there. A token the machine already has becomes the local server's token, so a machine never holds two.
+  - No Docker, Docker not running, a checksum mismatch, or a server that does not answer is an error with the fix in it, exit 1. The project files are already written by then. Measured: the first `init` on a machine takes 1 min 35 s (image build); the next project finds the running server in 1.2 s.
+  - `DECIDUOUS_NO_SERVER=1` skips the step, for tests and CI. `DECIDUOUS_SERVER_BUNDLE` points at a local bundle, for builds that are not releases.
+
+### Fixed
+- **The README's Claude Code MCP setup never connected anything.** It put `mcpServers` in `.claude/settings.local.json`, which Claude Code does not read for MCP. It now uses `claude mcp add`. The README also gains a first-time setup section.
+
 ## [1.0.4] - 2026-09-23
 
 Agents are told how to log by the server itself, on every connection, in place of the hook 1.0.3 removed. The release also adds a multi-agent demonstration and fixes `update --help`.
