@@ -160,6 +160,8 @@ impl McpServer {
                 result
             }
         };
+        let mut result = result;
+        attach_notices(&mut result);
 
         serde_json::to_value(result).map_err(|e| json!({"error": e.to_string()}))
     }
@@ -469,6 +471,25 @@ fn clear_session_from_disk(file: &std::path::Path, session_id: i32) -> io::Resul
     }
 }
 
+/// Puts what the server log has to say into a tool result, which the agent
+/// reads; stderr, where it used to go only, the agent never sees (RUST-N7).
+///
+/// A write this call made that was not queued makes the call an error: its
+/// text says the local write happened, so it is not retried. A refusal
+/// found by the replay thread is about an earlier write, and is added to
+/// whichever call comes next without changing that call's own outcome.
+fn attach_notices(result: &mut protocol::ToolCallResult) {
+    for n in crate::oplog::take_notices() {
+        if n.kind == crate::oplog::NoticeKind::Unqueued {
+            result.is_error = Some(true);
+        }
+        result.content.push(protocol::ToolResultContent {
+            content_type: "text".to_string(),
+            text: n.text,
+        });
+    }
+}
+
 /// Run the MCP server on stdin/stdout.
 pub fn run_server() -> io::Result<()> {
     let stdin = io::stdin();
@@ -494,6 +515,7 @@ pub fn run_server() -> io::Result<()> {
     };
 
     let mut server = McpServer::new(db);
+    let replayer = Replayer::spawn();
 
     eprintln!(
         "deciduous-mcp: server started (v{})",
@@ -545,15 +567,109 @@ pub fn run_server() -> io::Result<()> {
             stdout.flush()?;
         }
 
-        // After the answer, so the agent is not kept waiting on the network.
+        // Handed to the replay thread, so no answer waits on the network.
         // Warnings go to stderr; stdout is the protocol.
         if let Some(log) = crate::oplog::take_appended() {
-            crate::remote::replay_after_write(&log);
+            replayer.send(log);
         }
     }
 
     eprintln!("deciduous-mcp: stdin closed, shutting down");
+    // What is still waiting gets one last try, bounded by the replay's own
+    // timeout, so closing the session does not strand the last writes.
+    replayer.finish();
     Ok(())
+}
+
+/// Sends the log to the server on its own thread.
+///
+/// The loop used to replay after each answer, on the loop's thread. Against a
+/// server that accepts connections and never answers, every request after a
+/// write, reads and pings included, then waited out the replay: about 135 s,
+/// and again after every write (RUST-N2), well past an MCP client's
+/// timeout. A write's answer does not depend on the server; the local write
+/// and its op are already on disk when it is sent.
+///
+/// Requests that arrive while a replay is running are coalesced: one replay
+/// sends everything pending, so a burst of writes costs one more replay, not
+/// one each.
+struct Replayer {
+    tx: Option<std::sync::mpsc::Sender<crate::oplog::OpLog>>,
+    handle: Option<std::thread::JoinHandle<()>>,
+    /// Told when the thread has run its last replay.
+    done: Option<std::sync::mpsc::Receiver<()>>,
+}
+
+/// How long a closing stdio server waits for its last replay. The writes
+/// are on disk in the log either way; this is how long a client that waits
+/// for the process to exit waits on the network. It used to be the replay's
+/// own 10 s, plus a replay already running: about 10 s, and past 10 s for a
+/// second client, against a server that never answers.
+const FINISH_WAIT: std::time::Duration = std::time::Duration::from_secs(3);
+
+impl Replayer {
+    fn spawn() -> Self {
+        let (tx, rx) = std::sync::mpsc::channel::<crate::oplog::OpLog>();
+        let (done_tx, done) = std::sync::mpsc::channel::<()>();
+        let handle = std::thread::Builder::new()
+            .name("deciduous-replay".into())
+            .spawn(move || {
+                let mut last = None;
+                while let Ok(mut log) = rx.recv() {
+                    while let Ok(newer) = rx.try_recv() {
+                        log = newer;
+                    }
+                    crate::remote::replay_after_write_quietly(&log, &mut last);
+                }
+                let _ = done_tx.send(());
+            })
+            .ok();
+        if handle.is_none() {
+            eprintln!(
+                "deciduous-mcp: could not start the replay thread; writes are sent on this thread instead"
+            );
+        }
+        Replayer {
+            tx: handle.as_ref().map(|_| tx),
+            handle,
+            done: Some(done),
+        }
+    }
+
+    fn send(&self, log: crate::oplog::OpLog) {
+        match &self.tx {
+            Some(tx) => {
+                if let Err(e) = tx.send(log) {
+                    crate::remote::replay_after_write(&e.0);
+                }
+            }
+            None => crate::remote::replay_after_write(&log),
+        }
+    }
+
+    /// Lets a replay in progress, and one more for what it has not seen,
+    /// finish within [`FINISH_WAIT`]; after that the process exits and the
+    /// writes wait in the log for the next write or `remote push`. Stopping
+    /// a replay midway is safe: an answer not yet recorded is asked again
+    /// ("duplicate"), and a torn last line is mended by the next append.
+    fn finish(mut self) {
+        drop(self.tx.take());
+        let Some(h) = self.handle.take() else { return };
+        let finished = self
+            .done
+            .take()
+            .is_some_and(|d| d.recv_timeout(FINISH_WAIT).is_ok());
+        if finished {
+            let _ = h.join();
+        } else {
+            eprintln!(
+                "deciduous-mcp: the server did not answer within {} s of stdin closing; \
+                 the writes it has not acknowledged stay queued in the log and are sent \
+                 with the next write or `deciduous remote push`",
+                FINISH_WAIT.as_secs()
+            );
+        }
+    }
 }
 
 fn handle_notification(method: &str) {

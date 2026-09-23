@@ -263,7 +263,13 @@ fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
 /// pushed), the derived name is. If the server cannot be asked, nothing is
 /// recorded and the derived name is used for this call only, so the question
 /// is asked again next time.
-fn legacy_workspace(dir: &Path, url: &str, token: &str, derived: String) -> Result<String, String> {
+fn legacy_workspace(
+    dir: &Path,
+    url: &str,
+    token: &str,
+    derived: String,
+    deadline: Option<std::time::Instant>,
+) -> Result<String, String> {
     use colored::Colorize;
     let Some(config) = project_config(dir) else {
         return Ok(derived);
@@ -281,9 +287,12 @@ fn legacy_workspace(dir: &Path, url: &str, token: &str, derived: String) -> Resu
         struct Reply {
             workspaces: Vec<Held>,
         }
+        // Within the replay's budget when one is set: the /locate question
+        // and the ops after it used to take 15 s + 10 s per CLI write
+        // against a server that never answers (RUST-N2).
         let reply = ureq::post(&format!("{url}/locate"))
             .set("authorization", &format!("Bearer {token}"))
-            .timeout(std::time::Duration::from_secs(15))
+            .timeout(within(std::time::Duration::from_secs(15), deadline))
             .send_json(serde_json::json!({ "change_ids": ids }))
             .map_err(describe)
             .and_then(|r| {
@@ -379,10 +388,98 @@ pub struct Remote {
     /// This repository's root commit ids, sent so the server can tell two
     /// repositories with the same directory name apart. See [`repo_roots`].
     pub repo_roots: Option<Vec<String>>,
+    /// The longest one `POST /ops` request may take, connecting included.
+    ops_timeout: std::time::Duration,
+    /// When everything this remote sends has to be done by: the replay after
+    /// a write, which someone is waiting behind. `None` for an explicit
+    /// command.
+    deadline: Option<std::time::Instant>,
+}
+
+/// `limit`, or less if `deadline` is nearer. Never zero: ureq reads a zero
+/// timeout as none.
+fn within(limit: std::time::Duration, deadline: Option<std::time::Instant>) -> std::time::Duration {
+    let left = deadline.map_or(limit, |d| {
+        d.saturating_duration_since(std::time::Instant::now())
+    });
+    limit.min(left).max(std::time::Duration::from_millis(1))
+}
+
+/// How long `deciduous remote push` lets one batch of ops take.
+const OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// How long the replay after a write may take in all: resolving the
+/// workspace, every /ops request, and the one-op resends after a 500. A
+/// server that accepts connections and never answers (a paused container, a
+/// stalled tunnel, a captive portal) held every CLI write for 2:15 at 120 s
+/// plus a health check, a legacy config's /locate added 15 s to the ops'
+/// 10 s, and a server whose database was down answered each single-op
+/// resend 500 after 3.5 s: 108 s for a write with 30 ops queued. What is not
+/// sent within the budget waits: its ops stay pending, and a later replay
+/// that gets through is answered "duplicate" for any the server did apply.
+pub const QUICK_OPS_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// The config of the project whose database lives in `data_dir` (its
+/// `.deciduous/`), read from `data_dir/config.toml`, not found by walking up
+/// from the current directory. Default when there is none.
+pub fn config_at(data_dir: &Path) -> Result<Config, String> {
+    let path = data_dir.join("config.toml");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
 }
 
 impl Remote {
+    /// The server, workspace and repository of the project that owns the
+    /// database in `data_dir`.
+    ///
+    /// A write goes to the log beside its database, and the log has to be
+    /// replayed as that database's project: its config's url and workspace,
+    /// and the root commits of the repository it sits in. Resolving from the
+    /// current directory sent project 1's writes to project 3's workspace
+    /// whenever DECIDUOUS_DB_PATH pointed across (RUST-N1), and said nothing
+    /// at all when the current directory had no project (BRIDGE-N3).
+    ///
+    /// The url is read at replay time, not recorded per op when the op is
+    /// written. Queued writes are meant to follow a corrected url: a typo
+    /// fixed in config.toml, or a server that moved, must receive what was
+    /// queued while it was wrong.
+    pub fn for_data_dir(data_dir: &Path) -> Result<Self, String> {
+        Self::for_data_dir_by(data_dir, None)
+    }
+
+    /// [`Remote::for_data_dir`] for the replay after a write: everything it
+    /// sends, from resolving the workspace to the last op, within
+    /// [`QUICK_OPS_TIMEOUT`] from now.
+    pub fn for_replay_after_write(data_dir: &Path) -> Result<Self, String> {
+        let deadline = std::time::Instant::now() + QUICK_OPS_TIMEOUT;
+        let mut r = Self::for_data_dir_by(data_dir, Some(deadline))?;
+        r.ops_timeout = QUICK_OPS_TIMEOUT;
+        r.deadline = Some(deadline);
+        Ok(r)
+    }
+
+    fn for_data_dir_by(
+        data_dir: &Path,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Self, String> {
+        let config = config_at(data_dir)?;
+        let data_dir = std::path::absolute(data_dir).unwrap_or_else(|_| data_dir.to_path_buf());
+        let project = data_dir.parent().unwrap_or(&data_dir);
+        Self::resolve_by(&config, project, deadline)
+    }
+
     pub fn resolve(config: &Config, dir: &Path) -> Result<Self, String> {
+        Self::resolve_by(config, dir, None)
+    }
+
+    fn resolve_by(
+        config: &Config,
+        dir: &Path,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<Self, String> {
         let url = config.remote.url.clone().ok_or_else(|| {
             "no remote configured for this project.\n\nRun:\n\n    deciduous remote init <url>"
                 .to_string()
@@ -392,7 +489,7 @@ impl Remote {
         let token = token()?;
         let workspace = match &config.remote.workspace {
             Some(ws) => ws.clone(),
-            None => legacy_workspace(dir, &url, &token, workspace_for(dir))?,
+            None => legacy_workspace(dir, &url, &token, workspace_for(dir), deadline)?,
         };
 
         Ok(Self {
@@ -400,6 +497,8 @@ impl Remote {
             workspace,
             token,
             repo_roots: repo_roots(dir),
+            ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         })
     }
 
@@ -617,16 +716,21 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
 /// Documents used to be computed and then ignored: `nodes == 0 && edges == 0`
 /// returned "nothing to send" with a document missing, and a document that
 /// was sent had no bytes behind it, because nothing uploaded them.
-pub fn push_missing(
-    remote: &Remote,
-    graph: &Value,
-) -> Result<(Option<ImportReport>, Vec<DeletedOnServer>), String> {
+/// What [`push_missing`] did: the import's report (`None` when nothing was
+/// sent), the local nodes the server has deleted, and the rows withheld for
+/// holding a NUL.
+pub type Seeded = (Option<ImportReport>, Vec<DeletedOnServer>, Vec<String>);
+
+pub fn push_missing(remote: &Remote, graph: &Value) -> Result<Seeded, String> {
     let server = remote.export()?;
     let deleted = deleted_on_server(graph, &server);
-    let (missing, nodes, edges) = missing_on_server(graph, &server);
+    let (mut missing, _, _) = missing_on_server(graph, &server);
+    let withheld = withhold_nul(&mut missing);
+    let nodes = missing["nodes"].as_array().map_or(0, Vec::len);
+    let edges = missing["edges"].as_array().map_or(0, Vec::len);
     let docs = missing["documents"].as_array().cloned().unwrap_or_default();
     if nodes == 0 && edges == 0 && docs.is_empty() {
-        return Ok((None, deleted));
+        return Ok((None, deleted, withheld));
     }
     if !docs.is_empty() {
         let dir = Database::db_path()
@@ -652,7 +756,133 @@ pub fn push_missing(
             remote.upload_blob(hash, &bytes, d["mime_type"].as_str())?;
         }
     }
-    remote.import(missing).map(|r| (Some(r), deleted))
+    remote.import(missing).map(|r| (Some(r), deleted, withheld))
+}
+
+/// Where a local row (a node, an edge or a document, as `deciduous graph`
+/// writes it) holds a NUL character, if anywhere: in a field, or inside a
+/// `*_json` field once decoded, where it is stored escaped. Postgres text
+/// cannot hold one, so the server refuses the row.
+pub fn row_nul(row: &Value) -> Option<String> {
+    fn find(v: &Value, path: &str) -> Option<String> {
+        match v {
+            Value::String(s) if s.contains('\0') => Some(path.to_string()),
+            Value::String(s) if path.ends_with("_json") => serde_json::from_str::<Value>(s)
+                .ok()
+                .and_then(|inner| find(&inner, path.trim_end_matches("_json"))),
+            Value::Object(m) => m.iter().find_map(|(k, x)| {
+                let at = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
+                if k.contains('\0') {
+                    Some(format!("the key {at:?}"))
+                } else {
+                    find(x, &at)
+                }
+            }),
+            Value::Array(a) => a
+                .iter()
+                .enumerate()
+                .find_map(|(i, x)| find(x, &format!("{path}.{i}"))),
+            _ => None,
+        }
+    }
+    find(row, "")
+}
+
+/// Takes out of an import the rows holding a NUL, and the edges of a node
+/// taken out, and describes each. The server refuses a whole import for one
+/// such row ("nothing was imported"), so one of them stopped `remote push
+/// --seed` from sending any other row, including writes whose ops a crash
+/// had lost, for which --seed is the only way back.
+fn withhold_nul(missing: &mut Value) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut gone = std::collections::HashSet::new();
+    if let Some(nodes) = missing["nodes"].as_array_mut() {
+        nodes.retain(|n| match row_nul(n) {
+            None => true,
+            Some(at) => {
+                let cid = n["change_id"].as_str().unwrap_or_default().to_string();
+                out.push(format!(
+                    "{} {} \"{}\" (NUL at {at})",
+                    n["node_type"].as_str().unwrap_or("node"),
+                    cid.chars().take(8).collect::<String>(),
+                    n["title"].as_str().unwrap_or_default().replace('\0', "\\0")
+                ));
+                gone.insert(cid);
+                false
+            }
+        });
+    }
+    if let Some(edges) = missing["edges"].as_array_mut() {
+        edges.retain(|e| {
+            let end = |k: &str| e[k].as_str().is_some_and(|c| gone.contains(c));
+            let why = row_nul(e).map(|at| format!("NUL at {at}")).or_else(|| {
+                (end("from_change_id") || end("to_change_id"))
+                    .then(|| "an endpoint is withheld".to_string())
+            });
+            match why {
+                None => true,
+                Some(why) => {
+                    out.push(format!(
+                        "edge {} -> {} ({why})",
+                        e["from_change_id"]
+                            .as_str()
+                            .unwrap_or("?")
+                            .chars()
+                            .take(8)
+                            .collect::<String>(),
+                        e["to_change_id"]
+                            .as_str()
+                            .unwrap_or("?")
+                            .chars()
+                            .take(8)
+                            .collect::<String>()
+                    ));
+                    false
+                }
+            }
+        });
+    }
+    if let Some(docs) = missing["documents"].as_array_mut() {
+        docs.retain(|d| match row_nul(d) {
+            None => true,
+            Some(at) => {
+                out.push(format!(
+                    "document {} (NUL at {at})",
+                    d["original_filename"]
+                        .as_str()
+                        .unwrap_or("?")
+                        .replace('\0', "\\0")
+                ));
+                false
+            }
+        });
+    }
+    out
+}
+
+/// Prints the rows [`push_missing`] did not send because they hold a NUL.
+pub fn print_withheld(withheld: &[String]) {
+    use colored::Colorize;
+    if withheld.is_empty() {
+        return;
+    }
+    eprintln!(
+        "{} {} row(s) hold a NUL character, which the server cannot store; they were not sent \
+         (the other rows were):",
+        "Not sent:".red().bold(),
+        withheld.len()
+    );
+    for w in withheld {
+        eprintln!("  {w}");
+    }
+    eprintln!(
+        "Change that text here (a prompt: `deciduous prompt <id> ...`), then run \
+         `deciduous remote push --seed` again."
+    );
 }
 
 /// A node this machine still has that the server holds as a tombstone.
@@ -759,6 +989,48 @@ pub struct ReplayReport {
     pub already: usize,
     /// Ops the server refused, with its reason. They stay in the log.
     pub rejected: Vec<(crate::oplog::Op, String)>,
+    /// Lines of the log that are not entries: not sent, and moved to the
+    /// side file by the compaction that ends the replay.
+    pub unreadable: Vec<crate::oplog::Unreadable>,
+}
+
+/// Why a replay stopped. The three have different fixes, and saying "the
+/// server refused it" about a line of a local file sent people to the
+/// server for a problem on their own disk.
+#[derive(Debug, Clone)]
+pub enum ReplayError {
+    /// The log file could not be read or written. No server was involved.
+    Log(String),
+    /// No answer: nothing listening, a timeout, DNS. Passes by itself.
+    Unreachable(String),
+    /// The server answered, and not with a report: a refusal of the whole
+    /// request (another repository's workspace, a bad token), a server
+    /// error, or a body that is not an ops report.
+    Server(String),
+    /// The server failed on the request (HTTP 500): not a refusal, and not
+    /// an outage. See [`replay`] for how the op responsible is found.
+    Failed(String),
+    /// Nothing was sent because this machine's settings are incomplete: no
+    /// token, a workspace that could not be resolved.
+    Config(String),
+}
+
+impl std::fmt::Display for ReplayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReplayError::Log(e)
+            | ReplayError::Unreachable(e)
+            | ReplayError::Server(e)
+            | ReplayError::Failed(e)
+            | ReplayError::Config(e) => f.write_str(e),
+        }
+    }
+}
+
+impl From<ReplayError> for String {
+    fn from(e: ReplayError) -> String {
+        e.to_string()
+    }
 }
 
 /// Ops per request. The server takes up to 5,000; a smaller batch keeps one
@@ -844,7 +1116,10 @@ impl Remote {
     }
 
     /// Sends ops to `POST /ops` and returns the server's answer for each.
-    pub fn post_ops(&self, ops: &[crate::oplog::Op]) -> Result<Vec<crate::oplog::Ack>, String> {
+    pub fn post_ops(
+        &self,
+        ops: &[crate::oplog::Op],
+    ) -> Result<Vec<crate::oplog::Ack>, ReplayError> {
         #[derive(Deserialize)]
         struct Answer {
             op_id: String,
@@ -862,16 +1137,33 @@ impl Remote {
             "repo_roots": self.repo_roots,
             "ops": ops,
         });
+        if self
+            .deadline
+            .is_some_and(|d| std::time::Instant::now() >= d)
+        {
+            return Err(ReplayError::Unreachable(format!(
+                "the replay after a write gets {} s in all, and they are spent; \
+                 what was not answered waits",
+                QUICK_OPS_TIMEOUT.as_secs()
+            )));
+        }
         let reply: Reply = self
             .post("/ops")
-            .timeout(std::time::Duration::from_secs(120))
+            .timeout(within(self.ops_timeout, self.deadline))
             .send_json(payload)
             .map_err(|e| match e {
-                ureq::Error::Status(409, _) => self.claim_refused(),
-                e => describe(e),
+                ureq::Error::Status(409, _) => ReplayError::Server(self.claim_refused()),
+                e @ ureq::Error::Status(500, _) => ReplayError::Failed(describe(e)),
+                // A proxy's answer that the server behind it is down or
+                // slow: an outage, which passes by itself.
+                e @ ureq::Error::Status(502..=504, _) => ReplayError::Unreachable(describe(e)),
+                e @ ureq::Error::Status(..) => ReplayError::Server(describe(e)),
+                e @ ureq::Error::Transport(_) => ReplayError::Unreachable(describe(e)),
             })?
             .into_json()
-            .map_err(|e| format!("the server's response was not an ops report: {e}"))?;
+            .map_err(|e| {
+                ReplayError::Server(format!("the server's response was not an ops report: {e}"))
+            })?;
 
         let now = chrono::Utc::now().to_rfc3339();
         let answers: std::collections::HashMap<String, Answer> = reply
@@ -882,22 +1174,22 @@ impl Remote {
         ops.iter()
             .map(|op| {
                 let a = answers.get(&op.op_id).ok_or_else(|| {
-                    format!(
+                    ReplayError::Server(format!(
                         "the server answered for {} of {} ops and not for {} ({}); nothing was marked sent",
                         answers.len(),
                         ops.len(),
                         op.op_id,
                         op.body.describe()
-                    )
+                    ))
                 })?;
                 match a.result.as_str() {
                     "applied" | "exists" | "absent" | "duplicate" | "rejected" => {}
                     other => {
-                        return Err(format!(
+                        return Err(ReplayError::Server(format!(
                             "the server answered {other:?} for {} ({}); this CLI knows applied, exists, absent, duplicate and rejected",
                             op.op_id,
                             op.body.describe()
-                        ))
+                        )))
                     }
                 }
                 Ok(crate::oplog::Ack {
@@ -911,25 +1203,135 @@ impl Remote {
     }
 }
 
+pub use crate::oplog::{is_set_aside, SET_ASIDE};
+
+/// Ops set aside by this machine, and what later ops have to wait for them.
+///
+/// An op set aside leaves a gap in the log's order: the edits of a node
+/// after its set-aside create were sent anyway and refused ("no node ... on
+/// the server"), and an update after a set-aside update carries a `was`
+/// the server never saw. So an op that names what a set-aside op wrote is
+/// set aside with it, and they go again together, in order.
+#[derive(Default)]
+struct Held {
+    /// key -> the first 8 characters of the op id that holds it.
+    keys: std::collections::HashMap<String, String>,
+}
+
+impl Held {
+    /// What an op writes: its node, or its edge.
+    fn own(op: &crate::oplog::Op) -> Vec<String> {
+        use crate::oplog::OpBody::*;
+        match &op.body {
+            CreateNode { change_id, .. }
+            | UpdateNode { change_id, .. }
+            | DeleteNode { change_id } => vec![format!("n:{change_id}")],
+            CreateEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+                ..
+            }
+            | DeleteEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+            } => vec![format!("e:{from_change_id}|{to_change_id}|{edge_type}")],
+        }
+    }
+
+    /// What an op depends on: what it writes, and an edge's endpoints.
+    fn needs(op: &crate::oplog::Op) -> Vec<String> {
+        let mut k = Self::own(op);
+        if let crate::oplog::OpBody::CreateEdge {
+            from_change_id,
+            to_change_id,
+            ..
+        }
+        | crate::oplog::OpBody::DeleteEdge {
+            from_change_id,
+            to_change_id,
+            ..
+        } = &op.body
+        {
+            k.push(format!("n:{from_change_id}"));
+            k.push(format!("n:{to_change_id}"));
+        }
+        k
+    }
+
+    fn add(&mut self, op: &crate::oplog::Op, by: &str) {
+        for k in Self::own(op) {
+            self.keys.entry(k).or_insert_with(|| by.to_string());
+        }
+    }
+
+    /// The set-aside op `op` waits for, if any.
+    fn blocking(&self, op: &crate::oplog::Op) -> Option<String> {
+        Self::needs(op)
+            .iter()
+            .find_map(|k| self.keys.get(k).cloned())
+    }
+
+    /// Answers `op` locally as set aside behind `by`, and holds its keys.
+    fn hold_behind(&mut self, op: &crate::oplog::Op, by: &str) -> crate::oplog::Ack {
+        self.add(op, by);
+        crate::oplog::Ack {
+            op_id: op.op_id.clone(),
+            result: "rejected".into(),
+            reason: Some(format!(
+                "{SET_ASIDE}, not sent: it follows op {by}, which is set aside, and sent without \
+                 it the server would refuse it for want of that op. `deciduous remote push` sends \
+                 them again, in order; `deciduous remote push --drop {}` discards this one",
+                short_id(op)
+            )),
+            at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+fn short_id(op: &crate::oplog::Op) -> String {
+    op.op_id.chars().take(8).collect()
+}
+
 /// Sends every pending op in the log to the server, in order, records the
 /// answers and compacts the log.
 ///
 /// Acks are written batch by batch, so a failure halfway leaves the first
 /// half marked and the rest pending. A batch the server applied but whose
 /// answer never arrived is sent again next time and answered `duplicate`.
-pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, String> {
-    let state = log.read()?;
-    let mut report = ReplayReport::default();
+///
+/// A pending op that depends on an op this machine set aside earlier is set
+/// aside with it, unsent (see [`Held`]).
+pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, ReplayError> {
+    let state = log.read().map_err(ReplayError::Log)?;
+    let mut report = ReplayReport {
+        unreadable: state.unreadable.clone(),
+        ..Default::default()
+    };
+    print_unreadable(&state, log);
 
-    for batch in state.pending.chunks(REPLAY_BATCH) {
-        let acks = remote.post_ops(batch)?;
-        log.record_acks(&acks)?;
-        report.sent += batch.len();
-        for (op, ack) in batch.iter().zip(&acks) {
+    let mut held = Held::default();
+    for (op, ack) in &state.rejected {
+        if ack.reason.as_deref().is_some_and(is_set_aside) {
+            held.add(op, &short_id(op));
+        }
+    }
+    let by_id: std::collections::HashMap<&str, &crate::oplog::Op> = state
+        .pending
+        .iter()
+        .map(|op| (op.op_id.as_str(), op))
+        .collect();
+    let tally = |report: &mut ReplayReport, acks: &[crate::oplog::Ack]| {
+        for ack in acks {
+            let Some(op) = by_id.get(ack.op_id.as_str()) else {
+                continue;
+            };
+            report.sent += 1;
             match ack.result.as_str() {
                 "applied" => report.applied += 1,
                 "rejected" => report.rejected.push((
-                    op.clone(),
+                    (*op).clone(),
                     ack.reason
                         .clone()
                         .unwrap_or_else(|| "no reason given".into()),
@@ -937,40 +1339,243 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
                 _ => report.already += 1,
             }
         }
+    };
+
+    let mut sendable = Vec::with_capacity(state.pending.len());
+    let mut behind = Vec::new();
+    for op in &state.pending {
+        match held.blocking(op) {
+            Some(by) => behind.push(held.hold_behind(op, &by)),
+            None => sendable.push(op.clone()),
+        }
+    }
+    log.record_acks(&behind).map_err(ReplayError::Log)?;
+    tally(&mut report, &behind);
+
+    for batch in sendable.chunks(REPLAY_BATCH) {
+        let (acks, stop) = match remote.post_ops(batch) {
+            Ok(acks) => (acks, None),
+            Err(ReplayError::Failed(e)) => isolate(remote, batch, &e, &mut held),
+            Err(e) => return Err(e),
+        };
+        log.record_acks(&acks).map_err(ReplayError::Log)?;
+        tally(&mut report, &acks);
+        if let Some(e) = stop {
+            // What was answered is recorded; the rest waits.
+            log.compact().map_err(ReplayError::Log)?;
+            return Err(e);
+        }
     }
 
-    log.compact()?;
+    log.compact().map_err(ReplayError::Log)?;
     Ok(report)
 }
 
-/// Prints the ops a server refused, loudly, with what to do about them.
-pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplog::OpLog) {
+/// At most this many ops, in a row, that the server fails on even when sent
+/// alone and twice, before the replay concludes that the server is failing
+/// and not one op.
+const MAX_SUSPECTS: usize = 3;
+
+/// The server failed (HTTP 500) on a batch. One op it cannot handle fails
+/// the whole request, and every later write joins the same batch, so
+/// sending it again as it was would fail the same way forever (SERVER-N1:
+/// one NUL in a prompt stopped every write after it from reaching the
+/// server). The batch is sent again one op at a time.
+///
+/// An op is set aside (answered locally as rejected, kept in the log) only
+/// when the server fails on it alone, twice, then answers another op, then
+/// fails on it again: a verdict about that op, not about the server. A 500
+/// from a server whose database is restarting or whose pool timed out
+/// passes: the first rule of the previous version, "fails alone while the
+/// server answered others", counted an answer from before the outage, and
+/// set aside every healthy op after it. So:
+///
+/// * a 500 is retried once at once, which absorbs a blip;
+/// * an op that fails twice is a suspect, and the ops after it that do not
+///   depend on it are tried, to learn whether the server answers at all;
+/// * when one is answered, each suspect is sent once more, and set aside
+///   only if it fails again;
+/// * [`MAX_SUSPECTS`] suspects in a row, or none answered after them, and
+///   the server is failing: the replay stops and every unanswered op waits.
+///
+/// An op that depends on a suspect is not sent before the suspect is
+/// decided, and is set aside with it if it is set aside (see [`Held`]).
+///
+/// Returns the answers it has, and why it stopped, if it did.
+fn isolate(
+    remote: &Remote,
+    batch: &[crate::oplog::Op],
+    first: &str,
+    held: &mut Held,
+) -> (Vec<crate::oplog::Ack>, Option<ReplayError>) {
+    let send = |op: &crate::oplog::Op| -> Result<crate::oplog::Ack, ReplayError> {
+        let once = remote.post_ops(std::slice::from_ref(op));
+        let twice = match once {
+            Err(ReplayError::Failed(_)) => remote.post_ops(std::slice::from_ref(op)),
+            other => other,
+        };
+        twice.map(|mut a| a.remove(0))
+    };
+    let mut acks = Vec::with_capacity(batch.len());
+    let mut suspects: Vec<(usize, String)> = Vec::new();
+    let mut deferred: Vec<usize> = Vec::new();
+    let mut queue: std::collections::VecDeque<usize> = (0..batch.len()).collect();
+    while let Some(i) = queue.pop_front() {
+        let op = &batch[i];
+        if let Some(by) = held.blocking(op) {
+            acks.push(held.hold_behind(op, &by));
+            continue;
+        }
+        let waits_on_suspect = suspects
+            .iter()
+            .map(|(s, _)| *s)
+            .chain(deferred.iter().copied())
+            .any(|s| {
+                let own = Held::own(&batch[s]);
+                Held::needs(op).iter().any(|k| own.contains(k))
+            });
+        if waits_on_suspect {
+            deferred.push(i);
+            continue;
+        }
+        match send(op) {
+            Ok(ack) => {
+                acks.push(ack);
+                // The server answers: each suspect gets one more try.
+                for (s, _) in std::mem::take(&mut suspects) {
+                    let op = &batch[s];
+                    match send(op) {
+                        Ok(ack) => acks.push(ack),
+                        Err(ReplayError::Failed(e)) => {
+                            held.add(op, &short_id(op));
+                            acks.push(crate::oplog::Ack {
+                                op_id: op.op_id.clone(),
+                                result: "rejected".into(),
+                                reason: Some(format!(
+                                    "{SET_ASIDE}, not answered by the server: the server failed \
+                                     on this op ({e}) each time it was sent alone, and answered \
+                                     the op sent between those tries, so this op, not the \
+                                     server, is what it fails on. It was taken out of the queue \
+                                     to let the writes after it through. `deciduous remote push` \
+                                     sends it again; `deciduous remote push --drop {}` discards it",
+                                    short_id(op)
+                                )),
+                                at: chrono::Utc::now().to_rfc3339(),
+                            });
+                        }
+                        Err(e) => return (acks, Some(e)),
+                    }
+                }
+                for d in std::mem::take(&mut deferred).into_iter().rev() {
+                    queue.push_front(d);
+                }
+            }
+            Err(ReplayError::Failed(e)) => {
+                suspects.push((i, e));
+                if suspects.len() >= MAX_SUSPECTS {
+                    return (
+                        acks,
+                        Some(ReplayError::Failed(format!(
+                            "{first}; sent one at a time, the server failed on {} ops in a row, \
+                             each twice, so the server is failing, not one op. Nothing was set \
+                             aside; every write not answered waits",
+                            suspects.len()
+                        ))),
+                    );
+                }
+            }
+            Err(e) => return (acks, Some(e)),
+        }
+    }
+    if suspects.is_empty() {
+        return (acks, None);
+    }
+    (
+        acks,
+        Some(ReplayError::Failed(format!(
+            "{first}; sent alone, twice each, the server failed on {} and answered nothing \
+             after, so there is no telling whether they or the server are at fault. Nothing \
+             was set aside; they wait",
+            suspects
+                .iter()
+                .map(|(s, _)| batch[*s].body.describe())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))),
+    )
+}
+
+/// Says which lines of the log could not be read, every time the log is
+/// replayed, until someone deals with them. They are not sent.
+pub fn print_unreadable(state: &crate::oplog::LogState, log: &crate::oplog::OpLog) {
     use colored::Colorize;
-    if rejected.is_empty() {
+    if state.unreadable.is_empty() {
         return;
     }
     eprintln!(
-        "{} the server refused {} write(s):",
-        "Rejected:".red().bold(),
-        rejected.len()
-    );
-    for (op, reason) in rejected {
-        eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
-    }
-    eprintln!(
-        "They stay in {} and the local graph keeps them. \
-         `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
+        "{} {} line(s) of {} are not log entries and are not sent (the file is damaged; no server was involved):",
+        "Warning:".yellow(),
+        state.unreadable.len(),
         log.path().display()
     );
-    // The one refusal with a fix that is not a choice: the node is gone on
-    // the server, so the write can never apply, and pull both removes the
-    // node here and drops the refusals that touch it.
-    if rejected
+    for u in &state.unreadable {
+        eprintln!("  {}", u.describe());
+    }
+    eprintln!(
+        "They are moved to {} the next time the log is compacted. If one is a write you want sent, \
+         repair its JSON and append it to the log again; every other line is sent as usual.",
+        log.unreadable_path().display()
+    );
+}
+
+/// Prints the ops a server refused, loudly, with what to do about them,
+/// and apart from them the ops this machine set aside, which are real
+/// writes the server never judged: the advice for one is wrong for the
+/// other.
+pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplog::OpLog) {
+    use colored::Colorize;
+    let (aside, refused): (Vec<_>, Vec<_>) = rejected
         .iter()
-        .any(|(_, reason)| reason.contains("was deleted on the server"))
-    {
+        .partition(|(_, reason)| is_set_aside(reason));
+    if !refused.is_empty() {
         eprintln!(
-            "A node these writes touch was deleted on the server: `deciduous remote pull` removes it here and drops the refusals with it."
+            "{} the server refused {} write(s):",
+            "Rejected:".red().bold(),
+            refused.len()
+        );
+        for (op, reason) in &refused {
+            eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+        }
+        eprintln!(
+            "They stay in {} and the local graph keeps them. \
+             `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
+            log.path().display()
+        );
+        // The one refusal with a fix that is not a choice: the node is gone
+        // on the server, so the write can never apply, and pull both removes
+        // the node here and drops the refusals that touch it.
+        if refused
+            .iter()
+            .any(|(_, reason)| reason.contains("was deleted on the server"))
+        {
+            eprintln!(
+                "A node these writes touch was deleted on the server: `deciduous remote pull` removes it here and drops the refusals with it."
+            );
+        }
+    }
+    if !aside.is_empty() {
+        eprintln!(
+            "{} {} write(s) were not refused by the server; this machine held them back:",
+            "Set aside:".red().bold(),
+            aside.len()
+        );
+        for (op, reason) in &aside {
+            eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+        }
+        eprintln!(
+            "They are writes the server has not got. They stay in {}; `deciduous remote push` \
+             sends them again (`--drop <op id>` discards one; `--drop-rejected` keeps them).",
+            log.path().display()
         );
     }
 }
@@ -989,46 +1594,127 @@ pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplo
 /// says how many writes are waiting and where; they stay in the log, and the
 /// next write or `deciduous remote push` sends them.
 pub fn replay_after_write(log: &crate::oplog::OpLog) {
+    replay_after_write_quietly(log, &mut None);
+}
+
+/// [`replay_after_write`] for a process that replays after every write for
+/// hours (the stdio MCP server): a failure that is the same as the previous
+/// replay's is not printed again. Offline, each write printed about 430
+/// bytes of the same warning to stderr, and a client that does not read
+/// stderr stopped the server after about 150 writes (RUST-N7).
+pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<String>) {
     use colored::Colorize;
 
-    let cfg = Config::load();
-    if !cfg.remote.is_configured() {
-        return;
-    }
-    let dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let remote = Remote::resolve(&cfg, &dir);
+    // The log's own project, not the current directory's: see
+    // `Remote::for_data_dir`.
+    let data_dir = log.path().parent().unwrap_or(Path::new("."));
+    let remote = Remote::for_replay_after_write(data_dir);
     let result = remote
         .as_ref()
-        .map_err(|e| e.clone())
+        .map_err(|e| ReplayError::Config(e.clone()))
         .and_then(|r| replay(r, log));
-    match result {
-        Ok(report) => print_rejected(&report.rejected, log),
-        Err(e) => {
-            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
-            // Only a server that does not answer is an outage that passes by
-            // itself. A refusal (another repository's workspace, a bad
-            // token) or a config problem is answered the same way on every
-            // retry, and "once the server is reachable" sent people to wait
-            // for something that was never going to happen.
-            let unreachable = remote.as_ref().is_ok_and(|r| r.health().is_err());
-            if unreachable {
-                eprintln!(
-                    "{} the local write succeeded but the server did not get it: {e}\n\
-                     {waiting} write(s) queued in {}. They are sent on the next write, or now with \
-                     `deciduous remote push` once the server is reachable.",
-                    "Warning:".yellow(),
-                    log.path().display(),
+    let waiting = || match log.read() {
+        Ok(s) => format!("{} write(s)", s.pending.len()),
+        Err(e) => format!("an unknown number of writes (the log could not be read: {e})"),
+    };
+    let unsent = |text: String| crate::oplog::notice(crate::oplog::NoticeKind::Unsent, text);
+    match &result {
+        Ok(report) => {
+            if !report.rejected.is_empty() {
+                let aside = report
+                    .rejected
+                    .iter()
+                    .filter(|(_, r)| is_set_aside(r))
+                    .count();
+                let mut text = format!(
+                    "{} earlier write(s) did not reach the shared server ({} refused by it, {} set \
+                     aside by this machine because the server failed on them); they were made \
+                     here and are not on the server:",
+                    report.rejected.len(),
+                    report.rejected.len() - aside,
+                    aside
                 );
-            } else {
-                eprintln!(
-                    "{} the local write succeeded but the server refused it: {e}\n\
-                     {waiting} write(s) wait in {}, and every later write will be refused the same way \
-                     until that is fixed. `deciduous remote status` lists them.",
-                    "Warning:".yellow(),
+                for (op, reason) in &report.rejected {
+                    text.push_str(&format!("\n  {}: {reason}", op.body.describe()));
+                }
+                text.push_str(&format!(
+                    "\nThey stay in {}. `deciduous remote status` lists them.",
+                    log.path().display()
+                ));
+                unsent(text);
+            }
+            if !report.unreadable.is_empty() {
+                unsent(format!(
+                    "{} line(s) of {} are not log entries and were not sent (the file is damaged): {}",
+                    report.unreadable.len(),
                     log.path().display(),
-                );
+                    report
+                        .unreadable
+                        .iter()
+                        .map(|u| u.describe())
+                        .collect::<Vec<_>>()
+                        .join("; ")
+                ));
             }
         }
+        // An outage passes by itself; the writes are queued and go later.
+        Err(ReplayError::Unreachable(_)) => {}
+        Err(e) => unsent(format!(
+            "Writes made here did not reach the shared server, and will not until this is fixed: {e}\n{} wait in {}.",
+            waiting(),
+            log.path().display()
+        )),
+    }
+    let this = result.as_ref().err().map(|e| e.to_string());
+    let repeat = this.is_some() && *last == this;
+    *last = this;
+    if repeat {
+        return;
+    }
+    match result {
+        Ok(report) => print_rejected(&report.rejected, log),
+        // Only a server that does not answer is an outage that passes by
+        // itself. A refusal (another repository's workspace, a bad token)
+        // or a config problem is answered the same way on every retry, and
+        // "once the server is reachable" sent people to wait for something
+        // that was never going to happen.
+        Err(ReplayError::Unreachable(e)) => eprintln!(
+            "{} the local write succeeded but the server did not get it: {e}\n\
+             {} queued in {}. They are sent on the next write, or now with \
+             `deciduous remote push` once the server is reachable.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Server(e)) => eprintln!(
+            "{} the local write succeeded but the server refused it: {e}\n\
+             {} wait in {}, and every later write will be refused the same way \
+             until that is fixed. `deciduous remote status` lists them.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Failed(e)) => eprintln!(
+            "{} the local write succeeded but the server failed on the request: {e}\n\
+             {} wait in {}. They are sent again on the next write. An op is set aside only \
+             when the server fails on it alone, answers another, and fails on it again.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Config(e)) => eprintln!(
+            "{} the local write succeeded but could not be sent: {e}\n{} wait in {}.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Log(e)) => eprintln!(
+            "{} the local write succeeded but the log of writes for the server could not be \
+             read or written, so nothing was sent: {e}\n{} wait in {}.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
     }
 }
 
@@ -1899,6 +2585,8 @@ mod tests {
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
             repo_roots: None,
+            ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         };
         assert_eq!(
             r.events_url(),
@@ -1913,6 +2601,8 @@ mod tests {
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
             repo_roots: None,
+            ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         };
         assert_eq!(
             r.events_url(),
@@ -1931,6 +2621,8 @@ mod tests {
             workspace: "a b".to_string(),
             token: "tok".to_string(),
             repo_roots: None,
+            ops_timeout: OPS_TIMEOUT,
+            deadline: None,
         };
         assert!(
             r.events_url().contains("workspace=a%20b"),

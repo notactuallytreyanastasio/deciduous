@@ -68,7 +68,7 @@ called.
 | `deciduous remote init <url>` | Point this repo at a server; verifies and claims the workspace before writing, then sends local history the server lacks |
 | `deciduous remote status` | Writes waiting in the log, and every node, edge and document that differs, field by field, each with the command that fixes it. Exits 1 when anything differs |
 | `deciduous remote pull` | Send what is waiting, then refresh the local cache from the server (including its deletions) |
-| `deciduous remote push` | Send what is waiting in the log. `--seed` also sends rows and documents (with their bytes) no op covers, such as history from before the remote. `--repair` makes the server's fields match this copy's for every node status lists as Different. `--drop-rejected` discards ops the server refused |
+| `deciduous remote push` | Send what is waiting in the log. `--seed` also sends rows and documents (with their bytes) no op covers, such as history from before the remote. `--repair` makes the server's fields match this copy's for every node status lists as Different. `--drop-rejected` discards ops the server refused, `--retry-rejected` sends them again, `--drop <op id>` discards one op by the id `remote status` prints. Also sends again what this machine set aside, and exits 1 if anything is still set aside or a row could not be seeded |
 
 `status` compares content, not counts. Two graphs can hold the same number of
 nodes and different nodes:
@@ -137,8 +137,61 @@ is as long as the queue, not as long as the project.
 
 **Refused ops.** The server refuses, with a reason, an op it cannot apply (an
 edit to a node an agent deleted, for one). Refused ops stay in the log, are
-printed on every replay, and are listed by `remote status` until
-`deciduous remote push --drop-rejected`.
+printed on every replay, and are listed by `remote status`, each with the
+start of its op id, until `deciduous remote push --drop-rejected` (all of
+them), `--drop <op id>` (one) or `--retry-rejected` (send them again, once the
+cause is fixed).
+
+A write whose text holds a NUL character is refused before it is made, in a
+project with a remote: the server cannot store one. `remote push --seed`
+leaves out, by name, a row written earlier that holds one, and sends the rest.
+
+If the server fails on a request (HTTP 500) instead of answering, the batch
+is sent again one op at a time, and each failure once more at once. An op is
+set aside only when the server fails on it, then answers another op, then
+fails on it again: that is about the op, not the server, and it keeps one bad
+op from holding back every write after it. The ops that write the same node
+(or edge) after it are set aside with it, unsent, so their order holds. After
+three ops in a row fail, or none is answered after a failure, the server is
+failing: nothing is set aside and every unanswered op waits. What this machine
+set aside is listed as "set aside", not "rejected": it is a write the server
+never judged. `remote push` sends it again; `--drop-rejected` keeps it.
+
+**Which project.** The log is sent as the project of the database it sits
+beside: that `.deciduous/config.toml`'s url and workspace, and that
+repository's root commits, also when `DECIDUOUS_DB_PATH` points at a database
+outside the current directory. The url is read when the log is sent, not when
+the op was written, so fixing a wrong url sends what queued while it was
+wrong.
+
+**Crashes.** A write's ops are stored in the database, in a `remote_outbox`
+table, in the same transaction as the write, and moved to the log after the
+commit. A process that dies between the two leaves them in the outbox, and
+the next write (or the next command that opens the database) moves them to
+the log, in order, before anything newer. So a write is never made here
+without its op.
+
+Each write holds the log's lock (an OS lock on
+`remote-log.lock`, released when the process exits however it exits) from
+before it changes the database until its op is appended, so the log's order
+is the order of the writes and each update's `was` is the value it replaced.
+If the lock cannot be had within 30 s, the write is refused and nothing is
+written. A last line with no newline is an append that was cut short; the
+next append moves it to `.deciduous/remote-log.unreadable` rather than
+writing after it. Any other line that is not an entry is reported on every
+replay and by `remote status`, is never sent, and is moved to the same file
+when the log is compacted. Nothing unreadable is deleted: repair a line that
+is a write you want sent and append it to the log again, then delete that
+file. `remote status` exits 1 while it has lines in it.
+
+**Local MCP server.** `deciduous mcp` sends the log on a thread of its own,
+so no tool call waits on the network. That replay, like the one after a CLI
+write, gets 10 s in all, the workspace lookup and every request included;
+what it has not sent by then waits (`remote push` waits up to 120 s per
+request). When stdin closes, the server gives its last replay 3 s and exits;
+anything not sent stays in the log. A write that was made locally but could not be queued makes that
+tool call an error that says so. Refusals found by the replay are added to
+the next tool result.
 
 ## How workspaces are named
 

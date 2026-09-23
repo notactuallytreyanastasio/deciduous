@@ -560,6 +560,16 @@ enum RemoteAction {
         #[arg(long, conflicts_with_all = ["seed", "overwrite"])]
         drop_rejected: bool,
 
+        /// Send the rejected ops again (after the cause is fixed, or for an
+        /// op this machine set aside because the server failed on it)
+        #[arg(long, conflicts_with_all = ["drop_rejected", "seed", "overwrite"])]
+        retry_rejected: bool,
+
+        /// Discard one op, waiting or rejected, by the start of its id (as
+        /// `remote status` prints it)
+        #[arg(long, value_name = "OP_ID", conflicts_with_all = ["drop_rejected", "retry_rejected", "seed", "overwrite"])]
+        drop: Option<String>,
+
         /// Also send nodes, edges and documents the server lacks that no op
         /// covers: history written before this project had a remote. Never
         /// changes a row the server already has.
@@ -2282,9 +2292,12 @@ fn main() {
                                         .map_err(|e| format!("serializing the local graph: {e}"))
                                 })
                                 .and_then(|g| deciduous::remote::push_missing(&remote, &g));
+                            if let Ok((_, _, withheld)) = &seeded {
+                                deciduous::remote::print_withheld(withheld);
+                            }
                             match seeded {
-                                Ok((None, _)) => {}
-                                Ok((Some(r), _)) => println!(
+                                Ok((None, _, _)) => {}
+                                Ok((Some(r), _, _)) => println!(
                                     "  sent {} local node(s), {} edge(s) the server lacked",
                                     r.nodes.upserted, r.edges.upserted
                                 ),
@@ -2310,7 +2323,15 @@ fn main() {
                 }
 
                 RemoteAction::Status => {
-                    let cfg = Config::load();
+                    // The database's project, which is the cwd's unless
+                    // DECIDUOUS_DB_PATH says otherwise.
+                    let cfg = match deciduous::remote::config_at(db.data_dir()) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
                     if !cfg.remote.is_configured() {
                         println!(
                             "{} no remote configured for this project.",
@@ -2320,7 +2341,7 @@ fn main() {
                         return;
                     }
 
-                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2347,29 +2368,64 @@ fn main() {
                         .as_ref()
                         .map(|(_, st)| (st.pending.len(), st.rejected.len()))
                         .unwrap_or((0, 0));
+                    let set_aside = log_state.as_ref().map_or(0, |(_, st)| {
+                        st.rejected.iter().filter(|(_, a)| a.is_set_aside()).count()
+                    });
                     if let Some((log, st)) = &log_state {
                         println!(
-                            "{} {} write(s) waiting, {} rejected  ({})",
+                            "{} {} write(s) waiting, {} rejected{}  ({})",
                             "Log:".bold(),
                             waiting,
-                            rejected,
+                            rejected - set_aside,
+                            if set_aside > 0 {
+                                format!(
+                                    ", {set_aside} set aside by this machine \
+                                     (`deciduous remote push` sends them again)"
+                                )
+                            } else {
+                                String::new()
+                            },
                             log.path().display()
                         );
                         for op in st.pending.iter().take(20) {
-                            println!("  waiting   {}", op.body.describe());
+                            println!(
+                                "  waiting   {}  {}",
+                                op.op_id.chars().take(8).collect::<String>(),
+                                op.body.describe()
+                            );
                         }
                         if st.pending.len() > 20 {
                             println!("  ... and {} more", st.pending.len() - 20);
                         }
                         for (op, ack) in &st.rejected {
                             println!(
-                                "  {}  {}  {}",
-                                "rejected".red(),
+                                "  {}  {}  {}  {}",
+                                if ack.is_set_aside() {
+                                    "set aside".red()
+                                } else {
+                                    "rejected".red()
+                                },
+                                op.op_id.chars().take(8).collect::<String>(),
                                 op.body.describe(),
                                 ack.reason.as_deref().unwrap_or("").dimmed()
                             );
                         }
+                        for u in &st.unreadable {
+                            println!("  {}  {}", "unreadable".red(), u.describe());
+                        }
+                        if st.set_aside > 0 {
+                            println!(
+                                "  {} {} line(s) that were not log entries are in {}; \
+                                 repair and re-append any that is a write, then delete that file",
+                                "unreadable".red(),
+                                st.set_aside,
+                                log.unreadable_path().display()
+                            );
+                        }
                     }
+                    let damaged = log_state
+                        .as_ref()
+                        .is_some_and(|(_, st)| !st.unreadable.is_empty() || st.set_aside > 0);
 
                     let (nodes, edges) = match (db.get_all_nodes(), db.get_all_edges()) {
                         (Ok(n), Ok(e)) => (n, e),
@@ -2408,20 +2464,40 @@ fn main() {
                     println!("  nodes       {:>8}  {:>8}", d.local_nodes, d.server_nodes);
                     println!("  edges       {:>8}  {:>8}", d.local_edges, d.server_edges);
 
+                    let create_of = |op: &deciduous::oplog::Op| match &op.body {
+                        deciduous::oplog::OpBody::CreateNode { change_id, .. } => {
+                            Some(change_id.clone())
+                        }
+                        _ => None,
+                    };
                     let queued: std::collections::HashSet<String> = log_state
                         .as_ref()
+                        .map(|(_, st)| st.pending.iter().filter_map(create_of).collect())
+                        .unwrap_or_default();
+                    // A create in the log with an answer that is not a
+                    // delivery: "no op covers it" said the opposite of the
+                    // line above it.
+                    let held: std::collections::HashMap<String, (String, bool)> = log_state
+                        .as_ref()
                         .map(|(_, st)| {
-                            st.pending
+                            st.rejected
                                 .iter()
-                                .filter_map(|op| match &op.body {
-                                    deciduous::oplog::OpBody::CreateNode { change_id, .. } => {
-                                        Some(change_id.clone())
-                                    }
-                                    _ => None,
+                                .filter_map(|(op, a)| {
+                                    Some((
+                                        create_of(op)?,
+                                        (op.op_id.chars().take(8).collect(), a.is_set_aside()),
+                                    ))
                                 })
                                 .collect()
                         })
                         .unwrap_or_default();
+                    let nul_at: std::collections::HashMap<String, String> = nodes
+                        .iter()
+                        .filter_map(|n| {
+                            let at = deciduous::remote::row_nul(&serde_json::to_value(n).ok()?)?;
+                            Some((n.change_id.clone(), at))
+                        })
+                        .collect();
                     let list = |title: &str, rows: Vec<String>| {
                         if rows.is_empty() {
                             return;
@@ -2441,6 +2517,20 @@ fn main() {
                             .map(|(cid, l)| {
                                 if queued.contains(cid) {
                                     format!("{l}  (waiting in the log)")
+                                } else if let Some(at) = nul_at.get(cid) {
+                                    format!(
+                                        "{l}  (holds a NUL character at {at}, which the server cannot \
+                                         store; nothing sends it until that text is changed here)"
+                                    )
+                                } else if let Some((id, aside)) = held.get(cid) {
+                                    format!(
+                                        "{l}  (its op {id} is {} above)",
+                                        if *aside {
+                                            "set aside by this machine: listed"
+                                        } else {
+                                            "rejected by the server: listed"
+                                        }
+                                    )
                                 } else {
                                     format!(
                                         "{l}  (no op covers it: `deciduous remote push --seed`)"
@@ -2496,19 +2586,65 @@ fn main() {
                             .collect(),
                     );
 
-                    if d.is_empty() && docs_here.is_empty() && waiting == 0 && rejected == 0 {
+                    if d.is_empty()
+                        && docs_here.is_empty()
+                        && waiting == 0
+                        && rejected == 0
+                        && !damaged
+                    {
                         println!(
                             "\n{} no writes waiting, and every node, edge and document matches field by field.\n\
                              Themes and tags are not sent to the server, so they are not compared.",
                             "In sync:".green()
                         );
                     } else {
-                        println!(
-                            "\n{} `deciduous remote push` sends what is waiting; `--seed` adds what only this copy has; \
-                             `--repair` makes the server's fields match this copy's; `deciduous remote pull` \
-                             takes the server's side (newer edit wins per node).",
-                            "Differs:".yellow()
-                        );
+                        // Only the remedies for what does differ: with only
+                        // an unreadable-lines file, this listed push, --seed,
+                        // --repair and pull, none of which touches it.
+                        let mut todo = Vec::new();
+                        if waiting > 0 || set_aside > 0 {
+                            todo.push("`deciduous remote push` sends what is waiting and what this machine set aside".to_string());
+                        }
+                        if rejected > set_aside {
+                            todo.push("`deciduous remote push --drop-rejected` discards the server's refusals, once read".to_string());
+                        }
+                        let unlogged = d.only_local.iter().any(|(cid, _)| {
+                            !queued.contains(cid)
+                                && !held.contains_key(cid)
+                                && !nul_at.contains_key(cid)
+                        });
+                        if unlogged || !docs_here.is_empty() || !d.edges_only_local.is_empty() {
+                            todo.push(
+                                "`deciduous remote push --seed` adds what only this copy has"
+                                    .to_string(),
+                            );
+                        }
+                        if d.differ.iter().any(|nd| nd.here_newer) {
+                            todo.push("`deciduous remote push --repair` makes the server's fields match this copy's".to_string());
+                        }
+                        if !d.only_server.is_empty()
+                            || !d.deleted_on_server.is_empty()
+                            || !d.edges_only_server.is_empty()
+                            || d.differ.iter().any(|nd| !nd.here_newer)
+                        {
+                            todo.push("`deciduous remote pull` takes the server's side (newer edit wins per node)".to_string());
+                        }
+                        if !nul_at.is_empty() {
+                            todo.push("a node holding a NUL has to be changed here before anything can send it".to_string());
+                        }
+                        if damaged {
+                            if let Some((log, _)) = &log_state {
+                                todo.push(format!(
+                                    "lines of the log that are not entries are listed above: no push or pull \
+                                     changes them; repair and re-append any that is a write, then delete {}",
+                                    log.unreadable_path().display()
+                                ));
+                            }
+                        }
+                        if todo.is_empty() {
+                            todo.push("`deciduous remote push` sends what this copy has; `deciduous remote pull` takes the server's side".to_string());
+                        }
+                        println!("\n{} {}.", "Differs:".yellow(), todo.join("; "));
                         // Scripts read drift from the exit code, like `sync --check`.
                         exit(1);
                     }
@@ -2517,11 +2653,12 @@ fn main() {
                 RemoteAction::Push {
                     overwrite,
                     drop_rejected,
+                    retry_rejected,
+                    drop,
                     seed,
                     repair,
                 } => {
-                    let cfg = Config::load();
-                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2539,10 +2676,40 @@ fn main() {
 
                     if drop_rejected {
                         match log.drop_rejected() {
-                            Ok(n) => println!(
-                                "{} {} rejected op(s) from {}",
+                            Ok(n) => {
+                                println!(
+                                    "{} {} rejected op(s) from {}",
+                                    "Dropped".yellow(),
+                                    n,
+                                    log.path().display()
+                                );
+                                let kept = log.read().map_or(0, |st| {
+                                    st.rejected.iter().filter(|(_, a)| a.is_set_aside()).count()
+                                });
+                                if kept > 0 {
+                                    println!(
+                                        "{} {kept} op(s) this machine set aside: the server never \
+                                         refused them. `deciduous remote push` sends them again; \
+                                         `--drop <op id>` discards one.",
+                                        "Kept".yellow()
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        return;
+                    }
+
+                    if let Some(prefix) = drop {
+                        match log.drop_op(&prefix) {
+                            Ok(op) => println!(
+                                "{} {} {} from {}",
                                 "Dropped".yellow(),
-                                n,
+                                &op.op_id,
+                                op.body.describe(),
                                 log.path().display()
                             ),
                             Err(e) => {
@@ -2553,6 +2720,35 @@ fn main() {
                         return;
                     }
 
+                    if retry_rejected {
+                        match log.retry_rejected() {
+                            Ok(n) => {
+                                println!("{} {} rejected op(s) to send again", "Queued".yellow(), n)
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                    }
+
+                    // What this machine set aside is a real write the
+                    // server never judged: an explicit push tries it again.
+                    if !retry_rejected {
+                        match log.retry_set_aside() {
+                            Ok(0) => {}
+                            Ok(n) => println!(
+                                "{} {n} write(s) this machine had set aside",
+                                "Sending again".yellow()
+                            ),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                    }
+
+                    let mut undelivered = false;
                     match deciduous::remote::replay(&remote, &log) {
                         Ok(r) if r.sent == 0 => println!(
                             "{} no writes are waiting in {}",
@@ -2560,24 +2756,41 @@ fn main() {
                             log.path().display()
                         ),
                         Ok(r) => {
+                            let aside = r
+                                .rejected
+                                .iter()
+                                .filter(|(_, why)| deciduous::remote::is_set_aside(why))
+                                .count();
                             println!(
-                                "{} {} op(s) to {}: {} applied, {} already there, {} rejected",
+                                "{} {} op(s) to {}: {} applied, {} already there, {} rejected{}",
                                 "Pushed".green(),
                                 r.sent,
                                 remote.workspace.cyan(),
                                 r.applied,
                                 r.already,
-                                r.rejected.len()
+                                r.rejected.len() - aside,
+                                if aside > 0 {
+                                    format!(", {aside} set aside by this machine")
+                                } else {
+                                    String::new()
+                                }
                             );
                             deciduous::remote::print_rejected(&r.rejected, &log);
+                            undelivered = aside > 0;
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
-                            eprintln!(
-                                "{waiting} write(s) still waiting in {}.",
-                                log.path().display()
-                            );
+                            match log.read() {
+                                Ok(s) => eprintln!(
+                                    "{} write(s) still waiting in {}.",
+                                    s.pending.len(),
+                                    log.path().display()
+                                ),
+                                Err(e) => eprintln!(
+                                    "{} could not be read to count what is waiting: {e}",
+                                    log.path().display()
+                                ),
+                            }
                             exit(1);
                         }
                     }
@@ -2627,7 +2840,13 @@ fn main() {
                         }
                     }
 
+                    // Scripts read the exit code: a write set aside has
+                    // not reached the server. (A refusal has: it is the
+                    // server's answer, printed above.)
                     if !(seed || overwrite) {
+                        if undelivered {
+                            exit(1);
+                        }
                         return;
                     }
 
@@ -2646,15 +2865,21 @@ fn main() {
                     };
 
                     let sent = if overwrite {
-                        remote.import(graph.clone()).map(|r| (Some(r), Vec::new()))
+                        remote
+                            .import(graph.clone())
+                            .map(|r| (Some(r), Vec::new(), Vec::new()))
                     } else {
                         deciduous::remote::push_missing(&remote, &graph)
+                    };
+                    let withheld = match &sent {
+                        Ok((_, _, w)) => w.clone(),
+                        Err(_) => Vec::new(),
                     };
 
                     // Local nodes the server deleted: nothing pushed can
                     // change them, and printing "edges 1 of 1" for an edge
                     // into one, run after run, sent people back to push.
-                    if let Ok((_, deleted)) = &sent {
+                    if let Ok((_, deleted, _)) = &sent {
                         if !deleted.is_empty() {
                             println!(
                                 "{} the server deleted {} node(s) this machine still has; they were not pushed. `deciduous remote pull` to apply the deletion(s):",
@@ -2668,14 +2893,15 @@ fn main() {
                     }
 
                     match sent {
-                        Ok((None, _)) => {
+                        Ok((None, _, _)) if withheld.is_empty() => {
                             println!(
                                 "{} the server already has every live node, edge and document in the local graph ({})",
                                 "Nothing to seed:".green(),
                                 remote.workspace.cyan()
                             );
                         }
-                        Ok((Some(r), _)) => {
+                        Ok((None, _, _)) => {}
+                        Ok((Some(r), _, _)) => {
                             deciduous::remote::report_refused(&r, &graph);
                             println!(
                                 "{} {} -> {}",
@@ -2710,11 +2936,14 @@ fn main() {
                             exit(1);
                         }
                     }
+                    deciduous::remote::print_withheld(&withheld);
+                    if undelivered || !withheld.is_empty() {
+                        exit(1);
+                    }
                 }
 
                 RemoteAction::Pull => {
-                    let cfg = Config::load();
-                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);

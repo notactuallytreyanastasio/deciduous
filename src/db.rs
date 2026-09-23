@@ -95,8 +95,12 @@ pub fn get_current_git_commit() -> Option<String> {
 /// Can be overridden with DECIDUOUS_DB_PATH env var
 fn get_db_path() -> std::path::PathBuf {
     // Check env var first - always takes priority
+    // Made absolute: a bare `deciduous.db` has an empty parent, and every
+    // file found beside the database (the server log, graph.json) went
+    // missing with it.
     if let Ok(path) = std::env::var("DECIDUOUS_DB_PATH") {
-        return std::path::PathBuf::from(path);
+        let path = std::path::PathBuf::from(path);
+        return std::path::absolute(&path).unwrap_or(path);
     }
 
     // Walk up directory tree to find .deciduous folder
@@ -778,6 +782,13 @@ impl From<diesel::r2d2::Error> for DbError {
 
 pub type Result<T> = std::result::Result<T, DbError>;
 
+/// An op written to `remote_outbox` in its write's transaction, on its way to
+/// the log. See `Database::queue_in_tx`.
+struct Queued {
+    seq: i64,
+    op: crate::oplog::Op,
+}
+
 /// A one-entry JSON object, for an op that changes a single field.
 fn one_field(key: &str, value: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut m = serde_json::Map::new();
@@ -842,7 +853,8 @@ impl Database {
         if let Some(store) = RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open) {
             db.set_store(Some(store));
         }
-        db.set_oplog(crate::oplog::OpLog::for_db(path.as_ref()));
+        db.set_oplog(crate::oplog::OpLog::for_db(&db.path));
+        db.drain_outbox_at_open();
         Ok(db)
     }
 
@@ -859,75 +871,266 @@ impl Database {
     }
 
     // ------------------------------------------------------------------
-    // Server log write-through. Like the record store, a failure here does
-    // not undo the local write; unlike it, the failure is not something a
-    // later sync repairs by itself (the op is what carries the change), so
-    // the warning says the server will not see this write.
+    // Server log write-through.
+    //
+    // A logged write puts its op in `remote_outbox`, in the same SQLite
+    // transaction as the change itself, and moves it to remote-log.jsonl
+    // after the commit. The op used to be built and appended only after the
+    // commit: a process killed in between (an MCP client closing, SIGTERM
+    // at shutdown) left a write here with no op, and a lost delete was then
+    // undone by `remote pull`. The commit now carries its op; the move to
+    // the log is redone by the next logged write, or the next process that
+    // opens this database, if it did not happen.
     // ------------------------------------------------------------------
 
-    fn log_op(&self, body: crate::oplog::OpBody) {
-        let Some(log) = self.oplog() else { return };
-        if let Err(e) = log.append(body.clone()) {
-            eprintln!(
-                "Warning: the local write succeeded but could not be queued for the server: {e}\n\
-                 The server will not get: {}",
-                body.describe()
-            );
-        }
+    /// A write that was made here and whose op is not in the log: said on
+    /// stderr, and kept for the stdio MCP server to put in the tool result
+    /// of the call that made it, which an agent does read.
+    fn not_queued(&self, what: String) {
+        eprintln!("Warning: the local write succeeded but was not queued for the server: {what}");
+        crate::oplog::notice(
+            crate::oplog::NoticeKind::Unqueued,
+            format!(
+                "The write WAS made in the local database, but it was NOT queued for the shared \
+                 server: {what}\nDo not repeat it (that would write it twice here). \
+                 `deciduous remote status` shows what differs from the server."
+            ),
+        );
     }
 
-    fn log_node_created(&self, node_id: i32) {
-        if self.oplog().is_none() {
+    /// Makes the ops for `bodies` and writes them to `remote_outbox` in the
+    /// caller's transaction. Refuses (so the transaction, and the write,
+    /// roll back) an op holding a NUL: the server can never store it, and a
+    /// write it can never receive is the fork this log exists to prevent.
+    fn queue_in_tx(
+        &self,
+        conn: &mut SqliteConnection,
+        bodies: Vec<crate::oplog::OpBody>,
+    ) -> Result<Vec<Queued>> {
+        let mut out = Vec::with_capacity(bodies.len());
+        for body in bodies {
+            let op = crate::oplog::OpLog::new_op(body);
+            if let Some(at) = crate::oplog::nul_path(&op) {
+                return Err(DbError::Validation(format!(
+                    "nothing was written: {at} holds a NUL character, which the shared server \
+                     cannot store, so this write could never reach it ({}). Remove the NUL and \
+                     write again.",
+                    op.body.describe().replace('\0', "\\0")
+                )));
+            }
+            let json = serde_json::to_string(&op)
+                .map_err(|e| DbError::Validation(format!("serializing op: {e}")))?;
+            diesel::sql_query("INSERT INTO remote_outbox (op_json) VALUES (?)")
+                .bind::<diesel::sql_types::Text, _>(&json)
+                .execute(conn)?;
+            let seq: i64 = diesel::select(diesel::dsl::sql::<diesel::sql_types::BigInt>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            out.push(Queued { seq, op });
+        }
+        Ok(out)
+    }
+
+    /// After the commit, still holding the log's lock: moves a write's ops
+    /// from `remote_outbox` to the log.
+    fn to_log(&self, queued: Vec<Queued>) {
+        if queued.is_empty() {
             return;
         }
-        match self.get_node(node_id) {
-            Ok(Some(n)) => {
-                let metadata = n
-                    .metadata_json
-                    .as_deref()
-                    .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
-                    .and_then(|v| v.as_object().cloned())
-                    .unwrap_or_default();
-                self.log_op(crate::oplog::OpBody::CreateNode {
-                    change_id: n.change_id,
-                    node_type: n.node_type,
-                    title: n.title,
-                    description: n.description,
-                    status: n.status,
-                    metadata,
-                    created_at: n.created_at,
-                    updated_at: n.updated_at,
-                });
+        let Some(log) = self.oplog() else { return };
+        let ops: Vec<crate::oplog::Op> = queued.iter().map(|q| q.op.clone()).collect();
+        match log.append_ops(&ops) {
+            Ok(()) => {
+                if let Err(e) = self.forget_queued(queued.last().map(|q| q.seq).unwrap_or(0)) {
+                    // Harmless: the next drain finds the op in the log.
+                    eprintln!("Warning: could not clear remote_outbox after queueing: {e}");
+                }
             }
-            Ok(None) => {}
-            Err(e) => {
-                eprintln!("Warning: could not read node {node_id} to queue it for the server: {e}")
+            Err(e) => self.not_queued(format!(
+                "{e}\nIts op is kept in this database and is added to {} by the first write \
+                 after that file can be written. Until then the server will not get: {}",
+                log.path().display(),
+                ops.iter()
+                    .map(|o| o.body.describe())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            )),
+        }
+    }
+
+    fn forget_queued(&self, up_to: i64) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::sql_query("DELETE FROM remote_outbox WHERE seq <= ?")
+            .bind::<diesel::sql_types::BigInt, _>(up_to)
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    /// Moves to the log every op a write committed and did not get there
+    /// (its process stopped in between, or the log could not be written),
+    /// in commit order. The caller holds the log's lock. An op already in
+    /// the log (the process stopped after its append) is not added twice.
+    /// Returns how many were added.
+    fn drain_outbox(&self, log: &crate::oplog::OpLog) -> std::result::Result<usize, String> {
+        #[derive(QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = diesel::sql_types::BigInt)]
+            seq: i64,
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            op_json: String,
+        }
+        let mut conn = self.get_conn().map_err(|e| e.to_string())?;
+        let rows: Vec<Row> =
+            diesel::sql_query("SELECT seq, op_json FROM remote_outbox ORDER BY seq")
+                .load(&mut conn)
+                .map_err(|e| e.to_string())?;
+        drop(conn);
+        let Some(last) = rows.last().map(|r| r.seq) else {
+            return Ok(0);
+        };
+        let ops = rows
+            .iter()
+            .map(|r| {
+                serde_json::from_str::<crate::oplog::Op>(&r.op_json).map_err(|e| {
+                    format!(
+                        "remote_outbox row {} is not an op ({e}): {}",
+                        r.seq, r.op_json
+                    )
+                })
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let have = log.op_ids()?;
+        let missing: Vec<crate::oplog::Op> = ops
+            .into_iter()
+            .filter(|op| !have.contains(&op.op_id))
+            .collect();
+        log.append_ops(&missing)?;
+        self.forget_queued(last).map_err(|e| e.to_string())?;
+        if !missing.is_empty() {
+            eprintln!(
+                "Note: {} write(s) made here earlier had not reached {} (the process that made \
+                 them stopped before queueing them, or the file could not be written); they are \
+                 queued now: {}",
+                missing.len(),
+                log.path().display(),
+                missing
+                    .iter()
+                    .map(|o| o.body.describe())
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            );
+        }
+        Ok(missing.len())
+    }
+
+    /// At open: a write whose process stopped between its commit and its
+    /// append is queued now, if no one else holds the log. (Otherwise the
+    /// holder, a writer, does it.)
+    fn drain_outbox_at_open(&self) {
+        let Some(log) = self.oplog() else { return };
+        let pending = self
+            .get_conn()
+            .ok()
+            .and_then(|mut c| {
+                diesel::select(diesel::dsl::sql::<diesel::sql_types::BigInt>(
+                    "(SELECT count(*) FROM remote_outbox)",
+                ))
+                .first::<i64>(&mut c)
+                .ok()
+            })
+            .unwrap_or(0);
+        if pending == 0 {
+            return;
+        }
+        if let Ok(Some(_held)) = log.try_lock() {
+            if let Err(e) = self.drain_outbox(&log) {
+                eprintln!(
+                    "Warning: writes made here earlier could not be queued for the server: {e}"
+                );
             }
         }
     }
 
-    /// The node as it is before an edit, read only when there is a server
-    /// log to write the edit to: an update op says what it replaced.
-    fn before_update(&self, node_id: i32) -> Option<DecisionNode> {
+    fn node_created_body(&self, new: &NewDecisionNode) -> Option<crate::oplog::OpBody> {
         self.oplog()?;
-        self.get_node(node_id).ok().flatten()
+        let metadata = new
+            .metadata_json
+            .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        Some(crate::oplog::OpBody::CreateNode {
+            change_id: new.change_id.to_string(),
+            node_type: new.node_type.to_string(),
+            title: new.title.to_string(),
+            description: new.description.map(str::to_string),
+            status: new.status.to_string(),
+            metadata,
+            created_at: new.created_at.to_string(),
+            updated_at: new.updated_at.to_string(),
+        })
     }
 
-    fn log_node_update(
+    /// Holds the server log's lock from before a write changes the database
+    /// until its op is appended; `None` when there is no log.
+    ///
+    /// Without it, two local writers (two MCP servers and the CLI on one
+    /// project) could commit in one order and append in the other, and an
+    /// update op's `was` could be a value read before another writer's
+    /// commit. The server applies an update only over its `was`, so either
+    /// made it refuse an edit "changed on the server after this edit was
+    /// made" when nobody had touched the server (RUST-N5). Held across the
+    /// write, the log's order is the commit order.
+    ///
+    /// Taking it also queues what an earlier write committed and did not
+    /// append, before this write's op, so the order holds for those too.
+    ///
+    /// If the lock cannot be had, the write is refused before anything is
+    /// written: a write made and then not queued is the silent fork this
+    /// log exists to prevent.
+    fn hold_log(&self) -> Result<Option<crate::oplog::LockGuard>> {
+        let Some(log) = self.oplog() else {
+            return Ok(None);
+        };
+        let guard = log.lock().map_err(|e| {
+            DbError::Validation(format!(
+                "nothing was written: this write would have to be queued for the server in {}, \
+                 and its lock could not be taken: {e}",
+                log.path().display()
+            ))
+        })?;
+        if let Err(e) = self.drain_outbox(&log) {
+            eprintln!("Warning: writes made here earlier could not be queued for the server: {e}");
+        }
+        Ok(Some(guard))
+    }
+
+    /// Reads the node inside a write's transaction, when there is a server
+    /// log to record what the write replaced; `None` otherwise.
+    fn replaced_in_tx(
         &self,
+        conn: &mut SqliteConnection,
         node_id: i32,
+    ) -> Result<Option<DecisionNode>> {
+        if self.oplog().is_none() {
+            return Ok(None);
+        }
+        Ok(decision_nodes::table
+            .filter(decision_nodes::id.eq(node_id))
+            .first::<DecisionNode>(conn)
+            .optional()?)
+    }
+
+    /// The op for an edit of `before` (read in the edit's transaction):
+    /// the fields it sets, and for each the value it replaced.
+    fn node_update_body(
         before: Option<DecisionNode>,
         set: serde_json::Map<String, serde_json::Value>,
         metadata: serde_json::Map<String, serde_json::Value>,
-    ) {
-        if self.oplog().is_none() {
-            return;
-        }
+    ) -> Vec<crate::oplog::OpBody> {
+        // No log, so nothing was read.
         let Some(before) = before else {
-            eprintln!(
-                "Warning: node {node_id} could not be read before its edit, so the edit was not queued for the server"
-            );
-            return;
+            return Vec::new();
         };
         let old_meta: serde_json::Map<String, serde_json::Value> = before
             .metadata_json
@@ -960,51 +1163,27 @@ impl Database {
                 )
             })
             .collect();
-        self.log_op(crate::oplog::OpBody::UpdateNode {
+        vec![crate::oplog::OpBody::UpdateNode {
             change_id: before.change_id,
             set,
             metadata,
             was,
             was_metadata,
-        });
+        }]
     }
 
-    fn log_edge_created(&self, edge_id: i32) {
-        if self.oplog().is_none() {
-            return;
-        }
-        let edge = match self.get_edge(edge_id) {
-            Ok(Some(e)) => e,
-            Ok(None) => return,
-            Err(e) => {
-                eprintln!("Warning: could not read edge {edge_id} to queue it for the server: {e}");
-                return;
-            }
-        };
-        // Endpoints by the nodes' own change_ids, not the edge row's copies,
-        // which can be stale in older databases.
-        let (Some(from), Some(to)) = (
-            self.get_node(edge.from_node_id).ok().flatten(),
-            self.get_node(edge.to_node_id).ok().flatten(),
-        ) else {
-            eprintln!("Warning: edge {edge_id} has an endpoint that is not in the database; it was not queued for the server");
-            return;
-        };
-        self.log_op(crate::oplog::OpBody::CreateEdge {
-            from_change_id: from.change_id,
-            to_change_id: to.change_id,
-            edge_type: edge.edge_type,
-            rationale: edge.rationale,
-            weight: edge.weight,
-            created_at: edge.created_at,
-        });
-    }
-
-    fn log_edges_deleted(
+    /// The ops removing `edges`, and a description of each edge that cannot
+    /// be named to the server (an endpoint with no change_id).
+    fn edges_deleted_bodies(
         &self,
         edges: &[DecisionEdge],
         change_ids: &std::collections::HashMap<i32, String>,
-    ) {
+    ) -> (Vec<crate::oplog::OpBody>, Vec<String>) {
+        let mut bodies = Vec::new();
+        let mut unnamed = Vec::new();
+        if self.oplog().is_none() {
+            return (bodies, unnamed);
+        }
         for e in edges {
             let from = change_ids
                 .get(&e.from_node_id)
@@ -1016,18 +1195,19 @@ impl Database {
                 .or_else(|| e.to_change_id.clone());
             match (from, to) {
                 (Some(from_change_id), Some(to_change_id)) => {
-                    self.log_op(crate::oplog::OpBody::DeleteEdge {
+                    bodies.push(crate::oplog::OpBody::DeleteEdge {
                         from_change_id,
                         to_change_id,
                         edge_type: e.edge_type.clone(),
                     })
                 }
-                _ => eprintln!(
-                    "Warning: edge {} ({} -> {}) has no change_id for an endpoint; its removal was not queued for the server",
+                _ => unnamed.push(format!(
+                    "edge {} ({} -> {}) has no change_id for an endpoint, so its removal cannot be named to the server",
                     e.id, e.from_node_id, e.to_node_id
-                ),
+                )),
             }
         }
+        (bodies, unnamed)
     }
 
     /// change_ids of the endpoints of `edges`, read before they are deleted.
@@ -1369,6 +1549,17 @@ impl Database {
 
     fn init_schema(&self) -> Result<()> {
         let mut conn = self.get_conn()?;
+
+        // Ops of writes on their way to remote-log.jsonl: written in the
+        // write's own transaction, so a write is never committed without its
+        // op (see `Database::queue_in_tx`). Empty between writes.
+        diesel::sql_query(
+            "CREATE TABLE IF NOT EXISTS remote_outbox (
+                seq INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                op_json TEXT NOT NULL
+            )",
+        )
+        .execute(&mut conn)?;
 
         // Run raw SQL to create tables if they don't exist
         diesel::sql_query(
@@ -1897,6 +2088,7 @@ impl Database {
             ));
         }
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = created_at
             .map(|s| s.to_string())
@@ -1917,18 +2109,23 @@ impl Database {
             metadata_json: metadata.as_deref(),
         };
 
-        diesel::insert_into(decision_nodes::table)
-            .values(&new_node)
-            .execute(&mut conn)?;
-
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
+        // The row and its op commit together; see `queue_in_tx`.
+        let body = self.node_created_body(&new_node);
+        let (id, queued) = conn.immediate_transaction(|conn| {
+            diesel::insert_into(decision_nodes::table)
+                .values(&new_node)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            let queued = self.queue_in_tx(conn, body.into_iter().collect())?;
+            Ok::<_, DbError>((id, queued))
+        })?;
         drop(conn);
 
         self.publish_node_by_id(id);
-        self.log_node_created(id);
+        self.to_log(queued);
         Ok(id)
     }
 
@@ -1958,6 +2155,7 @@ impl Database {
         branch: Option<&str>,
     ) -> Result<i32> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -1975,18 +2173,23 @@ impl Database {
             metadata_json: metadata.as_deref(),
         };
 
-        diesel::insert_into(decision_nodes::table)
-            .values(&new_node)
-            .execute(&mut conn)?;
-
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
+        // The row and its op commit together; see `queue_in_tx`.
+        let body = self.node_created_body(&new_node);
+        let (id, queued) = conn.immediate_transaction(|conn| {
+            diesel::insert_into(decision_nodes::table)
+                .values(&new_node)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            let queued = self.queue_in_tx(conn, body.into_iter().collect())?;
+            Ok::<_, DbError>((id, queued))
+        })?;
         drop(conn);
 
         self.publish_node_by_id(id);
-        self.log_node_created(id);
+        self.to_log(queued);
         Ok(id)
     }
 
@@ -2403,6 +2606,7 @@ impl Database {
             )));
         }
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
         // Validate both nodes exist and get their change_ids
@@ -2448,18 +2652,32 @@ impl Database {
             created_at: &now,
         };
 
-        diesel::insert_into(decision_edges::table)
-            .values(&new_edge)
-            .execute(&mut conn)?;
-
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
+        let body = match (self.oplog(), &from_change_id, &to_change_id) {
+            (Some(_), Some(f), Some(t)) => vec![crate::oplog::OpBody::CreateEdge {
+                from_change_id: f.clone(),
+                to_change_id: t.clone(),
+                edge_type: edge_type.to_string(),
+                rationale: rationale.map(str::to_string),
+                weight: new_edge.weight,
+                created_at: now.clone(),
+            }],
+            _ => Vec::new(),
+        };
+        let (id, queued) = conn.immediate_transaction(|conn| {
+            diesel::insert_into(decision_edges::table)
+                .values(&new_edge)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            let queued = self.queue_in_tx(conn, body)?;
+            Ok::<_, DbError>((id, queued))
+        })?;
         drop(conn);
 
         self.publish_edge_by_id(id);
-        self.log_edge_created(id);
+        self.to_log(queued);
         Ok(id)
     }
 
@@ -2477,6 +2695,7 @@ impl Database {
     /// Delete an edge between two nodes
     pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
         // Check if the edge exists
@@ -2517,18 +2736,25 @@ impl Database {
 
         drop(conn);
         let endpoints = self.endpoint_change_ids(&doomed);
+        let (bodies, unnamed) = self.edges_deleted_bodies(&doomed, &endpoints);
         let mut conn = self.get_conn()?;
 
-        diesel::delete(
-            decision_edges::table
-                .filter(decision_edges::from_node_id.eq(from_id))
-                .filter(decision_edges::to_node_id.eq(to_id)),
-        )
-        .execute(&mut conn)?;
+        let queued = conn.immediate_transaction(|conn| {
+            diesel::delete(
+                decision_edges::table
+                    .filter(decision_edges::from_node_id.eq(from_id))
+                    .filter(decision_edges::to_node_id.eq(to_id)),
+            )
+            .execute(conn)?;
+            self.queue_in_tx(conn, bodies)
+        })?;
         drop(conn);
 
         self.tombstone_edges(&doomed);
-        self.log_edges_deleted(&doomed, &endpoints);
+        self.to_log(queued);
+        for u in unnamed {
+            self.not_queued(u);
+        }
         Ok(())
     }
 
@@ -2546,6 +2772,7 @@ impl Database {
         if !dry_run && publish {
             self.require_readable_store()?;
         }
+        let _log = if dry_run { None } else { self.hold_log()? };
         let mut conn = self.get_conn()?;
 
         // Check if node exists
@@ -2596,53 +2823,71 @@ impl Database {
         } else {
             Default::default()
         };
+        // Edges first, then the node: the server keeps a deleted node's
+        // edges unless told, and the local graph just lost them.
+        let (mut bodies, unnamed) = if publish {
+            self.edges_deleted_bodies(&doomed_edges, &endpoints)
+        } else {
+            Default::default()
+        };
+        if publish && self.oplog().is_some() {
+            bodies.push(crate::oplog::OpBody::DeleteNode {
+                change_id: node.change_id.clone(),
+            });
+        }
         let mut conn = self.get_conn()?;
 
-        // Delete in order to respect foreign key constraints:
+        // One transaction: the node, everything pointing at it, and the ops
+        // that tell the server, or none of them.
+        let (doomed_tags, queued) = conn.immediate_transaction(|conn| {
+            // Delete in order to respect foreign key constraints:
 
-        // 1. Delete edges connected to this node
-        diesel::delete(
-            decision_edges::table.filter(
-                decision_edges::from_node_id
-                    .eq(node_id)
-                    .or(decision_edges::to_node_id.eq(node_id)),
-            ),
-        )
-        .execute(&mut conn)?;
+            // 1. Delete edges connected to this node
+            diesel::delete(
+                decision_edges::table.filter(
+                    decision_edges::from_node_id
+                        .eq(node_id)
+                        .or(decision_edges::to_node_id.eq(node_id)),
+                ),
+            )
+            .execute(conn)?;
 
-        // 2. Delete context entries for this node
-        diesel::delete(decision_context::table.filter(decision_context::node_id.eq(node_id)))
-            .execute(&mut conn)?;
+            // 2. Delete context entries for this node
+            diesel::delete(decision_context::table.filter(decision_context::node_id.eq(node_id)))
+                .execute(conn)?;
 
-        // 3. Delete session_nodes entries for this node
-        diesel::delete(session_nodes::table.filter(session_nodes::node_id.eq(node_id)))
-            .execute(&mut conn)?;
+            // 3. Delete session_nodes entries for this node
+            diesel::delete(session_nodes::table.filter(session_nodes::node_id.eq(node_id)))
+                .execute(conn)?;
 
-        // 3b. Tags on this node (foreign keys are declared but not enforced)
-        let doomed_tags: Vec<NodeTheme> = node_themes::table
-            .filter(node_themes::node_id.eq(node_id))
-            .load(&mut conn)?;
-        diesel::delete(node_themes::table.filter(node_themes::node_id.eq(node_id)))
-            .execute(&mut conn)?;
+            // 3b. Tags on this node (foreign keys are declared but not enforced)
+            let doomed_tags: Vec<NodeTheme> = node_themes::table
+                .filter(node_themes::node_id.eq(node_id))
+                .load(conn)?;
+            diesel::delete(node_themes::table.filter(node_themes::node_id.eq(node_id)))
+                .execute(conn)?;
 
-        // 4. Set nullable foreign keys to NULL
-        diesel::update(
-            decision_sessions::table.filter(decision_sessions::root_node_id.eq(node_id)),
-        )
-        .set(decision_sessions::root_node_id.eq::<Option<i32>>(None))
-        .execute(&mut conn)?;
+            // 4. Set nullable foreign keys to NULL
+            diesel::update(
+                decision_sessions::table.filter(decision_sessions::root_node_id.eq(node_id)),
+            )
+            .set(decision_sessions::root_node_id.eq::<Option<i32>>(None))
+            .execute(conn)?;
 
-        diesel::update(command_log::table.filter(command_log::decision_node_id.eq(node_id)))
-            .set(command_log::decision_node_id.eq::<Option<i32>>(None))
-            .execute(&mut conn)?;
+            diesel::update(command_log::table.filter(command_log::decision_node_id.eq(node_id)))
+                .set(command_log::decision_node_id.eq::<Option<i32>>(None))
+                .execute(conn)?;
 
-        diesel::update(roadmap_items::table.filter(roadmap_items::outcome_node_id.eq(node_id)))
-            .set(roadmap_items::outcome_node_id.eq::<Option<i32>>(None))
-            .execute(&mut conn)?;
+            diesel::update(roadmap_items::table.filter(roadmap_items::outcome_node_id.eq(node_id)))
+                .set(roadmap_items::outcome_node_id.eq::<Option<i32>>(None))
+                .execute(conn)?;
 
-        // 5. Finally delete the node itself
-        diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .execute(&mut conn)?;
+            // 5. Finally delete the node itself
+            diesel::delete(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .execute(conn)?;
+            let queued = self.queue_in_tx(conn, bodies)?;
+            Ok::<_, DbError>((doomed_tags, queued))
+        })?;
         drop(conn);
 
         if publish {
@@ -2652,12 +2897,10 @@ impl Database {
                 }
             }
             self.tombstone_edges_of(&doomed_edges, Some(&node.change_id));
-            // Edges first, then the node: the server keeps a deleted node's
-            // edges unless told, and the local graph just lost them.
-            self.log_edges_deleted(&doomed_edges, &endpoints);
-            self.log_op(crate::oplog::OpBody::DeleteNode {
-                change_id: node.change_id.clone(),
-            });
+            self.to_log(queued);
+            for u in unnamed {
+                self.not_queued(u);
+            }
             if let Some(store) = self.store() {
                 for tag in &doomed_tags {
                     if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
@@ -2677,125 +2920,136 @@ impl Database {
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
         one_of("status", status, NODE_STATUSES)?;
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
-        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        let updated = diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::status.eq(status),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+        // `was` is read in the transaction that writes, so it is the value
+        // this write replaced, whatever wrote in between.
+        let queued = conn.immediate_transaction(|conn| {
+            let replaced = self.replaced_in_tx(conn, node_id)?;
+            let updated =
+                diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                    .set((
+                        decision_nodes::status.eq(status),
+                        decision_nodes::updated_at.eq(&now),
+                    ))
+                    .execute(conn)?;
+            if updated == 0 {
+                return Err(node_not_found(node_id));
+            }
+            let body =
+                Self::node_update_body(replaced, one_field("status", status), Default::default());
+            self.queue_in_tx(conn, body)
+        })?;
         drop(conn);
-        if updated == 0 {
-            return Err(node_not_found(node_id));
-        }
 
         self.publish_node_edit(node_id, before);
-        self.log_node_update(
-            node_id,
-            replaced,
-            one_field("status", status),
-            Default::default(),
-        );
+        self.to_log(queued);
         Ok(())
     }
 
     /// Update a node's commit hash in metadata_json
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
-        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        // Get current metadata
-        let current_meta: Option<String> = decision_nodes::table
-            .filter(decision_nodes::id.eq(node_id))
-            .select(decision_nodes::metadata_json)
-            .first(&mut conn)
-            .optional()?
-            .ok_or_else(|| node_not_found(node_id))?;
+        // Read, merge and write in one transaction: the map read is the map
+        // replaced, so neither a concurrent key nor `was` goes stale.
+        let queued = conn.immediate_transaction(|conn| {
+            let replaced = self.replaced_in_tx(conn, node_id)?;
+            let current_meta: Option<String> = decision_nodes::table
+                .filter(decision_nodes::id.eq(node_id))
+                .select(decision_nodes::metadata_json)
+                .first(conn)
+                .optional()?
+                .ok_or_else(|| node_not_found(node_id))?;
 
-        // Parse existing metadata or create new
-        let mut meta: serde_json::Value = current_meta
-            .as_ref()
-            .and_then(|m| serde_json::from_str(m).ok())
-            .unwrap_or_else(|| serde_json::json!({}));
+            // Parse existing metadata or create new
+            let mut meta: serde_json::Value = current_meta
+                .as_ref()
+                .and_then(|m| serde_json::from_str(m).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
 
-        // Add/update commit field
-        if let Some(obj) = meta.as_object_mut() {
-            obj.insert("commit".to_string(), serde_json::json!(commit_hash));
-        }
+            // Add/update commit field
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert("commit".to_string(), serde_json::json!(commit_hash));
+            }
 
-        let new_meta = serde_json::to_string(&meta)
-            .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
+            let new_meta = serde_json::to_string(&meta)
+                .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::metadata_json.eq(Some(new_meta)),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set((
+                    decision_nodes::metadata_json.eq(Some(new_meta)),
+                    decision_nodes::updated_at.eq(&now),
+                ))
+                .execute(conn)?;
+            let body = Self::node_update_body(
+                replaced,
+                Default::default(),
+                one_field("commit", commit_hash),
+            );
+            self.queue_in_tx(conn, body)
+        })?;
         drop(conn);
 
         self.publish_node_edit(node_id, before);
-        self.log_node_update(
-            node_id,
-            replaced,
-            Default::default(),
-            one_field("commit", commit_hash),
-        );
+        self.to_log(queued);
         Ok(())
     }
 
     /// Update a node's prompt in metadata_json
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
         self.require_readable_store()?;
+        let _log = self.hold_log()?;
         let before = self.node_before_edit(node_id);
-        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        // Get current metadata
-        let current_meta: Option<String> = decision_nodes::table
-            .filter(decision_nodes::id.eq(node_id))
-            .select(decision_nodes::metadata_json)
-            .first(&mut conn)
-            .optional()?
-            .ok_or_else(|| node_not_found(node_id))?;
+        // Read, merge and write in one transaction: the map read is the map
+        // replaced, so neither a concurrent key nor `was` goes stale.
+        let queued = conn.immediate_transaction(|conn| {
+            let replaced = self.replaced_in_tx(conn, node_id)?;
+            let current_meta: Option<String> = decision_nodes::table
+                .filter(decision_nodes::id.eq(node_id))
+                .select(decision_nodes::metadata_json)
+                .first(conn)
+                .optional()?
+                .ok_or_else(|| node_not_found(node_id))?;
 
-        // Parse existing metadata or create new
-        let mut meta: serde_json::Value = current_meta
-            .as_ref()
-            .and_then(|m| serde_json::from_str(m).ok())
-            .unwrap_or_else(|| serde_json::json!({}));
+            // Parse existing metadata or create new
+            let mut meta: serde_json::Value = current_meta
+                .as_ref()
+                .and_then(|m| serde_json::from_str(m).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
 
-        // Add/update prompt field
-        if let Some(obj) = meta.as_object_mut() {
-            obj.insert("prompt".to_string(), serde_json::json!(prompt));
-        }
+            // Add/update prompt field
+            if let Some(obj) = meta.as_object_mut() {
+                obj.insert("prompt".to_string(), serde_json::json!(prompt));
+            }
 
-        let new_meta = serde_json::to_string(&meta)
-            .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
+            let new_meta = serde_json::to_string(&meta)
+                .map_err(|e| DbError::Validation(format!("JSON serialization error: {}", e)))?;
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
-            .set((
-                decision_nodes::metadata_json.eq(Some(new_meta)),
-                decision_nodes::updated_at.eq(&now),
-            ))
-            .execute(&mut conn)?;
+            diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+                .set((
+                    decision_nodes::metadata_json.eq(Some(new_meta)),
+                    decision_nodes::updated_at.eq(&now),
+                ))
+                .execute(conn)?;
+            let body =
+                Self::node_update_body(replaced, Default::default(), one_field("prompt", prompt));
+            self.queue_in_tx(conn, body)
+        })?;
         drop(conn);
 
         self.publish_node_edit(node_id, before);
-        self.log_node_update(
-            node_id,
-            replaced,
-            Default::default(),
-            one_field("prompt", prompt),
-        );
+        self.to_log(queued);
         Ok(())
     }
 

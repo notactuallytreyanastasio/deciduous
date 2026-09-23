@@ -292,4 +292,102 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     assert name == "ops-case"
     assert {:ok, _} = Workspaces.normalize_name("Ops-Case")
   end
+
+  # SERVER-N1: an op carrying a NUL, an over-long id or a kind that is not a
+  # string raised inside Repo.transaction (Postgrex 22021, a varchar(255)
+  # overflow, Protocol.UndefinedError), and the whole request answered an
+  # empty 500. The CLI resent the batch on every write, got the same 500, and
+  # nothing after the bad op ever reached the server. Each is an answer about
+  # one op: rejected, with the reason, and the ops around it applied.
+  test "server_n1: a poisoned op is rejected alone and the ops around it are applied",
+       %{token: token} do
+    nul = "has" <> <<0>> <> "nul"
+    long = String.duplicate("x", 256)
+
+    poisons = [
+      {"nul in metadata", create("p1", "p1", %{metadata: %{"prompt" => nul}})},
+      {"nul in a metadata key", create("p2", "p2", %{metadata: %{nul => "v"}})},
+      {"nul in the title", create("p3", nul)},
+      {"op_id over 255", create("p4", "p4", %{op_id: long})},
+      {"op_id with nul", create("p5", "p5", %{op_id: "id" <> nul})},
+      {"kind an object", %{op_id: Ecto.UUID.generate(), kind: %{"a" => 1}, change_id: "p6"}},
+      {"kind over 255", %{op_id: Ecto.UUID.generate(), kind: long, change_id: "p7"}},
+      {"change_id over 255", create(long, "p8")},
+      {"change_id with nul", create("p9" <> nul, "p9")},
+      {"nul in set.title",
+       %{
+         op_id: Ecto.UUID.generate(),
+         kind: "update_node",
+         change_id: "a",
+         set: %{title: nul},
+         was: %{title: "a"}
+       }},
+      {"nul in a rationale",
+       %{
+         op_id: Ecto.UUID.generate(),
+         kind: "create_edge",
+         from_change_id: "a",
+         to_change_id: "c",
+         edge_type: "leads_to",
+         rationale: nul
+       }}
+    ]
+
+    for {label, poison} <- poisons do
+      ws = "ops-n1-" <> Integer.to_string(System.unique_integer([:positive]))
+      {200, _} = ops(token, ws, [create("a", "a"), create("c", "c")])
+      after_op = create("after", "after")
+      {status, body} = ops(token, ws, [poison, after_op])
+      assert status == 200, "#{label}: #{status} #{inspect(body)}"
+      [r, after_result] = body["results"]
+      assert r["result"] == "rejected", "#{label}: #{inspect(r)}"
+      assert is_binary(r["reason"]) and r["reason"] != "", "#{label}: #{inspect(r)}"
+      assert after_result["result"] == "applied", "#{label}: #{inspect(after_result)}"
+      # Sent again, the same answer: no 500 the second time either.
+      {200, %{"results" => [again, dup]}} = ops(token, ws, [poison, after_op])
+      assert again["result"] == "rejected", "#{label} again: #{inspect(again)}"
+      assert dup["result"] == "duplicate"
+    end
+  end
+
+  # NEW (low), adversarial round 2: an integer weight too large for a
+  # float raised ArgumentError while the edge was cast, and the whole
+  # request answered an empty 500. 1e300 and 1.7976931348623157e308 were
+  # applied; 10**400 was not. The Rust client sends an f64 and cannot send
+  # it; any other /ops client can.
+  test "new: a weight too large for a float is rejected alone", %{token: token} do
+    ws = "ops-weight-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("c", "c")])
+
+    huge = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "create_edge",
+      from_change_id: "a",
+      to_change_id: "c",
+      edge_type: "leads_to",
+      weight: Integer.pow(10, 400)
+    }
+
+    {status, body} = ops(token, ws, [huge, create("after", "after")])
+    assert status == 200, "#{status} #{inspect(body)}"
+    [r, after_result] = body["results"]
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "weight", inspect(r)
+    assert after_result["result"] == "applied"
+
+    fine = %{huge | op_id: Ecto.UUID.generate(), weight: 1.7976931348623157e308}
+    {200, %{"results" => [ok]}} = ops(token, ws, [fine])
+    assert ok["result"] == "applied", inspect(ok)
+  end
+
+  # NEW (low): the reason for a NUL in a metadata key printed the key as an
+  # Elixir binary, "at metadata.<<97, 0, 98>>".
+  test "new: a NUL in a metadata key is named as text", %{token: token} do
+    ws = "ops-nulkey-" <> Integer.to_string(System.unique_integer([:positive]))
+    key = "a" <> <<0>> <> "b"
+    {200, %{"results" => [r]}} = ops(token, ws, [create("k", "k", %{metadata: %{key => "v"}})])
+    assert r["result"] == "rejected"
+    refute r["reason"] =~ "<<", r["reason"]
+    assert r["reason"] =~ ~S(metadata."a\0b"), r["reason"]
+  end
 end
