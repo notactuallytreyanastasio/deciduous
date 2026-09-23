@@ -2924,9 +2924,34 @@ impl Database {
             _ => Vec::new(),
         };
         let (id, queued) = conn.immediate_transaction(|conn| {
-            diesel::insert_into(decision_edges::table)
+            let inserted = diesel::insert_into(decision_edges::table)
                 .values(&new_edge)
-                .execute(conn)?;
+                .execute(conn);
+            if let Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                _,
+            )) = inserted
+            {
+                // SQLite's text ("UNIQUE constraint failed: decision_edges...")
+                // names columns, not the edge, and not what to do instead.
+                let existing = decision_edges::table
+                    .filter(decision_edges::from_node_id.eq(from_id))
+                    .filter(decision_edges::to_node_id.eq(to_id))
+                    .filter(decision_edges::edge_type.eq(edge_type))
+                    .first::<DecisionEdge>(conn)
+                    .ok();
+                let rationale = existing
+                    .as_ref()
+                    .and_then(|e| e.rationale.as_deref())
+                    .map(|r| format!(" (rationale: {r:?})"))
+                    .unwrap_or_default();
+                return Err(DbError::Validation(format!(
+                    "node {from_id} already {edge_type} node {to_id}{rationale}; nothing was changed. \
+                     To give it a new rationale, unlink it first (`deciduous unlink {from_id} {to_id}`, \
+                     or unlink_nodes), then link again"
+                )));
+            }
+            inserted?;
             let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
                 "last_insert_rowid()",
             ))

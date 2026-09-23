@@ -603,3 +603,46 @@ fn g10_sync_check_writes_nothing() {
     let again = fresh.dx(&["sync", "--check"]);
     assert!(again.ok(), "sync --check after sync:\n{}", again.all());
 }
+
+/// NEW-7: linking two nodes that are already linked printed SQLite's own
+/// "Query error: UNIQUE constraint failed: decision_edges.from_node_id, ...".
+#[test]
+fn new7_linking_an_existing_edge_says_so() {
+    let Some(()) = local("new7_linking_an_existing_edge_says_so") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "from here");
+    p.add("option", "to there");
+    p.ok(&["link", "1", "2", "-r", "first"]);
+    let again = p.dx(&["link", "1", "2", "-r", "again"]);
+    assert!(
+        !again.ok(),
+        "a second identical link exited 0:\n{}",
+        again.all()
+    );
+    let text = again.all();
+    assert!(
+        !text.contains("UNIQUE constraint"),
+        "the duplicate link shows SQLite's error:\n{text}"
+    );
+    assert!(
+        text.contains("already") && text.contains("unlink"),
+        "the refusal does not say the edge exists and how to change it:\n{text}"
+    );
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let r = m.call(
+        "link_nodes",
+        json!({"from_id": 1, "to_id": 2, "rationale": "via mcp"}),
+    );
+    let err = r.expect_err("link_nodes of an existing edge succeeded");
+    assert!(
+        !err.contains("UNIQUE constraint") && err.contains("already"),
+        "link_nodes of an existing edge: {err}"
+    );
+    drop(m);
+    let edges: Vec<Value> = p.graph()["edges"].as_array().unwrap().clone();
+    assert_eq!(edges.len(), 1, "{edges:?}");
+    assert_eq!(edges[0]["rationale"], json!("first"));
+}
