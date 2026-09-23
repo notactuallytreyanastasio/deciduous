@@ -912,3 +912,78 @@ fn an_unreadable_graph_file_says_how_to_recover_not_to_rerun_what_failed() {
     // Still untouched.
     assert_eq!(alice.graph_text(), "{\"version\": 1, \"nodes\": {");
 }
+
+// ============================================================================
+// Round two: what the verifiers got past the first fixes
+// ============================================================================
+
+/// Set `deleted_at` on every edge and tag record, standing in for a
+/// teammate whose clock runs fast.
+fn tombstone_edges_and_tags_in_2099(dev: &Dev) {
+    let mut doc = dev.doc();
+    for kind in ["edges", "tags"] {
+        for rec in doc[kind].as_object_mut().unwrap().values_mut() {
+            rec["deleted_at"] = "2099-01-01T00:00:00+00:00".into();
+        }
+    }
+    dev.write_doc(&doc);
+}
+
+#[test]
+fn a_relink_or_retag_is_never_reverted_by_a_future_tombstone() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "Goal", &[]);
+    let opt = alice.add("option", "Opt", &[]);
+    alice.ok(&["link", &goal.to_string(), &opt.to_string(), "-r", "option"]);
+    alice.ok(&["themes", "create", "t"]);
+    alice.ok(&["tag", "add", &goal.to_string(), "t"]);
+    let goal_cid = alice_cid(&alice, goal);
+    let opt_cid = alice_cid(&alice, opt);
+    alice.commit_graph("graph");
+    alice.git(&["push", "-q"]);
+    let bob = team.join("bob");
+
+    // Alice, with a clock in 2099, unlinks and untags.
+    alice.ok(&["unlink", &goal.to_string(), &opt.to_string()]);
+    alice.ok(&["tag", "remove", &goal.to_string(), "t"]);
+    tombstone_edges_and_tags_in_2099(&alice);
+    alice.ok(&["sync"]);
+    alice.commit_graph("skewed unlink");
+    alice.git(&["push", "-q"]);
+
+    bob.git(&["pull", "-q", "--no-edit"]);
+    let out = bob.ok(&["sync"]);
+    assert!(edges(&bob).is_empty(), "{out}");
+
+    // Bob puts both back exactly as they were. The write changes nothing
+    // but deleted_at, and must still be stamped after the tombstone.
+    bob.ok(&["link", &goal_cid, &opt_cid, "-r", "option"]);
+    bob.ok(&["tag", "add", &goal_cid, "t"]);
+    let out = bob.ok(&["sync"]);
+    let e = edges(&bob);
+    assert_eq!(e.len(), 1, "the relink was reverted: {out}");
+    assert_eq!(e[0]["rationale"], "option");
+    let tags = bob.ok(&["tag", "list", &goal_cid]);
+    assert!(
+        tags.contains('t') && !tags.contains("no themes"),
+        "the retag was reverted: {out}\n{tags}"
+    );
+    let doc = bob.doc();
+    for kind in ["edges", "tags"] {
+        for rec in doc[kind].as_object().unwrap().values() {
+            assert!(rec.get("deleted_at").is_none(), "{kind}: {rec:#}");
+        }
+    }
+    let out = bob.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+
+    // And it reaches Alice.
+    bob.commit_graph("relink");
+    bob.git(&["push", "-q"]);
+    alice.git(&["pull", "-q", "--no-edit"]);
+    let out = alice.ok(&["sync"]);
+    assert_eq!(edges(&alice).len(), 1, "{out}");
+    let tags = alice.ok(&["tag", "list", &goal.to_string()]);
+    assert!(!tags.contains("no themes"), "{out}\n{tags}");
+}

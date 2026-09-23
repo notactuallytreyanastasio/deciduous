@@ -680,20 +680,29 @@ fn restamp_local_write(
     if record_ts(incoming) > ex_ts {
         return None;
     }
+    // Bringing a tombstone back to life is a change even when every field
+    // the write carries matches the file: a live record simply has no
+    // `deleted_at` key, so the key-by-key test below cannot see it. A relink
+    // or retag identical to what a teammate with a fast clock deleted is
+    // exactly that, and without the restamp their tombstone wins the merge.
+    let is_set =
+        |m: &serde_json::Map<String, Value>| m.get("deleted_at").is_some_and(|v| !v.is_null());
+    let revives = is_set(ex) && !is_set(inc);
     // What does the write change? Against the database's previous state
     // when known; otherwise against the file, where a field the write does
     // not carry is someone else's addition, not a removal.
-    let changes = match base.and_then(Value::as_object) {
-        Some(b) => b
-            .keys()
-            .chain(inc.keys())
-            .filter(|k| !STAMP_FIELDS.contains(&k.as_str()))
-            .any(|k| b.get(k) != inc.get(k)),
-        None => inc
-            .iter()
-            .filter(|(k, _)| !STAMP_FIELDS.contains(&k.as_str()))
-            .any(|(k, v)| ex.get(k) != Some(v)),
-    };
+    let changes = revives
+        || match base.and_then(Value::as_object) {
+            Some(b) => b
+                .keys()
+                .chain(inc.keys())
+                .filter(|k| !STAMP_FIELDS.contains(&k.as_str()))
+                .any(|k| b.get(k) != inc.get(k)),
+            None => inc
+                .iter()
+                .filter(|(k, _)| !STAMP_FIELDS.contains(&k.as_str()))
+                .any(|(k, v)| ex.get(k) != Some(v)),
+        };
     if !changes {
         return None;
     }
