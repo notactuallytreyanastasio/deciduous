@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **`/demo-swarm`, an easter egg for iTerm2 and Ghostty.** `deciduous demo-swarm` (hidden from `--help`) builds a fresh repository and opens one window: an Opus boss pane plays an animated tour of how a boss runs a team (the graph, direct messages, broadcasts, the merge gate, halt and reassign), then up to nine Sonnet workers come online, each in its own worktree, and build one Tetris under the boss, sharing one deciduous workspace. Each worker's goal hangs off the boss's assignment node, so the edges cross branches; the first arena had none that did. Both terminals' splits are native AppleScript. Every pane runs under `script -r` and every session has a pinned id, so a run can be replayed later from `.swarm/rec/`. In any other terminal it says so and exits 1.
+
 ## [1.0.3] - 2026-09-23
 
 `deciduous update` no longer destroys what it did not write. Upgrading the 86 projects on one machine to 1.0.2 took a script that backed everything up, restored what `update` wrote outside its own files, and put back 59 files it had replaced: a project's own `build-test` command, hand-edited hook scripts, a staged edit. That script is now the update.

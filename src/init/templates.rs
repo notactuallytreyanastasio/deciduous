@@ -2510,3 +2510,36 @@ deciduous nodes --type revisit
 - **Don't create implementation nodes.** The graph is about the MODEL, not the code.
 - **Don't over-structure.** Simple narratives might just be: goal → option → decision.
 "#;
+
+/// /demo-swarm: the easter egg. The command does the work; the model runs it
+/// and reports, and does nothing when the terminal is not iTerm2 or Ghostty.
+pub const DEMO_SWARM_MD: &str = r#"---
+description: Easter egg. An Opus boss and nine Sonnet workers build one Tetris together, in iTerm2 or Ghostty panes
+allowed-tools: Bash(deciduous demo-swarm:*)
+argument-hint: "[--workers N] [--dry-run] [--ask] [--dir PATH]"
+---
+
+# /demo-swarm
+
+Run this with the Bash tool, exactly, and nothing else first:
+
+    deciduous demo-swarm $ARGUMENTS
+
+It works only in iTerm2 or Ghostty on macOS. It builds a fresh repository
+(default `~/deciduous-swarm/swarm-MMDD-HHMM`) and opens a new window: an Opus
+boss pane plays an animated tour of how the boss runs the team, then nine
+Sonnet workers come online, each in its own worktree and branch, and the boss
+takes over. They share one deciduous workspace, message each other directly,
+and merge through the boss. Every pane is recorded with timestamps under
+`.swarm/rec/` in the arena, for a replay.
+
+Then tell the user, in two or three sentences, what opened: the arena path,
+the workspace and the recording directory, all printed by the command, and
+that the boss pane is theirs to talk to.
+
+If it refuses because the terminal is not iTerm2 or Ghostty, or `claude` or the
+deciduous MCP server is missing, say so in one sentence and stop. Do not work
+around the check, and do not start sessions another way.
+
+This is a demo, not work on this project: log nothing to the graph for it.
+"#;

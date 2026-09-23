@@ -43,6 +43,7 @@ pub mod archaeology;
 pub mod changelog;
 pub mod config;
 pub mod db;
+pub mod demo_swarm;
 pub mod events;
 pub mod export;
 pub mod github;

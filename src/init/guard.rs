@@ -394,6 +394,7 @@ mod tests {
             ("DECISION_GRAPH_MD", t::DECISION_GRAPH_MD),
             ("SYNC_MD", t::SYNC_MD),
             ("WORK_MD", t::WORK_MD),
+            ("DEMO_SWARM_MD", t::DEMO_SWARM_MD),
             ("HOOK_VERSION_CHECK", t::HOOK_VERSION_CHECK),
             ("CLAUDE_AGENTS_TOML", t::CLAUDE_AGENTS_TOML),
             ("SKILL_PULSE", t::SKILL_PULSE),
