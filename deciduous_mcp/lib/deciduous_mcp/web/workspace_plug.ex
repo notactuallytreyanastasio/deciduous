@@ -81,7 +81,9 @@ defmodule DeciduousMcp.Web.WorkspacePlug do
     body =
       Jason.encode!(%{
         error: "invalid #{@header} header",
-        value: raw,
+        # Jason refuses a binary that is not UTF-8; the reason sentence
+        # shows such a value as bytes.
+        value: if(String.valid?(raw), do: raw),
         reason: Workspaces.describe_name_error(raw, reason)
       })
 

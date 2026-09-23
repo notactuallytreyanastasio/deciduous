@@ -256,12 +256,15 @@ defmodule DeciduousMcp.MCP.Component do
   defp has_nodes?(name) do
     import Ecto.Query
 
-    DeciduousMcp.Repo.exists?(
-      from n in DeciduousMcp.Schema.Node,
-        join: w in DeciduousMcp.Schema.Workspace,
-        on: w.id == n.workspace_id,
-        where: w.name == ^name
-    )
+    case DeciduousMcp.Graph.Workspaces.get_by_name(name) do
+      {:ok, workspace} ->
+        DeciduousMcp.Repo.exists?(
+          from n in DeciduousMcp.Schema.Node, where: n.workspace_id == ^workspace.id
+        )
+
+      {:error, :not_found} ->
+        false
+    end
   end
 
   defp crashed(module, frame, formatted, what) do

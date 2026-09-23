@@ -49,6 +49,24 @@ defmodule DeciduousMcp.Graph.Workspaces do
   """
   def get_by_name(name) do
     case Repo.get_by(Workspace, name: name) do
+      nil -> get_by_normalized_name(name)
+      workspace -> {:ok, workspace}
+    end
+  end
+
+  # Names are stored NFC since normalize_name/1 began composing them. A
+  # workspace created earlier under a decomposed spelling is still found by
+  # the composed one, so the fix does not split it in two; if both spellings
+  # exist, the older is the one used. Only on a miss, so a known name still
+  # costs one indexed lookup.
+  defp get_by_normalized_name(name) do
+    from(w in Workspace,
+      where: fragment("normalize(?, NFC)", w.name) == ^name,
+      order_by: [asc: w.inserted_at],
+      limit: 1
+    )
+    |> Repo.one()
+    |> case do
       nil -> {:error, :not_found}
       workspace -> {:ok, workspace}
     end
@@ -129,6 +147,16 @@ defmodule DeciduousMcp.Graph.Workspaces do
   from.
   """
   def normalize_name(raw) when is_binary(raw) do
+    if String.valid?(raw), do: normalize_valid_name(raw), else: {:error, :not_utf8}
+  end
+
+  def normalize_name(_), do: {:error, :not_a_string}
+
+  # Composed (NFC) as well as lowercased: "café" typed precomposed and the
+  # decomposed "cafe" + U+0301 that macOS file APIs often return were two
+  # workspaces listed under the same name. A header is bytes, not text, and
+  # one that was not UTF-8 crashed the plug (an empty HTTP 500).
+  defp normalize_valid_name(raw) do
     trimmed = String.trim(raw)
 
     cond do
@@ -148,11 +176,9 @@ defmodule DeciduousMcp.Graph.Workspaces do
         {:error, :too_long}
 
       true ->
-        {:ok, String.downcase(trimmed)}
+        {:ok, trimmed |> String.downcase() |> String.normalize(:nfc)}
     end
   end
-
-  def normalize_name(_), do: {:error, :not_a_string}
 
   @doc "One sentence for a `normalize_name/1` refusal, naming the input."
   def describe_name_error(raw, reason) do
@@ -173,10 +199,18 @@ defmodule DeciduousMcp.Graph.Workspaces do
         :not_a_string ->
           "is not a string"
 
+        :not_utf8 ->
+          "is not valid UTF-8"
+
         :global ->
           "is \"#{@global}\", the global view across every project, which can be read but not written to or pinned"
       end
 
-    "invalid workspace name #{inspect(raw, binaries: :as_strings)}: it #{why}"
+    shown =
+      if is_binary(raw) and not String.valid?(raw),
+        do: inspect(raw, binaries: :as_binaries, limit: 20),
+        else: inspect(raw, binaries: :as_strings)
+
+    "invalid workspace name #{shown}: it #{why}"
   end
 end
