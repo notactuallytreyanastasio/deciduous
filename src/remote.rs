@@ -797,6 +797,7 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 updated_at: n.updated_at.clone(),
                 author: None,
                 deleted_at: n.deleted_at.clone(),
+                extra: Default::default(),
             };
             if store.write_node(&rec).map_err(|e| e.to_string())? {
                 written += 1;
@@ -822,6 +823,7 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
                 created_at: e.created_at.clone(),
                 author: None,
                 deleted_at: None,
+                extra: Default::default(),
             };
             if store.write_edge(&rec).map_err(|e| e.to_string())? {
                 written += 1;

@@ -344,3 +344,76 @@ fn a_digit_only_change_id_prefix_is_never_silently_a_local_id() {
     let shown = alice.ok(&["show", "c0ffee00-4444"]);
     assert!(shown.contains("long id"), "{shown}");
 }
+
+// ============================================================================
+// G4: fields this version does not know about
+// ============================================================================
+
+#[test]
+fn fields_this_version_does_not_know_survive_every_write_and_merge() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "Ship it", &[]);
+    let action = alice.add("action", "Write it", &[]);
+    alice.ok(&["link", &goal.to_string(), &action.to_string(), "-r", "how"]);
+    let goal_cid = alice.change_id(goal);
+
+    // A newer deciduous (or a teammate's tool) wrote fields we do not model.
+    let mut doc = alice.doc();
+    doc["documents"] = serde_json::json!({"d1": {"node": goal_cid, "sha": "abc"}});
+    let node = &mut doc["nodes"][&goal_cid];
+    node["priority"] = "p1".into();
+    node["reviewers"] = serde_json::json!(["bob", "carol"]);
+    let edge_key = doc["edges"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .next()
+        .unwrap()
+        .clone();
+    doc["edges"][&edge_key]["confidence_note"] = "strong".into();
+    alice.write_doc(&doc);
+    alice.commit_graph("fields from the future");
+    alice.git(&["push", "-q"]);
+
+    // Unrelated writes on the same machine.
+    alice.add("observation", "Unrelated", &[]);
+    alice.ok(&["status", &goal.to_string(), "active"]);
+    alice.ok(&["prompt", &goal.to_string(), "why"]);
+    let doc = alice.doc();
+    assert_eq!(doc["nodes"][&goal_cid]["priority"], "p1", "{doc:#}");
+    assert_eq!(doc["nodes"][&goal_cid]["reviewers"][1], "carol", "{doc:#}");
+    assert_eq!(doc["nodes"][&goal_cid]["status"], "active", "{doc:#}");
+    assert_eq!(
+        doc["edges"][&edge_key]["confidence_note"], "strong",
+        "{doc:#}"
+    );
+    assert_eq!(doc["documents"]["d1"]["sha"], "abc", "{doc:#}");
+
+    // Sync agrees with itself: the extra fields are not "differences" that
+    // re-import on every run.
+    alice.ok(&["sync"]);
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+    alice.commit_graph("unrelated work");
+
+    // Through a real merge with a teammate who touched the same records.
+    let bob = team.join("bob");
+    bob.ok(&["status", &goal_cid[..8], "completed"]);
+    bob.add("goal", "Bob's own", &[]);
+    bob.commit_graph("bob");
+    bob.git(&["push", "-q"]);
+    alice.git(&["pull", "-q", "--no-edit"]);
+    let doc = alice.doc();
+    assert_eq!(doc["nodes"][&goal_cid]["priority"], "p1", "{doc:#}");
+    assert_eq!(
+        doc["edges"][&edge_key]["confidence_note"], "strong",
+        "{doc:#}"
+    );
+    assert_eq!(doc["documents"]["d1"]["sha"], "abc", "{doc:#}");
+    alice.ok(&["sync"]);
+    let doc = alice.doc();
+    assert_eq!(doc["nodes"][&goal_cid]["priority"], "p1", "{doc:#}");
+    assert_eq!(doc["nodes"][&goal_cid]["status"], "completed", "{doc:#}");
+    assert_eq!(doc["documents"]["d1"]["sha"], "abc", "{doc:#}");
+}

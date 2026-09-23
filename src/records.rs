@@ -94,6 +94,11 @@ pub struct NodeRecord {
     /// Set when the node was deleted; the record is then a tombstone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl NodeRecord {
@@ -110,6 +115,7 @@ impl NodeRecord {
             updated_at: node.updated_at.clone(),
             author: author.map(str::to_string),
             deleted_at: None,
+            extra: BTreeMap::new(),
         }
     }
 
@@ -149,6 +155,11 @@ pub struct EdgeRecord {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl EdgeRecord {
@@ -167,6 +178,7 @@ impl EdgeRecord {
             created_at: edge.created_at.clone(),
             author: author.map(str::to_string),
             deleted_at: None,
+            extra: BTreeMap::new(),
         })
     }
 
@@ -189,6 +201,11 @@ pub struct ThemeRecord {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl ThemeRecord {
@@ -202,6 +219,7 @@ impl ThemeRecord {
             updated_at: theme.updated_at.clone(),
             author: author.map(str::to_string),
             deleted_at: None,
+            extra: BTreeMap::new(),
         }
     }
 
@@ -228,6 +246,11 @@ pub struct TagRecord {
     pub author: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub deleted_at: Option<String>,
+    /// Fields this version does not know about (a newer deciduous, another
+    /// tool). Carried through every read and write untouched: dropping them
+    /// would delete a teammate's data on the next unrelated edit.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl TagRecord {
@@ -438,6 +461,9 @@ pub struct GraphDoc {
     pub themes: BTreeMap<String, ThemeRecord>,
     #[serde(default)]
     pub tags: BTreeMap<String, TagRecord>,
+    /// Top-level sections this version does not know about, kept as is.
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, Value>,
 }
 
 impl Default for GraphDoc {
@@ -448,6 +474,7 @@ impl Default for GraphDoc {
             edges: BTreeMap::new(),
             themes: BTreeMap::new(),
             tags: BTreeMap::new(),
+            extra: BTreeMap::new(),
         }
     }
 }
@@ -836,6 +863,7 @@ impl RecordStore {
             created_at: created_at.to_string(),
             author: Some(self.author().to_string()),
             deleted_at: None,
+            extra: Default::default(),
         };
         let key = tag_id(node_change_id, theme_change_id);
         self.write_merged(|d| &mut d.tags, key, &rec)
@@ -898,6 +926,7 @@ impl RecordStore {
                 created_at: now.clone(),
                 author: None,
                 deleted_at: None,
+                extra: Default::default(),
             });
             rec.author = Some(author);
             rec.deleted_at = Some(now);
@@ -1123,6 +1152,7 @@ impl RecordStore {
                 updated_at: node.updated_at.to_rfc3339(),
                 author: node.author.clone(),
                 deleted_at,
+                extra: Default::default(),
             };
 
         self.mutate(|doc| {
@@ -1155,6 +1185,7 @@ impl RecordStore {
                     created_at: edge.created_at.to_rfc3339(),
                     author: edge.author.clone(),
                     deleted_at: None,
+                    extra: Default::default(),
                 };
                 if !doc.edges.contains_key(&rec.edge_id)
                     && put(&mut doc.edges, rec.edge_id.clone(), rec)
@@ -1175,6 +1206,7 @@ impl RecordStore {
                     created_at: edge.created_at.to_rfc3339(),
                     author: edge.author.clone(),
                     deleted_at: Some(deleted_at.to_rfc3339()),
+                    extra: Default::default(),
                 };
                 let keep = match doc.edges.get(&rec.edge_id) {
                     Some(existing) => {
@@ -1478,6 +1510,9 @@ fn reconcile_inner(
                         let mut theirs = rec.clone();
                         theirs.author = None;
                         theirs.created_at = mine.created_at.clone();
+                        // Fields the database cannot hold are not a
+                        // difference it could ever resolve.
+                        theirs.extra.clear();
                         mine == theirs
                     };
                     if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
@@ -1625,6 +1660,9 @@ fn reconcile_inner(
                         let mut theirs = rec.clone();
                         theirs.author = None;
                         theirs.created_at = mine.created_at.clone();
+                        // Fields the database cannot hold are not a
+                        // difference it could ever resolve.
+                        theirs.extra.clear();
                         mine == theirs
                     };
                     if rec_ts > row_ts || (rec_ts == row_ts && !same_content) {
@@ -2044,6 +2082,36 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
         );
         out.insert(kind.into(), Value::Object(merged));
     }
+
+    // Sections this version does not know. A section that is a map of
+    // records merges like one; anything else takes the side that changed
+    // it, ours when both did.
+    let mut others: Vec<&String> = o
+        .keys()
+        .chain(t.keys())
+        .filter(|k| k.as_str() != "version" && !RECORD_KINDS.contains(&k.as_str()))
+        .collect();
+    others.sort();
+    others.dedup();
+    for key in others {
+        let bv = b.and_then(|m| m.get(key));
+        let merged = match (o.get(key), t.get(key)) {
+            (Some(ov), Some(tv)) if ov == tv => Some(ov.clone()),
+            (Some(Value::Object(om)), Some(Value::Object(tm))) => Some(Value::Object(
+                merge_record_maps(bv.and_then(Value::as_object), om, tm),
+            )),
+            (Some(ov), Some(tv)) => Some(if bv == Some(ov) {
+                tv.clone()
+            } else {
+                ov.clone()
+            }),
+            (Some(v), None) | (None, Some(v)) => (bv != Some(v)).then(|| v.clone()),
+            (None, None) => None,
+        };
+        if let Some(v) = merged {
+            out.insert(key.clone(), v);
+        }
+    }
     Ok(Value::Object(out))
 }
 
@@ -2231,6 +2299,7 @@ mod tests {
             updated_at: updated_at.into(),
             author: Some("bob".into()),
             deleted_at: None,
+            extra: Default::default(),
         }
     }
 
@@ -2373,6 +2442,7 @@ mod tests {
             created_at: "2020-01-01T00:00:00+00:00".into(),
             author: None,
             deleted_at: Some("2020-01-02T00:00:00+00:00".into()),
+            extra: Default::default(),
         })
         .unwrap();
         db.tag_node(n, "ops", "manual").unwrap();
@@ -2389,6 +2459,7 @@ mod tests {
             created_at: "2020-01-01T00:00:00+00:00".into(),
             author: None,
             deleted_at: Some("2020-01-02T00:00:00+00:00".into()),
+            extra: Default::default(),
         })
         .unwrap();
         let r = reconcile(&db, &s, false).unwrap();
@@ -2588,6 +2659,7 @@ mod tests {
             created_at: "2026-01-02T00:00:00+00:00".into(),
             author: Some("alice".into()),
             deleted_at: None,
+            extra: Default::default(),
         })
         .unwrap();
 
@@ -2693,6 +2765,7 @@ mod tests {
             created_at: "2026-01-02T00:00:00+00:00".into(),
             author: None,
             deleted_at: None,
+            extra: Default::default(),
         })
         .unwrap();
         let r = reconcile(&db, &s, false).unwrap();
@@ -3124,6 +3197,7 @@ mod tests {
                 created_at: "2026-01-01T00:00:00+00:00".into(),
                 author: None,
                 deleted_at: None,
+                extra: Default::default(),
             })
             .unwrap(),
         )
