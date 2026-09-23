@@ -14,6 +14,7 @@ defmodule DeciduousMcp.Web.ExportTombstonesTest do
   setup do
     {:ok, ws} = Workspaces.find_or_create("ex-ws")
     {:ok, a} = Nodes.create_node(ws.id, %{node_type: "goal", title: "ex A"})
+
     {:ok, b} =
       Nodes.create_node(ws.id, %{
         node_type: "action",
@@ -21,6 +22,7 @@ defmodule DeciduousMcp.Web.ExportTombstonesTest do
         description: "pasted secret sk-live-123",
         metadata: %{"prompt" => "my password is hunter2", "branch" => "ex"}
       })
+
     {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: a.id, to_node_id: b.id})
 
     client = McpClient.connect()

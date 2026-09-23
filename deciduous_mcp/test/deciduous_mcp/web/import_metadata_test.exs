@@ -18,9 +18,14 @@ defmodule DeciduousMcp.Web.ImportMetadataTest do
   end
 
   defp push(client, nodes),
-    do: McpClient.post_json(client, "/import", %{"workspace" => "im-ws", "graph" => %{"nodes" => nodes}})
+    do:
+      McpClient.post_json(client, "/import", %{
+        "workspace" => "im-ws",
+        "graph" => %{"nodes" => nodes}
+      })
 
-  defp node(cid, meta), do: %{"change_id" => cid, "node_type" => "goal", "title" => cid, "metadata_json" => meta}
+  defp node(cid, meta),
+    do: %{"change_id" => cid, "node_type" => "goal", "title" => cid, "metadata_json" => meta}
 
   test "an import carrying an invalid confidence is refused whole, naming the node", %{
     client: client,
@@ -49,7 +54,13 @@ defmodule DeciduousMcp.Web.ImportMetadataTest do
   end
 
   test "a valid confidence and a missing one import", %{client: client, ws: ws} do
-    {200, _} = push(client, [node("im-a", ~s({"confidence":0})), node("im-b", nil), node("im-c", ~s({"confidence":100.0}))])
+    {200, _} =
+      push(client, [
+        node("im-a", ~s({"confidence":0})),
+        node("im-b", nil),
+        node("im-c", ~s({"confidence":100.0}))
+      ])
+
     assert {:ok, %{metadata: %{"confidence" => 0}}} = Nodes.get_node_by_change_id(ws.id, "im-a")
   end
 

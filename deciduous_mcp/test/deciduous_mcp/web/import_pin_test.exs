@@ -52,13 +52,19 @@ defmodule DeciduousMcp.Web.ImportPinTest do
 
   test "a pinned client naming its own workspace, in any case, imports", %{pinned: pinned} do
     graph = %{"nodes" => [%{"change_id" => "ip-2", "node_type" => "goal", "title" => "t"}]}
-    {status, body} = McpClient.post_json(pinned, "/import", %{"workspace" => "IP-A", "graph" => graph})
+
+    {status, body} =
+      McpClient.post_json(pinned, "/import", %{"workspace" => "IP-A", "graph" => graph})
+
     assert status == 200, inspect(body)
   end
 
   test "an unpinned client still names the workspace in the body", %{goal: goal} do
     {status, _} =
-      McpClient.post_json(McpClient.connect(), "/import", %{"workspace" => "ip-o", "graph" => hijack(goal)})
+      McpClient.post_json(McpClient.connect(), "/import", %{
+        "workspace" => "ip-o",
+        "graph" => hijack(goal)
+      })
 
     assert status == 200
     assert {:ok, %{title: "HIJACKED"}} = Nodes.get_node(goal.id)

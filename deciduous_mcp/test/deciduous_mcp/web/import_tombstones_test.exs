@@ -57,10 +57,16 @@ defmodule DeciduousMcp.Web.ImportTombstonesTest do
   test "no edge is written from or to a deleted node", %{client: client, d: d, p: p} do
     {status, report} =
       push(client, %{
-        "nodes" => [%{"id" => 9, "change_id" => "it-new", "node_type" => "outcome", "title" => "new"}],
+        "nodes" => [
+          %{"id" => 9, "change_id" => "it-new", "node_type" => "outcome", "title" => "new"}
+        ],
         "edges" => [
           %{"from_change_id" => d.change_id, "to_node_id" => 9, "edge_type" => "leads_to"},
-          %{"from_change_id" => p.change_id, "to_change_id" => d.change_id, "edge_type" => "chosen"}
+          %{
+            "from_change_id" => p.change_id,
+            "to_change_id" => d.change_id,
+            "edge_type" => "chosen"
+          }
         ]
       })
 
