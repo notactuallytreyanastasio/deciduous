@@ -617,6 +617,11 @@ impl Drop for QuerySlot {
 /// default is 1 GB; `printf('%.*c', 200000000, 'x')` built 200 MB in 62 ms.
 const QUERY_MAX_VALUE_BYTES: i32 = 1_000_000;
 
+/// Most memory SQLite may hold in a /query child (PRAGMA hard_heap_limit);
+/// past it the query fails with "out of memory". Room for several values of
+/// QUERY_MAX_VALUE_BYTES, and for the page cache of a large graph.
+const QUERY_MAX_HEAP_BYTES: i64 = 64 * 1024 * 1024;
+
 /// Largest `/query` result, as serialized JSON. SQLITE_LIMIT_LENGTH caps
 /// one value, not the response: 1000 rows of a 999 KB value made a 999 MB
 /// body, and the daemon kept 1.6 GB of it after the request ended.
@@ -686,6 +691,11 @@ fn sql_error(e: rusqlite::Error) -> ApiError {
             "statement refused: /query may only read this graph's tables \
              (no ATTACH, no pragmas beyond table/index/foreign-key info)",
         )
+    } else if msg.contains("out of memory") {
+        ApiError::bad_request(&format!(
+            "query stopped: it needed more than the {} MB of memory a /query may use",
+            QUERY_MAX_HEAP_BYTES / (1024 * 1024)
+        ))
     } else {
         ApiError::bad_request(&format!("SQL error: {msg}"))
     }
@@ -834,6 +844,20 @@ fn open_query_connection(db_path: &Path) -> Result<rusqlite::Connection, ApiErro
         QUERY_MAX_VALUE_BYTES,
     );
     conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_ATTACHED, 0);
+    // SQLITE_LIMIT_LENGTH caps a value once it is finished, not an
+    // aggregate (json_group_object, group_concat) while it is built: one
+    // such query held 1.5 GB until it was killed at 5 s. The heap limit is
+    // process-wide, which is right here: this process runs one query.
+    // An aggregate that hits it may ignore the failed append and run on
+    // (json_group_array does, until its final step), so it is still stopped
+    // at the time limit; what the limit bounds is its memory: 63 MB RSS
+    // where it was 1.5 GB.
+    conn.query_row(
+        &format!("PRAGMA hard_heap_limit = {QUERY_MAX_HEAP_BYTES}"),
+        [],
+        |_| Ok(()),
+    )
+    .map_err(|e| ApiError::internal(&format!("hard_heap_limit pragma: {e}")))?;
     conn.authorizer(Some(query_authorizer));
     Ok(conn)
 }

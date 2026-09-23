@@ -434,6 +434,55 @@ fn r6_bypass_abandoned_queries_do_not_pile_up() {
     }
 }
 
+/// R6 bypass, round 3: SQLITE_LIMIT_LENGTH caps a finished value, not an
+/// aggregate while it is being built. This one held 1.5 GB in its /query
+/// child from 1 s until it was killed at 5 s; four slots made that about
+/// 6 GB, for as long as a caller kept sending it.
+#[test]
+fn r6_bypass_query_memory_is_bounded() {
+    let Some(()) = local("r6_bypass_query_memory_is_bounded") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let daemon = d.child.id().to_string();
+    for agg in [
+        "json_group_object(x, printf('%.*c',100000,'a'))",
+        "json_group_array(printf('%.*c',100000,'a'))",
+    ] {
+        let sql = format!(
+            "SELECT {agg} FROM (WITH RECURSIVE r(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM r) SELECT x FROM r)"
+        );
+        let peak_kb = std::thread::scope(|scope| {
+            let q = scope.spawn(|| query(&d, &sql));
+            let mut peak = 0u64;
+            // The /query child is the daemon's child; sample its RSS.
+            for _ in 0..16 {
+                std::thread::sleep(Duration::from_millis(250));
+                let ps = std::process::Command::new("ps")
+                    .args(["-A", "-o", "ppid=,rss="])
+                    .output()
+                    .unwrap();
+                for line in String::from_utf8_lossy(&ps.stdout).lines() {
+                    let mut f = line.split_whitespace();
+                    if f.next() == Some(daemon.as_str()) {
+                        peak = peak.max(f.next().and_then(|r| r.parse().ok()).unwrap_or(0));
+                    }
+                }
+            }
+            let (st, body, _) = q.join().unwrap();
+            assert_eq!(st, 400, "{agg}: {body}");
+            peak
+        });
+        assert!(peak_kb > 0, "{agg}: never saw the /query child");
+        assert!(
+            peak_kb < 200 * 1024,
+            "{agg}: the /query child held {} MB",
+            peak_kb / 1024
+        );
+    }
+}
+
 /// R6 bypass, round 2: sqlite3_interrupt is seen between ops, and one op can
 /// run far past the limit. LIKE with a leading % and a 50,000-byte pattern
 /// over a 1 MB value is a single op of about 50 s (GLOB the same): four of
