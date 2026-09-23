@@ -20,8 +20,12 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
   - An action taken
   - An outcome (result of the action)
 
-  The tool creates all relevant nodes and connects them with proper edges,
-  following the Deciduous graph flow: goal → options → decision → action → outcome.
+  The tool creates all relevant nodes and connects them, in log_decision's
+  shape: context → decision → options (chosen/rejected edges), and
+  decision → action → outcome, where the context is parent_node_id, the
+  turn's own goal, or its first observation. Options without a decision
+  hang under the context. Everything the turn writes is reachable from
+  its context.
 
   ## When to call
 
@@ -282,7 +286,11 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             metadata: build_metadata(nil, branch, confidence, nil)
           })
 
-        if prev_node_id do
+        # With a decision in the turn, its options hang under it
+        # (decision -> option, chosen/rejected, below), as log_decision
+        # draws them; linking them under the context as well gave each
+        # option two parents. Without one, they hang under the context.
+        if prev_node_id && is_nil(args["decision"]) do
           link!(workspace_id, %{
             from_node_id: prev_node_id,
             to_node_id: node.id,
@@ -320,12 +328,16 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
           })
         end)
 
-        # Link from previous context to decision
-        if prev_node_id && Enum.empty?(option_ids) do
+        # Link from previous context to decision, options or not. With
+        # options this edge was left out, and nothing pointed into the
+        # decision: it was an orphan, and the action and outcome under it
+        # could not be reached from the goal the turn belongs to (T6).
+        if prev_node_id do
           link!(workspace_id, %{
             from_node_id: prev_node_id,
             to_node_id: node.id,
-            edge_type: "leads_to"
+            edge_type: "leads_to",
+            rationale: "Decided"
           })
         end
 
