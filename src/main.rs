@@ -477,7 +477,7 @@ enum Command {
 
     /// Removed in 1.0.3; exits 0 so hooks installed by 1.0.2 stay silent
     /// until `deciduous update` takes them out.
-    /// Easter egg: an Opus boss and four Sonnet workers build one Tetris in
+    /// Demonstration: an Opus lead and four Sonnet workers build one Tetris in
     /// iTerm2 or Ghostty panes. `deciduous demo-swarm --help` for options.
     #[command(name = "demo-swarm", hide = true, disable_help_flag = true)]
     DemoSwarm {

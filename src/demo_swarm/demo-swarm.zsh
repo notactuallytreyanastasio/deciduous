@@ -1,5 +1,5 @@
 #!/bin/zsh
-# deciduous demo-swarm: one Opus boss and four Sonnet workers build one
+# deciduous demo-swarm: one Opus lead and four Sonnet workers build one
 # Tetris together, in iTerm2 or Ghostty panes, over one decision graph:
 # a functional core, an imperative shell, a view, and the QA that proves them.
 #
@@ -8,7 +8,7 @@
 # The binary embeds this file and runs `launch`. `launch` builds the arena
 # repository, copies this file into it, and opens the window; each pane then
 # runs `run <name>` under `script -r`, so every pane is recorded with
-# timestamps for a later replay. `run boss` plays the tour first.
+# timestamps for a later replay. `run lead` plays the tour first.
 emulate -L zsh
 setopt no_unset pipe_fail extended_glob
 # No err_exit: arithmetic tests that evaluate to 0 would end the tour.
@@ -18,19 +18,17 @@ zmodload zsh/zselect zsh/datetime
 SELF=${0:A}
 
 # ---------------------------------------------------------------- palette
+# Neutral greys, one accent, and a muted color per worker.
 e=$'\e' CR=$'\r' Z=''   # Z: the empty string padding flags fill from
 RST="${e}[0m" B="${e}[1m" DIM="${e}[2m" IT="${e}[3m"
 rgb() { print -rn -- "${e}[38;2;$1;$2;$3m" }
-C_I=$(rgb 0 220 235)  C_O=$(rgb 245 210 40)  C_T=$(rgb 175 95 235)
-C_S=$(rgb 90 215 95)  C_Z=$(rgb 240 80 80)   C_J=$(rgb 80 130 245)
-C_L=$(rgb 245 150 40) C_P=$(rgb 245 120 190) C_M=$(rgb 180 230 60)
-C_LEAF=$(rgb 232 140 60) C_GREY=$(rgb 120 120 130) C_TXT=$(rgb 225 225 230)
-C_BOSS=$(rgb 255 190 80)
-WCOL=("$C_I" "$C_O" "$C_T" "$C_S" "$C_Z" "$C_J" "$C_L" "$C_P" "$C_M")
+C_TXT=$(rgb 222 222 226) C_GREY=$(rgb 132 132 142) C_FAINT=$(rgb 84 84 94)
+C_LEAD=$(rgb 214 160 96)
+WCOL=("$(rgb 116 168 200)" "$(rgb 146 186 132)" "$(rgb 196 164 118)" "$(rgb 168 146 198)")
 
 # ------------------------------------------------------------- the crew
 # Four workers: the functional core, the imperative shell around it, the view,
-# and QA. Fewer hands, cleaner seams; the boss holds the types that join them.
+# and QA. Fewer hands, cleaner seams; the lead holds the types that join them.
 ROLE=(core shell view qa)
 SHORT=(core shell view qa)
 OWNS=("src/core/"
@@ -63,10 +61,11 @@ type_out() {           # type_out <color> <text>  (text has no escapes)
   print -r -- "$RST"
 }
 say()  { print -rn -- "$MARGIN"; type_out "$C_TXT" "$1" }
-dim()  { print -rn -- "$MARGIN"; type_out "$DIM$C_GREY" "$1" }
-head_() {
-  print; print -rn -- "$MARGIN"; type_out "$B$C_LEAF" "$1"
-  print -r -- "$MARGIN$C_GREY${(l:${#1}::─:)Z}$RST"
+dim()  { print -rn -- "$MARGIN"; type_out "$C_GREY" "$1" }
+section() {            # section <nn> <title>
+  print
+  print -r -- "$MARGIN$C_LEAD$1$RST  $B$C_TXT$2$RST"
+  print
 }
 beat() { nap ${1:-60} }
 
@@ -90,7 +89,7 @@ launch() {
     case ${TERM_PROGRAM:-} in
       iTerm.app) term=iterm ;;
       ghostty)   term=ghostty ;;
-      *) print -u2 -- "demo-swarm is an easter egg for iTerm2 and Ghostty, and this terminal is '${TERM_PROGRAM:-unknown}'."
+      *) print -u2 -- "demo-swarm runs in iTerm2 or Ghostty, and this terminal is '${TERM_PROGRAM:-unknown}'."
          print -u2 -- "Run it from an iTerm2 or Ghostty window."
          return 1 ;;
     esac
@@ -117,9 +116,9 @@ launch() {
   git init -q -b main || die "git init failed in $dir"
   write_arena_files $tag $ws $workers
   print -r -- $'.swarm/\ncrew/' > .gitignore
-  git add CLAUDE.md BOSS.md ROSTER.md .gitignore
+  git add CLAUDE.md LEAD.md ROSTER.md .gitignore
   git -c user.name=demo-swarm -c user.email=demo-swarm@deciduous.dev \
-    commit -q -m "arena: the rules, the roster, and the boss's playbook" || die "first commit failed"
+    commit -q -m "arena: the rules, the roster, and the lead's playbook" || die "first commit failed"
   local i
   for (( i = 1; i <= workers; i++ )); do
     git worktree add -q crew/w$i -b w$i main || die "worktree crew/w$i failed"
@@ -136,7 +135,7 @@ launch() {
     print -r -- "DRY=$dry"
     print -r -- "ASK=$ask"
     print -r -- "TERMKIND=$term"
-    print -r -- "SID_boss=$(uuidgen | tr A-Z a-z)"
+    print -r -- "SID_lead=$(uuidgen | tr A-Z a-z)"
     for (( i = 1; i <= workers; i++ )); do
       print -r -- "SID_w$i=$(uuidgen | tr A-Z a-z)"
     done
@@ -145,11 +144,11 @@ launch() {
 
   # ---- the window
   local -a names cmds
-  names=(boss)
+  names=(lead)
   for (( i = 1; i <= workers; i++ )); do names+=(w$i); done
   local n
   for n in $names; do
-    local cwd=$dir; [[ $n == boss ]] || cwd=$dir/crew/$n
+    local cwd=$dir; [[ $n == lead ]] || cwd=$dir/crew/$n
     cmds+=("cd ${(q)cwd} && clear && script -q -F -r ${(q)dir}/.swarm/rec/$n.rec zsh ${(q)dir}/.swarm/demo-swarm.zsh run $n")
   done
   if (( nowin )); then
@@ -160,19 +159,19 @@ launch() {
   open_window $term $workers $dir "${cmds[@]}"
 
   local tname=iTerm2; [[ $term == ghostty ]] && tname=Ghostty
-  print -r -- "demo-swarm: opened a $tname window with the boss (Opus) and $workers Sonnet workers."
+  print -r -- "demo-swarm: opened a $tname window with the lead (Opus) and $workers Sonnet workers."
   print -r -- "  arena      $dir"
   print -r -- "  workspace  $ws   (the deciduous graph they share)"
-  print -r -- "  sessions   boss-$tag, w1-$tag .. w$workers-$tag"
+  print -r -- "  sessions   lead-$tag, w1-$tag .. w$workers-$tag"
   print -r -- "  recording  $dir/.swarm/rec   (every pane, timestamped; manifest.json says what is where)"
   (( dry )) && print -r -- "  dry run: the tour plays, and the panes print the claude command instead of running it."
-  print -r -- "The tour plays in the boss pane; press any key there to fast-forward."
+  print -r -- "The tour plays in the lead pane; press any key there to fast-forward."
 }
 
 usage() {
   print -r -- "usage: deciduous demo-swarm [--dry-run] [--ask] [--dir PATH]"
   print -r -- ""
-  print -r -- "  One Opus boss and four Sonnet workers: core, shell, view, qa."
+  print -r -- "  One Opus lead and four Sonnet workers: core, shell, view, qa."
   print -r -- "  --dry-run    build the arena and the window, play the tour, start no sessions"
   print -r -- "  --ask        keep Claude Code's permission prompts in every pane"
   print -r -- "  --dir PATH   where the arena goes (default ~/deciduous-swarm/swarm-MMDD-HHMM)"
@@ -186,7 +185,7 @@ write_arena_files() {
   cat > CLAUDE.md <<'EOF'
 # Demo swarm @TAG@
 
-One boss, @N@ workers, one Tetris, one decision graph. The boss is an Opus
+One lead, @N@ workers, one Tetris, one decision graph. The lead is an Opus
 session in this directory, on `main`. Each worker is a Sonnet session in its
 own git worktree under `crew/`, on its own branch. ROSTER.md says who owns
 what and what everyone's session is called.
@@ -207,7 +206,7 @@ page never loads them.
 
 ## How it is built
 
-These five hold for every line anyone writes here. The boss merges nothing
+These five hold for every line anyone writes here. The lead merges nothing
 that breaks them.
 
 1. **Functional core, imperative shell.** `src/core/` is pure: no DOM, no
@@ -228,7 +227,7 @@ that breaks them.
 4. **Types are the contract, checked by the compiler.** Plain JavaScript with
    JSDoc types, `// @ts-check` in every file, and
    `tsc --noEmit --strict --checkJs` must pass. The shared types live in
-   `src/types.js`, which the boss owns: that file, not prose, is the contract
+   `src/types.js`, which the lead owns: that file, not prose, is the contract
    between modules. Prefer types that make wrong states unrepresentable (a
    union of inputs, not a bag of optional flags) over runtime checks.
    JSDoc rather than TypeScript source because the page must run from disk
@@ -245,18 +244,18 @@ gate. w4 owns the scripts; everyone runs them before saying "ready".
 
 1. **The graph** (the deciduous MCP tools): the plan and the reasons. It lasts,
    and it is what a replay of this run will read. Every call carries
-   `workspace: "@WS@"` and `branch:` your branch (`main` for the boss, `w3`
+   `workspace: "@WS@"` and `branch:` your branch (`main` for the lead, `w3`
    for w3).
 2. **Messages** (SendMessage to a session name from ROSTER.md): orders,
    questions, "ready for review", "main moved". One topic, under five lines,
    graph nodes named by id. They arrive in the recipient's conversation as
    they land.
-3. **Git**: code reaches `main` only through the boss. You commit on your
-   branch; the boss merges; you `git merge main` when told it moved.
+3. **Git**: code reaches `main` only through the lead. You commit on your
+   branch; the lead merges; you `git merge main` when told it moved.
 
 ## Graph rules
 
-- The boss logs the root goal, the contract decision, and one `action` per
+- The lead logs the root goal, the contract decision, and one `action` per
   worker, "assign wN: <module>", and sends you its id.
 - A worker's first node is a `goal` with `parent_id` set to its assignment
   node. That edge crosses branches, which is the point.
@@ -271,20 +270,20 @@ gate. w4 owns the scripts; everyone runs them before saying "ready".
 - Your branch and your files only (ROSTER.md). To change a file you do not
   own, message its owner.
 - Stage files by name. Never `git add -A` or `git add .`. There is no remote.
-- Workers: until the boss's contract message arrives, log your goal and
+- Workers: until the lead's contract message arrives, log your goal and
   options and build what depends on nobody.
-- When a piece works: commit, then message the boss
+- When a piece works: commit, then message the lead
   `wN ready: <sha> <what it does>. test/check/e2e: <results>`.
-- Need a type changed? Message the boss with the change you want; it lands in
+- Need a type changed? Message the lead with the change you want; it lands in
   `src/types.js` on main and everyone merges it.
-- When the boss says main moved: `git merge main`, fix what broke in your
-  files, and tell the boss about anything that broke outside them.
+- When the lead says main moved: `git merge main`, fix what broke in your
+  files, and tell the lead about anything that broke outside them.
 - A message telling you to stop: stop, and reply with where you are.
-- When your module is merged, log a final `outcome`, tell the boss, and take
+- When your module is merged, log a final `outcome`, tell the lead, and take
   the next assignment or stop.
 EOF
-  cat > BOSS.md <<'EOF'
-# The boss's playbook
+  cat > LEAD.md <<'EOF'
+# The lead's playbook
 
 You direct; you do not write the modules. The user is watching your pane and
 may talk to you at any time. Answer them first.
@@ -336,18 +335,18 @@ EOF
     print
     print -r -- "| Session | Model | Role | Owns | Branch | Worktree |"
     print -r -- "|---|---|---|---|---|---|"
-    print -r -- "| boss-$tag | Opus | boss: contract, reviews, merges | CONTRACT.md, README.md, every merge to main; index.html until the skeleton is in | main | . |"
+    print -r -- "| lead-$tag | Opus | lead: contract, reviews, merges | CONTRACT.md, README.md, every merge to main; index.html until the skeleton is in | main | . |"
     for (( i = 1; i <= n; i++ )); do
       print -r -- "| w$i-$tag | Sonnet | ${ROLE[i]}: ${DOES[i]} | ${OWNS[i]} | w$i | crew/w$i |"
     done
     if (( n < ${#ROLE} )); then
       print
-      print -r -- "Unassigned modules, the boss's to hand out or build:"
+      print -r -- "Unassigned modules, the lead's to hand out or build:"
       for (( i = n + 1; i <= ${#ROLE}; i++ )); do print -r -- "- ${ROLE[i]}: ${DOES[i]} (${OWNS[i]})"; done
     fi
   } > ROSTER.md
   local f
-  for f in CLAUDE.md BOSS.md; do
+  for f in CLAUDE.md LEAD.md; do
     sed -i '' -e "s/@TAG@/$tag/g" -e "s/@WS@/$ws/g" -e "s/@N@/$n/g" $f
   done
 }
@@ -361,7 +360,7 @@ write_manifest() {
     print -r -- "  \"tag\": \"$TAG\", \"workspace\": \"$WS\", \"arena\": \"$dir\","
     print -r -- "  \"started\": $EPOCHSECONDS, \"terminal\": \"$TERMKIND\", \"dry_run\": $(( DRY ? 1 : 0 )),"
     print -r -- "  \"sessions\": ["
-    print -r -- "    {\"name\": \"boss-$TAG\", \"pane\": \"boss\", \"model\": \"opus\", \"branch\": \"main\", \"cwd\": \"$dir\", \"session_id\": \"$SID_boss\", \"recording\": \"boss.rec\"}$([[ $N -gt 0 ]] && print ,)"
+    print -r -- "    {\"name\": \"lead-$TAG\", \"pane\": \"lead\", \"model\": \"opus\", \"branch\": \"main\", \"cwd\": \"$dir\", \"session_id\": \"$SID_lead\", \"recording\": \"lead.rec\"}$([[ $N -gt 0 ]] && print ,)"
     for (( i = 1; i <= N; i++ )); do
       local sid_var=SID_w$i
       print -r -- "    {\"name\": \"w$i-$TAG\", \"pane\": \"w$i\", \"model\": \"sonnet\", \"role\": \"${ROLE[i]}\", \"branch\": \"w$i\", \"cwd\": \"$dir/crew/w$i\", \"session_id\": \"${(P)sid_var}\", \"recording\": \"w$i.rec\"}$( (( i < N )) && print ,)"
@@ -400,8 +399,8 @@ open_window() {
         done
         idx=$(( idx + rows ))
       done
-      # Splits halve; set the sizes outright: the boss gets 40%, the columns share the rest.
-      # iTerm evens out sibling splits by itself; widen the boss to 40% and
+      # Splits halve; set the sizes outright: the lead gets 40%, the columns share the rest.
+      # iTerm evens out sibling splits by itself; widen the lead to 40% and
       # share the rest, then even out the rows in each column.
       print -r -- '  delay 0.5'
       local sum="(columns of p0)"
@@ -472,7 +471,13 @@ run() {
   MARGIN="  "; (( COLUMNS > 84 )) && MARGIN=${(l:$(( (COLUMNS - 80) / 2 )):: :)Z}
   print -rn -- "${e}[?25l"
   trap 'print -rn -- "${e}[?25h$RST"' EXIT INT TERM
-  if [[ $me == boss ]]; then tour $dir; else standby $dir $me; fi
+  if [[ $me == lead ]]; then
+    # The tour is presentation. If it breaks, say so, and start the team anyway.
+    ( tour $dir ) || print -r -- "$MARGIN${C_LEAD}tour failed (exit $?); starting the sessions without it$RST"
+    : > $dir/.swarm/go
+  else
+    standby $dir $me
+  fi
   print -rn -- "${e}[?25h"
   start_claude $dir $me
 }
@@ -481,9 +486,9 @@ start_claude() {
   local dir=$1 me=$2 model name prompt sid_var=SID_$2
   local -a perm
   (( ASK )) || perm=(--dangerously-skip-permissions)
-  if [[ $me == boss ]]; then
-    model=opus name=boss-$TAG
-    prompt="You are the boss of demo swarm $TAG: one Opus session directing $N Sonnet workers who build one Tetris together. Read CLAUDE.md, then BOSS.md and ROSTER.md in this directory, and follow them. The user is watching this pane. Begin."
+  if [[ $me == lead ]]; then
+    model=opus name=lead-$TAG
+    prompt="You are the lead of demo swarm $TAG: one Opus session directing $N Sonnet workers who build one Tetris together. Read CLAUDE.md, then LEAD.md and ROSTER.md in this directory, and follow them. The user is watching this pane. Begin."
   else
     local i=${me#w}
     model=sonnet name=$me-$TAG
@@ -506,63 +511,29 @@ standby() {
   local col=${WCOL[i]} spin=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏) f=0
   clear
   print
-  print -r -- "  $col$B▐██▌ $me$RST  $C_TXT${ROLE[i]}$RST  $DIM${C_GREY}sonnet · branch $me$RST"
-  print -r -- "  $DIM$C_GREY${DOES[i]}$RST"
+  print -r -- "  $col$B$me$RST  $C_TXT${ROLE[i]}$RST  $C_FAINT·  sonnet  ·  branch $me$RST"
+  print
+  print -r -- "${DOES[i]}" | fold -s -w $(( COLUMNS > 8 ? COLUMNS - 4 : 60 )) | sed "s/^/  $C_GREY/; s/\$/$RST/"
   print
   while [[ ! -e $dir/.swarm/go ]]; do
-    print -rn -- "$CR  $col${spin[f % 10 + 1]}$RST $C_GREY standing by for the boss…$RST  "
+    print -rn -- "$CR  $C_FAINT${spin[f % 10 + 1]}  waiting for the lead$RST  "
     f=$(( f + 1 )); zselect -t 8 || true
   done
   zselect -t $(( i * 35 )) || true
-  print -r -- "$CR  $col●$RST ${C_TXT}online$RST $DIM${C_GREY}· starting claude --model sonnet$RST          "
+  print -r -- "$CR  $col●$RST  ${C_TXT}starting$RST  $C_FAINT·  claude --model sonnet$RST     "
   : > $dir/.swarm/online/$me
 }
 
 # ================================================================== tour
-banner() {
-  # 5-row glyphs; '#' is a block. Each letter falls into place.
-  local -A G
-  G[D]="##. #.# #.# #.# ##."   G[E]="### #.. ##. #.. ###"
-  G[M]="#...# ##.## #.#.# #...# #...#" G[O]="### #.# #.# #.# ###"
-  G[S]="### #.. ### ..# ###"   G[W]="#...# #...# #.#.# ##.## #...#"
-  G[A]=".#. #.# ### #.# #.#"   G[R]="##. #.# ##. #.# #.#"
-  G[_]=".. .. .. .. .."
-  local word="DEMO_SWARM" cols=("$C_I" "$C_O" "$C_T" "$C_S" "" "$C_Z" "$C_J" "$C_L" "$C_P" "$C_M")
-  local nl=${#word} frame last=$(( ${#word} * 2 + 6 )) L row k s src w cell
-  local -a g
-  for (( frame = 0; frame <= last; frame++ )); do
-    (( frame )) && print -rn -- "${e}[5F"
-    for (( row = 1; row <= 5; row++ )); do
-      L=$MARGIN
-      for (( k = 1; k <= nl; k++ )); do
-        g=(${=G[${word[k]}]})
-        s=$(( frame - (k - 1) * 2 ))                 # rows of this letter visible
-        (( s > 5 )) && s=5
-        src=$(( row - (5 - (s < 0 ? 0 : s)) ))  # glyph row shown here
-        w=${#g[1]}
-        if (( s > 0 && src >= 1 )); then
-          cell=${g[src]//\#/█}; cell=${cell//./ }
-          L+="${cols[k]}$cell$RST "
-        else
-          L+="${(l:$w:: :)Z} "
-        fi
-      done
-      print -r -- "$L${e}[K"
-    done
-    (( FAST )) || zselect -t 4 || true
-    poll_key
-  done
-}
-
 draw_map() {         # draw_map <lit-count> <redraw?> : the window, in miniature
   local lit=$1 redraw=$2 n=$N
   local ncols=$(( (n + 2) / 3 )) rpc L c r j line seg fin
   rpc=$(( (n + ncols - 1) / ncols ))
   local height=$(( 2 * rpc + 1 ))
   (( redraw )) && print -rn -- "${e}[${height}F"
-  local bosscol=$C_GREY; (( lit >= 0 )) && bosscol=$C_BOSS
-  local G=$C_GREY
-  local -a bosstxt=("" "  BOSS  " "  opus  ")
+  local leadcol=$C_FAINT; (( lit >= 0 )) && leadcol=$C_LEAD
+  local G=$C_FAINT
+  local -a leadtxt=("" "lead" "opus")
   for (( L = 0; L < height; L++ )); do
     if (( L == 0 )); then line="┌────────────────"; seg="┬─────────────"; fin="┐"
     elif (( L == height - 1 )); then line="└────────────────"; seg="┴─────────────"; fin="┘"
@@ -571,9 +542,9 @@ draw_map() {         # draw_map <lit-count> <redraw?> : the window, in miniature
       for (( c = 1; c <= ncols; c++ )); do line+=$seg; done
       print -r -- "$MARGIN$G$line$fin$RST"; continue
     fi
-    local bt=${bosstxt[L+1]:-}
-    line="$MARGIN$G│$RST    $bosscol$B${(r:8:)bt}$RST    "
-    if (( L % 2 == 0 )); then                   # a separator between rows
+    local lt=${leadtxt[L+1]:-}
+    line="$MARGIN$G│$RST  $leadcol${(r:14:)lt}$RST"
+    if (( L % 2 == 0 )); then
       line+="$G├"
       for (( c = 1; c <= ncols; c++ )); do line+="─────────────"; (( c < ncols )) && line+="┼"; done
       line+="┤$RST"
@@ -583,8 +554,8 @@ draw_map() {         # draw_map <lit-count> <redraw?> : the window, in miniature
         j=$(( (c - 1) * rpc + r ))
         line+="$G│$RST "
         if (( j > n )); then line+="${(l:11:: :)Z}"
-        elif (( j <= lit )); then line+="${WCOL[j]}● w$j ${(r:6:)SHORT[j]}$RST"
-        else line+="$DIM$C_GREY○ w$j ${(r:6:)SHORT[j]}$RST"; fi
+        elif (( j <= lit )); then line+="${WCOL[j]}w$j  ${(r:7:)SHORT[j]}$RST"
+        else line+="${C_FAINT}w$j  ${(r:7:)SHORT[j]}$RST"; fi
         line+=" "
       done
       line+="$G│$RST"
@@ -593,126 +564,67 @@ draw_map() {         # draw_map <lit-count> <redraw?> : the window, in miniature
   done
 }
 
-packet() {          # packet <from> <to> <color> : a dot travels the wire
-  local from=$1 to=$2 col=$3 len=28 p
-  for (( p = 0; p <= len; p++ )); do
-    local wire="${(l:$p::─:)Z}●${(l:$(( len - p ))::─:)Z}"
-    print -rn -- "$CR$MARGIN   $B$C_BOSS${(r:4:)from}$RST $C_GREY$wire$RST▶ $col$B$to$RST${e}[K"
-    (( FAST )) || zselect -t 2 || true; poll_key
-  done
-  print
+row() {              # row <color> <col1> <col2> <text>
+  print -r -- "$MARGIN$1${(r:6:)2}$RST$C_GREY${(r:8:)3}$RST$C_TXT$4$RST"
+  nap 12
 }
 
-broadcast() {
-  local n=$N len=24 t j
-  for (( j = 1; j <= n; j++ )); do print; done
-  for (( t = 0; t <= len + n * 2; t++ )); do
-    print -rn -- "${e}[${n}F"
-    for (( j = 1; j <= n; j++ )); do
-      local p=$(( t - (j - 1) * 2 )); (( p < 0 )) && p=0; (( p > len )) && p=$len
-      local fill="${(l:$p::━:)Z}" rest="${(l:$(( len - p ))::─:)Z}"
-      local mark=" "; (( p == len )) && mark="${WCOL[j]}✓$RST"
-      print -r -- "$MARGIN$C_BOSS${B}boss$RST ${WCOL[j]}$fill$RST$C_GREY$rest$RST▶ ${WCOL[j]}w$j$RST $mark${e}[K"
-    done
-    (( FAST )) || zselect -t 3 || true; poll_key
-  done
+exchange() {         # exchange <from> <to> <text> : one line of a sample conversation
+  local ts=$(strftime %H:%M:%S $(( EPOCHSECONDS + $4 ))) who="$1 → $2"
+  print -rn -- "$MARGIN$C_FAINT$ts$RST  $C_TXT${(r:13:)who}$RST"
+  type_out "$C_GREY" "$3"
 }
 
 tour() {
   local dir=$1 i
   clear
-  print; print
-  banner
   print
-  print -rn -- "$MARGIN"; type_out "$B$C_TXT" "one boss · $N worker$( (( N > 1 )) && print s) · one Tetris · one decision graph"
-  dim "(press any key to fast-forward)"
-  beat 120
-
-  head_ "The team"
-  print
-  draw_map -1 0; beat 40
-  draw_map 0 1;  beat 50
-  for (( i = 1; i <= N; i++ )); do draw_map $i 1; beat 18; done
-  print
-  say "The boss is Opus. It writes the contract as types, hands out the work,"
-  say "reviews every branch, and is the only one who merges to main."
-  say "Four Sonnet workers, one seam each: the functional core, the"
-  say "imperative shell around it, the view, and QA that drives the"
-  say "real page. Each in its own git worktree, on its own branch."
+  print -r -- "$MARGIN$B${C_TXT}deciduous$RST  $C_FAINT·$RST  ${C_GREY}multi-agent session$RST   $C_FAINT$TAG$RST"
+  local w=62 k
+  print -rn -- "$MARGIN$C_FAINT"
+  for (( k = 0; k < w; k++ )); do print -rn -- "─"; (( k % 3 )) || nap 1; done
+  print -r -- "$RST"
+  say "One lead model coordinating $N workers through a shared decision"
+  say "graph, direct messages, and a single integration branch."
+  dim "Press any key to skip ahead."
   beat 80
 
-  head_ "How the boss runs the team"
+  section 01 "Team"
+  draw_map -1 0; beat 30
+  draw_map 0 1;  beat 30
+  for (( i = 1; i <= N; i++ )); do draw_map $i 1; beat 14; done
   print
-  print -rn -- "$MARGIN"; type_out "$B$C_I" "1. The plan lives in the graph"
-  dim "   every node carries the why, and every worker's goal hangs off"
-  dim "   the boss's assignment: an edge across branches, on purpose."
-  print -r -- "$MARGIN   $C_BOSS◆ goal$RST      swarm $TAG: one Tetris"; nap 25
-  print -r -- "$MARGIN   $C_GREY└$RST $C_BOSS◆ decision$RST  module contract v1"; nap 25
-  for (( i = 1; i <= (N < 3 ? N : 3); i++ )); do
-    print -r -- "$MARGIN      $C_GREY├$RST $C_BOSS▸ action$RST  assign w$i: ${ROLE[i]}  $C_GREY◀──$RST ${WCOL[i]}◆ goal$RST ${WCOL[i]}(w$i)$RST"; nap 25
+  row "$C_LEAD" lead opus "writes the contract, assigns work, reviews and merges"
+  for (( i = 1; i <= N; i++ )); do
+    row "${WCOL[i]}" w$i sonnet "${ROLE[i]}: ${OWNS[i]}"
   done
-  (( N > 3 )) && { print -r -- "$MARGIN      $C_GREY└$RST $DIM$C_GREY… and $(( N - 3 )) more$RST"; nap 25 }
-  beat 60
+  beat 80
 
+  section 02 "Coordination"
+  row "$C_TXT" graph "" "decisions and their reasons; each worker's goal links to its assignment"
+  row "$C_TXT" msgs  "" "direct instructions between named sessions, delivered as sent"
+  row "$C_TXT" git   "" "one worktree and branch per worker; only the lead merges to main"
+  row "$C_TXT" gate  "" "a branch merges when unit tests, type check and browser tests pass"
   print
-  print -rn -- "$MARGIN"; type_out "$B$C_O" "2. Direct orders"
-  dim "   a message lands in one worker's conversation as it is sent."
-  packet boss w2 ${WCOL[2]}
-  print -r -- "$MARGIN        $IT$C_TXT\"Input is a union now. npm run check shows you where.\"$RST"; nap 40
-  print -rn -- "$CR$MARGIN   ${WCOL[1]}${B}w1  $RST$C_GREY$(printf '─%.0s' {1..10})●$(printf '─%.0s' {1..17})$RST▶ $C_BOSS${B}boss$RST"; nap 30; print
-  print -r -- "$MARGIN        $IT$C_TXT\"w1 ready: 9c1e SRS kicks, test first. test 41/41, check clean\"$RST"
-  beat 60
-
+  dim "A sample of what the lead pane will show:"
   print
-  print -rn -- "$MARGIN"; type_out "$B$C_T" "3. Broadcast"
-  dim "   one change, everyone: \"main moved: types.js v2, git merge main\""
-  broadcast
-  beat 50
-
-  print
-  print -rn -- "$MARGIN"; type_out "$B$C_S" "4. The merge gate"
-  dim "   main takes a branch only when the boss has read it and unit tests,"
-  dim "   the type check and the browser tests all pass."
-  print -r -- "$MARGIN   ${WCOL[1]}w1   ○──○──○$RST$C_GREY─╮$RST"; nap 25
-  print -r -- "$MARGIN   ${WCOL[2]}w2      ○──○$RST$C_GREY─┼──╮$RST"; nap 25
-  print -r -- "$MARGIN   $C_BOSS${B}main$RST $C_BOSS●───────────●──●──$RST  ${DIM}${C_GREY}each ● a reviewed, tested merge$RST"; nap 40
-  beat 50
-
-  print
-  print -rn -- "$MARGIN"; type_out "$B$C_Z" "5. Status, reassign, halt"
-  dim "   \"one line each\" · a stalled module moves to a free worker ·"
-  dim "   \"stop\" freezes everyone while the plan changes in the graph."
+  exchange lead w2   "Input is a union type now; npm run check lists the call sites." 0
+  exchange w1   lead "Ready at 9c1e: SRS kicks, tests first. test 41/41, check clean." 163
+  exchange lead all  "main updated to types.js v2. Merge main before continuing." 181
   beat 90
 
-  head_ "The quest"
-  say "One Tetris, built the way we would want it built:"
-  print
-  local -a rules=("functional core, imperative shell" "tests first, in plain node"
-    "browser tests that replay what users do wrong" "types as the contract, checked by the compiler"
-    "simple, not easy")
+  section 03 "Standards"
+  local -a rules=("Functional core, imperative shell." "Tests first, with node --test."
+    "Browser tests that reproduce user errors." "Types as the contract, checked by the compiler."
+    "Simple over easy.")
   for (( i = 1; i <= ${#rules}; i++ )); do
-    print -r -- "$MARGIN   ${WCOL[(i - 1) % 4 + 1]}▰$RST $C_TXT${rules[i]}$RST"; nap 30
+    print -rn -- "$MARGIN$C_FAINT$i$RST  "; type_out "$C_TXT" "${rules[i]}"
   done
-  print
-  say "Last time ten agents built ten games and linked none of their"
-  say "borrowing: 0 of 491 edges crossed a branch. Here every worker's"
-  say "goal hangs off the boss's assignment, so the edges cross from"
-  say "the first minute."
-  print
-  dim "Every pane is being recorded with timestamps, for a replay."
-  beat 120
+  beat 90
 
-  head_ "Launch"
-  local d
-  print -rn -- "$MARGIN"
-  for d in 3 2 1; do
-    print -rn -- "$B$C_BOSS  $d $RST"; (( FAST )) || zselect -t 70 || true
-  done
-  print -r -- "$B$C_S go$RST"
+  section 04 "Starting"
   : > $dir/.swarm/go
-  print
-  # Workers come online in a cascade; show it as it happens.
-  local online=0 deadline=$(( EPOCHSECONDS + 30 ))
+  local online=0 deadline=$(( EPOCHSECONDS + 30 )) f=0 spin=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
   for (( i = 1; i <= N; i++ )); do print; done
   while (( online < N && EPOCHSECONDS < deadline )); do
     print -rn -- "${e}[${N}F"
@@ -720,18 +632,19 @@ tour() {
     for (( i = 1; i <= N; i++ )); do
       if [[ -e $dir/.swarm/online/w$i ]]; then
         online=$(( online + 1 ))
-        print -r -- "$MARGIN  ${WCOL[i]}●$RST w$i  ${(r:9:)ROLE[i]} ${C_TXT}online$RST  $DIM${C_GREY}sonnet$RST${e}[K"
+        print -r -- "$MARGIN${WCOL[i]}●$RST  ${WCOL[i]}w$i$RST  $C_TXT${(r:7:)SHORT[i]}$RST${C_GREY}started$RST${e}[K"
       else
-        print -r -- "$MARGIN  $C_GREY○ w$i  ${(r:9:)ROLE[i]} waiting$RST${e}[K"
+        print -r -- "$MARGIN$C_FAINT${spin[f % 10 + 1]}  w$i  ${(r:7:)SHORT[i]}starting$RST${e}[K"
       fi
     done
-    zselect -t 10 || true
+    f=$(( f + 1 )); zselect -t 10 || true
   done
   print
-  say "The team is up. The boss is yours: talk to it here."
-  dim "try: \"status from everyone\" · \"w3, make the line clear punchier\""
-  dim "     \"stop everyone, we are switching to a dark theme\""
-  beat 150
+  say "All sessions are running. This pane is the lead; you can direct it."
+  dim "For example: \"status from each worker\", \"w3: tighten the line-clear"
+  dim "animation\", or \"pause everyone while we change the palette\"."
+  dim "Each pane is recorded to .swarm/rec for later replay."
+  beat 180
   clear
 }
 

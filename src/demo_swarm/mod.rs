@@ -1,5 +1,5 @@
-//! `deciduous demo-swarm`: an easter egg. One Opus boss and four Sonnet
-//! workers build one Tetris together in iTerm2 or Ghostty panes, sharing one
+//! `deciduous demo-swarm`: a multi-agent demonstration. One Opus lead and
+//! four Sonnet workers build one Tetris together in iTerm2 or Ghostty panes, sharing one
 //! decision graph, and every pane is recorded for a later replay.
 //!
 //! The work is a zsh script embedded in the binary. zsh, not bash: macOS
@@ -81,7 +81,7 @@ mod tests {
         let err = String::from_utf8_lossy(&out.stderr);
         // On macOS the terminal check answers; elsewhere the platform check does first.
         assert!(
-            err.contains("iTerm2 and Ghostty") || err.contains("needs macOS"),
+            err.contains("iTerm2 or Ghostty") || err.contains("needs macOS"),
             "{err}"
         );
     }

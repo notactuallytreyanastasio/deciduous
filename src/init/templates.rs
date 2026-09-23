@@ -2511,10 +2511,10 @@ deciduous nodes --type revisit
 - **Don't over-structure.** Simple narratives might just be: goal → option → decision.
 "#;
 
-/// /demo-swarm: the easter egg. The command does the work; the model runs it
-/// and reports, and does nothing when the terminal is not iTerm2 or Ghostty.
+/// /demo-swarm: a multi-agent demonstration. The command does the work; the
+/// model runs it and reports, and does nothing outside iTerm2 or Ghostty.
 pub const DEMO_SWARM_MD: &str = r#"---
-description: Easter egg. An Opus boss and four Sonnet workers build one Tetris together, in iTerm2 or Ghostty panes
+description: Demonstration. An Opus lead coordinates four Sonnet workers building one Tetris, in iTerm2 or Ghostty panes
 allowed-tools: Bash(deciduous demo-swarm:*)
 argument-hint: "[--dry-run] [--ask] [--dir PATH]"
 ---
@@ -2525,24 +2525,23 @@ Run this with the Bash tool, exactly, and nothing else first:
 
     deciduous demo-swarm $ARGUMENTS
 
-It works only in iTerm2 or Ghostty on macOS. It builds a fresh repository
-(default `~/deciduous-swarm/swarm-MMDD-HHMM`) and opens a new window: an Opus
-boss pane plays an animated tour of how the boss runs the team, then four
-Sonnet workers come online (the functional core, the imperative shell, the
-view, and QA), each in its own worktree and branch, and the boss takes over.
-The team works to five rules: functional core and imperative shell, tests
-first, browser tests that replay user mistakes, types the compiler checks,
-and simple over easy. They share one deciduous workspace, message each other directly,
-and merge through the boss. Every pane is recorded with timestamps under
-`.swarm/rec/` in the arena, for a replay.
+It works only in iTerm2 or Ghostty on macOS. It creates a fresh repository
+(default `~/deciduous-swarm/swarm-MMDD-HHMM`) and opens a new window. The lead
+pane (Opus) walks through the setup, then four Sonnet workers start, each in
+its own worktree and branch: the functional core, the imperative shell, the
+view, and QA. They share one deciduous workspace, message each other
+directly, and integrate through the lead, which merges only when unit tests,
+the type check and browser tests pass. Every pane is recorded with timestamps
+under `.swarm/rec/` for later replay.
 
 Then tell the user, in two or three sentences, what opened: the arena path,
 the workspace and the recording directory, all printed by the command, and
-that the boss pane is theirs to talk to.
+that the lead pane accepts instructions.
 
-If it refuses because the terminal is not iTerm2 or Ghostty, or `claude` or the
-deciduous MCP server is missing, say so in one sentence and stop. Do not work
-around the check, and do not start sessions another way.
+If it refuses because the terminal is not iTerm2 or Ghostty, or `claude` or
+the deciduous MCP server is missing, say so in one sentence and stop. Do not
+work around the check or start sessions another way.
 
-This is a demo, not work on this project: log nothing to the graph for it.
+This is a demonstration, not work on this project: log nothing to the graph
+for it.
 "#;
