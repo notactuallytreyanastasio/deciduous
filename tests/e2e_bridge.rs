@@ -661,3 +661,104 @@ fn t5_the_cli_takes_the_server_ids_agents_quote() {
         "an unknown reference does not say which ids are accepted:\n{text}"
     );
 }
+
+/// T5, round 2: about 2.3% of server ids start with eight decimal digits
+/// (89346034-83ce-...), and prefixes shorter than eight are all digits far
+/// more often. The CLI read any digit string as a local id and never asked
+/// the server, so `dx show 89346034` said "Node #89346034 not found" and
+/// `dx link 1 49975542` "Target node 49975542 does not exist", neither
+/// listing the kinds of id it takes. And the node arguments of `dot
+/// --nodes`, `writeup --roots`, `events emit` and `roadmap link` took local
+/// ids only.
+#[test]
+fn t5_all_digit_server_id_prefixes_reach_the_server() {
+    let Some(server) = remote("t5_all_digit_server_id_prefixes_reach_the_server") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let (p, ws) = remote_project(&sb, "t5d");
+    let g = p.add("goal", "cli goal");
+    let mut ag = agent(&server, &ws);
+
+    // Add nodes on the server until one's id starts with at least four
+    // decimal digits (15% of ids), and take the longest such prefix, at most
+    // eight characters.
+    let mut found: Option<(String, String)> = None;
+    for batch in 0..40 {
+        for i in 0..8 {
+            ag.call_ok(
+                "add_node",
+                json!({"node_type": "outcome", "title": format!("bulk{batch}-{i}"), "branch": "main"}),
+            );
+        }
+        let export = server.export(&ws);
+        found = export["nodes"].as_array().unwrap().iter().find_map(|n| {
+            let id = n["id"].as_str()?;
+            let title = n["title"].as_str()?;
+            if !title.starts_with("bulk") {
+                return None;
+            }
+            let digits: String = id
+                .chars()
+                .take(8)
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            (digits.len() >= 4 && !digits.starts_with('0')).then(|| (digits, title.to_string()))
+        });
+        if found.is_some() {
+            break;
+        }
+    }
+    let (digits, title) = found.expect("no server id in 320 starts with four decimal digits");
+    p.ok(&["remote", "pull"]);
+    let local_ids = p.graph()["nodes"].as_array().unwrap().len();
+    assert!(
+        digits.parse::<usize>().unwrap() > local_ids,
+        "{digits} is also a local id here; this test proves nothing"
+    );
+
+    let shown = p.dx(&["show", &digits]);
+    assert!(
+        shown.ok() && shown.all().contains(&title),
+        "show of the all-digit server id prefix {digits} ({title}) failed:\n{}",
+        shown.all()
+    );
+    let linked = p.dx(&["link", &g, &digits, "-r", "by digits"]);
+    assert!(linked.ok(), "link to {digits} failed:\n{}", linked.all());
+    assert!(
+        server.export(&ws)["edges"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["rationale"] == json!("by digits")),
+        "the edge linked by an all-digit server id is not on the server"
+    );
+
+    // The export commands take the same references.
+    let dot = p.dx(&["dot", "--nodes", &digits]);
+    assert!(
+        dot.ok() && dot.all().contains(&title),
+        "dot --nodes {digits}:\n{}",
+        dot.all()
+    );
+    let writeup = p.dx(&["writeup", "--roots", &digits, "-t", "w"]);
+    assert!(
+        writeup.ok() && writeup.all().contains(&title),
+        "writeup --roots {digits}:\n{}",
+        writeup.all()
+    );
+    let emit = p.dx(&["events", "emit", &digits]);
+    assert!(emit.ok(), "events emit {digits}:\n{}", emit.all());
+
+    // An all-digit reference nothing has, and a zero-padded local id: an
+    // error listing the kinds, never local #1 or a made-up id.
+    for bad in ["98765432", "0001"] {
+        let out = p.dx(&["show", bad]);
+        let text = out.all();
+        assert!(!out.ok(), "show {bad} exited 0:\n{text}");
+        assert!(
+            text.contains("local id") && text.contains("change_id") && text.contains("server"),
+            "show {bad} does not say which ids are accepted:\n{text}"
+        );
+    }
+}

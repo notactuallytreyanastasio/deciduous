@@ -691,8 +691,8 @@ enum EventsAction {
 
     /// Emit an event for a node (for testing/manual sync)
     Emit {
-        /// Node ID to emit event for
-        node_id: i32,
+        /// Node to emit an event for: local id, change_id prefix, or server id
+        node_id: String,
     },
 }
 
@@ -755,8 +755,8 @@ enum RoadmapAction {
         /// Roadmap item change_id or title (partial match)
         item: String,
 
-        /// Outcome node ID to link
-        outcome_id: i32,
+        /// Outcome node to link: local id, change_id prefix, or server id
+        outcome_id: String,
     },
 
     /// Remove outcome link from a roadmap item
@@ -1205,15 +1205,44 @@ fn check_scratch_dir() -> Result<PathBuf, String> {
 /// of it. A part of either spec that is not an id exits with an error
 /// naming it; it used to be dropped, and `--roots zz` printed an empty
 /// digraph with exit code 0.
+///
+/// Each part that is not a range of local ids is a node reference like any
+/// other command's (local id, change_id or server id, see
+/// [`resolve_node_or_exit`]); `dot --nodes 2d6aff66` used to say it was "not
+/// a node id or a range". A range is `a-b` in decimal with `a` shorter than
+/// eight digits: `12345678-1234` is the start of a UUID, not a range.
 fn cli_export_subgraph(
+    db: &Database,
     graph: deciduous::DecisionGraph,
     nodes: Option<String>,
     roots: Option<String>,
 ) -> deciduous::DecisionGraph {
+    let resolve = |spec: &str, ranges: bool| -> String {
+        spec.split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(|part| {
+                let is_range = ranges
+                    && part.split_once('-').is_some_and(|(a, b)| {
+                        a.len() < 8
+                            && !a.is_empty()
+                            && !b.is_empty()
+                            && a.bytes().chain(b.bytes()).all(|c| c.is_ascii_digit())
+                    });
+                if is_range {
+                    part.to_string()
+                } else {
+                    resolve_node_or_exit(db, part).to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    };
     let result = if let Some(node_spec) = nodes {
-        parse_node_range(&node_spec).map(|spec| filter_graph_by_ids(&graph, &spec.select(&graph)))
+        parse_node_range(&resolve(&node_spec, true))
+            .map(|spec| filter_graph_by_ids(&graph, &spec.select(&graph)))
     } else if let Some(root_spec) = roots {
-        deciduous::parse_root_ids(&root_spec)
+        deciduous::parse_root_ids(&resolve(&root_spec, false))
             .map(|ids| deciduous::filter_graph_from_roots(&graph, &ids))
     } else {
         Ok(graph)
@@ -3794,7 +3823,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
+                    let filtered_graph = cli_export_subgraph(&db, graph, nodes, roots);
 
                     let config = DotConfig {
                         title,
@@ -3913,7 +3942,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
+                    let filtered_graph = cli_export_subgraph(&db, graph, nodes, roots);
 
                     // Auto-detect GitHub repo from git remote
                     let github_repo = ProcessCommand::new("git")
@@ -4066,7 +4095,8 @@ fn main() {
                         }
                     }
                     if let EventsAction::Emit { node_id } = &action {
-                        match db.get_node(*node_id) {
+                        let node_id = resolve_node_or_exit(&db, node_id);
+                        match db.get_node(node_id) {
                             Ok(Some(node)) => {
                                 if let Err(e) = store.publish_node(&node) {
                                     eprintln!("{} {}", "Error:".red(), e);
@@ -5514,6 +5544,7 @@ fn main() {
                 }
 
                 RoadmapAction::Link { item, outcome_id } => {
+                    let outcome_id = resolve_node_or_exit(&db, &outcome_id);
                     // Find roadmap item by title or change_id
                     let items = match db.get_all_roadmap_items() {
                         Ok(i) => i,

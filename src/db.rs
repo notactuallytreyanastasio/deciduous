@@ -2707,7 +2707,23 @@ impl Database {
             ));
         }
         match (local, by_prefix.as_slice()) {
-            (_, []) => Ok(id),
+            // Nothing prints a local id zero-padded, so "0012" is far more
+            // likely the start of a change_id or server id than local #12,
+            // and reading it as #12 named some other node without a word.
+            (Some(node), []) if r.starts_with('0') => Err(DbError::NoSuchNode(format!(
+                "'{}' is zero-padded, so it is not read as local id {} (#{} {}; write {} or #{} for that), and no change_id starts with it.",
+                r, id, id, node.title, id, id
+            ))),
+            (Some(_), []) => Ok(id),
+            // Neither a local node nor a change_id prefix. Returning the id
+            // anyway (as this did) made "no such node" the caller's error,
+            // so a server id whose prefix is all digits (89346034-83ce...,
+            // 2.3% of them at 8 characters) was never looked up as one:
+            // `dx show 89346034` said "Node #89346034 not found".
+            (None, []) => Err(DbError::NoSuchNode(format!(
+                "No node has local id {} or a change_id starting with '{}'.",
+                id, r
+            ))),
             (None, _) => self.resolve_change_id_prefix(r),
             (Some(node), matches) => {
                 let mut list = vec![format!("local id #{} ({})", node.id, node.title)];
@@ -5543,8 +5559,17 @@ mod tests {
 
         let err = db.resolve_node_ref("zz").unwrap_err().to_string();
         assert!(err.contains("not a node id"), "{err}");
-        // Digits that prefix no change_id are an id, even a missing one.
-        assert_eq!(db.resolve_node_ref("99999").unwrap(), 99999);
+        // Four or more digits that are neither a local id nor a change_id
+        // prefix are no node, so the CLI can go on to try them as a server
+        // id; a zero-padded one is not silently read as a local id.
+        assert!(matches!(
+            db.resolve_node_ref("99999"),
+            Err(DbError::NoSuchNode(_))
+        ));
+        assert!(matches!(
+            db.resolve_node_ref(&format!("000{a}")),
+            Err(DbError::NoSuchNode(_))
+        ));
         let err = db
             .resolve_node_ref("ffffffff-0000")
             .unwrap_err()

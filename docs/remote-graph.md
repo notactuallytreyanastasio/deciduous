@@ -292,6 +292,13 @@ whether it is a server id, and it prints which node that turned out to be. A
 server node this clone has not pulled yet is an error that says to run
 `deciduous remote pull`; it is never taken as some other node.
 
+Digits are no exception: `89346034` is tried as local id 89346034 first, and
+when there is no such node, as a change_id and then a server id prefix. A
+zero-padded number such as `0012` is not taken as local id 12 (write `12` or `#12`).
+The node arguments of `dot --nodes`, `writeup --roots`, `roadmap link` and
+`events emit` take the same references; in `--nodes`, `3-7` is still a range
+of local ids.
+
 ## Working alongside other agents
 
 Two sessions writing to one workspace need to know the other exists and to
