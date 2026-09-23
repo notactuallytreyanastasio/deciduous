@@ -622,6 +622,13 @@ pub const MAX_DOCUMENT_BYTES: u64 = 25 * 1024 * 1024;
 /// `../../etc/passwd` or a symlink named `innocent.png` was copied into the
 /// project, a FIFO hung the single-threaded server forever, and `/dev/zero`
 /// grew it by gigabytes until it was killed.
+///
+/// Every check is made on the open file, never on the path: the path is
+/// opened once, and where the file is, what it is and how big it is are
+/// then asked of that descriptor. Checking the path and then opening it
+/// resolved the path twice, and a directory swapped for a symlink in
+/// between read a file outside the project, while a regular file swapped
+/// for a FIFO hung the server in `open`.
 fn read_attachable(
     db: &Database,
     file_path: &str,
@@ -637,9 +644,10 @@ fn read_attachable(
     let root = root.canonicalize().map_err(|e| {
         HandlerError::from(format!("cannot resolve project {}: {e}", root.display()))
     })?;
-    let real = std::path::Path::new(file_path)
-        .canonicalize()
+    let file = open_without_blocking(file_path)
         .map_err(|e| HandlerError::from(format!("File not found: {file_path} ({e})")))?;
+    let real = opened_path(&file, file_path)
+        .map_err(|e| HandlerError::from(format!("cannot resolve {file_path}: {e}")))?;
     if !real.starts_with(&root) {
         return Err(HandlerError::from(format!(
             "{file_path} resolves to {}, which is outside the project {}; only files inside it can be attached",
@@ -647,12 +655,27 @@ fn read_attachable(
             root.display()
         )));
     }
-    let meta = std::fs::metadata(&real)
+    let meta = file
+        .metadata()
         .map_err(|e| HandlerError::from(format!("Failed to read {file_path}: {e}")))?;
     if !meta.is_file() {
         return Err(HandlerError::from(format!(
             "{file_path} is not a regular file; only regular files can be attached"
         )));
+    }
+    // A hard link is a regular file inside the project whatever it links
+    // to, and no path check can see the other names. A file with more than
+    // one link is refused rather than guessed about.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() > 1 {
+            return Err(HandlerError::from(format!(
+                "{file_path} has {} hard links, and another of them may be outside the project; \
+                 copy it to a file of its own to attach it",
+                meta.nlink()
+            )));
+        }
     }
     if meta.len() > MAX_DOCUMENT_BYTES {
         return Err(HandlerError::from(format!(
@@ -662,8 +685,8 @@ fn read_attachable(
         )));
     }
     let mut bytes = Vec::with_capacity(meta.len() as usize);
-    std::fs::File::open(&real)
-        .and_then(|f| f.take(MAX_DOCUMENT_BYTES + 1).read_to_end(&mut bytes))
+    file.take(MAX_DOCUMENT_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
     if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
         return Err(HandlerError::from(format!(
@@ -671,6 +694,53 @@ fn read_attachable(
         )));
     }
     Ok((real, bytes))
+}
+
+/// Open for reading without waiting: a FIFO with no writer, or a terminal,
+/// would otherwise block in `open` itself, before anything could look at
+/// what it is.
+#[cfg(unix)]
+fn open_without_blocking(path: &str) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn open_without_blocking(path: &str) -> std::io::Result<std::fs::File> {
+    std::fs::File::open(path)
+}
+
+/// Where the open file actually is, asked of the descriptor, so it is the
+/// file that will be read and not whatever the path names by now.
+#[cfg(target_os = "macos")]
+fn opened_path(file: &std::fs::File, _path: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::io::AsRawFd;
+    let mut buf = vec![0u8; libc::PATH_MAX as usize];
+    // SAFETY: F_GETPATH writes at most PATH_MAX bytes, NUL-terminated.
+    if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETPATH, buf.as_mut_ptr()) } == -1 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(&buf[..len])))
+}
+
+#[cfg(target_os = "linux")]
+fn opened_path(file: &std::fs::File, _path: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::os::unix::io::AsRawFd;
+    std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
+}
+
+/// Elsewhere there is no portable way to ask a descriptor for its path, so
+/// the path is resolved again. That leaves the swap race described above
+/// open on those systems; the type, link-count and size checks still use
+/// the descriptor.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn opened_path(_file: &std::fs::File, path: &str) -> std::io::Result<std::path::PathBuf> {
+    std::path::Path::new(path).canonicalize()
 }
 
 fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {

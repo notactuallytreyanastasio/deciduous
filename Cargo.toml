@@ -76,6 +76,9 @@ uuid = { version = "1.0", features = ["v4"] }
 # Roadmap parsing
 regex = "1.10"
 sha2 = "0.10"
+# open-then-fstat for attach_document (O_NONBLOCK, F_GETPATH). Already in
+# the tree through half the dependencies.
+libc = "0.2"
 
 # SQLite ORM with migrations
 diesel = { version = "2.2", features = ["sqlite", "r2d2", "64-column-tables"] }

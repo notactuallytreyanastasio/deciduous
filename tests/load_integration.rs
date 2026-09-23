@@ -1815,3 +1815,98 @@ fn empty_theme_and_session_names_and_untagging_a_missing_node_are_refused() {
 // ============================================================================
 // R4, again: the file checked is the file read
 // ============================================================================
+
+/// Hard links look like regular files inside the project, whatever they
+/// point at.
+#[cfg(unix)]
+#[test]
+fn attach_document_refuses_a_hard_link_to_a_file_outside_the_project() {
+    let p = Project::new();
+    assert!(p.cli(&["add", "goal", "g"]).status.success());
+    // Same volume as the project, so the link can be made.
+    let outside = TempDir::new_in(p.root().parent().unwrap()).unwrap();
+    let secret = outside.path().join("id_rsa");
+    std::fs::write(&secret, "TOP SECRET KEY\n").unwrap();
+    std::fs::hard_link(&secret, p.root().join("innocent.png")).unwrap();
+    let mut m = p.mcp();
+    let e = m
+        .call(
+            "attach_document",
+            json!({"node_id":1,"file_path":"innocent.png"}),
+        )
+        .expect_err("a hard link to a file outside the project was attached");
+    assert!(e.contains("link"), "{e}");
+    m.close();
+    assert_eq!(p.sql("select count(*) from node_documents"), 0);
+}
+
+/// `canonicalize`, `metadata` and `open` each resolved the path again, so a
+/// directory swapped for a symlink between them read the file the symlink
+/// pointed at, and a regular file swapped for a FIFO hung the server.
+#[cfg(target_os = "macos")]
+#[test]
+fn attach_document_reads_the_file_it_checked_while_the_path_is_swapped() {
+    use std::os::unix::ffi::OsStrExt;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    let p = Project::new();
+    assert!(p.cli(&["add", "goal", "g"]).status.success());
+    let outside = TempDir::new().unwrap();
+    std::fs::write(outside.path().join("id_rsa"), "TOP SECRET KEY\n").unwrap();
+    std::fs::create_dir(p.root().join("d")).unwrap();
+    std::fs::write(p.root().join("d/id_rsa"), "harmless\n").unwrap();
+    std::os::unix::fs::symlink(outside.path(), p.root().join("L")).unwrap();
+    std::fs::write(p.root().join("f"), "plain\n").unwrap();
+    assert!(Command::new("mkfifo")
+        .arg(p.root().join("q"))
+        .status()
+        .unwrap()
+        .success());
+
+    let cpath = |name: &str| {
+        std::ffi::CString::new(p.root().join(name).as_os_str().as_bytes()).unwrap()
+    };
+    let stop = Arc::new(AtomicBool::new(false));
+    let swapper = |a: std::ffi::CString, b: std::ffi::CString| {
+        let stop = stop.clone();
+        std::thread::spawn(move || {
+            while !stop.load(Ordering::Relaxed) {
+                unsafe { libc::renamex_np(a.as_ptr(), b.as_ptr(), libc::RENAME_SWAP) };
+            }
+        })
+    };
+    let t1 = swapper(cpath("d"), cpath("L"));
+    let t2 = swapper(cpath("f"), cpath("q"));
+
+    let mut m = p.mcp();
+    let mut hung = None;
+    for i in 0..3000 {
+        let (file, _) = if i % 2 == 0 { ("d/id_rsa", 0) } else { ("f", 1) };
+        if m.call_within(
+            "attach_document",
+            json!({"node_id":1,"file_path":file}),
+            Duration::from_secs(10),
+        )
+        .is_none()
+        {
+            hung = Some(i);
+            break;
+        }
+    }
+    stop.store(true, Ordering::Relaxed);
+    t1.join().unwrap();
+    t2.join().unwrap();
+    assert_eq!(hung, None, "attach_document hung on a swapped-in FIFO");
+    m.close();
+
+    let docs = p.root().join(".deciduous/documents");
+    for entry in std::fs::read_dir(&docs).into_iter().flatten().flatten() {
+        let body = std::fs::read(entry.path()).unwrap();
+        assert!(
+            !String::from_utf8_lossy(&body).contains("TOP SECRET"),
+            "{} holds the file from outside the project",
+            entry.path().display()
+        );
+    }
+}
