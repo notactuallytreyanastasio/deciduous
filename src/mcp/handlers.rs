@@ -104,8 +104,46 @@ fn get_str<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
     args.get(key).and_then(Value::as_str)
 }
 
-fn get_i32(args: &Value, key: &str) -> Option<i32> {
-    args.get(key).and_then(Value::as_i64).map(|v| v as i32)
+/// A database id argument. Ids are SQLite rowids stored as `i32`; a JSON
+/// number that does not fit is refused with the number in the message.
+/// `as i32` here once turned `4294967298` into node 2 and deleted it.
+pub fn get_id(args: &Value, key: &str) -> Result<Option<i32>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => id_from_number(key, n).map(Some),
+        Some(other) => Err(HandlerError::from(format!(
+            "{key} must be an integer id, got {other}"
+        ))),
+    }
+}
+
+fn id_from_number(key: &str, n: &serde_json::Number) -> Result<i32, HandlerError> {
+    match n.as_i64() {
+        Some(v) => i32::try_from(v)
+            .map_err(|_| HandlerError::from(format!("{key} {v} is out of range for an id"))),
+        None => Err(HandlerError::from(format!(
+            "{key} {n} is out of range for an id (ids are integers up to {})",
+            i32::MAX
+        ))),
+    }
+}
+
+/// A non-negative count (a limit, a depth). Negative numbers used to wrap
+/// to "unlimited" through `as usize`.
+fn get_count(args: &Value, key: &str) -> Result<Option<usize>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .and_then(|v| usize::try_from(v).ok())
+            .map(Some)
+            .ok_or_else(|| {
+                HandlerError::from(format!("{key} must be a non-negative integer, got {n}"))
+            }),
+        Some(other) => Err(HandlerError::from(format!(
+            "{key} must be a non-negative integer, got {other}"
+        ))),
+    }
 }
 
 fn get_bool(args: &Value, key: &str) -> Option<bool> {
@@ -134,10 +172,7 @@ fn get_node_ref(db: &Database, args: &Value, key: &str) -> Result<Option<i32>, H
         // node (4294967298 as i32 is 2), and a digit-only CHANGE value is
         // looked up as a change_id prefix, as the CLI does.
         Some(Value::Number(n)) => {
-            let id = n
-                .as_i64()
-                .and_then(|v| i32::try_from(v).ok())
-                .ok_or_else(|| HandlerError::from(format!("{key}: {n} is not a node id")))?;
+            let id = id_from_number(key, n)?;
             db.resolve_node_ref(&id.to_string())
                 .map(Some)
                 .map_err(|e| HandlerError::from(format!("{key}: {e}")))
@@ -719,7 +754,7 @@ fn handle_untag_node(db: &Database, args: &Value) -> HandlerResult {
 
 fn handle_trace_chain(db: &Database, args: &Value) -> HandlerResult {
     let node_id = require_node_ref(db, args, "node_id")?;
-    let max_depth = get_i32(args, "max_depth").unwrap_or(0) as usize;
+    let max_depth = get_count(args, "max_depth")?.unwrap_or(0);
     let direction = get_str(args, "direction")
         .map(query::TraceDirection::parse)
         .unwrap_or(query::TraceDirection::Both);
@@ -744,7 +779,7 @@ fn handle_get_node_context(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_get_timeline(db: &Database, args: &Value) -> HandlerResult {
-    let limit = get_i32(args, "limit").unwrap_or(50) as usize;
+    let limit = get_count(args, "limit")?.unwrap_or(50);
     let node_type = get_str(args, "node_type");
     let branch = get_str(args, "branch");
     let since = get_str(args, "since");
@@ -1043,7 +1078,9 @@ mod tests {
         let args = json!({"name": "hello", "count": 42, "flag": true});
         assert_eq!(get_str(&args, "name"), Some("hello"));
         assert_eq!(get_str(&args, "missing"), None);
-        assert_eq!(get_i32(&args, "count"), Some(42));
+        assert_eq!(get_id(&args, "count").unwrap(), Some(42));
+        assert!(get_id(&json!({"id": 4294967298u64}), "id").is_err());
+        assert!(get_count(&json!({"n": -1}), "n").is_err());
         assert_eq!(get_bool(&args, "flag"), Some(true));
     }
 

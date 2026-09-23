@@ -132,11 +132,8 @@ impl McpServer {
                         if result.is_error.is_none() {
                             if let Some(text) = result.content.first().map(|c| &c.text) {
                                 if let Ok(val) = serde_json::from_str::<Value>(text) {
-                                    if let Some(node_id) =
-                                        val.get("node_id").and_then(Value::as_i64)
-                                    {
-                                        let _ =
-                                            self.db.add_node_to_session(session_id, node_id as i32);
+                                    if let Ok(Some(node_id)) = handlers::get_id(&val, "node_id") {
+                                        let _ = self.db.add_node_to_session(session_id, node_id);
                                     }
                                 }
                             }
@@ -238,16 +235,12 @@ impl McpServer {
     }
 
     fn handle_resume_session(&mut self, args: &Value) -> protocol::ToolCallResult {
-        let session_id = match args.get("session_id").and_then(Value::as_i64) {
-            Some(id) => match i32::try_from(id) {
-                Ok(id) => id,
-                Err(_) => {
-                    return protocol::tool_result_error(format!(
-                        "session_id: {id} is not a session id"
-                    ))
-                }
-            },
-            None => return protocol::tool_result_error("Missing required parameter: session_id"),
+        let session_id = match handlers::get_id(args, "session_id") {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                return protocol::tool_result_error("Missing required parameter: session_id")
+            }
+            Err(e) => return protocol::tool_result_error(e.message),
         };
 
         // Verify session exists
@@ -291,16 +284,9 @@ impl McpServer {
     }
 
     fn handle_get_session(&self, args: &Value) -> protocol::ToolCallResult {
-        let session_id = match args.get("session_id").and_then(Value::as_i64) {
-            Some(id) => match i32::try_from(id) {
-                Ok(id) => Some(id),
-                Err(_) => {
-                    return protocol::tool_result_error(format!(
-                        "session_id: {id} is not a session id"
-                    ))
-                }
-            },
-            None => self.active_session_id,
+        let session_id = match handlers::get_id(args, "session_id") {
+            Ok(id) => id.or(self.active_session_id),
+            Err(e) => return protocol::tool_result_error(e.message),
         };
 
         let session_id = match session_id {

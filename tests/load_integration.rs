@@ -616,3 +616,74 @@ fn a_delete_racing_other_writers_is_not_resurrected_by_sync() {
         text(&out.stdout)
     );
 }
+
+// ============================================================================
+// R2: an id that does not fit is refused, never truncated to another node
+// ============================================================================
+
+#[test]
+fn out_of_range_ids_are_refused_not_wrapped_onto_another_node() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    for t in ["n1", "n2"] {
+        m.call(
+            "add_node",
+            json!({"node_type":"goal","title":t,"branch":"b"}),
+        )
+        .unwrap();
+    }
+    // 2^32 + 2 wraps to 2 under `as i32`.
+    let e = m
+        .call("delete_node", json!({"node_id": 4294967298u64}))
+        .expect_err("a 33-bit id must be refused");
+    assert!(e.contains("4294967298"), "{e}");
+    for bad in [json!(4294967297u64), json!(-4294967295i64), json!(i64::MAX)] {
+        let e = m
+            .call("show_node", json!({"node_id": bad}))
+            .expect_err("out of range id must be refused");
+        assert!(e.contains("out of range"), "{bad}: {e}");
+    }
+    let e = m
+        .call("link_nodes", json!({"from_id": 4294967297u64, "to_id": 2}))
+        .expect_err("link with a wrapped id");
+    assert!(e.contains("out of range"), "{e}");
+    let e = m
+        .call("trace_chain", json!({"node_id": 1, "max_depth": -1}))
+        .expect_err("negative depth");
+    assert!(e.contains("max_depth"), "{e}");
+
+    // Sessions: start one, end it, then try to reach it through a wrapped id.
+    let s = m
+        .call("start_session", json!({"name":"s","goal_title":"g"}))
+        .unwrap();
+    let sid = s["session_id"].as_i64().unwrap();
+    m.call("end_session", json!({})).unwrap();
+    let e = m
+        .call("resume_session", json!({"session_id": (1i64 << 32) + sid}))
+        .expect_err("resume through a wrapped id");
+    assert!(e.contains("out of range"), "{e}");
+    m.close();
+
+    assert_eq!(p.sql("select count(*) from decision_nodes"), 3);
+}
+
+#[test]
+fn out_of_range_ids_are_refused_over_the_api() {
+    let p = Project::api_shared("ids");
+    let daemon = Daemon::start(&p, 4826, &p.root().join("data"));
+    for t in ["n1", "n2"] {
+        let (s, b) = daemon.tool(
+            "ids",
+            "add_node",
+            json!({"node_type":"goal","title":t,"branch":"b"}),
+        );
+        assert_eq!(s, 200, "{b}");
+    }
+    let (_, b) = daemon.tool(
+        "ids",
+        "link_nodes",
+        json!({"from_id": 4294967297u64, "to_id": 2}),
+    );
+    assert_eq!(b["data"]["is_error"], true, "{b}");
+    assert_eq!(p.sql("select count(*) from decision_edges"), 0);
+}
