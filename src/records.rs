@@ -3232,6 +3232,154 @@ impl RecordStore {
 }
 
 // ============================================================================
+// Sync on a detached commit (G7)
+// ============================================================================
+
+/// The short hash of HEAD in the repository holding `dir`, when HEAD is
+/// detached and git is not in the middle of a merge, rebase, cherry-pick or
+/// revert: someone looking at an old commit (`git checkout HEAD~15`, bisect,
+/// a CI checkout). None on a branch, outside a repository, or while an
+/// operation is in progress, since a rebase is detached too and its graph
+/// file does need writing (conflict markers merged, edits kept).
+pub fn detached_head_at(dir: &Path) -> Option<String> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .stderr(std::process::Stdio::null())
+            .output()
+            .ok()
+    };
+    let on_branch = git(&["symbolic-ref", "-q", "HEAD"])?;
+    if on_branch.status.success() {
+        return None;
+    }
+    for op in [
+        "rebase-merge",
+        "rebase-apply",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+    ] {
+        let path = git(&["rev-parse", "--git-path", op])?;
+        if !path.status.success() {
+            return None;
+        }
+        // Relative to `dir`, not to this process's working directory.
+        let path = dir.join(String::from_utf8_lossy(&path.stdout).trim());
+        if path.exists() {
+            return None;
+        }
+    }
+    let head = git(&["rev-parse", "--short", "HEAD"])?;
+    head.status
+        .success()
+        .then(|| String::from_utf8_lossy(&head.stdout).trim().to_string())
+}
+
+/// Whether a sync of the graph file at `store_path` is looking at history:
+/// HEAD detached with nothing in progress (see [`detached_head_at`]), and
+/// the file, if there is one, has no unmerged conflict (that takes the
+/// normal path, which merges it). Returns HEAD's short hash.
+///
+/// Every sync entry point asks this, the CLI's and the MCP `sync` and
+/// `sync_status` tools alike: the MCP tool calling [`reconcile`] directly
+/// exported into an old commit's file after the CLI had stopped doing so.
+pub fn viewing_history(store_path: &Path) -> Option<String> {
+    let dir = store_path
+        .ancestors()
+        .skip(1)
+        .find(|d| d.as_os_str().is_empty() || d.is_dir())?;
+    let dir = if dir.as_os_str().is_empty() {
+        Path::new(".")
+    } else {
+        dir
+    };
+    let at = detached_head_at(dir)?;
+    match RecordStore::open(store_path) {
+        Some(store) if !store.pending_conflicts().is_empty() => None,
+        _ => Some(at),
+    }
+}
+
+/// [`reconcile`] for a commit being looked at: imports reach the database,
+/// and nothing is written to the graph file. Exports go to a scratch copy of
+/// it (or, when the commit has no graph file, to an empty scratch one, so
+/// none is created), which is thrown away; they are taken out of the report
+/// and returned as "N node(s)"-style phrases for the note that says so.
+pub fn reconcile_viewing_history(
+    db: &Database,
+    store: Option<&RecordStore>,
+    dry_run: bool,
+) -> std::result::Result<(SyncReport, Vec<String>), String> {
+    let mut report = match store {
+        Some(store) if dry_run => reconcile(db, store, true)?,
+        _ => {
+            let dir = std::env::temp_dir().join(format!(
+                "deciduous-history-{}-{}",
+                std::process::id(),
+                Utc::now().timestamp_nanos_opt().unwrap_or_default()
+            ));
+            fs::create_dir_all(&dir)
+                .map_err(|e| format!("creating a scratch directory {}: {e}", dir.display()))?;
+            let copy = dir.join(STORE_FILE_NAME);
+            let result = (|| {
+                let scratch = match store {
+                    Some(store) => {
+                        fs::copy(store.path(), &copy).map_err(|e| {
+                            format!(
+                                "copying {} to {}: {e}",
+                                store.path().display(),
+                                copy.display()
+                            )
+                        })?;
+                        RecordStore::open(&copy).ok_or_else(|| {
+                            format!("{} vanished while it was being read", copy.display())
+                        })?
+                    }
+                    None => RecordStore::create(&copy)
+                        .map_err(|e| format!("creating {}: {e}", copy.display()))?,
+                };
+                reconcile(db, &scratch, dry_run)
+            })();
+            let _ = fs::remove_dir_all(&dir);
+            result?
+        }
+    };
+    let mut withheld = Vec::new();
+    for (n, what) in [
+        (std::mem::take(&mut report.nodes_exported), "node(s)"),
+        (std::mem::take(&mut report.edges_exported), "edge(s)"),
+        (std::mem::take(&mut report.themes_exported), "theme(s)"),
+        (std::mem::take(&mut report.tags_exported), "tag(s)"),
+    ] {
+        if n > 0 {
+            withheld.push(format!("{n} {what}"));
+        }
+    }
+    Ok((report, withheld))
+}
+
+/// The sentence saying what a sync on a detached commit left out.
+pub fn viewing_history_note(at: &str, file_exists: bool, withheld: &[String]) -> String {
+    let file = if file_exists {
+        "the graph file was left as this commit has it"
+    } else {
+        "no graph file was created (this commit has none)"
+    };
+    if withheld.is_empty() {
+        format!("HEAD is detached at {at}, so {file}; nothing needed exporting.")
+    } else {
+        format!(
+            "HEAD is detached at {at}, so {file}: {} not exported. They are still in the \
+             database; check out a branch and run `deciduous sync` to export them there.",
+            withheld.join(", ")
+        )
+    }
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 

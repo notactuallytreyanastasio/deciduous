@@ -470,6 +470,107 @@ fn g7_sync_on_an_old_commit_does_not_block_checkout() {
     assert!(settled.ok(), "{}", settled.all());
 }
 
+/// G7, round 2: the MCP `sync` tool called reconcile directly, with no
+/// detached-HEAD check, so on an old commit it exported into graph.json
+/// ("exported: 4") and `git checkout main` aborted again; and `sync_status`
+/// reported pending exports while CLI `sync --check` exited 0.
+#[test]
+fn g7_mcp_sync_on_an_old_commit_does_not_block_checkout() {
+    let Some(()) = local("g7_mcp_sync_on_an_old_commit_does_not_block_checkout") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    let two = p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let status = m.call_ok("sync_status", json!({}));
+    let synced = m.call_ok("sync", json!({}));
+    drop(m);
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "the MCP sync tool on a detached old commit dirtied the tree: {synced}"
+    );
+    assert_eq!(synced["exported"], json!(0), "{synced}");
+    assert!(
+        synced["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("detached"),
+        "the MCP sync on a detached commit does not say what it left out: {synced}"
+    );
+    let check = p.dx(&["sync", "--check"]);
+    assert_eq!(
+        status["settled"],
+        json!(check.ok()),
+        "sync_status ({status}) and `sync --check` ({}) disagree",
+        check.all()
+    );
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(co.ok(), "the MCP sync blocked checkout:\n{}", co.all());
+    assert!(!node(&p.graph_doc(), &two).is_null());
+}
+
+/// G7, round 2: on a detached commit that has no graph.json at all, sync
+/// created one ("Created .deciduous/graph.json (commit this file)") and then
+/// said the file "was left as this commit has it"; the new untracked file
+/// made `git checkout main` abort.
+#[test]
+fn g7_sync_on_a_commit_without_a_graph_file_creates_none() {
+    let Some(()) = local("g7_sync_on_a_commit_without_a_graph_file_creates_none") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    let root = p
+        .git_ok(&["rev-list", "--max-parents=0", "HEAD"])
+        .trim()
+        .to_string();
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let tree = p.git_ok(&["ls-tree", "-r", "--name-only", &root]);
+    assert!(
+        !tree.contains("graph.json"),
+        "the root commit has a graph file; this test proves nothing:\n{tree}"
+    );
+    p.git_ok(&["checkout", "-q", &root]);
+    assert!(!p.graph_file().exists());
+    let before = p.git_ok(&["status", "--porcelain"]);
+
+    let check = p.dx(&["sync", "--check"]);
+    let out = p.ok(&["sync"]);
+    assert!(
+        !p.graph_file().exists(),
+        "sync on a detached commit with no graph file created one:\n{out}"
+    );
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), before, "{out}");
+    assert!(
+        out.contains("detached") && out.contains("not exported"),
+        "sync does not say what it left out:\n{out}"
+    );
+    assert!(check.ok(), "sync --check disagrees:\n{}", check.all());
+
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let synced = m.call_ok("sync", json!({}));
+    drop(m);
+    assert!(
+        !p.graph_file().exists(),
+        "the MCP sync on a detached commit with no graph file created one: {synced}"
+    );
+
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(co.ok(), "sync blocked checkout:\n{}", co.all());
+    let settled = p.dx(&["sync", "--check"]);
+    assert!(settled.ok(), "{}", settled.all());
+}
+
 // ---------------------------------------------------------------- G8 / G9
 
 /// G8: an edge's rationale changed by unlink + relink never reached a

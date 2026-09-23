@@ -1069,7 +1069,60 @@ fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
     })
 }
 
+fn store_path_for(db: &Database) -> Result<std::path::PathBuf, HandlerError> {
+    db.store()
+        .map(|s| s.path().to_path_buf())
+        .or_else(|| crate::records::RecordStore::path_for_db(db.path()))
+        .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep the graph file"))
+}
+
+/// `sync` and `sync_status` on a detached commit (G7): imports only, the
+/// graph file left as the commit has it (and not created when it has none),
+/// with what was held back said in the result. The CLI's `sync` does the
+/// same through the same function, so the two agree.
+fn sync_viewing_history(
+    db: &Database,
+    at: &str,
+    store: Option<&crate::records::RecordStore>,
+    dry_run: bool,
+    path: &std::path::Path,
+) -> HandlerResult {
+    let (report, withheld) = crate::records::reconcile_viewing_history(db, store, dry_run)
+        .map_err(HandlerError::from)?;
+    let note = crate::records::viewing_history_note(at, store.is_some(), &withheld);
+    let applied = if dry_run {
+        format!(
+            "Would import {} record(s) into the database",
+            report.imported()
+        )
+    } else {
+        format!("Imported {} record(s) into the database", report.imported())
+    };
+    Ok(tool_result_json(&json!({
+        "initialized": store.is_some(),
+        "store_path": path.display().to_string(),
+        "dry_run": dry_run,
+        "detached_at": at,
+        "imported": report.imported(),
+        "exported": 0,
+        "withheld_exports": withheld,
+        "pending_import": report.imported(),
+        "pending_export": 0,
+        "edges_pending": report.edges_pending,
+        "read_errors": report.read_errors,
+        "conflicts": report.conflicts,
+        "errors": report.errors,
+        "settled": report.is_settled(),
+        "report": report,
+        "message": format!("{applied}. {note}"),
+    })))
+}
+
 fn handle_sync_status(db: &Database) -> HandlerResult {
+    let path = store_path_for(db)?;
+    if let Some(at) = crate::records::viewing_history(&path) {
+        return sync_viewing_history(db, &at, store_for(db).as_ref(), true, &path);
+    }
     let Some(store) = store_for(db) else {
         return Ok(tool_result_json(&json!({
             "initialized": false,
@@ -1122,6 +1175,10 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
 
 fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     let dry_run = get_bool(args, "dry_run").unwrap_or(false);
+    let path = store_path_for(db)?;
+    if let Some(at) = crate::records::viewing_history(&path) {
+        return sync_viewing_history(db, &at, store_for(db).as_ref(), dry_run, &path);
+    }
     let store = match store_for(db) {
         Some(s) => s,
         None => {

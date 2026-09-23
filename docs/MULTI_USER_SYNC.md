@@ -153,7 +153,9 @@ rows have reached a file. What that means in practice:
   and leaves the file exactly as the commit has it, so `git checkout main`
   still works afterwards. It says what it held back:
   `Note: HEAD is detached at 2848ae0, so the graph file was left as this
-  commit has it: 1 node(s) not exported.` `sync --check` agrees with it. A
+  commit has it: 1 node(s) not exported.` `sync --check` and the MCP `sync`
+  and `sync_status` tools agree with it, and a commit that has no graph file
+  is not given one. A
   stopped rebase, merge, cherry-pick or revert is detached too, but there the
   file is being rewritten, so `sync` writes it as usual.
 - **Branches share nodes (not fixed).** A node added on `spike` is exported
