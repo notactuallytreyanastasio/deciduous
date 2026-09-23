@@ -1,4 +1,4 @@
-//! `deciduous demo-swarm`: an easter egg. One Opus boss and up to nine Sonnet
+//! `deciduous demo-swarm`: an easter egg. One Opus boss and four Sonnet
 //! workers build one Tetris together in iTerm2 or Ghostty panes, sharing one
 //! decision graph, and every pane is recorded for a later replay.
 //!

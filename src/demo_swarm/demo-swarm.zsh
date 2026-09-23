@@ -1,8 +1,9 @@
 #!/bin/zsh
-# deciduous demo-swarm: one Opus boss and up to nine Sonnet workers build one
-# Tetris together, in iTerm2 or Ghostty panes, over one decision graph.
+# deciduous demo-swarm: one Opus boss and four Sonnet workers build one
+# Tetris together, in iTerm2 or Ghostty panes, over one decision graph:
+# a functional core, an imperative shell, a view, and the QA that proves them.
 #
-#   deciduous demo-swarm [--workers N] [--dry-run] [--ask] [--dir PATH]
+#   deciduous demo-swarm [--dry-run] [--ask] [--dir PATH]
 #
 # The binary embeds this file and runs `launch`. `launch` builds the arena
 # repository, copies this file into it, and opens the window; each pane then
@@ -28,20 +29,18 @@ C_BOSS=$(rgb 255 190 80)
 WCOL=("$C_I" "$C_O" "$C_T" "$C_S" "$C_Z" "$C_J" "$C_L" "$C_P" "$C_M")
 
 # ------------------------------------------------------------- the crew
-ROLE=(engine rotation input render scoring audio shell effects qa)
-SHORT=(engine rotate input render score audio shell juice qa)
-OWNS=("src/engine.js" "src/rotation.js" "src/input.js" "src/render.js"
-      "src/scoring.js" "src/audio.js" "index.html (after the skeleton), style.css, src/shell.js"
-      "src/effects.js" "tests/")
-DOES=("board, pieces, 7-bag, gravity, lock delay, the game state"
-      "SRS rotation, wall kicks for I and JLSTZ, T-spin detection"
-      "keyboard, DAS and ARR, soft and hard drop, pause, remapping"
-      "canvas: board, ghost piece, hold, next queue, HUD"
-      "guideline scoring, combos, back-to-back, levels, gravity curve"
-      "WebAudio synth: every sound and the music, no audio files"
-      "the page: menus, pause screen, game over, restart, high scores"
-      "line-clear animation, particles, screen shake, level-up flash"
-      "node test runner, tests for engine, rotation and scoring, a browser smoke check")
+# Four workers: the functional core, the imperative shell around it, the view,
+# and QA. Fewer hands, cleaner seams; the boss holds the types that join them.
+ROLE=(core shell view qa)
+SHORT=(core shell view qa)
+OWNS=("src/core/"
+      "src/shell/, index.html (after the skeleton), style.css"
+      "src/view/"
+      "e2e/, package.json, tsconfig.json")
+DOES=("pure functions only: board, pieces, 7-bag with injected randomness, SRS rotation and kicks, gravity and lock delay, scoring and levels, as step(state, input) -> state"
+      "the imperative shell: the loop and clock, keyboard with DAS and ARR, audio, high scores in localStorage, pause; it turns the world into inputs for the core and does nothing clever itself"
+      "layout(state) -> a list of draw commands, pure and tested, then a thin canvas painter; board, ghost, hold, next queue, HUD, menus, line-clear effects"
+      "Playwright end-to-end tests that drive the real page and replay the mistakes users make; the npm scripts, tsc config, and the one command that runs everything")
 
 die() { print -u2 -- "demo-swarm: $*"; exit 1 }
 
@@ -73,10 +72,9 @@ beat() { nap ${1:-60} }
 
 # ================================================================= launch
 launch() {
-  local workers=9 dry=0 ask=0 nowin=0 base="$HOME/deciduous-swarm" dir="" term=""
+  local workers=4 dry=0 ask=0 nowin=0 base="$HOME/deciduous-swarm" dir="" term=""
   while (( $# )); do
     case $1 in
-      --workers) workers=${2:-}; shift 2 ;;
       --dry-run) dry=1; shift ;;
       --ask)     ask=1; shift ;;
       --dir)     dir=${2:-}; shift 2 ;;
@@ -86,7 +84,6 @@ launch() {
       *) usage >&2; return 2 ;;
     esac
   done
-  [[ $workers == <1-9> ]] || die "--workers takes 1 to 9, not '$workers'"
 
   [[ $(uname) == Darwin ]] || die "this needs macOS: it drives iTerm2 or Ghostty through AppleScript"
   if [[ -z $term ]]; then
@@ -163,7 +160,7 @@ launch() {
   open_window $term $workers $dir "${cmds[@]}"
 
   local tname=iTerm2; [[ $term == ghostty ]] && tname=Ghostty
-  print -r -- "demo-swarm: opened a $tname window with the boss (Opus) and $workers Sonnet worker(s)."
+  print -r -- "demo-swarm: opened a $tname window with the boss (Opus) and $workers Sonnet workers."
   print -r -- "  arena      $dir"
   print -r -- "  workspace  $ws   (the deciduous graph they share)"
   print -r -- "  sessions   boss-$tag, w1-$tag .. w$workers-$tag"
@@ -173,9 +170,9 @@ launch() {
 }
 
 usage() {
-  print -r -- "usage: deciduous demo-swarm [--workers N] [--dry-run] [--ask] [--dir PATH]"
+  print -r -- "usage: deciduous demo-swarm [--dry-run] [--ask] [--dir PATH]"
   print -r -- ""
-  print -r -- "  --workers N  1 to 9 Sonnet workers (default 9); the boss is always Opus"
+  print -r -- "  One Opus boss and four Sonnet workers: core, shell, view, qa."
   print -r -- "  --dry-run    build the arena and the window, play the tour, start no sessions"
   print -r -- "  --ask        keep Claude Code's permission prompts in every pane"
   print -r -- "  --dir PATH   where the arena goes (default ~/deciduous-swarm/swarm-MMDD-HHMM)"
@@ -203,16 +200,46 @@ pull requests. This repository is local and has no remote.
 
 ## The game
 
-A playable Tetris in plain HTML, CSS and JavaScript at the root of `main`.
-`index.html` opens from disk and plays. No build step, no dependencies, no
-frameworks.
+A playable Tetris at the root of `main`: `index.html` opens from disk and
+plays. No build step and no runtime dependencies. Development tools
+(`typescript`, `@playwright/test`) are devDependencies in package.json; the
+page never loads them.
 
-- Classic `<script>` tags, not ES modules: Chrome refuses module scripts from
-  `file://`. Every module attaches to one namespace, `globalThis.Tetris`.
-- Engine, rotation and scoring load under node too (`node tests/run.js`), so
-  keep DOM and canvas code out of them.
-- Headless Chrome does not advance `requestAnimationFrame` under a virtual
-  time budget. Tests step the game by calling its update function.
+## How it is built
+
+These five hold for every line anyone writes here. The boss merges nothing
+that breaks them.
+
+1. **Functional core, imperative shell.** `src/core/` is pure: no DOM, no
+   clock, no `Math.random`, no mutation of its inputs. The game is
+   `step(state, input) -> state`; randomness and time are arguments.
+   Everything that touches the world (keys, frames, sound, storage, canvas)
+   lives in the shell or the painter and is as thin as it can be. When shell
+   code grows a decision, move the decision into a pure function and test it.
+2. **Tests first.** Write the failing test, then the code. `node --test` runs
+   them; no framework. A commit that adds behaviour adds the test that asked
+   for it, and a bug fix starts as a test that reproduces it.
+3. **End-to-end tests replay what users do wrong.** Playwright drives the
+   real page in a real browser: hold twice in a row, keys mashed during the
+   line-clear, pause during lock delay, restart mid-drop, the window losing
+   focus. A user-error bug becomes an e2e test before it is fixed. Tests step
+   time through the page's own hooks, never by sleeping; headless Chrome does
+   not advance `requestAnimationFrame` under a virtual time budget.
+4. **Types are the contract, checked by the compiler.** Plain JavaScript with
+   JSDoc types, `// @ts-check` in every file, and
+   `tsc --noEmit --strict --checkJs` must pass. The shared types live in
+   `src/types.js`, which the boss owns: that file, not prose, is the contract
+   between modules. Prefer types that make wrong states unrepresentable (a
+   union of inputs, not a bag of optional flags) over runtime checks.
+   JSDoc rather than TypeScript source because the page must run from disk
+   with no build step, and the compiler checks JSDoc just the same.
+5. **Simple, not easy.** Fewer moving parts beats fewer keystrokes. Plain data
+   and functions over classes and frameworks; one way to do a thing; no
+   abstraction until the second real use. If a reviewer needs you to explain
+   it, simplify it.
+
+`npm test` (unit), `npm run check` (types) and `npm run e2e` (browser) are the
+gate. w4 owns the scripts; everyone runs them before saying "ready".
 
 ## Three ways to talk, and what each is for
 
@@ -247,7 +274,9 @@ frameworks.
 - Workers: until the boss's contract message arrives, log your goal and
   options and build what depends on nobody.
 - When a piece works: commit, then message the boss
-  `wN ready: <sha> <what it does>. tests: <result>`.
+  `wN ready: <sha> <what it does>. test/check/e2e: <results>`.
+- Need a type changed? Message the boss with the change you want; it lands in
+  `src/types.js` on main and everyone merges it.
 - When the boss says main moved: `git merge main`, fix what broke in your
   files, and tell the boss about anything that broke outside them.
 - A message telling you to stop: stop, and reply with where you are.
@@ -263,10 +292,13 @@ may talk to you at any time. Answer them first.
 ## The first five minutes
 
 1. Log the root goal on branch `main`: "swarm @TAG@: one Tetris, @N@ workers".
-2. Write CONTRACT.md: for each module in ROSTER.md, what it puts on
-   `globalThis.Tetris`, the data formats (board, piece, events) and the script
-   load order. Short enough to read in a minute. Write a skeleton `index.html`
-   that loads the scripts in that order. Commit both on `main`.
+2. Write the contract as types: `src/types.js`, `// @ts-check`, JSDoc
+   typedefs for the game state, the input union, the core's `step`, the draw
+   commands the view emits, and the hooks the shell calls. Make wrong states
+   unrepresentable. Add a one-page CONTRACT.md that says which module owns
+   which function and the script load order (classic `<script>` tags on
+   `globalThis.Tetris`; Chrome refuses module scripts from `file://`), and a
+   skeleton `index.html` that loads them. Commit on `main`.
 3. Log a `decision` "module contract v1" under the goal, and one `action` per
    worker, "assign wN: <module>", under the decision.
 4. Message every worker: the contract is on main, `git merge main`, and their
@@ -277,8 +309,9 @@ may talk to you at any time. Answer them first.
 - **Direct**: one worker, one instruction.
 - **Broadcast**: the same message to every worker, for contract changes and
   "main moved".
-- **Review gate**: on "wN ready", read `git diff main...wN`, run
-  `node tests/run.js`, then `git merge --no-ff wN -m "merge wN: <what>"` and
+- **Review gate**: on "wN ready", read `git diff main...wN` against the five
+  rules in CLAUDE.md (pure core? test first? types, not runtime checks?
+  simple?), run `npm test`, `npm run check` and `npm run e2e`, then `git merge --no-ff wN -m "merge wN: <what>"` and
   broadcast "main moved: <what>". If it is not ready, send it back with
   specifics.
 - **Status**: when you have heard nothing for a while, ask everyone for one
@@ -292,7 +325,7 @@ may talk to you at any time. Answer them first.
 ## Done
 
 `index.html` on main plays a whole game in a real browser, every module is
-merged, and `node tests/run.js` passes. Write README.md: what the game does,
+merged, and `npm test`, `npm run check` and `npm run e2e` all pass. Write README.md: what the game does,
 which session built which part, and how the team talked. Log the final
 `outcome`, then tell the user and every worker that it is over.
 EOF
@@ -307,10 +340,10 @@ EOF
     for (( i = 1; i <= n; i++ )); do
       print -r -- "| w$i-$tag | Sonnet | ${ROLE[i]}: ${DOES[i]} | ${OWNS[i]} | w$i | crew/w$i |"
     done
-    if (( n < 9 )); then
+    if (( n < ${#ROLE} )); then
       print
       print -r -- "Unassigned modules, the boss's to hand out or build:"
-      for (( i = n + 1; i <= 9; i++ )); do print -r -- "- ${ROLE[i]}: ${DOES[i]} (${OWNS[i]})"; done
+      for (( i = n + 1; i <= ${#ROLE}; i++ )); do print -r -- "- ${ROLE[i]}: ${DOES[i]} (${OWNS[i]})"; done
     fi
   } > ROSTER.md
   local f
@@ -343,6 +376,7 @@ open_window() {
   local term=$1 n=$2 dir=$3; shift 3
   local -a cmds=("$@")
   local ncols=$(( (n + 2) / 3 ))
+  local rpc=$(( (n + ncols - 1) / ncols ))   # rows per column: 4 -> 2x2
   local scr=$(osascript -l JavaScript -e 'ObjC.import("AppKit"); var f = $.NSScreen.mainScreen.visibleFrame; var h = $.NSScreen.mainScreen.frame.size.height; [Math.round(f.origin.x), Math.round(h - f.origin.y - f.size.height), Math.round(f.size.width), Math.round(f.size.height)].join(" ")')
   local -a s=(${=scr})
   local as=$dir/.swarm/layout.applescript c r k idx
@@ -359,7 +393,7 @@ open_window() {
       done
       idx=0
       for (( c = 1; c <= ncols; c++ )); do
-        local rows=$(( n - (c - 1) * 3 )); (( rows > 3 )) && rows=3
+        local rows=$(( n - (c - 1) * rpc )); (( rows > rpc )) && rows=$rpc
         print -r -- "  set p$(( idx + 1 )) to c$c"
         for (( r = 2; r <= rows; r++ )); do
           print -r -- "  tell p$(( idx + r - 1 )) to set p$(( idx + r )) to (split horizontally with default profile)"
@@ -378,7 +412,7 @@ open_window() {
       for (( c = 1; c < ncols; c++ )); do print -r -- "  set columns of c$c to cw"; done
       idx=0
       for (( c = 1; c <= ncols; c++ )); do
-        local rows=$(( n - (c - 1) * 3 )); (( rows > 3 )) && rows=3
+        local rows=$(( n - (c - 1) * rpc )); (( rows > rpc )) && rows=$rpc
         if (( rows > 1 )); then
           local rsum="(rows of p$(( idx + 1 )))"
           for (( r = 2; r <= rows; r++ )); do rsum+=" + (rows of p$(( idx + r )))"; done
@@ -409,11 +443,11 @@ open_window() {
       print -r -- '  set p0 to focused terminal of selected tab of w'
       print -r -- '  set c1 to split p0 direction right with configuration cf1'
       for (( c = 2; c <= ncols; c++ )); do
-        print -r -- "  set c$c to split c$(( c - 1 )) direction right with configuration cf$(( (c - 1) * 3 + 1 ))"
+        print -r -- "  set c$c to split c$(( c - 1 )) direction right with configuration cf$(( (c - 1) * rpc + 1 ))"
       done
       idx=0
       for (( c = 1; c <= ncols; c++ )); do
-        local rows=$(( n - (c - 1) * 3 )); (( rows > 3 )) && rows=3
+        local rows=$(( n - (c - 1) * rpc )); (( rows > rpc )) && rows=$rpc
         print -r -- "  set p$(( idx + 1 )) to c$c"
         for (( r = 2; r <= rows; r++ )); do
           print -r -- "  set p$(( idx + r )) to split p$(( idx + r - 1 )) direction down with configuration cf$(( idx + r ))"
@@ -449,7 +483,7 @@ start_claude() {
   (( ASK )) || perm=(--dangerously-skip-permissions)
   if [[ $me == boss ]]; then
     model=opus name=boss-$TAG
-    prompt="You are the boss of demo swarm $TAG: one Opus session directing $N Sonnet worker(s) who build one Tetris together. Read CLAUDE.md, then BOSS.md and ROSTER.md in this directory, and follow them. The user is watching this pane. Begin."
+    prompt="You are the boss of demo swarm $TAG: one Opus session directing $N Sonnet workers who build one Tetris together. Read CLAUDE.md, then BOSS.md and ROSTER.md in this directory, and follow them. The user is watching this pane. Begin."
   else
     local i=${me#w}
     model=sonnet name=$me-$TAG
@@ -520,24 +554,43 @@ banner() {
   done
 }
 
-draw_map() {         # draw_map <lit-count> <redraw?>
-  local lit=$1 redraw=$2 n=$N i r c
-  (( redraw )) && print -rn -- "${e}[7F"
+draw_map() {         # draw_map <lit-count> <redraw?> : the window, in miniature
+  local lit=$1 redraw=$2 n=$N
+  local ncols=$(( (n + 2) / 3 )) rpc L c r j line seg fin
+  rpc=$(( (n + ncols - 1) / ncols ))
+  local height=$(( 2 * rpc + 1 ))
+  (( redraw )) && print -rn -- "${e}[${height}F"
   local bosscol=$C_GREY; (( lit >= 0 )) && bosscol=$C_BOSS
-  cell() {
-    local j=$1
-    if (( j > n )); then print -rn -- "$DIM$C_GREY ·         $RST"; return; fi
-    if (( j <= lit )); then print -rn -- "${WCOL[j]}● w$j ${(r:6:)SHORT[j]}$RST"
-    else print -rn -- "$DIM$C_GREY○ w$j ${(r:6:)SHORT[j]}$RST"; fi
-  }
   local G=$C_GREY
-  print -r -- "$MARGIN$G┌────────────────┬─────────────┬─────────────┬─────────────┐$RST"
-  print -r -- "$MARGIN$G│$RST                $G│$RST $(cell 1) $G│$RST $(cell 4) $G│$RST $(cell 7) $G│$RST"
-  print -r -- "$MARGIN$G│$RST    $bosscol$B  BOSS  $RST    $G├─────────────┼─────────────┼─────────────┤$RST"
-  print -r -- "$MARGIN$G│$RST    $bosscol  opus  $RST    $G│$RST $(cell 2) $G│$RST $(cell 5) $G│$RST $(cell 8) $G│$RST"
-  print -r -- "$MARGIN$G│$RST                $G├─────────────┼─────────────┼─────────────┤$RST"
-  print -r -- "$MARGIN$G│$RST                $G│$RST $(cell 3) $G│$RST $(cell 6) $G│$RST $(cell 9) $G│$RST"
-  print -r -- "$MARGIN$G└────────────────┴─────────────┴─────────────┴─────────────┘$RST"
+  local -a bosstxt=("" "  BOSS  " "  opus  ")
+  for (( L = 0; L < height; L++ )); do
+    if (( L == 0 )); then line="┌────────────────"; seg="┬─────────────"; fin="┐"
+    elif (( L == height - 1 )); then line="└────────────────"; seg="┴─────────────"; fin="┘"
+    else line=""; fi
+    if [[ -n $line ]]; then
+      for (( c = 1; c <= ncols; c++ )); do line+=$seg; done
+      print -r -- "$MARGIN$G$line$fin$RST"; continue
+    fi
+    local bt=${bosstxt[L+1]:-}
+    line="$MARGIN$G│$RST    $bosscol$B${(r:8:)bt}$RST    "
+    if (( L % 2 == 0 )); then                   # a separator between rows
+      line+="$G├"
+      for (( c = 1; c <= ncols; c++ )); do line+="─────────────"; (( c < ncols )) && line+="┼"; done
+      line+="┤$RST"
+    else
+      r=$(( (L + 1) / 2 ))
+      for (( c = 1; c <= ncols; c++ )); do
+        j=$(( (c - 1) * rpc + r ))
+        line+="$G│$RST "
+        if (( j > n )); then line+="${(l:11:: :)Z}"
+        elif (( j <= lit )); then line+="${WCOL[j]}● w$j ${(r:6:)SHORT[j]}$RST"
+        else line+="$DIM$C_GREY○ w$j ${(r:6:)SHORT[j]}$RST"; fi
+        line+=" "
+      done
+      line+="$G│$RST"
+    fi
+    print -r -- "$line"
+  done
 }
 
 packet() {          # packet <from> <to> <color> : a dot travels the wire
@@ -581,10 +634,11 @@ tour() {
   draw_map 0 1;  beat 50
   for (( i = 1; i <= N; i++ )); do draw_map $i 1; beat 18; done
   print
-  say "The boss is Opus. It writes the contract, hands out the work,"
+  say "The boss is Opus. It writes the contract as types, hands out the work,"
   say "reviews every branch, and is the only one who merges to main."
-  say "The workers are Sonnet, one module each, each in its own"
-  say "git worktree, on its own branch."
+  say "Four Sonnet workers, one seam each: the functional core, the"
+  say "imperative shell around it, the view, and QA that drives the"
+  say "real page. Each in its own git worktree, on its own branch."
   beat 80
 
   head_ "How the boss runs the team"
@@ -603,21 +657,22 @@ tour() {
   print
   print -rn -- "$MARGIN"; type_out "$B$C_O" "2. Direct orders"
   dim "   a message lands in one worker's conversation as it is sent."
-  packet boss w$(( N < 3 ? N : 3 )) ${WCOL[$(( N < 3 ? N : 3 ))]}
-  print -r -- "$MARGIN        $IT$C_TXT\"DAS 167ms, ARR 33ms, per node 4f2a. ship it.\"$RST"; nap 40
+  packet boss w2 ${WCOL[2]}
+  print -r -- "$MARGIN        $IT$C_TXT\"Input is a union now. npm run check shows you where.\"$RST"; nap 40
   print -rn -- "$CR$MARGIN   ${WCOL[1]}${B}w1  $RST$C_GREY$(printf '─%.0s' {1..10})●$(printf '─%.0s' {1..17})$RST▶ $C_BOSS${B}boss$RST"; nap 30; print
-  print -r -- "$MARGIN        $IT$C_TXT\"w1 ready: 9c1e 7-bag and lock delay. tests: 14 pass\"$RST"
+  print -r -- "$MARGIN        $IT$C_TXT\"w1 ready: 9c1e SRS kicks, test first. test 41/41, check clean\"$RST"
   beat 60
 
   print
   print -rn -- "$MARGIN"; type_out "$B$C_T" "3. Broadcast"
-  dim "   one change, everyone: \"main moved: engine merged, git merge main\""
+  dim "   one change, everyone: \"main moved: types.js v2, git merge main\""
   broadcast
   beat 50
 
   print
   print -rn -- "$MARGIN"; type_out "$B$C_S" "4. The merge gate"
-  dim "   code reaches main only after the boss reads it and the tests pass."
+  dim "   main takes a branch only when the boss has read it and unit tests,"
+  dim "   the type check and the browser tests all pass."
   print -r -- "$MARGIN   ${WCOL[1]}w1   ○──○──○$RST$C_GREY─╮$RST"; nap 25
   print -r -- "$MARGIN   ${WCOL[2]}w2      ○──○$RST$C_GREY─┼──╮$RST"; nap 25
   print -r -- "$MARGIN   $C_BOSS${B}main$RST $C_BOSS●───────────●──●──$RST  ${DIM}${C_GREY}each ● a reviewed, tested merge$RST"; nap 40
@@ -630,11 +685,19 @@ tour() {
   beat 90
 
   head_ "The quest"
-  say "Last time, ten agents built ten Tetrises side by side and"
-  say "linked none of their borrowing: 0 of 491 edges crossed a branch."
-  say "This time the team builds one game: SRS with kicks, 7-bag, hold,"
-  say "ghost, DAS and ARR, T-spins, synthesized sound, juice, and tests"
-  say "that run. Every dependency between sessions is an edge."
+  say "One Tetris, built the way we would want it built:"
+  print
+  local -a rules=("functional core, imperative shell" "tests first, in plain node"
+    "browser tests that replay what users do wrong" "types as the contract, checked by the compiler"
+    "simple, not easy")
+  for (( i = 1; i <= ${#rules}; i++ )); do
+    print -r -- "$MARGIN   ${WCOL[(i - 1) % 4 + 1]}▰$RST $C_TXT${rules[i]}$RST"; nap 30
+  done
+  print
+  say "Last time ten agents built ten games and linked none of their"
+  say "borrowing: 0 of 491 edges crossed a branch. Here every worker's"
+  say "goal hangs off the boss's assignment, so the edges cross from"
+  say "the first minute."
   print
   dim "Every pane is being recorded with timestamps, for a replay."
   beat 120
@@ -666,7 +729,7 @@ tour() {
   done
   print
   say "The team is up. The boss is yours: talk to it here."
-  dim "try: \"status from everyone\" · \"w6, make the line clear punchier\""
+  dim "try: \"status from everyone\" · \"w3, make the line clear punchier\""
   dim "     \"stop everyone, we are switching to a dark theme\""
   beat 150
   clear

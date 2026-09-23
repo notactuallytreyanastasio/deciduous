@@ -2514,9 +2514,9 @@ deciduous nodes --type revisit
 /// /demo-swarm: the easter egg. The command does the work; the model runs it
 /// and reports, and does nothing when the terminal is not iTerm2 or Ghostty.
 pub const DEMO_SWARM_MD: &str = r#"---
-description: Easter egg. An Opus boss and nine Sonnet workers build one Tetris together, in iTerm2 or Ghostty panes
+description: Easter egg. An Opus boss and four Sonnet workers build one Tetris together, in iTerm2 or Ghostty panes
 allowed-tools: Bash(deciduous demo-swarm:*)
-argument-hint: "[--workers N] [--dry-run] [--ask] [--dir PATH]"
+argument-hint: "[--dry-run] [--ask] [--dir PATH]"
 ---
 
 # /demo-swarm
@@ -2527,9 +2527,12 @@ Run this with the Bash tool, exactly, and nothing else first:
 
 It works only in iTerm2 or Ghostty on macOS. It builds a fresh repository
 (default `~/deciduous-swarm/swarm-MMDD-HHMM`) and opens a new window: an Opus
-boss pane plays an animated tour of how the boss runs the team, then nine
-Sonnet workers come online, each in its own worktree and branch, and the boss
-takes over. They share one deciduous workspace, message each other directly,
+boss pane plays an animated tour of how the boss runs the team, then four
+Sonnet workers come online (the functional core, the imperative shell, the
+view, and QA), each in its own worktree and branch, and the boss takes over.
+The team works to five rules: functional core and imperative shell, tests
+first, browser tests that replay user mistakes, types the compiler checks,
+and simple over easy. They share one deciduous workspace, message each other directly,
 and merge through the boss. Every pane is recorded with timestamps under
 `.swarm/rec/` in the arena, for a replay.
 
