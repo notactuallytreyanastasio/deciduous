@@ -105,8 +105,43 @@ defmodule DeciduousMcp.MCP.Component do
   and reports the `{:error, _}` clauses as unreachable — one warning per such
   module, for a clause the macro genuinely needs for the tools that do fail.
   """
+  # Every argument that names a node. A value here that is not a UUID reached
+  # Ecto as `where n.id == ^""`, which raises Ecto.Query.CastError inside the
+  # handler; on production (2026-09-22 14:18 and 15:01) that took the Hermes
+  # server process down and every session with it. Handlers now run in their
+  # own task, so the same input is a contained error, but it is still a
+  # crash and still a stack trace where a one-line answer belongs.
+  @id_keys ~w(node_id from_node_id to_node_id related_to took_from parent_node_id)
+
   def dispatch_tool(module, params, frame) do
-    case module.call(%{arguments: params || %{}, server: frame}) do
+    params = params || %{}
+
+    case invalid_id(params) do
+      {key, value} ->
+        {:error, Error.execution("#{key} is not a node id: #{inspect(value)}"), frame}
+
+      nil ->
+        dispatch_valid_tool(module, params, frame)
+    end
+  end
+
+  defp invalid_id(params) do
+    Enum.find_value(@id_keys, fn key ->
+      case Map.get(params, key) do
+        nil ->
+          nil
+
+        value when is_binary(value) ->
+          if match?({:ok, _}, Ecto.UUID.cast(value)), do: nil, else: {key, value}
+
+        value ->
+          {key, value}
+      end
+    end)
+  end
+
+  defp dispatch_valid_tool(module, params, frame) do
+    case module.call(%{arguments: params, server: frame}) do
       {:ok, payload} when is_binary(payload) ->
         {:reply, Response.text(Response.tool(), payload), frame}
 
