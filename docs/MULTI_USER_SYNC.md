@@ -154,8 +154,22 @@ the database by `change_id`:
 | tombstone before the row's `updated_at` | row | the row was edited after the delete: rewrite the record (resurrect) |
 
 Edges import once both endpoints exist locally. An edge whose endpoint has not
-arrived yet is reported as pending and imports on a later sync. An edge that points
-at a tombstoned node is skipped.
+arrived yet is reported as pending (and `sync --check` exits 1 until it arrives) and
+imports on a later sync. An edge that points at a tombstoned node is skipped.
+
+Edges have no `updated_at`. An edge both sides have whose rationale or weight differs
+(someone unlinked and relinked it) takes the file's version: local writes reach the
+file as they happen, so a row that differs is stale.
+
+Deleting a node tombstones its edges and tags with a `deleted_with` marker naming
+that deletion. If the node comes back (edited elsewhere after the delete), those
+tombstones no longer count and the edges and tags come back with it. A deliberate
+unlink or untag has no marker and stays.
+
+A local write is always stamped later than the version of its record already in the
+file, even when that version's timestamp is ahead of this clock (`add --date` in the
+future, a teammate whose clock runs fast). Otherwise last-writer-wins would keep the
+file's version and the next sync would revert the edit.
 
 Four details keep this honest:
 

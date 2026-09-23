@@ -793,3 +793,77 @@ fn a_relinked_edge_carries_its_new_rationale_to_clones_that_had_the_edge() {
 fn alice_cid(alice: &Dev, id: i32) -> String {
     alice.change_id(id)[..8].to_string()
 }
+
+// ============================================================================
+// G9: a node deleted on one clone and edited on another comes back whole
+// ============================================================================
+
+#[test]
+fn a_resurrected_node_comes_back_with_the_edges_and_tags_its_delete_took() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "Goal", &[]);
+    let action = alice.add("action", "Contested", &[]);
+    let other = alice.add("action", "Unrelated", &[]);
+    alice.ok(&[
+        "link",
+        &goal.to_string(),
+        &action.to_string(),
+        "-r",
+        "does it",
+    ]);
+    alice.ok(&["link", &goal.to_string(), &other.to_string(), "-r", "also"]);
+    alice.ok(&["themes", "create", "infra"]);
+    alice.ok(&["tag", "add", &action.to_string(), "infra"]);
+    let action_cid = alice.change_id(action);
+    let other_cid = alice.change_id(other);
+    alice.commit_graph("graph");
+    alice.git(&["push", "-q"]);
+    let bob = team.join("bob");
+
+    // Alice deletes the action (its edge and tag go with it), and
+    // separately unlinks the unrelated one on purpose.
+    alice.ok(&["delete", &action.to_string()]);
+    alice.ok(&["unlink", &goal.to_string(), &other.to_string()]);
+    alice.commit_graph("delete");
+    alice.git(&["push", "-q"]);
+
+    // Bob, not having pulled, edits the action afterwards. Edit after
+    // delete wins, as documented: the node lives.
+    bob.ok(&["status", &action_cid[..8], "completed"]);
+    bob.commit_graph("edit");
+    bob.git(&["pull", "-q", "--no-edit"]);
+    let out = bob.ok(&["sync"]);
+    assert!(bob.node_by_title("Contested").is_some(), "{out}");
+    let e = edges(&bob);
+    assert!(
+        e.iter().any(|e| e["to_change_id"] == action_cid.as_str()),
+        "Bob lost the edge of the node that came back: {out}\n{e:#?}"
+    );
+    // The deliberate unlink stays unlinked.
+    assert!(
+        !e.iter().any(|e| e["to_change_id"] == other_cid.as_str()),
+        "{e:#?}"
+    );
+    let tags = bob.ok(&["tag", "list", &action_cid[..8]]);
+    assert!(tags.contains("infra"), "{tags}");
+    bob.git(&["push", "-q"]);
+
+    // Alice gets it all back too.
+    alice.git(&["pull", "-q", "--no-edit"]);
+    let out = alice.ok(&["sync"]);
+    let back = alice
+        .node_by_title("Contested")
+        .expect("node back on alice");
+    assert_eq!(back["status"], "completed");
+    let e = edges(&alice);
+    assert!(
+        e.iter().any(|e| e["to_change_id"] == action_cid.as_str()),
+        "{out}\n{e:#?}"
+    );
+    assert!(!e.iter().any(|e| e["to_change_id"] == other_cid.as_str()));
+    let tags = alice.ok(&["tag", "list", &action_cid[..8]]);
+    assert!(tags.contains("infra"), "{tags}");
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+}

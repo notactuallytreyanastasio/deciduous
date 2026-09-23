@@ -809,9 +809,15 @@ impl Database {
     }
 
     fn tombstone_edges(&self, edges: &[DecisionEdge]) {
+        self.tombstone_edges_of(edges, None);
+    }
+
+    /// Tombstone edges; `with_node` names the node whose deletion took
+    /// them, so they come back if that node does.
+    fn tombstone_edges_of(&self, edges: &[DecisionEdge], with_node: Option<&str>) {
         let Some(store) = self.store() else { return };
         for edge in edges {
-            if let Err(e) = store.tombstone_edge(edge) {
+            if let Err(e) = store.tombstone_edge_of(edge, with_node) {
                 Self::store_warn("could not write edge tombstone", e);
             }
         }
@@ -859,7 +865,7 @@ impl Database {
 
     fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) {
         let Some(store) = self.store() else { return };
-        if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id) {
+        if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id, false) {
             Self::store_warn("could not write tag tombstone", e);
         }
     }
@@ -2116,10 +2122,15 @@ impl Database {
                     Self::store_warn("could not write node tombstone", e);
                 }
             }
-            self.tombstone_edges(&doomed_edges);
-            for tag in &doomed_tags {
-                if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
-                    self.tombstone_tag(&node.change_id, &theme.change_id);
+            self.tombstone_edges_of(&doomed_edges, Some(&node.change_id));
+            if let Some(store) = self.store() {
+                for tag in &doomed_tags {
+                    if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
+                        if let Err(e) = store.tombstone_tag(&node.change_id, &theme.change_id, true)
+                        {
+                            Self::store_warn("could not write tag tombstone", e);
+                        }
+                    }
                 }
             }
         }

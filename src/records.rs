@@ -162,7 +162,35 @@ pub struct EdgeRecord {
     pub extra: BTreeMap<String, Value>,
 }
 
+/// Key, in a tombstone's extra fields, naming the node whose deletion wrote
+/// it: `"<node change_id>@<deleted_at>"`. Kept among the extra fields so the
+/// file format does not change shape and an older version that drops it
+/// only falls back to the old behaviour (the tombstone stands).
+pub const DELETED_WITH: &str = "deleted_with";
+
+/// The node a tombstone was written for, if it was a side effect of
+/// deleting that node and has not been superseded since. The marker names
+/// the deletion it belongs to; a later deliberate unlink moves deleted_at
+/// and leaves the marker stale, which then counts for nothing.
+fn cascade_node<'a>(
+    extra: &'a BTreeMap<String, Value>,
+    deleted_at: Option<&str>,
+) -> Option<&'a str> {
+    let marker = extra.get(DELETED_WITH)?.as_str()?;
+    let (node, at) = marker.split_once('@')?;
+    (Some(at) == deleted_at).then_some(node)
+}
+
+fn cascade_marker(node_change_id: &str, deleted_at: &str) -> Value {
+    Value::String(format!("{}@{}", node_change_id, deleted_at))
+}
+
 impl EdgeRecord {
+    /// If this tombstone was written because a node was deleted, that node.
+    pub fn deleted_with(&self) -> Option<&str> {
+        cascade_node(&self.extra, self.deleted_at.as_deref())
+    }
+
     /// Build a record from a database row. Returns `None` for legacy rows
     /// whose endpoints have no `change_id` (pre-migration databases).
     pub fn from_db(edge: &DecisionEdge, author: Option<&str>) -> Option<Self> {
@@ -256,6 +284,11 @@ pub struct TagRecord {
 impl TagRecord {
     pub fn is_tombstone(&self) -> bool {
         self.deleted_at.is_some()
+    }
+
+    /// If this tombstone was written because its node was deleted.
+    pub fn deleted_with(&self) -> Option<&str> {
+        cascade_node(&self.extra, self.deleted_at.as_deref())
     }
 }
 
@@ -628,6 +661,17 @@ fn restamp_local_write(
     let stamp = (ex_ts + chrono::Duration::milliseconds(1))
         .with_timezone(&chrono::Local)
         .to_rfc3339();
+    if field == "deleted_at" {
+        // A cascade marker names the deletion it belongs to; keep it
+        // pointing at this one.
+        let old = inc.get("deleted_at").and_then(Value::as_str).unwrap_or("");
+        let marker = inc.get(DELETED_WITH).and_then(Value::as_str);
+        if let Some((node, at)) = marker.and_then(|m| m.split_once('@')) {
+            if at == old {
+                incoming[DELETED_WITH] = cascade_marker(node, &stamp);
+            }
+        }
+    }
     incoming[field] = Value::String(stamp.clone());
     (field == "updated_at").then_some(stamp)
 }
@@ -926,9 +970,24 @@ impl RecordStore {
     }
 
     pub fn tombstone_edge(&self, edge: &DecisionEdge) -> io::Result<bool> {
+        self.tombstone_edge_of(edge, None)
+    }
+
+    /// Tombstone an edge; `with_node` is the node whose deletion took it
+    /// (see [`DELETED_WITH`]), `None` for a deliberate unlink.
+    pub fn tombstone_edge_of(
+        &self,
+        edge: &DecisionEdge,
+        with_node: Option<&str>,
+    ) -> io::Result<bool> {
         match EdgeRecord::from_db(edge, Some(self.author())) {
             Some(mut rec) => {
-                rec.deleted_at = Some(now_ts());
+                let now = now_ts();
+                if let Some(node) = with_node {
+                    rec.extra
+                        .insert(DELETED_WITH.into(), cascade_marker(node, &now));
+                }
+                rec.deleted_at = Some(now);
                 Ok(self
                     .write_merged(|d| &mut d.edges, rec.edge_id.clone(), &rec, None)?
                     .0)
@@ -1020,7 +1079,14 @@ impl RecordStore {
         Ok(moved)
     }
 
-    pub fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) -> io::Result<bool> {
+    /// Tombstone a tag. `with_node` says it goes because its node was
+    /// deleted (see [`DELETED_WITH`]), not because someone untagged it.
+    pub fn tombstone_tag(
+        &self,
+        node_change_id: &str,
+        theme_change_id: &str,
+        with_node: bool,
+    ) -> io::Result<bool> {
         let author = self.author().to_string();
         let now = now_ts();
         let key = tag_id(node_change_id, theme_change_id);
@@ -1046,6 +1112,14 @@ impl RecordStore {
                     .with_timezone(&chrono::Local)
                     .to_rfc3339()
             };
+            if with_node {
+                rec.extra.insert(
+                    DELETED_WITH.into(),
+                    cascade_marker(node_change_id, &deleted),
+                );
+            } else {
+                rec.extra.remove(DELETED_WITH);
+            }
             rec.author = Some(author);
             rec.deleted_at = Some(deleted);
             Ok(put(&mut doc.tags, key, rec))
@@ -1860,10 +1934,19 @@ fn reconcile_inner(
         }
     }
 
+    // A tombstone written only because a node was deleted does not count
+    // once that node is back (edited after the delete, elsewhere): the
+    // node returns with the edges and tags its deletion took.
+    let node_is_back = |cid: Option<&str>| {
+        cid.and_then(|c| store_nodes.get(c))
+            .is_some_and(|n| !n.is_tombstone())
+    };
+
     for (eid, rec) in &store_edges {
+        let dead = rec.is_tombstone() && !node_is_back(rec.deleted_with());
         match db_edge_by_key.get(eid) {
             None => {
-                if rec.is_tombstone() {
+                if dead {
                     continue;
                 }
                 let from_dead = tombstoned_nodes.contains(&rec.from_change_id);
@@ -1903,7 +1986,7 @@ fn reconcile_inner(
                 }
             }
             Some(row) => {
-                if rec.is_tombstone() {
+                if dead {
                     let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
                     if deleted >= parse_ts(&row.created_at) {
                         if !dry_run {
@@ -1971,9 +2054,10 @@ fn reconcile_inner(
     }
 
     for (key, rec) in &store_tags {
+        let dead = rec.is_tombstone() && !node_is_back(rec.deleted_with());
         match db_tag_by_key.get(key) {
             None => {
-                if rec.is_tombstone() {
+                if dead {
                     continue;
                 }
                 if let (Some(&node_id), Some(&theme_id)) = (
@@ -1990,7 +2074,7 @@ fn reconcile_inner(
                 }
             }
             Some((row, node_cid, theme_cid)) => {
-                if rec.is_tombstone() {
+                if dead {
                     let deleted = rec.deleted_at.as_deref().map(parse_ts).unwrap_or_default();
                     if deleted >= parse_ts(&row.created_at) {
                         if !dry_run {
