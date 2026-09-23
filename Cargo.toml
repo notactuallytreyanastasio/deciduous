@@ -64,7 +64,7 @@ toml_edit = "0.22"
 
 # HTTP server for graph viewer
 tiny_http = "0.12"
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled", "hooks", "limits"] }
 serde_urlencoded = "0.7"
 
 # Date/time

@@ -805,3 +805,81 @@ fn attach_document_refuses_anything_but_a_regular_file_in_the_project() {
                 .is_none()
     );
 }
+
+// ============================================================================
+// R6 / R7: /query is bounded in time and size and cannot reach other files
+// ============================================================================
+
+fn query(port: u16, graph: &str, sql: &str) -> (u16, Value, Duration) {
+    let t = Instant::now();
+    let (s, b) = http(
+        port,
+        "POST",
+        &format!("/api/v1/graphs/{graph}/query"),
+        API_TOKEN,
+        &json!({"sql": sql}),
+    );
+    (s, b, t.elapsed())
+}
+
+#[test]
+fn api_query_is_bounded_and_confined_to_its_graph() {
+    let p = Project::api_shared("q");
+    let daemon = Daemon::start(&p, 4827, &p.root().join("data"));
+    let (s, b) = daemon.tool(
+        "q",
+        "add_node",
+        json!({"node_type":"goal","title":"g","branch":"b"}),
+    );
+    assert_eq!(s, 200, "{b}");
+
+    let (s, b, _) = query(4827, "q", "SELECT count(*) FROM decision_nodes");
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["data"]["rows"][0][0], 1);
+
+    // Never terminates on its own: it has to be stopped.
+    let (s, b, took) = query(
+        4827,
+        "q",
+        "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT x FROM c WHERE x<0",
+    );
+    assert!(took < Duration::from_secs(15), "runaway query ran {took:?}");
+    assert_eq!(s, 400, "{b}");
+    assert!(b["error"].as_str().unwrap().contains("time limit"), "{b}");
+
+    // SQLite's printf gives NULL instead of a value over the length limit;
+    // the default limit is 1 GB, so this used to build all 200 MB.
+    let (s, b, _) = query(4827, "q", "SELECT length(printf('%.*c', 200000000, 'x'))");
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["data"]["rows"][0][0], Value::Null, "{b}");
+    let (s, b, _) = query(4827, "q", "SELECT length(zeroblob(200000000))");
+    assert_eq!(s, 400, "{b}");
+    assert!(b["error"].as_str().unwrap().contains("too big"), "{b}");
+
+    // ATTACH must not answer differently for a file that exists and one
+    // that does not.
+    let (s1, b1, _) = query(4827, "q", "ATTACH '/etc/hosts' AS h");
+    let (s2, b2, _) = query(4827, "q", "ATTACH '/nonexistent/nope.db' AS h");
+    assert_eq!(s1, 403, "{b1}");
+    assert_eq!((s1, &b1), (s2, &b2));
+
+    for sql in [
+        "SELECT file FROM pragma_database_list",
+        "PRAGMA database_list",
+        "SELECT * FROM pragma_table_info('decision_nodes') JOIN pragma_database_list",
+    ] {
+        let (s, b, _) = query(4827, "q", sql);
+        assert_eq!(s, 403, "{sql}: {b}");
+        assert!(
+            !b.to_string().contains(p.root().to_str().unwrap()),
+            "{sql} revealed the data directory: {b}"
+        );
+    }
+    // Harmless pragmas that describe the schema are still readable.
+    let (s, b, _) = query(
+        4827,
+        "q",
+        "SELECT name FROM pragma_table_info('decision_nodes')",
+    );
+    assert_eq!(s, 200, "{b}");
+}

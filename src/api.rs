@@ -390,6 +390,76 @@ fn tool_result_to_json(result: ToolCallResult) -> Value {
 
 // ── Read-only SQL over a graph ────────────────────────────────────────────
 
+/// Wall-clock budget for one `/query`. A recursive CTE without a bound
+/// never finishes, and the daemon runs one thread per request: four aborted
+/// requests pinned it at 400% CPU until it was killed.
+const QUERY_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Largest string or blob a query may build (SQLITE_LIMIT_LENGTH). The
+/// default is 1 GB; `printf('%.*c', 200000000, 'x')` built 200 MB in 62 ms.
+const QUERY_MAX_VALUE_BYTES: i32 = 1_000_000;
+
+/// Table-valued pragmas that only describe this graph's schema. Every other
+/// pragma, and `pragma_database_list` in particular (it returns the data
+/// directory's absolute path), is refused.
+const SCHEMA_PRAGMAS: &[&str] = &[
+    "table_info",
+    "table_xinfo",
+    "table_list",
+    "index_list",
+    "index_info",
+    "index_xinfo",
+    "foreign_key_list",
+];
+
+/// What a `/query` statement may do: read tables of the one database this
+/// connection opened. Enforced by SQLite's authorizer while the statement
+/// is prepared, so it covers every spelling (`PRAGMA x`, `pragma_x(...)`,
+/// a view, a CTE) rather than whatever a text check thought of.
+///
+/// ATTACH is the reason this exists. It is read-only by SQLite's own
+/// definition, so `stmt.readonly()` let it through, and its error told the
+/// caller whether any path on the server existed ("file is not a database"
+/// versus "unable to open database file").
+fn query_authorizer(ctx: rusqlite::hooks::AuthContext<'_>) -> rusqlite::hooks::Authorization {
+    use rusqlite::hooks::{AuthAction, Authorization};
+    let schema_pragma = |name: &str| SCHEMA_PRAGMAS.contains(&name.trim_start_matches("pragma_"));
+    match ctx.action {
+        AuthAction::Select | AuthAction::Recursive | AuthAction::Function { .. } => {
+            Authorization::Allow
+        }
+        AuthAction::Read { table_name, .. } => {
+            if table_name.starts_with("pragma_") && !schema_pragma(table_name) {
+                Authorization::Deny
+            } else {
+                Authorization::Allow
+            }
+        }
+        AuthAction::Pragma {
+            pragma_name,
+            pragma_value: _,
+        } if schema_pragma(pragma_name) => Authorization::Allow,
+        _ => Authorization::Deny,
+    }
+}
+
+fn sql_error(e: rusqlite::Error) -> ApiError {
+    let msg = e.to_string();
+    if msg.contains("not authorized") || msg.contains("is prohibited") {
+        ApiError::forbidden(
+            "statement refused: /query may only read this graph's tables \
+             (no ATTACH, no pragmas beyond table/index/foreign-key info)",
+        )
+    } else if msg.contains("interrupted") {
+        ApiError::bad_request(&format!(
+            "query stopped: it exceeded the {} s time limit",
+            QUERY_TIME_LIMIT.as_secs()
+        ))
+    } else {
+        ApiError::bad_request(&format!("SQL error: {msg}"))
+    }
+}
+
 fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, ApiError> {
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
@@ -401,10 +471,16 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
         .map_err(|e| ApiError::internal(&format!("query_only pragma: {e}")))?;
     conn.busy_timeout(std::time::Duration::from_millis(2_000))
         .map_err(|e| ApiError::internal(&format!("busy timeout: {e}")))?;
+    conn.set_limit(
+        rusqlite::limits::Limit::SQLITE_LIMIT_LENGTH,
+        QUERY_MAX_VALUE_BYTES,
+    );
+    conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_ATTACHED, 0);
+    let deadline = std::time::Instant::now() + QUERY_TIME_LIMIT;
+    conn.progress_handler(10_000, Some(move || std::time::Instant::now() > deadline));
+    conn.authorizer(Some(query_authorizer));
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| ApiError::bad_request(&format!("SQL error: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(sql_error)?;
     if !stmt.readonly() {
         return Err(ApiError::forbidden(
             "only read-only SELECT statements are allowed",
@@ -416,13 +492,8 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
 
     let mut rows_out: Vec<Vec<Value>> = Vec::new();
     let mut truncated = false;
-    let mut rows = stmt
-        .query([])
-        .map_err(|e| ApiError::bad_request(&format!("SQL error: {e}")))?;
-    while let Some(row) = rows
-        .next()
-        .map_err(|e| ApiError::bad_request(&format!("SQL error: {e}")))?
-    {
+    let mut rows = stmt.query([]).map_err(sql_error)?;
+    while let Some(row) = rows.next().map_err(sql_error)? {
         if rows_out.len() >= limit {
             truncated = true;
             break;
