@@ -217,6 +217,36 @@ impl OpBody {
     }
 }
 
+/// Where `op` holds a NUL character (`title`, `metadata.prompt`, a key
+/// named `a\0b`), if anywhere. Postgres text cannot hold one, so the server
+/// refuses such an op, and no write holding one can ever reach it.
+pub fn nul_path(op: &Op) -> Option<String> {
+    fn find(v: &Value, path: &mut Vec<String>) -> Option<String> {
+        match v {
+            Value::String(s) if s.contains('\0') => Some(path.join(".")),
+            Value::Object(m) => m.iter().find_map(|(k, x)| {
+                if k.contains('\0') {
+                    let mut p = path.clone();
+                    p.push(format!("{k:?}"));
+                    return Some(format!("the key {}", p.join(".")));
+                }
+                path.push(k.clone());
+                let found = find(x, path);
+                path.pop();
+                found
+            }),
+            Value::Array(a) => a.iter().enumerate().find_map(|(i, x)| {
+                path.push(i.to_string());
+                let found = find(x, path);
+                path.pop();
+                found
+            }),
+            _ => None,
+        }
+    }
+    find(&serde_json::to_value(op).ok()?, &mut Vec::new())
+}
+
 /// The server's answer for one op.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Ack {

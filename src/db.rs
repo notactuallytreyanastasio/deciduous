@@ -899,7 +899,9 @@ impl Database {
     }
 
     /// Makes the ops for `bodies` and writes them to `remote_outbox` in the
-    /// caller's transaction.
+    /// caller's transaction. Refuses (so the transaction, and the write,
+    /// roll back) an op holding a NUL: the server can never store it, and a
+    /// write it can never receive is the fork this log exists to prevent.
     fn queue_in_tx(
         &self,
         conn: &mut SqliteConnection,
@@ -908,6 +910,14 @@ impl Database {
         let mut out = Vec::with_capacity(bodies.len());
         for body in bodies {
             let op = crate::oplog::OpLog::new_op(body);
+            if let Some(at) = crate::oplog::nul_path(&op) {
+                return Err(DbError::Validation(format!(
+                    "nothing was written: {at} holds a NUL character, which the shared server \
+                     cannot store, so this write could never reach it ({}). Remove the NUL and \
+                     write again.",
+                    op.body.describe().replace('\0', "\\0")
+                )));
+            }
             let json = serde_json::to_string(&op)
                 .map_err(|e| DbError::Validation(format!("serializing op: {e}")))?;
             diesel::sql_query("INSERT INTO remote_outbox (op_json) VALUES (?)")

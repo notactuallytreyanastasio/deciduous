@@ -1694,33 +1694,25 @@ fn server_n1_an_op_the_server_fails_on_is_set_aside_and_the_rest_delivered() {
     assert!(!log_lines(&dir).iter().any(|l| l["op_id"] == id.as_str()));
 }
 
-// SERVER-N1 against the real server: a NUL in one write's prompt.
+// SERVER-N1 against the real server: a NUL in one queued op. The CLI now
+// refuses such a write before making it (see
+// new_a_write_holding_a_nul_is_refused_before_it_is_made), so the op is put
+// in the log by hand, the way an older build or another client queued it.
 #[test]
 #[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
 fn server_n1_a_nul_in_one_write_does_not_stop_the_writes_after_it() {
-    use std::io::Write;
     let (url, token) = server();
     let sb = Sandbox::new(&token);
     let ws = unique("wal-poison");
     let dir = sb.remote_repo("poison", &url, &ws);
-    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
-        .args(["add", "goal", "poison", "--prompt-stdin"])
-        .current_dir(&dir)
-        .env("HOME", sb.path().join("home"))
-        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
-        .env("DECIDUOUS_MCP_TOKEN", &token)
-        .env("DECIDUOUS_NO_SERVER", "1")
-        .env_remove("DECIDUOUS_DB_PATH")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .unwrap();
-    child.stdin.take().unwrap().write_all(b"has\0nul").unwrap();
-    let out = child.wait_with_output().unwrap();
-    let said = format!("{}{}", text(&out.stdout), text(&out.stderr));
+    let now = "2026-09-23T00:00:00Z";
+    let poison = serde_json::json!({"entry":"op","op_id":"poisoned-op-1","at":now,
+        "kind":"create_node","change_id":"0badc0de-0000-4000-8000-000000000001",
+        "node_type":"goal","title":"poison","status":"pending",
+        "metadata":{"prompt":"has\u{0}nul"},"created_at":now,"updated_at":now});
+    std::fs::write(log_path(&dir), format!("{poison}\n")).unwrap();
+    let said = sb.dx_ok(&dir, &["add", "goal", "after"]);
     assert!(said.contains("NUL"), "the refusal names the cause: {said}");
-    sb.dx_ok(&dir, &["add", "goal", "after"]);
     assert_eq!(live_titles(&export(&url, &token, &ws)), ["after"]);
     let st = sb.dx(&dir, &["remote", "status"]);
     let st = text(&st.stdout);
@@ -2597,4 +2589,78 @@ fn new_a_stdio_server_exits_promptly_when_stdin_closes() {
         "exited after {took:?}"
     );
     assert_eq!(queued_titles(&dir), ["x1", "x2"]);
+}
+
+/// `deciduous add goal <title> --prompt-stdin` with `prompt` on stdin.
+fn add_with_prompt(sb: &Sandbox, dir: &Path, title: &str, prompt: &[u8]) -> Output {
+    use std::io::Write;
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["add", "goal", title, "--prompt-stdin"])
+        .current_dir(dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &sb.token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env("NO_COLOR", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(prompt).unwrap();
+    child.wait_with_output().unwrap()
+}
+
+// NEW (medium), the source: the CLI accepted a NUL in --prompt-stdin in a
+// project whose writes go to a server that can never store it. It is
+// refused before anything is written, naming where the NUL is.
+#[test]
+fn new_a_write_holding_a_nul_is_refused_before_it_is_made() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "nul-write");
+    let out = add_with_prompt(&sb, &dir, "poison", b"has\0nul");
+    let said = all_of(&out);
+    assert!(!out.status.success(), "{said}");
+    assert!(said.contains("NUL") && said.contains("prompt"), "{said}");
+    let g: Value = serde_json::from_str(&sb.dx_ok(&dir, &["graph"])).unwrap();
+    assert_eq!(g["nodes"].as_array().unwrap().len(), 0, "nothing written");
+    assert!(queued_titles(&dir).is_empty());
+}
+
+// NEW (medium): one row holding a NUL (written before this project had a
+// remote) made `remote push --seed` fail as a whole ("nodes[0] ... NUL ...
+// nothing was imported"), so every other row that no op covers could not
+// be sent either, and `remote status` pointed the NUL row at --seed.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn new_a_nul_row_does_not_stop_seed_sending_the_others() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-nulseed");
+    let dir = sb.repo("nulseed");
+    let out = add_with_prompt(&sb, &dir, "poison", b"has\0nul");
+    assert!(out.status.success(), "{}", all_of(&out));
+    sb.dx_ok(&dir, &["add", "goal", "pre-remote-row"]);
+    sb.dx_ok(&dir, &["remote", "init", &url, "--workspace", &ws]);
+
+    let st = all_of(&sb.dx(&dir, &["remote", "status"]));
+    let poison_line = st
+        .lines()
+        .find(|l| l.contains("\"poison\""))
+        .unwrap_or_else(|| panic!("{st}"));
+    assert!(
+        poison_line.contains("NUL") && !poison_line.contains("--seed"),
+        "{st}"
+    );
+
+    let seed = sb.dx(&dir, &["remote", "push", "--seed"]);
+    let said = all_of(&seed);
+    assert!(!seed.status.success(), "a row was not sent: {said}");
+    assert!(said.contains("poison") && said.contains("NUL"), "{said}");
+    assert_eq!(
+        live_titles(&export(&url, &token, &ws)),
+        ["pre-remote-row"],
+        "{said}"
+    );
 }

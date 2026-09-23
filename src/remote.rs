@@ -716,16 +716,21 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
 /// Documents used to be computed and then ignored: `nodes == 0 && edges == 0`
 /// returned "nothing to send" with a document missing, and a document that
 /// was sent had no bytes behind it, because nothing uploaded them.
-pub fn push_missing(
-    remote: &Remote,
-    graph: &Value,
-) -> Result<(Option<ImportReport>, Vec<DeletedOnServer>), String> {
+/// What [`push_missing`] did: the import's report (`None` when nothing was
+/// sent), the local nodes the server has deleted, and the rows withheld for
+/// holding a NUL.
+pub type Seeded = (Option<ImportReport>, Vec<DeletedOnServer>, Vec<String>);
+
+pub fn push_missing(remote: &Remote, graph: &Value) -> Result<Seeded, String> {
     let server = remote.export()?;
     let deleted = deleted_on_server(graph, &server);
-    let (missing, nodes, edges) = missing_on_server(graph, &server);
+    let (mut missing, _, _) = missing_on_server(graph, &server);
+    let withheld = withhold_nul(&mut missing);
+    let nodes = missing["nodes"].as_array().map_or(0, Vec::len);
+    let edges = missing["edges"].as_array().map_or(0, Vec::len);
     let docs = missing["documents"].as_array().cloned().unwrap_or_default();
     if nodes == 0 && edges == 0 && docs.is_empty() {
-        return Ok((None, deleted));
+        return Ok((None, deleted, withheld));
     }
     if !docs.is_empty() {
         let dir = Database::db_path()
@@ -751,7 +756,133 @@ pub fn push_missing(
             remote.upload_blob(hash, &bytes, d["mime_type"].as_str())?;
         }
     }
-    remote.import(missing).map(|r| (Some(r), deleted))
+    remote.import(missing).map(|r| (Some(r), deleted, withheld))
+}
+
+/// Where a local row (a node, an edge or a document, as `deciduous graph`
+/// writes it) holds a NUL character, if anywhere: in a field, or inside a
+/// `*_json` field once decoded, where it is stored escaped. Postgres text
+/// cannot hold one, so the server refuses the row.
+pub fn row_nul(row: &Value) -> Option<String> {
+    fn find(v: &Value, path: &str) -> Option<String> {
+        match v {
+            Value::String(s) if s.contains('\0') => Some(path.to_string()),
+            Value::String(s) if path.ends_with("_json") => serde_json::from_str::<Value>(s)
+                .ok()
+                .and_then(|inner| find(&inner, path.trim_end_matches("_json"))),
+            Value::Object(m) => m.iter().find_map(|(k, x)| {
+                let at = if path.is_empty() {
+                    k.clone()
+                } else {
+                    format!("{path}.{k}")
+                };
+                if k.contains('\0') {
+                    Some(format!("the key {at:?}"))
+                } else {
+                    find(x, &at)
+                }
+            }),
+            Value::Array(a) => a
+                .iter()
+                .enumerate()
+                .find_map(|(i, x)| find(x, &format!("{path}.{i}"))),
+            _ => None,
+        }
+    }
+    find(row, "")
+}
+
+/// Takes out of an import the rows holding a NUL, and the edges of a node
+/// taken out, and describes each. The server refuses a whole import for one
+/// such row ("nothing was imported"), so one of them stopped `remote push
+/// --seed` from sending any other row, including writes whose ops a crash
+/// had lost, for which --seed is the only way back.
+fn withhold_nul(missing: &mut Value) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut gone = std::collections::HashSet::new();
+    if let Some(nodes) = missing["nodes"].as_array_mut() {
+        nodes.retain(|n| match row_nul(n) {
+            None => true,
+            Some(at) => {
+                let cid = n["change_id"].as_str().unwrap_or_default().to_string();
+                out.push(format!(
+                    "{} {} \"{}\" (NUL at {at})",
+                    n["node_type"].as_str().unwrap_or("node"),
+                    cid.chars().take(8).collect::<String>(),
+                    n["title"].as_str().unwrap_or_default().replace('\0', "\\0")
+                ));
+                gone.insert(cid);
+                false
+            }
+        });
+    }
+    if let Some(edges) = missing["edges"].as_array_mut() {
+        edges.retain(|e| {
+            let end = |k: &str| e[k].as_str().is_some_and(|c| gone.contains(c));
+            let why = row_nul(e).map(|at| format!("NUL at {at}")).or_else(|| {
+                (end("from_change_id") || end("to_change_id"))
+                    .then(|| "an endpoint is withheld".to_string())
+            });
+            match why {
+                None => true,
+                Some(why) => {
+                    out.push(format!(
+                        "edge {} -> {} ({why})",
+                        e["from_change_id"]
+                            .as_str()
+                            .unwrap_or("?")
+                            .chars()
+                            .take(8)
+                            .collect::<String>(),
+                        e["to_change_id"]
+                            .as_str()
+                            .unwrap_or("?")
+                            .chars()
+                            .take(8)
+                            .collect::<String>()
+                    ));
+                    false
+                }
+            }
+        });
+    }
+    if let Some(docs) = missing["documents"].as_array_mut() {
+        docs.retain(|d| match row_nul(d) {
+            None => true,
+            Some(at) => {
+                out.push(format!(
+                    "document {} (NUL at {at})",
+                    d["original_filename"]
+                        .as_str()
+                        .unwrap_or("?")
+                        .replace('\0', "\\0")
+                ));
+                false
+            }
+        });
+    }
+    out
+}
+
+/// Prints the rows [`push_missing`] did not send because they hold a NUL.
+pub fn print_withheld(withheld: &[String]) {
+    use colored::Colorize;
+    if withheld.is_empty() {
+        return;
+    }
+    eprintln!(
+        "{} {} row(s) hold a NUL character, which the server cannot store; they were not sent \
+         (the other rows were):",
+        "Not sent:".red().bold(),
+        withheld.len()
+    );
+    for w in withheld {
+        eprintln!("  {w}");
+    }
+    eprintln!(
+        "Change that text here (a prompt: `deciduous prompt <id> ...`), then run \
+         `deciduous remote push --seed` again."
+    );
 }
 
 /// A node this machine still has that the server holds as a tombstone.

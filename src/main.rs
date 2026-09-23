@@ -2292,9 +2292,12 @@ fn main() {
                                         .map_err(|e| format!("serializing the local graph: {e}"))
                                 })
                                 .and_then(|g| deciduous::remote::push_missing(&remote, &g));
+                            if let Ok((_, _, withheld)) = &seeded {
+                                deciduous::remote::print_withheld(withheld);
+                            }
                             match seeded {
-                                Ok((None, _)) => {}
-                                Ok((Some(r), _)) => println!(
+                                Ok((None, _, _)) => {}
+                                Ok((Some(r), _, _)) => println!(
                                     "  sent {} local node(s), {} edge(s) the server lacked",
                                     r.nodes.upserted, r.edges.upserted
                                 ),
@@ -2488,6 +2491,13 @@ fn main() {
                                 .collect()
                         })
                         .unwrap_or_default();
+                    let nul_at: std::collections::HashMap<String, String> = nodes
+                        .iter()
+                        .filter_map(|n| {
+                            let at = deciduous::remote::row_nul(&serde_json::to_value(n).ok()?)?;
+                            Some((n.change_id.clone(), at))
+                        })
+                        .collect();
                     let list = |title: &str, rows: Vec<String>| {
                         if rows.is_empty() {
                             return;
@@ -2507,6 +2517,11 @@ fn main() {
                             .map(|(cid, l)| {
                                 if queued.contains(cid) {
                                     format!("{l}  (waiting in the log)")
+                                } else if let Some(at) = nul_at.get(cid) {
+                                    format!(
+                                        "{l}  (holds a NUL character at {at}, which the server cannot \
+                                         store; nothing sends it until that text is changed here)"
+                                    )
                                 } else if let Some((id, aside)) = held.get(cid) {
                                     format!(
                                         "{l}  (its op {id} is {} above)",
@@ -2809,15 +2824,21 @@ fn main() {
                     };
 
                     let sent = if overwrite {
-                        remote.import(graph.clone()).map(|r| (Some(r), Vec::new()))
+                        remote
+                            .import(graph.clone())
+                            .map(|r| (Some(r), Vec::new(), Vec::new()))
                     } else {
                         deciduous::remote::push_missing(&remote, &graph)
+                    };
+                    let withheld = match &sent {
+                        Ok((_, _, w)) => w.clone(),
+                        Err(_) => Vec::new(),
                     };
 
                     // Local nodes the server deleted: nothing pushed can
                     // change them, and printing "edges 1 of 1" for an edge
                     // into one, run after run, sent people back to push.
-                    if let Ok((_, deleted)) = &sent {
+                    if let Ok((_, deleted, _)) = &sent {
                         if !deleted.is_empty() {
                             println!(
                                 "{} the server deleted {} node(s) this machine still has; they were not pushed. `deciduous remote pull` to apply the deletion(s):",
@@ -2831,14 +2852,15 @@ fn main() {
                     }
 
                     match sent {
-                        Ok((None, _)) => {
+                        Ok((None, _, _)) if withheld.is_empty() => {
                             println!(
                                 "{} the server already has every live node, edge and document in the local graph ({})",
                                 "Nothing to seed:".green(),
                                 remote.workspace.cyan()
                             );
                         }
-                        Ok((Some(r), _)) => {
+                        Ok((None, _, _)) => {}
+                        Ok((Some(r), _, _)) => {
                             deciduous::remote::report_refused(&r, &graph);
                             println!(
                                 "{} {} -> {}",
@@ -2873,7 +2895,8 @@ fn main() {
                             exit(1);
                         }
                     }
-                    if undelivered {
+                    deciduous::remote::print_withheld(&withheld);
+                    if undelivered || !withheld.is_empty() {
                         exit(1);
                     }
                 }
