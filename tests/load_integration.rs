@@ -1475,6 +1475,46 @@ fn rss_kb(pid: u32) -> u64 {
     text(&out.stdout).trim().parse().unwrap_or(0)
 }
 
+/// SQLITE_LIMIT_LENGTH caps one value at 1 MB, not the response: 1000 rows
+/// of 999 KB made a 999 MB body and left the daemon at 1.6 GB.
+#[test]
+fn api_query_response_size_is_bounded() {
+    let p = Project::api_shared("big");
+    let daemon = Daemon::start(&p, 4833, &p.root().join("data"));
+    let (s, b) = daemon.tool(
+        "big",
+        "add_node",
+        json!({"node_type":"goal","title":"g","branch":"b"}),
+    );
+    assert_eq!(s, 200, "{b}");
+    let sql = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<100) \
+               SELECT printf('%.*c', 999000, 'x') FROM c";
+    let started = Instant::now();
+    let (s, b) = http(
+        4833,
+        "POST",
+        "/api/v1/graphs/big/query",
+        API_TOKEN,
+        &json!({"sql": sql, "limit": 100}),
+    );
+    let took = started.elapsed();
+    let body = b.to_string();
+    assert!(
+        body.len() < 1_000_000,
+        "a {} byte response came back in {took:?}",
+        body.len()
+    );
+    assert_eq!(s, 400, "{}", &body[..body.len().min(300)]);
+    assert!(b["error"].as_str().unwrap().contains("bytes"), "{b}");
+    let rss = rss_kb(daemon.child.id());
+    assert!(rss < 200_000, "daemon holds {rss} KB after the query");
+
+    // Ordinary queries still answer in full.
+    let (s, b, _) = query(4833, "big", "SELECT title FROM decision_nodes");
+    assert_eq!(s, 200, "{b}");
+    assert_eq!(b["data"]["rows"][0][0], "g");
+}
+
 impl Mcp {
     fn ping_alive(&mut self) {
         self.next_id += 1;

@@ -415,6 +415,24 @@ const QUERY_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
 /// default is 1 GB; `printf('%.*c', 200000000, 'x')` built 200 MB in 62 ms.
 const QUERY_MAX_VALUE_BYTES: i32 = 1_000_000;
 
+/// Largest `/query` result, as serialized JSON. SQLITE_LIMIT_LENGTH caps
+/// one value, not the response: 1000 rows of a 999 KB value made a 999 MB
+/// body, and the daemon kept 1.6 GB of it after the request ended.
+const QUERY_MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+
+/// Counts what serde_json would write, without keeping it.
+struct ByteCount(usize);
+
+impl std::io::Write for ByteCount {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 /// Table-valued pragmas that only describe this graph's schema. Every other
 /// pragma, and `pragma_database_list` in particular (it returns the data
 /// directory's absolute path), is refused.
@@ -508,6 +526,7 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
 
     let mut rows_out: Vec<Vec<Value>> = Vec::new();
     let mut truncated = false;
+    let mut size = ByteCount(0);
     let mut rows = stmt.query([]).map_err(sql_error)?;
     while let Some(row) = rows.next().map_err(sql_error)? {
         if rows_out.len() >= limit {
@@ -516,9 +535,22 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
         }
         let mut out = Vec::with_capacity(n_cols);
         for i in 0..n_cols {
-            out.push(sqlite_value_to_json(row.get_ref(i).map_err(|e| {
-                ApiError::internal(&format!("read column {i}: {e}"))
-            })?));
+            let value = sqlite_value_to_json(
+                row.get_ref(i)
+                    .map_err(|e| ApiError::internal(&format!("read column {i}: {e}")))?,
+            );
+            // Counted as it is built, so the limit bounds the memory too,
+            // not only the body: checking the finished Vec would already
+            // have held all of it.
+            let _ = serde_json::to_writer(&mut size, &value);
+            if size.0 > QUERY_MAX_RESPONSE_BYTES {
+                return Err(ApiError::bad_request(&format!(
+                    "query result is larger than {QUERY_MAX_RESPONSE_BYTES} bytes \
+                     (reached in row {}); select fewer or shorter columns, or lower the limit",
+                    rows_out.len() + 1
+                )));
+            }
+            out.push(value);
         }
         rows_out.push(out);
     }
