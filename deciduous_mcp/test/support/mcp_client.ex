@@ -50,7 +50,8 @@ defmodule DeciduousMcp.Test.McpClient do
   end
 
   def post(%__MODULE__{} = client, body) do
-    headers = if client.sid, do: [{"mcp-session-id", client.sid} | client.headers], else: client.headers
+    headers =
+      if client.sid, do: [{"mcp-session-id", client.sid} | client.headers], else: client.headers
 
     conn =
       conn(:post, "/mcp", Jason.encode!(body))
