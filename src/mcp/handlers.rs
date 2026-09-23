@@ -878,13 +878,16 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
             "Database and records agree.".to_string()
         } else if !report.conflicts.is_empty() {
             format!(
-                "{} carries git conflict markers. Call `sync` to merge the two sides record by record.",
+                "{}. Call `sync` to merge it record by record.",
                 report
                     .conflicts
                     .iter()
-                    .map(|c| c.path.as_str())
+                    .map(|c| match &c.message {
+                        Some(m) => format!("{}: {}", c.path, m),
+                        None => c.path.clone(),
+                    })
                     .collect::<Vec<_>>()
-                    .join(", ")
+                    .join("; ")
             )
         } else {
             format!(

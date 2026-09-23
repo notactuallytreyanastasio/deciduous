@@ -221,8 +221,19 @@ one-sided change from a real collision:
 | One side deleted, the other edited **before** the delete | the tombstone stands, keeping the edited fields |
 | Both sides created the record independently (no ancestor) | every differing field is a collision: later `updated_at` wins, `metadata` still unions |
 
-The driver exits non-zero if either side is not valid JSON, and git then falls back
-to an ordinary conflict.
+A version that still carries conflict markers (someone committed a conflicted file)
+is resolved by merging its own sides first, so it does not poison every later merge
+whose ancestor it is. An ancestor that will not parse at all is dropped, with a note
+on stderr, and the merge goes two-way.
+
+When the driver does fail (a side is not JSON), or git cannot run it (`deciduous` is
+not on the PATH git sees: GUI clients, CI images), git does **not** fall back to an
+ordinary conflict. It leaves our side in the file untouched, with no markers, and
+marks the path unmerged (`UU` in `git status`). That file parses and looks clean;
+committing it silently drops the other side. `deciduous sync --check` reports the
+unmerged state and exits 1, and `deciduous sync` finishes the merge from git's own
+three versions (`git ls-files -u`), keeping any local writes made to the working file
+since, and stages the result.
 
 Git config is per clone, so a clone that has never run `deciduous sync` (or a GitHub
 web merge) can still produce conflict markers inside `graph.json`. That is not

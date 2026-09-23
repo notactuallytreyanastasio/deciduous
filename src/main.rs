@@ -1113,9 +1113,16 @@ fn main() {
     }
 
     if let Command::MergeRecord { base, ours, theirs } = &args.command {
-        // Exit non-zero on any problem so git falls back to a normal conflict.
-        match deciduous::records::merge_record_files(base, ours, theirs) {
-            Ok(merged) => {
+        // On failure, exit non-zero. Git then does NOT write conflict
+        // markers: it keeps our side in the file untouched and marks it
+        // unmerged, so the file parses and looks clean. `deciduous sync`
+        // (and `sync --check`) look for that unmerged state and finish the
+        // merge from git's own three versions.
+        match deciduous::records::merge_record_files_with_notes(base, ours, theirs) {
+            Ok((merged, notes)) => {
+                for note in notes {
+                    eprintln!("deciduous merge-record: {}", note);
+                }
                 if let Err(e) = std::fs::write(ours, merged) {
                     eprintln!("deciduous merge-record: {}", e);
                     std::process::exit(1);
@@ -2554,6 +2561,15 @@ fn main() {
                 }
             };
             print_sync_report(&report, &store);
+
+            if !check && report.conflicts.iter().any(|c| !c.merged) {
+                eprintln!(
+                    "{} {} is not merged; nothing else was synced",
+                    "Error:".red(),
+                    store_path.display()
+                );
+                std::process::exit(1);
+            }
 
             if check {
                 if report.is_clean() && report.conflicts.is_empty() {
@@ -5047,16 +5063,24 @@ fn print_record_dir_import(report: &deciduous::LegacyImport) {
 
 fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     let verb = if report.dry_run { "would" } else { "did" };
-    let counts = store.counts();
+    let on_disk = match store.read_doc_all() {
+        Ok(_) => {
+            let counts = store.counts();
+            format!(
+                "{} nodes, {} edges, {} themes, {} tags on disk",
+                counts.nodes, counts.edges, counts.themes, counts.tags
+            )
+        }
+        // Not "0 nodes": the records are there, they just do not parse yet.
+        Err(_) => "not readable until it is merged".to_string(),
+    };
     println!(
-        "{} {} ({} nodes, {} edges, {} themes, {} tags on disk)",
+        "{} {} ({})",
         if report.dry_run { "Checked" } else { "Synced" }.cyan(),
         store.path().display(),
-        counts.nodes,
-        counts.edges,
-        counts.themes,
-        counts.tags
+        on_disk
     );
+    let unresolved = report.conflicts.iter().any(|c| !c.merged);
     let mut lines: Vec<String> = Vec::new();
     let mut push = |n: usize, what: &str| {
         if n > 0 {
@@ -5078,7 +5102,9 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     push(report.tags_imported, "tags imported");
     push(report.tags_deleted, "tags deleted");
     push(report.tags_exported, "tags exported");
-    if lines.is_empty() {
+    if unresolved {
+        println!("  Not compared with the database until the graph file is merged");
+    } else if lines.is_empty() {
         println!("  Database and records already agree");
     } else {
         println!("  {} {}: {}", "Changes".bold(), verb, lines.join(", "));
@@ -5108,7 +5134,8 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     }
     for c in &report.conflicts {
         match (&c.merged, &c.message) {
-            (true, _) => println!("  {} conflict markers in {}", "Merged".green(), c.path),
+            (true, Some(m)) => println!("  {} {}: {}", "Merged".green(), c.path, m),
+            (true, None) => println!("  {} conflict markers in {}", "Merged".green(), c.path),
             (false, Some(m)) => println!("  {} {}: {}", "Conflict:".yellow(), c.path, m),
             (false, None) => println!("  {} {}", "Conflict:".yellow(), c.path),
         }

@@ -1540,19 +1540,17 @@ fn reconcile_inner(
     let io_err = |e: io::Error| format!("record store: {}", e);
     let db_err = |e: crate::db::DbError| format!("database: {}", e);
 
-    // Files merged by git without the merge driver still carry markers.
+    // A merge git left unresolved (the driver failed or was not found), or
+    // one done without the driver, which leaves conflict markers.
     if dry_run {
-        report.conflicts = store
-            .conflicted_files()
-            .into_iter()
-            .map(|p| ConflictRepair {
-                path: p.display().to_string(),
-                merged: false,
-                message: Some("has conflict markers; `deciduous sync` will merge it".into()),
-            })
-            .collect();
+        report.conflicts = store.pending_conflicts();
     } else {
         report.conflicts = store.repair_conflicted_files().map_err(io_err)?;
+        // Not merged means the file is not the merge result. Reconciling
+        // against it would export local rows into a half-merged file.
+        if report.conflicts.iter().any(|c| !c.merged) {
+            return Ok(report);
+        }
     }
 
     // Everything below compares the document with the database and writes
@@ -2233,29 +2231,81 @@ fn merge_docs(base: Option<&Value>, ours: &Value, theirs: &Value) -> io::Result<
     Ok(Value::Object(out))
 }
 
+/// Parse one version of the graph file. A version that still carries
+/// conflict markers is resolved first by merging its own sides: that is what
+/// a clone without the merge driver commits, and every later merge whose
+/// ancestor is that commit hands it to the driver as `base`.
+fn parse_version(text: &str, what: &str) -> io::Result<Option<Value>> {
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    let err = match serde_json::from_str(text) {
+        Ok(v) => return Ok(Some(v)),
+        Err(e) => e,
+    };
+    let Some((ours, base, theirs)) = split_conflict_markers(text) else {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{}: {}", what, err),
+        ));
+    };
+    let side = |t: &str, which: &str| -> io::Result<Value> {
+        serde_json::from_str(t).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "{} has conflict markers and its {} side is not JSON: {}",
+                    what, which, e
+                ),
+            )
+        })
+    };
+    let o = side(&ours, "ours")?;
+    let t = side(&theirs, "theirs")?;
+    let b = base.as_deref().and_then(|b| serde_json::from_str(b).ok());
+    merge_docs(b.as_ref(), &o, &t).map(Some)
+}
+
 /// Merge three graph files the way a git merge driver is called: `base`
 /// (may be empty for add/add), `ours`, `theirs`. Returns the merged document
 /// as stable JSON text.
 pub fn merge_record_files(base: &Path, ours: &Path, theirs: &Path) -> io::Result<String> {
-    let read = |p: &Path| -> io::Result<Option<Value>> {
-        let text = fs::read_to_string(p)?;
-        if text.trim().is_empty() {
-            return Ok(None);
-        }
-        serde_json::from_str(&text).map(Some).map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("{}: {}", p.display(), e),
-            )
-        })
+    Ok(merge_record_files_with_notes(base, ours, theirs)?.0)
+}
+
+/// [`merge_record_files`], plus notes for the person running the merge
+/// (the driver prints them on stderr, which git shows).
+///
+/// An ancestor that will not parse even after resolving its markers is
+/// merged without, two-way: both sides' records all survive, and only a
+/// record one side deleted outright (not tombstoned) can come back.
+/// Refusing it instead used to fail the driver, and a failed driver leaves
+/// our side in the file with no markers, which reads as a clean merge.
+pub fn merge_record_files_with_notes(
+    base: &Path,
+    ours: &Path,
+    theirs: &Path,
+) -> io::Result<(String, Vec<String>)> {
+    let read = |p: &Path, what: &str| -> io::Result<Option<Value>> {
+        parse_version(
+            &fs::read_to_string(p)?,
+            &format!("{} ({})", what, p.display()),
+        )
     };
-    let base_v = read(base)?;
-    let ours_v =
-        read(ours)?.ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ours is empty"))?;
-    let theirs_v = read(theirs)?
+    let mut notes = Vec::new();
+    let base_v = match read(base, "the common ancestor") {
+        Ok(v) => v,
+        Err(e) => {
+            notes.push(format!("{}; merged without it", e));
+            None
+        }
+    };
+    let ours_v = read(ours, "ours")?
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "ours is empty"))?;
+    let theirs_v = read(theirs, "theirs")?
         .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "theirs is empty"))?;
     let merged = merge_docs(base_v.as_ref(), &ours_v, &theirs_v)?;
-    to_stable_json(&merged)
+    Ok((to_stable_json(&merged)?, notes))
 }
 
 /// Split a file that contains git conflict markers into (ours, base, theirs).
@@ -2323,6 +2373,15 @@ pub struct ConflictRepair {
     pub message: Option<String>,
 }
 
+/// Git's versions of the graph file while a merge of it is unresolved
+/// (`git ls-files -u`): stage 1 is the common ancestor, 2 ours, 3 theirs.
+#[derive(Debug, Default)]
+struct UnmergedStages {
+    base: Option<String>,
+    ours: Option<String>,
+    theirs: Option<String>,
+}
+
 impl RecordStore {
     /// The graph file, if git left conflict markers in it — a merge done in
     /// a clone where `deciduous merge-record` is not registered.
@@ -2335,10 +2394,164 @@ impl RecordStore {
         }
     }
 
-    /// Merge a graph file that still carries conflict markers, using the
-    /// same rules as the merge driver. A file whose sides do not parse as
-    /// JSON is left untouched and reported.
+    fn git(&self, args: &[&str]) -> Option<std::process::Output> {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(self.dir())
+            .output()
+            .ok()
+    }
+
+    fn file_name(&self) -> String {
+        self.path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| STORE_FILE_NAME.to_string())
+    }
+
+    /// Whether git holds the graph file unmerged. When the merge driver
+    /// fails, or is not found (git runs it through the shell, so a GUI
+    /// client or CI job without `deciduous` on PATH gets "command not
+    /// found"), git keeps our side in the file untouched, with no conflict
+    /// markers, and marks it unmerged. The file then parses fine and looks
+    /// like a clean result; committing it drops everything the other side
+    /// added. Outside a git repository, or with no git, this is `false`.
+    pub fn is_unmerged_in_git(&self) -> bool {
+        self.unmerged_stages().is_some()
+    }
+
+    fn unmerged_stages(&self) -> Option<UnmergedStages> {
+        let out = self.git(&["ls-files", "-u", "-z", "--", &self.file_name()])?;
+        if !out.status.success() || out.stdout.is_empty() {
+            return None;
+        }
+        let mut stages = UnmergedStages::default();
+        for entry in out.stdout.split(|b| *b == 0).filter(|e| !e.is_empty()) {
+            // "<mode> <sha> <stage>\t<path>"
+            let entry = String::from_utf8_lossy(entry);
+            let meta = entry.split('\t').next().unwrap_or("");
+            let mut parts = meta.split_whitespace();
+            let (_, Some(sha), Some(stage)) = (parts.next(), parts.next(), parts.next()) else {
+                continue;
+            };
+            let blob = self
+                .git(&["cat-file", "blob", sha])
+                .filter(|o| o.status.success());
+            let text = blob.map(|o| String::from_utf8_lossy(&o.stdout).into_owned());
+            match stage {
+                "1" => stages.base = text,
+                "2" => stages.ours = text,
+                "3" => stages.theirs = text,
+                _ => {}
+            }
+        }
+        Some(stages)
+    }
+
+    /// Finish a merge git left unresolved: merge its three versions the way
+    /// the driver would have, write the result and stage it (`git add`),
+    /// which is exactly the state a successful driver run leaves behind.
+    ///
+    /// Our side is the working file when it parses, since it may hold local
+    /// writes made after the failed merge; otherwise git's stage 2.
+    fn repair_unmerged(&self, stages: UnmergedStages) -> io::Result<ConflictRepair> {
+        let display = self.path.display().to_string();
+        let failed = |message: String| ConflictRepair {
+            path: display.clone(),
+            merged: false,
+            message: Some(message),
+        };
+        let working = fs::read_to_string(&self.path).unwrap_or_default();
+        let ours = match serde_json::from_str::<Value>(&working) {
+            Ok(v) => Some(v),
+            Err(_) => {
+                match parse_version(stages.ours.as_deref().unwrap_or(""), "ours (git stage 2)") {
+                    Ok(v) => v,
+                    Err(e) => {
+                        return Ok(failed(format!("unmerged in git and not mergeable: {}", e)))
+                    }
+                }
+            }
+        };
+        let theirs = match parse_version(
+            stages.theirs.as_deref().unwrap_or(""),
+            "theirs (git stage 3)",
+        ) {
+            Ok(v) => v,
+            Err(e) => return Ok(failed(format!("unmerged in git and not mergeable: {}", e))),
+        };
+        let (Some(ours), Some(theirs)) = (ours, theirs) else {
+            return Ok(failed(
+                "unmerged in git, and one side deleted the graph file; restore it with `git checkout --ours` or `--theirs`, then `deciduous sync`".into(),
+            ));
+        };
+        let base = stages
+            .base
+            .as_deref()
+            .and_then(|b| parse_version(b, "base").ok().flatten());
+        let doc = merge_docs(base.as_ref(), &ours, &theirs).and_then(|v| {
+            serde_json::from_value::<GraphDoc>(v)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))
+        });
+        let doc = match doc {
+            Ok(doc) => doc,
+            Err(e) => {
+                return Ok(failed(format!(
+                    "unmerged in git; merging its versions failed: {}",
+                    e
+                )))
+            }
+        };
+        self.replace_doc(doc)?;
+        // Inside a sync the write is batched; git must see it now.
+        {
+            let mut cache = self.lock();
+            self.flush(&mut cache)?;
+        }
+        let staged = self
+            .git(&["add", "--", &self.file_name()])
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        Ok(ConflictRepair {
+            path: display,
+            merged: true,
+            message: Some(if staged {
+                "git left it unmerged (the merge driver failed or was not found); merged git's three versions and staged the result".into()
+            } else {
+                "git left it unmerged (the merge driver failed or was not found); merged git's three versions, but `git add` failed: stage it yourself".into()
+            }),
+        })
+    }
+
+    /// What is wrong with the graph file as git left it, without changing
+    /// anything: unmerged in git, or carrying conflict markers.
+    pub fn pending_conflicts(&self) -> Vec<ConflictRepair> {
+        if self.is_unmerged_in_git() {
+            return vec![ConflictRepair {
+                path: self.path.display().to_string(),
+                merged: false,
+                message: Some(
+                    "unmerged in git: the merge driver failed or was not found (is `deciduous` on git's PATH?); `deciduous sync` will merge it".into(),
+                ),
+            }];
+        }
+        self.conflicted_files()
+            .into_iter()
+            .map(|p| ConflictRepair {
+                path: p.display().to_string(),
+                merged: false,
+                message: Some("has conflict markers; `deciduous sync` will merge it".into()),
+            })
+            .collect()
+    }
+
+    /// Merge a graph file that git left unmerged or that still carries
+    /// conflict markers, using the same rules as the merge driver. A file
+    /// whose sides do not parse as JSON is left untouched and reported.
     pub fn repair_conflicted_files(&self) -> io::Result<Vec<ConflictRepair>> {
+        if let Some(stages) = self.unmerged_stages() {
+            return Ok(vec![self.repair_unmerged(stages)?]);
+        }
         let mut out = Vec::new();
         for path in self.conflicted_files() {
             let text = fs::read_to_string(&path)?;

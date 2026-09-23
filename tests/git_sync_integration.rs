@@ -32,8 +32,20 @@ struct Dev {
     path: String,
 }
 
+/// git and a shell, and no deciduous: an installed one (Homebrew, cargo)
+/// must never stand in for the binary under test.
 fn base_path() -> String {
-    "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin".to_string()
+    let git = Command::new("sh")
+        .args(["-c", "command -v git"])
+        .output()
+        .unwrap();
+    let git = String::from_utf8_lossy(&git.stdout).trim().to_string();
+    let git_dir = Path::new(&git).parent().unwrap().display().to_string();
+    assert!(
+        !Path::new(&git_dir).join("deciduous").exists(),
+        "git shares a directory with an installed deciduous ({git_dir})"
+    );
+    format!("{git_dir}:/usr/bin:/bin:/usr/sbin:/sbin")
 }
 
 fn with_bin_on_path() -> String {
@@ -121,6 +133,16 @@ impl Team {
 }
 
 impl Dev {
+    /// The same clone, to change how its processes run (e.g. PATH).
+    fn clone_handle(&self) -> Dev {
+        Dev {
+            name: self.name.clone(),
+            dir: self.dir.clone(),
+            home: self.home.clone(),
+            path: self.path.clone(),
+        }
+    }
+
     fn configure(&self) {
         self.git(&["config", "user.name", &self.name]);
         self.git(&[
@@ -497,4 +519,148 @@ fn a_local_edit_is_never_reverted_by_a_future_updated_at() {
 /// RFC 3339 timestamp `days` from now.
 fn chrono_like_now_plus_days(days: i64) -> String {
     (chrono::Utc::now() + chrono::Duration::days(days)).to_rfc3339()
+}
+
+// ============================================================================
+// G2: the merge driver fails, and git does not leave markers behind
+// ============================================================================
+
+fn titles(dev: &Dev) -> Vec<String> {
+    let mut t: Vec<String> = dev
+        .nodes()
+        .iter()
+        .map(|n| n["title"].as_str().unwrap().to_string())
+        .collect();
+    t.sort();
+    t
+}
+
+fn unmerged(dev: &Dev) -> String {
+    dev.git(&["ls-files", "-u", "--", ".deciduous/graph.json"])
+}
+
+#[test]
+fn a_merge_driver_that_is_not_on_path_is_caught_and_finished_by_sync() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let shared = alice.add("goal", "Shared", &[]);
+    alice.commit_graph("shared");
+    alice.git(&["push", "-q"]);
+
+    let bob = team.join("bob");
+    bob.ok(&["status", &alice.change_id(shared)[..8], "completed"]);
+    bob.add("goal", "Bob only", &[]);
+    bob.commit_graph("bob");
+    bob.git(&["push", "-q"]);
+
+    alice.add("goal", "Alice only", &[]);
+    alice.commit_graph("alice");
+
+    // A GUI client or CI job: git is on PATH, deciduous is not. Git runs the
+    // driver, the shell says "command not found", and git leaves our side
+    // in the file with no markers and the index unmerged.
+    let gui = Dev {
+        path: base_path(),
+        ..alice.clone_handle()
+    };
+    let out = gui.git_out(&["pull", "--no-edit"]);
+    assert!(!out.status.success());
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(text.contains("CONFLICT"), "{text}");
+    assert!(!alice.graph_text().contains("<<<<<<<"));
+    assert!(!unmerged(&alice).is_empty());
+
+    // The check must not call this clean: committing now drops Bob's work.
+    let (out, _) = alice.fails(&["sync", "--check"]);
+    assert!(out.contains("unmerged"), "{out}");
+
+    // sync does the merge the driver should have done, from git's own three
+    // versions, and marks the file resolved.
+    let out = alice.ok(&["sync"]);
+    assert!(out.contains("unmerged"), "{out}");
+    assert!(unmerged(&alice).is_empty(), "still unmerged after sync");
+    assert_eq!(
+        titles(&alice),
+        ["Alice only", "Bob only", "Shared"],
+        "{out}"
+    );
+    assert_eq!(status_of(&alice, &shared.to_string()), "completed");
+    alice.git(&["commit", "-q", "--no-edit"]);
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+}
+
+#[test]
+fn a_committed_conflict_does_not_break_every_later_merge() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "Base", &[]);
+    alice.commit_graph("base");
+    alice.git(&["push", "-q"]);
+
+    // Carol's clone has no driver registered (she cloned but never ran
+    // deciduous), so her merge leaves markers, and she commits them.
+    let carol = team.join("carol");
+    carol.git(&["config", "--remove-section", "merge.deciduous"]);
+    let bob = team.join("bob");
+    // Both change the same record, so the text merge collides.
+    bob.ok(&["status", "1", "active"]);
+    bob.add("goal", "Bob first", &[]);
+    bob.commit_graph("bob first");
+    bob.git(&["push", "-q"]);
+    carol.ok(&["status", "1", "completed"]);
+    carol.add("goal", "Carol first", &[]);
+    carol.commit_graph("carol first");
+    let out = carol.git_out(&["pull", "--no-edit"]);
+    assert!(
+        !out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+    assert!(
+        carol.graph_text().contains("<<<<<<<"),
+        "{}{}\n{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr),
+        carol.graph_text()
+    );
+    carol.git(&["add", ".deciduous/graph.json"]);
+    carol.git(&["commit", "-q", "--no-edit"]);
+    carol.git(&["push", "-q"]);
+
+    // Alice and Bob both build on the conflicted commit.
+    bob.git(&["pull", "-q", "--no-edit"]);
+    bob.ok(&["sync"]);
+    bob.add("goal", "Bob after", &[]);
+    bob.commit_graph("bob after");
+    alice.git(&["pull", "-q", "--no-edit"]);
+    alice.ok(&["sync"]);
+    alice.add("goal", "Alice after", &[]);
+    alice.commit_graph("alice after");
+    alice.git(&["push", "-q"]);
+
+    // The merge base is the commit with markers. The driver used to refuse
+    // it ("key must be a string"), leaving Bob's side with no markers.
+    let out = bob.git_out(&["pull", "--no-edit"]);
+    assert!(
+        out.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    bob.ok(&["sync"]);
+    assert_eq!(
+        titles(&bob),
+        [
+            "Alice after",
+            "Base",
+            "Bob after",
+            "Bob first",
+            "Carol first"
+        ]
+    );
 }
