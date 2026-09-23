@@ -307,8 +307,8 @@ enum Command {
         #[arg(short, long)]
         title: Option<String>,
 
-        /// Graph direction: TB (top-bottom) or LR (left-right)
-        #[arg(long, default_value = "TB")]
+        /// Graph direction: TB (top-bottom), LR (left-right), BT or RL
+        #[arg(long, default_value = "TB", value_parser = ["TB", "LR", "BT", "RL"])]
         rankdir: String,
     },
 

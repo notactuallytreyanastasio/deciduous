@@ -335,6 +335,30 @@ pub struct WriteupConfig {
     pub git_branch: Option<String>,
 }
 
+/// Directions Graphviz understands for `rankdir`. Anything else is refused:
+/// the value is written into the DOT source as-is, so
+/// `LR; injected_node [label="x"]` used to add a node to the graph.
+pub const RANKDIRS: &[&str] = &["TB", "LR", "BT", "RL"];
+
+pub fn validate_rankdir(rankdir: &str) -> Result<(), String> {
+    if RANKDIRS.contains(&rankdir) {
+        Ok(())
+    } else {
+        Err(format!(
+            "rankdir must be one of {}, got {:?}",
+            RANKDIRS.join(", "),
+            rankdir
+        ))
+    }
+}
+
+/// A title as one markdown line. Titles are single-line by intent, but
+/// nothing stops a newline in one, and in a list item or heading it ends
+/// the line: the rest became a heading or a checked checkbox of its own.
+fn one_line(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 /// Generate a PR writeup from a decision graph
 pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> String {
     let filtered = if config.root_ids.is_empty() {
@@ -357,7 +381,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
 
     if !goals.is_empty() {
         for goal in &goals {
-            wln!(writeup, "**Goal:** {}", goal.title);
+            wln!(writeup, "**Goal:** {}", one_line(&goal.title));
             if let Some(desc) = &goal.description {
                 wln!(writeup, "\n{}\n", desc);
             }
@@ -376,7 +400,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         wln!(writeup, "## Key Decisions\n");
 
         for decision in &decisions {
-            wln!(writeup, "### {}\n", decision.title);
+            wln!(writeup, "### {}\n", one_line(&decision.title));
 
             // Find options for this decision
             let decision_options: Vec<&DecisionNode> = filtered
@@ -403,7 +427,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                     } else {
                         "[ ]"
                     };
-                    wln!(writeup, "- {} {}", marker, opt.title);
+                    wln!(writeup, "- {} {}", marker, one_line(&opt.title));
                 }
                 wln!(writeup);
             }
@@ -424,7 +448,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
             if !observations.is_empty() {
                 wln!(writeup, "**Observations:**\n");
                 for obs in &observations {
-                    wln!(writeup, "- {}", obs.title);
+                    wln!(writeup, "- {}", one_line(&obs.title));
                 }
                 wln!(writeup);
             }
@@ -448,7 +472,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                 .map(|c| format!(" `{}`", &c[..7.min(c.len())]))
                 .unwrap_or_default();
 
-            wln!(writeup, "- {}{}", action.title, commit_badge);
+            wln!(writeup, "- {}{}", one_line(&action.title), commit_badge);
         }
         wln!(writeup);
     }
@@ -469,7 +493,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
                 .map(|c| format!(" ({}% confidence)", c))
                 .unwrap_or_default();
 
-            wln!(writeup, "- {}{}", outcome.title, conf_badge);
+            wln!(writeup, "- {}{}", one_line(&outcome.title), conf_badge);
         }
         wln!(writeup);
     }
@@ -529,7 +553,7 @@ pub fn generate_pr_writeup(graph: &DecisionGraph, config: &WriteupConfig) -> Str
         let test_items: Vec<String> = outcomes
             .iter()
             .filter(|o| o.status == "completed")
-            .map(|o| format!("- [x] {}", o.title))
+            .map(|o| format!("- [x] {}", one_line(&o.title)))
             .collect();
 
         if test_items.is_empty() {

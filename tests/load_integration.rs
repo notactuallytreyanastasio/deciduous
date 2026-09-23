@@ -1170,3 +1170,54 @@ fn invalid_writes_are_refused_through_mcp_and_cli() {
     }
     assert_eq!(p.sql("select count(*) from decision_nodes"), 2);
 }
+
+// ============================================================================
+// R13: export_dot and generate_writeup cannot be steered by their inputs
+// ============================================================================
+
+#[test]
+fn export_dot_rankdir_and_writeup_titles_cannot_inject() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    m.call(
+        "add_node",
+        json!({"node_type":"goal","title":"G\n# Injected heading\n- [x] fake check","branch":"b"}),
+    )
+    .unwrap();
+    m.call(
+        "add_node",
+        json!({"node_type":"outcome","title":"done\n\n## Also injected","branch":"b"}),
+    )
+    .unwrap();
+
+    let e = m
+        .call(
+            "export_dot",
+            json!({"rankdir": "LR; injected_node [label=\"INJECTED\"]; 1 -> injected_node"}),
+        )
+        .expect_err("rankdir injection accepted");
+    assert!(e.contains("rankdir"), "{e}");
+    let dot = m.call("export_dot", json!({"rankdir":"LR"})).unwrap();
+    assert!(dot.as_str().unwrap().contains("rankdir=LR"));
+    let e = m
+        .call("export_dot", json!({"roots":"1,banana"}))
+        .expect_err("unparseable root silently dropped");
+    assert!(e.contains("banana"), "{e}");
+
+    let md = m.call("generate_writeup", json!({"no_dot": true})).unwrap();
+    let md = md.as_str().unwrap();
+    for line in md.lines() {
+        assert!(
+            !line.starts_with("# Injected") && !line.starts_with("## Also injected"),
+            "a title broke out of its line:\n{md}"
+        );
+    }
+    assert!(md.contains("Injected heading"), "{md}");
+    m.close();
+
+    let out = p.cli(&["dot", "--rankdir", "LR; x [label=y]"]);
+    assert!(
+        !out.status.success(),
+        "cli dot accepted an injected rankdir"
+    );
+}
