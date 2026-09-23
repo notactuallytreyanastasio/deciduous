@@ -57,7 +57,16 @@ enum Command {
     /// Auto-detects which assistants are installed (.claude/, .opencode/)
     /// and updates their integration files.
     /// Does NOT touch: settings files, .deciduous/config.toml, docs/
-    Update {},
+    ///
+    /// Files deciduous wrote are replaced; files someone else wrote are kept
+    /// (Markdown gets the new text appended in a marked block). Everything it
+    /// changes is first copied to .deciduous/update-backups/<time>/.
+    Update {
+        /// Update every deciduous project directly under this directory (and
+        /// the directory itself, if it is one), one after another
+        #[arg(long, value_name = "DIR")]
+        all: Option<PathBuf>,
+    },
 
     /// Check if deciduous integration files need updating
     ///
@@ -466,12 +475,12 @@ enum Command {
         shell: clap_complete::Shell,
     },
 
-    /// Claude Code hook: make the agent log to the graph as it works.
-    /// Reads the hook's JSON on stdin; see src/log_loop.rs.
+    /// Removed in 1.0.3; exits 0 so hooks installed by 1.0.2 stay silent
+    /// until `deciduous update` takes them out.
     #[command(name = "log-loop", hide = true)]
     LogLoop {
-        /// pre | post-log | post-bash | stop
-        event: String,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        _args: Vec<String>,
     },
 }
 
@@ -502,8 +511,16 @@ enum RemoteAction {
     /// Show how far the local database has drifted from the server
     Status,
 
-    /// Send this project's local graph to the server
-    Push,
+    /// Send the server what this project's local graph has and it does not
+    ///
+    /// Only nodes, edges and documents the server lacks are sent, so nothing
+    /// changed on the server since is overwritten by a stale local copy.
+    Push {
+        /// Send the whole local graph and replace the server's copy of every
+        /// row it already has (the pre-1.0.3 behaviour)
+        #[arg(long)]
+        overwrite: bool,
+    },
 
     /// Refresh the local database from the server
     Pull,
@@ -1014,10 +1031,20 @@ fn main() {
 
     // Handle update separately - it doesn't need an existing database
     // Auto-detects which assistants are installed
-    if let Command::Update {} = args.command {
-        if let Err(e) = deciduous::init::update_tooling() {
-            eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
+    if let Command::Update { all } = &args.command {
+        match all {
+            None => {
+                if let Err(e) = deciduous::init::update_tooling() {
+                    eprintln!("{} {}", "Error:".red(), e);
+                    std::process::exit(1);
+                }
+            }
+            Some(root) => {
+                let failed = deciduous::init::update_all(root);
+                if failed > 0 {
+                    std::process::exit(1);
+                }
+            }
         }
         return;
     }
@@ -1138,10 +1165,10 @@ fn main() {
         return;
     }
 
-    // The hook runs on every tool call an agent makes. It must never open or
-    // create the local database, so it is handled before Database::open.
-    if let Command::LogLoop { event } = &args.command {
-        deciduous::log_loop::run(event);
+    // Removed in 1.0.3. Projects set up by 1.0.2 still run it from
+    // settings.json on every tool call until their next `deciduous update`,
+    // so it succeeds silently, before Database::open.
+    if let Command::LogLoop { .. } = &args.command {
         return;
     }
 
@@ -2079,7 +2106,7 @@ fn main() {
                     }
                 }
 
-                RemoteAction::Push => {
+                RemoteAction::Push { overwrite } => {
                     let cfg = Config::load();
                     let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
                         Ok(r) => r,
@@ -2101,6 +2128,29 @@ fn main() {
                             eprintln!("{} could not read the local graph: {}", "Error:".red(), e);
                             std::process::exit(1);
                         }
+                    };
+
+                    let graph = if overwrite {
+                        graph
+                    } else {
+                        let server = match remote.export() {
+                            Ok(s) => s,
+                            Err(e) => {
+                                eprintln!("{} reading the server's copy: {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        };
+                        let (missing, n, m) = deciduous::remote::missing_on_server(&graph, &server);
+                        if n == 0 && m == 0 {
+                            println!(
+                                "{} the server already has every node and edge in the local graph ({})",
+                                "Nothing to push:".green(),
+                                remote.workspace.cyan()
+                            );
+                            return;
+                        }
+                        println!("  sending {} node(s) and {} edge(s) the server lacks", n, m);
+                        missing
                     };
 
                     match remote.import(graph) {
@@ -4552,16 +4602,11 @@ fn main() {
                         eprintln!("{} {}", "Error:".red(), e);
                         std::process::exit(1);
                     }
-                    println!("\n{}", "Hooks installed successfully!".green().bold());
-                    println!();
-                    println!("The following hooks are now active:");
                     println!(
-                        "  • {} - blocks Edit/Write without recent action node",
-                        "require-action-node".cyan()
-                    );
-                    println!(
-                        "  • {} - reminds to link commits to graph",
-                        "post-commit-reminder".cyan()
+                        "\n{}",
+                        "Hooks installed from .deciduous/config.toml."
+                            .green()
+                            .bold()
                     );
                     println!();
                 }

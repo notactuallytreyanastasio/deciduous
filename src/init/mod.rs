@@ -3,6 +3,8 @@
 //! `deciduous init` creates all the files needed for decision graph tracking
 //! with AI assistant integration (Claude Code and/or OpenCode).
 
+pub mod guard;
+mod known_templates;
 pub mod templates;
 
 use crate::opencode;
@@ -13,10 +15,9 @@ use std::path::Path;
 use templates::{
     BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
     DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, DOCUMENT_MD,
-    HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE, HOOK_VERSION_CHECK, PAGES_VIEWER_HTML,
-    RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD,
-    SYNC_MD, WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER,
-    WINDSURF_HOOK_REQUIRE_ACTION_NODE, WINDSURF_RULES_DECIDUOUS, WORK_MD,
+    HOOK_VERSION_CHECK, PAGES_VIEWER_HTML, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
+    SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD, SYNC_MD, WINDSURF_HOOKS_JSON,
+    WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -146,25 +147,9 @@ pub fn init_project(
         let agents_path = claude_base.join("agents.toml");
         write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
 
-        // Create .claude/hooks directory and write enforcement hooks
+        // Create .claude/hooks directory; the only hook is the version check
         let hooks_dir = claude_base.join("hooks");
         create_dir_if_missing(&hooks_dir)?;
-
-        // Write require-action-node.sh hook
-        let require_action_path = hooks_dir.join("require-action-node.sh");
-        write_executable_if_missing(
-            &require_action_path,
-            HOOK_REQUIRE_ACTION_NODE,
-            ".claude/hooks/require-action-node.sh",
-        )?;
-
-        // Write post-commit-reminder.sh hook
-        let post_commit_path = hooks_dir.join("post-commit-reminder.sh");
-        write_executable_if_missing(
-            &post_commit_path,
-            HOOK_POST_COMMIT_REMINDER,
-            ".claude/hooks/post-commit-reminder.sh",
-        )?;
 
         // Write version-check.sh hook (opt-in auto-update check)
         let version_check_path = hooks_dir.join("version-check.sh");
@@ -415,17 +400,35 @@ pub fn update_tooling() -> Result<(), String> {
     }
 
     // Make sure the record store exists and is tracked (projects initialised
-    // before 0.17 ignored all of .deciduous/)
-    ensure_gitignore(&cwd)?;
-    ensure_gitattributes(&cwd)?;
-    if ensure_merge_driver(&cwd)? {
+    // before 0.17 ignored all of .deciduous/). Not on a project that points at
+    // a shared server: its graph lives there, and the graph.json sync would
+    // only write into .gitignore, .gitattributes and .git/config, which are
+    // the project's files, for nothing.
+    if crate::config::Config::load().remote.is_configured() {
         println!(
-            "   {} git merge driver for graph records",
-            "Configured".green()
+            "   {} .gitignore, .gitattributes, git merge driver, graph.json (remote configured; the graph lives on the server)",
+            "Skipped".dimmed()
         );
+    } else {
+        ensure_gitignore(&cwd)?;
+        ensure_gitattributes(&cwd)?;
+        if ensure_merge_driver(&cwd)? {
+            println!(
+                "   {} git merge driver for graph records",
+                "Configured".green()
+            );
+        }
+        if deciduous_dir.exists() {
+            ensure_graph_file(&cwd)?;
+        }
     }
-    if deciduous_dir.exists() {
-        ensure_graph_file(&cwd)?;
+
+    if let Some(dir) = guard::backup_dir(&cwd) {
+        println!(
+            "   {} previous versions of changed files in {}",
+            "Backed up".green(),
+            dir.strip_prefix(&cwd).unwrap_or(&dir).display()
+        );
     }
 
     // Write version file for auto-update detection
@@ -453,17 +456,16 @@ pub fn update_tooling() -> Result<(), String> {
     println!("  - Slash commands (/decision, /recover, /work, /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync)");
     println!("  - Skills (/pulse, /narratives, /archaeology)");
     if has_claude {
-        println!("  - Enforcement hooks (block edits without action nodes)");
-        println!("  - Post-commit reminders (link commits to graph)");
         println!("  - Agent configurations (agents.toml)");
+        println!("  - No logging hooks: the ones earlier versions installed are removed");
     }
     if has_opencode {
-        println!("  - OpenCode plugins (TypeScript hooks)");
+        println!("  - OpenCode version-check plugin (the logging plugins are removed)");
         println!("  - OpenCode skills, agents, and tools");
         println!("  - OpenCode configuration (opencode.json)");
     }
     if has_windsurf {
-        println!("  - Windsurf hooks and rules");
+        println!("  - Windsurf rules and version-check hook");
     }
     println!();
 
@@ -547,26 +549,16 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     let sync_path = claude_dir.join("sync.md");
     write_file_overwrite(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
 
-    // Create/update hooks directory and enforcement hooks
+    // Create/update hooks directory
     let claude_base = cwd.join(".claude");
     let hooks_dir = claude_base.join("hooks");
     create_dir_if_missing(&hooks_dir)?;
 
-    // Overwrite require-action-node.sh hook
-    let require_action_path = hooks_dir.join("require-action-node.sh");
-    write_executable_overwrite(
-        &require_action_path,
-        HOOK_REQUIRE_ACTION_NODE,
-        ".claude/hooks/require-action-node.sh",
-    )?;
-
-    // Overwrite post-commit-reminder.sh hook
-    let post_commit_path = hooks_dir.join("post-commit-reminder.sh");
-    write_executable_overwrite(
-        &post_commit_path,
-        HOOK_POST_COMMIT_REMINDER,
-        ".claude/hooks/post-commit-reminder.sh",
-    )?;
+    // The logging hooks are gone since 1.0.3: remove the scripts deciduous
+    // wrote, keep any the user wrote, and take the entries out of settings.json.
+    for name in RETIRED_HOOK_SCRIPTS {
+        remove_guarded(&hooks_dir.join(name), &format!(".claude/hooks/{name}"))?;
+    }
 
     // Overwrite version-check.sh hook (opt-in auto-update check)
     let version_check_path = hooks_dir.join("version-check.sh");
@@ -576,18 +568,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
         ".claude/hooks/version-check.sh",
     )?;
 
-    // Bring settings.json onto the log-loop hooks, keeping the user's own
-    // entries. The scripts above are wrappers around `deciduous log-loop`,
-    // but an old settings.json only ran them on Edit|Write and had no Stop
-    // or post-log entries at all.
-    if crate::config::Config::load().hooks.log_loop_enabled() {
-        merge_log_loop_settings(&claude_base.join("settings.json"))?;
-    } else {
-        println!(
-            "   {} .claude/settings.json (hooks disabled in .deciduous/config.toml; log-loop not installed)",
-            "Skipped".yellow()
-        );
-    }
+    strip_retired_hook_settings(&claude_base.join("settings.json"))?;
 
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");
@@ -616,6 +597,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
 
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");
+    guard::backup(cwd, "CLAUDE.md")?;
     replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
 
     // Update Windsurf if .windsurf directory exists
@@ -643,22 +625,6 @@ fn setup_windsurf_integration(cwd: &Path) -> Result<(), String> {
         &hooks_json_path,
         WINDSURF_HOOKS_JSON,
         ".windsurf/hooks.json",
-    )?;
-
-    // Write require-action-node.sh hook
-    let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
-    write_executable_if_missing(
-        &require_action_path,
-        WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-        ".windsurf/hooks/require-action-node.sh",
-    )?;
-
-    // Write post-commit-reminder.sh hook
-    let post_commit_path = windsurf_hooks_dir.join("post-commit-reminder.sh");
-    write_executable_if_missing(
-        &post_commit_path,
-        WINDSURF_HOOK_POST_COMMIT_REMINDER,
-        ".windsurf/hooks/post-commit-reminder.sh",
     )?;
 
     // Write version-check.sh hook (opt-in auto-update check)
@@ -699,21 +665,12 @@ fn update_windsurf(cwd: &Path) -> Result<(), String> {
         ".windsurf/hooks.json",
     )?;
 
-    // Overwrite require-action-node.sh hook
-    let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
-    write_executable_overwrite(
-        &require_action_path,
-        WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-        ".windsurf/hooks/require-action-node.sh",
-    )?;
-
-    // Overwrite post-commit-reminder.sh hook
-    let post_commit_path = windsurf_hooks_dir.join("post-commit-reminder.sh");
-    write_executable_overwrite(
-        &post_commit_path,
-        WINDSURF_HOOK_POST_COMMIT_REMINDER,
-        ".windsurf/hooks/post-commit-reminder.sh",
-    )?;
+    for name in RETIRED_HOOK_SCRIPTS {
+        remove_guarded(
+            &windsurf_hooks_dir.join(name),
+            &format!(".windsurf/hooks/{name}"),
+        )?;
+    }
 
     // Overwrite version-check.sh hook (opt-in auto-update check)
     let version_check_path = windsurf_hooks_dir.join("version-check.sh");
@@ -743,34 +700,221 @@ fn create_dir_if_missing(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Merges the log-loop hooks into `.claude/settings.json` (creating it from
-/// the template if absent). Refuses to touch a file it cannot parse rather
-/// than overwrite settings it does not understand.
-pub fn merge_log_loop_settings(path: &Path) -> Result<(), String> {
-    let mut settings: serde_json::Value = if path.exists() {
-        let raw = fs::read_to_string(path)
-            .map_err(|e| format!("Could not read {}: {}", path.display(), e))?;
-        serde_json::from_str(&raw).map_err(|e| {
-            format!(
-                "{} is not valid JSON ({}); fix it and rerun `deciduous update` to install the log-loop hooks",
-                path.display(),
-                e
-            )
-        })?
-    } else {
-        serde_json::from_str(CLAUDE_SETTINGS_JSON).expect("template is valid JSON")
+/// Hook scripts deciduous installed before 1.0.3 to make agents log, for
+/// Claude Code and Windsurf alike. Logging is encouraged through the
+/// instructions and the tool replies now, not enforced by a hook, so
+/// `update` removes the ones it wrote.
+pub const RETIRED_HOOK_SCRIPTS: [&str; 2] = ["require-action-node.sh", "post-commit-reminder.sh"];
+
+/// Takes the retired logging hooks out of `.claude/settings.json`: every
+/// command that runs `deciduous log-loop`, and every command that runs a
+/// retired script that is no longer on disk. A retired script the user
+/// wrote was kept, so the entry that runs it stays. Entries and events left
+/// empty are dropped; everything else, including key order, is kept. A file
+/// that is not valid JSON is reported and left alone.
+pub fn strip_retired_hook_settings(path: &Path) -> Result<(), String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return Ok(());
+    };
+    let mut settings: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => {
+            println!(
+                "   {} .claude/settings.json (not valid JSON: {e}); remove any `deciduous log-loop` hooks by hand",
+                "Skipped".yellow()
+            );
+            return Ok(());
+        }
+    };
+    let hooks_dir = path.parent().map(|p| p.join("hooks"));
+    let retired = |command: &str| {
+        command.contains("deciduous log-loop")
+            || RETIRED_HOOK_SCRIPTS.iter().any(|name| {
+                command.contains(&format!(".claude/hooks/{name}"))
+                    && !hooks_dir.as_ref().is_some_and(|d| d.join(name).exists())
+            })
     };
 
-    if crate::log_loop::merge_claude_settings(&mut settings) || !path.exists() {
-        let body = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    let mut changed = false;
+    if let Some(events) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
+        for entries in events.values_mut() {
+            let Some(list) = entries.as_array_mut() else {
+                continue;
+            };
+            for entry in list.iter_mut() {
+                if let Some(hs) = entry.get_mut("hooks").and_then(|h| h.as_array_mut()) {
+                    let before = hs.len();
+                    hs.retain(|h| !retired(h["command"].as_str().unwrap_or("")));
+                    changed |= hs.len() != before;
+                }
+            }
+            let before = list.len();
+            list.retain(|e| e["hooks"].as_array().is_none_or(|hs| !hs.is_empty()));
+            changed |= list.len() != before;
+        }
+        let before = events.len();
+        events.retain(|_, v| v.as_array().is_none_or(|l| !l.is_empty()));
+        changed |= events.len() != before;
+    }
+
+    if changed {
+        if let Some(root) = path.parent().and_then(|p| p.parent()) {
+            guard::backup(root, ".claude/settings.json")?;
+        }
+        let body = render_in_original_order(&settings, &raw);
         fs::write(path, body + "\n")
             .map_err(|e| format!("Could not write {}: {}", path.display(), e))?;
         println!(
-            "   {} .claude/settings.json (log-loop hooks)",
+            "   {} .claude/settings.json (logging hooks removed)",
             "Updated".green()
         );
     }
     Ok(())
+}
+
+/// Pretty-prints `value` (2-space indent, like `to_string_pretty`) with each
+/// object's keys in the order they first appear in `original`, and keys that
+/// are new after them in the order serde_json holds them. serde_json's map is
+/// sorted, and `preserve_order` cannot be turned on for one call: it would
+/// reorder every JSON the program writes, graph.json included. A user's
+/// settings.json keeps its shape; only what deciduous adds is new.
+fn render_in_original_order(value: &serde_json::Value, original: &str) -> String {
+    let orders = key_orders(original);
+    let mut out = String::new();
+    render_ordered(value, &orders, "", 0, &mut out);
+    out
+}
+
+/// For every object in `raw`, keyed by its path ("/hooks/PreToolUse/0"), its
+/// keys in the order written. A small scanner, not a full JSON parser: it only
+/// has to find keys in a document serde_json has already accepted.
+fn key_orders(raw: &str) -> std::collections::HashMap<String, Vec<String>> {
+    fn skip_ws(b: &[u8], i: &mut usize) {
+        while *i < b.len() && (b[*i] as char).is_whitespace() {
+            *i += 1;
+        }
+    }
+    fn string(b: &[u8], i: &mut usize) -> String {
+        let start = *i;
+        *i += 1;
+        while *i < b.len() && b[*i] != b'"' {
+            if b[*i] == b'\\' {
+                *i += 1;
+            }
+            *i += 1;
+        }
+        *i += 1;
+        serde_json::from_slice(&b[start..*i]).unwrap_or_default()
+    }
+    fn value(
+        b: &[u8],
+        i: &mut usize,
+        path: &str,
+        out: &mut std::collections::HashMap<String, Vec<String>>,
+    ) {
+        skip_ws(b, i);
+        match b.get(*i) {
+            Some(b'{') => {
+                *i += 1;
+                let mut keys = Vec::new();
+                loop {
+                    skip_ws(b, i);
+                    match b.get(*i) {
+                        Some(b'}') => {
+                            *i += 1;
+                            break;
+                        }
+                        Some(b',') => *i += 1,
+                        Some(b'"') => {
+                            let k = string(b, i);
+                            skip_ws(b, i);
+                            *i += 1; // ':'
+                            value(b, i, &format!("{path}/{k}"), out);
+                            keys.push(k);
+                        }
+                        _ => return,
+                    }
+                }
+                out.insert(path.to_string(), keys);
+            }
+            Some(b'[') => {
+                *i += 1;
+                let mut n = 0;
+                loop {
+                    skip_ws(b, i);
+                    match b.get(*i) {
+                        Some(b']') => {
+                            *i += 1;
+                            break;
+                        }
+                        Some(b',') => *i += 1,
+                        Some(_) => {
+                            value(b, i, &format!("{path}/{n}"), out);
+                            n += 1;
+                        }
+                        None => return,
+                    }
+                }
+            }
+            Some(b'"') => {
+                string(b, i);
+            }
+            Some(_) => {
+                while *i < b.len() && !matches!(b[*i], b',' | b'}' | b']') {
+                    *i += 1;
+                }
+            }
+            None => {}
+        }
+    }
+    let mut out = std::collections::HashMap::new();
+    let mut i = 0;
+    value(raw.as_bytes(), &mut i, "", &mut out);
+    out
+}
+
+fn render_ordered(
+    v: &serde_json::Value,
+    orders: &std::collections::HashMap<String, Vec<String>>,
+    path: &str,
+    depth: usize,
+    out: &mut String,
+) {
+    use serde_json::Value;
+    let pad = "  ".repeat(depth + 1);
+    let close = "  ".repeat(depth);
+    match v {
+        Value::Object(map) if !map.is_empty() => {
+            let known = orders.get(path);
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort_by_key(|k| {
+                known
+                    .and_then(|o| o.iter().position(|x| x == *k))
+                    .unwrap_or(usize::MAX)
+            });
+            out.push_str("{\n");
+            for (i, k) in keys.iter().enumerate() {
+                out.push_str(&pad);
+                out.push_str(&serde_json::to_string(k).unwrap());
+                out.push_str(": ");
+                render_ordered(&map[*k], orders, &format!("{path}/{k}"), depth + 1, out);
+                out.push_str(if i + 1 < keys.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&close);
+            out.push('}');
+        }
+        Value::Array(items) if !items.is_empty() => {
+            out.push_str("[\n");
+            for (i, item) in items.iter().enumerate() {
+                out.push_str(&pad);
+                render_ordered(item, orders, &format!("{path}/{i}"), depth + 1, out);
+                out.push_str(if i + 1 < items.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&close);
+            out.push(']');
+        }
+        other => out.push_str(&serde_json::to_string(other).unwrap()),
+    }
 }
 
 fn write_file_if_missing(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
@@ -825,39 +969,107 @@ fn write_executable_if_missing(
     write_file_if_missing(path, content, display_name)
 }
 
+/// `deciduous update --all <dir>`: every deciduous project directly under
+/// `dir`, and `dir` itself if it is one, updated one after another. A project
+/// is a directory with `.deciduous/` and an assistant integration to update.
+/// One project failing does not stop the rest. Returns how many failed.
+pub fn update_all(root: &Path) -> usize {
+    let start = std::env::current_dir().unwrap_or_default();
+    let mut dirs: Vec<std::path::PathBuf> = vec![root.to_path_buf()];
+    if let Ok(entries) = fs::read_dir(root) {
+        let mut children: Vec<_> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        children.sort();
+        dirs.extend(children);
+    }
+    let is_project = |d: &Path| {
+        d.join(".deciduous").is_dir()
+            && [".claude", ".opencode", ".windsurf"]
+                .iter()
+                .any(|a| d.join(a).is_dir())
+    };
+    let (mut ok, mut failed) = (0usize, Vec::new());
+    for d in dirs.into_iter().filter(|d| is_project(d)) {
+        println!("\n{} {}", "==>".cyan(), d.display());
+        let result = std::env::set_current_dir(&d)
+            .map_err(|e| format!("cannot enter {}: {e}", d.display()))
+            .and_then(|_| update_tooling());
+        match result {
+            Ok(()) => ok += 1,
+            Err(e) => {
+                eprintln!("   {} {}", "Failed:".red(), e);
+                failed.push(d.display().to_string());
+            }
+        }
+    }
+    let _ = std::env::set_current_dir(start);
+    println!(
+        "\n{} {} updated, {} failed",
+        "Done:".green(),
+        ok,
+        failed.len()
+    );
+    for f in &failed {
+        println!("   {} {}", "failed".red(), f);
+    }
+    failed.len()
+}
+
+/// The project root for a harness path: callers pass the path relative to the
+/// project as `display_name`, so the root is the path with that suffix removed.
+fn harness_root(path: &Path, display_name: &str) -> std::path::PathBuf {
+    let full = path.to_string_lossy();
+    match full.strip_suffix(display_name) {
+        Some(root) if !root.is_empty() => std::path::PathBuf::from(root),
+        _ => std::env::current_dir().unwrap_or_default(),
+    }
+}
+
+/// Writes a harness file through [`guard::write`]: replaces what deciduous
+/// wrote, keeps (and for Markdown, appends to) what someone else wrote.
 fn write_file_overwrite(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
-    fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
-    println!("   {} {}", "Updated".green(), display_name);
-    Ok(())
+    write_guarded(path, content, display_name, false)
 }
 
-#[cfg(unix)]
 fn write_executable_overwrite(
     path: &Path,
     content: &str,
     display_name: &str,
 ) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-
-    fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
-    // Make executable (chmod +x)
-    let mut perms = fs::metadata(path)
-        .map_err(|e| format!("Could not get metadata for {}: {}", display_name, e))?
-        .permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(path, perms)
-        .map_err(|e| format!("Could not set permissions for {}: {}", display_name, e))?;
-    println!("   {} {} (executable)", "Updated".green(), display_name);
-    Ok(())
+    write_guarded(path, content, display_name, true)
 }
 
-#[cfg(not(unix))]
-fn write_executable_overwrite(
+fn write_guarded(
     path: &Path,
     content: &str,
     display_name: &str,
+    executable: bool,
 ) -> Result<(), String> {
-    write_file_overwrite(path, content, display_name)
+    let outcome = guard::write(&harness_root(path, display_name), path, content, executable)?;
+    let label = outcome.label();
+    let label = match outcome {
+        guard::Outcome::KeptYours | guard::Outcome::Appended => label.yellow(),
+        guard::Outcome::Unchanged => label.dimmed(),
+        _ => label.green(),
+    };
+    println!("   {} {}", label, display_name);
+    Ok(())
+}
+
+fn remove_guarded(path: &Path, display_name: &str) -> Result<(), String> {
+    match guard::remove(&harness_root(path, display_name), path)? {
+        Some(guard::Outcome::KeptYours) => println!(
+            "   {} {} (yours; left in place)",
+            "Kept".yellow(),
+            display_name
+        ),
+        Some(outcome) => println!("   {} {}", outcome.label().green(), display_name),
+        None => {}
+    }
+    Ok(())
 }
 
 fn replace_config_md_section(
@@ -900,7 +1112,7 @@ fn replace_config_md_section(
                 if after.is_empty() {
                     String::new()
                 } else {
-                    format!("\n{}", after.trim_start())
+                    format!("\n{}", after) // everything after the end marker is the user's, blank lines included
                 }
             );
 
@@ -1230,14 +1442,96 @@ mod tests {
         assert_eq!(fs::read_to_string(&file_path).unwrap(), "content");
     }
 
+    /// What a 1.0.2 `update` left in a user's settings.json: their own entry,
+    /// the wrapper entries, and the log-loop entries.
+    const SETTINGS_1_0_2: &str = "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(mix *)\"\n    ]\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"mine.sh\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"Edit|Write|NotebookEdit|Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"\\\"$CLAUDE_PROJECT_DIR/.claude/hooks/require-action-node.sh\\\"\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"deciduous log-loop post-bash || true\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"deciduous log-loop stop || true\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"x\"\n}\n";
+
+    #[test]
+    fn retired_hooks_leave_settings_and_the_users_entries_stay_in_order() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude/hooks")).unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        fs::write(&p, SETTINGS_1_0_2).unwrap();
+        strip_retired_hook_settings(&p).unwrap();
+        let after = fs::read_to_string(&p).unwrap();
+        assert!(!after.contains("log-loop"), "{after}");
+        assert!(!after.contains("require-action-node"), "{after}");
+        assert!(
+            !after.contains("\"Stop\"") && !after.contains("\"PostToolUse\""),
+            "empty events dropped:\n{after}"
+        );
+        let (perm, hooks, model) = (
+            after.find("\"permissions\"").unwrap(),
+            after.find("\"hooks\"").unwrap(),
+            after.find("\"model\"").unwrap(),
+        );
+        assert!(
+            perm < hooks && hooks < model,
+            "top-level order kept:\n{after}"
+        );
+        let (m, h) = (
+            after.find("\"matcher\": \"Edit\"").unwrap(),
+            after.find("\"command\": \"mine.sh\"").unwrap(),
+        );
+        assert!(m < h, "matcher still before hooks in the user's entry");
+        // Idempotent: a second run finds nothing to do.
+        strip_retired_hook_settings(&p).unwrap();
+        assert_eq!(fs::read_to_string(&p).unwrap(), after);
+    }
+
+    #[test]
+    fn a_retired_script_the_user_wrote_keeps_its_entry() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude/hooks")).unwrap();
+        fs::write(
+            tmp.path().join(".claude/hooks/require-action-node.sh"),
+            "#!/bin/sh\n# mine\nexit 0\n",
+        )
+        .unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        fs::write(&p, SETTINGS_1_0_2).unwrap();
+        strip_retired_hook_settings(&p).unwrap();
+        let after = fs::read_to_string(&p).unwrap();
+        assert!(after.contains("require-action-node.sh"), "{after}");
+        assert!(!after.contains("log-loop"), "{after}");
+    }
+
+    #[test]
+    fn replacing_the_marked_section_leaves_everything_after_it_byte_for_byte() {
+        let tmp = TempDir::new().unwrap();
+        let md = tmp.path().join("CLAUDE.md");
+        let user_before = "# Mine\n\nRules.\n\n";
+        let user_after = "\n## My Section\n\nText.\n";
+        fs::write(
+            &md,
+            format!(
+                "{user_before}<!-- deciduous:start -->\nold\n<!-- deciduous:end -->\n{user_after}"
+            ),
+        )
+        .unwrap();
+        let section = "<!-- deciduous:start -->\nnew\n<!-- deciduous:end -->";
+        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
+        let once = fs::read_to_string(&md).unwrap();
+        assert_eq!(once, format!("{user_before}{section}\n{user_after}"));
+        replace_config_md_section(&md, section, "CLAUDE.md").unwrap();
+        assert_eq!(fs::read_to_string(&md).unwrap(), once);
+    }
+
     #[test]
     fn test_write_file_overwrite() {
         let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
         let file_path = tmp.path().join("test.txt");
 
-        fs::write(&file_path, "original").unwrap();
+        // Written by deciduous, then updated: replaced.
+        write_file_overwrite(&file_path, "original", "test.txt").unwrap();
         write_file_overwrite(&file_path, "updated", "test.txt").unwrap();
         assert_eq!(fs::read_to_string(&file_path).unwrap(), "updated");
+
+        // Written by someone else: kept.
+        fs::write(&file_path, "someone else's").unwrap();
+        write_file_overwrite(&file_path, "updated again", "test.txt").unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "someone else's");
     }
 
     #[test]

@@ -48,7 +48,6 @@ pub mod export;
 pub mod github;
 pub mod hooks;
 pub mod init;
-pub mod log_loop;
 pub mod mcp;
 pub mod narratives;
 pub mod opencode;

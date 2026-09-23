@@ -18,105 +18,6 @@ use serde_json::json;
 use std::fs;
 use std::path::Path;
 
-/// OpenCode plugin for requiring action nodes before edits
-pub const PLUGIN_REQUIRE_ACTION_NODE: &str = r#"// OpenCode Plugin: Require Action Node
-// Checks for recent action/goal nodes before file edits
-// This enforces the decision graph workflow: log BEFORE you code
-
-import type { Plugin } from "@opencode-ai/plugin"
-
-export const RequireActionNode: Plugin = async ({ $ }) => {
-  return {
-    "tool.execute.before": async (input, output) => {
-      // Only check on edit and write tools
-      if (input.tool !== "edit" && input.tool !== "write") {
-        return
-      }
-
-      try {
-        // Check if deciduous is initialized
-        const fs = await import("fs")
-        if (!fs.existsSync(".deciduous")) {
-          return // No deciduous in this project, allow all edits
-        }
-
-        // Get recent nodes from deciduous
-        const result = await $`deciduous nodes 2>/dev/null | tail -5`.quiet()
-        const stdout = result.stdout.toString()
-        const lines = stdout.trim().split("\n").filter((l: string) => l.trim())
-
-        // Check for any goal or action node
-        let hasRecentNode = false
-        for (const line of lines) {
-          if (line.match(/goal|action/i)) {
-            hasRecentNode = true
-            break
-          }
-        }
-
-        if (!hasRecentNode && lines.length > 2) {
-          // Write reminder to log file instead of console (console output corrupts TUI)
-          const path = await import("path")
-          const logFile = path.join(".deciduous", "plugin.log")
-          const msg = `[${new Date().toISOString()}] REMINDER: No recent action/goal node found. Run: deciduous add goal "..." or deciduous add action "..."\n`
-          fs.appendFileSync(logFile, msg)
-        }
-      } catch (error) {
-        // If deciduous isn't available, continue silently
-      }
-    }
-  }
-}
-"#;
-
-/// OpenCode plugin for post-commit reminders
-pub const PLUGIN_POST_COMMIT_REMINDER: &str = r#"// OpenCode Plugin: Post-Commit Reminder
-// Reminds to link commits to the decision graph after git commit
-// This ensures commits are connected to the reasoning that led to them
-
-import type { Plugin } from "@opencode-ai/plugin"
-
-export const PostCommitReminder: Plugin = async ({ $ }) => {
-  return {
-    "tool.execute.after": async (input) => {
-      // Only check bash tool
-      if (input.tool !== "bash") {
-        return
-      }
-
-      // Check if deciduous is initialized
-      const fs = await import("fs")
-      if (!fs.existsSync(".deciduous")) {
-        return
-      }
-
-      // Check if this was a git commit command
-      const command = input.args?.command || ""
-      if (!command.match(/^git commit/)) {
-        return
-      }
-
-      try {
-        // Get the latest commit info
-        const hashResult = await $`git rev-parse --short HEAD 2>/dev/null`.quiet()
-        const msgResult = await $`git log -1 --format=%s 2>/dev/null`.quiet()
-
-        const commitHash = hashResult.stdout.toString().trim()
-        const commitMsg = msgResult.stdout.toString().trim().slice(0, 50)
-
-        // Write reminder to log file instead of console (console output corrupts TUI)
-        const path = await import("path")
-        const logFile = path.join(".deciduous", "plugin.log")
-        const msg = `[${new Date().toISOString()}] POST-COMMIT: ${commitHash} "${commitMsg}" - Run: deciduous add outcome "..." --commit HEAD\n`
-        fs.appendFileSync(logFile, msg)
-      } catch (error) {
-        // If git commands fail, skip the reminder
-      }
-    }
-  }
-}
-"#;
-
 /// OpenCode plugin for version checking (always-on, rate-limited)
 pub const PLUGIN_VERSION_CHECK: &str = r#"// OpenCode Plugin: Version Check
 // Checks for new deciduous versions via crates.io (always-on, once per 24h)
@@ -2526,32 +2427,9 @@ pub fn install_opencode(project_root: &Path) -> Result<(), String> {
         }
     }
 
-    // Install plugins (hooks)
+    // Install plugins. Only the version check since 1.0.3: the logging
+    // plugins (require-action-node, post-commit-reminder) were removed.
     if config.hooks.enabled {
-        for hook in &config.hooks.pre_tool_use {
-            if hook.enabled && hook.name == "require-action-node" {
-                let plugin_path = plugin_dir.join("require-action-node.ts");
-                fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
-                    .map_err(|e| format!("Could not write plugin: {}", e))?;
-                println!(
-                    "   {} .opencode/plugins/require-action-node.ts",
-                    "Installed".green()
-                );
-            }
-        }
-
-        for hook in &config.hooks.post_tool_use {
-            if hook.enabled && hook.name == "post-commit-reminder" {
-                let plugin_path = plugin_dir.join("post-commit-reminder.ts");
-                fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
-                    .map_err(|e| format!("Could not write plugin: {}", e))?;
-                println!(
-                    "   {} .opencode/plugins/post-commit-reminder.ts",
-                    "Installed".green()
-                );
-            }
-        }
-
         // Always install version-check plugin (opt-in via config.toml)
         let version_check_path = plugin_dir.join("version-check.ts");
         fs::write(&version_check_path, PLUGIN_VERSION_CHECK)
@@ -2780,26 +2658,21 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
         }
     }
 
-    // Update plugins (overwrite)
-    let plugin_path = plugin_dir.join("require-action-node.ts");
-    fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
-    println!(
-        "   {} .opencode/plugins/require-action-node.ts",
-        "Updated".green()
-    );
-
-    let plugin_path = plugin_dir.join("post-commit-reminder.ts");
-    fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
-    println!(
-        "   {} .opencode/plugins/post-commit-reminder.ts",
-        "Updated".green()
-    );
+    // The logging plugins were removed in 1.0.3: delete the ones deciduous
+    // wrote, keep any the user wrote.
+    for name in ["require-action-node.ts", "post-commit-reminder.ts"] {
+        match crate::init::guard::remove(project_root, &plugin_dir.join(name))? {
+            Some(crate::init::guard::Outcome::KeptYours) => println!(
+                "   {} .opencode/plugins/{name} (yours; deciduous no longer ships it)",
+                "Kept".yellow()
+            ),
+            Some(outcome) => println!("   {} .opencode/plugins/{name}", outcome.label().green()),
+            None => {}
+        }
+    }
 
     let plugin_path = plugin_dir.join("version-check.ts");
-    fs::write(&plugin_path, PLUGIN_VERSION_CHECK)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
+    crate::init::guard::write(project_root, &plugin_path, PLUGIN_VERSION_CHECK, false)?;
     println!(
         "   {} .opencode/plugins/version-check.ts",
         "Updated".green()
@@ -2820,8 +2693,7 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
 
     for (name, content) in commands {
         let cmd_path = command_dir.join(name);
-        fs::write(&cmd_path, content)
-            .map_err(|e| format!("Could not write command {}: {}", name, e))?;
+        crate::init::guard::write(project_root, &cmd_path, content, false)?;
         println!("   {} .opencode/commands/{}", "Updated".green(), name);
     }
 
@@ -2839,8 +2711,7 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
                 .map_err(|e| format!("Could not create {:?}: {}", skill_subdir, e))?;
         }
         let skill_path = skill_subdir.join("SKILL.md");
-        fs::write(&skill_path, content)
-            .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
+        crate::init::guard::write(project_root, &skill_path, content, false)?;
         println!(
             "   {} .opencode/skills/{}/SKILL.md",
             "Updated".green(),
@@ -2850,12 +2721,12 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
 
     // Update agent (overwrite)
     let agent_path = agent_dir.join("deciduous.md");
-    fs::write(&agent_path, AGENT_DECIDUOUS).map_err(|e| format!("Could not write agent: {}", e))?;
+    crate::init::guard::write(project_root, &agent_path, AGENT_DECIDUOUS, false)?;
     println!("   {} .opencode/agents/deciduous.md", "Updated".green());
 
     // Update tool (overwrite)
     let tool_path = tool_dir.join("deciduous.ts");
-    fs::write(&tool_path, TOOL_DECIDUOUS).map_err(|e| format!("Could not write tool: {}", e))?;
+    crate::init::guard::write(project_root, &tool_path, TOOL_DECIDUOUS, false)?;
     println!("   {} .opencode/tools/deciduous.ts", "Updated".green());
 
     // Note: We don't overwrite opencode.json or AGENTS.md as they may have user customizations
@@ -3444,10 +3315,10 @@ mod tests {
         assert!(result.is_ok());
 
         // Check plugins (now in plugins/ plural)
-        assert!(project_root
+        assert!(!project_root
             .join(".opencode/plugins/require-action-node.ts")
             .exists());
-        assert!(project_root
+        assert!(!project_root
             .join(".opencode/plugins/post-commit-reminder.ts")
             .exists());
 

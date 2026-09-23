@@ -12,6 +12,7 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
   use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.MCP.Scope
+  alias DeciduousMcp.Repo
   alias DeciduousMcp.Graph.{Nodes, Edges}
 
   def definition do
@@ -23,7 +24,10 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
       input_schema: %{
         type: "object",
         properties: %{
-          title: %{type: "string", description: "What was being decided (e.g., 'Choose auth strategy')"},
+          title: %{
+            type: "string",
+            description: "What was being decided (e.g., 'Choose auth strategy')"
+          },
           rationale: %{type: "string", description: "Why the chosen option was selected"},
           chosen_option: %{
             type: "object",
@@ -67,75 +71,135 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
     end
   end
 
+  # Everything is validated before the first insert and written in one
+  # transaction. Before this, options given as strings (the schema asks for
+  # objects, but Peri checks arrays as :any) crashed mid-write after the
+  # decision node was already in, and every create_edge result was thrown
+  # away, so a parent_node_id that is not a node left the decision orphaned
+  # while the call reported success. The description said "atomically".
   defp do_call(workspace_id, args) do
-    meta = %{} |> maybe_put("confidence", args["confidence"]) |> maybe_put("branch", args["branch"])
+    meta =
+      %{} |> maybe_put("confidence", args["confidence"]) |> maybe_put("branch", args["branch"])
 
-    # Create the decision node
-    {:ok, decision} =
-      Nodes.create_node(workspace_id, %{
-        node_type: "decision",
-        title: args["title"],
-        description: args["rationale"],
-        status: "completed",
-        metadata: meta
-      })
-
-    # Link to parent if provided
-    if args["parent_node_id"] do
-      Edges.create_edge(workspace_id, %{
-        from_node_id: args["parent_node_id"],
-        to_node_id: decision.id,
-        edge_type: "leads_to",
-        rationale: "Decision point"
-      })
-    end
-
-    # Create the chosen option
-    {:ok, chosen} =
-      Nodes.create_node(workspace_id, %{
-        node_type: "option",
-        title: args["chosen_option"]["title"],
-        description: args["chosen_option"]["description"],
-        status: "completed",
-        metadata: meta
-      })
-
-    Edges.create_edge(workspace_id, %{
-      from_node_id: decision.id,
-      to_node_id: chosen.id,
-      edge_type: "chosen",
-      rationale: args["rationale"]
-    })
-
-    # Create rejected options
-    rejected =
-      Enum.map(args["rejected_options"] || [], fn opt ->
-        {:ok, node} =
-          Nodes.create_node(workspace_id, %{
-            node_type: "option",
-            title: opt["title"],
-            description: opt["description"],
-            status: "rejected",
+    with {:ok, chosen_opt} <- option(args["chosen_option"], "chosen_option"),
+         {:ok, rejected_opts} <- options(args["rejected_options"] || []) do
+      Repo.transaction(fn ->
+        decision =
+          insert!(workspace_id, %{
+            node_type: "decision",
+            title: args["title"],
+            description: args["rationale"],
+            status: "completed",
             metadata: meta
           })
 
-        Edges.create_edge(workspace_id, %{
-          from_node_id: decision.id,
-          to_node_id: node.id,
-          edge_type: "rejected",
-          rationale: opt["reason"]
-        })
+        if args["parent_node_id"] do
+          link!(workspace_id, args["parent_node_id"], decision.id, "leads_to", "Decision point")
+        end
 
-        %{id: node.id, title: node.title}
+        chosen =
+          insert!(workspace_id, %{
+            node_type: "option",
+            title: chosen_opt["title"],
+            description: chosen_opt["description"],
+            status: "completed",
+            metadata: meta
+          })
+
+        link!(workspace_id, decision.id, chosen.id, "chosen", args["rationale"])
+
+        rejected =
+          Enum.map(rejected_opts, fn opt ->
+            node =
+              insert!(workspace_id, %{
+                node_type: "option",
+                title: opt["title"],
+                description: opt["description"],
+                status: "rejected",
+                metadata: meta
+              })
+
+            link!(workspace_id, decision.id, node.id, "rejected", opt["reason"])
+            %{id: node.id, title: node.title}
+          end)
+
+        %{
+          decision_id: decision.id,
+          chosen: %{id: chosen.id, title: chosen.title},
+          rejected: rejected,
+          message: "Decision logged: #{args["title"]}"
+        }
       end)
+      |> case do
+        {:ok, result} ->
+          {:ok, Jason.encode!(result)}
 
-    {:ok,
-     Jason.encode!(%{
-       decision_id: decision.id,
-       chosen: %{id: chosen.id, title: chosen.title},
-       rejected: rejected,
-       message: "Decision logged: #{args["title"]}"
-     })}
+        {:error, message} when is_binary(message) ->
+          {:error, %{code: -1, message: message}}
+
+        {:error, other} ->
+          {:error, %{code: -1, message: "Decision not logged: #{inspect(other)}"}}
+      end
+    else
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  # An option is a string (its title) or an object with a title.
+  defp option(title, _field) when is_binary(title) and title != "", do: {:ok, %{"title" => title}}
+
+  defp option(%{"title" => title} = opt, _field) when is_binary(title) and title != "",
+    do: {:ok, opt}
+
+  defp option(other, field),
+    do:
+      {:error,
+       "#{field} must be a title string or an object with a title, got: #{inspect(other)}; nothing was written"}
+
+  defp options(list) when is_list(list) do
+    list
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {opt, i}, {:ok, acc} ->
+      case option(opt, "rejected_options[#{i}]") do
+        {:ok, o} -> {:cont, {:ok, [o | acc]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, acc} -> {:ok, Enum.reverse(acc)}
+      error -> error
+    end
+  end
+
+  defp options(other),
+    do: {:error, "rejected_options must be a list, got: #{inspect(other)}; nothing was written"}
+
+  defp insert!(workspace_id, attrs) do
+    case Nodes.create_node(workspace_id, attrs) do
+      {:ok, node} ->
+        node
+
+      {:error, reason} ->
+        Repo.rollback("Decision not logged, nothing was written: #{inspect(reason)}")
+    end
+  end
+
+  defp link!(workspace_id, from, to, type, rationale) do
+    case Edges.create_edge(workspace_id, %{
+           from_node_id: from,
+           to_node_id: to,
+           edge_type: type,
+           rationale: rationale
+         }) do
+      {:ok, _edge} ->
+        :ok
+
+      {:error, {:node_not_found, id}} ->
+        Repo.rollback("#{inspect(id)} is not a node in this workspace; nothing was written")
+
+      {:error, reason} ->
+        Repo.rollback("Decision not logged, nothing was written: #{inspect(reason)}")
+    end
   end
 
   defp maybe_put(map, _key, nil), do: map

@@ -1,12 +1,10 @@
 //! Claude Code hooks management
 //!
-//! Generates and installs hooks for Claude Code integration.
-//! Hooks enforce the decision graph workflow by:
-//! - Blocking edits without recent action nodes (pre-tool-use)
-//! - Reminding to link commits to the graph (post-tool-use)
+//! Installs the hooks a project lists in `.deciduous/config.toml`. Deciduous
+//! ships none of its own since 1.0.3: the logging hooks it used to install
+//! (require-action-node, post-commit-reminder) are removed by `update`.
 
 use crate::config::{Config, Hook};
-use crate::init::templates::{HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE};
 use colored::Colorize;
 use serde_json::json;
 use std::fs;
@@ -91,12 +89,13 @@ fn get_hook_script(hook: &Hook, _config: &Config) -> Result<String, String> {
             .map_err(|e| format!("Could not read hook script {}: {}", path, e));
     }
 
-    // Use built-in templates for known hooks
     match hook.name.as_str() {
-        "require-action-node" => Ok(HOOK_REQUIRE_ACTION_NODE.to_string()),
-        "post-commit-reminder" => Ok(HOOK_POST_COMMIT_REMINDER.to_string()),
+        "require-action-node" | "post-commit-reminder" => Err(format!(
+            "Hook '{}' was removed in deciduous 1.0.3; delete it from .deciduous/config.toml",
+            hook.name
+        )),
         _ => Err(format!(
-            "Hook '{}' has no script and is not a built-in hook",
+            "Hook '{}' has no script or script_path in .deciduous/config.toml",
             hook.name
         )),
     }
@@ -140,17 +139,12 @@ fn generate_settings_json(claude_dir: &Path, config: &Config) -> Result<(), Stri
         })
         .collect();
 
-    let mut settings = json!({
+    let settings = json!({
         "hooks": {
             "PreToolUse": pre_hooks,
             "PostToolUse": post_hooks
         }
     });
-    // A project that switched require-action-node off in config.toml gets
-    // exactly what it configured, not the log-loop hooks forced back in.
-    if config.hooks.log_loop_enabled() {
-        crate::log_loop::merge_claude_settings(&mut settings);
-    }
 
     let json_string = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Could not serialize settings: {}", e))?;
@@ -448,13 +442,24 @@ mod tests {
     use tempfile::TempDir;
 
     #[test]
-    fn test_get_builtin_hook_script() {
-        let hook = Hook::default_require_action_node();
-        let script = get_hook_script(&hook, &Config::default()).unwrap();
-        assert!(script.contains("require-action-node"));
-        // The rules live in the binary; the script only hands over to it.
-        assert!(script.contains("deciduous log-loop pre || exit 0"));
-        assert!(!script.contains("deciduous nodes"));
+    fn a_removed_builtin_hook_says_so() {
+        let hook = Hook {
+            name: "require-action-node".to_string(),
+            description: String::new(),
+            matcher: "Edit".to_string(),
+            enabled: true,
+            script: None,
+            script_path: None,
+        };
+        let err = get_hook_script(&hook, &Config::default()).unwrap_err();
+        assert!(err.contains("removed in deciduous 1.0.3"), "{err}");
+    }
+
+    #[test]
+    fn no_hooks_are_installed_by_default() {
+        let config = Config::default();
+        assert!(config.hooks.pre_tool_use.is_empty());
+        assert!(config.hooks.post_tool_use.is_empty());
     }
 
     #[test]
@@ -497,12 +502,10 @@ enabled = true
         std::env::set_current_dir(original_dir).unwrap();
 
         assert!(result.is_ok());
-        assert!(project_root
+        assert!(!project_root
             .join(".claude/hooks/require-action-node.sh")
             .exists());
-        assert!(project_root
-            .join(".claude/hooks/post-commit-reminder.sh")
-            .exists());
-        assert!(project_root.join(".claude/settings.json").exists());
+        let settings = fs::read_to_string(project_root.join(".claude/settings.json")).unwrap();
+        assert!(!settings.contains("log-loop"), "{settings}");
     }
 }
