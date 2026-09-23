@@ -444,6 +444,14 @@ defmodule DeciduousMcp.MCP.Component do
 
   def describe_error({:node_not_found, id}), do: "#{id} is not a node in this workspace"
 
+  def describe_error({:edge_exists, edge}),
+    do: "#{edge.from_node_id} -> #{edge.to_node_id} (#{edge.edge_type}) already exists"
+
+  def describe_error({:reverse_exists, edge}),
+    do:
+      "#{edge.from_node_id} -> #{edge.to_node_id} (#{edge.edge_type}) already exists, and " <>
+        "#{edge.to_node_id} -> #{edge.from_node_id} would make the two nodes each other's parent"
+
   def describe_error(reason) do
     Logger.error("unrecognised tool error: " <> inspect(reason, limit: :infinity))
     "unexpected error (#{error_shape(reason)}); the details are in the server log"

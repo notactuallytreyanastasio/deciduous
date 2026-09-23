@@ -2876,6 +2876,29 @@ impl Database {
             )));
         }
 
+        // A 2-cycle: the two nodes would be each other's parent. The server
+        // refuses it on every path (MCP add_edge, POST /ops), so an edge
+        // written here would be an op it rejects, kept in the log until
+        // someone drops it. Refused here first, where it can be said
+        // plainly. took_from, a borrow between branches, is exempt on both
+        // sides, as it is on the server.
+        if edge_type != "took_from" {
+            let reverse = decision_edges::table
+                .filter(decision_edges::from_node_id.eq(to_id))
+                .filter(decision_edges::to_node_id.eq(from_id))
+                .filter(decision_edges::edge_type.ne("took_from"))
+                .first::<DecisionEdge>(&mut conn)
+                .optional()?;
+            if let Some(rev) = reverse {
+                return Err(DbError::Validation(format!(
+                    "{to_id} -> {from_id} ({}) already exists; {from_id} -> {to_id} would make \
+                     the two nodes each other's parent. A decision's options hang under it \
+                     (decision -> option); to put a decision under its goal, link goal -> decision.",
+                    rev.edge_type
+                )));
+            }
+        }
+
         let now = chrono::Local::now().to_rfc3339();
 
         let new_edge = NewDecisionEdge {
@@ -4885,6 +4908,23 @@ pub struct DecisionGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn t6_link_refuses_an_edge_whose_reverse_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let db = Database::new(db_path.to_str().unwrap()).unwrap();
+        let a = db.create_node("goal", "a", None, None, None).unwrap();
+        let b = db.create_node("decision", "b", None, None, None).unwrap();
+        db.create_edge(a, b, "leads_to", None).unwrap();
+        let err = db
+            .create_edge(b, a, "leads_to", None)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("each other's parent"), "{err}");
+        // A borrow is not the tree.
+        db.create_edge(b, a, "took_from", None).unwrap();
+    }
 
     // === build_metadata_json Tests ===
 

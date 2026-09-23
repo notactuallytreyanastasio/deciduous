@@ -163,6 +163,28 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
                "update_node to change that node."
          }}
 
+      {:error, {:other_parent, node, [], parent_id}} ->
+        {:error,
+         %{
+           code: -1,
+           message:
+             "change_id #{node.change_id} is already node #{node.id}, and #{parent_id} " <>
+               "hangs under it, so it cannot also be its parent (the two would be each " <>
+               "other's parent). Nothing was written."
+         }}
+
+      {:error, {:other_parent, node, parents, parent_id}} ->
+        {:error,
+         %{
+           code: -1,
+           message:
+             "change_id #{node.change_id} is already node #{node.id}, under " <>
+               "#{Enum.map_join(parents, ", ", & &1.from_node_id)}; this call names " <>
+               "parent_id #{parent_id}. Nothing was written. A retry names the parent the " <>
+               "first call did; to give the node another parent on purpose, add_edge " <>
+               "#{parent_id} -> #{node.id}."
+         }}
+
       {:error, {:change_id_deleted, cid, node}} ->
         {:error,
          %{
@@ -218,7 +240,12 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
   end
 
   # A retry of a call with parent_id finds the edge the first call made; a
-  # node the CLI made has none yet, and the call asked for one.
+  # node the CLI made, with no parent yet, gets the edge the call asked for.
+  # A node that already hangs under another parent is refused, not given a
+  # second one: a retry names the same parent, so a different one is a
+  # different write (T3 verification: the retry "linked under parent_id"
+  # quietly added a second parent, and naming the node's own child made a
+  # 2-cycle). A second parent is add_edge's to make, on purpose.
   defp link_existing(_workspace_id, _node, %{"parent_id" => nil}), do: {:ok, nil}
 
   defp link_existing(_workspace_id, _node, args) when not is_map_key(args, "parent_id"),
@@ -226,11 +253,15 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
 
   defp link_existing(workspace_id, node, %{"parent_id" => parent_id} = args) do
     type = args["edge_type"] || "leads_to"
+    parents = Enum.reject(Edges.edges_to(node.id), &(&1.edge_type == "took_from"))
 
-    case Enum.find(
-           Edges.edges_to(node.id),
-           &(&1.from_node_id == parent_id and &1.edge_type == type)
-         ) do
+    case Enum.find(parents, &(&1.from_node_id == parent_id and &1.edge_type == type)) do
+      %{} = edge ->
+        {:ok, edge}
+
+      nil when parents != [] ->
+        {:error, {:other_parent, node, parents, parent_id}}
+
       nil ->
         case Edges.create_edge(workspace_id, %{
                from_node_id: parent_id,
@@ -240,11 +271,9 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
              }) do
           {:ok, edge} -> {:ok, edge}
           {:error, {:node_not_found, _}} -> {:error, {:node_not_found, parent_id}}
+          {:error, {:reverse_exists, _}} -> {:error, {:other_parent, node, [], parent_id}}
           {:error, reason} -> {:error, reason}
         end
-
-      edge ->
-        {:ok, edge}
     end
   end
 

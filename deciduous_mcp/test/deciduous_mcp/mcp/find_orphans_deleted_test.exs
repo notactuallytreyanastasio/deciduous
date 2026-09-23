@@ -15,6 +15,20 @@ defmodule DeciduousMcp.MCP.FindOrphansDeletedTest do
     %{ws: ws, client: McpClient.connect()}
   end
 
+  # Edges.create_edge refuses a 2-cycle now; graphs written before it, and
+  # local graphs mirrored by POST /import, still hold them, and find_orphans
+  # has to read those.
+  defp legacy_back_edge(ws, from, to) do
+    %DeciduousMcp.Schema.Edge{}
+    |> DeciduousMcp.Schema.Edge.changeset(%{
+      workspace_id: ws.id,
+      from_node_id: from.id,
+      to_node_id: to.id,
+      edge_type: "leads_to"
+    })
+    |> DeciduousMcp.Repo.insert!()
+  end
+
   defp orphan_ids(client) do
     McpClient.call!(client, "find_orphans", %{"workspace" => "fo-ws"})["orphans"]
     |> Enum.map(& &1["id"])
@@ -115,7 +129,7 @@ defmodule DeciduousMcp.MCP.FindOrphansDeletedTest do
     {:ok, w} = Nodes.create_node(ws.id, %{node_type: "observation", title: "W"})
     {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: x.id, to_node_id: y.id})
     {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: y.id, to_node_id: z.id})
-    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: z.id, to_node_id: y.id})
+    legacy_back_edge(ws, z, y)
     {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: z.id, to_node_id: w.id})
 
     assert orphan_ids(client) == MapSet.new()
@@ -129,7 +143,7 @@ defmodule DeciduousMcp.MCP.FindOrphansDeletedTest do
     {:ok, z} = Nodes.create_node(ws.id, %{node_type: "outcome", title: "Z"})
     {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: g.id, to_node_id: y.id})
     {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: y.id, to_node_id: z.id})
-    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: z.id, to_node_id: y.id})
+    legacy_back_edge(ws, z, y)
 
     assert orphan_ids(client) == MapSet.new()
   end

@@ -495,7 +495,10 @@ defmodule DeciduousMcp.Sync.Ops do
          {:ok, from} <- live_node(ws, from_cid),
          {:ok, to} <- live_node(ws, to_cid) do
       type = op["edge_type"] || "leads_to"
-      serialize(["edge", from.id, to.id, type])
+      # The lock Edges.create_edge takes too, on the pair in either
+      # direction: taken here first so the check below and the insert are
+      # one step against every other writer of an edge between these two.
+      Edges.lock_pair(from.id, to.id)
 
       cond do
         edge(from.id, to.id, type) ->
@@ -524,6 +527,19 @@ defmodule DeciduousMcp.Sync.Ops do
           case Edges.create_edge(ws.id, attrs) do
             {:ok, _} ->
               {:ok, "applied"}
+
+            {:error, {:edge_exists, _}} ->
+              {:ok, "exists"}
+
+            # A 2-cycle, refused as MCP's add_edge refuses it (T6: MCP
+            # add_edge A -> B, then this op B -> A, was applied). Said by
+            # change_id, which is what the CLI knows the nodes by.
+            {:error, {:reverse_exists, rev}} ->
+              {:rejected,
+               "create_edge #{from_cid} -> #{to_cid}: #{to_cid} -> #{from_cid} " <>
+                 "(#{rev.edge_type}) already exists, and the two nodes cannot be each " <>
+                 "other's parent; nothing was written. `deciduous unlink` the local one, then " <>
+                 "`deciduous remote push --drop-rejected`"}
 
             {:error, %Ecto.Changeset{} = cs} ->
               {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{errors(cs)}"}
@@ -969,21 +985,6 @@ defmodule DeciduousMcp.Sync.Ops do
            "`deciduous remote pull` takes the server's value; " <>
            "`deciduous remote push --repair --overwrite-server` sends this copy's over it"}
     end
-  end
-
-  # Creates of one node, or of one edge, take turns. The check above each
-  # insert ("is it there already?") and the insert are two statements, and
-  # between them a concurrent create of the same change_id could commit:
-  # the unique index then refused the insert, and the op was answered
-  # "rejected: workspace_id has already been taken" (SERVER-N4), a false
-  # alarm the CLI keeps printing, naming the wrong field. Under this lock
-  # the second creator runs its check after the first has committed, and
-  # answers `exists`, which is what happened. The lock is the
-  # transaction's, released when apply_one commits or rolls back.
-  defp serialize(parts) do
-    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
-      Enum.join(parts, "|")
-    ])
   end
 
   defp any_node(ws, cid, opts \\ [])

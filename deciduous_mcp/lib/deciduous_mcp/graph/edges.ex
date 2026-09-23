@@ -10,16 +10,39 @@ defmodule DeciduousMcp.Graph.Edges do
   @doc """
   Creates a directed edge between two nodes.
   Both nodes must be in the same workspace.
+
+  Every path that writes an edge comes through here (the MCP tools, POST
+  /ops), and here two rules hold under one lock:
+
+    * `{:error, {:edge_exists, edge}}` when the edge is already there.
+      The check before the insert used to be each caller's, or nobody's:
+      an MCP add_edge that lost a race to an /ops create of the same edge
+      failed on the unique index as "from_node_id: has already been taken".
+    * `{:error, {:reverse_exists, edge}}` when the reverse edge is (a
+      2-cycle: the two nodes would be each other's parent). took_from, a
+      borrow between branches rather than the tree, is exempt on both
+      sides. This lived in the add_edge tool alone, as a read before the
+      insert: two sessions adding A -> B and B -> A at once wrote both
+      in 15 rounds of 15, /ops create_edge never asked, and add_node's
+      change_id retry linked a node under its own child (T6, T3).
+
+  The lock is on the unordered pair of nodes, so creates between two
+  nodes, in either direction, take turns; the second then sees what the
+  first committed.
   """
   def create_edge(workspace_id, attrs) do
     edge_attrs = Map.put(attrs, :workspace_id, workspace_id)
+    type = attrs[:edge_type] || attrs["edge_type"] || "leads_to"
 
     Repo.transaction(fn ->
       # Verify both nodes exist and are in the same workspace
       with {:ok, from_node} <-
              get_workspace_node(workspace_id, attrs[:from_node_id] || attrs["from_node_id"]),
            {:ok, to_node} <-
-             get_workspace_node(workspace_id, attrs[:to_node_id] || attrs["to_node_id"]) do
+             get_workspace_node(workspace_id, attrs[:to_node_id] || attrs["to_node_id"]),
+           :ok <- lock_pair(from_node.id, to_node.id),
+           :ok <- absent(from_node.id, to_node.id, type),
+           :ok <- no_reverse(from_node.id, to_node.id, type) do
         edge_attrs =
           edge_attrs
           |> Map.put(:from_change_id, from_node.change_id)
@@ -49,6 +72,43 @@ defmodule DeciduousMcp.Graph.Edges do
         {:error, reason} -> Repo.rollback(reason)
       end
     end)
+  end
+
+  @doc """
+  Makes every create of an edge between these two nodes, in either
+  direction, wait for the others, until the calling transaction ends.
+  The key is hashed (hashtextextended); two pairs that collide only wait
+  for each other.
+  """
+  def lock_pair(a, b) do
+    [x, y] = Enum.sort([a, b])
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["pair|#{x}|#{y}"])
+    :ok
+  end
+
+  defp absent(from_id, to_id, type) do
+    case Repo.one(
+           from e in Edge,
+             where: e.from_node_id == ^from_id and e.to_node_id == ^to_id and e.edge_type == ^type
+         ) do
+      nil -> :ok
+      edge -> {:error, {:edge_exists, edge}}
+    end
+  end
+
+  defp no_reverse(_from_id, _to_id, "took_from"), do: :ok
+
+  defp no_reverse(from_id, to_id, _type) do
+    case Repo.one(
+           from e in Edge,
+             where:
+               e.from_node_id == ^to_id and e.to_node_id == ^from_id and
+                 e.edge_type != "took_from",
+             limit: 1
+         ) do
+      nil -> :ok
+      edge -> {:error, {:reverse_exists, edge}}
+    end
   end
 
   @doc """
