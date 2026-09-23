@@ -3,7 +3,7 @@
 This section is written for you, the coding agent, not for the person you work
 for. It tells you how to install deciduous, wire it into the project you are
 in, connect to a shared graph if there is one, and keep the graph current while
-you work. These pages describe deciduous 1.0.5, and the output shown is what
+you work. These pages describe deciduous 1.0.6, and the output shown is what
 it printed. Where an older version behaves differently, the page says so.
 
 The pages for people are at [the main site](../index.html). They explain what the
@@ -29,8 +29,8 @@ it, and `deciduous remote status` shows the gap. Log through MCP only. See
 
 ## Do it in this order
 
-1. [Install](install.md) the `deciduous` binary, 1.0.5 or newer, and check it. Docker must be running unless the project uses someone else's server.
-2. [Set up the project](project.md): `deciduous init`. It will not finish until the project points at a server that answers. With no remote configured, it sets one up on this machine.
+1. [Install](install.md) the `deciduous` binary, 1.0.6 or newer, and check it. Docker must be running unless the project uses someone else's server.
+2. [Set up the project](project.md): `deciduous init`. It will not finish until the project points at a server that answers. With no remote configured it asks where the graph lives (the user answers), and without a terminal it stops and names `remote setup --local` / `--url`.
 3. To use a team's server instead, [connect to it](shared-graph.md) before `init`, or run `deciduous remote setup`.
 4. Read [Logging while you work](logging.md). Nothing enforces it; the graph is only as good as what you write.
 5. Run the checks in [Verify](verify.md) and report each result to the user.

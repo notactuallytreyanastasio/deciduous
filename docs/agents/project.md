@@ -44,8 +44,8 @@ After writing the files, `init` makes sure the project points at a server that
 answers. It fails with exit 1 and the fix if it cannot:
 
 - **`[remote] url` already set:** the server must answer and accept the stored token.
-- **No remote, a server already running on this machine:** the project is pointed at it (about a second).
-- **No remote, no server:** it downloads the release's `deciduous-mcp-docker.tar.gz` for its own version and checks it against `checksums.txt`. It then starts PostgreSQL and the server on `127.0.0.1:4000` with Docker (a few minutes, the first time on a machine). It stores the token, writes `[remote]`, and registers the server with Claude Code.
+- **No remote, in a terminal:** it asks where the graph lives, "1) This machine" or "2) A server someone else runs". The user answers, not you. For 1, a server already running on this machine is reused (about a second). Otherwise `init` downloads the release's `deciduous-mcp-docker.tar.gz` for its own version, checks it against `checksums.txt`, and starts PostgreSQL and the server on `127.0.0.1:4000` with Docker (a few minutes the first time). For 2, it asks for the URL and the token. Either way it stores the token, writes `[remote]`, and registers the server with Claude Code.
+- **No remote, no terminal** (your Bash tool is not a terminal): it stops with exit 1 and names `deciduous remote setup --local` and `--url <url>`. Ask the user which, then run that command. Do not guess.
 
 ```
 Shared graph server
