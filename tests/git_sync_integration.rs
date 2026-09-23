@@ -1583,3 +1583,46 @@ fn sync_on_an_older_commit_leaves_the_tree_clean() {
     assert!(alice.git(&["status", "--porcelain"]).is_empty(), "{out}");
     alice.git(&["checkout", "-q", "main"]);
 }
+
+/// Model seed 7833548565119299294 (1 run in 8 on chapter 29): a value two
+/// clones both took from the server (`remote pull` writes graph.json and
+/// commits nothing), changed back to the ancestor's value by one of them
+/// afterwards, loses to the stale copy in git's merge. The three-way merge
+/// sees base "pending", ours "rejected", theirs "pending" and takes ours:
+/// the later edit is indistinguishable from "did not touch the field",
+/// because a record has one updated_at, not one per field.
+#[test]
+#[ignore = "deferred: needs per-field stamps in graph.json records (ABA on a pulled value)"]
+fn model_7833_a_field_set_back_to_the_ancestors_value_survives_the_merge() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "G", &[]);
+    let cid = alice.change_id(goal);
+    alice.commit_all("G");
+    alice.git(&["push", "-q", "origin", "main"]);
+    let bob = team.join("bob");
+
+    // Both take the server's "rejected", as `remote pull` would.
+    let pulled = (chrono::Utc::now() + chrono::Duration::seconds(1)).to_rfc3339();
+    for dev in [&alice, &bob] {
+        let mut doc = dev.doc();
+        doc["nodes"][&cid]["status"] = "rejected".into();
+        doc["nodes"][&cid]["updated_at"] = pulled.clone().into();
+        dev.write_doc(&doc);
+        dev.ok(&["sync"]);
+    }
+    // Alice sets it back, later.
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    alice.ok(&["status", &goal.to_string(), "pending"]);
+    alice.ok(&["sync"]);
+    alice.commit_graph("alice: pending again");
+    alice.git(&["push", "-q", "origin", "main"]);
+    bob.commit_graph("bob: pulled rejected");
+    bob.git(&["pull", "-q", "--no-rebase", "origin", "main"]);
+    bob.ok(&["sync"]);
+    assert_eq!(
+        status_of(&bob, &cid),
+        "pending",
+        "alice's later edit back to the ancestor's value was lost in the merge"
+    );
+}

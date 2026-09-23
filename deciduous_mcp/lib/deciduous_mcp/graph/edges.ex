@@ -25,7 +25,18 @@ defmodule DeciduousMcp.Graph.Edges do
           |> Map.put(:from_change_id, from_node.change_id)
           |> Map.put(:to_change_id, to_node.change_id)
 
-        case %Edge{} |> Edge.changeset(edge_attrs) |> Repo.insert() do
+        # A CLI's link keeps the time it was made (see Sync.Ops): it is
+        # what an unlink of the same edge elsewhere is ordered against.
+        changeset =
+          case edge_attrs[:inserted_at] do
+            %DateTime{} = at ->
+              %Edge{} |> Edge.changeset(edge_attrs) |> Ecto.Changeset.put_change(:inserted_at, at)
+
+            _ ->
+              Edge.changeset(%Edge{}, edge_attrs)
+          end
+
+        case Repo.insert(changeset) do
           {:ok, edge} ->
             audit_change(workspace_id, edge, "create")
             broadcast(workspace_id, {:edge_created, edge})

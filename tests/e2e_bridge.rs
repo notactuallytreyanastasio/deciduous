@@ -545,7 +545,10 @@ fn wal_replay_does_not_overwrite_a_newer_server_edit_of_the_same_field() {
         json!({"node_id": uuid, "status": "completed"}),
     );
     p.set_remote_url(&server.url);
-    p.ok(&["remote", "push"]);
+    // Refused, so the push exits 1 (round-2 BRIDGE-N10), and the pull
+    // takes the server's value, which settles the refusal (BRIDGE-N9).
+    let push = p.dx(&["remote", "push"]);
+    assert!(!push.ok(), "a refused push exited 0:\n{}", push.all());
     p.ok(&["remote", "pull"]);
     assert_eq!(
         server.view(&ws).nodes[&n].status,

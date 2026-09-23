@@ -36,7 +36,9 @@ defmodule DeciduousMcp.Graph.Nodes do
   Updates an existing node. Only provided fields are changed.
 
   A soft-deleted node is refused with `{:error, :deleted}`: the tools check
-  first, and this is the belt for every other caller.
+  first, and this is the belt for every other caller. `revive: true` (a
+  CLI's edit made after the delete, see `Sync.Ops`) clears `deleted_at`
+  instead and applies the edit.
 
   `merge_metadata: true` treats `attrs.metadata` as a patch on the stored
   map (JSON merge patch, top level): keys given are set, keys given as nil
@@ -47,21 +49,36 @@ defmodule DeciduousMcp.Graph.Nodes do
   replaying a CLI node wants.
   """
   def update_node(node_id, attrs, opts \\ []) do
+    revive = opts[:revive] == true
+
     Repo.transaction(fn ->
       case Node |> lock("FOR UPDATE") |> Repo.get(node_id) do
         nil ->
           Repo.rollback(:not_found)
 
-        %Node{deleted_at: %DateTime{}} ->
+        %Node{deleted_at: %DateTime{}} when not revive ->
           Repo.rollback(:deleted)
 
         node ->
           attrs = if opts[:merge_metadata], do: merge_metadata(node, attrs), else: attrs
+          revived = revive and node.deleted_at != nil
+          key = if Enum.any?(Map.keys(attrs), &is_binary/1), do: "deleted_at", else: :deleted_at
+          attrs = if revived, do: Map.put(attrs, key, nil), else: attrs
 
           case node |> Node.update_changeset(attrs) |> Repo.update() do
             {:ok, updated} ->
-              audit_change(node.workspace_id, updated, "update", attrs)
-              broadcast(node.workspace_id, {:node_updated, updated})
+              audit_change(
+                node.workspace_id,
+                updated,
+                if(revived, do: "restore", else: "update"),
+                attrs
+              )
+
+              broadcast(
+                node.workspace_id,
+                if(revived, do: {:node_created, updated}, else: {:node_updated, updated})
+              )
+
               updated
 
             {:error, changeset} ->
@@ -83,7 +100,15 @@ defmodule DeciduousMcp.Graph.Nodes do
   node serialise instead of both committing against a node the other one
   had already changed.
   """
-  def delete_node(node_id) do
+  def delete_node(node_id, opts \\ []) do
+    # `at:` dates the tombstone when the delete was made (a CLI's queued
+    # delete), never later than now.
+    at =
+      case opts[:at] do
+        %DateTime{} = t -> Enum.min([t, DateTime.utc_now()], DateTime)
+        nil -> DateTime.utc_now()
+      end
+
     Repo.transaction(fn ->
       case Node |> lock("FOR UPDATE") |> Repo.get(node_id) do
         nil ->
@@ -94,7 +119,7 @@ defmodule DeciduousMcp.Graph.Nodes do
 
         node ->
           case node
-               |> Node.update_changeset(%{deleted_at: DateTime.utc_now()})
+               |> Node.update_changeset(%{deleted_at: at})
                |> Repo.update() do
             {:ok, deleted} ->
               audit_change(node.workspace_id, deleted, "delete")

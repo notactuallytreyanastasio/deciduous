@@ -52,7 +52,7 @@ defmodule DeciduousMcp.Graph.Query do
           end),
         else: Enum.map(nodes, serialize)
 
-    %{
+    graph = %{
       nodes: serialized,
       edges: Enum.map(edges, &serialize_edge(&1, details?)),
       themes: Enum.map(themes, &serialize_theme/1),
@@ -66,6 +66,35 @@ defmodule DeciduousMcp.Graph.Query do
         exported_at: DateTime.utc_now() |> DateTime.to_iso8601()
       }
     }
+
+    # Unlinks, beside the tombstoned nodes: without them an edge an agent
+    # removed stayed on every clone that had it. A key of its own rather
+    # than rows in `edges`, where a 1.0.7 CLI would read them as live.
+    if tombstones?,
+      do: Map.put(graph, :edge_tombstones, fetch_edge_tombstones(scope)),
+      else: graph
+  end
+
+  defp fetch_edge_tombstones(:global), do: []
+
+  defp fetch_edge_tombstones(workspace_id) do
+    %{rows: rows} =
+      Repo.query!(
+        """
+        SELECT from_change_id, to_change_id, edge_type, deleted_at FROM edge_tombstones
+        WHERE workspace_id = $1 ORDER BY deleted_at
+        """,
+        [Ecto.UUID.dump!(workspace_id)]
+      )
+
+    Enum.map(rows, fn [f, t, type, at] ->
+      %{
+        from_change_id: f,
+        to_change_id: t,
+        edge_type: type,
+        deleted_at: at |> DateTime.from_naive!("Etc/UTC") |> DateTime.to_iso8601()
+      }
+    end)
   end
 
   @doc """

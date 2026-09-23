@@ -798,8 +798,10 @@ fn pull_removes_a_node_the_server_deleted() {
 }
 
 // C4 (the push half): a node an agent deleted is not re-sent by later
-// writes, and an edit to it is refused by the server loudly, not applied to
-// the tombstone or silently dropped.
+// writes, and an edit to it made before the delete is refused by the server
+// loudly, not applied to the tombstone or silently dropped. (An edit made
+// after the delete brings the node back, as git's merge does; see
+// e2e_conflicts log_conflicts_an_edit_after_a_delete_...)
 #[test]
 #[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
 fn a_node_deleted_on_the_server_is_not_resent_and_edits_to_it_are_refused_loudly() {
@@ -814,6 +816,9 @@ fn a_node_deleted_on_the_server_is_not_resent_and_edits_to_it_are_refused_loudly
         .as_str()
         .unwrap()
         .to_string();
+    set_remote_url(&dir, &dead_url());
+    sb.dx_ok(&dir, &["status", "1", "completed"]);
+    set_remote_url(&dir, &url);
     mcp(
         &url,
         &token,
@@ -823,11 +828,9 @@ fn a_node_deleted_on_the_server_is_not_resent_and_edits_to_it_are_refused_loudly
 
     let out = sb.dx_ok(&dir, &["add", "goal", "unrelated"]);
     assert!(!out.contains("Pushed"), "{out}");
-    assert_eq!(live_titles(&export(&url, &token, &ws)), ["unrelated"]);
-
-    let out = sb.dx_ok(&dir, &["status", "1", "completed"]);
     assert!(out.contains("Rejected"), "{out}");
     assert!(out.contains("deleted on the server"), "{out}");
+    assert_eq!(live_titles(&export(&url, &token, &ws)), ["unrelated"]);
     let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
     assert!(out.contains("1 rejected"), "{out}");
     sb.dx_ok(&dir, &["remote", "push", "--drop-rejected"]);
@@ -878,7 +881,11 @@ fn a_queued_edit_does_not_overwrite_a_newer_agent_edit_to_the_same_field() {
         ],
     );
 
-    let out = sb.dx_ok(&dir, &["remote", "push"]);
+    // A push the server refused anything of exits 1 (round-2 BRIDGE-N10):
+    // the refused write has not reached it.
+    let raw = sb.dx(&dir, &["remote", "push"]);
+    let out = format!("{}{}", text(&raw.stdout), text(&raw.stderr));
+    assert!(!raw.status.success(), "a refused push exited 0: {out}");
     assert!(out.contains("1 applied"), "{out}");
     assert!(out.contains("Rejected"), "the conflict is reported: {out}");
     assert!(
@@ -920,6 +927,11 @@ fn a_node_the_server_deleted_is_not_seeded_back_and_pull_removes_it() {
     let dir = sb.remote_repo("del3", &url, &ws);
 
     sb.dx_ok(&dir, &["add", "action", "a1"]);
+    // Edited before the agent's delete: an edit made after it would bring
+    // the node back.
+    set_remote_url(&dir, &dead_url());
+    sb.dx(&dir, &["status", "1", "completed"]);
+    set_remote_url(&dir, &url);
     let g = export(&url, &token, &ws);
     mcp(
         &url,
@@ -931,7 +943,6 @@ fn a_node_the_server_deleted_is_not_seeded_back_and_pull_removes_it() {
         )],
     );
     sb.dx_ok(&dir, &["add", "goal", "g2"]);
-    sb.dx(&dir, &["status", "1", "completed"]);
     sb.dx(&dir, &["link", "2", "1"]);
     sb.dx_ok(&dir, &["remote", "push", "--drop-rejected"]);
 
@@ -1087,7 +1098,14 @@ fn an_attached_document_is_reported_and_seeded_with_its_bytes() {
     let dir = sb.remote_repo("doc", &url, &ws);
     sb.dx_ok(&dir, &["add", "goal", "has a spec"]);
     std::fs::write(dir.join("spec.txt"), "the spec, in full\n").unwrap();
+    // An attach is an op now and reaches the server by itself (round-2
+    // BRIDGE-N4). One made with no [remote] (before `remote init`, or by
+    // 1.0.7) is what status reports and --seed sends.
+    let cfg = dir.join(".deciduous").join("config.toml");
+    let saved = std::fs::read_to_string(&cfg).unwrap();
+    std::fs::write(&cfg, "").unwrap();
     sb.dx_ok(&dir, &["doc", "attach", "1", "spec.txt"]);
+    std::fs::write(&cfg, saved).unwrap();
 
     let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
     assert!(!out.contains("In sync"), "{out}");
@@ -1218,8 +1236,10 @@ fn a_claimed_workspace_refuses_unborn_and_unrelated_repositories_on_every_path()
         format!("[remote]\nurl = \"{url}\"\nworkspace = \"{name}\"\n"),
     )
     .unwrap();
+    // Nothing is sent from a repository with no commit (round-2
+    // BRIDGE-N7): the write waits, and says why.
     let out = sb.dx_ok(&b, &["add", "goal", "B goal before first commit"]);
-    assert!(out.contains("refused"), "{out}");
+    assert!(out.contains("no commit yet"), "{out}");
     assert!(
         !out.contains("once the server is reachable"),
         "a refusal is not an outage: {out}"
@@ -1716,7 +1736,10 @@ fn server_n1_a_nul_in_one_write_does_not_stop_the_writes_after_it() {
     assert_eq!(live_titles(&export(&url, &token, &ws)), ["after"]);
     let st = sb.dx(&dir, &["remote", "status"]);
     let st = text(&st.stdout);
-    assert!(st.contains("0 write(s) waiting, 1 rejected"), "{st}");
+    // The node is on neither side, so the refusal is settled: listed, and
+    // not counted in the header (round-2 verification of chapter 29).
+    assert!(st.contains("0 write(s) waiting, 0 rejected"), "{st}");
+    assert!(st.contains("settled"), "{st}");
 }
 
 impl Sandbox {

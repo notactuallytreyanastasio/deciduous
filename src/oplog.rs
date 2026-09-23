@@ -82,6 +82,11 @@ pub const FILE_NAME: &str = "remote-log.jsonl";
 /// Where lines of the log that could not be read are moved. See the module
 /// docs.
 pub const UNREADABLE_FILE: &str = "remote-log.unreadable";
+/// Edits the server took from this machine since the last `remote pull`,
+/// one op per line. With the pull's copy of each node (the database's
+/// remote_base) it says what the server held when this machine last knew:
+/// a field that differs from both was changed there by someone else.
+pub const DELIVERED_FILE: &str = "remote-delivered.jsonl";
 
 /// One graph change, as the server's `POST /ops` receives it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -89,9 +94,26 @@ pub struct Op {
     pub op_id: String,
     /// When the local write happened.
     pub at: String,
+    /// `git` for a write this machine applied from graph.json: a
+    /// teammate's edit that reached it through git, which the server may
+    /// already have, or have something newer than. The server ignores it;
+    /// a refusal of such an op means the server is ahead of git, which is
+    /// not a failure of anyone's write (see `remote::print_rejected`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin: Option<String>,
     #[serde(flatten)]
     pub body: OpBody,
 }
+
+impl Op {
+    /// Whether this op carries an edit that came through git.
+    pub fn from_git(&self) -> bool {
+        self.origin.as_deref() == Some(GIT)
+    }
+}
+
+/// [`Op::origin`] of an edit applied from graph.json.
+pub const GIT: &str = "git";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -127,8 +149,20 @@ pub enum OpBody {
         #[serde(default, skip_serializing_if = "Map::is_empty")]
         was_metadata: Map<String, Value>,
     },
+    /// `was` holds the node's title, description and status and
+    /// `was_metadata` its whole metadata map, as this copy held them when
+    /// it deleted the node. The server deletes only while it holds exactly
+    /// that: a delete that waited in the queue must not win over an edit
+    /// made after it (round-2 NEW-2). An old log's delete has neither and
+    /// is refused by the server, by name.
     DeleteNode {
         change_id: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        node_type: Option<String>,
+        #[serde(default)]
+        was: Map<String, Value>,
+        #[serde(default)]
+        was_metadata: Map<String, Value>,
     },
     CreateEdge {
         from_change_id: String,
@@ -140,10 +174,49 @@ pub enum OpBody {
         weight: Option<f64>,
         created_at: String,
     },
+    /// A document attached to a node. The bytes go to `PUT /blob/:hash`
+    /// before the op (see `remote::replay`).
+    AttachDocument {
+        change_id: String,
+        node_change_id: String,
+        content_hash: String,
+        original_filename: String,
+        storage_filename: String,
+        mime_type: String,
+        file_size: i64,
+        #[serde(default)]
+        description: Option<String>,
+        description_source: String,
+        #[serde(default)]
+        attached_by: Option<String>,
+        attached_at: String,
+    },
+    /// Detaching is how a pasted secret leaves the shared graph; it used to
+    /// stay on the server (round-2 BRIDGE-N4).
+    DetachDocument {
+        change_id: String,
+        node_change_id: String,
+    },
+    /// Applied only while the server's description is `was_description`.
+    DescribeDocument {
+        change_id: String,
+        node_change_id: String,
+        #[serde(default)]
+        description: Option<String>,
+        description_source: String,
+        #[serde(default)]
+        was_description: Option<String>,
+    },
+    /// Ordered against a link of the same edge by when each was made: the
+    /// server refuses an unlink older than the edge it holds. The unlink's
+    /// time is the op's `at`, or `deleted_at` when the unlink came from
+    /// graph.json (a teammate's, through git) and is older than the op.
     DeleteEdge {
         from_change_id: String,
         to_change_id: String,
         edge_type: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        deleted_at: Option<String>,
     },
 }
 
@@ -153,7 +226,7 @@ impl OpBody {
         match self {
             OpBody::CreateNode { change_id, .. }
             | OpBody::UpdateNode { change_id, .. }
-            | OpBody::DeleteNode { change_id } => vec![change_id],
+            | OpBody::DeleteNode { change_id, .. } => vec![change_id],
             OpBody::CreateEdge {
                 from_change_id,
                 to_change_id,
@@ -164,6 +237,19 @@ impl OpBody {
                 to_change_id,
                 ..
             } => vec![from_change_id, to_change_id],
+            OpBody::AttachDocument { node_change_id, .. }
+            | OpBody::DetachDocument { node_change_id, .. }
+            | OpBody::DescribeDocument { node_change_id, .. } => vec![node_change_id],
+        }
+    }
+
+    /// The document this op writes, for a document op.
+    pub fn document(&self) -> Option<&str> {
+        match self {
+            OpBody::AttachDocument { change_id, .. }
+            | OpBody::DetachDocument { change_id, .. }
+            | OpBody::DescribeDocument { change_id, .. } => Some(change_id),
+            _ => None,
         }
     }
 
@@ -193,7 +279,7 @@ impl OpBody {
                 fields.extend(metadata.keys().map(|k| format!("metadata.{k}")));
                 format!("update {} {}", short(change_id), fields.join(" "))
             }
-            OpBody::DeleteNode { change_id } => format!("delete node {}", short(change_id)),
+            OpBody::DeleteNode { change_id, .. } => format!("delete node {}", short(change_id)),
             OpBody::CreateEdge {
                 from_change_id,
                 to_change_id,
@@ -208,11 +294,31 @@ impl OpBody {
                 from_change_id,
                 to_change_id,
                 edge_type,
+                ..
             } => format!(
                 "unlink {} -> {} ({edge_type})",
                 short(from_change_id),
                 short(to_change_id)
             ),
+            OpBody::AttachDocument {
+                original_filename,
+                node_change_id,
+                ..
+            } => format!(
+                "attach \"{original_filename}\" to {}",
+                short(node_change_id)
+            ),
+            OpBody::DetachDocument {
+                change_id,
+                node_change_id,
+            } => format!(
+                "detach document {} from {}",
+                short(change_id),
+                short(node_change_id)
+            ),
+            OpBody::DescribeDocument { change_id, .. } => {
+                format!("describe document {}", short(change_id))
+            }
         }
     }
 }
@@ -281,6 +387,9 @@ pub fn is_set_aside(reason: &str) -> bool {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "entry", rename_all = "snake_case")]
+// Entries are read and written one at a time; boxing the op would only
+// move the allocation.
+#[allow(clippy::large_enum_variant)]
 enum Entry {
     Op(Op),
     Ack(Ack),
@@ -474,6 +583,7 @@ impl OpLog {
         Op {
             op_id: uuid::Uuid::new_v4().to_string(),
             at: chrono::Utc::now().to_rfc3339(),
+            origin: None,
             body,
         }
     }
@@ -712,6 +822,74 @@ impl OpLog {
         self.rewrite(|op, ack| {
             !(ack.is_some_and(|a| a.is_rejected())
                 && op.body.change_ids().iter().any(|c| change_ids.contains(*c)))
+        })
+    }
+
+    pub fn delivered_path(&self) -> PathBuf {
+        self.path.with_file_name(DELIVERED_FILE)
+    }
+
+    /// Records creates and updates the server answered `applied` or
+    /// `exists`: it holds their values now.
+    pub fn record_delivered(&self, ops: &[&Op]) -> Result<(), String> {
+        let ops: Vec<&&Op> = ops
+            .iter()
+            .filter(|o| {
+                matches!(
+                    o.body,
+                    OpBody::CreateNode { .. } | OpBody::UpdateNode { .. }
+                )
+            })
+            .collect();
+        if ops.is_empty() {
+            return Ok(());
+        }
+        let mut text = String::new();
+        for op in ops {
+            text.push_str(&serde_json::to_string(op).map_err(|e| e.to_string())?);
+            text.push('\n');
+        }
+        let path = self.delivered_path();
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut f| f.write_all(text.as_bytes()))
+            .map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// What [`Self::record_delivered`] kept, oldest first. A line that does
+    /// not parse is skipped: the file only narrows what `--repair` treats
+    /// as this copy's edit, never widens it.
+    pub fn delivered(&self) -> Vec<Op> {
+        std::fs::read_to_string(self.delivered_path())
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect()
+    }
+
+    /// A pull has just recorded what the server holds.
+    pub fn clear_delivered(&self) -> Result<(), String> {
+        match std::fs::remove_file(self.delivered_path()) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("{}: {e}", self.delivered_path().display())),
+        }
+    }
+
+    /// Drops the server's refusals among `op_ids` (never an op this machine
+    /// set aside: that is a write the server has not judged).
+    pub fn drop_refused(
+        &self,
+        op_ids: &std::collections::HashSet<String>,
+    ) -> Result<usize, String> {
+        if op_ids.is_empty() {
+            return Ok(0);
+        }
+        self.rewrite(|op, ack| {
+            !(ack.is_some_and(|a| a.is_rejected() && !a.is_set_aside())
+                && op_ids.contains(&op.op_id))
         })
     }
 
@@ -980,6 +1158,7 @@ mod tests {
         let v = serde_json::to_value(Entry::Op(Op {
             op_id: "o".into(),
             at: "t".into(),
+            origin: None,
             body: status("c", "completed"),
         }))
         .unwrap();

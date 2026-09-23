@@ -56,6 +56,48 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
 
   defp node(ws, cid), do: Repo.get_by!(Node, workspace_id: ws.id, change_id: cid)
 
+  # A delete says what the node held; `create/3`'s defaults unless changed.
+  defp delete(cid, was, meta \\ %{"branch" => "main"}) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "delete_node",
+      change_id: cid,
+      was: Map.merge(%{"title" => cid, "description" => nil, "status" => "pending"}, was),
+      was_metadata: meta
+    }
+  end
+
+  defp link(from, to, made) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "create_edge",
+      from_change_id: from,
+      to_change_id: to,
+      edge_type: "leads_to",
+      created_at: made
+    }
+  end
+
+  defp unlink(from, to, at) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "delete_edge",
+      from_change_id: from,
+      to_change_id: to,
+      edge_type: "leads_to",
+      at: at
+    }
+  end
+
+  defp export(token, ws) do
+    conn =
+      conn(:get, "/export?workspace=" <> ws)
+      |> put_req_header("authorization", "Bearer " <> token)
+      |> Router.call(@opts)
+
+    Jason.decode!(conn.resp_body)
+  end
+
   test "a status op changes the status and leaves an agent's title and description alone",
        %{token: token} do
     {200, _} = ops(token, "ops-c1", [create("a1", "a1")])
@@ -157,7 +199,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       from_change_id: "e1",
       to_change_id: "e2",
       edge_type: "leads_to",
-      rationale: "why"
+      rationale: "why",
+      created_at: "2016-02-01T00:00:01-05:00"
     }
 
     {200, %{"results" => [r]}} =
@@ -171,7 +214,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       kind: "delete_edge",
       from_change_id: "e1",
       to_change_id: "e2",
-      edge_type: "leads_to"
+      edge_type: "leads_to",
+      at: "2016-02-01T00:00:02-05:00"
     }
 
     {200, %{"results" => [r]}} = ops(token, "ops-edge", [del])
@@ -180,7 +224,7 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
 
     {200, %{"results" => [r]}} =
       ops(token, "ops-edge", [
-        %{op_id: Ecto.UUID.generate(), kind: "delete_node", change_id: "e2"}
+        delete("e2", %{"title" => "e2"})
       ])
 
     assert r["result"] == "applied"
@@ -365,7 +409,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       from_change_id: "a",
       to_change_id: "c",
       edge_type: "leads_to",
-      weight: Integer.pow(10, 400)
+      weight: Integer.pow(10, 400),
+      created_at: "2016-02-01T00:00:01-05:00"
     }
 
     {status, body} = ops(token, ws, [huge, create("after", "after")])
@@ -389,5 +434,273 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     assert r["result"] == "rejected"
     refute r["reason"] =~ "<<", r["reason"]
     assert r["reason"] =~ ~S(metadata."a\0b"), r["reason"]
+  end
+
+  # --- round 2: every op carries what it was made against -------------------
+
+  test "new_2: a delete made before a newer edit is refused, and the node stays",
+       %{token: token} do
+    ws = "ops-new2-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    # Bob's edit reached the server first; alice's delete was made before it.
+    {:ok, _} = Nodes.update_node(node(w, "c").id, %{status: "completed"})
+
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("c", %{"title" => "C"})])
+    assert r["result"] == "rejected", inspect(r)
+
+    assert r["reason"] =~
+             ~s(status: the server has "completed", this copy deleted it at "pending")
+
+    assert is_nil(node(w, "c").deleted_at)
+
+    # A delete made over what the server holds goes through.
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [delete("c", %{"title" => "C", "status" => "completed"})])
+
+    assert r["result"] == "applied", inspect(r)
+    refute is_nil(node(w, "c").deleted_at)
+  end
+
+  # Verification of chapter 29 (delete first, edit later): alice deleted C
+  # online, bob, offline and unaware, set its status 1.1 s later. git keeps
+  # bob's edit; the server refused it as an edit to a deleted node, and the
+  # next pulls deleted his edit on every clone.
+  defp edit_at(cid, at, set, was) do
+    %{
+      op_id: Ecto.UUID.generate(),
+      kind: "update_node",
+      change_id: cid,
+      at: at,
+      set: set,
+      was: was
+    }
+  end
+
+  defp iso(dt), do: DateTime.to_iso8601(dt)
+
+  test "log_conflicts_delete_first: an edit made after an agent's delete brings the node back",
+       %{token: token} do
+    ws = "ops-dfirst-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    {:ok, _} = Nodes.delete_node(node(w, "c").id)
+    later = DateTime.add(DateTime.utc_now(), 1, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(later), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "applied", inspect(r)
+    assert is_nil(node(w, "c").deleted_at)
+    assert node(w, "c").status == "completed"
+    assert node(w, "c").title == "C"
+  end
+
+  test "log_conflicts_delete_first: an edit made before the delete stays refused, with both times",
+       %{token: token} do
+    ws = "ops-dfirst2-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    earlier = DateTime.add(DateTime.utc_now(), -5, :second)
+    {:ok, _} = Nodes.delete_node(node(w, "c").id)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(earlier), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "was deleted on the server at"
+    assert r["reason"] =~ iso(DateTime.truncate(earlier, :microsecond))
+    refute is_nil(node(w, "c").deleted_at)
+  end
+
+  test "log_conflicts_delete_first: an offline delete is dated when it was made, not when it arrived",
+       %{token: token} do
+    ws = "ops-dfirst3-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    made = DateTime.add(DateTime.utc_now(), -60, :second)
+    edited = DateTime.add(made, 30, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [Map.put(delete("c", %{"title" => "C"}), :at, iso(made))])
+
+    assert r["result"] == "applied", inspect(r)
+    assert DateTime.compare(node(w, "c").deleted_at, DateTime.truncate(made, :microsecond)) == :eq
+
+    # Bob's edit was made after the delete and reached the server after it.
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("c", iso(edited), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "applied", inspect(r)
+    assert node(w, "c").status == "completed"
+    assert is_nil(node(w, "c").deleted_at)
+  end
+
+  test "log_conflicts_delete_first: an edit does not bring back a node the server never had",
+       %{token: token} do
+    ws = "ops-dfirst4-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("t", %{"title" => "T"})])
+    assert r["result"] == "absent"
+    later = DateTime.add(DateTime.utc_now(), 1, :second)
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [edit_at("t", iso(later), %{status: "completed"}, %{status: "pending"})])
+
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "never held"
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    refute is_nil(node(w, "t").deleted_at)
+  end
+
+  test "new_2: a delete that does not say what it deleted is refused", %{token: token} do
+    ws = "ops-new2b-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [%{op_id: Ecto.UUID.generate(), kind: "delete_node", change_id: "c"}])
+
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "does not say what the node held"
+  end
+
+  test "new_2: a metadata key changed on the server stops a delete", %{token: token} do
+    ws = "ops-new2c-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("c", "C")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+
+    {:ok, _} =
+      Nodes.update_node(node(w, "c").id, %{metadata: %{"branch" => "main", "prompt" => "p"}})
+
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("c", %{"title" => "C"})])
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ ~s(metadata.prompt: the server has "p", this copy deleted it at nil)
+  end
+
+  test "new_3: a delete of a node the server never had leaves a tombstone the create meets",
+       %{token: token} do
+    ws = "ops-new3n-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, %{"results" => [r]}} = ops(token, ws, [delete("t", %{"title" => "T"})])
+    assert r["result"] == "absent"
+
+    {200, %{"results" => [r]}} = ops(token, ws, [create("t", "T")])
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "was deleted on the server"
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    refute is_nil(node(w, "t").deleted_at)
+  end
+
+  test "new_3: an unlink leaves a tombstone; a link made before it is refused, one after applied",
+       %{token: token} do
+    ws = "ops-new3e-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("b", "b")])
+
+    # Bob unlinks an edge the server never had (it reached him through git).
+    {200, %{"results" => [r]}} = ops(token, ws, [unlink("a", "b", "2016-02-01T00:00:05Z")])
+    assert r["result"] == "absent"
+
+    # Alice's link, made before the unlink, replayed after it.
+    {200, %{"results" => [r]}} = ops(token, ws, [link("a", "b", "2016-02-01T00:00:03Z")])
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "was unlinked on the server"
+
+    [t] = export(token, ws)["edge_tombstones"]
+    assert t["from_change_id"] == "a" and t["deleted_at"] =~ "2016-02-01T00:00:05"
+
+    # A link made after the unlink is a relink, and removes the tombstone.
+    {200, %{"results" => [r]}} = ops(token, ws, [link("a", "b", "2016-02-01T00:00:09Z")])
+    assert r["result"] == "applied", inspect(r)
+    assert export(token, ws)["edge_tombstones"] == []
+  end
+
+  test "new_3: an unlink older than the edge the server holds is refused", %{token: token} do
+    ws = "ops-new3r-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("b", "b")])
+
+    {200, [_]} =
+      then(ops(token, ws, [link("a", "b", "2016-02-01T00:00:09Z")]), fn {s, b} ->
+        {s, b["results"]}
+      end)
+
+    {200, %{"results" => [r]}} = ops(token, ws, [unlink("a", "b", "2016-02-01T00:00:05Z")])
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "was linked again on the server"
+    assert length(export(token, ws)["edges"]) == 1
+
+    {200, %{"results" => [r]}} = ops(token, ws, [unlink("a", "b", "2016-02-01T00:00:10Z")])
+    assert r["result"] == "applied"
+    assert export(token, ws)["edges"] == []
+    [t] = export(token, ws)["edge_tombstones"]
+    assert t["deleted_at"] =~ "2016-02-01T00:00:10"
+  end
+
+  test "stack: an agent's unlink is in /export as an edge tombstone", %{token: token} do
+    ws = "ops-stack-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("b", "b")])
+    {200, _} = ops(token, ws, [link("a", "b", "2016-02-01T00:00:01Z")])
+    w = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: ws)
+    {:ok, _} = DeciduousMcp.Graph.Edges.delete_edge(node(w, "a").id, node(w, "b").id)
+
+    [t] = export(token, ws)["edge_tombstones"]
+    assert {t["from_change_id"], t["to_change_id"], t["edge_type"]} == {"a", "b", "leads_to"}
+  end
+
+  test "bridge_n4: attach, describe and detach reach the server as ops", %{token: token} do
+    ws = "ops-n4-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("n", "n")])
+    hash = :crypto.hash(:sha256, "secret") |> Base.encode16(case: :lower)
+
+    attach = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "attach_document",
+      change_id: "d1",
+      node_change_id: "n",
+      content_hash: hash,
+      original_filename: "secret.txt",
+      storage_filename: hash <> ".txt",
+      mime_type: "text/plain",
+      file_size: 6,
+      description: nil,
+      description_source: "none",
+      attached_at: "2016-02-01T00:00:00Z"
+    }
+
+    {200, %{"results" => [r]}} = ops(token, ws, [attach])
+    assert r["result"] == "applied", inspect(r)
+    [d] = export(token, ws)["documents"]
+    assert d["original_filename"] == "secret.txt"
+
+    describe = fn new, was ->
+      %{
+        op_id: Ecto.UUID.generate(),
+        kind: "describe_document",
+        change_id: "d1",
+        description: new,
+        description_source: "user",
+        was_description: was
+      }
+    end
+
+    {200, %{"results" => [r]}} = ops(token, ws, [describe.("first", nil)])
+    assert r["result"] == "applied", inspect(r)
+    {200, %{"results" => [r]}} = ops(token, ws, [describe.("stale", nil)])
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ ~s(the server has "first")
+
+    detach = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "detach_document",
+      change_id: "d1",
+      at: "2016-02-01T00:00:09Z"
+    }
+
+    {200, %{"results" => [r]}} = ops(token, ws, [detach])
+    assert r["result"] == "applied", inspect(r)
+    assert export(token, ws)["documents"] == []
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [%{attach | op_id: Ecto.UUID.generate()}])
+
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "was detached on the server"
   end
 end
