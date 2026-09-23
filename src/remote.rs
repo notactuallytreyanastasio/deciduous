@@ -298,9 +298,15 @@ impl Remote {
 /// change ids can be stale or absent in older databases. Keyed by the stored
 /// ids alone, one 7,805-node workspace looked like 51,092 missing edges, every
 /// one of which already existed.
+///
+/// An edge touching a node the server holds as a tombstone is not sent. The
+/// server refuses it, so sending it made `remote push` print "edges 1 of 1"
+/// on every run while nothing changed; the fix for that node is a pull,
+/// which `deleted_on_server` names.
 pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, usize) {
     use std::collections::{HashMap, HashSet};
     let have_nodes: HashSet<&str> = server.nodes.iter().map(|n| n.change_id.as_str()).collect();
+    let dead = server.tombstones();
     let have_edges: HashSet<(&str, &str, &str)> = server
         .edges
         .iter()
@@ -350,7 +356,7 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
             continue;
         };
         let kind = e["edge_type"].as_str().unwrap_or("leads_to");
-        if have_edges.contains(&(f, t, kind)) {
+        if have_edges.contains(&(f, t, kind)) || dead.contains_key(f) || dead.contains_key(t) {
             continue;
         }
         let mut e = e.clone();
@@ -385,13 +391,126 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
 /// Shared by `remote push` and the automatic push after a write, so both decide
 /// what is missing the same way — `missing_on_server` earned its edge-keying
 /// rules the hard way and there must not be a second copy of them.
-pub fn push_missing(remote: &Remote, graph: &Value) -> Result<Option<ImportReport>, String> {
+///
+/// Also returns the local nodes the server has deleted. Nothing a push sends
+/// can change those; they are the user's to pull (see `deleted_on_server`).
+pub fn push_missing(
+    remote: &Remote,
+    graph: &Value,
+) -> Result<(Option<ImportReport>, Vec<DeletedOnServer>), String> {
     let server = remote.export()?;
+    let deleted = deleted_on_server(graph, &server);
     let (missing, nodes, edges) = missing_on_server(graph, &server);
     if nodes == 0 && edges == 0 {
-        return Ok(None);
+        return Ok((None, deleted));
     }
-    remote.import(missing).map(Some)
+    remote.import(missing).map(|r| (Some(r), deleted))
+}
+
+/// A node this machine still has that the server holds as a tombstone.
+#[derive(Debug, Clone, PartialEq)]
+pub struct DeletedOnServer {
+    pub id: i64,
+    pub change_id: String,
+    pub title: String,
+    pub deleted_at: String,
+}
+
+/// The local nodes (from a `deciduous graph` value) that the server has
+/// deleted and this machine has not yet pulled.
+///
+/// This is the drift neither count nor push can resolve: the local side
+/// holds more, so `remote status` used to say push, and push has nothing
+/// the server will take. Only `remote pull` applies it.
+pub fn deleted_on_server(local: &Value, server: &RemoteGraph) -> Vec<DeletedOnServer> {
+    let dead = server.tombstones();
+    local["nodes"]
+        .as_array()
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter_map(|n| {
+                    let cid = n["change_id"].as_str()?;
+                    let at = dead.get(cid)?;
+                    Some(DeletedOnServer {
+                        id: n["id"].as_i64().unwrap_or_default(),
+                        change_id: cid.to_string(),
+                        title: n["title"].as_str().unwrap_or_default().to_string(),
+                        deleted_at: at.to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Local node and edge counts once `deleted` is applied: what the local
+/// graph will hold after a pull, for comparing with the server's live
+/// counts.
+pub fn counts_without(local: &Value, deleted: &[DeletedOnServer]) -> (usize, usize) {
+    use std::collections::HashSet;
+    let gone: HashSet<i64> = deleted.iter().map(|d| d.id).collect();
+    let nodes = local["nodes"].as_array().map_or(0, |n| {
+        n.iter()
+            .filter(|n| !n["id"].as_i64().is_some_and(|i| gone.contains(&i)))
+            .count()
+    });
+    let edges = local["edges"].as_array().map_or(0, |e| {
+        e.iter()
+            .filter(|e| {
+                !e["from_node_id"].as_i64().is_some_and(|i| gone.contains(&i))
+                    && !e["to_node_id"].as_i64().is_some_and(|i| gone.contains(&i))
+            })
+            .count()
+    });
+    (nodes, edges)
+}
+
+/// Prints what an import refused because the server had deleted it, if
+/// anything. The server names the change_ids; `graph` maps them back to
+/// local ids and titles so the user can tell which of their nodes it was.
+pub fn report_refused(r: &ImportReport, graph: &Value) {
+    use colored::Colorize;
+    if r.nodes.refused_deleted == 0 && r.edges.refused_deleted == 0 {
+        return;
+    }
+    eprintln!(
+        "{} the server refused {} node(s) and {} edge(s) because it has deleted them or \
+         their endpoints. `deciduous remote pull` applies those deletions here.",
+        "Note:".yellow(),
+        r.nodes.refused_deleted,
+        r.edges.refused_deleted
+    );
+    for ex in &r.nodes.refused_deleted_examples {
+        let cid = ex["change_id"].as_str().unwrap_or_default();
+        let local = graph["nodes"]
+            .as_array()
+            .and_then(|n| n.iter().find(|n| n["change_id"] == cid));
+        eprintln!(
+            "  {} \"{}\" deleted on the server at {}",
+            local
+                .and_then(|n| n["id"].as_i64())
+                .map_or_else(|| cid.to_string(), |i| i.to_string()),
+            local.and_then(|n| n["title"].as_str()).unwrap_or("?"),
+            ex["deleted_at"].as_str().unwrap_or("?")
+        );
+    }
+}
+
+/// Says that edits to nodes the server deleted were not sent.
+fn warn_edits_to_deleted(deleted: &[DeletedOnServer]) {
+    use colored::Colorize;
+    for d in deleted {
+        eprintln!(
+            "{} node {} \"{}\" was deleted on the server at {}, so this edit was not sent. \
+             It stays in the local database until `deciduous remote pull` removes the node here; \
+             to keep the change, add it again as a new node.",
+            "Warning:".yellow(),
+            d.id,
+            d.title,
+            d.deleted_at
+        );
+    }
 }
 
 /// Pushes to the server after a local write, without letting the server turn a
@@ -432,14 +551,30 @@ pub fn push_after_write(db: &Database, touched: &[i32]) {
             })?;
         let server = remote.export()?;
         let (mut payload, _, _) = missing_on_server(&graph, &server);
-        let added = add_touched_nodes(&mut payload, &graph, touched);
+        // A touched node the server has deleted is not re-sent: the server
+        // refuses it, and before it did, the push rewrote the tombstone and
+        // the next pull dropped the edit without a word. Say so instead.
+        let deleted: Vec<DeletedOnServer> = deleted_on_server(&graph, &server)
+            .into_iter()
+            .filter(|d| touched.contains(&(d.id as i32)))
+            .collect();
+        warn_edits_to_deleted(&deleted);
+        let live_touched: Vec<i32> = touched
+            .iter()
+            .copied()
+            .filter(|t| !deleted.iter().any(|d| d.id == *t as i64))
+            .collect();
+        let added = add_touched_nodes(&mut payload, &graph, &live_touched);
         if payload["nodes"].as_array().is_some_and(|n| n.is_empty())
             && payload["edges"].as_array().is_some_and(|e| e.is_empty())
             && added == 0
         {
             return Ok((remote, None));
         }
-        remote.import(payload).map(|r| (remote, Some(r)))
+        remote.import(payload).map(|r| {
+            report_refused(&r, &graph);
+            (remote, Some(r))
+        })
     });
     match pushed {
         Ok((_, None)) => {}
@@ -557,6 +692,14 @@ impl RemoteGraph {
     /// those as nodes would compare a local graph that no longer has the node
     /// with a server total that still does, and `remote status` would report
     /// drift forever: the same symptom tombstones exist to end.
+    /// change_id -> deleted_at for every tombstone in the export.
+    pub fn tombstones(&self) -> std::collections::HashMap<&str, &str> {
+        self.nodes
+            .iter()
+            .filter_map(|n| Some((n.change_id.as_str(), n.deleted_at.as_deref()?)))
+            .collect()
+    }
+
     pub fn live_counts(&self) -> RemoteCounts {
         RemoteCounts {
             nodes: self.nodes.iter().filter(|n| n.deleted_at.is_none()).count(),
@@ -603,6 +746,12 @@ pub struct ImportReport {
 pub struct CountPair {
     pub received: usize,
     pub upserted: usize,
+    /// Nodes the server would not write because it has deleted them. Absent
+    /// from a server older than this field, which wrote them anyway.
+    #[serde(default)]
+    pub refused_deleted: usize,
+    #[serde(default)]
+    pub refused_deleted_examples: Vec<Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -612,6 +761,8 @@ pub struct EdgeReport {
     pub unresolved: usize,
     #[serde(default)]
     pub stale_change_ids: usize,
+    #[serde(default)]
+    pub refused_deleted: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -688,12 +839,52 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
 
     let report = records::reconcile(db, store, false)?;
 
+    // A server tombstone wins, even over a local edit made after it.
+    // reconcile's rule among teammates is the opposite ("edited locally
+    // after someone deleted it: resurrect"), and that is right for a git
+    // file anyone can write. It is wrong here: the server refuses every
+    // write to a deleted node, so the resurrected node could never reach
+    // it, and `remote status` reported the same deletion after every pull
+    // while pull did nothing. The edit was refused, and the user was told
+    // so when it was made (`push_after_write`); this is where it goes.
+    let local = db
+        .get_graph()
+        .map_err(|e| format!("reading the local graph: {e}"))
+        .and_then(|g| {
+            serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
+        })?;
+    let overridden = deleted_on_server(&local, &graph);
+    for d in &overridden {
+        db.delete_node(d.id as i32, false)
+            .map_err(|e| format!("deleting node {} \"{}\": {e}", d.id, d.title))?;
+        // The local tombstone keeps the row's last fields, prompt included;
+        // the server's keeps none, because a delete is how a pasted secret
+        // leaves the graph. Keep the local deleted_at (now, later than the
+        // edit), so a teammate who synced the edit deletes it too.
+        let scrubbed = store
+            .read_node(&d.change_id)
+            .map_err(|e| format!("record store: {e}"))?
+            .map(|mut rec| {
+                rec.title = String::new();
+                rec.description = None;
+                rec.metadata = None;
+                rec
+            });
+        if let Some(rec) = scrubbed {
+            store
+                .write_node(&rec)
+                .map_err(|e| format!("record store: {e}"))?;
+        }
+    }
+
     Ok(PullReport {
         fetched_nodes: graph.nodes.len(),
         fetched_edges: graph.edges.len(),
         records_written,
         imported_nodes: report.nodes_imported,
         imported_edges: report.edges_imported,
+        deleted_nodes: report.nodes_deleted,
+        deleted_over_local_edits: overridden,
     })
 }
 
@@ -704,6 +895,11 @@ pub struct PullReport {
     pub records_written: usize,
     pub imported_nodes: usize,
     pub imported_edges: usize,
+    /// Nodes the server had deleted that reconcile deleted here.
+    pub deleted_nodes: usize,
+    /// Nodes the server had deleted that had been edited here after the
+    /// delete; deleted anyway, edit and all (see `pull`).
+    pub deleted_over_local_edits: Vec<DeletedOnServer>,
 }
 
 /// ureq puts the useful part of an HTTP failure in the response body, which
