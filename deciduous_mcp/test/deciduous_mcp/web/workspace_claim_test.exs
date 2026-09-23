@@ -156,4 +156,18 @@ defmodule DeciduousMcp.Web.WorkspaceClaimTest do
     assert get.(@a) == 200
     assert get.(nil) == 200
   end
+
+  test "/locate names the workspaces holding change_ids", %{token: token} do
+    graph = %{
+      "nodes" => [
+        %{"change_id" => "loc-1", "node_type" => "goal", "title" => "a"},
+        %{"change_id" => "loc-2", "node_type" => "goal", "title" => "b"}
+      ]
+    }
+
+    {200, _} = post(token, "/import", %{workspace: "old-name", graph: graph})
+
+    assert {200, %{"workspaces" => [%{"name" => "old-name", "nodes" => 2}]}} =
+             post(token, "/locate", %{change_ids: ["loc-1", "loc-2", "nowhere"]})
+  end
 end

@@ -582,10 +582,13 @@ fn renaming_or_cloning_the_repository_keeps_its_workspace() {
 fn a_worktree_uses_the_main_repositorys_workspace() {
     let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
     let main = sb.repo("wt-main");
-    // A 1.0.7 config: URL only, workspace derived on every call.
+    // A 1.0.7 config: URL only, workspace derived on every call. The server
+    // is asked which workspace holds this project's nodes (none here) before
+    // the derived name is recorded, so it has to answer.
+    let url = stub_server(serde_json::json!({"nodes": [], "edges": [], "documents": []}));
     std::fs::write(
         main.join(".deciduous").join("config.toml"),
-        format!("[remote]\nurl = \"{}\"\n", dead_url()),
+        format!("[remote]\nurl = \"{url}\"\n"),
     )
     .unwrap();
     sb.git(&main, &["add", ".deciduous/config.toml"]);
@@ -718,6 +721,7 @@ fn stub_server(export: Value) -> String {
             let reply = match path.as_str() {
                 "/health" => "ok".to_string(),
                 "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
                 "/ops" => {
                     let v: Value = serde_json::from_str(&body).unwrap();
                     let results: Vec<Value> = v["ops"]
@@ -1185,6 +1189,48 @@ fn a_shallow_clone_writes_to_its_repositorys_workspace() {
         live_titles(&export(&url, &token, &name)),
         ["from ci", "from the full clone"]
     );
+}
+
+// A repository written by 1.0.7 (URL-only config, workspace derived from
+// the directory name on every call, pushed through /import with no roots)
+// and then renamed: 1.0.8 recorded the new directory name and started a
+// second, empty graph.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_renamed_1_0_7_repository_keeps_writing_to_the_workspace_it_wrote_before() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let name = unique("wal-old");
+    let dir = sb.repo(&name);
+    std::fs::write(dir.join(".deciduous").join("config.toml"), "").unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "old1"]);
+
+    // What 1.0.7's push did: the local graph through /import, no roots.
+    let graph: Value = serde_json::from_str(&sb.dx_ok(&dir, &["graph"])).unwrap();
+    ureq::post(&format!("{url}/import"))
+        .set("authorization", &format!("Bearer {token}"))
+        .send_json(serde_json::json!({"workspace": name, "graph": graph}))
+        .unwrap();
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\n"),
+    )
+    .unwrap();
+
+    let moved = sb.path().join(format!("{name}-moved"));
+    std::fs::rename(&dir, &moved).unwrap();
+    let out = sb.dx_ok(&moved, &["add", "goal", "after the move"]);
+
+    assert_eq!(
+        config_workspace(&moved).as_deref(),
+        Some(name.as_str()),
+        "{out}"
+    );
+    assert_eq!(
+        live_titles(&export(&url, &token, &name)),
+        ["after the move", "old1"]
+    );
+    assert!(live_titles(&export(&url, &token, &format!("{name}-moved"))).is_empty());
 }
 
 // Two ops merging different metadata keys into one node at the same moment:

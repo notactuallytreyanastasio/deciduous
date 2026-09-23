@@ -12,6 +12,8 @@ defmodule DeciduousMcp.Web.Router do
     * `POST /import` — bulk ingest of one project's graph.
     * `POST /ops` — a CLI's queued writes, applied field by field, each at
       most once (see `DeciduousMcp.Sync.Ops`).
+    * `POST /locate` — which workspaces hold a set of change_ids, so a
+      1.0.7 project that was renamed can find the graph it wrote to.
     * `POST /claim` — ties a workspace to a repository's root commits, so two
       repositories with the same directory name cannot share one by accident
       (see `DeciduousMcp.Graph.Workspaces.claim/3`).
@@ -115,6 +117,34 @@ defmodule DeciduousMcp.Web.Router do
 
         {:too_large, conn} ->
           json(conn, 413, %{error: "claim exceeds #{@max_import_bytes} bytes"})
+
+        {:error, _} ->
+          json(conn, 400, %{error: "could not read body"})
+      end
+    end
+  end
+
+  # Which workspaces hold these change_ids. A 1.0.7 config names no
+  # workspace; 1.0.7 derived it from the directory name on every call, so
+  # after a rename the name it wrote under is known only to the server.
+  post "/locate" do
+    conn = Auth.call(conn, [])
+
+    if conn.halted do
+      conn
+    else
+      case read_whole_body(conn) do
+        {:ok, body, conn} ->
+          case Jason.decode(body) do
+            {:ok, %{"change_ids" => ids}} when is_list(ids) and length(ids) <= 1000 ->
+              json(conn, 200, %{workspaces: Workspaces.holding(Enum.filter(ids, &is_binary/1))})
+
+            _ ->
+              json(conn, 422, %{error: "body must be {\"change_ids\": [...]}, at most 1000"})
+          end
+
+        {:too_large, conn} ->
+          json(conn, 413, %{error: "locate exceeds #{@max_import_bytes} bytes"})
 
         {:error, _} ->
           json(conn, 400, %{error: "could not read body"})

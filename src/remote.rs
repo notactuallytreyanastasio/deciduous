@@ -251,45 +251,123 @@ fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
         .find(|p| p.exists())
 }
 
-/// Writes a derived workspace into a config that has a `[remote] url` and no
-/// workspace: one written by 1.0.7, which derived the name on every call.
-/// Recording it the first time it is used is what makes a later rename or a
-/// clone under another name keep writing to the same graph.
-fn record_derived_workspace(dir: &Path, url: &str, workspace: &str) {
+/// The workspace a config written by 1.0.7 (a `[remote] url` and no
+/// workspace) has been writing to, recorded in the config so it stops being
+/// derived.
+///
+/// 1.0.7 derived the name from the directory on every call. Recording the
+/// *current* directory name, as the first 1.0.8 build did, forked a project
+/// renamed since its last 1.0.7 write into a second, empty graph. So the
+/// server is asked first which workspaces hold this database's nodes
+/// (`POST /locate`), and the one that does is recorded. If none does (never
+/// pushed), the derived name is. If the server cannot be asked, nothing is
+/// recorded and the derived name is used for this call only, so the question
+/// is asked again next time.
+fn legacy_workspace(dir: &Path, url: &str, token: &str, derived: String) -> Result<String, String> {
     use colored::Colorize;
-    let Some(path) = project_config(dir) else {
-        return;
+    let Some(config) = project_config(dir) else {
+        return Ok(derived);
     };
-    let Ok(text) = std::fs::read_to_string(&path) else {
-        return;
+    let ids = local_change_ids(&config.with_file_name("deciduous.db"));
+    let chosen = if ids.is_empty() {
+        derived.clone()
+    } else {
+        #[derive(Deserialize)]
+        struct Held {
+            name: String,
+            nodes: usize,
+        }
+        #[derive(Deserialize)]
+        struct Reply {
+            workspaces: Vec<Held>,
+        }
+        let reply = ureq::post(&format!("{url}/locate"))
+            .set("authorization", &format!("Bearer {token}"))
+            .timeout(std::time::Duration::from_secs(15))
+            .send_json(serde_json::json!({ "change_ids": ids }))
+            .map_err(describe)
+            .and_then(|r| {
+                r.into_json::<Reply>()
+                    .map_err(|e| format!("the server's /locate answer was not a list: {e}"))
+            });
+        let held = match reply {
+            Ok(r) => r.workspaces,
+            // Asked again on the next call; see above.
+            Err(_) => return Ok(derived),
+        };
+        match held.as_slice() {
+            [] => derived.clone(),
+            _ if held.iter().any(|h| h.name == derived) => derived.clone(),
+            [one] => one.name.clone(),
+            many => {
+                return Err(format!(
+                    "this project's config names no workspace (it was written by 1.0.7, which used the \
+                     directory name), and this project's nodes are in more than one workspace on {url}: {}.\n\n\
+                     Record the one it should write to:\n\n    deciduous remote init {url} --workspace <name>",
+                    many.iter()
+                        .map(|h| format!("{} ({} nodes)", h.name, h.nodes))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        }
+    };
+
+    let Ok(text) = std::fs::read_to_string(&config) else {
+        return Ok(chosen);
     };
     let Ok(mut doc) = text.parse::<toml_edit::DocumentMut>() else {
-        return;
+        return Ok(chosen);
     };
     let same_url = doc
         .get("remote")
         .and_then(|r| r.get("url"))
         .and_then(|u| u.as_str())
         .is_some_and(|u| u.trim_end_matches('/') == url);
-    let has_ws = doc.get("remote").and_then(|r| r.get("workspace")).is_some();
-    if !same_url || has_ws {
-        return;
+    if !same_url || doc.get("remote").and_then(|r| r.get("workspace")).is_some() {
+        return Ok(chosen);
     }
-    doc["remote"]["workspace"] = toml_edit::value(workspace);
-    match std::fs::write(&path, doc.to_string()) {
+    doc["remote"]["workspace"] = toml_edit::value(chosen.as_str());
+    let why = if chosen == derived {
+        String::new()
+    } else {
+        format!(
+            " (the server holds this project's nodes there: the name this directory had when 1.0.7 wrote them, not \"{derived}\")"
+        )
+    };
+    match std::fs::write(&config, doc.to_string()) {
         Ok(()) => eprintln!(
-            "{} recorded workspace = \"{workspace}\" in {}, so renaming or cloning this \
+            "{} recorded workspace = \"{chosen}\"{why} in {}, so renaming or cloning this \
              repository keeps writing to the same graph. Commit that file.",
             "Note:".yellow(),
-            path.display()
+            config.display()
         ),
         Err(e) => eprintln!(
-            "{} could not record workspace = \"{workspace}\" in {}: {e}. \
+            "{} could not record workspace = \"{chosen}\" in {}: {e}. \
              Until it is recorded, renaming this directory changes which graph it writes to.",
             "Warning:".yellow(),
-            path.display()
+            config.display()
         ),
     }
+    Ok(chosen)
+}
+
+/// Up to 1,000 change_ids from a local database, newest first; empty when
+/// there is no database or it cannot be read.
+fn local_change_ids(db: &Path) -> Vec<String> {
+    let Ok(conn) =
+        rusqlite::Connection::open_with_flags(db, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
+    else {
+        return Vec::new();
+    };
+    let Ok(mut stmt) =
+        conn.prepare("SELECT change_id FROM decision_nodes WHERE change_id IS NOT NULL ORDER BY id DESC LIMIT 1000")
+    else {
+        return Vec::new();
+    };
+    stmt.query_map([], |r| r.get::<_, String>(0))
+        .map(|rows| rows.flatten().collect())
+        .unwrap_or_default()
 }
 
 /// Resolved settings for a call: where to send it, as which workspace.
@@ -311,19 +389,16 @@ impl Remote {
         })?;
 
         let url = url.trim_end_matches('/').to_string();
+        let token = token()?;
         let workspace = match &config.remote.workspace {
             Some(ws) => ws.clone(),
-            None => {
-                let ws = workspace_for(dir);
-                record_derived_workspace(dir, &url, &ws);
-                ws
-            }
+            None => legacy_workspace(dir, &url, &token, workspace_for(dir))?,
         };
 
         Ok(Self {
             url,
             workspace,
-            token: token()?,
+            token,
             repo_roots: repo_roots(dir),
         })
     }

@@ -221,6 +221,24 @@ defmodule DeciduousMcp.Graph.Workspaces do
 
   defp validate_roots(other), do: {:error, "repo_roots must be a list, got #{inspect(other)}"}
 
+  @doc """
+  Workspaces holding any of `change_ids`, with how many each holds, most
+  first. Deleted nodes count: they were written there.
+  """
+  def holding([]), do: []
+
+  def holding(change_ids) do
+    from(n in Node,
+      join: w in Workspace,
+      on: w.id == n.workspace_id,
+      where: n.change_id in ^change_ids,
+      group_by: w.name,
+      select: %{name: w.name, nodes: count(n.id)},
+      order_by: [desc: count(n.id), asc: w.name]
+    )
+    |> Repo.all()
+  end
+
   @max_name_length 128
 
   @doc """
