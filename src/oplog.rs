@@ -734,6 +734,21 @@ impl OpLog {
         })
     }
 
+    /// Drops the server's refusals among `op_ids` (never an op this machine
+    /// set aside: that is a write the server has not judged).
+    pub fn drop_refused(
+        &self,
+        op_ids: &std::collections::HashSet<String>,
+    ) -> Result<usize, String> {
+        if op_ids.is_empty() {
+            return Ok(0);
+        }
+        self.rewrite(|op, ack| {
+            !(ack.is_some_and(|a| a.is_rejected() && !a.is_set_aside())
+                && op_ids.contains(&op.op_id))
+        })
+    }
+
     fn rewrite(&self, keep: impl Fn(&Op, Option<&Ack>) -> bool) -> Result<usize, String> {
         self.rewrite_with(|op, ack| {
             if keep(op, ack) {

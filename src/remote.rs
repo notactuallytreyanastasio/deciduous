@@ -1533,6 +1533,157 @@ pub fn print_unreadable(state: &crate::oplog::LogState, log: &crate::oplog::OpLo
 /// and apart from them the ops this machine set aside, which are real
 /// writes the server never judged: the advice for one is wrong for the
 /// other.
+/// The server's refusals that are over: for everything the refused op
+/// wrote, this copy and the server now hold the same thing (a pull took the
+/// server's value, git brought the newer one, the same edit reached the
+/// server another way). Such a refusal asks nothing of anyone, and kept, it
+/// made `remote status` exit 1 while every row matched (round-2 BRIDGE-N10).
+/// An op this machine set aside is never settled here: it is a write the
+/// server has not seen.
+pub fn settled_refusals(
+    rejected: &[(crate::oplog::Op, crate::oplog::Ack)],
+    nodes: &[crate::db::DecisionNode],
+    edges: &[crate::db::DecisionEdge],
+    server: &RemoteGraph,
+) -> Vec<crate::oplog::Op> {
+    use crate::oplog::OpBody;
+    let here: std::collections::HashMap<&str, &crate::db::DecisionNode> =
+        nodes.iter().map(|n| (n.change_id.as_str(), n)).collect();
+    let there: std::collections::HashMap<&str, &RemoteNode> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_none())
+        .map(|n| (n.change_id.as_str(), n))
+        .collect();
+    let by_id: std::collections::HashMap<i32, &str> =
+        nodes.iter().map(|n| (n.id, n.change_id.as_str())).collect();
+    let edges_here: std::collections::HashSet<(String, String, String)> = edges
+        .iter()
+        .filter_map(|e| {
+            Some((
+                by_id.get(&e.from_node_id)?.to_string(),
+                by_id.get(&e.to_node_id)?.to_string(),
+                e.edge_type.clone(),
+            ))
+        })
+        .collect();
+    let edges_there: std::collections::HashSet<(String, String, String)> = server
+        .edges
+        .iter()
+        .filter_map(|e| {
+            let (f, t) = (e.from_change_id.as_deref()?, e.to_change_id.as_deref()?);
+            (there.contains_key(f) && there.contains_key(t))
+                .then(|| (f.to_string(), t.to_string(), e.edge_type.clone()))
+        })
+        .collect();
+    let same_node = |cid: &str| match (here.get(cid), there.get(cid)) {
+        (None, None) => true,
+        (Some(n), Some(s)) => node_fields_differ(n, s).is_empty(),
+        _ => false,
+    };
+    let same_edge = |f: &str, t: &str, k: &str| {
+        let key = (f.to_string(), t.to_string(), k.to_string());
+        edges_here.contains(&key) == edges_there.contains(&key)
+    };
+    rejected
+        .iter()
+        .filter(|(_, a)| !a.is_set_aside())
+        .filter(|(op, _)| match &op.body {
+            OpBody::UpdateNode {
+                change_id,
+                set,
+                metadata,
+                ..
+            } => match (here.get(change_id.as_str()), there.get(change_id.as_str())) {
+                (None, None) => true,
+                (Some(n), Some(s)) => {
+                    let differ = node_fields_differ(n, s);
+                    set.keys()
+                        .cloned()
+                        .chain(metadata.keys().map(|k| format!("metadata.{k}")))
+                        .all(|f| !differ.contains(&f))
+                }
+                _ => false,
+            },
+            OpBody::CreateNode { change_id, .. } | OpBody::DeleteNode { change_id, .. } => {
+                same_node(change_id)
+            }
+            OpBody::CreateEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+                ..
+            }
+            | OpBody::DeleteEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+                ..
+            } => same_edge(from_change_id, to_change_id, edge_type),
+        })
+        .map(|(op, _)| op.clone())
+        .collect()
+}
+
+/// The fields (`title`, `status`, `description`, `metadata.<key>`) in
+/// which this copy's node and the server's differ.
+fn node_fields_differ(n: &crate::db::DecisionNode, s: &RemoteNode) -> Vec<String> {
+    let mut out = Vec::new();
+    if n.title != s.title {
+        out.push("title".to_string());
+    }
+    if n.status != s.status {
+        out.push("status".to_string());
+    }
+    if n.description.as_deref().unwrap_or("") != s.description.as_deref().unwrap_or("") {
+        out.push("description".to_string());
+    }
+    if n.node_type != s.node_type {
+        out.push("type".to_string());
+    }
+    let here = metadata_map(n.metadata_json.as_deref());
+    let there = s
+        .metadata
+        .as_ref()
+        .and_then(|m| m.as_object().cloned())
+        .unwrap_or_default();
+    let keys: std::collections::BTreeSet<&String> = here.keys().chain(there.keys()).collect();
+    for k in keys {
+        if here.get(k) != there.get(k) {
+            out.push(format!("metadata.{k}"));
+        }
+    }
+    out
+}
+
+fn metadata_map(json: Option<&str>) -> serde_json::Map<String, Value> {
+    json.and_then(|m| serde_json::from_str::<Value>(m).ok())
+        .and_then(|v| v.as_object().cloned())
+        .unwrap_or_default()
+}
+
+/// Drops the settled refusals (see [`settled_refusals`]) and says so.
+pub fn drop_settled(
+    log: &crate::oplog::OpLog,
+    db: &Database,
+    server: &RemoteGraph,
+) -> Result<Vec<crate::oplog::Op>, String> {
+    let state = log.read()?;
+    if state.rejected.iter().all(|(_, a)| a.is_set_aside()) {
+        return Ok(Vec::new());
+    }
+    let nodes = db
+        .get_all_nodes()
+        .map_err(|e| format!("reading the local graph: {e}"))?;
+    let edges = db
+        .get_all_edges()
+        .map_err(|e| format!("reading the local graph: {e}"))?;
+    let settled = settled_refusals(&state.rejected, &nodes, &edges, server);
+    let ids: std::collections::HashSet<String> = settled.iter().map(|o| o.op_id.clone()).collect();
+    log.drop_refused(&ids)?;
+    Ok(settled)
+}
+
 pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplog::OpLog) {
     use colored::Colorize;
     let (aside, refused): (Vec<_>, Vec<_>) = rejected
@@ -2175,6 +2326,9 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
     let result = pull_server_rows(db, store, &graph, &mut written, log.as_ref());
     db.set_oplog(log.clone());
     let mut report = result?;
+    if let Some(log) = &log {
+        report.settled = drop_settled(log, db, &graph)?;
+    }
     report.imported_nodes += git.nodes_imported;
     report.updated_nodes += git.nodes_updated;
     report.removed_nodes += git.nodes_deleted;
@@ -2192,7 +2346,61 @@ fn pull_server_rows(
 ) -> Result<PullReport, String> {
     let written_before = *written;
 
+    // Fields the server refused an edit of: the refusal means the server
+    // holds something newer, so the pull takes it, whatever the stamps say.
+    // A refused edit is the newest thing here, so the node's stamp alone
+    // kept it, and the refusal's advice ("`remote pull` takes the server's
+    // value") was false (round-2 BRIDGE-N9).
+    let refused: std::collections::HashMap<String, std::collections::BTreeSet<String>> = match log {
+        Some(log) => refused_fields(&log.read()?.rejected),
+        None => Default::default(),
+    };
+
     let result = store.batch(|| -> Result<usize, String> {
+        for n in graph.nodes.iter().filter(|n| n.deleted_at.is_none()) {
+            let Some(fields) = refused.get(&n.change_id) else {
+                continue;
+            };
+            let Some(mut rec) = store.read_node(&n.change_id).map_err(|e| e.to_string())? else {
+                continue;
+            };
+            if rec.is_tombstone() {
+                continue;
+            }
+            let before = rec.clone();
+            for f in fields {
+                match f.as_str() {
+                    "title" => rec.title = n.title.clone(),
+                    "status" => rec.status = n.status.clone(),
+                    "description" => rec.description = n.description.clone(),
+                    key => {
+                        let Some(key) = key.strip_prefix("metadata.") else {
+                            continue;
+                        };
+                        let mut meta = rec
+                            .metadata
+                            .as_ref()
+                            .and_then(|m| m.as_object().cloned())
+                            .unwrap_or_default();
+                        match n.metadata.as_ref().and_then(|m| m.get(key)) {
+                            Some(v) => meta.insert(key.to_string(), v.clone()),
+                            None => meta.remove(key),
+                        };
+                        rec.metadata = Some(Value::Object(meta));
+                    }
+                }
+            }
+            if rec != before {
+                // Stamped just after the version it replaces, so it is the
+                // newer copy for reconcile and for any teammate's merge.
+                rec.updated_at = (records::parse_ts(&before.updated_at)
+                    + chrono::Duration::milliseconds(1))
+                .to_rfc3339();
+                store.write_node(&rec).map_err(|e| e.to_string())?;
+                *written += 1;
+            }
+        }
+
         for n in &graph.nodes {
             let rec = NodeRecord {
                 change_id: n.change_id.clone(),
@@ -2343,7 +2551,35 @@ fn pull_server_rows(
         removed_edges: report.edges_deleted,
         deleted_over_local_edits: overridden,
         dropped_rejected,
+        settled: Vec::new(),
     })
+}
+
+/// change_id -> the fields the server refused an edit of (`title`,
+/// `status`, `description`, `metadata.<key>`). Only the server's refusals:
+/// an op this machine set aside says nothing about what the server holds.
+fn refused_fields(
+    rejected: &[(crate::oplog::Op, crate::oplog::Ack)],
+) -> std::collections::HashMap<String, std::collections::BTreeSet<String>> {
+    let mut out: std::collections::HashMap<String, std::collections::BTreeSet<String>> =
+        Default::default();
+    for (op, ack) in rejected {
+        if ack.is_set_aside() {
+            continue;
+        }
+        if let crate::oplog::OpBody::UpdateNode {
+            change_id,
+            set,
+            metadata,
+            ..
+        } = &op.body
+        {
+            let e = out.entry(change_id.clone()).or_default();
+            e.extend(set.keys().cloned());
+            e.extend(metadata.keys().map(|k| format!("metadata.{k}")));
+        }
+    }
+    out
 }
 
 /// What a pull changed locally. "imported 0 nodes" after a pull that applied
@@ -2368,6 +2604,9 @@ pub struct PullReport {
     /// Refused ops in the log that touched a node the server deleted,
     /// dropped because they can never apply.
     pub dropped_rejected: usize,
+    /// Refused ops dropped because this copy and the server now agree on
+    /// everything they wrote.
+    pub settled: Vec<crate::oplog::Op>,
 }
 
 /// ureq puts the useful part of an HTTP failure in the response body, which

@@ -878,7 +878,11 @@ fn a_queued_edit_does_not_overwrite_a_newer_agent_edit_to_the_same_field() {
         ],
     );
 
-    let out = sb.dx_ok(&dir, &["remote", "push"]);
+    // A push the server refused anything of exits 1 (round-2 BRIDGE-N10):
+    // the refused write has not reached it.
+    let raw = sb.dx(&dir, &["remote", "push"]);
+    let out = format!("{}{}", text(&raw.stdout), text(&raw.stderr));
+    assert!(!raw.status.success(), "a refused push exited 0: {out}");
     assert!(out.contains("1 applied"), "{out}");
     assert!(out.contains("Rejected"), "the conflict is reported: {out}");
     assert!(

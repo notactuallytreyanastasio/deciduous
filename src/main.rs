@@ -1066,6 +1066,20 @@ enum TagAction {
 /// server. `exit` skips destructors, so every command that wrote and then
 /// failed (a pivot whose third step errors, say) left its first writes in the
 /// log unsent, while the same command succeeding sent them.
+/// Says which refused writes were dropped because they are over.
+fn print_settled(settled: &[deciduous::oplog::Op]) {
+    if settled.is_empty() {
+        return;
+    }
+    println!(
+        "  dropped {} refused write(s) that are settled: this copy and the server now agree on what they wrote",
+        settled.len()
+    );
+    for op in settled.iter().take(10) {
+        println!("    {}", op.body.describe());
+    }
+}
+
 fn exit(code: i32) -> ! {
     if let Some(log) = deciduous::oplog::take_appended() {
         deciduous::remote::replay_after_write(&log);
@@ -2452,6 +2466,30 @@ fn main() {
                         exit(1);
                     }
                     let d = deciduous::remote::content_diff(&nodes, &edges, &server);
+                    // Refusals whose rows now agree: listed, not counted.
+                    let settled: std::collections::HashSet<String> = log_state
+                        .as_ref()
+                        .map(|(_, st)| {
+                            deciduous::remote::settled_refusals(
+                                &st.rejected,
+                                &nodes,
+                                &edges,
+                                &server,
+                            )
+                            .into_iter()
+                            .map(|o| o.op_id)
+                            .collect()
+                        })
+                        .unwrap_or_default();
+                    if !settled.is_empty() {
+                        println!(
+                            "  {} {} of the refusals above: this copy and the server now agree on \
+                             what they wrote; the next `deciduous remote push` or `pull` drops them",
+                            "settled".green(),
+                            settled.len()
+                        );
+                    }
+                    let rejected = rejected - settled.len();
                     let docs_here = match db.get_node_documents(None, false) {
                         Ok(docs) => deciduous::remote::documents_only_here(&docs, &server),
                         Err(e) => {
@@ -2749,6 +2787,7 @@ fn main() {
                     }
 
                     let mut undelivered = false;
+                    let mut refused = 0usize;
                     match deciduous::remote::replay(&remote, &log) {
                         Ok(r) if r.sent == 0 => println!(
                             "{} no writes are waiting in {}",
@@ -2777,6 +2816,7 @@ fn main() {
                             );
                             deciduous::remote::print_rejected(&r.rejected, &log);
                             undelivered = aside > 0;
+                            refused = r.rejected.len() - aside;
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2825,6 +2865,7 @@ fn main() {
                                     r.rejected.len()
                                 );
                                 deciduous::remote::print_rejected(&r.rejected, &log);
+                                refused += r.rejected.len();
                             }
                             Err(e) => {
                                 eprintln!(
@@ -2840,11 +2881,32 @@ fn main() {
                         }
                     }
 
-                    // Scripts read the exit code: a write set aside has
-                    // not reached the server. (A refusal has: it is the
-                    // server's answer, printed above.)
+                    // A refusal whose rows now agree on both sides asks
+                    // nothing of anyone: dropped, and said. What is left is
+                    // a write the server did not take.
+                    if refused > 0 {
+                        let settled = remote
+                            .export()
+                            .and_then(|g| deciduous::remote::drop_settled(&log, &db, &g));
+                        match settled {
+                            Ok(s) => {
+                                refused = refused.saturating_sub(s.len());
+                                print_settled(&s);
+                            }
+                            Err(e) => eprintln!(
+                                "{} could not check whether the refusals are settled: {e}",
+                                "Warning:".yellow()
+                            ),
+                        }
+                    }
+
+                    // Scripts read the exit code. A write set aside has not
+                    // reached the server, and neither has one it refused:
+                    // exit 0 after "Rejected: the server refused 1
+                    // write(s)" let a script carry on as if it had
+                    // (round-2 BRIDGE-N10).
                     if !(seed || overwrite) {
-                        if undelivered {
+                        if undelivered || refused > 0 {
                             exit(1);
                         }
                         return;
@@ -2937,7 +2999,7 @@ fn main() {
                         }
                     }
                     deciduous::remote::print_withheld(&withheld);
-                    if undelivered || !withheld.is_empty() {
+                    if undelivered || refused > 0 || !withheld.is_empty() {
                         exit(1);
                     }
                 }
@@ -3024,6 +3086,7 @@ fn main() {
                                     r.dropped_rejected
                                 );
                             }
+                            print_settled(&r.settled);
                             for d in &r.deleted_over_local_edits {
                                 println!(
                                     "  {} node {} \"{}\" was edited here after the server deleted it at {}; the server refuses edits to a deleted node, so it is deleted here too and the edit with it",

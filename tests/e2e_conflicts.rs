@@ -395,3 +395,56 @@ fn stack_an_agents_unlink_reaches_every_clone() {
         assert!(status_says_clean(&st), "{}", st.all());
     }
 }
+
+// ---------------------------------------------------------------- BRIDGE-N9 / N10
+
+/// BRIDGE-N9: the refusal said "`deciduous remote pull` takes the server's
+/// value", and the pull kept the refused local edit (the newer stamp) and
+/// changed nothing. BRIDGE-N10: the refusal then stayed in the log, so
+/// `remote status` exited 1 with every row matching, and the `remote push`
+/// that printed "the server refused 1 write(s)" exited 0.
+#[test]
+fn bridge_n9_n10_pull_takes_the_refused_field_and_the_refusal_settles() {
+    let Some(server) = remote("bridge_n9_n10") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "n9n10");
+    let a = t.alice.add("goal", "A");
+    let mut agent = t.agent();
+    let u = agent.uuid_of(&t.ws, &a);
+    agent.call_ok("update_node", json!({"node_id": u, "status": "active"}));
+
+    t.offline(&t.alice);
+    t.alice.ok(&["status", &a, "completed"]);
+    t.online(&t.alice);
+    let push = t.alice.dx(&["remote", "push"]);
+    assert!(
+        push.all().contains("the server refused 1 write(s)"),
+        "{}",
+        push.all()
+    );
+    assert!(
+        !push.ok(),
+        "a push the server refused exited 0:\n{}",
+        push.all()
+    );
+    assert!(push
+        .all()
+        .contains("`deciduous remote pull` takes the server's value"));
+
+    let pull = t.alice.ok(&["remote", "pull"]);
+    assert_eq!(
+        status_of(&t.alice, &a).as_deref(),
+        Some("active"),
+        "pull kept the refused edit:\n{pull}"
+    );
+    assert_eq!(t.alice.graph_doc()["nodes"][&a]["status"], json!("active"));
+    assert!(pull.contains("settled"), "{pull}");
+    let st = t.alice.dx(&["remote", "status"]);
+    assert!(
+        status_says_clean(&st),
+        "every row matches and nothing waits:\n{}",
+        st.all()
+    );
+}
