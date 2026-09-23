@@ -79,6 +79,7 @@ launch() {
       --dir)     dir=${2:-}; shift 2 ;;
       --terminal) term=${2:-}; shift 2 ;;
       --no-window) nowin=1; dry=1; shift ;;
+      --preview) preview; return 0 ;;
       -h|--help) usage; return 0 ;;
       *) usage >&2; return 2 ;;
     esac
@@ -177,6 +178,7 @@ usage() {
   print -r -- "  --dir PATH   where the arena goes (default ~/deciduous-swarm/swarm-MMDD-HHMM)"
   print -r -- "  --terminal iterm|ghostty   skip detection (for testing the other layout)"
   print -r -- "  --no-window  build the arena as a dry run and print the pane commands (for testing)"
+  print -r -- "  --preview    play the walkthrough in this terminal; nothing is created or started"
 }
 
 # ---------------------------------------------------------- arena files
@@ -645,7 +647,26 @@ tour() {
   dim "animation\", or \"pause everyone while we change the palette\"."
   dim "Each pane is recorded to .swarm/rec for later replay."
   beat 180
-  clear
+  [[ -n ${DEMO_SWARM_PREVIEW:-} ]] || clear
+}
+
+# --------------------------------------------------------------- preview
+# The tour alone, in this terminal: no repository, no window, no sessions.
+# Worker start-up is simulated so the last section plays as it would.
+preview() {
+  [[ -t 1 ]] || die "--preview draws in this terminal, and stdout is not one"
+  local dir=$(mktemp -d -t demo-swarm-preview) i
+  DEMO_SWARM_PREVIEW=1
+  mkdir -p $dir/.swarm/online
+  TAG=$(strftime %m%d-%H%M $EPOCHSECONDS) N=4
+  MARGIN="  "; (( COLUMNS > 84 )) && MARGIN=${(l:$(( (COLUMNS - 80) / 2 )):: :)Z}
+  print -rn -- "${e}[?25l"
+  trap 'print -rn -- "${e}[?25h$RST"; rm -rf $dir' EXIT INT TERM
+  {
+    until [[ -e $dir/.swarm/go ]]; do zselect -t 10 || true; done
+    for (( i = 1; i <= N; i++ )); do zselect -t 35 || true; : > $dir/.swarm/online/w$i; done
+  } &!
+  tour $dir
 }
 
 # ================================================================== main
