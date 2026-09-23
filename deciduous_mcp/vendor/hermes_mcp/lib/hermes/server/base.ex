@@ -60,7 +60,8 @@ defmodule Hermes.Server.Base do
     {:name, {:required, {:custom, &Hermes.genserver_name/1}}},
     {:transport, {:required, {:custom, &Hermes.server_transport/1}}},
     {:registry, {:atom, {:default, Hermes.Server.Registry}}},
-    {:session_idle_timeout, {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}}
+    {:session_idle_timeout, {{:integer, {:gte, 1}}, {:default, @default_session_idle_timeout}}},
+    {:request_deadline, {{:integer, {:gte, 1}}, {:default, nil}}}
   ])
 
   @spec start_link(Enumerable.t(option())) :: GenServer.on_start()
@@ -88,6 +89,10 @@ defmodule Hermes.Server.Base do
       registry: opts.registry,
       sessions: %{},
       session_idle_timeout: opts.session_idle_timeout,
+      # Longest a handler task may run before this process kills it and
+      # answers its request with an error (see start_request_task/4). nil
+      # means no limit, which is upstream's behaviour.
+      request_deadline: Map.get(opts, :request_deadline),
       expiry_timers: %{},
       frame: Frame.new(),
       server_requests: %{},
@@ -204,7 +209,16 @@ defmodule Hermes.Server.Base do
         {:encoded, encode_reply(reply, request_id)}
       end)
 
-    info = %{from: from, session: session, request_id: request_id, method: request["method"]}
+    info = %{
+      from: from,
+      session: session,
+      request_id: request_id,
+      method: request["method"],
+      tool: get_in(request, ["params", "name"]),
+      pid: task.pid,
+      supervisor: supervisor,
+      deadline_timer: start_deadline_timer(task.ref, state.request_deadline)
+    }
 
     {:noreply,
      %{
@@ -213,6 +227,19 @@ defmodule Hermes.Server.Base do
          frame: Frame.clear_request(frame)
      }}
   end
+
+  # A deadline on the handler, not on the caller. The transport has its own
+  # request_timeout, but when that fires it only stops waiting: this process
+  # keeps the task running for nobody, and a client that retries a write gets
+  # it twice. The deadline lives here because this is where the task is.
+  defp start_deadline_timer(_ref, nil), do: nil
+  defp start_deadline_timer(ref, ms), do: Process.send_after(self(), {:request_deadline, ref}, ms)
+
+  defp cancel_deadline_timer(%{deadline_timer: nil}), do: :ok
+  defp cancel_deadline_timer(%{deadline_timer: timer}), do: Process.cancel_timer(timer, async: true, info: false)
+
+  defp format_ms(ms) when rem(ms, 1000) == 0, do: "#{div(ms, 1000)}s"
+  defp format_ms(ms), do: "#{ms}ms"
 
   @impl GenServer
   def handle_cast({:notification, decoded, session_id, context}, state) when is_map(decoded) do
@@ -264,8 +291,9 @@ defmodule Hermes.Server.Base do
   def handle_info({ref, {:encoded, payload}}, %{pending_requests: pending} = state)
       when is_reference(ref) and is_map_key(pending, ref) do
     Process.demonitor(ref, [:flush])
-    {%{from: from, session: session, request_id: request_id}, pending} = Map.pop(pending, ref)
+    {%{from: from, session: session, request_id: request_id} = info, pending} = Map.pop(pending, ref)
 
+    cancel_deadline_timer(info)
     complete_request(session, request_id)
     GenServer.reply(from, payload)
 
@@ -278,8 +306,10 @@ defmodule Hermes.Server.Base do
   # connected client). Now it is a JSON-RPC error under the request's own id.
   def handle_info({:DOWN, ref, :process, _pid, reason}, %{pending_requests: pending} = state)
       when is_map_key(pending, ref) do
-    {%{from: from, session: session, request_id: request_id, method: method}, pending} =
+    {%{from: from, session: session, request_id: request_id, method: method} = info, pending} =
       Map.pop(pending, ref)
+
+    cancel_deadline_timer(info)
 
     Logging.server_event(
       "request_handler_crashed",
@@ -293,6 +323,43 @@ defmodule Hermes.Server.Base do
 
     {:noreply, %{state | pending_requests: pending}}
   end
+
+  # A handler task outlived request_deadline. Kill it and answer the request
+  # under its own id, so the client reads a sentence instead of waiting out
+  # its own timeout (Claude Code backgrounds a call at 120s and aborts at
+  # 300s; Cloudflare cuts the origin at 100s). Killing the task is what makes
+  # this safe for writes: a transaction whose owner dies is rolled back, so
+  # a retried call cannot find half of the first one committed.
+  def handle_info({:request_deadline, ref}, %{pending_requests: pending} = state)
+      when is_map_key(pending, ref) do
+    {%{from: from, session: session, request_id: request_id} = info, pending} = Map.pop(pending, ref)
+
+    Process.demonitor(ref, [:flush])
+    _ = Task.Supervisor.terminate_child(info.supervisor, info.pid)
+
+    what = info.tool || info.method
+
+    Logging.server_event(
+      "request_deadline_exceeded",
+      %{id: request_id, method: info.method, tool: info.tool, deadline_ms: state.request_deadline},
+      level: :error
+    )
+
+    error =
+      Error.execution(
+        "#{what} did not finish within #{format_ms(state.request_deadline)} and was stopped; nothing it had not committed was kept",
+        %{deadline_ms: state.request_deadline}
+      )
+
+    complete_request(session, request_id)
+    GenServer.reply(from, encode_reply({:ok, Error.build_json_rpc(error, request_id)}, request_id))
+
+    {:noreply, %{state | pending_requests: pending}}
+  end
+
+  # The task finished in the same instant the deadline fired and its reply
+  # already went out; the timer message is all that is left of it.
+  def handle_info({:request_deadline, _ref}, state), do: {:noreply, state}
 
   def handle_info({:DOWN, ref, :process, _pid, reason}, state) do
     session_entry =

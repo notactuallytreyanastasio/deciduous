@@ -28,7 +28,7 @@ defmodule DeciduousMcp.MCP.Server do
   """
   use Hermes.Server,
     name: "deciduous-mcp",
-    version: "1.0.1",
+    version: "1.0.2",
     capabilities: [:tools, :prompts]
 
   require Logger

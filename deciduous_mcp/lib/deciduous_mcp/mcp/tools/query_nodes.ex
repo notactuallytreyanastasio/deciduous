@@ -39,6 +39,12 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
     |> Scope.with_workspace_arg(global?: true)
   end
 
+  # Postgres refuses a negative LIMIT by raising, which reached the client as
+  # an inspected Postgrex struct. Said here in one line instead.
+  def call(%{arguments: %{"limit" => limit}}) when is_integer(limit) and limit < 1 do
+    {:error, %{code: -1, message: "limit must be at least 1, got #{limit}"}}
+  end
+
   def call(%{arguments: args, server: frame}) do
     case Scope.read_scope(frame, args) do
       {:ok, workspace_id} -> do_call(workspace_id, args)

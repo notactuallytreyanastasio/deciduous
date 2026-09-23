@@ -140,10 +140,16 @@ defmodule Hermes.Logging do
     if should_log?(level), do: log_by_level(level, message, metadata)
   end
 
+  # Upstream compared (config_level, level), which is backwards: it passed
+  # only messages at or BELOW the configured level. At :info in production
+  # every :warning and :error Hermes emits (request_handler_crashed,
+  # server_call_failed, request_error) was dropped here, and the :debug ones
+  # were passed on for Logger to drop. A message is worth sending when its
+  # level is at or ABOVE the configured one.
   defp should_log?(level) do
     log? = Application.get_env(:hermes_mcp, :log, true)
     config_level = Application.get_env(:logger, :level, :debug)
-    log? and Logger.compare_levels(config_level, level) != :lt
+    log? and Logger.compare_levels(level, config_level) != :lt
   end
 
   @doc false

@@ -146,6 +146,8 @@ defmodule DeciduousMcp.Web.SessionGuardTest do
 
     assert %{"id" => 1, "result" => %{"serverInfo" => %{"version" => ^version}}} =
              Jason.decode!(conn.resp_body)
+
+    assert version == DeciduousMcp.MCP.Server.server_info()["version"]
   end
 
   test "a session that exists but was never initialized is refused too", %{token: token} do
