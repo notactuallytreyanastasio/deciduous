@@ -69,8 +69,9 @@ defmodule DeciduousMcp.Graph.Query do
   end
 
   @doc """
-  Finds orphan nodes (nodes with no incoming edges and not of type 'goal').
-  These indicate missing connections in the graph.
+  Finds orphan nodes: live non-goal nodes with no incoming edge from a live
+  node, plus live nodes cut off from every such root by a cycle (see
+  `stranded_in_cycles/1`). These indicate missing connections in the graph.
   """
   def find_orphans(scope) do
     # Nodes with no incoming edge from a live node, that aren't goals. An
@@ -93,6 +94,65 @@ defmodule DeciduousMcp.Graph.Query do
       )
     )
     |> Repo.all()
+    |> Kernel.++(stranded_in_cycles(scope))
+  end
+
+  # "No incoming live edge" cannot see a cycle: X(goal) -> Y -> Z, Z -> Y,
+  # then X deleted, and Y and Z each still have a live parent -- the other
+  # one. The pair is cut off from every root and was never reported. So
+  # also: every live node that no walk from a root reaches, where a root is
+  # a live goal or a live node with no live parent (the orphans above).
+  # Anything unreached is only reachable through a rootless cycle; it is
+  # reported with whatever hangs below that cycle, since all of it is
+  # detached. Disjoint from the first query by construction: those nodes
+  # are roots, and a root is reached.
+  #
+  # Walked in memory over two flat reads, not as a recursive CTE. The CTE
+  # was the first version; on a synthetic 8,000-node chain with 12,000
+  # edges it took 24,976 ms, because each recursion level rescans the
+  # unindexed live-edge CTE and a chain is 8,000 levels deep. The flat
+  # reads and the linear walk take tens of milliseconds on the same graph.
+  defp stranded_in_cycles(scope) do
+    live =
+      from(n in Node, where: is_nil(n.deleted_at), select: {n.id, n.node_type})
+      |> scope_ws(scope)
+      |> Repo.all()
+
+    alive = MapSet.new(live, &elem(&1, 0))
+
+    # Filtered against `alive` here rather than by joining decision_nodes
+    # twice in SQL: on freshly written tables with stale statistics the
+    # planner picked a nested loop for that join and the call took 4.1 s.
+    edges =
+      from(e in Edge, select: {e.from_node_id, e.to_node_id})
+      |> scope_ws(scope)
+      |> Repo.all()
+      |> Enum.filter(fn {f, t} -> MapSet.member?(alive, f) and MapSet.member?(alive, t) end)
+
+    children = Enum.group_by(edges, &elem(&1, 0), &elem(&1, 1))
+    has_parent = MapSet.new(edges, &elem(&1, 1))
+
+    roots =
+      for {id, type} <- live, type == "goal" or not MapSet.member?(has_parent, id), do: id
+
+    reached = reach(roots, children, MapSet.new(roots))
+
+    case for({id, _} <- live, not MapSet.member?(reached, id), do: id) do
+      [] -> []
+      ids -> Node |> where([n], n.id in ^ids) |> Repo.all()
+    end
+  end
+
+  defp reach([], _children, seen), do: seen
+
+  defp reach(frontier, children, seen) do
+    next =
+      frontier
+      |> Enum.flat_map(&Map.get(children, &1, []))
+      |> Enum.reject(&MapSet.member?(seen, &1))
+      |> Enum.uniq()
+
+    reach(next, children, Enum.reduce(next, seen, &MapSet.put(&2, &1)))
   end
 
   @doc """

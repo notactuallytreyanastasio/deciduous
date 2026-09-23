@@ -100,4 +100,47 @@ defmodule DeciduousMcp.MCP.FindOrphansDeletedTest do
     assert length(stranded) + length(refused) == 30
     assert Enum.all?(refused, &(&1 =~ "parent"))
   end
+
+  # X(goal) -> Y -> Z, Z -> Y, then X deleted. Y and Z each keep a live
+  # incoming edge from the other, so "no incoming live edge" never named
+  # either, and the pair was cut off from every goal with find_orphans
+  # reporting nothing. W hangs below the cycle and is cut off with it.
+  test "a cycle stranded by deleting its root is reported, with what hangs below it", %{
+    ws: ws,
+    client: client
+  } do
+    {:ok, x} = Nodes.create_node(ws.id, %{node_type: "goal", title: "X"})
+    {:ok, y} = Nodes.create_node(ws.id, %{node_type: "action", title: "Y"})
+    {:ok, z} = Nodes.create_node(ws.id, %{node_type: "outcome", title: "Z"})
+    {:ok, w} = Nodes.create_node(ws.id, %{node_type: "observation", title: "W"})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: x.id, to_node_id: y.id})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: y.id, to_node_id: z.id})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: z.id, to_node_id: y.id})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: z.id, to_node_id: w.id})
+
+    assert orphan_ids(client) == MapSet.new()
+    McpClient.call!(client, "delete_node", %{"node_id" => x.id, "branch" => "fo"})
+    assert orphan_ids(client) == MapSet.new([y.id, z.id, w.id])
+  end
+
+  test "a cycle still reachable from a live goal is not an orphan", %{ws: ws, client: client} do
+    {:ok, g} = Nodes.create_node(ws.id, %{node_type: "goal", title: "G"})
+    {:ok, y} = Nodes.create_node(ws.id, %{node_type: "action", title: "Y"})
+    {:ok, z} = Nodes.create_node(ws.id, %{node_type: "outcome", title: "Z"})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: g.id, to_node_id: y.id})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: y.id, to_node_id: z.id})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: z.id, to_node_id: y.id})
+
+    assert orphan_ids(client) == MapSet.new()
+  end
+
+  # The existing definition is unchanged: a parentless action is the
+  # orphan; its children hang off it and are not reported again.
+  test "a chain under a parentless non-goal reports only its head", %{ws: ws, client: client} do
+    {:ok, a} = Nodes.create_node(ws.id, %{node_type: "action", title: "A"})
+    {:ok, b} = Nodes.create_node(ws.id, %{node_type: "outcome", title: "B"})
+    {:ok, _} = Edges.create_edge(ws.id, %{from_node_id: a.id, to_node_id: b.id})
+
+    assert orphan_ids(client) == MapSet.new([a.id])
+  end
 end
