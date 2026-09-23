@@ -1,0 +1,669 @@
+<!-- https://deciduous.dev/agents/index.md -->
+
+# Deciduous, for agents
+
+This section is written for you, the coding agent, not for the person you work
+for. It tells you how to install deciduous, wire it into the project you are
+in, connect to a shared graph if there is one, and keep the graph current while
+you work. The commands on these pages were run against deciduous 1.0.2 and the
+output shown is what it printed. 1.0.3 removes the logging hooks; where that
+changes something, the page says so.
+
+The pages for people are at [the main site](../index.html). They explain what the
+graph is for. You do not need them to set it up.
+
+## What you are setting up
+
+Deciduous records the reasoning behind a project as a graph: what was asked
+(`goal`), the approaches considered (`option`), the one chosen (`decision`),
+the work done (`action`), what happened (`outcome`), and anything learned on
+the way (`observation`, `revisit`). The next session, yours or another agent's,
+reads that graph instead of guessing why the code looks the way it does.
+
+The graph lives on a shared server: one PostgreSQL database behind an HTTP MCP
+endpoint, one workspace per repository. You write to it with the MCP tools
+(`add_node`, `add_edge`, ...), and every other agent on the workspace sees the
+write as it lands.
+
+The one fact that breaks most setups: **the `deciduous` CLI does not write to
+the server.** `deciduous add` after `deciduous remote init` still does not reach
+it, and `deciduous remote status` shows the gap. Log through MCP only. See
+[Shared graph](shared-graph.md).
+
+## Do it in this order
+
+1. [Install](install.md) the `deciduous` binary, 1.0.3 or newer, and check it.
+2. [Set up the project](project.md): `deciduous init`, then commit the right files.
+3. [Connect to the shared server](shared-graph.md) and register it with your MCP client.
+4. Read [Logging while you work](logging.md). Nothing enforces it; the graph is only as good as what you write.
+5. Run the checks in [Verify](verify.md) and report each result to the user.
+6. When something fails, look in [Troubleshooting](troubleshooting.md) before improvising.
+
+[MCP tools](tools.md) lists every tool with its required arguments.
+
+## Before you start, ask the user two things
+
+- What is the shared server's URL, and is the token
+  already on this machine (`~/.config/deciduous/credentials`, or
+  `DECIDUOUS_MCP_TOKEN` in the environment)? Never ask them to paste the token
+  into the chat. Have them run `deciduous remote login` themselves.
+- Should the integration files (`.claude/`, `CLAUDE.md`) be committed
+  for the whole team, or kept to this checkout?
+
+Do not guess either answer. The first one decides where every node lands.
+
+## Machine-readable entry points
+
+- [`/llms.txt`](../llms.txt): index of these pages, with one line per page.
+- [`/agents/llms-full.txt`](llms-full.txt): every page in this section, concatenated.
+- Every page here is plain Markdown. Fetch the `.md`.
+
+
+<!-- https://deciduous.dev/agents/install.md -->
+
+# Install
+
+You need one binary, `deciduous`: the CLI that sets up a project, points it at
+the shared server and installs the agent instructions. The shared server is a
+separate program, covered in [Shared graph](shared-graph.md), and most machines
+never run it.
+
+## Check what is already there
+
+```sh
+which -a deciduous
+deciduous --version
+```
+
+`which -a` lists every copy on `PATH`. Machines often have two, one from
+cargo and one from Homebrew, and the first one wins. If they report different
+versions, tell the user which one runs, and fix `PATH` or remove the stale copy
+rather than installing a third.
+
+Use **1.0.3 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
+until it writes to the graph; 1.0.3 removes them, and `deciduous update` on
+1.0.3 takes them out of a project that has them.
+
+## Install or upgrade
+
+Pick the channel the machine already uses. Otherwise use Homebrew on macOS and
+cargo when a Rust toolchain is present.
+
+```sh
+# Homebrew (macOS, Linux)
+brew install notactuallytreyanastasio/tap/deciduous
+brew upgrade deciduous
+
+# crates.io (needs a Rust toolchain)
+cargo install deciduous --locked
+
+# A release binary, no toolchain needed
+# https://github.com/notactuallytreyanastasio/deciduous/releases/latest
+#   deciduous-darwin-arm64   deciduous-darwin-amd64
+#   deciduous-linux-arm64    deciduous-linux-amd64
+#   deciduous-windows-amd64.exe
+#   checksums.txt            (verify before running)
+```
+
+Then confirm:
+
+```sh
+deciduous --version
+# deciduous 1.0.2
+```
+
+## Upgrading a project that was set up by an older version
+
+The binary and each project's integration files are versioned separately.
+After upgrading the binary, run this in each project:
+
+```sh
+deciduous check-update   # exit 0: files current; exit 1: run update
+deciduous update
+```
+
+On 1.0.3, `deciduous update` replaces only files deciduous wrote
+(`.claude/commands/`, `.claude/skills/`, the section of `CLAUDE.md` between
+`<!-- deciduous:start -->` and `<!-- deciduous:end -->`). A file the user
+changed is kept; Markdown gets the new template appended in a marked block.
+Every file it changes is copied to `.deciduous/update-backups/<time>/` first.
+It removes the logging hook scripts it once installed and their entries in
+`.claude/settings.json`, and keeps any hook script the user wrote. In a project
+with a `[remote]` it leaves `.gitignore` and `.gitattributes` alone. `deciduous update --all ~/code` does every project under a directory.
+Show the user `git diff` afterwards. The changes are theirs to commit.
+
+
+<!-- https://deciduous.dev/agents/project.md -->
+
+# Set up the project
+
+Run everything from the repository root. Deciduous finds its data by walking up
+from the current directory to the nearest `.deciduous/`, the way git finds
+`.git`. A stray `.deciduous/` in a parent directory would capture every write
+beneath it, so check for one first:
+
+```sh
+git rev-parse --show-toplevel
+ls -d .deciduous 2>/dev/null || echo "no .deciduous here"
+```
+
+If `.deciduous/` already exists, the project is set up. Skip to
+[Upgrading](install.md#upgrading-a-project-that-was-set-up-by-an-older-version)
+and do not run `init` again.
+
+## Initialise
+
+```sh
+deciduous init            # Claude Code (the default)
+deciduous init --opencode # OpenCode: .opencode/ and AGENTS.md
+deciduous init --windsurf # Windsurf: .windsurf/
+deciduous init --both     # Claude Code and OpenCode
+```
+
+Use the flag for the assistant the user actually runs. For Claude Code, `init`
+writes:
+
+| Path | What it is | Commit it? |
+|------|------------|------------|
+| `.deciduous/config.toml` | Branch detection and the `[remote]` server URL and workspace | Yes |
+| `CLAUDE.md` | Workflow instructions between `<!-- deciduous:start -->` and `<!-- deciduous:end -->` | Yes |
+| `.claude/settings.json`, `.claude/hooks/version-check.sh` | A once-a-day update check, nothing else | Yes |
+| `.claude/commands/*.md`, `.claude/skills/*.md` | `/recover`, `/work`, `/decision`, `/pulse`, ... | Yes |
+| `docs/index.html`, `docs/graph-data.json` | A static graph viewer for GitHub Pages | Only if the user wants the graph published |
+| `.github/workflows/deploy-pages.yml`, `cleanup-decision-graphs.yml` | Pages deploy and PNG cleanup | Only with the viewer |
+
+Show the user the list of new files before you commit any of them. Commit
+explicitly by path, never with `git add -A` or `git add .`:
+
+```sh
+git add .deciduous/config.toml CLAUDE.md .claude/
+git commit -m "chore: set up deciduous"
+```
+
+If the project already had a `CLAUDE.md`, `init` adds its section between the
+markers and leaves the rest alone. Keep your own instructions outside the
+markers. `deciduous update` rewrites everything between them.
+
+## Environment
+
+| Variable | Meaning |
+|----------|---------|
+| `DECIDUOUS_MCP_TOKEN` | Bearer token for the shared server. Checked before `~/.config/deciduous/credentials` |
+
+Next: [connect to the shared server](shared-graph.md).
+
+
+<!-- https://deciduous.dev/agents/shared-graph.md -->
+
+# Shared graph
+
+A shared server is one PostgreSQL database behind an HTTP MCP endpoint. Every
+project on it is a **workspace**, and a workspace's branches are where
+different agents write side by side. Use it when more than one agent, or more
+than one machine, needs to see the others' reasoning while it is happening.
+
+Two separate things have to be configured, and they do not know about each other:
+
+1. **The MCP client**, so your tool calls reach the server. This is how nodes
+   get written.
+2. **The project's `[remote]` table**, so the CLI can compare, pull and push.
+   This does not make the CLI write to the server.
+
+## 1. The token
+
+The server authenticates with one bearer token. The user should store it
+themselves, so it never passes through your context:
+
+```sh
+deciduous remote login --url https://example.com/deciduous-mcp
+# Token (read from stdin, not saved to shell history):
+# Token: stored in ~/.config/deciduous/credentials
+#   mode 0600, outside every repository
+```
+
+`remote login` checks the token against the server before storing it. The CLI
+reads `DECIDUOUS_MCP_TOKEN` first and falls back to that file. Never write the
+token into a file inside a repository, into `config.toml`, or into a node.
+
+## 2. Register the MCP server with your client
+
+The endpoint is the base URL plus `/mcp`. It speaks Streamable HTTP.
+
+**Claude Code, once per machine (user scope).** One registration serves every
+repository, and each call names its workspace:
+
+```sh
+claude mcp add --scope user --transport http deciduous \
+  https://example.com/deciduous-mcp/mcp \
+  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+claude mcp get deciduous    # Status: ✔ Connected
+```
+
+The shell expands `$DECIDUOUS_MCP_TOKEN` when the command runs, so the token
+ends up in `~/.claude.json`. That file is outside every repository, but it is
+plain text. If the user would rather not store the token there, use the
+project form below with `${DECIDUOUS_MCP_TOKEN}`, which Claude Code expands
+from its environment at startup.
+
+**Claude Code, per project (`.mcp.json`, safe to commit).** This pins every call
+to one workspace:
+
+```json
+{
+  "mcpServers": {
+    "deciduous": {
+      "type": "http",
+      "url": "https://example.com/deciduous-mcp/mcp",
+      "headers": {
+        "Authorization": "Bearer ${DECIDUOUS_MCP_TOKEN}",
+        "X-Deciduous-Workspace": "my-project"
+      }
+    }
+  }
+}
+```
+
+Other clients take the same URL and headers. Configure them the way that
+client handles HTTP MCP servers and secrets. `${...}` expansion is specific to
+each client.
+
+After registering, the user must restart the client. The tools appear as
+`mcp__deciduous__add_node` and so on. Check the list against [MCP tools](tools.md).
+If you see `link_nodes`, `search_nodes` or `trace_chain`, the client is running
+the old `deciduous mcp` stdio server instead. Remove it and register this one.
+
+## 3. Which workspace a call lands in
+
+Highest precedence first:
+
+1. The `X-Deciduous-Workspace` header, if the client sends one. No tool
+   argument can override it.
+2. The `workspace` argument on the call. Pass the **basename of the git
+   repository root**, lowercased, even when you are in a subdirectory or a
+   worktree. A worktree at `.claude/worktrees/fix-x` belongs to the repository
+   it was made from, not to a workspace called `fix-x`.
+3. `scratch`, for anything outside a git repository.
+
+Read tools also accept `workspace: "*"`, every project at once. Write tools
+refuse it. An unknown workspace name is created on first write, not rejected,
+so a typo makes a new, empty project. Run `list_workspaces` when unsure.
+
+Always pass `branch` too, set to the current git branch. Writes take a short
+advisory lock per workspace and branch. Two agents on different branches never
+contend. A second session writing to a branch another session holds is refused,
+and the refusal names the holder. Work on your own branch, and call
+`check_activity` before a burst of writes to see who else is active.
+
+## 4. Point the project at the server
+
+```sh
+deciduous remote init https://example.com/deciduous-mcp
+# Remote: https://example.com/deciduous-mcp
+#   workspace: my-project
+#   server holds 0 nodes, 0 edges, 0 documents
+#
+# Written to .deciduous/config.toml. The token stays in DECIDUOUS_MCP_TOKEN.
+```
+
+It verifies the server and token, then writes:
+
+```toml
+[remote]
+url = "https://example.com/deciduous-mcp"
+workspace = "my-project"
+```
+
+Commit `config.toml`. It holds no secret, and every clone then resolves to the
+same workspace. `--workspace NAME` overrides the name when the directory name
+is wrong for the graph.
+
+To configure many repositories at once:
+
+```sh
+deciduous remote adopt ~/code --url https://example.com/deciduous-mcp --dry-run
+deciduous remote adopt ~/code --url https://example.com/deciduous-mcp
+```
+
+`adopt` only touches projects that already have a `.deciduous/`, and never
+repoints one that is aimed at a different server. Show the user the dry run first.
+
+## The write boundary
+
+This is what `remote init` does **not** do, observed on 1.0.2:
+
+```sh
+$ deciduous add goal "does a CLI write reach the server" -c 50
+Created node 1 (type: goal, title: does a CLI write reach the server) [confidence: 50%]
+$ deciduous remote status
+                 local    remote
+  nodes              1         0
+  edges              0         0
+
+Drift: local holds more than the server. `deciduous remote push` to send it up.
+```
+
+So, in a project with a shared server:
+
+- **Write through the HTTP MCP tools.** They land on the server immediately and
+  every other agent can see them.
+- Do not log with the CLI. If something was written that way, `deciduous
+  remote push` sends what the server lacks. Tell the user you ran it.
+- `deciduous remote status` compares counts only. `counts match` is not the
+  same as identical: the two sides can hold the same number of different nodes.
+
+## Watching other agents
+
+```sh
+deciduous remote watch                          # one line per write, as it lands
+deciduous remote watch --types outcome,observation --branch main
+deciduous remote watch --claude-code            # prints a ready-made Monitor call
+```
+
+When you use another agent's idea, record the borrow:
+`log_observation(..., took_from: "<their node id or change_id>")` writes your
+observation and a `took_from` edge from their node in one call.
+
+## Running a server
+
+If the user wants their own server, the deployment guide is
+[deciduous_mcp/DEPLOY.md](https://github.com/notactuallytreyanastasio/deciduous/blob/main/deciduous_mcp/DEPLOY.md):
+a Docker bundle with one setup script, or a native `deciduous-mcp-*` binary
+against an existing PostgreSQL 17. A server listens on `127.0.0.1:4000` by
+default. It needs a TLS proxy before any other machine can reach it, and one
+token grants access to every workspace on it.
+
+
+<!-- https://deciduous.dev/agents/logging.md -->
+
+# Logging while you work
+
+The graph is only worth reading if it is written while the work happens. A
+graph reconstructed at the end records what you remember, not what you chose.
+Nothing enforces this. Write at the moments below, as they happen, one node per
+thing someone would want to know later.
+
+## At the start of a session
+
+Read before you write. Find out what is already in flight on this branch and
+what the last session left open:
+
+- Claude Code with the slash commands installed: run `/recover`.
+- `query_nodes` with `workspace` and `branch`, then `ask_graph`
+  with the topic of the user's request. `check_activity` shows who else is
+  writing to the workspace.
+
+If the request continues an existing goal, attach new nodes under that goal.
+Do not start a parallel one.
+
+## The shape
+
+```
+goal -> option(s) -> decision -> action(s) -> outcome(s)
+                  observations attach anywhere
+```
+
+| Type | Write it when | Title is |
+|------|---------------|----------|
+| `goal` | The user asks for something | What they asked for, as a result |
+| `option` | You see more than one way to do it | The approach, in a phrase |
+| `decision` | You pick an option | The choice **and** what it beat |
+| `action` | You are about to change code or config | What you are changing |
+| `outcome` | The change worked or failed | The result, with the number or error |
+| `observation` | You learned a fact that affects the work | The fact, not "noticed something" |
+| `revisit` | An earlier decision turned out wrong | What is being reconsidered |
+
+Rules that keep it readable:
+
+- A goal carries the user's **verbatim** message in `prompt`, not a summary.
+  Do the same for any message that changes direction.
+- Options come before the decision. A goal never points straight at a decision.
+- Every node except a root goal has a parent. Create it with its parent in
+  one call (below).
+- Titles are claims someone can check later: "Trigram index: search 85 ms -> 3 ms",
+  not "Improved search".
+- Put the why in `description`. That is the part a later session cannot recover
+  from the code.
+
+Do **not** log your own process: reading files, running tests to look around,
+planning, "starting work". A useful test: would the user put this on a project
+timeline or in a PR description? If not, leave it out.
+
+## Create and link in one call
+
+`add_node` takes `parent_id` and creates the node and its
+edge in one transaction:
+
+```json
+{
+  "node_type": "observation",
+  "title": "remote init writes url + workspace, but CLI adds still land locally",
+  "description": "local 1 / remote 0 after `deciduous add`; needs `remote push`",
+  "parent_id": "5b39d6e3-de1f-480d-b09e-5ca43931d8ed",
+  "rationale": "Setup fact the docs rest on",
+  "workspace": "deciduous",
+  "branch": "docs-for-agents-and-people",
+  "confidence": 90
+}
+```
+
+The reply contains `"message":"Node created and linked"`, the new `id`, and
+`edge_id`.
+
+**Never send `add_node` and an `add_edge` that needs its id in the same
+parallel batch.** The id does not exist yet, and whatever stands in for it (a
+placeholder, a guess, a made-up UUID) is refused. If a node needs a second
+parent, send `add_edge` after the `add_node` reply has arrived.
+
+## Commits
+
+After a commit, log an `action` or `outcome` that carries it:
+
+- `add_node` with `commit` set to the hash from `git rev-parse HEAD`.
+
+## Several actions at once
+
+`log_decision` writes a decision, its options, and `chosen`/`rejected` edges in
+one call. `capture_conversation_turn` writes a goal, observations, decision,
+action and outcome from one exchange. `close_thread` writes the outcome that
+ends a line of work and can mark its goal completed. They save round trips.
+They do not replace logging as you go.
+
+## When you finish
+
+- Mark finished goals `completed` and dead ends `abandoned` with `update_node`.
+- Run `find_orphans`. Link anything it lists, except root goals.
+- Tell the user which nodes you added, and anything you left `pending`.
+
+
+<!-- https://deciduous.dev/agents/tools.md -->
+
+# MCP tools
+
+The shared server's 18 tools in 1.0.2, generated from its own `tools/list`
+reply, not written by hand. The descriptions are the first sentence the server
+gives your client. Your client shows you the rest. Node ids are UUIDs.
+
+If your tool list has `link_nodes`, `search_nodes` or `trace_chain` instead,
+the client is running the old local `deciduous mcp` stdio server. Register the
+HTTP server instead ([Shared graph](shared-graph.md)).
+
+## Shared server
+
+Every write tool takes `workspace` and `branch`. Pass both on every call (see
+[Shared graph](shared-graph.md#3-which-workspace-a-call-lands-in)). Read tools
+also accept `workspace: "*"`.
+
+| Tool | Required | Optional | What it does |
+|------|----------|----------|--------------|
+| `add_edge` | `from_node_id`, `to_node_id` | `branch`, `edge_type`, `rationale`, `workspace` | Create a directed edge between two nodes. |
+| `add_node` | `node_type`, `title` | `branch`, `commit`, `confidence`, `description`, `edge_type`, `files`, `parent_id`, `prompt`, `rationale`, `status`, `workspace` | Add a new node to the decision graph. |
+| `ask_graph` | `question` | `include_context`, `scope`, `workspace` | Ask a natural language question about the decision graph. |
+| `capture_conversation_turn` | `summary` | `action`, `branch`, `confidence`, `decision`, `goal`, `observations`, `options_considered`, `outcome`, `parent_node_id`, `workspace` | Capture the reasoning from a conversation exchange into the decision graph. |
+| `check_activity` | - | `branches`, `workspace` | List active write sessions in a workspace — which branches have a session actively writing right now, which client, and whether it's this session — and the most recent node on every branch, so one call shows what everyon |
+| `close_thread` | `title` | `branch`, `description`, `goal_node_id`, `lessons_learned`, `next_steps`, `parent_node_id`, `success`, `workspace` | Close out a reasoning thread with an outcome. |
+| `delete_edge` | `from_node_id`, `to_node_id` | `branch`, `edge_type` | Remove an edge between two nodes. |
+| `delete_node` | `node_id` | `branch` | Soft-delete a decision graph node. |
+| `find_orphans` | - | `workspace` | Find nodes with no incoming edges that aren't goals. |
+| `get_ancestors` | `node_id` | `max_depth`, `max_nodes` | Walk the graph backward from a node to find all ancestor nodes. |
+| `get_descendants` | `node_id` | `max_depth`, `max_nodes` | Walk the graph forward from a node to find all descendant nodes. |
+| `get_graph` | - | `branch`, `include_details`, `max_nodes`, `workspace` | Get the decision graph (nodes, edges, themes, documents) for one workspace. |
+| `list_workspaces` | - | - | List every project in the shared decision graph, with node and edge counts, most populated first. |
+| `log_decision` | `title`, `chosen_option` | `branch`, `confidence`, `parent_node_id`, `rationale`, `rejected_options`, `workspace` | Record a decision point with the options that were considered and which was chosen. |
+| `log_observation` | `title` | `branch`, `description`, `related_to`, `tags`, `took_from`, `why`, `workspace` | Quickly log an insight, learning, or discovery as an observation node. |
+| `query_nodes` | - | `branch`, `limit`, `search`, `status`, `type`, `workspace` | Search and filter decision graph nodes. |
+| `show_node` | `node_id` | - | Get detailed information about a single node, including connected edges, documents, and themes. |
+| `update_node` | `node_id` | `branch`, `description`, `metadata`, `status`, `title` | Update an existing decision graph node's title, description, or status. |
+
+Things the schemas do not say:
+
+- Every call has a 60-second deadline. A call that runs past it is stopped,
+  its uncommitted writes are rolled back, and it is answered with an error
+  instead of hanging.
+- `get_graph` refuses graphs over `max_nodes` (default 2000). Use `query_nodes`
+  with `search`, `type`, `branch` and `limit` instead.
+- `add_node` with `parent_id` checks the parent before it writes anything. A
+  parent that is missing, or in another workspace, fails the whole call:
+  `parent_id 00000000-... is not a node in this workspace; nothing was created.`
+- `log_decision` with `parent_node_id` and `rejected_options` crashed with
+  `request handler crashed` on 1.0.2 and still left its decision node behind,
+  unlinked. Write the decision, its options and their edges with `add_node` and
+  `parent_id` instead, and run `find_orphans` if a call crashed.
+- `edge_type` is one of `leads_to` (default), `chosen`, `rejected`, `requires`,
+  `blocks`, `enables`, `took_from`.
+
+
+<!-- https://deciduous.dev/agents/verify.md -->
+
+# Verify
+
+Run these after setting up and report each result to the user as pass or
+fail, with the output. Do not report the setup as done until every line that
+applies has passed. A setup that looks right but writes to the wrong place is
+worse than one that fails loudly.
+
+## Every project
+
+```sh
+deciduous --version                 # 1.0.2 or newer
+deciduous check-update; echo $?     # 0: integration files match the binary
+git ls-files --error-unmatch .deciduous/config.toml
+```
+
+`git ls-files` fails until the files are committed. Report that as a step
+left to do, not as a failure.
+
+## Shared server
+
+```sh
+deciduous remote status
+```
+
+Expected:
+
+```
+Remote: https://example.com/deciduous-mcp
+Workspace: my-project
+
+                 local    remote
+  nodes            ...      ...
+
+OK: counts match.
+```
+
+Then prove that your MCP writes land where the user expects. This is the check
+that catches a wrong workspace:
+
+1. Call `add_node` with `node_type: "observation"`, a title such as "deciduous
+   setup verified from <client>", `workspace`, `branch`, and `parent_id` set
+   to the goal you are working under (or no parent if there is none yet).
+2. Call `query_nodes` with the same `workspace` and `branch`, and a `search`
+   for that title. It must come back.
+3. Run `deciduous remote status`. The remote count went up by one. The local
+   count did not, which is correct: MCP writes go to the server.
+4. Optionally `deciduous remote pull`, and the counts match again.
+
+Leave the node in place. It records when and from where the setup was verified.
+
+
+<!-- https://deciduous.dev/agents/troubleshooting.md -->
+
+# Troubleshooting
+
+Each entry is a failure that has actually happened, with the text you will see.
+Match the message, apply the fix, and tell the user what you changed.
+
+## "DECIDUOUS: 10 actions since your last graph write"
+
+A project set up by 1.0.2 still has its logging hooks. Upgrade the binary to
+1.0.3 and run `deciduous update` in the project. It removes the hook scripts it
+wrote and their `settings.json` entries, and keeps the rest.
+
+## A write is refused with a placeholder id
+
+```
+to_node_id is not a node id: "PLACEHOLDER". To link a node you are creating now, pass parent_id to add_node instead; an id must come from a previous answer, not be written ahead of it
+```
+
+You sent `add_edge` in the same parallel batch as the `add_node` whose id it
+needed, and put a placeholder where the id would be. Use `add_node` with
+`parent_id` instead. It creates the node and its edge together.
+
+## `parent_id ... is not a node in this workspace; nothing was created.`
+
+The parent is missing, or it lives in a different workspace from the one this
+call resolved to. Look it up with `show_node`. If it is in another workspace,
+pass that `workspace`, or check whether an `X-Deciduous-Workspace` header is
+pinning you somewhere else.
+
+## `deciduous remote status` says local holds more than the server
+
+```
+Drift: local holds more than the server. `deciduous remote push` to send it up.
+```
+
+Something wrote with the CLI (`deciduous add`) or the old stdio MCP server.
+Those writes never reached the server. Run `deciduous remote push`, then write
+through the HTTP MCP tools from now on. The
+reverse message, the server holding more, means other agents have written. Run
+`deciduous remote pull`.
+
+## Your nodes are missing from the workspace you expected
+
+They landed in another workspace. The usual causes are a `workspace` argument
+set to a worktree's directory name instead of the repository's, a typo (unknown
+names are created, not rejected), or no argument at all from outside a git
+repository, which lands in `scratch`. Find them:
+
+```
+query_nodes(workspace: "*", search: "<part of the title>")
+```
+
+## A write is refused because another session holds the branch
+
+Writes lock per workspace and branch. Another agent is writing on the same
+branch right now, and the refusal names it. Use your own branch. Call
+`check_activity` to see who is active where.
+
+## HTTP 403 when scripting against the server directly
+
+The public deployment sits behind Cloudflare, which rejected Python's default
+`urllib` User-Agent with 403 before the request reached the server. Send a
+User-Agent of your own. The same request with `User-Agent: something/1` passed.
+
+## `Server not initialized`
+
+```json
+{"error":{"code":-32600,"data":{"message":"Server not initialized"},"message":"Invalid Request"}}
+```
+
+You posted `tools/list` or `tools/call` without an MCP session. Send
+`initialize` first, keep the `mcp-session-id` response header, send
+`notifications/initialized`, then send your call with that header. MCP clients
+do this themselves. You only see this when you script HTTP by hand.
+
+## The tools you expect are not there
+
+`link_nodes`, `search_nodes` and `trace_chain` belong to the old `deciduous mcp` stdio server.
+`add_edge`, `query_nodes` and `ask_graph` belong to the shared server. If the
+user expects one and you see the other, the client is registered against the
+wrong one. For Claude Code, `claude mcp get deciduous` shows which.

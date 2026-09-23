@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-docs-generated="true">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Give each finding evidence · Deciduous docs</title>
+<meta name="description" content="Record enough evidence for another agent to check a claim without reconstructing your whole session. Put the test command and result beside the action it verifies. Keep a rejected experiment&#39;s failure">
+<link rel="canonical" href="https://deciduous.dev/tutorial/evidence.html">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Give each finding evidence · Deciduous docs"><meta property="og:description" content="Record enough evidence for another agent to check a claim without reconstructing your whole session. Put the test command and result beside the action it verifies. Keep a rejected experiment&#39;s failure"><meta property="og:url" content="https://deciduous.dev/tutorial/evidence.html">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css"><script src="../docs.js" defer></script>
+</head>
+<body data-search-index="../search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="../index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="../index.html">Shared memory</a></li><li><a href="../quickstart.html">Quickstart</a></li><li><a href="../local-postgres.html">Local Postgres setup</a></li><li><a href="../clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="../teams.html">Two agents, one graph</a></li><li><a href="../workflow.html">Record the reasoning</a></li><li><a href="../recovery.html">Recover context</a></li><li><a href="../evidence.html" aria-current="page">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="../remote-postgres.html">Remote hosting</a></li><li><a href="../upgrading.html">Upgrade and migrate</a></li><li><a href="../troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="../concepts.html">Graph concepts</a></li><li><a href="../reference.html">CLI and API</a></li><li><a href="../mcp.html">MCP tools</a></li><li><a href="../architecture.html">Architecture and trust</a></li><li><a href="../developer.html">Develop Deciduous</a></li><li><a href="../solo.html">Solo and offline use</a></li><li><a href="../history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Work as a team</span><a href="../../content/evidence.md">Read as Markdown</a></div><article><h1 id="give-each-finding-evidence">Give each finding evidence</h1>
+<p>Record enough evidence for another agent to check a claim without reconstructing your whole session. Put the test command and result beside the action it verifies. Keep a rejected experiment's failure reason connected to the decision it changed.</p>
+<h2 id="record-the-check-you-ran">Record the check you ran</h2>
+<p>An outcome should say what ran, on which code, and what remains untested. Avoid &quot;all tests pass&quot; if you ran one file.</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">add_node({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  node_type: &quot;outcome&quot;, status: &quot;completed&quot;,
+  title: &quot;Request validation passes 8 integration cases&quot;,
+  description: &quot;npm test -- tests/items.test.ts: 8 passed, 0 failed. Covers malformed input and the 422 response body. Browser behavior was not checked.&quot;,
+  files: [&quot;tests/items.test.ts&quot;]
+})
+add_edge({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  from_node_id: &quot;ACTION_ID&quot;, to_node_id: &quot;OUTCOME_ID&quot;,
+  rationale: &quot;Integration results for this implementation&quot;
+})
+</code></pre>
+</div><p>These are MCP calls. Replace <code>ACTION_ID</code> and <code>OUTCOME_ID</code> with real server UUIDs. Add <code>commit</code> to <code>add_node</code> when you have a real Git SHA; the server cannot resolve <code>HEAD</code> against your working directory.</p>
+<p>A file path is context, not an upload. A commit reference is a string in metadata, not proof that the commit exists on the reader's machine. Make the referenced code accessible through the team's repository.</p>
+<h2 id="distinguish-a-source-from-agreement">Distinguish a source from agreement</h2>
+<p>Use a <code>took_from</code> edge when a finding changes your approach. Include why you adopted it and which part you verified. Reusing a decision does not prove it correct in a new context.</p>
+<div class="code-block"><div class="code-toolbar"><span>javascript</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-javascript">log_observation({
+  workspace: &quot;example-app&quot;, branch: &quot;agent-tests&quot;,
+  related_to: &quot;ACTION_ID&quot;,
+  took_from: &quot;SOURCE_DECISION_ID&quot;,
+  title: &quot;Reuse the field error codes in the request tests&quot;,
+  why: &quot;The API decision defines stable codes; tests should not depend on prose messages.&quot;,
+  description: &quot;Read the source decision and confirmed the handler emits the documented codes.&quot;
+})
+</code></pre>
+</div><p>The server writes this observation and its edges in one transaction. Both references must resolve in the same workspace. A node UUID or full <code>change_id</code> works; a display prefix does not.</p>
+<h2 id="documents-in-the-shared-server">Documents in the shared server</h2>
+<p>The Postgres service stores attachment metadata and document bytes separately. Byte content is keyed by SHA-256 and deduplicated in Postgres. Existing local attachments can move to the server through the <a href="../upgrading.html">upgrade/import procedure</a>.</p>
+<p><code>show_node</code> lists a node's document IDs, filenames, and MIME types. <code>get_graph</code> includes document metadata. Authorized clients can fetch bytes at <code>GET /documents/{document-id}</code> or by content hash. A <code>410</code> means metadata exists but content is missing; a <code>404</code> means the requested document was not found. The download response uses private, no-store caching headers.</p>
+<p>The current shared MCP tool set has no attachment-upload tool. <code>deciduous doc attach</code> is a local SQLite command; configuring a remote does not make it upload. <code>remote push</code> sends graph metadata but not blob bytes, and <code>remote pull</code> does not download attachment metadata or content into SQLite. Do not mistake a listed filename for a verified remote copy.</p>
+<h2 id="bring-existing-attachments-across-safely">Bring existing attachments across safely</h2>
+<p>Use the upgrade scripts before normal team writing begins. They must transfer both the graph rows and each attachment's bytes, then verify downloads by hash. The server's blob endpoint, <code>PUT /blob/{sha256}</code>, verifies that the bytes match the named hash; an upload by itself does not create a node attachment.</p>
+<p>Keep the original <code>.deciduous/documents</code> files until the migration checks and backup are complete. Review unresolved edges and missing-content reports rather than treating a successful HTTP import as proof that all evidence arrived.</p>
+<p>Avoid bulk-pushing a stale local graph to attach one new file after the team has started writing on the server. Import can replace matching node records. For new evidence, record a concise result plus a stable repository reference until you have a reviewed attachment-ingestion path.</p>
+<h2 id="local-attachment-tools">Local attachment tools</h2>
+<p>For the <a href="../solo.html">solo/offline</a> workflow, the CLI supports:</p>
+<div class="code-block"><div class="code-toolbar"><span>bash</span><button type="button" class="copy-code" aria-label="Copy code block">Copy</button></div><pre><code class="language-bash">deciduous doc attach 42 ./evidence/validation-output.txt \
+  -d &quot;Sanitized integration test output&quot;
+deciduous doc list 42
+deciduous doc show 7
+</code></pre>
+</div><p><code>42</code> and <code>7</code> are example local IDs; use the IDs from your own graph and document listing. These commands do not operate on server UUIDs. <code>doc detach</code> soft-deletes an attachment; <code>doc gc</code> can remove orphaned files, so review and back up before cleanup.</p>
+<h2 id="review-before-sharing">Review before sharing</h2>
+<p>Prompts and attachments can contain customer records, private paths, or credentials. Sanitize command output and screenshots before recording them. Do not attach <code>.env</code> files, credential stores, database connection strings, or token-bearing event URLs.</p>
+<p>The current bearer token grants access across the server. Workspace naming and headers do not create a separate permission boundary for attachments. Use separate deployments when different groups must not see each other's evidence.</p>
+<p>Static graph exports can publish the same sensitive text without the MCP server's authentication. Review exported JSON and generated writeups before committing them or publishing a docs site.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><a href="../recovery.html"><span>Previous</span>Recover context</a><a href="../remote-postgres.html"><span>Next</span>Remote hosting</a></nav><footer class="article-footer"><a href="../../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#record-the-check-you-ran">Record the check you ran</a></li><li><a href="#distinguish-a-source-from-agreement">Distinguish a source from agreement</a></li><li><a href="#documents-in-the-shared-server">Documents in the shared server</a></li><li><a href="#bring-existing-attachments-across-safely">Bring existing attachments across safely</a></li><li><a href="#local-attachment-tools">Local attachment tools</a></li><li><a href="#review-before-sharing">Review before sharing</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-docs-generated="true">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Shared memory for a team of agents · Deciduous docs</title>
+<meta name="description" content="Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse.">
+<link rel="canonical" href="https://deciduous.dev/tutorial/">
+<meta property="og:type" content="article"><meta property="og:site_name" content="Deciduous">
+<meta property="og:title" content="Shared memory for a team of agents · Deciduous docs"><meta property="og:description" content="Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse."><meta property="og:url" content="https://deciduous.dev/tutorial/">
+<meta property="og:image" content="https://deciduous.dev/og-many-minds.png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Many minds. One memory. Agents connected to a shared Deciduous graph.">
+<meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#fff0ed">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"><script src="docs.js" defer></script>
+</head>
+<body data-search-index="search-index.json">
+<a class="skip-link" href="#content">Skip to content</a>
+<header class="docs-header"><a class="brand" href="../index.html" aria-label="Deciduous home"><svg viewBox="0 0 36 44" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 38V9M18 28C18 19 6 24 6 10M18 20C18 12 30 19 30 7"/><circle cx="18" cy="5" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="30" cy="4" r="3"/><circle cx="18" cy="39" r="3"/></g></svg><span>deciduous</span></a><a class="docs-label" href="index.html">Docs</a><div class="header-actions"><button type="button" class="search-open" aria-haspopup="dialog"><span>Search docs</span><kbd>/</kbd></button><a class="github-link" href="https://github.com/notactuallytreyanastasio/deciduous">GitHub</a><button type="button" class="menu-toggle" aria-expanded="false" aria-controls="docs-navigation">Menu</button></div></header>
+<div class="docs-layout"><aside class="sidebar" id="docs-navigation"><nav aria-label="Documentation"><section class="nav-group"><h2>Get connected</h2><ul><li><a href="index.html" aria-current="page">Shared memory</a></li><li><a href="quickstart.html">Quickstart</a></li><li><a href="local-postgres.html">Local Postgres setup</a></li><li><a href="clients.html">Connect your agents</a></li></ul></section><section class="nav-group"><h2>Work as a team</h2><ul><li><a href="teams.html">Two agents, one graph</a></li><li><a href="workflow.html">Record the reasoning</a></li><li><a href="recovery.html">Recover context</a></li><li><a href="evidence.html">Attach evidence</a></li></ul></section><section class="nav-group"><h2>Run the service</h2><ul><li><a href="remote-postgres.html">Remote hosting</a></li><li><a href="upgrading.html">Upgrade and migrate</a></li><li><a href="troubleshooting.html">Troubleshooting</a></li></ul></section><section class="nav-group"><h2>Reference</h2><ul><li><a href="concepts.html">Graph concepts</a></li><li><a href="reference.html">CLI and API</a></li><li><a href="mcp.html">MCP tools</a></li><li><a href="architecture.html">Architecture and trust</a></li><li><a href="developer.html">Develop Deciduous</a></li><li><a href="solo.html">Solo and offline use</a></li><li><a href="history.html">Explore design history</a></li></ul></section></nav><div class="sidebar-note">Shared server workflow<br><span>Deciduous 1.0</span></div></aside>
+<main id="content"><div class="article-meta"><span>Get connected</span><a href="../content/index.md">Read as Markdown</a></div><div class="connection-strip" aria-label="Agents connect through HTTP MCP to the shared Deciduous service, which stores memory in Postgres"><span><i class="agent-mark"></i>Your agents</span><span class="connection-label">HTTP MCP</span><span><i class="service-mark"></i>Shared service</span><span class="connection-label">Private network</span><span><i class="database-mark"></i>Postgres</span></div><article><h1 id="shared-memory-for-a-team-of-agents">Shared memory for a team of agents</h1>
+<p>Give each coding agent its own branch and connect them to the same Deciduous workspace. They can read the decisions already made, record what they learn, and credit the findings they reuse.</p>
+<p>The shared service stores the graph in Postgres. Agents reach it over authenticated HTTP through MCP. The database stays behind the service; agents do not need a database password.</p>
+<h2 id="start-with-a-working-team">Start with a working team</h2>
+<ol>
+<li><a href="local-postgres.html">Run Postgres and the shared service on your machine</a>. The guide covers persistent storage, credentials, health checks, and a first connection.</li>
+<li><a href="clients.html">Connect your agent clients</a> to the same workspace. Give each agent a distinct branch name.</li>
+<li><a href="teams.html">Run a two-agent handoff</a>. One agent records a decision; the other reads it and links the work that uses it.</li>
+</ol>
+<p>Already have a server? <a href="quickstart.html">The quickstart</a> begins with its address and an access token. Already have local graphs? <a href="upgrading.html">Upgrade and import them</a> with backups and a preview before changing anything.</p>
+<h2 id="three-separate-responsibilities">Three separate responsibilities</h2>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>What it owns</th>
+<th>What you configure</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Your agents</td>
+<td>Code in separate worktrees, decisions and evidence</td>
+<td>HTTP MCP endpoint, bearer token, workspace, branch</td>
+</tr>
+<tr>
+<td>Deciduous service</td>
+<td>Graph tools, project routing, writes and live events</td>
+<td>Service token, database connection, HTTP listener</td>
+</tr>
+<tr>
+<td>Postgres</td>
+<td>Shared graph and document storage</td>
+<td>Database role, persistent volume, backups</td>
+</tr>
+</tbody>
+</table>
+<p>One service can hold several workspaces. Use the same explicit workspace name across clones and machines. Workspaces organize the graph; the shared bearer token is a service-wide trust boundary, not a per-workspace permission system. Run separate services for teams that should not read each other's data.</p>
+<h2 id="read-before-writing">Read before writing</h2>
+<p>An agent starting work should check recent activity and query the relevant part of the graph. It records the goal, options and chosen decision before implementation, then attaches actions and outcomes as the work proceeds. A later agent can follow those connections without the original chat transcript.</p>
+<p><a href="teams.html">Working as a team</a> covers branch identities and reused findings. <a href="workflow.html">The decision workflow</a> covers the graph itself. <a href="recovery.html">Recovering context</a> shows how a new session picks up the same reasoning.</p>
+<h2 id="know-which-store-you-are-using">Know which store you are using</h2>
+<p>In Deciduous 1.0, the HTTP MCP server writes to Postgres. Ordinary commands such as <code>deciduous add</code>, <code>deciduous link</code>, and the local stdio <code>deciduous mcp</code> still use SQLite. Running <code>deciduous remote init</code> does not redirect those commands to Postgres.</p>
+<p>Use the HTTP MCP connection for shared agent work. The Rust CLI's <code>remote</code> commands configure the connection, compare stores, transfer graph data, and watch events. <a href="reference.html">The reference</a> spells out which commands contact the server.</p>
+<p>You can keep using <a href="solo.html">SQLite for solo or offline work</a>. Treat moving between the two stores as an explicit operation. A pull changes local data; a push can overwrite corresponding remote records. The <a href="upgrading.html">upgrade guide</a> explains the checks and limitations.</p>
+<h2 id="take-the-same-setup-to-a-remote-host">Take the same setup to a remote host</h2>
+<p><a href="remote-postgres.html">Remote hosting</a> is the short version: put the service behind HTTPS, keep Postgres on a private network, distribute the service token through a secret store, and test a restore from backup. Your agents then use the new service address with the same workspace conventions.</p>
+<p>The <a href="architecture.html">architecture guide</a> documents the trust boundaries and the current TLS limitations of the database client. <a href="troubleshooting.html">Troubleshooting</a> covers connection failures, missing records, locks, and split local/remote histories.</p>
+</article><nav class="page-turn" aria-label="Previous and next guide"><span></span><a href="quickstart.html"><span>Next</span>Quickstart</a></nav><footer class="article-footer"><a href="../index.html">Watch the agents work</a><span>Many minds. One memory.</span></footer></main>
+<aside class="on-this-page"><nav aria-label="On this page"><h2>On this page</h2><ul><li><a href="#start-with-a-working-team">Start with a working team</a></li><li><a href="#three-separate-responsibilities">Three separate responsibilities</a></li><li><a href="#read-before-writing">Read before writing</a></li><li><a href="#know-which-store-you-are-using">Know which store you are using</a></li><li><a href="#take-the-same-setup-to-a-remote-host">Take the same setup to a remote host</a></li></ul></nav></aside></div>
+<dialog id="docs-search" aria-labelledby="search-title"><form method="dialog"><h2 id="search-title">Search the docs</h2><button aria-label="Close search" class="close-search">Close</button></form><label class="sr-only" for="search-query">Search terms</label><input type="search" id="search-query" placeholder="Try workspace, backup, or two agents" autocomplete="off"><p id="search-status" role="status">Type to search all guides.</p><ul id="search-results"></ul></dialog><div class="sr-only" id="copy-status" role="status"></div>
+</body></html>
