@@ -1397,3 +1397,135 @@ fn an_mcp_node_id_is_never_truncated_to_another_node() {
     let text = answer.to_string();
     assert!(text.contains("all digits"), "{text}");
 }
+
+/// A real HTTP server on 127.0.0.1 that answers `GET /export` with `body`
+/// and anything else with an empty object, for as long as the test runs.
+fn serve_export(body: String) -> String {
+    use std::io::{BufRead, BufReader, Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut reader = BufReader::new(stream.try_clone().unwrap());
+            let mut request_line = String::new();
+            reader.read_line(&mut request_line).unwrap_or(0);
+            let mut length = 0usize;
+            loop {
+                let mut line = String::new();
+                if reader.read_line(&mut line).unwrap_or(0) == 0 || line == "\r\n" {
+                    break;
+                }
+                if let Some(v) = line.to_lowercase().strip_prefix("content-length:") {
+                    length = v.trim().parse().unwrap_or(0);
+                }
+            }
+            let mut sink = vec![0; length];
+            let _ = reader.read_exact(&mut sink);
+            let payload = if request_line.starts_with("GET /export") {
+                body.clone()
+            } else {
+                "{}".to_string()
+            };
+            let _ = write!(
+                stream,
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                payload.len(),
+                payload
+            );
+        }
+    });
+    url
+}
+
+#[test]
+fn remote_pull_merges_into_graph_json_instead_of_overwriting_it() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let a = alice.add("goal", "A", &[]);
+    let b = alice.add("action", "B", &[]);
+    let c = alice.add("action", "C", &[]);
+    let (a, b, c) = (a.to_string(), b.to_string(), c.to_string());
+    alice.ok(&["link", &a, &b, "-r", "old"]);
+    alice.ok(&["link", &a, &c, "-r", "to c"]);
+
+    // What the server holds: this graph as it was now.
+    let doc = alice.doc();
+    let nodes: Vec<Value> = doc["nodes"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|n| {
+            serde_json::json!({
+                "change_id": n["change_id"], "node_type": n["node_type"],
+                "title": n["title"], "status": n["status"],
+                "created_at": n["created_at"], "updated_at": n["updated_at"],
+            })
+        })
+        .collect();
+    let server_edges: Vec<Value> = doc["edges"]
+        .as_object()
+        .unwrap()
+        .values()
+        .map(|e| {
+            serde_json::json!({
+                "from_change_id": e["from_change_id"], "to_change_id": e["to_change_id"],
+                "edge_type": e["edge_type"], "rationale": e["rationale"],
+                "created_at": e["created_at"],
+            })
+        })
+        .collect();
+    let url = serve_export(
+        serde_json::json!({"nodes": nodes, "edges": server_edges, "documents": []}).to_string(),
+    );
+
+    // Since then, locally: A -> C unlinked (removal is local only), A -> B
+    // relinked with a new rationale, and a field this version does not know.
+    alice.ok(&["unlink", &a, &c]);
+    alice.ok(&["unlink", &a, &b]);
+    alice.ok(&["link", &a, &b, "-r", "new local relink"]);
+    let mut doc = alice.doc();
+    for n in doc["nodes"].as_object_mut().unwrap().values_mut() {
+        n["priority"] = "high".into();
+    }
+    alice.write_doc(&doc);
+    alice.ok(&["sync"]);
+    fs::write(
+        alice.dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\nworkspace = \"w\"\n"),
+    )
+    .unwrap();
+
+    let out = alice
+        .cmd(BIN)
+        .args(["remote", "pull"])
+        .env("DECIDUOUS_MCP_TOKEN", "t")
+        .output()
+        .unwrap();
+    let said = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{said}");
+
+    let doc = alice.doc();
+    for n in doc["nodes"].as_object().unwrap().values() {
+        assert_eq!(
+            n["priority"], "high",
+            "remote pull dropped a field: {n:#}\n{said}"
+        );
+    }
+    let e = edges(&alice);
+    assert_eq!(e.len(), 1, "the unlinked edge came back: {e:#?}\n{said}");
+    assert_eq!(e[0]["rationale"], "new local relink", "{said}");
+    let tomb = doc["edges"]
+        .as_object()
+        .unwrap()
+        .values()
+        .filter(|e| e["deleted_at"].is_string())
+        .count();
+    assert_eq!(tomb, 1, "{doc:#}");
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+}

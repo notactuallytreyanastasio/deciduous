@@ -954,6 +954,53 @@ impl RecordStore {
         self.mutate(|doc| Ok(put(&mut doc.tags, key, rec.clone())))
     }
 
+    /// Fold in a node record that came from somewhere other than this
+    /// clone's database (the shared server): merged with the file's version
+    /// by the merge driver's rules, without a base and without a restamp,
+    /// since it is not a local write. Fields only the file has (a newer
+    /// version's, a cascade marker) survive, and the newer side wins a
+    /// field both have. [`Self::write_node`] would replace the record.
+    pub fn absorb_node(&self, rec: &NodeRecord) -> io::Result<bool> {
+        self.absorb(|d| &mut d.nodes, rec.change_id.clone(), rec)
+    }
+
+    /// Like [`Self::absorb_node`], for an edge. A local tombstone newer than
+    /// the incoming copy stays a tombstone, and a local relink keeps its
+    /// rationale over an older copy of the edge.
+    pub fn absorb_edge(&self, rec: &EdgeRecord) -> io::Result<bool> {
+        self.absorb(|d| &mut d.edges, rec.edge_id.clone(), rec)
+    }
+
+    fn absorb<T>(
+        &self,
+        pick: impl FnOnce(&mut GraphDoc) -> &mut BTreeMap<String, T>,
+        key: String,
+        rec: &T,
+    ) -> io::Result<bool>
+    where
+        T: Serialize + for<'de> Deserialize<'de> + PartialEq + Clone,
+    {
+        self.mutate(|doc| {
+            let map = pick(doc);
+            let merged = match map.get(&key) {
+                None => rec.clone(),
+                Some(existing) => {
+                    let ours = serde_json::to_value(existing).map_err(io::Error::other)?;
+                    let theirs = serde_json::to_value(rec).map_err(io::Error::other)?;
+                    serde_json::from_value(merge_record_values(None, &ours, &theirs)).map_err(
+                        |e| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidData,
+                                format!("merging a record produced something unreadable: {}", e),
+                            )
+                        },
+                    )?
+                }
+            };
+            Ok(put(map, key, merged))
+        })
+    }
+
     /// Write a record produced by a local mutation, merged with whatever is
     /// already in the document. That entry may hold a teammate's version
     /// that was pulled but not yet synced into the database; overwriting it
