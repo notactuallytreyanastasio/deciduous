@@ -1021,42 +1021,76 @@ pub struct ApiDaemon {
 }
 
 impl ApiDaemon {
+    /// Starts the daemon on a port it chooses (`--port 0`) and learns that
+    /// port from the line it prints once it is bound.
+    ///
+    /// It used to be handed a port found free a moment earlier (dead_port:
+    /// bind to 0, read the port, release it) and be taken as listening as
+    /// soon as any TCP connect to that port succeeded. Both halves are a
+    /// window: the port is free only when it is looked at, and a connect
+    /// that succeeds says something is there, not that it is this child.
+    /// The r6 flake (a first request "Connection refused", or "reset by
+    /// peer" with twelve daemons starting at once) came through it.
     pub fn spawn(sb: &Sandbox, data_dir: &Path, token: &str) -> Self {
+        use std::io::BufRead;
+
         std::fs::create_dir_all(data_dir).unwrap();
-        for _ in 0..5 {
-            let port = dead_port();
-            let mut c = sb.cmd(bin(), data_dir);
-            c.args([
-                "serve",
-                "--api",
-                "--port",
-                &port.to_string(),
-                "--data-dir",
-                data_dir.to_str().unwrap(),
-            ])
-            .env("DECIDUOUS_API_TOKEN", token)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
-            let mut child = c.spawn().expect("spawn serve --api");
-            let deadline = Instant::now() + Duration::from_secs(10);
-            while Instant::now() < deadline {
-                if std::net::TcpStream::connect(("127.0.0.1", port)).is_ok() {
-                    return ApiDaemon {
-                        child,
-                        port,
-                        token: token.to_string(),
-                        data_dir: data_dir.to_path_buf(),
-                    };
-                }
-                if !matches!(child.try_wait(), Ok(None)) {
-                    break;
-                }
-                std::thread::sleep(Duration::from_millis(50));
+        let mut c = sb.cmd(bin(), data_dir);
+        c.args([
+            "serve",
+            "--api",
+            "--port",
+            "0",
+            "--data-dir",
+            data_dir.to_str().unwrap(),
+        ])
+        .env("DECIDUOUS_API_TOKEN", token)
+        .env("NO_COLOR", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+        let mut child = c.spawn().expect("spawn serve --api");
+        let stdout = child.stdout.take().unwrap();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let mut lines = std::io::BufReader::new(stdout).lines();
+            let first = lines.next();
+            let _ = tx.send(first);
+            // Keep draining, so a daemon that prints more never blocks on
+            // a full pipe.
+            for _ in lines {}
+        });
+        let line = match rx.recv_timeout(Duration::from_secs(20)) {
+            Ok(Some(Ok(line))) => line,
+            other => {
+                let _ = child.kill();
+                let out = child.wait_with_output().unwrap();
+                panic!(
+                    "serve --api printed no address ({other:?}); stderr: {}",
+                    String::from_utf8_lossy(&out.stderr)
+                );
             }
-            let _ = child.kill();
-            let _ = child.wait();
+        };
+        let port: u16 = line
+            .rsplit_once("http://")
+            .and_then(|(_, rest)| rest.split_once(':'))
+            .and_then(|(_, rest)| {
+                rest.split(|c: char| !c.is_ascii_digit())
+                    .next()
+                    .and_then(|p| p.parse().ok())
+            })
+            .unwrap_or_else(|| panic!("no port in serve --api's first line: {line:?}"));
+        // stderr is not read after this; drain it so it cannot fill up.
+        if let Some(err) = child.stderr.take() {
+            std::thread::spawn(move || {
+                let _ = std::io::copy(&mut std::io::BufReader::new(err), &mut std::io::sink());
+            });
         }
-        panic!("serve --api never started listening");
+        ApiDaemon {
+            child,
+            port,
+            token: token.to_string(),
+            data_dir: data_dir.to_path_buf(),
+        }
     }
 
     pub fn as_server(&self) -> Server {
