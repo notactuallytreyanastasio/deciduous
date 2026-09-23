@@ -17,6 +17,11 @@ defmodule DeciduousMcp.Graph.Query do
   - `:include_deleted` — include soft-deleted nodes (default false)
   """
   def get_full_graph(scope, opts \\ []) do
+    # `details: false` drops description, metadata and rationale. On the
+    # 7,805-node epstein graph those three fields are 10.8MB of a 31.3MB body,
+    # and the MCP client re-parses the body as a string inside JSON-RPC, so
+    # every byte is paid for three times (encode, escape, decode).
+    details? = Keyword.get(opts, :details, true)
     nodes = fetch_nodes(scope, opts)
     node_ids = Enum.map(nodes, & &1.id)
     edges = fetch_edges(scope, node_ids)
@@ -25,8 +30,8 @@ defmodule DeciduousMcp.Graph.Query do
     node_themes = fetch_node_themes(node_ids)
 
     %{
-      nodes: Enum.map(nodes, &serialize_node/1),
-      edges: Enum.map(edges, &serialize_edge/1),
+      nodes: Enum.map(nodes, &serialize_node(&1, details?)),
+      edges: Enum.map(edges, &serialize_edge(&1, details?)),
       themes: Enum.map(themes, &serialize_theme/1),
       documents: Enum.map(documents, &serialize_document/1),
       node_themes: Enum.map(node_themes, &serialize_node_theme/1),
@@ -64,14 +69,16 @@ defmodule DeciduousMcp.Graph.Query do
   Returns nodes in order from root to the given node.
   """
   def ancestors(node_id, max_depth \\ 50) do
-    walk_graph(node_id, :backward, max_depth)
+    {nodes, _truncated} = walk_graph(node_id, :backward, max_depth)
+    nodes
   end
 
   @doc """
   Gets the descendants of a node (walks edges forward).
   """
   def descendants(node_id, max_depth \\ 50) do
-    walk_graph(node_id, :forward, max_depth)
+    {nodes, _truncated} = walk_graph(node_id, :forward, max_depth)
+    nodes
   end
 
   # --- Private helpers ---
@@ -100,12 +107,21 @@ defmodule DeciduousMcp.Graph.Query do
     |> Repo.all()
   end
 
+  # Both endpoints of an edge are in its workspace by construction
+  # (`Edges.create_edge/2` checks it), so the only edges the IN-list ever
+  # removed were ones touching a soft-deleted node. Filtering those here saves
+  # sending the node id list back to Postgres as two 7,805-element arrays: a
+  # 600KB statement with 16ms of planning on production for a 54ms query.
   defp fetch_edges(scope, node_ids) do
+    live = MapSet.new(node_ids)
+
     Edge
     |> scope_ws(scope)
-    |> where([e], e.from_node_id in ^node_ids and e.to_node_id in ^node_ids)
     |> order_by([e], asc: e.inserted_at)
     |> Repo.all()
+    |> Enum.filter(
+      &(MapSet.member?(live, &1.from_node_id) and MapSet.member?(live, &1.to_node_id))
+    )
   end
 
   defp fetch_themes(scope) do
@@ -128,57 +144,100 @@ defmodule DeciduousMcp.Graph.Query do
     |> Repo.all()
   end
 
-  defp walk_graph(start_node_id, direction, max_depth) do
-    do_walk([start_node_id], MapSet.new(), direction, max_depth, [])
+  @walk_max_nodes 1_000
+
+  # Breadth-first by level, two queries per level rather than two per node.
+  # The previous version decremented `depth` once per dequeued node, so
+  # `max_depth: 50` returned exactly 50 nodes from any hub and said nothing
+  # about having stopped: `get_descendants` on epstein's root goal returned
+  # `count: 50` from a subtree of thousands. Returns `{nodes, truncated?}`.
+  def walk_graph(start_node_id, direction, max_depth, max_nodes \\ @walk_max_nodes) do
+    visited = MapSet.new([start_node_id])
+    start = Repo.get(Node, start_node_id)
+    acc = if start, do: [start], else: []
+    do_walk_levels([start_node_id], visited, direction, max_depth, max_nodes, acc, false)
   end
 
-  defp do_walk([], _visited, _direction, _depth, acc), do: Enum.reverse(acc)
-  defp do_walk(_queue, _visited, _direction, 0, acc), do: Enum.reverse(acc)
+  defp do_walk_levels([], _visited, _dir, _depth, _max, acc, truncated),
+    do: {Enum.reverse(acc), truncated}
 
-  defp do_walk([current | rest], visited, direction, depth, acc) do
-    if MapSet.member?(visited, current) do
-      do_walk(rest, visited, direction, depth, acc)
+  defp do_walk_levels(_frontier, _visited, _dir, 0, _max, acc, _truncated),
+    do: {Enum.reverse(acc), true}
+
+  defp do_walk_levels(frontier, visited, direction, depth, max_nodes, acc, _truncated) do
+    next_ids =
+      case direction do
+        :forward ->
+          Edge
+          |> where([e], e.from_node_id in ^frontier)
+          |> select([e], e.to_node_id)
+          |> Repo.all()
+
+        :backward ->
+          Edge
+          |> where([e], e.to_node_id in ^frontier)
+          |> select([e], e.from_node_id)
+          |> Repo.all()
+      end
+      |> Enum.uniq()
+      |> Enum.reject(&MapSet.member?(visited, &1))
+
+    room = max_nodes - length(acc)
+    {take, dropped} = Enum.split(next_ids, max(room, 0))
+
+    nodes = if take == [], do: [], else: Node |> where([n], n.id in ^take) |> Repo.all()
+    visited = Enum.reduce(take, visited, &MapSet.put(&2, &1))
+    acc = Enum.reverse(nodes) ++ acc
+
+    if dropped != [] do
+      {Enum.reverse(acc), true}
     else
-      visited = MapSet.put(visited, current)
-      node = Repo.get(Node, current)
-
-      neighbors =
-        case direction do
-          :forward ->
-            Edge
-            |> where([e], e.from_node_id == ^current)
-            |> select([e], e.to_node_id)
-            |> Repo.all()
-
-          :backward ->
-            Edge
-            |> where([e], e.to_node_id == ^current)
-            |> select([e], e.from_node_id)
-            |> Repo.all()
-        end
-
-      new_acc = if node, do: [node | acc], else: acc
-      do_walk(rest ++ neighbors, visited, direction, depth - 1, new_acc)
+      do_walk_levels(take, visited, direction, depth - 1, max_nodes, acc, false)
     end
   end
 
+  def ancestors_bounded(node_id, opts \\ []),
+    do:
+      walk_graph(node_id, :backward, opts[:max_depth] || 50, opts[:max_nodes] || @walk_max_nodes)
+
+  def descendants_bounded(node_id, opts \\ []),
+    do: walk_graph(node_id, :forward, opts[:max_depth] || 50, opts[:max_nodes] || @walk_max_nodes)
+
   # --- Serializers (match Rust CLI output format) ---
 
-  defp serialize_node(node) do
-    %{
+  defp serialize_node(node, details?) do
+    base = %{
       id: node.id,
       change_id: node.change_id,
       node_type: node.node_type,
       title: node.title,
-      description: node.description,
       status: node.status,
-      metadata: node.metadata || %{},
+      # The branch is the one metadata key every reader needs; keep it in
+      # the slim form so a branch filter stays possible client-side.
+      branch: node.metadata && node.metadata["branch"],
       created_at: DateTime.to_iso8601(node.inserted_at),
       updated_at: DateTime.to_iso8601(node.updated_at)
     }
+
+    if details?,
+      do: Map.merge(base, %{description: node.description, metadata: node.metadata || %{}}),
+      else: base
   end
 
-  defp serialize_edge(edge) do
+  # The slim edge is what an LLM needs to follow the graph: which two nodes
+  # and how. The change-id pair duplicates the node ids in a second
+  # namespace and the timestamp is rarely read; together they were 12MB of
+  # the 21MB slim epstein body.
+  defp serialize_edge(edge, false) do
+    %{
+      id: edge.id,
+      from_node_id: edge.from_node_id,
+      to_node_id: edge.to_node_id,
+      edge_type: edge.edge_type
+    }
+  end
+
+  defp serialize_edge(edge, true) do
     %{
       id: edge.id,
       from_node_id: edge.from_node_id,
