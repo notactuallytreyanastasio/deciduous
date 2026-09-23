@@ -377,4 +377,29 @@ defmodule DeciduousMcp.Graph.Workspaces do
 
     "invalid workspace name #{shown}: it #{why}"
   end
+
+  @doc """
+  Shares the workspace's write lock until the calling transaction ends.
+  Every create keyed by a change_id or by a pair of nodes takes it
+  (`Nodes.lock_change_id/2`, `Edges.lock_pair/3`) before its own key, so
+  a bulk import, which takes it exclusively (`lock_exclusively/1`), runs
+  alone against them.
+
+  One exclusive lock per import, not one lock per row it writes: an
+  advisory lock takes a slot in the shared lock table, and a graph of
+  51,158 edges would run it out ("out of shared memory").
+  """
+  def lock_shared(workspace_id) do
+    Repo.query!("SELECT pg_advisory_xact_lock_shared(hashtextextended($1, 0))", [
+      "ws|#{workspace_id}"
+    ])
+
+    :ok
+  end
+
+  @doc "The exclusive side of `lock_shared/1`, for POST /import."
+  def lock_exclusively(workspace_id) do
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["ws|#{workspace_id}"])
+    :ok
+  end
 end

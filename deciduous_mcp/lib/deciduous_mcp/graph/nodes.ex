@@ -39,6 +39,10 @@ defmodule DeciduousMcp.Graph.Nodes do
   the first one's node instead of losing on the unique index.
   """
   def lock_change_id(workspace_id, change_id) do
+    # POST /import writes rows by change_id too, and takes this
+    # workspace's lock exclusively (SERVER-N4 through /import).
+    :ok = DeciduousMcp.Graph.Workspaces.lock_shared(workspace_id)
+
     Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
       Enum.join(["node", workspace_id, change_id], "|")
     ])

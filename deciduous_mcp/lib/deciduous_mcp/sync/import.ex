@@ -75,6 +75,17 @@ defmodule DeciduousMcp.Sync.Import do
             {:error, reason} -> Repo.rollback(reason)
           end
 
+          # /ops creates and add_node with a change_id take turns on each
+          # change_id, and every edge create on its pair of nodes; this
+          # upserts both without looking first. Racing it, an /ops create
+          # lost on the unique index and was answered "rejected:
+          # workspace_id has already been taken" (14 in 15 rounds), the
+          # SERVER-N4 false alarm by another path. Those locks are all
+          # taken shared on the workspace first, and this takes it
+          # exclusively: an import runs alone against them, and whoever
+          # comes after it finds its rows and answers `exists`.
+          :ok = Workspaces.lock_exclusively(workspace.id)
+
           deleted = deleted_change_ids(workspace.id)
           node_report = upsert_nodes(workspace.id, nodes, deleted)
           edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)

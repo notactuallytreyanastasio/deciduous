@@ -40,7 +40,7 @@ defmodule DeciduousMcp.Graph.Edges do
              get_workspace_node(workspace_id, attrs[:from_node_id] || attrs["from_node_id"]),
            {:ok, to_node} <-
              get_workspace_node(workspace_id, attrs[:to_node_id] || attrs["to_node_id"]),
-           :ok <- lock_pair(from_node.id, to_node.id),
+           :ok <- lock_pair(workspace_id, from_node.id, to_node.id),
            :ok <- absent(from_node.id, to_node.id, type),
            :ok <- no_reverse(from_node.id, to_node.id, type) do
         edge_attrs =
@@ -76,11 +76,15 @@ defmodule DeciduousMcp.Graph.Edges do
 
   @doc """
   Makes every create of an edge between these two nodes, in either
-  direction, wait for the others, until the calling transaction ends.
+  direction, wait for the others, and for an import into the workspace,
+  until the calling transaction ends.
   The key is hashed (hashtextextended); two pairs that collide only wait
   for each other.
   """
-  def lock_pair(a, b) do
+  def lock_pair(workspace_id, a, b) do
+    # POST /import upserts edges too, under this workspace's lock taken
+    # exclusively.
+    :ok = DeciduousMcp.Graph.Workspaces.lock_shared(workspace_id)
     [x, y] = Enum.sort([a, b])
     Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", ["pair|#{x}|#{y}"])
     :ok

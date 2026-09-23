@@ -560,7 +560,7 @@ defmodule DeciduousMcp.Sync.Ops do
       # The lock Edges.create_edge takes too, on the pair in either
       # direction: taken here first so the check below and the insert are
       # one step against every other writer of an edge between these two.
-      Edges.lock_pair(from.id, to.id)
+      Edges.lock_pair(ws.id, from.id, to.id)
 
       cond do
         edge(from.id, to.id, type) ->
