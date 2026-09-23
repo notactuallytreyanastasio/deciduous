@@ -744,3 +744,136 @@ fn bridge_n8_a_shallow_clone_is_told_its_writes_are_unchecked() {
     );
     assert!(!init.contains("is refused"), "{init}");
 }
+
+// ---------------------------------------------------------------- BRIDGE-N6
+
+/// BRIDGE-N6: `remote watch --edges` printed 2 lines for 4 server updates
+/// (the repeated frames were byte-identical and a 60 s filter dropped
+/// them), a node delete as "(updated)", and nothing for an unlink; and on
+/// a reconnect it had no way to ask for what it missed.
+#[test]
+fn bridge_n6_watch_shows_every_update_delete_and_unlink() {
+    let Some(server) = remote("bridge_n6") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "n6");
+    let p = &t.alice;
+    let a = p.add("goal", "Wa");
+    let b = p.add("option", "Wb");
+    p.ok(&["link", &a, &b]);
+
+    let mut child = p
+        .dx_cmd()
+        .args(["remote", "watch", "--edges"])
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let stdout = child.stdout.take().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        use std::io::BufRead;
+        for line in std::io::BufReader::new(stdout)
+            .lines()
+            .map_while(Result::ok)
+        {
+            if tx.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    p.ok(&["status", &a, "completed"]);
+    p.ok(&["status", &a, "pending"]);
+    p.ok(&["status", &a, "completed"]);
+    p.ok(&["prompt", &a, "a prompt"]);
+    p.ok(&["unlink", &a, &b]);
+    p.ok(&["delete", &b]);
+
+    let mut lines = Vec::new();
+    let until = std::time::Instant::now() + std::time::Duration::from_secs(8);
+    while std::time::Instant::now() < until && lines.len() < 6 {
+        if let Ok(l) = rx.recv_timeout(std::time::Duration::from_millis(200)) {
+            lines.push(l);
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    let all = lines.join("\n");
+    assert_eq!(
+        lines.iter().filter(|l| l.contains("goal (updated")).count(),
+        4,
+        "four updates, four lines:\n{all}"
+    );
+    assert!(
+        all.contains("edge leads_to (deleted)"),
+        "the unlink:\n{all}"
+    );
+    assert!(all.contains("option (deleted)"), "the delete:\n{all}");
+    assert!(
+        !all.contains("option (updated"),
+        "a delete is not an update:\n{all}"
+    );
+}
+
+/// BRIDGE-N6, the reconnect: `/events?since=<seq>` replays what came after
+/// that event, each once, in order, which is what the watcher asks for
+/// when it reconnects.
+#[test]
+fn bridge_n6_a_stream_resumes_from_the_last_event_it_saw() {
+    let Some(server) = remote("bridge_n6_resume") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "n6r");
+    let p = &t.alice;
+    let a = p.add("goal", "R");
+    p.ok(&["status", &a, "completed"]);
+    p.ok(&["status", &a, "pending"]);
+
+    let url = format!(
+        "{}/events?workspace={}&token={}&since=0",
+        server.url.replacen("http", "ws", 1),
+        urlencode(&t.ws),
+        urlencode(&server.token)
+    );
+    let (mut ws, _) = tungstenite::connect(url.as_str()).expect("connect");
+    if let tungstenite::stream::MaybeTlsStream::Plain(s) = ws.get_ref() {
+        s.set_read_timeout(Some(std::time::Duration::from_secs(3)))
+            .unwrap();
+    }
+    let mut got: Vec<Value> = Vec::new();
+    while got.len() < 3 {
+        match ws.read() {
+            Ok(tungstenite::Message::Text(t)) => {
+                got.push(serde_json::from_str(t.as_str()).unwrap())
+            }
+            Ok(_) => {}
+            Err(e) => panic!("after {} event(s): {e}", got.len()),
+        }
+    }
+    let ops: Vec<(&str, Option<&str>)> = got
+        .iter()
+        .map(|e| (e["op"].as_str().unwrap(), e["changed"][0].as_str()))
+        .collect();
+    assert_eq!(
+        ops,
+        [
+            ("INSERT", None),
+            ("UPDATE", Some("status")),
+            ("UPDATE", Some("status"))
+        ]
+    );
+    let seqs: Vec<u64> = got.iter().map(|e| e["seq"].as_u64().unwrap()).collect();
+    assert!(seqs.windows(2).all(|w| w[0] < w[1]), "{seqs:?}");
+
+    // Resuming after the first replays only the two after it.
+    let url2 = url.replace("since=0", &format!("since={}", seqs[0]));
+    let (mut ws2, _) = tungstenite::connect(url2.as_str()).expect("connect");
+    let first = match ws2.read().unwrap() {
+        tungstenite::Message::Text(t) => serde_json::from_str::<Value>(t.as_str()).unwrap(),
+        other => panic!("{other:?}"),
+    };
+    assert_eq!(first["seq"].as_u64(), Some(seqs[1]));
+}

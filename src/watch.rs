@@ -142,7 +142,17 @@ pub fn format_event(event: &Value, at: &str) -> Option<String> {
                 .unwrap_or("node");
             let kind = match op {
                 "INSERT" => node_type.to_string(),
-                "UPDATE" => format!("{node_type} (updated)"),
+                "UPDATE" => match event.get("changed").and_then(Value::as_array) {
+                    Some(fields) if !fields.is_empty() => format!(
+                        "{node_type} (updated: {})",
+                        fields
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    ),
+                    _ => format!("{node_type} (updated)"),
+                },
                 "DELETE" => format!("{node_type} (deleted)"),
                 other => format!("{node_type} ({})", other.to_lowercase()),
             };
@@ -252,16 +262,53 @@ fn is_permanent(e: &tungstenite::Error) -> Option<String> {
 /// ends the run, since no retry will fix a bad token. The reason for each
 /// reconnect goes to stderr, without the URL, so stdout stays one event per
 /// line.
+/// Where a stream resumes: the `seq` of the last event this watcher saw.
+///
+/// The server numbers every event (graph_events, round-2 BRIDGE-N6). A
+/// reconnect asks for what came after it (`&since=`), so an update made
+/// while the connection was down is shown instead of lost; and an event is
+/// shown once by its number, not by its bytes, so the third identical-
+/// looking status change of a node is a line of its own. A server that
+/// sends no `seq` (older than this) gets the old content filter.
+#[derive(Debug, Default)]
+pub struct Cursor {
+    pub last: Option<u64>,
+}
+
+impl Cursor {
+    /// Whether `event` is new, recording it if it is.
+    pub fn admit(&mut self, event: &Value) -> Option<bool> {
+        let seq = event.get("seq").and_then(Value::as_u64)?;
+        if self.last.is_some_and(|l| seq <= l) {
+            return Some(false);
+        }
+        self.last = Some(seq);
+        Some(true)
+    }
+
+    /// `url`, resuming after the last event seen.
+    pub fn resume(&self, url: &str) -> String {
+        match self.last {
+            Some(n) if url.contains('?') => format!("{url}&since={n}"),
+            Some(n) => format!("{url}?since={n}"),
+            None => url.to_string(),
+        }
+    }
+}
+
 pub fn run(url: &str, filter: &Filter, out: &mut dyn Write) -> Result<(), String> {
     let mut backoff = Duration::from_secs(1);
     let max_backoff = Duration::from_secs(30);
     let mut dedup = Dedup::new(Duration::from_secs(60));
+    let mut cursor = Cursor::default();
 
     loop {
-        match tungstenite::connect(url) {
+        let url = cursor.resume(url);
+        match tungstenite::connect(url.as_str()) {
             Ok((socket, _response)) => {
                 set_read_timeout(&socket);
-                let (why, delivered) = read_until_closed(socket, filter, &mut dedup, out)?;
+                let (why, delivered) =
+                    read_until_closed(socket, filter, &mut dedup, &mut cursor, out)?;
                 if delivered {
                     backoff = Duration::from_secs(1);
                 }
@@ -301,6 +348,7 @@ fn read_until_closed(
     mut socket: WebSocket<MaybeTlsStream<TcpStream>>,
     filter: &Filter,
     dedup: &mut Dedup,
+    cursor: &mut Cursor,
     out: &mut dyn Write,
 ) -> Result<(String, bool), String> {
     let mut delivered = false;
@@ -318,7 +366,16 @@ fn read_until_closed(
                     }
                 };
 
-                if !filter.admits(&event) || !dedup.first_sighting(text) {
+                if event.get("gap").and_then(Value::as_bool) == Some(true) {
+                    let why = event.get("reason").and_then(Value::as_str).unwrap_or("");
+                    eprintln!("warning: some events were missed while disconnected: {why}");
+                    continue;
+                }
+                let new = match cursor.admit(&event) {
+                    Some(new) => new,
+                    None => dedup.first_sighting(text),
+                };
+                if !new || !filter.admits(&event) {
                     continue;
                 }
 
@@ -427,6 +484,49 @@ mod tests {
         };
         assert_eq!(f.unknown_types(), vec!["outcomes"]);
         assert!(Filter::default().unknown_types().is_empty());
+    }
+
+    #[test]
+    fn bridge_n6_an_update_names_what_changed() {
+        let mut e = node("UPDATE");
+        e["changed"] = json!(["status", "metadata"]);
+        let line = format_event(&e, "t").unwrap();
+        assert!(
+            line.contains("outcome (updated: status, metadata)"),
+            "{line}"
+        );
+    }
+
+    #[test]
+    fn bridge_n6_events_are_told_apart_by_seq_and_resume_after_the_last() {
+        let mut c = Cursor::default();
+        assert_eq!(
+            c.resume("ws://h/events?workspace=w"),
+            "ws://h/events?workspace=w"
+        );
+        let mut a = node("UPDATE");
+        a["seq"] = json!(7);
+        let mut b = a.clone();
+        b["seq"] = json!(8);
+        // Byte-identical but for the seq: two real updates, two lines.
+        assert_eq!(c.admit(&a), Some(true));
+        assert_eq!(c.admit(&b), Some(true));
+        assert_eq!(c.admit(&a), Some(false), "a replayed event is shown once");
+        assert_eq!(
+            c.resume("ws://h/events?workspace=w"),
+            "ws://h/events?workspace=w&since=8"
+        );
+        assert_eq!(
+            c.admit(&node("UPDATE")),
+            None,
+            "no seq: the old filter decides"
+        );
+    }
+
+    #[test]
+    fn a_node_delete_says_deleted() {
+        let line = format_event(&node("DELETE"), "t").unwrap();
+        assert!(line.contains("outcome (deleted)"), "{line}");
     }
 
     #[test]

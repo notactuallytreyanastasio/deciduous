@@ -285,12 +285,24 @@ defmodule DeciduousMcp.Web.Router do
     else
       conn = conn |> WorkspacePlug.call([]) |> fetch_query_params()
 
-      case Scope.read_target(conn_frame(conn), conn.query_params) do
-        {:ok, scope} -> upgrade_to_event_stream(conn, scope)
+      case {since(conn), Scope.read_target(conn_frame(conn), conn.query_params)} do
+        {:error, _} ->
+          json(conn, 400, %{
+            error:
+              "since must be the seq of the last event received (a non-negative integer), " <>
+                "got #{inspect(conn.query_params["since"])}"
+          })
+
+        {_, {:ok, scope}} ->
+          upgrade_to_event_stream(conn, scope)
+
         # Topics are keyed by name, so a stream can wait for a workspace's
         # first write without the subscription creating it.
-        {:absent, name} -> subscribe_by_name(conn, name)
-        {:error, message} -> json(conn, 422, %{error: message})
+        {_, {:absent, name}} ->
+          subscribe_by_name(conn, name)
+
+        {_, {:error, message}} ->
+          json(conn, 422, %{error: message})
       end
     end
   end
@@ -592,7 +604,11 @@ defmodule DeciduousMcp.Web.Router do
   # name here, rather than teaching the trigger or the topic scheme to key on
   # ids, keeps exactly one place that knows the mapping.
   defp upgrade_to_event_stream(conn, :global) do
-    conn |> Plug.Conn.upgrade_adapter(:websocket, {GraphSocket, %{topic: "graph:*"}, []})
+    conn
+    |> Plug.Conn.upgrade_adapter(
+      :websocket,
+      {GraphSocket, %{topic: "graph:*", since: resume_from(conn)}, []}
+    )
   end
 
   defp upgrade_to_event_stream(conn, workspace_id) do
@@ -603,7 +619,30 @@ defmodule DeciduousMcp.Web.Router do
   end
 
   defp subscribe_by_name(conn, name) do
-    Plug.Conn.upgrade_adapter(conn, :websocket, {GraphSocket, %{topic: "graph:" <> name}, []})
+    Plug.Conn.upgrade_adapter(
+      conn,
+      :websocket,
+      {GraphSocket, %{topic: "graph:" <> name, since: resume_from(conn)}, []}
+    )
+  end
+
+  # `?since=<seq>`: resume after the last event a client saw.
+  defp since(conn) do
+    case conn.query_params["since"] do
+      nil ->
+        {:ok, nil}
+
+      text ->
+        case Integer.parse(text) do
+          {n, ""} when n >= 0 -> {:ok, n}
+          _ -> :error
+        end
+    end
+  end
+
+  defp resume_from(conn) do
+    {:ok, n} = since(conn)
+    n
   end
 
   defp empty_graph(name) do

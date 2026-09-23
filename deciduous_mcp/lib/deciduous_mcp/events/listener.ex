@@ -17,9 +17,11 @@ defmodule DeciduousMcp.Events.Listener do
 
   ## What a frame carries
 
-  A pointer with a label, not the row. For a node: `table`, `op` (INSERT or
-  UPDATE), `workspace`, `id`, `change_id`, `node_type`, `title` (cut at 200
-  characters), `status`, `branch`. For an edge: `table`, `op`, `workspace`,
+  A pointer with a label, not the row. For a node: `table`, `op` (INSERT,
+  UPDATE, or DELETE for a soft delete), `workspace`, `id`, `change_id`,
+  `node_type`, `title` (cut at 200 characters), `status`, `branch`, and for
+  an update `changed`, the fields it changed. Every event also carries
+  `seq`, its number in graph_events, and `at`. For an edge: `table`, `op`, `workspace`,
   `id`, `edge_type`, `from_change_id`, `to_change_id`, and `branch` taken
   from the edge's source node, since an edge row has none of its own. The
   title is there so a watcher can quote what landed instead of counting
@@ -31,9 +33,10 @@ defmodule DeciduousMcp.Events.Listener do
   `Postgrex.Notifications` documents its own limit plainly: notifications that
   arrive while the connection is down are not queued and cannot be recovered,
   and reconnects race new LISTENs against notifications issued at the same
-  moment. This is advisory, the same word used for the write locks — a
-  subscriber that needs certainty calls `check_activity` or `query_nodes` to
-  catch up; it does not treat a gap in this stream as proof nothing happened.
+  moment. A WebSocket client that reconnects asks for what it missed with
+  `?since=<seq>`, which is read from graph_events (kept a week), not from
+  this stream; this listener's own gap, while its database connection is
+  down, is not covered by that.
   """
   use GenServer
   require Logger
