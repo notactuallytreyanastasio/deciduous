@@ -60,15 +60,28 @@ if [ ! -e "$env_file" ]; then
   fi
 
   # The database image supplies the random source and utilities. No host
-  # Erlang, Elixir, OpenSSL, psql, or language runtime is needed.
+  # Erlang, Elixir, OpenSSL, psql, or language runtime is needed. The third
+  # line is a port in 20000-32767: above the registered range, below the
+  # ephemeral range the host draws outgoing ports from. It is random rather
+  # than fixed so an install does not squat a port the machine already wants
+  # (4000 is Phoenix's). Docker refuses to start if it is taken, which is the
+  # loud failure we want; the CLI picks a port it has bind-checked and passes
+  # it in DECIDUOUS_PORT, so this is the fallback for running setup by hand.
   secrets=$(docker run --rm --entrypoint sh postgres:17.11-alpine -eu -c '
     od -An -N32 -tx1 /dev/urandom | tr -d " \n"
     printf "\n"
     od -An -N32 -tx1 /dev/urandom | tr -d " \n"
     printf "\n"
+    od -An -N2 -tu1 /dev/urandom | awk "{print 20000 + ((\$1 * 256 + \$2) % 12768)}"
   ')
   token=${DECIDUOUS_MCP_TOKEN:-$(printf '%s\n' "$secrets" | sed -n '1p')}
   password=$(printf '%s\n' "$secrets" | sed -n '2p')
+  port=${DECIDUOUS_PORT:-$(printf '%s\n' "$secrets" | sed -n '3p')}
+  case "$port" in
+    ''|*[!0-9]*)
+      printf 'DECIDUOUS_PORT must be a port number, got %s\n' "$port" >&2
+      exit 1 ;;
+  esac
   database_url=${DATABASE_URL:-"ecto://deciduous:$password@db:5432/deciduous"}
   [ "${#token}" -ge 32 ] || {
     printf '%s\n' 'DECIDUOUS_MCP_TOKEN must contain at least 32 bytes.' >&2
@@ -90,7 +103,7 @@ if [ ! -e "$env_file" ]; then
       printf 'COMPOSE_PROJECT_NAME=%s\n' "${COMPOSE_PROJECT_NAME:-deciduous}"
       printf 'DECIDUOUS_DATABASE_MODE=%s\n' "$mode"
       printf 'DECIDUOUS_BIND_ADDRESS=%s\n' "${DECIDUOUS_BIND_ADDRESS:-127.0.0.1}"
-      printf 'DECIDUOUS_PORT=%s\n' "${DECIDUOUS_PORT:-4000}"
+      printf 'DECIDUOUS_PORT=%s\n' "$port"
       printf "DECIDUOUS_MCP_TOKEN='%s'\n" "$token"
       printf "POSTGRES_PASSWORD='%s'\n" "$password"
       printf "DATABASE_URL='%s'\n" "$database_url"

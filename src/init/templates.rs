@@ -2384,6 +2384,14 @@ If it refuses because the terminal is not iTerm2 or Ghostty, or `claude` or
 the deciduous MCP server is missing, say so in one sentence and stop. Do not
 work around the check or start sessions another way.
 
+If instead there is no such subcommand -- `error: unrecognized subcommand
+'demo-swarm'` -- the deciduous that answered is older than 1.0.4, the first
+release to carry it. This happens even right after installing a newer one,
+when a second deciduous sits earlier on PATH than `~/.cargo/bin`. Say that,
+and name `deciduous --version` and `which -a deciduous` to tell which, and
+`cargo install deciduous --force` to fix it. Those are the user's to run, not
+yours: this command may run only `deciduous demo-swarm`.
+
 This is a demonstration, not work on this project: log nothing to the graph
 for it.
 "#;

@@ -17,7 +17,9 @@ services:
     volumes:
       - ./certs:/app/certs:ro
     ports:
-      - "${DECIDUOUS_BIND_ADDRESS:-127.0.0.1}:${DECIDUOUS_PORT:-4000}:4000"
+      # Required, not defaulted: a default would put every install on the same
+      # host port and squat it. setup.sh writes the chosen one into .env.
+      - "${DECIDUOUS_BIND_ADDRESS:-127.0.0.1}:${DECIDUOUS_PORT:?run scripts/setup.sh or set DECIDUOUS_PORT}:4000"
     healthcheck:
       test: ["CMD", "curl", "--fail", "--silent", "--max-time", "5", "http://127.0.0.1:4000/ready"]
       interval: 5s

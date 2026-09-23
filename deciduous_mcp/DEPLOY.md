@@ -25,25 +25,36 @@ Desktop's WSL integration enabled.
 The first build downloads dependencies and can take several minutes. Setup
 generates a bearer token and database password, saves them in `.env` with mode
 `600`, and starts PostgreSQL 17.11 and the server. PostgreSQL has no published
-port. The server listens on `127.0.0.1:4000`, so it is reachable only from this
-machine by default.
+port. The server listens on `127.0.0.1` only, so it is reachable only from this
+machine by default, on a port chosen at random from 20000-32767 — above the
+registered range, below the ephemeral range the host draws outgoing ports from.
+The port is random rather than fixed so that an install never squats a port the
+machine already wants: a server sitting on 4000 breaks a Phoenix dev server, and
+two installs sharing a default collide. Setup writes the chosen port to `.env`
+as `DECIDUOUS_PORT` and prints the URL.
 
 Setup returns success only after `/ready` confirms database access. It prints
 the MCP URL but keeps the token out of terminal output. Open `.env` to get
 `DECIDUOUS_MCP_TOKEN` for your client. Keep this file private and back it up
 alongside the database. `.env.example` lists the settings.
 
-Rerunning setup preserves `.env` and the named database volume. To use a
-different local port on the first run:
+Rerunning setup preserves `.env` and the named database volume, including its
+port: `DECIDUOUS_PORT` is read on the first run only. To choose the port instead
+of letting setup pick one:
 
 ```bash
 DECIDUOUS_PORT=4010 ./scripts/setup.sh
 ```
 
+To change the port of an installation that already exists, edit `DECIDUOUS_PORT`
+in `.env`, rerun setup, and update the URL in `[remote]` in each project's
+`.deciduous/config.toml` (or rerun `deciduous remote init <url>` there).
+
 ## Connect your client
 
-Use `http://127.0.0.1:4000/mcp` with the HTTP/Streamable HTTP transport and a
-bearer authorization header. For Claude Code, put this in your project's
+Use `http://127.0.0.1:<DECIDUOUS_PORT>/mcp` — the URL setup printed, with the
+port from `.env` — with the HTTP/Streamable HTTP transport and a bearer
+authorization header. For Claude Code, put this in your project's
 `.mcp.json`. Claude Code expands the token from its process environment; the
 configuration can be shared without committing the secret. The workspace
 header pins calls to one project:
@@ -53,7 +64,7 @@ header pins calls to one project:
   "mcpServers": {
     "deciduous": {
       "type": "http",
-      "url": "http://127.0.0.1:4000/mcp",
+      "url": "http://127.0.0.1:24871/mcp",
       "headers": {
         "Authorization": "Bearer ${DECIDUOUS_MCP_TOKEN}",
         "X-Deciduous-Workspace": "my-project"
@@ -262,7 +273,7 @@ example, a host-installed Caddy can proxy a domain:
 
 ```caddy
 deciduous.example.com {
-    reverse_proxy 127.0.0.1:4000 {
+    reverse_proxy 127.0.0.1:24871 {
         flush_interval -1
     }
 }

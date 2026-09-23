@@ -97,10 +97,16 @@ the project has no server yet, it asks where its graph should live:
 
 Where should this project's graph live?
 
-  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1:4000
+  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1
   2) A server someone else runs: you need its URL and token
 
 Choose 1 or 2 [1]:
+
+The server needs a port on this machine. 24871 is free right now; anything
+already using the port you pick (a dev server on 4000, say) would stop this
+server from starting.
+
+Port [24871]:
 ```
 
 - **1.** The first time on a machine, `init` downloads the server bundle for
@@ -186,9 +192,10 @@ cd deciduous-mcp-docker
 
 Docker with Compose is the only runtime prerequisite. Setup creates private
 credentials, starts PostgreSQL with persistent storage, applies migrations, and
-waits until the server can query the database. Your MCP endpoint is
-`http://127.0.0.1:4000/mcp`; its bearer token is in `.env`. Running setup again
-keeps the same credentials and database.
+waits until the server can query the database. It picks a free port in
+20000-32767 unless `DECIDUOUS_PORT` says otherwise, and prints the resulting MCP
+endpoint; the port and bearer token are in `.env`. Running setup again keeps the
+same credentials, port and database.
 
 Already have a Deciduous PostgreSQL database? The same setup can connect to it
 and apply pending migrations. See the [deployment guide](deciduous_mcp/DEPLOY.md)

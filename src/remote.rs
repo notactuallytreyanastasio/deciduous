@@ -384,6 +384,159 @@ pub fn missing_on_server(local: &Value, server: &RemoteGraph) -> (Value, usize, 
     )
 }
 
+/// Sends the server everything in `graph` it does not already have. `None`
+/// means there was nothing to send.
+///
+/// Shared by `remote push` and the automatic push after a write, so both decide
+/// what is missing the same way — `missing_on_server` earned its edge-keying
+/// rules the hard way and there must not be a second copy of them.
+pub fn push_missing(remote: &Remote, graph: &Value) -> Result<Option<ImportReport>, String> {
+    let server = remote.export()?;
+    let (missing, nodes, edges) = missing_on_server(graph, &server);
+    if nodes == 0 && edges == 0 {
+        return Ok(None);
+    }
+    remote.import(missing).map(Some)
+}
+
+/// Pushes to the server after a local write, without letting the server turn a
+/// successful write into a failed command.
+///
+/// The CLI writes to the local database and the agents write through the MCP
+/// server. A local write the server never sees is a fork, not a cache: this is
+/// how one workspace ended up with 502 nodes locally and 0 on the server, with
+/// neither side saying a word. So every write pushes.
+///
+/// `touched` names the nodes this command changed, by local id. They are sent
+/// even when the server already has them: `missing_on_server` only finds what
+/// the server lacks, so on its own it would push a new node but never a changed
+/// one, and `status`/`prompt` would go on diverging silently. The server's
+/// import replaces `status`, `title`, `description` and `metadata` on a
+/// change_id it already holds, so re-sending a node is what applies an edit.
+///
+/// Best effort deliberately. The local write has already happened and is not
+/// rolled back: the CLI has to keep working on a plane, and a server being down
+/// must not stop anyone recording a decision. A failure prints what is waiting
+/// and the command to send it; the records stay in the local database and the
+/// next successful push — automatic or manual — takes them, which is what the
+/// full-diff half of the payload is for.
+pub fn push_after_write(db: &Database, touched: &[i32]) {
+    use colored::Colorize;
+
+    let cfg = Config::load();
+    if !cfg.remote.is_configured() {
+        return;
+    }
+    let dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
+    let pushed = Remote::resolve(&cfg, &dir).and_then(|remote| {
+        let graph = db
+            .get_graph()
+            .map_err(|e| format!("reading the local graph: {e}"))
+            .and_then(|g| {
+                serde_json::to_value(&g).map_err(|e| format!("serializing the local graph: {e}"))
+            })?;
+        let server = remote.export()?;
+        let (mut payload, _, _) = missing_on_server(&graph, &server);
+        let added = add_touched_nodes(&mut payload, &graph, touched);
+        if payload["nodes"].as_array().is_some_and(|n| n.is_empty())
+            && payload["edges"].as_array().is_some_and(|e| e.is_empty())
+            && added == 0
+        {
+            return Ok((remote, None));
+        }
+        remote.import(payload).map(|r| (remote, Some(r)))
+    });
+    match pushed {
+        Ok((_, None)) => {}
+        Ok((remote, Some(r))) => {
+            // Quiet on the expected case: one command, one node or edge sent.
+            // A larger number means a backlog just cleared, which is worth
+            // saying, because the user was told about it when it built up.
+            if r.nodes.upserted + r.edges.upserted > 2 {
+                println!(
+                    "   {} {} node(s), {} edge(s) to {}",
+                    "Pushed".green(),
+                    r.nodes.upserted,
+                    r.edges.upserted,
+                    remote.workspace.cyan()
+                );
+            }
+        }
+        Err(e) => eprintln!(
+            "{} the local write succeeded but the server did not get it: {e}\n\
+             {} `deciduous remote push` once the server is reachable. Until then the \
+             local graph and the graph the agents read are different graphs.",
+            "Warning:".yellow(),
+            "Run:".yellow(),
+        ),
+    }
+}
+
+/// Adds the nodes `touched` names to a push payload, skipping any the diff
+/// already put there. Returns how many were added.
+fn add_touched_nodes(payload: &mut Value, graph: &Value, touched: &[i32]) -> usize {
+    use std::collections::HashSet;
+
+    if touched.is_empty() {
+        return 0;
+    }
+    let already: HashSet<String> = payload["nodes"]
+        .as_array()
+        .map(|n| {
+            n.iter()
+                .filter_map(|n| n["change_id"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let extra: Vec<Value> = graph["nodes"]
+        .as_array()
+        .map(|nodes| {
+            nodes
+                .iter()
+                .filter(|n| {
+                    n["id"]
+                        .as_i64()
+                        .is_some_and(|id| touched.contains(&(id as i32)))
+                        && n["change_id"]
+                            .as_str()
+                            .is_some_and(|c| !already.contains(c))
+                })
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default();
+    let added = extra.len();
+    if let Some(nodes) = payload["nodes"].as_array_mut() {
+        nodes.extend(extra);
+    }
+    added
+}
+
+/// Says that a local removal stopped at the local database.
+///
+/// `POST /import` upserts `status`, `title`, `description` and `metadata` on a
+/// change_id the server already holds, and nothing else: `deleted_at` is not in
+/// its replace list, and a hard-deleted local row has nothing left to send
+/// anyway. So a `delete` or `unlink` here cannot reach the server, and saying
+/// nothing would recreate exactly the silent divergence the automatic push
+/// exists to end.
+pub fn warn_removal_is_local_only(what: &str) {
+    use colored::Colorize;
+
+    let cfg = Config::load();
+    if !cfg.remote.is_configured() {
+        return;
+    }
+    let url = cfg.remote.url.unwrap_or_default();
+    eprintln!(
+        "{} the {what} was removed locally only. {url} still has it, and \
+         `deciduous remote push` will not remove it there: the server's import \
+         applies additions and edits, not removals. Remove it through the agent \
+         (the deciduous MCP tools) as well, or the two graphs stay different.",
+        "Note:".yellow(),
+    );
+}
+
 #[derive(Debug, Default)]
 pub struct RemoteCounts {
     pub nodes: usize,
@@ -693,6 +846,44 @@ mod tests {
         assert_eq!(g["nodes"][0]["change_id"], "c");
         assert_eq!(g["edges"][0]["from_change_id"], "b");
         assert_eq!(g["edges"][0]["to_change_id"], "c");
+    }
+
+    #[test]
+    fn a_changed_node_the_server_already_has_is_still_sent_when_touched() {
+        // The whole point of `touched`: `status`/`prompt` edit a node the
+        // server already holds, so the missing-diff finds nothing and the edit
+        // would never leave this machine.
+        let local = serde_json::json!({
+            "nodes": [{"id": 1, "change_id": "a"}, {"id": 2, "change_id": "b"}],
+            "edges": [],
+            "documents": []
+        });
+        let (mut payload, n, m) = missing_on_server(&local, &server(&["a", "b"], &[]));
+        assert_eq!((n, m), (0, 0), "nothing is missing, by construction");
+        assert_eq!(add_touched_nodes(&mut payload, &local, &[2]), 1);
+        assert_eq!(payload["nodes"][0]["change_id"], "b");
+    }
+
+    #[test]
+    fn a_touched_node_the_diff_already_sends_is_not_sent_twice() {
+        let local = serde_json::json!({
+            "nodes": [{"id": 1, "change_id": "a"}],
+            "edges": [],
+            "documents": []
+        });
+        let (mut payload, n, _) = missing_on_server(&local, &server(&[], &[]));
+        assert_eq!(n, 1);
+        assert_eq!(add_touched_nodes(&mut payload, &local, &[1]), 0);
+        assert_eq!(payload["nodes"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn touching_nothing_adds_nothing() {
+        let local = serde_json::json!({"nodes": [{"id": 1, "change_id": "a"}], "edges": []});
+        let (mut payload, _, _) = missing_on_server(&local, &server(&["a"], &[]));
+        assert_eq!(add_touched_nodes(&mut payload, &local, &[]), 0);
+        assert_eq!(add_touched_nodes(&mut payload, &local, &[99]), 0);
+        assert!(payload["nodes"].as_array().unwrap().is_empty());
     }
 
     #[test]
