@@ -73,7 +73,7 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
         {:error, %{code: -1, message: "Update failed: #{changeset_errors(changeset)}"}}
 
       {:error, reason} ->
-        {:error, %{code: -1, message: "Update failed: #{inspect(reason)}"}}
+        {:error, %{code: -1, message: "Update failed: #{DeciduousMcp.MCP.Component.describe_error(reason)}"}}
     end
   end
 

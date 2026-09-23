@@ -104,25 +104,36 @@ defmodule DeciduousMcp.MCP.Tools.LogObservation do
   # with an already-resolved source that no longer exists.
   def write(workspace_id, args, related, source) do
     Repo.transaction(fn ->
-      {:ok, node} =
-        Nodes.create_node(workspace_id, %{
-          node_type: "observation",
-          title: args["title"],
-          description: args["description"],
-          status: "active",
-          metadata:
-            %{}
-            |> maybe_put("branch", args["branch"])
-            |> maybe_put("tags", args["tags"])
-        })
-
-      with :ok <- link_related(workspace_id, related, node),
+      # Matched with `{:ok, node} =` before, so a refused insert (a blank
+      # title) raised a MatchError whose message carried the changeset.
+      with {:ok, node} <- create_observation(workspace_id, args),
+           :ok <- link_related(workspace_id, related, node),
            {:ok, took_from} <- link_source(workspace_id, source, node, args) do
         {node, took_from}
       else
         {:error, message} -> Repo.rollback(message)
       end
     end)
+  end
+
+  defp create_observation(workspace_id, args) do
+    case Nodes.create_node(workspace_id, %{
+           node_type: "observation",
+           title: args["title"],
+           description: args["description"],
+           status: "active",
+           metadata:
+             %{}
+             |> maybe_put("branch", args["branch"])
+             |> maybe_put("tags", args["tags"])
+         }) do
+      {:ok, node} ->
+        {:ok, node}
+
+      {:error, reason} ->
+        {:error,
+         "observation not logged: #{DeciduousMcp.MCP.Component.describe_error(reason)}; nothing was logged"}
+    end
   end
 
   defp link_related(_workspace_id, nil, _node), do: :ok
@@ -160,7 +171,8 @@ defmodule DeciduousMcp.MCP.Tools.LogObservation do
     do: "node #{node.id} was deleted before the edge could be written; nothing was logged"
 
   defp edge_failure(_node, reason),
-    do: "could not write the edge (#{inspect(reason)}); nothing was logged"
+    do:
+      "could not write the edge (#{DeciduousMcp.MCP.Component.describe_error(reason)}); nothing was logged"
 
   defp resolve_optional(_workspace_id, nil, _field), do: {:ok, nil}
 

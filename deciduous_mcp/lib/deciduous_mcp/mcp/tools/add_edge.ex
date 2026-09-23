@@ -66,7 +66,7 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
         {:error, %{code: -1, message: "Node not found: #{node_id}"}}
 
       {:error, reason} ->
-        {:error, %{code: -1, message: "Failed to create edge: #{inspect(reason)}"}}
+        {:error, %{code: -1, message: "Failed to create edge: #{DeciduousMcp.MCP.Component.describe_error(reason)}"}}
     end
   end
 end

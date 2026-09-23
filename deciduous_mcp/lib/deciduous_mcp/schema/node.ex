@@ -63,6 +63,9 @@ defmodule DeciduousMcp.Schema.Node do
   def update_changeset(node, attrs) do
     node
     |> cast(attrs, [:title, :description, :status, :metadata, :deleted_at])
+    # title is NOT NULL; without this an update to "" reached Postgres and
+    # came back as a not_null_violation echoing the whole row.
+    |> validate_required([:title])
     |> validate_inclusion(:status, @statuses)
     |> validate_metadata()
   end

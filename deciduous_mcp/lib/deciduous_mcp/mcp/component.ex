@@ -32,6 +32,8 @@ defmodule DeciduousMcp.MCP.Component do
   alias Hermes.MCP.Error
   alias Hermes.Server.Response
 
+  require Logger
+
   defmacro __using__(type: :tool) do
     quote do
       @behaviour Hermes.Server.Component.Tool
@@ -174,8 +176,42 @@ defmodule DeciduousMcp.MCP.Component do
     byte_size(value) == 36 and match?({:ok, _}, Ecto.UUID.cast(value))
   end
 
+  # The try is the last line of defence, not the handling: a tool that can
+  # fail says why itself. Without it, an exception reached Hermes, which
+  # answers "request handler crashed" with the inspected exception and stack
+  # trace in `data` — for a Postgres error that is the Postgrex struct, and
+  # for a failed insert the row being written. The client gets one line
+  # naming the tool and the exception's type; the log gets the rest.
   defp dispatch_valid_tool(module, params, frame) do
-    case module.call(%{arguments: params, server: frame}) do
+    module.call(%{arguments: params, server: frame})
+  rescue
+    exception ->
+      crashed(
+        module,
+        frame,
+        Exception.format(:error, exception, __STACKTRACE__),
+        exception.__struct__
+      )
+  catch
+    kind, reason ->
+      crashed(module, frame, Exception.format(kind, reason, __STACKTRACE__), kind)
+  else
+    result -> translate_tool_result(result, frame)
+  end
+
+  defp crashed(module, frame, formatted, what) do
+    name = module.definition()[:name]
+    Logger.error("tool #{name} crashed: " <> formatted)
+
+    {:error,
+     Error.execution(
+       "#{name} failed (#{inspect(what)}); nothing it had not committed was kept, " <>
+         "and the details are in the server log"
+     ), frame}
+  end
+
+  defp translate_tool_result(result, frame) do
+    case result do
       {:ok, payload} when is_binary(payload) ->
         {:reply, Response.text(Response.tool(), payload), frame}
 
@@ -263,7 +299,44 @@ defmodule DeciduousMcp.MCP.Component do
   defp to_string_key(k) when is_atom(k), do: Atom.to_string(k)
   defp to_string_key(k), do: k
 
-  @doc false
+  @doc """
+  One sentence for a tool failure, without the internals.
+
+  An `Ecto.Changeset` used to be `inspect`ed into the message, which prints
+  the changes being written and the struct they were written to; the
+  client only needs the validation errors, field by field. Anything this
+  does not recognise is logged in full and answered with its shape only.
+  """
   def describe_error(reason) when is_binary(reason), do: reason
-  def describe_error(reason), do: inspect(reason)
+  def describe_error(reason) when is_atom(reason), do: to_string(reason)
+
+  def describe_error(%Ecto.Changeset{} = changeset) do
+    changeset
+    |> Ecto.Changeset.traverse_errors(fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string_safe(value))
+      end)
+    end)
+    |> Enum.map_join("; ", fn {field, messages} -> "#{field}: #{Enum.join(messages, ", ")}" end)
+  end
+
+  def describe_error({:node_not_found, id}), do: "#{id} is not a node in this workspace"
+
+  def describe_error(reason) do
+    Logger.error("unrecognised tool error: " <> inspect(reason, limit: :infinity))
+    "unexpected error (#{error_shape(reason)}); the details are in the server log"
+  end
+
+  defp error_shape(reason) when is_tuple(reason) and tuple_size(reason) > 0,
+    do: "tuple starting #{inspect(elem(reason, 0), limit: 3)}"
+
+  defp error_shape(%{__struct__: struct}), do: inspect(struct)
+  defp error_shape(reason) when is_map(reason), do: "map"
+  defp error_shape(reason) when is_list(reason), do: "list"
+  defp error_shape(_), do: "term"
+
+  defp to_string_safe(value) when is_binary(value) or is_number(value) or is_atom(value),
+    do: to_string(value)
+
+  defp to_string_safe(value), do: inspect(value, limit: 5)
 end
