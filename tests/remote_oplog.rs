@@ -493,3 +493,112 @@ fn status_reports_waiting_writes_and_content_differences_when_counts_match() {
     let out = sb.dx_ok(&dir, &["remote", "status"]);
     assert!(out.contains("In sync"), "{out}");
 }
+
+fn config_workspace(dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(dir.join(".deciduous").join("config.toml")).ok()?;
+    let doc: toml::Value = toml::from_str(&text).ok()?;
+    doc.get("remote")?
+        .get("workspace")?
+        .as_str()
+        .map(str::to_string)
+}
+
+fn live_titles(g: &Value) -> Vec<String> {
+    let mut t: Vec<String> = g["nodes"]
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter(|n| n["deleted_at"].is_null())
+                .filter_map(|n| n["title"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    t.sort();
+    t
+}
+
+// ---------------------------------------------------------------------------
+// C6: the workspace is recorded at remote init; a rename or a clone under
+// another name keeps writing to the same graph.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn renaming_or_cloning_the_repository_keeps_its_workspace() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let name = unique("wal-c6");
+    let dir = sb.repo(&name);
+    sb.dx_ok(&dir, &["remote", "init", &url]);
+    sb.dx_ok(&dir, &["add", "goal", "before the move"]);
+
+    let moved = sb.path().join(format!("{name}-renamed"));
+    std::fs::rename(&dir, &moved).unwrap();
+    sb.dx_ok(&moved, &["add", "goal", "after the move"]);
+
+    // The shared config travels with the code, so a clone under another
+    // name writes to the same workspace too.
+    sb.git(&moved, &["add", ".deciduous/config.toml"]);
+    sb.git(&moved, &["commit", "-q", "-m", "deciduous config"]);
+    let clone = sb.path().join(format!("{name}-clone"));
+    sb.git(
+        sb.path(),
+        &[
+            "clone",
+            "-q",
+            moved.to_str().unwrap(),
+            clone.to_str().unwrap(),
+        ],
+    );
+    sb.dx_ok(&clone, &["add", "goal", "from the clone"]);
+
+    assert_eq!(
+        live_titles(&export(&url, &token, &name)),
+        ["after the move", "before the move", "from the clone"]
+    );
+    assert!(live_titles(&export(&url, &token, &format!("{name}-renamed"))).is_empty());
+    assert!(live_titles(&export(&url, &token, &format!("{name}-clone"))).is_empty());
+    assert_eq!(config_workspace(&clone).as_deref(), Some(name.as_str()));
+}
+
+// ---------------------------------------------------------------------------
+// C7: a linked worktree resolves to the main repository's workspace, which
+// is what the server's instructions tell agents to use.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn a_worktree_uses_the_main_repositorys_workspace() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let main = sb.repo("wt-main");
+    // A 1.0.7 config: URL only, workspace derived on every call.
+    std::fs::write(
+        main.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{}\"\n", dead_url()),
+    )
+    .unwrap();
+    sb.git(&main, &["add", ".deciduous/config.toml"]);
+    sb.git(&main, &["commit", "-q", "-m", "config"]);
+    sb.git(
+        &main,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "../wt-main-feature",
+            "-b",
+            "feature",
+        ],
+    );
+    let wt = sb.path().join("wt-main-feature");
+
+    let out = sb.dx_ok(&wt, &["add", "goal", "from the worktree"]);
+    assert_eq!(
+        config_workspace(&wt).as_deref(),
+        Some("wt-main"),
+        "worktree resolved to its own directory name: {out}"
+    );
+    assert!(
+        out.contains("wt-main"),
+        "the recorded name is announced: {out}"
+    );
+}

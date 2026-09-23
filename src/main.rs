@@ -2110,7 +2110,9 @@ fn main() {
                     // and the failure only surfaces on the next real command.
                     let mut cfg = Config::load();
                     cfg.remote.url = Some(url.clone());
-                    cfg.remote.workspace = workspace;
+                    // Recorded even when derived: the name is decided once,
+                    // here, not re-derived from the directory on every call.
+                    cfg.remote.workspace = Some(ws.clone());
 
                     let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
                         Ok(r) => r,

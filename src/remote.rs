@@ -141,30 +141,113 @@ pub fn forget_token() -> Result<bool, String> {
     }
 }
 
+/// The main working tree of the repository `dir` is in, also when `dir` is
+/// inside a linked worktree.
+///
+/// `git rev-parse --show-toplevel` answers with the worktree's own directory,
+/// so 1.0.7 put `repo/` and `repo-feature/` (a `git worktree add` of it) in
+/// two workspaces, while the server's instructions tell agents in that
+/// worktree to use the main repository's name (C7). A linked worktree is the
+/// case where `--git-dir` and `--git-common-dir` differ; its main working tree
+/// is the first entry of `git worktree list`.
+pub fn repo_root(dir: &Path) -> Option<std::path::PathBuf> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+    };
+    let out = git(&[
+        "rev-parse",
+        "--path-format=absolute",
+        "--show-toplevel",
+        "--git-dir",
+        "--git-common-dir",
+    ])?;
+    let mut lines = out.lines();
+    let (top, git_dir, common) = (lines.next()?, lines.next()?, lines.next()?);
+    if git_dir == common {
+        return Some(std::path::PathBuf::from(top));
+    }
+    let list = git(&["worktree", "list", "--porcelain"])?;
+    list.lines()
+        .find_map(|l| l.strip_prefix("worktree "))
+        .map(std::path::PathBuf::from)
+}
+
 /// Workspace name for a directory: the git repository's root directory name,
 /// lowercased, or `scratch` outside a repository.
 ///
 /// The repository root rather than the current directory, so that running this
-/// from a subdirectory does not split one project across two workspaces.
+/// from a subdirectory does not split one project across two workspaces; and
+/// the main working tree rather than a linked worktree, for the same reason.
+///
+/// This is a default, computed once: `remote init` records the result in
+/// `.deciduous/config.toml`, and from then on that is the name. Deriving it on
+/// every call is what forked a renamed repository into a second workspace.
 pub fn workspace_for(dir: &Path) -> String {
-    let root = std::process::Command::new("git")
-        .args([
-            "-C",
-            &dir.display().to_string(),
-            "rev-parse",
-            "--show-toplevel",
-        ])
-        .output()
-        .ok()
-        .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok());
-
-    match root {
-        Some(path) => Path::new(path.trim())
+    match repo_root(dir) {
+        Some(path) => path
             .file_name()
-            .map(|n| n.to_string_lossy().to_lowercase())
+            .map(|n| {
+                let n = n.to_string_lossy().to_lowercase();
+                // The main tree of a bare repository is `name.git`.
+                n.strip_suffix(".git").map(str::to_string).unwrap_or(n)
+            })
             .unwrap_or_else(|| FALLBACK_WORKSPACE.to_string()),
         None => FALLBACK_WORKSPACE.to_string(),
+    }
+}
+
+/// The nearest `.deciduous/config.toml` at or above `dir`.
+fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
+    dir.ancestors()
+        .map(|d| d.join(".deciduous").join("config.toml"))
+        .find(|p| p.exists())
+}
+
+/// Writes a derived workspace into a config that has a `[remote] url` and no
+/// workspace: one written by 1.0.7, which derived the name on every call.
+/// Recording it the first time it is used is what makes a later rename or a
+/// clone under another name keep writing to the same graph.
+fn record_derived_workspace(dir: &Path, url: &str, workspace: &str) {
+    use colored::Colorize;
+    let Some(path) = project_config(dir) else {
+        return;
+    };
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return;
+    };
+    let Ok(mut doc) = text.parse::<toml_edit::DocumentMut>() else {
+        return;
+    };
+    let same_url = doc
+        .get("remote")
+        .and_then(|r| r.get("url"))
+        .and_then(|u| u.as_str())
+        .is_some_and(|u| u.trim_end_matches('/') == url);
+    let has_ws = doc.get("remote").and_then(|r| r.get("workspace")).is_some();
+    if !same_url || has_ws {
+        return;
+    }
+    doc["remote"]["workspace"] = toml_edit::value(workspace);
+    match std::fs::write(&path, doc.to_string()) {
+        Ok(()) => eprintln!(
+            "{} recorded workspace = \"{workspace}\" in {}, so renaming or cloning this \
+             repository keeps writing to the same graph. Commit that file.",
+            "Note:".yellow(),
+            path.display()
+        ),
+        Err(e) => eprintln!(
+            "{} could not record workspace = \"{workspace}\" in {}: {e}. \
+             Until it is recorded, renaming this directory changes which graph it writes to.",
+            "Warning:".yellow(),
+            path.display()
+        ),
     }
 }
 
@@ -183,13 +266,19 @@ impl Remote {
                 .to_string()
         })?;
 
+        let url = url.trim_end_matches('/').to_string();
+        let workspace = match &config.remote.workspace {
+            Some(ws) => ws.clone(),
+            None => {
+                let ws = workspace_for(dir);
+                record_derived_workspace(dir, &url, &ws);
+                ws
+            }
+        };
+
         Ok(Self {
-            url: url.trim_end_matches('/').to_string(),
-            workspace: config
-                .remote
-                .workspace
-                .clone()
-                .unwrap_or_else(|| workspace_for(dir)),
+            url,
+            workspace,
             token: token()?,
         })
     }
@@ -1190,7 +1279,13 @@ pub fn write_remote_url(project: &Path, url: &str) -> Result<(), String> {
         .parse::<toml_edit::DocumentMut>()
         .map_err(|e| format!("{} is not valid TOML: {e}", path.display()))?;
 
-    doc["remote"].or_insert(toml_edit::table())["url"] = toml_edit::value(url.to_string());
+    let remote = doc["remote"].or_insert(toml_edit::table());
+    remote["url"] = toml_edit::value(url.to_string());
+    // Recorded now, while the directory still has the name it was set up
+    // under; see `workspace_for`.
+    if remote.get("workspace").is_none() {
+        remote["workspace"] = toml_edit::value(workspace_for(project));
+    }
 
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     std::fs::write(&path, doc.to_string()).map_err(|e| format!("{}: {e}", path.display()))
