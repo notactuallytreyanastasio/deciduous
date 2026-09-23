@@ -39,6 +39,14 @@ defmodule DeciduousMcp.MCP.Tools.DeleteNode do
 
       {:error, :not_found} ->
         {:error, %{code: -1, message: "Node not found: #{node_id}"}}
+
+      # Scope refuses a deleted node first; this is a delete that landed
+      # between that check and this one.
+      {:error, :already_deleted} ->
+        {:error, %{code: -1, message: "node #{node_id} was already deleted"}}
+
+      {:error, reason} ->
+        {:error, %{code: -1, message: "Delete failed: #{inspect(reason)}"}}
     end
   end
 end

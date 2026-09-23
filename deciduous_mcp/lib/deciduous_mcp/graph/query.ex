@@ -151,11 +151,23 @@ defmodule DeciduousMcp.Graph.Query do
   # `max_depth: 50` returned exactly 50 nodes from any hub and said nothing
   # about having stopped: `get_descendants` on epstein's root goal returned
   # `count: 50` from a subtree of thousands. Returns `{nodes, truncated?}`.
+  #
+  # Only live nodes are visited, and a walk does not pass through a deleted
+  # one: A -> B -> C with B deleted is [A] from A. get_graph and /export
+  # already drop edges touching a deleted node, so a walk that went through
+  # B described a path no other read shows (the probe got
+  # [A, "B zombie", C]). A deleted start node yields nothing.
   def walk_graph(start_node_id, direction, max_depth, max_nodes \\ @walk_max_nodes) do
     visited = MapSet.new([start_node_id])
-    start = Repo.get(Node, start_node_id)
-    acc = if start, do: [start], else: []
-    do_walk_levels([start_node_id], visited, direction, max_depth, max_nodes, acc, false)
+
+    acc =
+      case Repo.get(Node, start_node_id) do
+        %Node{deleted_at: nil} = start -> [start]
+        _ -> []
+      end
+
+    frontier = Enum.map(acc, & &1.id)
+    do_walk_levels(frontier, visited, direction, max_depth, max_nodes, acc, false)
   end
 
   defp do_walk_levels([], _visited, _dir, _depth, _max, acc, truncated),
@@ -182,17 +194,33 @@ defmodule DeciduousMcp.Graph.Query do
       |> Enum.uniq()
       |> Enum.reject(&MapSet.member?(visited, &1))
 
-    room = max_nodes - length(acc)
-    {take, dropped} = Enum.split(next_ids, max(room, 0))
+    # Mark the dead ones visited too, so they are not asked for again.
+    visited = Enum.reduce(next_ids, visited, &MapSet.put(&2, &1))
 
-    nodes = if take == [], do: [], else: Node |> where([n], n.id in ^take) |> Repo.all()
-    visited = Enum.reduce(take, visited, &MapSet.put(&2, &1))
+    live =
+      if next_ids == [],
+        do: [],
+        else:
+          Node
+          |> where([n], n.id in ^next_ids and is_nil(n.deleted_at))
+          |> Repo.all()
+
+    room = max_nodes - length(acc)
+    {nodes, dropped} = Enum.split(live, max(room, 0))
     acc = Enum.reverse(nodes) ++ acc
 
     if dropped != [] do
       {Enum.reverse(acc), true}
     else
-      do_walk_levels(take, visited, direction, depth - 1, max_nodes, acc, false)
+      do_walk_levels(
+        Enum.map(nodes, & &1.id),
+        visited,
+        direction,
+        depth - 1,
+        max_nodes,
+        acc,
+        false
+      )
     end
   end
 

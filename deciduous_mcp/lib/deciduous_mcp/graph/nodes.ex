@@ -34,12 +34,18 @@ defmodule DeciduousMcp.Graph.Nodes do
 
   @doc """
   Updates an existing node. Only provided fields are changed.
+
+  A soft-deleted node is refused with `{:error, :deleted}`: the tools check
+  first, and this is the belt for every other caller.
   """
   def update_node(node_id, attrs) do
     Repo.transaction(fn ->
-      case Repo.get(Node, node_id) do
+      case Node |> lock("FOR UPDATE") |> Repo.get(node_id) do
         nil ->
           Repo.rollback(:not_found)
+
+        %Node{deleted_at: %DateTime{}} ->
+          Repo.rollback(:deleted)
 
         node ->
           case node |> Node.update_changeset(attrs) |> Repo.update() do
@@ -57,27 +63,39 @@ defmodule DeciduousMcp.Graph.Nodes do
 
   @doc """
   Soft-deletes a node by setting deleted_at.
+
+  Deleting a node twice is `{:error, :already_deleted}`, not a second
+  success: the second call used to overwrite deleted_at with a later time,
+  so the tombstone's timestamp said the node died when someone last asked.
+
+  The row is locked `FOR UPDATE` for the duration, and `Edges.create_edge`
+  reads its endpoints `FOR SHARE`, so a delete and a link racing on the same
+  node serialise instead of both committing against a node the other one
+  had already changed.
   """
   def delete_node(node_id) do
-    case Repo.get(Node, node_id) do
-      nil ->
-        {:error, :not_found}
+    Repo.transaction(fn ->
+      case Node |> lock("FOR UPDATE") |> Repo.get(node_id) do
+        nil ->
+          Repo.rollback(:not_found)
 
-      node ->
-        now = DateTime.utc_now()
+        %Node{deleted_at: %DateTime{}} ->
+          Repo.rollback(:already_deleted)
 
-        node
-        |> Node.update_changeset(%{deleted_at: now})
-        |> Repo.update()
-        |> tap(fn
-          {:ok, deleted} ->
-            audit_change(node.workspace_id, deleted, "delete")
-            broadcast(node.workspace_id, {:node_deleted, deleted})
+        node ->
+          case node
+               |> Node.update_changeset(%{deleted_at: DateTime.utc_now()})
+               |> Repo.update() do
+            {:ok, deleted} ->
+              audit_change(node.workspace_id, deleted, "delete")
+              broadcast(node.workspace_id, {:node_deleted, deleted})
+              deleted
 
-          _ ->
-            :ok
-        end)
-    end
+            {:error, changeset} ->
+              Repo.rollback(changeset)
+          end
+      end
+    end)
   end
 
   @doc """

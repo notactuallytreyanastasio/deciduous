@@ -105,6 +105,7 @@ defmodule DeciduousMcp.MCP.Scope do
   """
   def write_scope_for_node(frame, node_id, args) do
     with {:ok, node} <- lookup_node(node_id),
+         :ok <- check_live(node),
          :ok <- check_pin(frame, node) do
       claim_lock(node.workspace_id, frame, args)
     else
@@ -130,6 +131,16 @@ defmodule DeciduousMcp.MCP.Scope do
          "node #{node.id} belongs to another workspace than the one this client is pinned to"}
     end
   end
+
+  # A soft-deleted row is kept for audit and for /export's tombstones, not
+  # to be read or edited by id. Reading one answered with no sign it was
+  # deleted; editing one said "Node updated"; deleting one again reset
+  # deleted_at. Say what happened to it instead of "not found", so a caller
+  # holding a stale id learns why.
+  defp check_live(%{deleted_at: nil}), do: :ok
+
+  defp check_live(node),
+    do: {:error, "node #{node.id} was deleted at #{DateTime.to_iso8601(node.deleted_at)}"}
 
   defp lookup_node(node_id) do
     case Ecto.UUID.cast(node_id) do
@@ -232,6 +243,7 @@ defmodule DeciduousMcp.MCP.Scope do
   """
   def read_node(frame, node_id, preloads \\ []) do
     with {:ok, node} <- Nodes.get_node(node_id, preloads),
+         :ok <- check_live(node),
          :ok <- check_pin(frame, node) do
       {:ok, node}
     else

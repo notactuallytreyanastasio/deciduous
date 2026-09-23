@@ -284,14 +284,18 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
     |> Enum.take(8)
   end
 
+  # Only edges whose other end is live: a deleted neighbour was listed under
+  # connects_to with its title, as if it were still part of the graph.
   defp edges_from_node(node_id) do
     Edge
+    |> join(:inner, [e], n in Node, on: n.id == e.to_node_id and is_nil(n.deleted_at))
     |> where([e], e.from_node_id == ^node_id)
     |> Repo.all()
   end
 
   defp edges_to_node(node_id) do
     Edge
+    |> join(:inner, [e], n in Node, on: n.id == e.from_node_id and is_nil(n.deleted_at))
     |> where([e], e.to_node_id == ^node_id)
     |> Repo.all()
   end

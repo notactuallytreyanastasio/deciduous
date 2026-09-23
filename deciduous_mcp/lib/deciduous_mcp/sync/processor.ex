@@ -76,8 +76,14 @@ defmodule DeciduousMcp.Sync.Processor do
 
       {:delete_node, change_id} ->
         case Nodes.get_node_by_change_id(workspace_id, change_id) do
-          {:ok, node} -> Nodes.delete_node(node.id)
-          {:error, :not_found} -> {:ok, :already_deleted}
+          {:ok, node} ->
+            case Nodes.delete_node(node.id) do
+              {:error, :already_deleted} -> {:ok, :already_deleted}
+              other -> other
+            end
+
+          {:error, :not_found} ->
+            {:ok, :already_deleted}
         end
 
       {:create_edge, attrs} ->

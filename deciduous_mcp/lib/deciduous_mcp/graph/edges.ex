@@ -125,9 +125,14 @@ defmodule DeciduousMcp.Graph.Edges do
         {:error, {:node_not_found, node_id}}
 
       {:ok, _} ->
+        # FOR SHARE: a concurrent delete_node (FOR UPDATE) waits for this
+        # edge to commit, or this read waits for the delete and then sees
+        # the node as deleted. Without it both committed, leaving a live
+        # child under a parent deleted a moment earlier.
         Node
         |> where([n], n.id == ^node_id and n.workspace_id == ^workspace_id)
         |> where([n], is_nil(n.deleted_at))
+        |> lock("FOR SHARE")
         |> Repo.one()
         |> case do
           nil -> {:error, {:node_not_found, node_id}}

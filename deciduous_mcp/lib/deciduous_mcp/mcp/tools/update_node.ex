@@ -60,6 +60,9 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
       {:error, :not_found} ->
         {:error, %{code: -1, message: "Node not found: #{args["node_id"]}"}}
 
+      {:error, :deleted} ->
+        {:error, %{code: -1, message: "node #{args["node_id"]} was deleted"}}
+
       {:error, reason} ->
         {:error, %{code: -1, message: "Update failed: #{inspect(reason)}"}}
     end
