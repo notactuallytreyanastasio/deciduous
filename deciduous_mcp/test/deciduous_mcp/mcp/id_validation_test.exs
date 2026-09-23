@@ -8,7 +8,15 @@ defmodule DeciduousMcp.MCP.IdValidationTest do
 
   alias DeciduousMcp.Graph.{Edges, Nodes}
   alias DeciduousMcp.MCP.Component
-  alias DeciduousMcp.MCP.Tools.{AddEdge, GetDescendants, LogObservation, ShowNode, UpdateNode}
+
+  alias DeciduousMcp.MCP.Tools.{
+    AddEdge,
+    GetDescendants,
+    LogObservation,
+    QueryNodes,
+    ShowNode,
+    UpdateNode
+  }
 
   setup do
     ws = create_test_workspace("ids")
@@ -44,6 +52,24 @@ defmodule DeciduousMcp.MCP.IdValidationTest do
 
       assert err.message =~ "#{key} is not a node id", "#{inspect(tool)}: #{err.message}"
     end
+  end
+
+  test "query_nodes answers a limit below 1 instead of raising in Postgres", %{frame: frame} do
+    # Production 2026-09-23: limit -5 reached Postgres as LIMIT -5 and came
+    # back as an inspected Postgrex.Error struct.
+    for limit <- [-5, 0] do
+      assert {:error, %Hermes.MCP.Error{} = err, _frame} =
+               Component.dispatch_tool(
+                 QueryNodes,
+                 %{"workspace" => "ids", "limit" => limit},
+                 frame
+               )
+
+      assert err.message == "limit must be at least 1, got #{limit}"
+    end
+
+    assert {:reply, _, _} =
+             Component.dispatch_tool(QueryNodes, %{"workspace" => "ids", "limit" => 1}, frame)
   end
 
   test "a valid id still dispatches", %{n: n, frame: frame} do
