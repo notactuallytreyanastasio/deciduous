@@ -743,11 +743,29 @@ impl Database {
     }
 
     // ------------------------------------------------------------------
-    // Record store write-through. Failures never fail the operation: the
-    // database write already happened, and the next `deciduous sync` will
-    // export whatever is missing. They are reported on stderr so MCP/stdio
+    // Record store write-through. A file that cannot be read refuses the
+    // operation before the database is touched (require_readable_store).
+    // Any other failure does not fail it: the database write already
+    // happened, and the next `deciduous sync` will export what is missing. They are reported on stderr so MCP/stdio
     // transports stay clean.
     // ------------------------------------------------------------------
+
+    /// Refuse a graph mutation while the attached graph file cannot be read
+    /// (conflict markers, a bad hand edit). The write-through below would
+    /// fail with only a warning, the database would be ahead of the file,
+    /// and the sync that repairs the file would then compare the two
+    /// without this write ever having been stamped against the file's
+    /// versions: a record stamped later than this clock wins, and the edit
+    /// the CLI reported as done is reverted.
+    fn require_readable_store(&self) -> Result<()> {
+        let Some(store) = self.store() else {
+            return Ok(());
+        };
+        store
+            .read_doc_all()
+            .map(|_| ())
+            .map_err(|e| DbError::Validation(format!("nothing was changed: {}", e)))
+    }
 
     fn store_warn(what: &str, e: impl std::fmt::Display) {
         eprintln!("Warning: graph file: {} ({})", what, e);
@@ -1472,6 +1490,7 @@ impl Database {
         branch: Option<&str>,
         created_at: Option<&str>,
     ) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = created_at
             .map(|s| s.to_string())
@@ -1531,6 +1550,7 @@ impl Database {
         files: Option<&str>,
         branch: Option<&str>,
     ) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -1891,6 +1911,7 @@ impl Database {
         edge_type: &str,
         rationale: Option<&str>,
     ) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
 
         // Validate both nodes exist and get their change_ids
@@ -1963,6 +1984,7 @@ impl Database {
 
     /// Delete an edge between two nodes
     pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
 
         // Check if the edge exists
@@ -2024,6 +2046,9 @@ impl Database {
         dry_run: bool,
         publish: bool,
     ) -> Result<DeleteSummary> {
+        if !dry_run && publish {
+            self.require_readable_store()?;
+        }
         let mut conn = self.get_conn()?;
 
         // Check if node exists
@@ -2140,6 +2165,7 @@ impl Database {
 
     /// Update node status
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
+        self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -2158,6 +2184,7 @@ impl Database {
 
     /// Update a node's commit hash in metadata_json
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
+        self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -2196,6 +2223,7 @@ impl Database {
 
     /// Update a node's prompt in metadata_json
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
+        self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -3073,6 +3101,7 @@ impl Database {
 
     /// Create a new theme
     pub fn create_theme(&self, name: &str, color: &str, description: Option<&str>) -> Result<i32> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
@@ -3125,6 +3154,7 @@ impl Database {
 
     /// Delete a theme by name (also removes all node_themes associations)
     pub fn delete_theme(&self, name: &str) -> Result<bool> {
+        self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let normalized = name.to_lowercase().replace(' ', "-");
 
@@ -3162,6 +3192,7 @@ impl Database {
 
     /// Tag a node with a theme
     pub fn tag_node(&self, node_id: i32, theme_name: &str, source: &str) -> Result<()> {
+        self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?.ok_or_else(|| {
             DbError::Validation(format!(
                 "Theme '{}' not found. Create it with: deciduous themes create {}",
@@ -3195,6 +3226,7 @@ impl Database {
 
     /// Remove a theme from a node
     pub fn untag_node(&self, node_id: i32, theme_name: &str) -> Result<bool> {
+        self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?;
 
         if let Some(theme) = theme {
@@ -3219,6 +3251,7 @@ impl Database {
 
     /// Confirm a suggested tag (change source from "suggested" to "manual")
     pub fn confirm_tag(&self, node_id: i32, theme_name: &str) -> Result<bool> {
+        self.require_readable_store()?;
         let theme = self.get_theme_by_name(theme_name)?;
 
         if let Some(theme) = theme {

@@ -987,3 +987,52 @@ fn a_relink_or_retag_is_never_reverted_by_a_future_tombstone() {
     let tags = alice.ok(&["tag", "list", &goal.to_string()]);
     assert!(!tags.contains("no themes"), "{out}\n{tags}");
 }
+
+/// The graph file as a merge without the driver leaves it: two sides of
+/// the document between conflict markers.
+fn write_conflicted(dev: &Dev, ours: &Value, theirs: &Value) {
+    let text = format!(
+        "<<<<<<< HEAD\n{}\n=======\n{}\n>>>>>>> theirs\n",
+        serde_json::to_string_pretty(ours).unwrap(),
+        serde_json::to_string_pretty(theirs).unwrap()
+    );
+    fs::write(dev.graph_path(), text).unwrap();
+}
+
+#[test]
+fn an_edit_is_refused_while_the_graph_file_is_unreadable_instead_of_lost() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let dated = alice.add("action", "dated", &["--date", "2099-01-01"]);
+    let cid = alice.change_id(dated);
+    let doc = alice.doc();
+    let mut theirs = doc.clone();
+    theirs["nodes"][&cid]["description"] = "from the other side".into();
+    write_conflicted(&alice, &doc, &theirs);
+
+    // The database cannot be changed without the file following it: the
+    // write would never be restamped past the 2099 record, and the sync
+    // that merges the markers would revert it.
+    let out = alice.run(&["status", &dated.to_string(), "completed"]);
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !out.status.success(),
+        "status reported success on an unreadable graph file:\n{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        err
+    );
+    assert!(
+        err.contains("graph.json") && err.contains("conflict markers"),
+        "{err}"
+    );
+    assert_eq!(status_of(&alice, &dated.to_string()), "pending");
+    let (_, err) = alice.fails(&["add", "goal", "new while broken"]);
+    assert!(err.contains("conflict markers"), "{err}");
+    assert!(alice.node_by_title("new while broken").is_none());
+
+    // Once sync has merged the file, the same edit goes through and sticks.
+    alice.ok(&["sync"]);
+    alice.ok(&["status", &dated.to_string(), "completed"]);
+    alice.ok(&["sync"]);
+    assert_eq!(status_of(&alice, &dated.to_string()), "completed");
+}

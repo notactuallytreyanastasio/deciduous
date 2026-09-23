@@ -2833,10 +2833,13 @@ mod tests {
         let on_disk = s.read_node(&row.change_id).unwrap().unwrap();
         assert_eq!(on_disk.description.as_deref(), Some("from alice"));
         assert_eq!(on_disk.status, "active");
-        // A graph file that does not parse is never overwritten.
+        // A graph file that does not parse is never overwritten, and the
+        // edit is refused rather than left in the database alone.
         fs::write(s.path(), "{broken").unwrap();
-        db.update_node_status(id, "completed").unwrap();
+        let err = db.update_node_status(id, "completed").unwrap_err();
+        assert!(err.to_string().contains("nothing was changed"), "{err}");
         assert_eq!(fs::read_to_string(s.path()).unwrap(), "{broken");
+        assert_eq!(db.get_node(id).unwrap().unwrap().status, "active");
     }
 
     #[test]
