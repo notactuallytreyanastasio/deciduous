@@ -131,8 +131,12 @@ defmodule DeciduousMcp.Web.Router do
     end
   end
 
+  # Pinned like /export: without the plug a client pinned to A read O's
+  # attachment bytes by id, or by the content hash of any file it could
+  # name.
   get "/documents/:id" do
     conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
     if conn.halted, do: conn, else: serve_document(conn, id)
   end
 
@@ -271,7 +275,7 @@ defmodule DeciduousMcp.Web.Router do
   end
 
   defp serve_document(conn, id) do
-    case Documents.fetch(id) do
+    case Documents.fetch(id, workspace_id: conn.assigns[:pinned_workspace_id]) do
       {:ok, doc, content} ->
         conn
         # Set directly rather than via put_resp_content_type/2, which appends
