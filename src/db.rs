@@ -1695,33 +1695,88 @@ impl Database {
     /// Accepts a local integer id (`42`, `#42`) or a `change_id` prefix of
     /// at least four characters (`a1b2c3d4`). Local ids differ between
     /// machines; the prefix is how you point at a teammate's node.
+    ///
+    /// `#42` is always a local id. A bare number of four or more digits is
+    /// also a valid change_id prefix (about one change_id in seven starts
+    /// with four digits), so it is looked up both ways: if it names a local
+    /// node *and* prefixes a change_id, that is an error listing both,
+    /// never a guess, because a guess aims `delete` at the wrong node and
+    /// the tombstone reaches everyone. A full change_id wins over a longer
+    /// one it is a prefix of.
     pub fn resolve_node_ref(&self, reference: &str) -> Result<i32> {
-        let r = reference.trim().trim_start_matches('#');
-        // Digits always mean a local id, even when no such node exists:
-        // guessing a change_id prefix instead could aim a delete at the
-        // wrong node.
-        if let Ok(id) = r.parse::<i32>() {
-            return Ok(id);
+        let trimmed = reference.trim();
+        if let Some(explicit) = trimmed.strip_prefix('#') {
+            return explicit.parse::<i32>().map_err(|_| {
+                DbError::Validation(format!(
+                    "'{}' is not a local node id (after '#' comes an integer)",
+                    reference
+                ))
+            });
         }
+        let r = trimmed;
         let looks_like_prefix =
             r.len() >= 4 && r.chars().all(|c| c.is_ascii_hexdigit() || c == '-');
+        let as_id = r.parse::<i32>().ok().filter(|id| *id >= 0);
         if !looks_like_prefix {
-            return Err(DbError::Validation(format!(
-                "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
-                reference
-            )));
+            return as_id.ok_or_else(|| {
+                DbError::Validation(format!(
+                    "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
+                    reference
+                ))
+            });
         }
-        self.resolve_change_id_prefix(r)
+        let Some(id) = as_id else {
+            return self.resolve_change_id_prefix(r);
+        };
+        // Digits only, four or more: an id, a change_id prefix, or both.
+        let local = self.get_node(id)?;
+        let by_prefix = self.change_id_matches(r)?;
+        match (local, by_prefix.as_slice()) {
+            (_, []) => Ok(id),
+            (None, _) => self.resolve_change_id_prefix(r),
+            (Some(node), matches) => {
+                let mut list = vec![format!("local id #{} ({})", node.id, node.title)];
+                list.extend(matches.iter().take(5).map(Self::describe_match));
+                Err(DbError::Validation(format!(
+                    "'{}' is both a local id and a change_id prefix: {}. Use '#{}' for the local id, or more change_id characters",
+                    r,
+                    list.join("; "),
+                    id
+                )))
+            }
+        }
     }
 
-    fn resolve_change_id_prefix(&self, r: &str) -> Result<i32> {
+    fn describe_match(n: &DecisionNode) -> String {
+        format!(
+            "#{} {} ({})",
+            n.id,
+            n.change_id.chars().take(12).collect::<String>(),
+            n.title
+        )
+    }
+
+    /// Nodes whose change_id starts with `r` (at most six), with an exact
+    /// match, if any, first and alone.
+    fn change_id_matches(&self, r: &str) -> Result<Vec<DecisionNode>> {
         let mut conn = self.get_conn()?;
+        let exact: Option<DecisionNode> = decision_nodes::table
+            .filter(decision_nodes::change_id.eq(r))
+            .first(&mut conn)
+            .optional()?;
+        if let Some(node) = exact {
+            return Ok(vec![node]);
+        }
         let pattern = format!("{}%", r);
-        let matches: Vec<DecisionNode> = decision_nodes::table
+        Ok(decision_nodes::table
             .filter(decision_nodes::change_id.like(&pattern))
             .order(decision_nodes::id.asc())
             .limit(6)
-            .load(&mut conn)?;
+            .load(&mut conn)?)
+    }
+
+    fn resolve_change_id_prefix(&self, r: &str) -> Result<i32> {
+        let matches = self.change_id_matches(r)?;
         match matches.len() {
             0 => Err(DbError::Validation(format!(
                 "No node has a change_id starting with '{}'. Run 'deciduous sync' if a teammate created it.",
@@ -1729,18 +1784,7 @@ impl Database {
             ))),
             1 => Ok(matches[0].id),
             _ => {
-                let list: Vec<String> = matches
-                    .iter()
-                    .take(5)
-                    .map(|n| {
-                        format!(
-                            "#{} {} ({})",
-                            n.id,
-                            n.change_id.chars().take(12).collect::<String>(),
-                            n.title
-                        )
-                    })
-                    .collect();
+                let list: Vec<String> = matches.iter().take(5).map(Self::describe_match).collect();
                 Err(DbError::Validation(format!(
                     "'{}' matches several nodes; use more characters: {}",
                     r,
@@ -4130,8 +4174,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db = Database::new(dir.path().join("test.db").to_str().unwrap()).unwrap();
         // Fixed change_ids: a random UUID's first 8 hex characters are all
-        // digits about 2% of the time, and digits always resolve as a local
-        // id, so a random prefix would make this test flaky.
+        // digits about 2% of the time, which this test does not want to
+        // exercise by accident (the git_sync integration test does it on
+        // purpose).
         let a = db
             .create_node_with_change_id(
                 "a1b2c3d4-1111-4111-8111-111111111111",
@@ -4167,7 +4212,7 @@ mod tests {
 
         let err = db.resolve_node_ref("zz").unwrap_err().to_string();
         assert!(err.contains("not a node id"), "{err}");
-        // Digits are always an id, never a change_id guess.
+        // Digits that prefix no change_id are an id, even a missing one.
         assert_eq!(db.resolve_node_ref("99999").unwrap(), 99999);
         let err = db
             .resolve_node_ref("ffffffff-0000")

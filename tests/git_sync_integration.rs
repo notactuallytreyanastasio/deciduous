@@ -1,0 +1,346 @@
+//! Multi-user sync through real git: a bare origin, several clones, the real
+//! `deciduous` binary as the CLI and as the registered merge driver.
+//!
+//! `sync_integration.rs` stands in for git by calling `merge-record` by hand.
+//! These tests do not: they `git pull`, `git merge`, `git checkout`, so what
+//! they check is what a team actually sees, including the cases where git
+//! does something other than what its documentation suggests.
+
+#![allow(dead_code)] // helpers are shared by tests added one finding at a time
+
+use serde_json::Value;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+use tempfile::TempDir;
+
+const BIN: &str = env!("CARGO_BIN_EXE_deciduous");
+
+/// A shared origin and a scratch home. Every clone lives under one TempDir.
+struct Team {
+    root: TempDir,
+}
+
+/// One developer's clone.
+struct Dev {
+    name: String,
+    dir: PathBuf,
+    home: PathBuf,
+    /// PATH for every process this developer runs. By default the
+    /// directory holding the deciduous under test comes first, so git
+    /// finds the merge driver the way it would after `cargo install`.
+    path: String,
+}
+
+fn base_path() -> String {
+    "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin".to_string()
+}
+
+fn with_bin_on_path() -> String {
+    let bin_dir = Path::new(BIN).parent().unwrap();
+    format!("{}:{}", bin_dir.display(), base_path())
+}
+
+impl Team {
+    fn new() -> Self {
+        let root = TempDir::new().unwrap();
+        let origin = root.path().join("origin.git");
+        let out = Command::new("git")
+            .args(["init", "--bare", "-q", "-b", "main"])
+            .arg(&origin)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        Self { root }
+    }
+
+    fn origin(&self) -> PathBuf {
+        self.root.path().join("origin.git")
+    }
+
+    /// The first developer: creates the project, runs `deciduous sync` once
+    /// (which creates the graph file and registers the driver), commits the
+    /// setup and pushes it.
+    fn founder(&self, name: &str) -> Dev {
+        let dev = self.dev(name);
+        fs::create_dir_all(&dev.dir).unwrap();
+        dev.git(&["init", "-q", "-b", "main"]);
+        dev.configure();
+        fs::create_dir_all(dev.dir.join(".deciduous")).unwrap();
+        fs::write(
+            dev.dir.join(".gitattributes"),
+            ".deciduous/graph.json merge=deciduous linguist-generated=true\n",
+        )
+        .unwrap();
+        fs::write(
+            dev.dir.join(".gitignore"),
+            ".deciduous/*.db\n.deciduous/*.db-*\n",
+        )
+        .unwrap();
+        dev.ok(&["sync"]);
+        dev.commit_all("setup");
+        dev.git(&["remote", "add", "origin", self.origin().to_str().unwrap()]);
+        dev.git(&["push", "-q", "-u", "origin", "main"]);
+        dev
+    }
+
+    /// Everyone else clones and syncs once.
+    fn join(&self, name: &str) -> Dev {
+        let dev = self.dev(name);
+        let out = Command::new("git")
+            .args(["clone", "-q"])
+            .arg(self.origin())
+            .arg(&dev.dir)
+            .env("HOME", &dev.home)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        dev.configure();
+        dev.ok(&["sync"]);
+        dev
+    }
+
+    fn dev(&self, name: &str) -> Dev {
+        let home = self.root.path().join("homes").join(name);
+        fs::create_dir_all(&home).unwrap();
+        Dev {
+            name: name.to_string(),
+            dir: self.root.path().join(name),
+            home,
+            path: with_bin_on_path(),
+        }
+    }
+}
+
+impl Dev {
+    fn configure(&self) {
+        self.git(&["config", "user.name", &self.name]);
+        self.git(&[
+            "config",
+            "user.email",
+            &format!("{}@example.test", self.name),
+        ]);
+        self.git(&["config", "pull.rebase", "false"]);
+        self.git(&["config", "commit.gpgsign", "false"]);
+    }
+
+    fn cmd(&self, program: &str) -> Command {
+        let mut c = Command::new(program);
+        c.current_dir(&self.dir)
+            .env("HOME", &self.home)
+            .env("PATH", &self.path)
+            .env("DECIDUOUS_NO_SERVER", "1")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env_remove("DECIDUOUS_DB_PATH")
+            .env_remove("DECIDUOUS_MCP_TOKEN")
+            .env_remove("DECIDUOUS_API_TOKEN")
+            .env_remove("XDG_CONFIG_HOME")
+            .env_remove("GIT_DIR")
+            .env_remove("GIT_WORK_TREE");
+        c
+    }
+
+    fn run(&self, args: &[&str]) -> Output {
+        self.cmd(BIN).args(args).output().expect("run deciduous")
+    }
+
+    fn ok(&self, args: &[&str]) -> String {
+        let out = self.run(args);
+        assert!(
+            out.status.success(),
+            "[{}] deciduous {:?} failed:\n{}\n{}",
+            self.name,
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
+    fn fails(&self, args: &[&str]) -> (String, String) {
+        let out = self.run(args);
+        assert!(
+            !out.status.success(),
+            "[{}] deciduous {:?} should have failed:\n{}",
+            self.name,
+            args,
+            String::from_utf8_lossy(&out.stdout)
+        );
+        (
+            String::from_utf8_lossy(&out.stdout).to_string(),
+            String::from_utf8_lossy(&out.stderr).to_string(),
+        )
+    }
+
+    fn git_out(&self, args: &[&str]) -> Output {
+        self.cmd("git").args(args).output().expect("run git")
+    }
+
+    fn git(&self, args: &[&str]) -> String {
+        let out = self.git_out(args);
+        assert!(
+            out.status.success(),
+            "[{}] git {:?} failed:\n{}\n{}",
+            self.name,
+            args,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        String::from_utf8_lossy(&out.stdout).to_string()
+    }
+
+    fn commit_all(&self, msg: &str) {
+        self.git(&[
+            "add",
+            ".gitattributes",
+            ".gitignore",
+            ".deciduous/graph.json",
+        ]);
+        let out = self.git_out(&["commit", "-q", "-m", msg]);
+        // Nothing to commit is fine: the graph may already be committed.
+        let text = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            out.status.success() || text.contains("nothing to commit"),
+            "[{}] commit failed: {}{}",
+            self.name,
+            text,
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+
+    fn commit_graph(&self, msg: &str) {
+        self.git(&["add", ".deciduous/graph.json"]);
+        self.git(&["commit", "-q", "-m", msg]);
+    }
+
+    fn graph_path(&self) -> PathBuf {
+        self.dir.join(".deciduous").join("graph.json")
+    }
+
+    fn graph_text(&self) -> String {
+        fs::read_to_string(self.graph_path()).unwrap()
+    }
+
+    fn doc(&self) -> Value {
+        serde_json::from_str(&self.graph_text()).unwrap()
+    }
+
+    fn write_doc(&self, doc: &Value) {
+        let mut s = serde_json::to_string_pretty(doc).unwrap();
+        s.push('\n');
+        fs::write(self.graph_path(), s).unwrap();
+    }
+
+    /// Add a node and return its local id.
+    fn add(&self, node_type: &str, title: &str, extra: &[&str]) -> i32 {
+        let mut args = vec!["add", node_type, title];
+        args.extend_from_slice(extra);
+        let out = self.ok(&args);
+        out.split_whitespace()
+            .nth(2)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| panic!("no id in: {out}"))
+    }
+
+    fn change_id(&self, id: i32) -> String {
+        let shown: Value =
+            serde_json::from_str(&self.ok(&["show", &id.to_string(), "--json"])).unwrap();
+        shown["change_id"]
+            .as_str()
+            .or_else(|| shown["node"]["change_id"].as_str())
+            .unwrap_or_else(|| panic!("no change_id in {shown}"))
+            .to_string()
+    }
+
+    /// Nodes as the CLI reports them: (change_id, title, status).
+    fn nodes(&self) -> Vec<Value> {
+        let graph: Value = serde_json::from_str(&self.ok(&["graph"])).unwrap();
+        graph["nodes"].as_array().cloned().unwrap_or_default()
+    }
+
+    fn node_by_title(&self, title: &str) -> Option<Value> {
+        self.nodes().into_iter().find(|n| n["title"] == title)
+    }
+}
+
+/// A node record as it sits in graph.json, for seeding teammates' records.
+fn node_record(change_id: &str, title: &str, updated_at: &str) -> Value {
+    serde_json::json!({
+        "change_id": change_id,
+        "node_type": "goal",
+        "title": title,
+        "status": "pending",
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": updated_at,
+        "author": "teammate",
+    })
+}
+
+// ============================================================================
+// G3: a change_id prefix made of digits
+// ============================================================================
+
+#[test]
+fn a_digit_only_change_id_prefix_is_never_silently_a_local_id() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let one = alice.add("goal", "local one", &[]);
+    let two = alice.add("goal", "local two", &[]);
+    assert_eq!((one, two), (1, 2));
+
+    // A teammate's nodes arrive through the graph file. About 15% of
+    // change_ids start with four digits and 2.5% with eight.
+    let mut doc = alice.doc();
+    let nodes = doc["nodes"].as_object_mut().unwrap();
+    for (cid, title) in [
+        ("0002abcd-1111-4111-8111-111111111111", "teammate target"),
+        ("37650685-2222-4222-8222-222222222222", "all digits"),
+        ("c0ffee00", "short id"),
+        ("c0ffee00-4444-4444-8444-444444444444", "long id"),
+    ] {
+        nodes.insert(
+            cid.into(),
+            node_record(cid, title, "2026-01-02T00:00:00+00:00"),
+        );
+    }
+    alice.write_doc(&doc);
+    let out = alice.ok(&["sync"]);
+    assert!(out.contains("4 nodes imported"), "{out}");
+
+    // "0002" is local #2 and the prefix of the teammate's node. Deleting
+    // either on a guess would tombstone it for everyone.
+    let (_, err) = alice.fails(&["delete", "0002"]);
+    assert!(err.contains("#2") && err.contains("local two"), "{err}");
+    assert!(
+        err.contains("0002abcd") && err.contains("teammate target"),
+        "{err}"
+    );
+    assert!(alice.node_by_title("local two").is_some());
+    assert!(alice.node_by_title("teammate target").is_some());
+
+    // Exactly the CHANGE column string, which is all digits: the node, not
+    // "Node #37650685 not found".
+    let shown = alice.ok(&["show", "37650685"]);
+    assert!(shown.contains("all digits"), "{shown}");
+
+    // `#` always means a local id; short numbers are local ids.
+    assert!(alice.ok(&["show", "#2"]).contains("local two"));
+    assert!(alice.ok(&["show", "2"]).contains("local two"));
+    // A four-digit number with no matching change_id is still an id.
+    let (_, err) = alice.fails(&["show", "9999"]);
+    assert!(err.contains("9999"), "{err}");
+
+    // A change_id that is a prefix of another is reachable by its full id.
+    let shown = alice.ok(&["show", "c0ffee00"]);
+    assert!(shown.contains("short id"), "{shown}");
+    let shown = alice.ok(&["show", "c0ffee00-4444"]);
+    assert!(shown.contains("long id"), "{shown}");
+}
