@@ -348,12 +348,23 @@ fn handle_unlink_nodes(db: &Database, args: &Value) -> HandlerResult {
     let from_id = require_node_ref(db, args, "from_id")?;
     let to_id = require_node_ref(db, args, "to_id")?;
 
-    db.delete_edge(from_id, to_id)?;
+    let edge_type = match args.get("edge_type") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(t)) => Some(t.as_str()),
+        Some(other) => {
+            return Err(HandlerError::from(format!(
+                "edge_type must be a string, got {other}"
+            )))
+        }
+    };
+    let removed = db.delete_edge(from_id, to_id, edge_type)?;
+    let types: Vec<&str> = removed.iter().map(|e| e.edge_type.as_str()).collect();
 
     Ok(tool_result_json(&json!({
         "from_id": from_id,
         "to_id": to_id,
-        "message": format!("Removed edge {} -> {}", from_id, to_id)
+        "edge_type": types.join(", "),
+        "message": format!("Removed edge {} -> {} ({})", from_id, to_id, types.join(", "))
     })))
 }
 

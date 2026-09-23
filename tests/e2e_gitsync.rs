@@ -667,6 +667,69 @@ fn new7_linking_an_existing_edge_says_so() {
     assert_eq!(edges[0]["rationale"], json!("first"));
 }
 
+/// NEW-7, round 2: the refusal said to `deciduous unlink 5 6` first. When
+/// two edge types join the pair, that unlink (which took no type) removed
+/// both and printed "Removed edge (5 -> 6)", deleting an edge nobody named.
+#[test]
+fn new7_the_unlink_the_refusal_suggests_removes_only_that_edge() {
+    let Some(()) = local("new7_the_unlink_the_refusal_suggests_removes_only_that_edge") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("pair", None);
+    p.add("goal", "from here");
+    p.add("option", "to there");
+    p.ok(&["link", "1", "2", "-r", "first"]);
+    p.ok(&["link", "1", "2", "-r", "x", "-t", "chosen"]);
+    let again = p.dx(&["link", "1", "2", "-r", "y", "-t", "chosen"]);
+    assert!(!again.ok(), "{}", again.all());
+    let text = again.all();
+    // Run exactly the command the refusal names.
+    let start = text.find("`deciduous unlink").expect(&text) + 1;
+    let cmd = &text[start..start + text[start..].find('`').unwrap()];
+    let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
+    let out = p.dx(&args);
+    assert!(out.ok(), "`{cmd}` failed:\n{}", out.all());
+    let edges: Vec<Value> = p.graph()["edges"].as_array().unwrap().clone();
+    assert_eq!(
+        edges.len(),
+        1,
+        "`{cmd}` (as the refusal advised) left {edges:?}; it said: {}",
+        out.all()
+    );
+    assert_eq!(edges[0]["edge_type"], json!("leads_to"), "{edges:?}");
+    p.ok(&["link", "1", "2", "-r", "y", "-t", "chosen"]);
+
+    // With two edges and no type, unlink removes nothing and names both.
+    let out = p.dx(&["unlink", "1", "2"]);
+    assert!(
+        !out.ok(),
+        "unlink of two edges with no type exited 0:\n{}",
+        out.all()
+    );
+    assert!(
+        out.all().contains("leads_to") && out.all().contains("chosen"),
+        "{}",
+        out.all()
+    );
+    assert_eq!(p.graph()["edges"].as_array().unwrap().len(), 2);
+
+    // The MCP tool: the same refusal, and edge_type picks one.
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let err = m
+        .call("unlink_nodes", json!({"from_id": 1, "to_id": 2}))
+        .expect_err("unlink_nodes of two edges with no type succeeded");
+    assert!(err.contains("chosen") && err.contains("leads_to"), "{err}");
+    m.call_ok(
+        "unlink_nodes",
+        json!({"from_id": 1, "to_id": 2, "edge_type": "chosen"}),
+    );
+    drop(m);
+    let edges: Vec<Value> = p.graph()["edges"].as_array().unwrap().clone();
+    assert_eq!(edges.len(), 1, "{edges:?}");
+    assert_eq!(edges[0]["edge_type"], json!("leads_to"), "{edges:?}");
+}
+
 /// T8: `dx add --commit origin/main` stored the literal "origin/main" (only
 /// HEAD was resolved) and the confirmation printed "[commit: origin/]".
 #[test]

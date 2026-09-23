@@ -3003,8 +3003,8 @@ impl Database {
                     .unwrap_or_default();
                 return Err(DbError::Validation(format!(
                     "node {from_id} already {edge_type} node {to_id}{rationale}; nothing was changed. \
-                     To give it a new rationale, unlink it first (`deciduous unlink {from_id} {to_id}`, \
-                     or unlink_nodes), then link again"
+                     To give it a new rationale, unlink it first (`deciduous unlink {from_id} {to_id} -t {edge_type}`, \
+                     or unlink_nodes with edge_type {edge_type:?}), then link again"
                 )));
             }
             inserted?;
@@ -3034,19 +3034,31 @@ impl Database {
     }
 
     /// Delete an edge between two nodes
-    pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
+    /// Remove the edge from `from_id` to `to_id`, of `edge_type` when given,
+    /// and return what was removed.
+    ///
+    /// Without a type it removes the pair's edge only when there is exactly
+    /// one. It used to remove every edge between the two, whatever its type,
+    /// and print "Removed edge (5 -> 6)": the `unlink 5 6` that the
+    /// duplicate-link refusal advised for a `chosen` edge silently took the
+    /// pair's `leads_to` edge with it.
+    pub fn delete_edge(
+        &self,
+        from_id: i32,
+        to_id: i32,
+        edge_type: Option<&str>,
+    ) -> Result<Vec<DecisionEdge>> {
         self.require_readable_store()?;
         let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
-        // Check if the edge exists
-        let edge_exists = decision_edges::table
+        let between: Vec<DecisionEdge> = decision_edges::table
             .filter(decision_edges::from_node_id.eq(from_id))
             .filter(decision_edges::to_node_id.eq(to_id))
-            .first::<DecisionEdge>(&mut conn)
-            .optional()?;
+            .order(decision_edges::id.asc())
+            .load(&mut conn)?;
 
-        if edge_exists.is_none() {
+        if between.is_empty() {
             // Get outgoing edges from source node to provide helpful error
             let outgoing: Vec<DecisionEdge> = decision_edges::table
                 .filter(decision_edges::from_node_id.eq(from_id))
@@ -3070,23 +3082,51 @@ impl Database {
             }
         }
 
-        let doomed: Vec<DecisionEdge> = decision_edges::table
-            .filter(decision_edges::from_node_id.eq(from_id))
-            .filter(decision_edges::to_node_id.eq(to_id))
-            .load(&mut conn)?;
+        let describe = |edges: &[DecisionEdge]| {
+            edges
+                .iter()
+                .map(|e| match &e.rationale {
+                    Some(r) => format!("{} (rationale: {r:?})", e.edge_type),
+                    None => e.edge_type.clone(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let doomed: Vec<DecisionEdge> = match edge_type {
+            Some(t) => {
+                let picked: Vec<DecisionEdge> = between
+                    .iter()
+                    .filter(|e| e.edge_type == t)
+                    .cloned()
+                    .collect();
+                if picked.is_empty() {
+                    return Err(DbError::Validation(format!(
+                        "No {t} edge from node {from_id} to node {to_id}; the edges between them are: {}. Nothing was removed.",
+                        describe(&between)
+                    )));
+                }
+                picked
+            }
+            None if between.len() > 1 => {
+                return Err(DbError::Validation(format!(
+                    "Node {from_id} has {} edges to node {to_id}: {}. Nothing was removed; name the one to remove with its type (`deciduous unlink {from_id} {to_id} -t {}`, or unlink_nodes with edge_type).",
+                    between.len(),
+                    describe(&between),
+                    between[0].edge_type
+                )));
+            }
+            None => between,
+        };
 
         drop(conn);
         let endpoints = self.endpoint_change_ids(&doomed);
         let (bodies, unnamed) = self.edges_deleted_bodies(&doomed, &endpoints);
         let mut conn = self.get_conn()?;
 
+        let ids: Vec<i32> = doomed.iter().map(|e| e.id).collect();
         let queued = conn.immediate_transaction(|conn| {
-            diesel::delete(
-                decision_edges::table
-                    .filter(decision_edges::from_node_id.eq(from_id))
-                    .filter(decision_edges::to_node_id.eq(to_id)),
-            )
-            .execute(conn)?;
+            diesel::delete(decision_edges::table.filter(decision_edges::id.eq_any(&ids)))
+                .execute(conn)?;
             self.queue_in_tx(conn, bodies)
         })?;
         drop(conn);
@@ -3096,7 +3136,7 @@ impl Database {
         for u in unnamed {
             self.not_queued(u);
         }
-        Ok(())
+        Ok(doomed)
     }
 
     /// Delete a node and all its connected edges

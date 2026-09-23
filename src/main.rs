@@ -162,6 +162,11 @@ enum Command {
 
         /// Target node: local id, change_id prefix, or server id
         to: String,
+
+        /// Remove only the edge of this type (required when the two nodes
+        /// are joined by more than one)
+        #[arg(short = 't', long = "type")]
+        edge_type: Option<String>,
     },
 
     /// Delete a node and all its connected edges
@@ -1802,12 +1807,24 @@ fn main() {
             }
         }
 
-        Command::Unlink { from, to } => {
+        Command::Unlink {
+            from,
+            to,
+            edge_type,
+        } => {
             let from_id = resolve_node_or_exit(&db, &from);
             let to_id = resolve_node_or_exit(&db, &to);
-            match db.delete_edge(from_id, to_id) {
-                Ok(()) => {
-                    println!("{} edge ({} -> {})", "Removed".red(), from_id, to_id);
+            match db.delete_edge(from_id, to_id, edge_type.as_deref()) {
+                Ok(removed) => {
+                    for e in removed {
+                        println!(
+                            "{} edge ({} -> {}, {})",
+                            "Removed".red(),
+                            from_id,
+                            to_id,
+                            e.edge_type
+                        );
+                    }
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
