@@ -38,16 +38,17 @@ defmodule DeciduousMcp.Graph.Query do
 
     serialize = &serialize_node(&1, details?)
 
-    # A tombstone is the whole row with `deleted_at` set, in `nodes` beside
-    # the live ones: the shape the CLI's pull already reads (RemoteNode has
-    # a deleted_at field and hands it to reconcile, which deletes). Only
+    # A tombstone sits in `nodes` beside the live ones, with `deleted_at`
+    # set: the shape the CLI's pull already reads (RemoteNode has a
+    # deleted_at field and hands it to reconcile, which deletes). Only
     # /export asks for them; `deleted_at` is on every node there, nil for a
     # live one, so a reader need not guess what a missing key means.
     serialized =
       if tombstones?,
         do:
-          Enum.map(fetched, fn n ->
-            Map.put(serialize.(n), :deleted_at, n.deleted_at && DateTime.to_iso8601(n.deleted_at))
+          Enum.map(fetched, fn
+            %Node{deleted_at: nil} = n -> Map.put(serialize.(n), :deleted_at, nil)
+            n -> serialize_tombstone(n)
           end),
         else: Enum.map(nodes, serialize)
 
@@ -280,6 +281,30 @@ defmodule DeciduousMcp.Graph.Query do
     if details?,
       do: Map.merge(base, %{description: node.description, metadata: node.metadata || %{}}),
       else: base
+  end
+
+  # What a delete leaves visible: which row, what kind, and when it died.
+  # Not the title, description or metadata. A delete is how someone removes
+  # a secret pasted into a prompt, and the first version of this sent the
+  # whole row, prompt included, to every token holder through /export
+  # (and through /export?workspace=* across every project). Reconcile needs
+  # change_id and deleted_at; title and status stay as keys, empty and
+  # unchanged, only because a 1.0.x CLI's RemoteNode requires both strings
+  # and would fail to parse the export without them.
+  defp serialize_tombstone(node) do
+    %{
+      id: node.id,
+      change_id: node.change_id,
+      node_type: node.node_type,
+      title: "",
+      description: nil,
+      status: node.status,
+      metadata: nil,
+      branch: nil,
+      created_at: DateTime.to_iso8601(node.inserted_at),
+      updated_at: DateTime.to_iso8601(node.updated_at),
+      deleted_at: DateTime.to_iso8601(node.deleted_at)
+    }
   end
 
   # The slim edge is what an LLM needs to follow the graph: which two nodes
