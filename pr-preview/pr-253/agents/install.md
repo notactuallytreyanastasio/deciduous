@@ -18,11 +18,12 @@ cargo and one from Homebrew, and the first one wins. If they report different
 versions, tell the user which one runs, and fix `PATH` or remove the stale copy
 rather than installing a third.
 
-Use **1.0.5 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
+Use **1.0.6 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
 until it writes to the graph. 1.0.3 removed them, 1.0.4 moved the logging
 guidance into the server's `initialize` reply, and 1.0.5 made `init` set up or
-check the server and dropped GitHub Pages. `deciduous update` on 1.0.5 brings
-an older project up to date.
+check the server and dropped GitHub Pages. 1.0.6 made it ask where the graph
+lives instead of choosing. `deciduous update` on 1.0.6 brings an older project
+up to date.
 
 ## Install or upgrade
 
@@ -49,7 +50,7 @@ Then confirm:
 
 ```sh
 deciduous --version
-# deciduous 1.0.5
+# deciduous 1.0.6
 ```
 
 ## Upgrading a project that was set up by an older version

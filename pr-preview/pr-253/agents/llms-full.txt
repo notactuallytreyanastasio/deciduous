@@ -5,7 +5,7 @@
 This section is written for you, the coding agent, not for the person you work
 for. It tells you how to install deciduous, wire it into the project you are
 in, connect to a shared graph if there is one, and keep the graph current while
-you work. These pages describe deciduous 1.0.5, and the output shown is what
+you work. These pages describe deciduous 1.0.6, and the output shown is what
 it printed. Where an older version behaves differently, the page says so.
 
 The pages for people are at [the main site](../index.html). They explain what the
@@ -31,8 +31,8 @@ it, and `deciduous remote status` shows the gap. Log through MCP only. See
 
 ## Do it in this order
 
-1. [Install](install.md) the `deciduous` binary, 1.0.5 or newer, and check it. Docker must be running unless the project uses someone else's server.
-2. [Set up the project](project.md): `deciduous init`. It will not finish until the project points at a server that answers. With no remote configured, it sets one up on this machine.
+1. [Install](install.md) the `deciduous` binary, 1.0.6 or newer, and check it. Docker must be running unless the project uses someone else's server.
+2. [Set up the project](project.md): `deciduous init`. It will not finish until the project points at a server that answers. With no remote configured it asks where the graph lives (the user answers), and without a terminal it stops and names `remote setup --local` / `--url`.
 3. To use a team's server instead, [connect to it](shared-graph.md) before `init`, or run `deciduous remote setup`.
 4. Read [Logging while you work](logging.md). Nothing enforces it; the graph is only as good as what you write.
 5. Run the checks in [Verify](verify.md) and report each result to the user.
@@ -82,11 +82,12 @@ cargo and one from Homebrew, and the first one wins. If they report different
 versions, tell the user which one runs, and fix `PATH` or remove the stale copy
 rather than installing a third.
 
-Use **1.0.5 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
+Use **1.0.6 or newer**. 1.0.2 installed hooks that deny an agent's tool calls
 until it writes to the graph. 1.0.3 removed them, 1.0.4 moved the logging
 guidance into the server's `initialize` reply, and 1.0.5 made `init` set up or
-check the server and dropped GitHub Pages. `deciduous update` on 1.0.5 brings
-an older project up to date.
+check the server and dropped GitHub Pages. 1.0.6 made it ask where the graph
+lives instead of choosing. `deciduous update` on 1.0.6 brings an older project
+up to date.
 
 ## Install or upgrade
 
@@ -113,7 +114,7 @@ Then confirm:
 
 ```sh
 deciduous --version
-# deciduous 1.0.5
+# deciduous 1.0.6
 ```
 
 ## Upgrading a project that was set up by an older version
@@ -188,8 +189,8 @@ After writing the files, `init` makes sure the project points at a server that
 answers. It fails with exit 1 and the fix if it cannot:
 
 - **`[remote] url` already set:** the server must answer and accept the stored token.
-- **No remote, a server already running on this machine:** the project is pointed at it (about a second).
-- **No remote, no server:** it downloads the release's `deciduous-mcp-docker.tar.gz` for its own version and checks it against `checksums.txt`. It then starts PostgreSQL and the server on `127.0.0.1:4000` with Docker (a few minutes, the first time on a machine). It stores the token, writes `[remote]`, and registers the server with Claude Code.
+- **No remote, in a terminal:** it asks where the graph lives, "1) This machine" or "2) A server someone else runs". The user answers, not you. For 1, a server already running on this machine is reused (about a second). Otherwise `init` downloads the release's `deciduous-mcp-docker.tar.gz` for its own version, checks it against `checksums.txt`, and starts PostgreSQL and the server on `127.0.0.1:4000` with Docker (a few minutes the first time). For 2, it asks for the URL and the token. Either way it stores the token, writes `[remote]`, and registers the server with Claude Code.
+- **No remote, no terminal** (your Bash tool is not a terminal): it stops with exit 1 and names `deciduous remote setup --local` and `--url <url>`. Ask the user which, then run that command. Do not guess.
 
 ```
 Shared graph server
@@ -593,7 +594,7 @@ worse than one that fails loudly.
 ## Every project
 
 ```sh
-deciduous --version                 # 1.0.5 or newer
+deciduous --version                 # 1.0.6 or newer
 deciduous check-update; echo $?     # 0: integration files match the binary
 git ls-files --error-unmatch .deciduous/config.toml
 ```
