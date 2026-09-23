@@ -344,6 +344,37 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
+  @doc """
+  The workspace a write with these arguments would have to create, or nil
+  when it names one that exists (or none, or "*", or an invalid name).
+
+  `DeciduousMcp.MCP.Component` runs a call that would create one inside a
+  transaction, and keeps the workspace only if the call succeeded and left
+  a node in it. Creation has to happen before the tool's own checks (the
+  tool needs the id to look anything up), so without that, a refused
+  add_edge or a capture_conversation_turn that wrote nothing still left
+  a permanent empty project in list_workspaces.
+  """
+  def workspace_to_create(frame, args) do
+    target =
+      case pinned(frame) do
+        {:id, _} ->
+          nil
+
+        {:name, name} ->
+          name
+
+        nil ->
+          case requested_name(args) do
+            {:ok, @global} -> nil
+            {:ok, name} -> name
+            {:error, _} -> nil
+          end
+      end
+
+    if target && match?({:error, :not_found}, Workspaces.get_by_name(target)), do: target
+  end
+
   # The `workspace` argument, normalized. Compared with "*" only after
   # normalizing: `" *"` used to pass the write tools' read-only check as a
   # different string and then trim to a literal workspace named "*".

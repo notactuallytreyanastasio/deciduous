@@ -183,7 +183,17 @@ defmodule DeciduousMcp.MCP.Component do
   # for a failed insert the row being written. The client gets one line
   # naming the tool and the exception's type; the log gets the rest.
   defp dispatch_valid_tool(module, params, frame) do
-    module.call(%{arguments: params, server: frame})
+    call = fn -> module.call(%{arguments: params, server: frame}) end
+
+    # Only a tool that takes a workspace can create one; update_node and
+    # the other by-id tools resolve the node's own workspace.
+    new_workspace =
+      if names_workspace?(module), do: DeciduousMcp.MCP.Scope.workspace_to_create(frame, params)
+
+    case new_workspace do
+      nil -> call.()
+      name -> in_new_workspace(name, call)
+    end
   rescue
     exception ->
       crashed(
@@ -197,6 +207,59 @@ defmodule DeciduousMcp.MCP.Component do
       crashed(module, frame, Exception.format(kind, reason, __STACKTRACE__), kind)
   else
     result -> translate_tool_result(result, frame)
+  end
+
+  # A call that creates a workspace runs in one transaction with it. The
+  # workspace is kept only if the call succeeded and a node is in it now;
+  # otherwise everything the call did is rolled back, the workspace row with
+  # it, and the call's own answer is returned unchanged.
+  #
+  # Deleting an empty workspace afterwards looks simpler and is wrong: a
+  # second caller that found the new row between the insert and the delete
+  # would have its node insert fail on the foreign key. Inside the
+  # transaction the row is not visible to anyone until it is kept, and a
+  # concurrent creator of the same name waits on the unique index for this
+  # one to commit or roll back (then finds it, or inserts it itself).
+  @result_key {__MODULE__, :new_workspace_result}
+
+  defp in_new_workspace(name, call) do
+    transaction =
+      DeciduousMcp.Repo.transaction(fn ->
+        result = call.()
+        Process.put(@result_key, result)
+
+        if match?({:ok, _}, result) and has_nodes?(name),
+          do: result,
+          else: DeciduousMcp.Repo.rollback(:not_kept)
+      end)
+
+    case transaction do
+      {:ok, result} ->
+        Process.delete(@result_key)
+        result
+
+      # :not_kept is ours; :rollback means a tool's own inner transaction
+      # rolled back, which in a nested transaction rolls back this one too.
+      # Either way the tool's answer is what the client gets.
+      {:error, reason} when reason in [:not_kept, :rollback] ->
+        Process.delete(@result_key)
+    end
+  end
+
+  defp names_workspace?(module) do
+    props = get_in(module.definition(), [:input_schema, :properties]) || %{}
+    Map.has_key?(props, :workspace) or Map.has_key?(props, "workspace")
+  end
+
+  defp has_nodes?(name) do
+    import Ecto.Query
+
+    DeciduousMcp.Repo.exists?(
+      from n in DeciduousMcp.Schema.Node,
+        join: w in DeciduousMcp.Schema.Workspace,
+        on: w.id == n.workspace_id,
+        where: w.name == ^name
+    )
   end
 
   defp crashed(module, frame, formatted, what) do
