@@ -1511,3 +1511,25 @@ fn gitsync_n6_a_corrupt_line_is_blamed_on_the_file_and_the_writes_are_counted() 
     // The advice must not be to delete a line that holds a write.
     assert!(!out.contains("delete that line"), "{out}");
 }
+
+// RUST-N4 / GITSYNC-N10: the lock was a file created with create_new and
+// removed in Drop. SIGKILL or SIGTERM mid-write left it, and every write for
+// the next 60 s waited 10 s and then dropped its op ("could not be queued").
+// A leftover file is what a killed process leaves; an OS lock leaves none.
+#[test]
+fn rust_n4_a_lock_left_by_a_killed_process_neither_stalls_nor_drops_a_write() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "stalelock");
+    sb.dx_ok(&dir, &["add", "goal", "before"]);
+    std::fs::write(dir.join(".deciduous").join("remote-log.lock"), b"").unwrap();
+
+    let t = std::time::Instant::now();
+    let out = sb.dx_ok(&dir, &["add", "goal", "after-kill"]);
+    let took = t.elapsed();
+    assert!(!out.contains("could not be queued"), "{out}");
+    assert_eq!(queued_titles(&dir), ["before", "after-kill"], "{out}");
+    assert!(
+        took < std::time::Duration::from_secs(5),
+        "took {took:?}: {out}"
+    );
+}

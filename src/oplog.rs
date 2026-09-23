@@ -594,57 +594,96 @@ impl OpLog {
             .map_err(|e| format!("{}: {e}", self.path.display()))
     }
 
-    /// A lock file held while appending or rewriting.
+    /// The log's lock, held while appending or rewriting, and by a
+    /// database write from before it changes a row until its op is
+    /// appended (see `Database::hold_log`).
     ///
     /// Appends alone would not need it (O_APPEND), but compaction replaces
     /// the file, and an append that lands in the old file after compaction
-    /// read it would be lost. `std::fs::File::lock` would do this, but it is
-    /// newer than this crate's minimum Rust, so this is `create_new` on a
-    /// sibling file, which is atomic on every filesystem the CLI runs on.
-    fn lock(&self) -> Result<LockGuard, String> {
+    /// read it would be lost.
+    ///
+    /// An OS lock (`flock`) on `remote-log.lock`, which the kernel releases
+    /// when the holder dies. It used to be `create_new` on that file and a
+    /// remove in Drop: a process killed while holding it (SIGKILL, and
+    /// SIGTERM, which runs no destructors either) left the file, and every
+    /// write for the next 60 s waited 10 s and then dropped its op. The
+    /// file itself now stays, empty; its existence means nothing.
+    ///
+    /// Re-entrant within a thread: a write holding the lock appends under it.
+    pub fn lock(&self) -> Result<LockGuard, String> {
         let path = self.path.with_extension("lock");
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        let held = HELD.with(|h| {
+            let mut h = h.borrow_mut();
+            match h.iter_mut().find(|(p, _, _)| *p == path) {
+                Some((_, _, depth)) => {
+                    *depth += 1;
+                    true
+                }
+                None => false,
+            }
+        });
+        if held {
+            return Ok(LockGuard { path });
+        }
+        let file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let deadline = std::time::Instant::now() + LOCK_WAIT;
         loop {
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-            {
-                Ok(_) => return Ok(LockGuard { path }),
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                    // A process that died holding the lock leaves the file
-                    // behind. Nothing holds it for more than a rewrite.
-                    let stale = std::fs::metadata(&path)
-                        .and_then(|m| m.modified())
-                        .ok()
-                        .and_then(|t| t.elapsed().ok())
-                        .is_some_and(|age| age > std::time::Duration::from_secs(60));
-                    if stale {
-                        let _ = std::fs::remove_file(&path);
-                        continue;
-                    }
+            match file.try_lock() {
+                Ok(()) => break,
+                Err(std::fs::TryLockError::WouldBlock) => {
                     if std::time::Instant::now() > deadline {
                         return Err(format!(
-                            "{} has been held for 10s by another deciduous process. \
-                             If none is running, delete it.",
-                            path.display()
+                            "{} has been held by another deciduous process for {}s \
+                             (a live one: the lock is released when its holder exits, however it exits)",
+                            path.display(),
+                            LOCK_WAIT.as_secs()
                         ));
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(20));
+                    std::thread::sleep(std::time::Duration::from_millis(10));
                 }
-                Err(e) => return Err(format!("{}: {e}", path.display())),
+                Err(std::fs::TryLockError::Error(e)) => {
+                    return Err(format!("locking {}: {e}", path.display()))
+                }
             }
         }
+        HELD.with(|h| h.borrow_mut().push((path.clone(), file, 1)));
+        Ok(LockGuard { path })
     }
 }
 
-struct LockGuard {
+/// How long a write waits for another process's hold on the log. A hold
+/// lasts one database write and one append, so this is far past any real
+/// one; it is the bound on a holder that is alive and stuck.
+const LOCK_WAIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+thread_local! {
+    /// Locks this thread holds: (lock path, the locked file, depth).
+    static HELD: std::cell::RefCell<Vec<(PathBuf, std::fs::File, usize)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// A hold on the log's lock. Dropping the last one on a thread unlocks it.
+pub struct LockGuard {
     path: PathBuf,
 }
 
 impl Drop for LockGuard {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+        HELD.with(|h| {
+            let mut h = h.borrow_mut();
+            if let Some(i) = h.iter().position(|(p, _, _)| *p == self.path) {
+                h[i].2 -= 1;
+                if h[i].2 == 0 {
+                    // Closing the file releases the lock.
+                    h.swap_remove(i);
+                }
+            }
+        });
     }
 }
 
@@ -757,6 +796,48 @@ mod tests {
             (st.pending.len(), st.unreadable.len(), st.set_aside),
             (2, 0, 1)
         );
+    }
+
+    #[test]
+    fn a_leftover_lock_file_is_not_a_lock_and_a_live_holder_is_waited_for() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join(FILE_NAME);
+        let log = OpLog::at(&path);
+        // What a killed holder leaves: the file, with no lock on it.
+        std::fs::write(path.with_extension("lock"), b"").unwrap();
+        let t = std::time::Instant::now();
+        log.append(status("a", "completed")).unwrap();
+        assert!(t.elapsed() < std::time::Duration::from_secs(1));
+
+        // A live holder on another descriptor (another process, as far as
+        // flock is concerned) is waited for, not broken.
+        let other = std::fs::OpenOptions::new()
+            .write(true)
+            .open(path.with_extension("lock"))
+            .unwrap();
+        other.lock().unwrap();
+        let release = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            drop(other);
+        });
+        let t = std::time::Instant::now();
+        let log2 = log.clone();
+        std::thread::spawn(move || log2.append(status("b", "completed")).unwrap())
+            .join()
+            .unwrap();
+        assert!(t.elapsed() >= std::time::Duration::from_millis(250));
+        release.join().unwrap();
+        assert_eq!(log.read().unwrap().pending.len(), 2);
+    }
+
+    #[test]
+    fn the_lock_is_reentrant_within_a_thread() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let log = OpLog::at(dir.path().join(FILE_NAME));
+        let _held = log.lock().unwrap();
+        log.append(status("a", "completed")).unwrap();
+        log.compact().unwrap();
+        assert_eq!(log.read().unwrap().pending.len(), 1);
     }
 
     #[test]
