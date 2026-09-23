@@ -45,7 +45,8 @@ defmodule DeciduousMcp.MCP.IdValidationTest do
        "took_from"},
       {LogObservation, %{"workspace" => "ids", "title" => "t", "related_to" => 42}, "related_to"},
       # 16 bytes: Ecto.UUID.cast/1 takes this as a raw binary UUID.
-      {AddEdge, %{"workspace" => "ids", "from_node_id" => n.id, "to_node_id" => "PLACEHOLDER_SKIP"},
+      {AddEdge,
+       %{"workspace" => "ids", "from_node_id" => n.id, "to_node_id" => "PLACEHOLDER_SKIP"},
        "to_node_id"}
     ]
 
@@ -68,7 +69,7 @@ defmodule DeciduousMcp.MCP.IdValidationTest do
                  frame
                )
 
-      assert err.message == "limit must be at least 1, got #{limit}"
+      assert err.message =~ "limit must be at least 1, got #{limit}"
     end
 
     assert {:reply, _, _} =

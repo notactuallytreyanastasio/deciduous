@@ -32,7 +32,12 @@ defmodule DeciduousMcp.MCP.Tools.QueryNodes do
           },
           branch: %{type: "string", description: "Filter by git branch"},
           search: %{type: "string", description: "Text search in title and description"},
-          limit: %{type: "integer", description: "Max results (default: 100)"}
+          limit: %{
+            type: "integer",
+            minimum: 1,
+            maximum: 10_000,
+            description: "Max results (default: 100)"
+          }
         }
       }
     }

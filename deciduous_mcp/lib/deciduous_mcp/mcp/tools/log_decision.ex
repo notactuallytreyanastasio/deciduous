@@ -30,8 +30,8 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
           },
           rationale: %{type: "string", description: "Why the chosen option was selected"},
           chosen_option: %{
-            type: "object",
-            description: "The option that was selected",
+            type: ["object", "string"],
+            description: "The option that was selected: an object, or just its title",
             properties: %{
               title: %{type: "string"},
               description: %{type: "string"}
@@ -42,7 +42,7 @@ defmodule DeciduousMcp.MCP.Tools.LogDecision do
             type: "array",
             description: "Options that were considered but not selected",
             items: %{
-              type: "object",
+              type: ["object", "string"],
               properties: %{
                 title: %{type: "string"},
                 description: %{type: "string"},

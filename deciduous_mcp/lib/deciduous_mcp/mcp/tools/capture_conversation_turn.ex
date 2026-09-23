@@ -34,6 +34,8 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
   alias DeciduousMcp.Graph.{Nodes, Edges}
   alias DeciduousMcp.Repo
 
+  # Every section may be given as a plain string, which is its title (see
+  # normalise/1), so the schema says both; ArgCheck enforces what it says.
   def definition do
     %{
       name: "capture_conversation_turn",
@@ -50,7 +52,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
               "Brief summary of what happened in this conversation turn (1-2 sentences)"
           },
           goal: %{
-            type: "object",
+            type: ["object", "string"],
             description: "A new goal or objective that emerged (if any)",
             properties: %{
               title: %{type: "string"},
@@ -62,7 +64,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             type: "array",
             description: "Insights, learnings, or things noticed",
             items: %{
-              type: "object",
+              type: ["object", "string"],
               properties: %{
                 title: %{type: "string"},
                 description: %{type: "string"}
@@ -74,7 +76,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             type: "array",
             description: "Approaches that were considered",
             items: %{
-              type: "object",
+              type: ["object", "string"],
               properties: %{
                 title: %{type: "string"},
                 description: %{type: "string"},
@@ -84,7 +86,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             }
           },
           decision: %{
-            type: "object",
+            type: ["object", "string"],
             description: "A decision that was made (choosing between options)",
             properties: %{
               title: %{type: "string"},
@@ -92,7 +94,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             }
           },
           action: %{
-            type: "object",
+            type: ["object", "string"],
             description: "Something that was done or implemented",
             properties: %{
               title: %{type: "string"},
@@ -102,7 +104,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             }
           },
           outcome: %{
-            type: "object",
+            type: ["object", "string"],
             description: "The result of an action",
             properties: %{
               title: %{type: "string"},

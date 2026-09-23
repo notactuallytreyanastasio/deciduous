@@ -108,7 +108,8 @@ defmodule DeciduousMcp.Web.ReadScopeTest do
         })
 
       assert {:tool_error, message} = result, inspect({name, result})
-      assert message =~ "control or formatting character", message
+      # NUL is caught earlier, with every other string argument (ArgCheck)
+      assert message =~ ~r/control or formatting character|NUL character/, message
       refute message =~ "Postgrex"
     end
   end

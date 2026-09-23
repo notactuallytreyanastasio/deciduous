@@ -46,7 +46,9 @@ defmodule DeciduousMcp.MCP.Component do
 
       @impl Hermes.Server.Component.Tool
       def input_schema do
-        DeciduousMcp.MCP.Component.stringify(definition()[:input_schema])
+        definition()[:input_schema]
+        |> DeciduousMcp.MCP.ArgCheck.with_limits()
+        |> DeciduousMcp.MCP.Component.stringify()
       end
 
       @doc false
@@ -124,7 +126,20 @@ defmodule DeciduousMcp.MCP.Component do
          frame}
 
       nil ->
-        dispatch_valid_tool(module, params, frame)
+        schema = DeciduousMcp.MCP.ArgCheck.with_limits(module.definition()[:input_schema] || %{})
+
+        case DeciduousMcp.MCP.ArgCheck.check(schema, params) do
+          :ok ->
+            dispatch_valid_tool(module, params, frame)
+
+          # Answered like every other refusal a tool makes (execution error,
+          # the sentence as the message), not as -32602 with the sentence
+          # tucked into `data`: the message is what a client shows the model.
+          # The suffix is true for reads too, and it is the thing a caller
+          # retrying a write most needs to know.
+          {:error, message} ->
+            {:error, Error.execution(message <> "; nothing was written"), frame}
+        end
     end
   end
 
