@@ -50,14 +50,32 @@ defmodule DeciduousMcp.MCP.MultiAgentTest do
     }
   end
 
-  defp call(tool, args, session_id), do: tool.call(%{arguments: args, server: frame(session_id)})
+  # What DeciduousMcp.MCP.Component does around a tool: the activity a
+  # call holds is recorded when it succeeds, and dropped when it fails.
+  defp call(tool, args, session_id),
+    do: around(fn -> tool.call(%{arguments: args, server: frame(session_id)}) end)
+
+  defp around(fun) do
+    DeciduousMcp.MCP.Scope.discard_activity()
+    result = fun.()
+
+    case result do
+      {:ok, _} -> DeciduousMcp.MCP.Scope.flush_activity()
+      _ -> DeciduousMcp.MCP.Scope.discard_activity()
+    end
+
+    result
+  end
 
   defp pinned_frame(session_id, workspace_id) do
     %{frame(session_id) | assigns: %{pinned_workspace_id: workspace_id}}
   end
 
   defp call_pinned(tool, args, session_id, workspace_id),
-    do: tool.call(%{arguments: args, server: pinned_frame(session_id, workspace_id)})
+    do:
+      around(fn ->
+        tool.call(%{arguments: args, server: pinned_frame(session_id, workspace_id)})
+      end)
 
   describe "the tools that name a row by id record the write and never refuse it" do
     setup %{workspace: ws} do

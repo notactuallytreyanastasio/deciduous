@@ -103,4 +103,64 @@ defmodule DeciduousMcp.MCP.ActivityTest do
     {:ok, at, _} = DateTime.from_iso8601(at)
     assert DateTime.diff(DateTime.utc_now(), at) < 60, "updated_at #{at}"
   end
+
+  # Verification of T10: Scope.write_workspace_id recorded the write
+  # before the tool ran, and nothing took the record back when the write
+  # was refused. A session whose add_node (bad parent_id) and add_edge (a
+  # self loop) both failed was listed writing branches "feat" and "feat2",
+  # which held no nodes; /ops records only what it applied, so the two
+  # surfaces disagreed.
+  test "T10: a write that is refused is not recorded as activity" do
+    writer = McpHttp.session()
+    {:ok, %{"id" => id}} = McpHttp.call(writer, "add_node", goal("real", "main"))
+
+    failing = McpHttp.session()
+
+    assert {:tool_error, _} =
+             McpHttp.call(
+               failing,
+               "add_node",
+               Map.put(goal("x", "feat"), "parent_id", Ecto.UUID.generate())
+             )
+
+    assert {:tool_error, _} =
+             McpHttp.call(failing, "add_edge", %{
+               "workspace" => @ws,
+               "branch" => "feat2",
+               "from_node_id" => id,
+               "to_node_id" => id
+             })
+
+    assert {:tool_error, _} =
+             McpHttp.call(failing, "update_node", %{
+               "node_id" => id,
+               "branch" => "feat3",
+               "status" => "bogus"
+             })
+
+    assert {:ok, activity} =
+             McpHttp.call(McpHttp.session(), "check_activity", %{"workspace" => @ws})
+
+    branches = activity["sessions"] |> Enum.map(& &1["branch"]) |> Enum.sort()
+    assert branches == ["main"], inspect(activity["sessions"])
+    assert activity["active_sessions"] == 1
+  end
+
+  test "new (low): a by-id write naming workspace \"*\" is refused, as every other write is" do
+    sid = McpHttp.session()
+    {:ok, %{"id" => id}} = McpHttp.call(sid, "add_node", goal("n"))
+
+    for {tool, args} <- [
+          {"update_node", %{"node_id" => id, "title" => "star"}},
+          {"delete_node", %{"node_id" => id}}
+        ] do
+      assert {:tool_error, message} = McpHttp.call(sid, tool, Map.put(args, "workspace", "*"))
+      assert message =~ ~s(workspace "*" is read-only), "#{tool}: #{message}"
+    end
+
+    assert %{title: "n", deleted_at: nil} = Repo.get!(DeciduousMcp.Schema.Node, id)
+
+    # A read by id may name it: "*" is the view across every workspace.
+    assert {:ok, _} = McpHttp.call(sid, "show_node", %{"node_id" => id, "workspace" => "*"})
+  end
 end

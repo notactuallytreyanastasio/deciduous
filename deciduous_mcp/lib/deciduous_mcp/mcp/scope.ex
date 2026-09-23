@@ -68,6 +68,7 @@ defmodule DeciduousMcp.MCP.Scope do
   end
 
   @node_scoped ~w(update_node delete_node delete_edge show_node get_ancestors get_descendants)
+  @node_scoped_writes ~w(update_node delete_node delete_edge)
 
   @doc "True for a tool that names its node by id and acts in that node's workspace."
   def node_scoped?(tool), do: tool in @node_scoped
@@ -99,8 +100,25 @@ defmodule DeciduousMcp.MCP.Scope do
   workspace and the node is in a different one. A node that cannot be found
   is left to the tool to report.
   """
+  # A write naming "*" is refused, as every other write tool refuses it;
+  # update_node {workspace: "*"} answered "Node updated". A read by id may
+  # name it: "*" is the view across every workspace, and the node is in it.
   def check_node_workspace(tool, %{"workspace" => raw} = args)
       when tool in @node_scoped and is_binary(raw) do
+    case Workspaces.normalize_name(raw) do
+      {:ok, @global} when tool in @node_scoped_writes ->
+        {:error,
+         "workspace \"#{@global}\" is read-only: a write acts on one project. Pass the " <>
+           "node's own workspace, or none"}
+
+      _ ->
+        check_named_workspace(raw, args)
+    end
+  end
+
+  def check_node_workspace(_tool, _args), do: :ok
+
+  defp check_named_workspace(raw, args) do
     node_id = args["node_id"] || args["from_node_id"]
 
     with {:ok, wanted} when wanted != @global <- Workspaces.normalize_name(raw),
@@ -119,8 +137,6 @@ defmodule DeciduousMcp.MCP.Scope do
         :ok
     end
   end
-
-  def check_node_workspace(_tool, _args), do: :ok
 
   @doc """
   Resolves a write scope, and records the write in `DeciduousMcp.Activity`.
@@ -220,19 +236,38 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
+  # Held, not written: `DeciduousMcp.MCP.Component` records it once the
+  # tool has answered success (`flush_activity/0`), and drops it when the
+  # write was refused. Recorded here, before the tool ran, a session whose
+  # every write failed was listed in check_activity writing branches that
+  # held nothing of its (verification of T10), and /ops, which records
+  # only what it applied, told a different story.
+  @pending {__MODULE__, :pending_activity}
+
   defp record_activity(workspace_id, frame, args) do
     client = client_info(frame)
 
-    :ok =
-      Activity.record(
-        workspace_id,
-        Map.get(args, "branch"),
-        session_id(frame),
-        client.name,
-        client.version
-      )
+    entry =
+      {workspace_id, Map.get(args, "branch"), session_id(frame), client.name, client.version}
 
+    Process.put(@pending, [entry | Process.get(@pending, [])])
     {:ok, workspace_id}
+  end
+
+  @doc "Forgets the activity a call held; before a call, and after one that failed."
+  def discard_activity do
+    Process.delete(@pending)
+    :ok
+  end
+
+  @doc "Records the activity a call held, after it succeeded."
+  def flush_activity do
+    (Process.delete(@pending) || [])
+    |> Enum.reverse()
+    |> Enum.uniq()
+    |> Enum.each(fn {ws, branch, session, name, version} ->
+      :ok = Activity.record(ws, branch, session, name, version)
+    end)
   end
 
   defp session_id(frame) do

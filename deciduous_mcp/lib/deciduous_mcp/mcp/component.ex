@@ -226,6 +226,7 @@ defmodule DeciduousMcp.MCP.Component do
   # for a failed insert the row being written. The client gets one line
   # naming the tool and the exception's type; the log gets the rest.
   defp dispatch_valid_tool(module, params, frame) do
+    DeciduousMcp.MCP.Scope.discard_activity()
     call = fn -> module.call(%{arguments: params, server: frame}) end
 
     # Only a tool that takes a workspace can create one; update_node and
@@ -239,6 +240,8 @@ defmodule DeciduousMcp.MCP.Component do
     end
   rescue
     exception ->
+      DeciduousMcp.MCP.Scope.discard_activity()
+
       crashed(
         module,
         frame,
@@ -247,9 +250,18 @@ defmodule DeciduousMcp.MCP.Component do
       )
   catch
     kind, reason ->
+      DeciduousMcp.MCP.Scope.discard_activity()
       crashed(module, frame, Exception.format(kind, reason, __STACKTRACE__), kind)
   else
-    result -> translate_tool_result(result, frame)
+    # Who wrote where is recorded once the write has happened, and only
+    # then (Scope.record_activity/3 holds it until here).
+    {:ok, _} = result ->
+      DeciduousMcp.MCP.Scope.flush_activity()
+      translate_tool_result(result, frame)
+
+    result ->
+      DeciduousMcp.MCP.Scope.discard_activity()
+      translate_tool_result(result, frame)
   end
 
   # A call that creates a workspace runs in one transaction with it. The
