@@ -14,6 +14,7 @@ pub const RELEASES: &[Release] = &[
     Release {
         version: "1.0.3",
         highlights: &[
+            "The log-loop hook is removed: nothing denies an agent's tool calls any more. `deciduous update` deletes the hook scripts and plugins deciduous wrote (keeping any you wrote) and takes `deciduous log-loop` out of .claude/settings.json",
             "`deciduous update` keeps what it did not write: files deciduous wrote are replaced, a user's Markdown is kept with the new text appended in a marked block, a user's script or TOML is left alone",
             "Everything update changes is backed up first to .deciduous/update-backups/<time>/; on a remote project it no longer touches .gitignore, .gitattributes, .git/config or graph.json",
             "`remote push` sends only what the server lacks (--overwrite for the old behaviour); `update --all <dir>` updates every project under a directory",

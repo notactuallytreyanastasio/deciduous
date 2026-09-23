@@ -15,10 +15,9 @@ use std::path::Path;
 use templates::{
     BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
     DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, DOCUMENT_MD,
-    HOOK_POST_COMMIT_REMINDER, HOOK_REQUIRE_ACTION_NODE, HOOK_VERSION_CHECK, PAGES_VIEWER_HTML,
-    RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY, SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD,
-    SYNC_MD, WINDSURF_HOOKS_JSON, WINDSURF_HOOK_POST_COMMIT_REMINDER,
-    WINDSURF_HOOK_REQUIRE_ACTION_NODE, WINDSURF_RULES_DECIDUOUS, WORK_MD,
+    HOOK_VERSION_CHECK, PAGES_VIEWER_HTML, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
+    SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD, SYNC_MD, WINDSURF_HOOKS_JSON,
+    WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
 
 /// Initialize a new deciduous project with AI assistant integration
@@ -148,25 +147,9 @@ pub fn init_project(
         let agents_path = claude_base.join("agents.toml");
         write_file_if_missing(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
 
-        // Create .claude/hooks directory and write enforcement hooks
+        // Create .claude/hooks directory; the only hook is the version check
         let hooks_dir = claude_base.join("hooks");
         create_dir_if_missing(&hooks_dir)?;
-
-        // Write require-action-node.sh hook
-        let require_action_path = hooks_dir.join("require-action-node.sh");
-        write_executable_if_missing(
-            &require_action_path,
-            HOOK_REQUIRE_ACTION_NODE,
-            ".claude/hooks/require-action-node.sh",
-        )?;
-
-        // Write post-commit-reminder.sh hook
-        let post_commit_path = hooks_dir.join("post-commit-reminder.sh");
-        write_executable_if_missing(
-            &post_commit_path,
-            HOOK_POST_COMMIT_REMINDER,
-            ".claude/hooks/post-commit-reminder.sh",
-        )?;
 
         // Write version-check.sh hook (opt-in auto-update check)
         let version_check_path = hooks_dir.join("version-check.sh");
@@ -567,26 +550,16 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     let sync_path = claude_dir.join("sync.md");
     write_file_overwrite(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
 
-    // Create/update hooks directory and enforcement hooks
+    // Create/update hooks directory
     let claude_base = cwd.join(".claude");
     let hooks_dir = claude_base.join("hooks");
     create_dir_if_missing(&hooks_dir)?;
 
-    // Overwrite require-action-node.sh hook
-    let require_action_path = hooks_dir.join("require-action-node.sh");
-    write_executable_overwrite(
-        &require_action_path,
-        HOOK_REQUIRE_ACTION_NODE,
-        ".claude/hooks/require-action-node.sh",
-    )?;
-
-    // Overwrite post-commit-reminder.sh hook
-    let post_commit_path = hooks_dir.join("post-commit-reminder.sh");
-    write_executable_overwrite(
-        &post_commit_path,
-        HOOK_POST_COMMIT_REMINDER,
-        ".claude/hooks/post-commit-reminder.sh",
-    )?;
+    // The logging hooks are gone since 1.0.3: remove the scripts deciduous
+    // wrote, keep any the user wrote, and take the entries out of settings.json.
+    for name in RETIRED_HOOK_SCRIPTS {
+        remove_guarded(&hooks_dir.join(name), &format!(".claude/hooks/{name}"))?;
+    }
 
     // Overwrite version-check.sh hook (opt-in auto-update check)
     let version_check_path = hooks_dir.join("version-check.sh");
@@ -596,18 +569,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
         ".claude/hooks/version-check.sh",
     )?;
 
-    // Bring settings.json onto the log-loop hooks, keeping the user's own
-    // entries. The scripts above are wrappers around `deciduous log-loop`,
-    // but an old settings.json only ran them on Edit|Write and had no Stop
-    // or post-log entries at all.
-    if crate::config::Config::load().hooks.log_loop_enabled() {
-        merge_log_loop_settings(&claude_base.join("settings.json"))?;
-    } else {
-        println!(
-            "   {} .claude/settings.json (hooks disabled in .deciduous/config.toml; log-loop not installed)",
-            "Skipped".yellow()
-        );
-    }
+    strip_retired_hook_settings(&claude_base.join("settings.json"))?;
 
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");
@@ -666,22 +628,6 @@ fn setup_windsurf_integration(cwd: &Path) -> Result<(), String> {
         ".windsurf/hooks.json",
     )?;
 
-    // Write require-action-node.sh hook
-    let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
-    write_executable_if_missing(
-        &require_action_path,
-        WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-        ".windsurf/hooks/require-action-node.sh",
-    )?;
-
-    // Write post-commit-reminder.sh hook
-    let post_commit_path = windsurf_hooks_dir.join("post-commit-reminder.sh");
-    write_executable_if_missing(
-        &post_commit_path,
-        WINDSURF_HOOK_POST_COMMIT_REMINDER,
-        ".windsurf/hooks/post-commit-reminder.sh",
-    )?;
-
     // Write version-check.sh hook (opt-in auto-update check)
     let version_check_path = windsurf_hooks_dir.join("version-check.sh");
     write_executable_if_missing(
@@ -720,21 +666,12 @@ fn update_windsurf(cwd: &Path) -> Result<(), String> {
         ".windsurf/hooks.json",
     )?;
 
-    // Overwrite require-action-node.sh hook
-    let require_action_path = windsurf_hooks_dir.join("require-action-node.sh");
-    write_executable_overwrite(
-        &require_action_path,
-        WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-        ".windsurf/hooks/require-action-node.sh",
-    )?;
-
-    // Overwrite post-commit-reminder.sh hook
-    let post_commit_path = windsurf_hooks_dir.join("post-commit-reminder.sh");
-    write_executable_overwrite(
-        &post_commit_path,
-        WINDSURF_HOOK_POST_COMMIT_REMINDER,
-        ".windsurf/hooks/post-commit-reminder.sh",
-    )?;
+    for name in RETIRED_HOOK_SCRIPTS {
+        remove_guarded(
+            &windsurf_hooks_dir.join(name),
+            &format!(".windsurf/hooks/{name}"),
+        )?;
+    }
 
     // Overwrite version-check.sh hook (opt-in auto-update check)
     let version_check_path = windsurf_hooks_dir.join("version-check.sh");
@@ -764,61 +701,72 @@ fn create_dir_if_missing(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Merges the log-loop hooks into `.claude/settings.json` (creating it from
-/// the template if absent). Refuses to touch a file it cannot parse rather
-/// than overwrite settings it does not understand.
-pub fn merge_log_loop_settings(path: &Path) -> Result<(), String> {
-    let mut settings: serde_json::Value = if path.exists() {
-        let raw = fs::read_to_string(path)
-            .map_err(|e| format!("Could not read {}: {}", path.display(), e))?;
-        serde_json::from_str(&raw).map_err(|e| {
-            format!(
-                "{} is not valid JSON ({}); fix it and rerun `deciduous update` to install the log-loop hooks",
-                path.display(),
-                e
-            )
-        })?
-    } else {
-        serde_json::from_str(CLAUDE_SETTINGS_JSON).expect("template is valid JSON")
+/// Hook scripts deciduous installed before 1.0.3 to make agents log, for
+/// Claude Code and Windsurf alike. Logging is encouraged through the
+/// instructions and the tool replies now, not enforced by a hook, so
+/// `update` removes the ones it wrote.
+pub const RETIRED_HOOK_SCRIPTS: [&str; 2] = ["require-action-node.sh", "post-commit-reminder.sh"];
+
+/// Takes the retired logging hooks out of `.claude/settings.json`: every
+/// command that runs `deciduous log-loop`, and every command that runs a
+/// retired script that is no longer on disk. A retired script the user
+/// wrote was kept, so the entry that runs it stays. Entries and events left
+/// empty are dropped; everything else, including key order, is kept. A file
+/// that is not valid JSON is reported and left alone.
+pub fn strip_retired_hook_settings(path: &Path) -> Result<(), String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return Ok(());
+    };
+    let mut settings: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(v) => v,
+        Err(e) => {
+            println!(
+                "   {} .claude/settings.json (not valid JSON: {e}); remove any `deciduous log-loop` hooks by hand",
+                "Skipped".yellow()
+            );
+            return Ok(());
+        }
+    };
+    let hooks_dir = path.parent().map(|p| p.join("hooks"));
+    let retired = |command: &str| {
+        command.contains("deciduous log-loop")
+            || RETIRED_HOOK_SCRIPTS.iter().any(|name| {
+                command.contains(&format!(".claude/hooks/{name}"))
+                    && !hooks_dir.as_ref().is_some_and(|d| d.join(name).exists())
+            })
     };
 
-    let mut changed = crate::log_loop::merge_claude_settings(&mut settings);
-    // A hook script the user wrote was kept by the guard, so the entry that
-    // runs it does not run log-loop. Add log-loop as its own entry beside it.
-    if let Some(hooks_dir) = path.parent().map(|p| p.join("hooks")) {
-        for (script, event, matcher, command) in [
-            (
-                "require-action-node.sh",
-                "PreToolUse",
-                "Edit|Write|NotebookEdit|Bash",
-                "deciduous log-loop pre || true",
-            ),
-            (
-                "post-commit-reminder.sh",
-                "PostToolUse",
-                "Bash",
-                "deciduous log-loop post-bash || true",
-            ),
-        ] {
-            let theirs = fs::read_to_string(hooks_dir.join(script))
-                .map(|s| !s.contains("log-loop"))
-                .unwrap_or(false);
-            if theirs {
-                changed |= crate::log_loop::ensure_entry(&mut settings, event, matcher, command);
+    let mut changed = false;
+    if let Some(events) = settings.get_mut("hooks").and_then(|h| h.as_object_mut()) {
+        for entries in events.values_mut() {
+            let Some(list) = entries.as_array_mut() else {
+                continue;
+            };
+            for entry in list.iter_mut() {
+                if let Some(hs) = entry.get_mut("hooks").and_then(|h| h.as_array_mut()) {
+                    let before = hs.len();
+                    hs.retain(|h| !retired(h["command"].as_str().unwrap_or("")));
+                    changed |= hs.len() != before;
+                }
             }
+            let before = list.len();
+            list.retain(|e| e["hooks"].as_array().is_none_or(|hs| !hs.is_empty()));
+            changed |= list.len() != before;
         }
+        let before = events.len();
+        events.retain(|_, v| v.as_array().is_none_or(|l| !l.is_empty()));
+        changed |= events.len() != before;
     }
 
-    if changed || !path.exists() {
+    if changed {
         if let Some(root) = path.parent().and_then(|p| p.parent()) {
             guard::backup(root, ".claude/settings.json")?;
         }
-        let original = fs::read_to_string(path).unwrap_or_default();
-        let body = render_in_original_order(&settings, &original);
+        let body = render_in_original_order(&settings, &raw);
         fs::write(path, body + "\n")
             .map_err(|e| format!("Could not write {}: {}", path.display(), e))?;
         println!(
-            "   {} .claude/settings.json (log-loop hooks)",
+            "   {} .claude/settings.json (logging hooks removed)",
             "Updated".green()
         );
     }
@@ -1109,6 +1057,19 @@ fn write_guarded(
         _ => label.green(),
     };
     println!("   {} {}", label, display_name);
+    Ok(())
+}
+
+fn remove_guarded(path: &Path, display_name: &str) -> Result<(), String> {
+    match guard::remove(&harness_root(path, display_name), path)? {
+        Some(guard::Outcome::KeptYours) => println!(
+            "   {} {} (yours; left in place)",
+            "Kept".yellow(),
+            display_name
+        ),
+        Some(outcome) => println!("   {} {}", outcome.label().green(), display_name),
+        None => {}
+    }
     Ok(())
 }
 
@@ -1482,15 +1443,24 @@ mod tests {
         assert_eq!(fs::read_to_string(&file_path).unwrap(), "content");
     }
 
+    /// What a 1.0.2 `update` left in a user's settings.json: their own entry,
+    /// the wrapper entries, and the log-loop entries.
+    const SETTINGS_1_0_2: &str = "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(mix *)\"\n    ]\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"mine.sh\"\n          }\n        ]\n      },\n      {\n        \"matcher\": \"Edit|Write|NotebookEdit|Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"\\\"$CLAUDE_PROJECT_DIR/.claude/hooks/require-action-node.sh\\\"\"\n          }\n        ]\n      }\n    ],\n    \"PostToolUse\": [\n      {\n        \"matcher\": \"Bash\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"deciduous log-loop post-bash || true\"\n          }\n        ]\n      }\n    ],\n    \"Stop\": [\n      {\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"deciduous log-loop stop || true\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"x\"\n}\n";
+
     #[test]
-    fn settings_keep_their_key_order_when_log_loop_is_merged_in() {
+    fn retired_hooks_leave_settings_and_the_users_entries_stay_in_order() {
         let tmp = TempDir::new().unwrap();
-        fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        fs::create_dir_all(tmp.path().join(".claude/hooks")).unwrap();
         let p = tmp.path().join(".claude/settings.json");
-        let original = "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(mix *)\"\n    ]\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"mine.sh\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"x\"\n}\n";
-        fs::write(&p, original).unwrap();
-        merge_log_loop_settings(&p).unwrap();
+        fs::write(&p, SETTINGS_1_0_2).unwrap();
+        strip_retired_hook_settings(&p).unwrap();
         let after = fs::read_to_string(&p).unwrap();
+        assert!(!after.contains("log-loop"), "{after}");
+        assert!(!after.contains("require-action-node"), "{after}");
+        assert!(
+            !after.contains("\"Stop\"") && !after.contains("\"PostToolUse\""),
+            "empty events dropped:\n{after}"
+        );
         let (perm, hooks, model) = (
             after.find("\"permissions\"").unwrap(),
             after.find("\"hooks\"").unwrap(),
@@ -1505,9 +1475,26 @@ mod tests {
             after.find("\"command\": \"mine.sh\"").unwrap(),
         );
         assert!(m < h, "matcher still before hooks in the user's entry");
-        assert!(after.contains("deciduous log-loop stop || true"));
-        let v: serde_json::Value = serde_json::from_str(&after).unwrap();
-        assert_eq!(v["permissions"]["allow"][0], "Bash(mix *)");
+        // Idempotent: a second run finds nothing to do.
+        strip_retired_hook_settings(&p).unwrap();
+        assert_eq!(fs::read_to_string(&p).unwrap(), after);
+    }
+
+    #[test]
+    fn a_retired_script_the_user_wrote_keeps_its_entry() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude/hooks")).unwrap();
+        fs::write(
+            tmp.path().join(".claude/hooks/require-action-node.sh"),
+            "#!/bin/sh\n# mine\nexit 0\n",
+        )
+        .unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        fs::write(&p, SETTINGS_1_0_2).unwrap();
+        strip_retired_hook_settings(&p).unwrap();
+        let after = fs::read_to_string(&p).unwrap();
+        assert!(after.contains("require-action-node.sh"), "{after}");
+        assert!(!after.contains("log-loop"), "{after}");
     }
 
     #[test]

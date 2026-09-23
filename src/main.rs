@@ -475,12 +475,12 @@ enum Command {
         shell: clap_complete::Shell,
     },
 
-    /// Claude Code hook: make the agent log to the graph as it works.
-    /// Reads the hook's JSON on stdin; see src/log_loop.rs.
+    /// Removed in 1.0.3; exits 0 so hooks installed by 1.0.2 stay silent
+    /// until `deciduous update` takes them out.
     #[command(name = "log-loop", hide = true)]
     LogLoop {
-        /// pre | post-log | post-bash | stop
-        event: String,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        _args: Vec<String>,
     },
 }
 
@@ -1165,10 +1165,10 @@ fn main() {
         return;
     }
 
-    // The hook runs on every tool call an agent makes. It must never open or
-    // create the local database, so it is handled before Database::open.
-    if let Command::LogLoop { event } = &args.command {
-        deciduous::log_loop::run(event);
+    // Removed in 1.0.3. Projects set up by 1.0.2 still run it from
+    // settings.json on every tool call until their next `deciduous update`,
+    // so it succeeds silently, before Database::open.
+    if let Command::LogLoop { .. } = &args.command {
         return;
     }
 
@@ -4602,16 +4602,11 @@ fn main() {
                         eprintln!("{} {}", "Error:".red(), e);
                         std::process::exit(1);
                     }
-                    println!("\n{}", "Hooks installed successfully!".green().bold());
-                    println!();
-                    println!("The following hooks are now active:");
                     println!(
-                        "  • {} - blocks Edit/Write without recent action node",
-                        "require-action-node".cyan()
-                    );
-                    println!(
-                        "  • {} - reminds to link commits to graph",
-                        "post-commit-reminder".cyan()
+                        "\n{}",
+                        "Hooks installed from .deciduous/config.toml."
+                            .green()
+                            .bold()
                     );
                     println!();
                 }
