@@ -3640,6 +3640,11 @@ impl Database {
 
     /// Create a new theme
     pub fn create_theme(&self, name: &str, color: &str, description: Option<&str>) -> Result<i32> {
+        if name.trim().is_empty() {
+            return Err(DbError::Validation(
+                "a theme needs a non-empty name".to_string(),
+            ));
+        }
         self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -3763,53 +3768,56 @@ impl Database {
         Ok(())
     }
 
-    /// Remove a theme from a node
+    /// The theme named `theme_name` and the node `node_id`, or an error
+    /// naming whichever is missing. Untagging either one that does not
+    /// exist answered "was not tagged", as if the call had been meaningful.
+    fn existing_tag_parts(&self, node_id: i32, theme_name: &str) -> Result<Theme> {
+        let theme = self.get_theme_by_name(theme_name)?.ok_or_else(|| {
+            DbError::Validation(format!("Theme '{theme_name}' not found"))
+        })?;
+        self.get_node(node_id)?
+            .ok_or_else(|| DbError::Validation(format!("Node {node_id} not found")))?;
+        Ok(theme)
+    }
+
+    /// Remove a theme from a node. `Ok(false)` only when both exist and the
+    /// node simply was not tagged.
     pub fn untag_node(&self, node_id: i32, theme_name: &str) -> Result<bool> {
         self.require_readable_store()?;
-        let theme = self.get_theme_by_name(theme_name)?;
-
-        if let Some(theme) = theme {
-            let mut conn = self.get_conn()?;
-            let deleted = diesel::delete(
-                node_themes::table
-                    .filter(node_themes::node_id.eq(node_id))
-                    .filter(node_themes::theme_id.eq(theme.id)),
-            )
-            .execute(&mut conn)?;
-            drop(conn);
-            if deleted > 0 {
-                if let Ok(Some(node)) = self.get_node(node_id) {
-                    self.tombstone_tag(&node.change_id, &theme.change_id);
-                }
+        let theme = self.existing_tag_parts(node_id, theme_name)?;
+        let mut conn = self.get_conn()?;
+        let deleted = diesel::delete(
+            node_themes::table
+                .filter(node_themes::node_id.eq(node_id))
+                .filter(node_themes::theme_id.eq(theme.id)),
+        )
+        .execute(&mut conn)?;
+        drop(conn);
+        if deleted > 0 {
+            if let Ok(Some(node)) = self.get_node(node_id) {
+                self.tombstone_tag(&node.change_id, &theme.change_id);
             }
-            Ok(deleted > 0)
-        } else {
-            Ok(false)
         }
+        Ok(deleted > 0)
     }
 
     /// Confirm a suggested tag (change source from "suggested" to "manual")
     pub fn confirm_tag(&self, node_id: i32, theme_name: &str) -> Result<bool> {
         self.require_readable_store()?;
-        let theme = self.get_theme_by_name(theme_name)?;
-
-        if let Some(theme) = theme {
-            let mut conn = self.get_conn()?;
-            let updated = diesel::update(
-                node_themes::table
-                    .filter(node_themes::node_id.eq(node_id))
-                    .filter(node_themes::theme_id.eq(theme.id)),
-            )
-            .set(node_themes::source.eq("manual"))
-            .execute(&mut conn)?;
-            drop(conn);
-            if updated > 0 {
-                self.publish_tag(node_id, theme.id);
-            }
-            Ok(updated > 0)
-        } else {
-            Ok(false)
+        let theme = self.existing_tag_parts(node_id, theme_name)?;
+        let mut conn = self.get_conn()?;
+        let updated = diesel::update(
+            node_themes::table
+                .filter(node_themes::node_id.eq(node_id))
+                .filter(node_themes::theme_id.eq(theme.id)),
+        )
+        .set(node_themes::source.eq("manual"))
+        .execute(&mut conn)?;
+        drop(conn);
+        if updated > 0 {
+            self.publish_tag(node_id, theme.id);
         }
+        Ok(updated > 0)
     }
 
     /// Get themes for a specific node
@@ -3864,6 +3872,11 @@ impl Database {
 
     /// Create a new session with an optional name and root goal node.
     pub fn create_session(&self, name: Option<&str>, root_node_id: Option<i32>) -> Result<i32> {
+        if name.is_some_and(|n| n.trim().is_empty()) {
+            return Err(DbError::Validation(
+                "a session name, when given, must not be empty".to_string(),
+            ));
+        }
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 

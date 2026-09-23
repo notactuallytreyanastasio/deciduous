@@ -1777,6 +1777,41 @@ fn api_daemon_writes_to_a_graph_file_created_after_it_opened_the_graph() {
     assert_eq!(rec["author"], "deciduous-api", "{rec}");
 }
 
+#[test]
+fn empty_theme_and_session_names_and_untagging_a_missing_node_are_refused() {
+    let p = Project::new();
+    let mut m = p.mcp();
+    m.call(
+        "add_node",
+        json!({"node_type":"goal","title":"g","branch":"b"}),
+    )
+    .unwrap();
+    m.call("create_theme", json!({"name":"t"})).unwrap();
+    for (tool, args, why) in [
+        ("create_theme", json!({"name":""}), "name"),
+        ("create_theme", json!({"name":"   "}), "name"),
+        ("start_session", json!({"name":"","goal_title":"g"}), "name"),
+        ("start_session", json!({"name":" \t","goal_title":"g"}), "name"),
+        ("untag_node", json!({"node_id":99999,"theme":"t"}), "99999"),
+        ("untag_node", json!({"node_id":1,"theme":"nope"}), "nope"),
+    ] {
+        let e = m
+            .call(tool, args.clone())
+            .expect_err(&format!("{tool} {args} was accepted"));
+        assert!(e.contains(why), "{tool} {args}: expected '{why}' in: {e}");
+    }
+    m.close();
+    assert_eq!(p.sql("select count(*) from themes"), 1);
+    assert_eq!(p.sql("select count(*) from decision_sessions"), 0);
+    assert_eq!(
+        p.sql("select count(*) from decision_nodes"),
+        1,
+        "a refused start_session left its root goal behind"
+    );
+    let out = p.cli(&["themes", "create", " "]);
+    assert!(!out.status.success(), "cli created a blank theme");
+}
+
 // ============================================================================
 // R4, again: the file checked is the file read
 // ============================================================================

@@ -169,6 +169,13 @@ impl McpServer {
             .get("name")
             .and_then(Value::as_str)
             .unwrap_or("unnamed session");
+        // Checked before the root goal is created, so a refused start leaves
+        // nothing behind.
+        if name.trim().is_empty() {
+            return protocol::tool_result_error(
+                "a session name, when given, must not be empty",
+            );
+        }
         let goal_title = args
             .get("goal_title")
             .and_then(Value::as_str)
