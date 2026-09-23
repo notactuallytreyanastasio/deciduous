@@ -1,9 +1,9 @@
-# hermes_mcp 0.14.1, vendored with two patches
+# hermes_mcp 0.14.1, vendored with four patches
 
-This is the hex package `hermes_mcp` 0.14.1 as fetched, with two changes
+This is the hex package `hermes_mcp` 0.14.1 as fetched, with four changes
 deciduous needs and upstream does not have. It is a `path:` dependency in
 `mix.exs` so `mix deps.get` never overwrites it. Upgrading Hermes means
-re-applying these two hunks or confirming upstream made them unnecessary.
+re-applying these four hunks or confirming upstream made them unnecessary.
 
 ## 1. Request handlers run in a Task, not in `Hermes.Server.Base`
 
@@ -37,11 +37,45 @@ transport answers from `handle_info` when its task hears back from Base, so
 the plug process sat in that call for the whole request and exited at 5 s:
 Bandit answered an empty HTTP 500 while Base kept running the abandoned call.
 Both calls now pass `:infinity`; the transport's own `request_timeout`
-(set to 4 minutes in `DeciduousMcp.Application`, under Claude Code's 300 s
-abort) is the one budget, and it still replies `{:error, :server_unavailable}`
-when it expires.
+(set in `DeciduousMcp.Application`) is the transport's budget, and it still
+replies `{:error, :server_unavailable}` when it expires. It only stops
+waiting; patch 3 is what stops the handler.
 
-Patch files with the full rationale and measurements:
+## 3. A handler that outlives `request_deadline` is killed and answered
+
+`lib/hermes/server/base.ex`, `lib/hermes/server/supervisor.ex`. New option
+`:request_deadline` (ms, default none, which is upstream's behaviour),
+passed from the server's child spec through the supervisor to Base.
+`start_request_task/4` arms a timer next to each handler task. If it fires
+while the task is still pending, Base kills the task with
+`Task.Supervisor.terminate_child/2`, replies under the request's own id with
+`"<tool> did not finish within <n> and was stopped; nothing it had not
+committed was kept"`, and logs `request_deadline_exceeded`.
+
+The transport's `request_timeout` cannot do this job. When it fires the
+client is told to go away while Base keeps running the handler for nobody,
+and a client that retries a write gets it twice. Killing the task is what
+makes the deadline safe for writes: a transaction whose owner dies is rolled
+back.
+
+deciduous sets 60 s, under Cloudflare's 100 s origin cut and Claude Code's
+120 s move-to-background. Test: `test/deciduous_mcp/mcp/request_deadline_test.exs`.
+
+## 4. `Hermes.Logging.should_log?/1` compared levels backwards
+
+`lib/hermes/logging.ex`. Upstream was
+`Logger.compare_levels(config_level, level) != :lt`, which passes only
+messages at or below the configured level. At `:info` in production every
+`:warning` and `:error` Hermes emits (`request_handler_crashed`,
+`server_call_failed`, `request_error`) was dropped before reaching Logger:
+
+    config=info msg=error compare(config,msg)=lt -> hermes logs? false
+    config=info msg=debug compare(config,msg)=gt -> hermes logs? true
+
+The arguments are swapped. The deadline test asserts the log line, and was
+the first thing to notice it was missing.
+
+Patch files with the full rationale and measurements for 1 and 2:
 `serialization-hermes-base-async.patch` and
 `wheretime-02-hermes-transport-call-infinity.patch` in the 2026-09-22 hangs
 investigation.

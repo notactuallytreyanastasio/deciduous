@@ -19,6 +19,7 @@ defmodule Hermes.Server.Supervisor do
           | {:name, Supervisor.name()}
           | {:session_idle_timeout, pos_integer() | nil}
           | {:request_timeout, pos_integer() | nil}
+          | {:request_deadline, pos_integer() | nil}
           | {:server_name, GenServer.name() | nil}
 
   @doc """
@@ -33,6 +34,8 @@ defmodule Hermes.Server.Supervisor do
       * `:registry` - The custom registry to use to manage processes names (defaults to `Hermes.Server.Registry`)
       * `:session_idle_timeout` - Time in milliseconds before idle sessions expire (default: 30 minutes)
       * `:request_timeout` - Time limit in miliseconds for server requests timeout (defaults to 30s)
+      * `:request_deadline` - Time limit in milliseconds after which a request handler is killed and
+        its request answered with an error (default: none)
       * `:server_name` - Custom server name, non derived from the `server_module`
 
   ## Examples
@@ -81,6 +84,13 @@ defmodule Hermes.Server.Supervisor do
       server_opts =
         if timeout = Keyword.get(opts, :session_idle_timeout) do
           Keyword.put(server_opts, :session_idle_timeout, timeout)
+        else
+          server_opts
+        end
+
+      server_opts =
+        if deadline = Keyword.get(opts, :request_deadline) do
+          Keyword.put(server_opts, :request_deadline, deadline)
         else
           server_opts
         end
