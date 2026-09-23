@@ -42,9 +42,10 @@ defmodule DeciduousMcp.Sync.Import do
 
   @chunk 1_000
 
-  def run(%{"graph" => graph} = payload) when is_map(graph) do
-    with {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
-         {:ok, workspace} <- Workspaces.find_or_create(name),
+  def run(payload, opts \\ [])
+
+  def run(%{"graph" => graph} = payload, opts) when is_map(graph) do
+    with {:ok, workspace} <- target_workspace(payload["workspace"], opts[:pinned_workspace_id]),
          {:ok, nodes} <- validate_nodes(graph["nodes"] || []) do
       Repo.transaction(
         fn ->
@@ -66,7 +67,40 @@ defmodule DeciduousMcp.Sync.Import do
     end
   end
 
-  def run(_), do: {:error, "payload must contain a \"graph\" object"}
+  def run(_, _), do: {:error, "payload must contain a \"graph\" object"}
+
+  # Unpinned: the body names the workspace, as it always has.
+  defp target_workspace(name, nil) do
+    with {:ok, name} <- Workspaces.normalize_name(name || "") do
+      Workspaces.find_or_create(name)
+    end
+  end
+
+  # Pinned by X-Deciduous-Workspace: the pinned workspace, and a body naming
+  # a different one is refused rather than redirected. Quietly importing
+  # into the pin would report success for a push the sender meant for
+  # somewhere else; the MCP tools can ignore their workspace argument
+  # because it is a default, but this one names where every row goes.
+  defp target_workspace(name, pinned_id) do
+    {:ok, pinned} = Workspaces.get_workspace(pinned_id)
+
+    case name && Workspaces.normalize_name(name) do
+      nil ->
+        {:ok, pinned}
+
+      {:ok, same} when same == pinned.name ->
+        {:ok, pinned}
+
+      {:ok, other} ->
+        {:error,
+         {:pinned,
+          "this client is pinned to workspace \"#{pinned.name}\" by " <>
+            "X-Deciduous-Workspace; the import names \"#{other}\". Nothing was written."}}
+
+      {:error, _} = err ->
+        err
+    end
+  end
 
   @doc """
   Clears `content_missing` on every row waiting for this hash.

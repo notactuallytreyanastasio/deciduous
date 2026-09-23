@@ -127,5 +127,23 @@ defmodule DeciduousMcp.Test.McpClient do
     |> Router.call(@opts)
   end
 
+  @doc """
+  POST /import (or any non-MCP route taking a JSON body) with the client's
+  token and pin. Returns `{status, decoded_body}`.
+  """
+  def post_json(%__MODULE__{} = client, path, body) do
+    conn =
+      conn(:post, path, Jason.encode!(body))
+      |> put_req_header("authorization", "Bearer " <> client.token)
+      |> put_req_header("content-type", "application/json")
+
+    conn =
+      client.headers
+      |> Enum.reduce(conn, fn {k, v}, c -> put_req_header(c, k, v) end)
+      |> Router.call(@opts)
+
+    {conn.status, Jason.decode!(conn.resp_body)}
+  end
+
   defp text(content), do: Enum.map_join(content, "", &(&1["text"] || ""))
 end

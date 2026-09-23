@@ -60,6 +60,12 @@ defmodule DeciduousMcp.Web.Router do
   post "/import" do
     conn = Auth.call(conn, [])
 
+    # The pin applies here as it does to /export, /events and every MCP
+    # tool. Without it a client pinned to A could rewrite any workspace's
+    # nodes by naming it in the body: the pinned-write guard close_thread
+    # and the id-taking tools enforce, bypassed by the CLI's push path.
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
+
     if conn.halted do
       conn
     else
@@ -228,11 +234,15 @@ defmodule DeciduousMcp.Web.Router do
 
   defp handle_import(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
-         {:ok, report} <- Import.run(payload) do
+         {:ok, report} <-
+           Import.run(payload, pinned_workspace_id: conn.assigns[:pinned_workspace_id]) do
       json(conn, 200, report)
     else
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
 
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
