@@ -1017,12 +1017,106 @@ impl Remote {
     }
 }
 
+pub use crate::oplog::{is_set_aside, SET_ASIDE};
+
+/// Ops set aside by this machine, and what later ops have to wait for them.
+///
+/// An op set aside leaves a gap in the log's order: the edits of a node
+/// after its set-aside create were sent anyway and refused ("no node ... on
+/// the server"), and an update after a set-aside update carries a `was`
+/// the server never saw. So an op that names what a set-aside op wrote is
+/// set aside with it, and they go again together, in order.
+#[derive(Default)]
+struct Held {
+    /// key -> the first 8 characters of the op id that holds it.
+    keys: std::collections::HashMap<String, String>,
+}
+
+impl Held {
+    /// What an op writes: its node, or its edge.
+    fn own(op: &crate::oplog::Op) -> Vec<String> {
+        use crate::oplog::OpBody::*;
+        match &op.body {
+            CreateNode { change_id, .. }
+            | UpdateNode { change_id, .. }
+            | DeleteNode { change_id } => vec![format!("n:{change_id}")],
+            CreateEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+                ..
+            }
+            | DeleteEdge {
+                from_change_id,
+                to_change_id,
+                edge_type,
+            } => vec![format!("e:{from_change_id}|{to_change_id}|{edge_type}")],
+        }
+    }
+
+    /// What an op depends on: what it writes, and an edge's endpoints.
+    fn needs(op: &crate::oplog::Op) -> Vec<String> {
+        let mut k = Self::own(op);
+        if let crate::oplog::OpBody::CreateEdge {
+            from_change_id,
+            to_change_id,
+            ..
+        }
+        | crate::oplog::OpBody::DeleteEdge {
+            from_change_id,
+            to_change_id,
+            ..
+        } = &op.body
+        {
+            k.push(format!("n:{from_change_id}"));
+            k.push(format!("n:{to_change_id}"));
+        }
+        k
+    }
+
+    fn add(&mut self, op: &crate::oplog::Op, by: &str) {
+        for k in Self::own(op) {
+            self.keys.entry(k).or_insert_with(|| by.to_string());
+        }
+    }
+
+    /// The set-aside op `op` waits for, if any.
+    fn blocking(&self, op: &crate::oplog::Op) -> Option<String> {
+        Self::needs(op)
+            .iter()
+            .find_map(|k| self.keys.get(k).cloned())
+    }
+
+    /// Answers `op` locally as set aside behind `by`, and holds its keys.
+    fn hold_behind(&mut self, op: &crate::oplog::Op, by: &str) -> crate::oplog::Ack {
+        self.add(op, by);
+        crate::oplog::Ack {
+            op_id: op.op_id.clone(),
+            result: "rejected".into(),
+            reason: Some(format!(
+                "{SET_ASIDE}, not sent: it follows op {by}, which is set aside, and sent without \
+                 it the server would refuse it for want of that op. `deciduous remote push` sends \
+                 them again, in order; `deciduous remote push --drop {}` discards this one",
+                short_id(op)
+            )),
+            at: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+fn short_id(op: &crate::oplog::Op) -> String {
+    op.op_id.chars().take(8).collect()
+}
+
 /// Sends every pending op in the log to the server, in order, records the
 /// answers and compacts the log.
 ///
 /// Acks are written batch by batch, so a failure halfway leaves the first
 /// half marked and the rest pending. A batch the server applied but whose
 /// answer never arrived is sent again next time and answered `duplicate`.
+///
+/// A pending op that depends on an op this machine set aside earlier is set
+/// aside with it, unsent (see [`Held`]).
 pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, ReplayError> {
     let state = log.read().map_err(ReplayError::Log)?;
     let mut report = ReplayReport {
@@ -1031,21 +1125,27 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
     };
     print_unreadable(&state, log);
 
-    let mut answered = false;
-    for batch in state.pending.chunks(REPLAY_BATCH) {
-        let acks = match remote.post_ops(batch) {
-            Ok(acks) => acks,
-            Err(ReplayError::Failed(e)) => isolate(remote, batch, &e, answered)?,
-            Err(e) => return Err(e),
-        };
-        answered = true;
-        log.record_acks(&acks).map_err(ReplayError::Log)?;
-        report.sent += batch.len();
-        for (op, ack) in batch.iter().zip(&acks) {
+    let mut held = Held::default();
+    for (op, ack) in &state.rejected {
+        if ack.reason.as_deref().is_some_and(is_set_aside) {
+            held.add(op, &short_id(op));
+        }
+    }
+    let by_id: std::collections::HashMap<&str, &crate::oplog::Op> = state
+        .pending
+        .iter()
+        .map(|op| (op.op_id.as_str(), op))
+        .collect();
+    let tally = |report: &mut ReplayReport, acks: &[crate::oplog::Ack]| {
+        for ack in acks {
+            let Some(op) = by_id.get(ack.op_id.as_str()) else {
+                continue;
+            };
+            report.sent += 1;
             match ack.result.as_str() {
                 "applied" => report.applied += 1,
                 "rejected" => report.rejected.push((
-                    op.clone(),
+                    (*op).clone(),
                     ack.reason
                         .clone()
                         .unwrap_or_else(|| "no reason given".into()),
@@ -1053,61 +1153,170 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
                 _ => report.already += 1,
             }
         }
+    };
+
+    let mut sendable = Vec::with_capacity(state.pending.len());
+    let mut behind = Vec::new();
+    for op in &state.pending {
+        match held.blocking(op) {
+            Some(by) => behind.push(held.hold_behind(op, &by)),
+            None => sendable.push(op.clone()),
+        }
+    }
+    log.record_acks(&behind).map_err(ReplayError::Log)?;
+    tally(&mut report, &behind);
+
+    for batch in sendable.chunks(REPLAY_BATCH) {
+        let (acks, stop) = match remote.post_ops(batch) {
+            Ok(acks) => (acks, None),
+            Err(ReplayError::Failed(e)) => isolate(remote, batch, &e, &mut held),
+            Err(e) => return Err(e),
+        };
+        log.record_acks(&acks).map_err(ReplayError::Log)?;
+        tally(&mut report, &acks);
+        if let Some(e) = stop {
+            // What was answered is recorded; the rest waits.
+            log.compact().map_err(ReplayError::Log)?;
+            return Err(e);
+        }
     }
 
     log.compact().map_err(ReplayError::Log)?;
     Ok(report)
 }
 
+/// At most this many ops, in a row, that the server fails on even when sent
+/// alone and twice, before the replay concludes that the server is failing
+/// and not one op.
+const MAX_SUSPECTS: usize = 3;
+
 /// The server failed (HTTP 500) on a batch. One op it cannot handle fails
 /// the whole request, and every later write joins the same batch, so
 /// sending it again as it was would fail the same way forever (SERVER-N1:
 /// one NUL in a prompt stopped every write after it from reaching the
-/// server). The batch is sent again one op at a time. An op the server
-/// fails on alone, in a replay where it answered other ops, is set aside:
-/// answered locally as rejected, with the reason, so it stays in the log,
-/// is listed by `remote status`, and can be resent (`remote push
-/// --retry-rejected`) or dropped (`--drop <op id>`).
+/// server). The batch is sent again one op at a time.
 ///
-/// If the server answered nothing at all in this replay, a 500 says nothing
-/// about any one op (a broken deploy fails every request), and nothing is
-/// set aside: the error is returned and every op keeps waiting.
+/// An op is set aside (answered locally as rejected, kept in the log) only
+/// when the server fails on it alone, twice, then answers another op, then
+/// fails on it again: a verdict about that op, not about the server. A 500
+/// from a server whose database is restarting or whose pool timed out
+/// passes: the first rule of the previous version, "fails alone while the
+/// server answered others", counted an answer from before the outage, and
+/// set aside every healthy op after it. So:
+///
+/// * a 500 is retried once at once, which absorbs a blip;
+/// * an op that fails twice is a suspect, and the ops after it that do not
+///   depend on it are tried, to learn whether the server answers at all;
+/// * when one is answered, each suspect is sent once more, and set aside
+///   only if it fails again;
+/// * [`MAX_SUSPECTS`] suspects in a row, or none answered after them, and
+///   the server is failing: the replay stops and every unanswered op waits.
+///
+/// An op that depends on a suspect is not sent before the suspect is
+/// decided, and is set aside with it if it is set aside (see [`Held`]).
+///
+/// Returns the answers it has, and why it stopped, if it did.
 fn isolate(
     remote: &Remote,
     batch: &[crate::oplog::Op],
     first: &str,
-    answered_before: bool,
-) -> Result<Vec<crate::oplog::Ack>, ReplayError> {
+    held: &mut Held,
+) -> (Vec<crate::oplog::Ack>, Option<ReplayError>) {
+    let send = |op: &crate::oplog::Op| -> Result<crate::oplog::Ack, ReplayError> {
+        let once = remote.post_ops(std::slice::from_ref(op));
+        let twice = match once {
+            Err(ReplayError::Failed(_)) => remote.post_ops(std::slice::from_ref(op)),
+            other => other,
+        };
+        twice.map(|mut a| a.remove(0))
+    };
     let mut acks = Vec::with_capacity(batch.len());
-    let mut failed = Vec::new();
-    for op in batch {
-        match remote.post_ops(std::slice::from_ref(op)) {
-            Ok(mut a) => acks.append(&mut a),
-            Err(ReplayError::Failed(e)) => {
-                failed.push(acks.len());
-                acks.push(crate::oplog::Ack {
-                    op_id: op.op_id.clone(),
-                    result: "rejected".into(),
-                    reason: Some(format!(
-                        "set aside by this machine, not answered by the server: the server failed on \
-                         this op alone ({e}) while it answered the others, so it was taken out of the \
-                         queue to let the writes after it through. `deciduous remote push \
-                         --retry-rejected` sends it again; `deciduous remote push --drop {}` discards it",
-                        op.op_id.chars().take(8).collect::<String>()
-                    )),
-                    at: chrono::Utc::now().to_rfc3339(),
-                });
+    let mut suspects: Vec<(usize, String)> = Vec::new();
+    let mut deferred: Vec<usize> = Vec::new();
+    let mut queue: std::collections::VecDeque<usize> = (0..batch.len()).collect();
+    while let Some(i) = queue.pop_front() {
+        let op = &batch[i];
+        if let Some(by) = held.blocking(op) {
+            acks.push(held.hold_behind(op, &by));
+            continue;
+        }
+        let waits_on_suspect = suspects
+            .iter()
+            .map(|(s, _)| *s)
+            .chain(deferred.iter().copied())
+            .any(|s| {
+                let own = Held::own(&batch[s]);
+                Held::needs(op).iter().any(|k| own.contains(k))
+            });
+        if waits_on_suspect {
+            deferred.push(i);
+            continue;
+        }
+        match send(op) {
+            Ok(ack) => {
+                acks.push(ack);
+                // The server answers: each suspect gets one more try.
+                for (s, _) in std::mem::take(&mut suspects) {
+                    let op = &batch[s];
+                    match send(op) {
+                        Ok(ack) => acks.push(ack),
+                        Err(ReplayError::Failed(e)) => {
+                            held.add(op, &short_id(op));
+                            acks.push(crate::oplog::Ack {
+                                op_id: op.op_id.clone(),
+                                result: "rejected".into(),
+                                reason: Some(format!(
+                                    "{SET_ASIDE}, not answered by the server: the server failed \
+                                     on this op ({e}) each time it was sent alone, and answered \
+                                     the op sent between those tries, so this op, not the \
+                                     server, is what it fails on. It was taken out of the queue \
+                                     to let the writes after it through. `deciduous remote push` \
+                                     sends it again; `deciduous remote push --drop {}` discards it",
+                                    short_id(op)
+                                )),
+                                at: chrono::Utc::now().to_rfc3339(),
+                            });
+                        }
+                        Err(e) => return (acks, Some(e)),
+                    }
+                }
+                for d in std::mem::take(&mut deferred).into_iter().rev() {
+                    queue.push_front(d);
+                }
             }
-            Err(e) => return Err(e),
+            Err(ReplayError::Failed(e)) => {
+                suspects.push((i, e));
+                if suspects.len() >= MAX_SUSPECTS {
+                    return (
+                        acks,
+                        Some(ReplayError::Failed(format!(
+                            "{first}; sent one at a time, the server failed on {} ops in a row, \
+                             each twice, so the server is failing, not one op. Nothing was set \
+                             aside; every write not answered waits",
+                            suspects.len()
+                        ))),
+                    );
+                }
+            }
+            Err(e) => return (acks, Some(e)),
         }
     }
-    if !answered_before && failed.len() == batch.len() {
-        return Err(ReplayError::Failed(format!(
-            "{first}; sent one at a time, every op failed the same way, so no one op is to blame \
-             and nothing was set aside"
-        )));
+    if suspects.is_empty() {
+        return (acks, None);
     }
-    Ok(acks)
+    (
+        acks,
+        Some(ReplayError::Failed(format!(
+            "{first}; sent alone, twice each, the server failed on {} and answered nothing \
+             after, so there is no telling whether they or the server are at fault. Nothing \
+             was set aside; they wait",
+            suspects
+                .iter()
+                .map(|(s, _)| batch[*s].body.describe())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))),
+    )
 }
 
 /// Says which lines of the log could not be read, every time the log is
@@ -1133,34 +1342,54 @@ pub fn print_unreadable(state: &crate::oplog::LogState, log: &crate::oplog::OpLo
     );
 }
 
-/// Prints the ops a server refused, loudly, with what to do about them.
+/// Prints the ops a server refused, loudly, with what to do about them,
+/// and apart from them the ops this machine set aside, which are real
+/// writes the server never judged: the advice for one is wrong for the
+/// other.
 pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplog::OpLog) {
     use colored::Colorize;
-    if rejected.is_empty() {
-        return;
-    }
-    eprintln!(
-        "{} the server refused {} write(s):",
-        "Rejected:".red().bold(),
-        rejected.len()
-    );
-    for (op, reason) in rejected {
-        eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
-    }
-    eprintln!(
-        "They stay in {} and the local graph keeps them. \
-         `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
-        log.path().display()
-    );
-    // The one refusal with a fix that is not a choice: the node is gone on
-    // the server, so the write can never apply, and pull both removes the
-    // node here and drops the refusals that touch it.
-    if rejected
+    let (aside, refused): (Vec<_>, Vec<_>) = rejected
         .iter()
-        .any(|(_, reason)| reason.contains("was deleted on the server"))
-    {
+        .partition(|(_, reason)| is_set_aside(reason));
+    if !refused.is_empty() {
         eprintln!(
-            "A node these writes touch was deleted on the server: `deciduous remote pull` removes it here and drops the refusals with it."
+            "{} the server refused {} write(s):",
+            "Rejected:".red().bold(),
+            refused.len()
+        );
+        for (op, reason) in &refused {
+            eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+        }
+        eprintln!(
+            "They stay in {} and the local graph keeps them. \
+             `deciduous remote status` lists them; `deciduous remote push --drop-rejected` discards them.",
+            log.path().display()
+        );
+        // The one refusal with a fix that is not a choice: the node is gone
+        // on the server, so the write can never apply, and pull both removes
+        // the node here and drops the refusals that touch it.
+        if refused
+            .iter()
+            .any(|(_, reason)| reason.contains("was deleted on the server"))
+        {
+            eprintln!(
+                "A node these writes touch was deleted on the server: `deciduous remote pull` removes it here and drops the refusals with it."
+            );
+        }
+    }
+    if !aside.is_empty() {
+        eprintln!(
+            "{} {} write(s) were not refused by the server; this machine held them back:",
+            "Set aside:".red().bold(),
+            aside.len()
+        );
+        for (op, reason) in &aside {
+            eprintln!("  {}  {}", op.body.describe(), reason.dimmed());
+        }
+        eprintln!(
+            "They are writes the server has not got. They stay in {}; `deciduous remote push` \
+             sends them again (`--drop <op id>` discards one; `--drop-rejected` keeps them).",
+            log.path().display()
         );
     }
 }
@@ -1206,9 +1435,18 @@ pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<S
     match &result {
         Ok(report) => {
             if !report.rejected.is_empty() {
+                let aside = report
+                    .rejected
+                    .iter()
+                    .filter(|(_, r)| is_set_aside(r))
+                    .count();
                 let mut text = format!(
-                    "The shared server refused {} earlier write(s); they were made here and are not on the server:",
-                    report.rejected.len()
+                    "{} earlier write(s) did not reach the shared server ({} refused by it, {} set \
+                     aside by this machine because the server failed on them); they were made \
+                     here and are not on the server:",
+                    report.rejected.len(),
+                    report.rejected.len() - aside,
+                    aside
                 );
                 for (op, reason) in &report.rejected {
                     text.push_str(&format!("\n  {}: {reason}", op.body.describe()));
@@ -1272,8 +1510,8 @@ pub fn replay_after_write_quietly(log: &crate::oplog::OpLog, last: &mut Option<S
         ),
         Err(ReplayError::Failed(e)) => eprintln!(
             "{} the local write succeeded but the server failed on the request: {e}\n\
-             {} wait in {}. They are sent again on the next write; an op the server keeps \
-             failing on is set aside then, as rejected, once the server has answered another.",
+             {} wait in {}. They are sent again on the next write. An op is set aside only \
+             when the server fails on it alone, answers another, and fails on it again.",
             "Warning:".yellow(),
             waiting(),
             log.path().display(),

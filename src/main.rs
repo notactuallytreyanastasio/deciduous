@@ -2365,12 +2365,23 @@ fn main() {
                         .as_ref()
                         .map(|(_, st)| (st.pending.len(), st.rejected.len()))
                         .unwrap_or((0, 0));
+                    let set_aside = log_state.as_ref().map_or(0, |(_, st)| {
+                        st.rejected.iter().filter(|(_, a)| a.is_set_aside()).count()
+                    });
                     if let Some((log, st)) = &log_state {
                         println!(
-                            "{} {} write(s) waiting, {} rejected  ({})",
+                            "{} {} write(s) waiting, {} rejected{}  ({})",
                             "Log:".bold(),
                             waiting,
-                            rejected,
+                            rejected - set_aside,
+                            if set_aside > 0 {
+                                format!(
+                                    ", {set_aside} set aside by this machine \
+                                     (`deciduous remote push` sends them again)"
+                                )
+                            } else {
+                                String::new()
+                            },
                             log.path().display()
                         );
                         for op in st.pending.iter().take(20) {
@@ -2386,7 +2397,11 @@ fn main() {
                         for (op, ack) in &st.rejected {
                             println!(
                                 "  {}  {}  {}  {}",
-                                "rejected".red(),
+                                if ack.is_set_aside() {
+                                    "set aside".red()
+                                } else {
+                                    "rejected".red()
+                                },
                                 op.op_id.chars().take(8).collect::<String>(),
                                 op.body.describe(),
                                 ack.reason.as_deref().unwrap_or("").dimmed()
@@ -2446,16 +2461,29 @@ fn main() {
                     println!("  nodes       {:>8}  {:>8}", d.local_nodes, d.server_nodes);
                     println!("  edges       {:>8}  {:>8}", d.local_edges, d.server_edges);
 
+                    let create_of = |op: &deciduous::oplog::Op| match &op.body {
+                        deciduous::oplog::OpBody::CreateNode { change_id, .. } => {
+                            Some(change_id.clone())
+                        }
+                        _ => None,
+                    };
                     let queued: std::collections::HashSet<String> = log_state
                         .as_ref()
+                        .map(|(_, st)| st.pending.iter().filter_map(create_of).collect())
+                        .unwrap_or_default();
+                    // A create in the log with an answer that is not a
+                    // delivery: "no op covers it" said the opposite of the
+                    // line above it.
+                    let held: std::collections::HashMap<String, (String, bool)> = log_state
+                        .as_ref()
                         .map(|(_, st)| {
-                            st.pending
+                            st.rejected
                                 .iter()
-                                .filter_map(|op| match &op.body {
-                                    deciduous::oplog::OpBody::CreateNode { change_id, .. } => {
-                                        Some(change_id.clone())
-                                    }
-                                    _ => None,
+                                .filter_map(|(op, a)| {
+                                    Some((
+                                        create_of(op)?,
+                                        (op.op_id.chars().take(8).collect(), a.is_set_aside()),
+                                    ))
                                 })
                                 .collect()
                         })
@@ -2479,6 +2507,15 @@ fn main() {
                             .map(|(cid, l)| {
                                 if queued.contains(cid) {
                                     format!("{l}  (waiting in the log)")
+                                } else if let Some((id, aside)) = held.get(cid) {
+                                    format!(
+                                        "{l}  (its op {id} is {} above)",
+                                        if *aside {
+                                            "set aside by this machine: listed"
+                                        } else {
+                                            "rejected by the server: listed"
+                                        }
+                                    )
                                 } else {
                                     format!(
                                         "{l}  (no op covers it: `deciduous remote push --seed`)"
@@ -2583,12 +2620,25 @@ fn main() {
 
                     if drop_rejected {
                         match log.drop_rejected() {
-                            Ok(n) => println!(
-                                "{} {} rejected op(s) from {}",
-                                "Dropped".yellow(),
-                                n,
-                                log.path().display()
-                            ),
+                            Ok(n) => {
+                                println!(
+                                    "{} {} rejected op(s) from {}",
+                                    "Dropped".yellow(),
+                                    n,
+                                    log.path().display()
+                                );
+                                let kept = log.read().map_or(0, |st| {
+                                    st.rejected.iter().filter(|(_, a)| a.is_set_aside()).count()
+                                });
+                                if kept > 0 {
+                                    println!(
+                                        "{} {kept} op(s) this machine set aside: the server never \
+                                         refused them. `deciduous remote push` sends them again; \
+                                         `--drop <op id>` discards one.",
+                                        "Kept".yellow()
+                                    );
+                                }
+                            }
                             Err(e) => {
                                 eprintln!("{} {}", "Error:".red(), e);
                                 exit(1);
@@ -2626,6 +2676,23 @@ fn main() {
                         }
                     }
 
+                    // What this machine set aside is a real write the
+                    // server never judged: an explicit push tries it again.
+                    if !retry_rejected {
+                        match log.retry_set_aside() {
+                            Ok(0) => {}
+                            Ok(n) => println!(
+                                "{} {n} write(s) this machine had set aside",
+                                "Sending again".yellow()
+                            ),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                    }
+
+                    let mut undelivered = false;
                     match deciduous::remote::replay(&remote, &log) {
                         Ok(r) if r.sent == 0 => println!(
                             "{} no writes are waiting in {}",
@@ -2633,16 +2700,27 @@ fn main() {
                             log.path().display()
                         ),
                         Ok(r) => {
+                            let aside = r
+                                .rejected
+                                .iter()
+                                .filter(|(_, why)| deciduous::remote::is_set_aside(why))
+                                .count();
                             println!(
-                                "{} {} op(s) to {}: {} applied, {} already there, {} rejected",
+                                "{} {} op(s) to {}: {} applied, {} already there, {} rejected{}",
                                 "Pushed".green(),
                                 r.sent,
                                 remote.workspace.cyan(),
                                 r.applied,
                                 r.already,
-                                r.rejected.len()
+                                r.rejected.len() - aside,
+                                if aside > 0 {
+                                    format!(", {aside} set aside by this machine")
+                                } else {
+                                    String::new()
+                                }
                             );
                             deciduous::remote::print_rejected(&r.rejected, &log);
+                            undelivered = aside > 0;
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2706,7 +2784,13 @@ fn main() {
                         }
                     }
 
+                    // Scripts read the exit code: a write set aside has
+                    // not reached the server. (A refusal has: it is the
+                    // server's answer, printed above.)
                     if !(seed || overwrite) {
+                        if undelivered {
+                            exit(1);
+                        }
                         return;
                     }
 
@@ -2788,6 +2872,9 @@ fn main() {
                             eprintln!("{} {}", "Error:".red(), e);
                             exit(1);
                         }
+                    }
+                    if undelivered {
+                        exit(1);
                     }
                 }
 

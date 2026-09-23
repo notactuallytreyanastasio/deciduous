@@ -232,6 +232,21 @@ impl Ack {
     pub fn is_rejected(&self) -> bool {
         self.result == "rejected"
     }
+
+    /// Rejected by this machine, not by the server (see [`SET_ASIDE`]).
+    pub fn is_set_aside(&self) -> bool {
+        self.is_rejected() && self.reason.as_deref().is_some_and(is_set_aside)
+    }
+}
+
+/// How every reason this machine writes for an op it set aside begins. An
+/// op answered this way was not refused by the server: it is a real write,
+/// held back here, and `remote push` sends it again.
+pub const SET_ASIDE: &str = "set aside by this machine";
+
+/// Whether a rejection's reason is this machine's, not the server's.
+pub fn is_set_aside(reason: &str) -> bool {
+    reason.starts_with(SET_ASIDE)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -574,22 +589,47 @@ impl OpLog {
         })
     }
 
-    /// Drops rejected ops (and acknowledged ones). Returns how many rejected
-    /// ops were dropped.
+    /// Drops the ops the server rejected (and acknowledged ones). Returns
+    /// how many rejected ops were dropped. Ops this machine set aside are
+    /// kept: the server never refused them, and they are real writes.
     pub fn drop_rejected(&self) -> Result<usize, String> {
-        let before = self.read()?.rejected.len();
-        self.rewrite(|_, ack| ack.is_none())?;
+        let _lock = self.lock()?;
+        let before = self
+            .read()?
+            .rejected
+            .iter()
+            .filter(|(_, a)| !a.is_set_aside())
+            .count();
+        self.rewrite(|_, ack| ack.is_none_or(|a| a.is_set_aside()))?;
         Ok(before)
     }
 
     /// Makes every rejected op pending again (its rejection is forgotten),
     /// so the next replay sends it. Returns how many.
     pub fn retry_rejected(&self) -> Result<usize, String> {
+        self.retry_where(|_| true)
+    }
+
+    /// Makes the ops this machine set aside pending again. Returns how many.
+    pub fn retry_set_aside(&self) -> Result<usize, String> {
+        self.retry_where(Ack::is_set_aside)
+    }
+
+    fn retry_where(&self, which: impl Fn(&Ack) -> bool) -> Result<usize, String> {
         let _lock = self.lock()?;
-        let before = self.read()?.rejected.len();
+        let before = self
+            .read()?
+            .rejected
+            .iter()
+            .filter(|(_, a)| which(a))
+            .count();
+        if before == 0 {
+            return Ok(0);
+        }
         self.rewrite_with(|_, ack| match ack {
             None => Keep::Op,
-            Some(a) if a.is_rejected() => Keep::Op,
+            Some(a) if a.is_rejected() && which(a) => Keep::Op,
+            Some(a) if a.is_rejected() => Keep::Both,
             Some(_) => Keep::Nothing,
         })?;
         Ok(before)

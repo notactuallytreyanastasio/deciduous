@@ -2337,3 +2337,155 @@ fn rust_n1_a_db_path_with_no_directory_part_still_queues() {
 fn all_of(out: &Output) -> String {
     format!("{}{}", text(&out.stdout), text(&out.stderr))
 }
+
+/// A stand-in for the server whose /ops answers are decided per request by
+/// `fail(n, ops)`: `Some((status, delay_ms))` answers that status after the
+/// delay, `None` applies every op. `n` counts /ops requests from 1. Returns
+/// the URL, what it applied (a create's title, else `kind change_id`), and
+/// a switch that, once set, makes it apply everything.
+#[allow(clippy::type_complexity)]
+fn scripted_stub(
+    fail: impl Fn(usize, &[Value]) -> Option<(u16, u64)> + Send + 'static,
+) -> (
+    String,
+    std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    std::sync::Arc<std::sync::atomic::AtomicBool>,
+) {
+    let applied = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let healthy = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let (seen, ok) = (applied.clone(), healthy.clone());
+    std::thread::spawn(move || {
+        let mut n = 0;
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
+                "/ops" => {
+                    n += 1;
+                    let v: Value = serde_json::from_str(&body).unwrap();
+                    let ops = v["ops"].as_array().unwrap().clone();
+                    if !ok.load(std::sync::atomic::Ordering::SeqCst) {
+                        if let Some((status, delay)) = fail(n, &ops) {
+                            std::thread::sleep(std::time::Duration::from_millis(delay));
+                            let _ = req.respond(tiny_http::Response::empty(status));
+                            continue;
+                        }
+                    }
+                    let mut seen = seen.lock().unwrap();
+                    let results: Vec<Value> = ops
+                        .iter()
+                        .map(|op| {
+                            seen.push(match op["title"].as_str() {
+                                Some(t) => t.to_string(),
+                                None => format!(
+                                    "{} {}",
+                                    op["kind"].as_str().unwrap_or(""),
+                                    op["change_id"].as_str().unwrap_or("")
+                                ),
+                            });
+                            serde_json::json!({"op_id": op["op_id"], "result": "applied"})
+                        })
+                        .collect();
+                    serde_json::json!({"workspace": "stub", "results": results}).to_string()
+                }
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    (format!("http://127.0.0.1:{port}"), applied, healthy)
+}
+
+// NEW (medium): a 500 on the first request and on the first per-op resend
+// (a DB restart, a pool timeout) set a good create aside as "the server
+// failed on this op alone", and both edits of that node after it were then
+// refused as if the node did not exist. Push exited 0.
+#[test]
+fn new_a_transient_500_sets_no_op_aside() {
+    let (url, applied, _) = scripted_stub(|n, _| (n <= 2).then_some((500, 0)));
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "transient");
+    sb.dx_ok(&dir, &["add", "goal", "casc"]);
+    sb.dx_ok(&dir, &["status", "1", "completed"]);
+    sb.dx_ok(&dir, &["prompt", "1", "why"]);
+    set_remote_url(&dir, &url);
+    let out = sb.dx(&dir, &["remote", "push"]);
+    let said = all_of(&out);
+    assert!(said.contains("0 rejected"), "{said}");
+    assert!(out.status.success(), "{said}");
+    assert_eq!(applied.lock().unwrap().len(), 3, "{said}");
+}
+
+// SERVER-N1, client half: the server answered one op and then failed on
+// every request (its database went down mid-replay). The rule "fails alone
+// while the server answered others" set every later op aside as poisoned,
+// they were never resent, and the hint printed for them discarded them.
+#[test]
+fn server_n1_an_outage_during_a_replay_sets_no_op_aside() {
+    // Batches fail; the first single op is answered; then everything fails.
+    let (url, applied, healthy) =
+        scripted_stub(|n, ops| (ops.len() > 1 || n > 2).then_some((500, 0)));
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "outage");
+    for t in ["a", "b", "c", "d", "e"] {
+        sb.dx_ok(&dir, &["add", "goal", t]);
+    }
+    sb.dx_ok(&dir, &["link", "1", "2"]);
+    set_remote_url(&dir, &url);
+    let out = sb.dx(&dir, &["remote", "push"]);
+    let said = all_of(&out);
+    let st = log_lines(&dir);
+    let rejected = st
+        .iter()
+        .filter(|l| l["entry"] == "ack" && l["result"] == "rejected")
+        .count();
+    assert_eq!(rejected, 0, "{said}");
+    assert!(
+        !out.status.success(),
+        "a push that left writes waiting: {said}"
+    );
+    assert!(!said.contains("--drop-rejected"), "{said}");
+
+    healthy.store(true, std::sync::atomic::Ordering::SeqCst);
+    let again = sb.dx(&dir, &["remote", "push"]);
+    assert!(again.status.success(), "{}", all_of(&again));
+    let mut got = applied.lock().unwrap().clone();
+    got.retain(|t| t.len() == 1);
+    got.sort();
+    assert_eq!(got, ["a", "b", "c", "d", "e"], "{}", all_of(&again));
+    assert!(log_ops(&dir).is_empty(), "{:?}", log_ops(&dir));
+}
+
+// NEW (medium), the order half: a set-aside create was followed by edits of
+// the same node, which were sent and refused ("no node ... on the server")
+// for want of it. They wait with it instead, and are resent with it.
+#[test]
+fn new_the_edits_of_a_set_aside_node_wait_with_it() {
+    let (url, applied, _) = scripted_stub(|_, ops| {
+        ops.iter()
+            .any(|op| op["title"] == "poison")
+            .then_some((500, 0))
+    });
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "held");
+    sb.dx_ok(&dir, &["add", "goal", "before"]);
+    sb.dx_ok(&dir, &["add", "goal", "poison"]);
+    sb.dx_ok(&dir, &["status", "2", "completed"]);
+    sb.dx_ok(&dir, &["add", "goal", "after"]);
+    set_remote_url(&dir, &url);
+    let out = sb.dx(&dir, &["remote", "push"]);
+    let said = all_of(&out);
+    assert_eq!(*applied.lock().unwrap(), ["before", "after"], "{said}");
+    assert!(!out.status.success(), "writes were set aside: {said}");
+    let ops = log_ops(&dir);
+    assert_eq!(ops.len(), 2, "the create and its edit both kept: {ops:?}");
+}
