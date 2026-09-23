@@ -9,9 +9,9 @@
 
 ## See It In Action
 
-**[Browse the Live Decision Graph](https://notactuallytreyanastasio.github.io/deciduous/demo/)** — 1,100+ decisions from building deciduous itself
+**[Browse the Live Decision Graph](https://deciduous.dev/demo/)** — 1,100+ decisions from building deciduous itself
 
-**[Interactive Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** — Learn the workflow in 15 minutes
+**[Interactive Tutorial](https://deciduous.dev/tutorial/)** — Learn the workflow in 15 minutes
 
 **[Watch the Demo](https://asciinema.org/a/761574)** — Full session walkthrough
 
@@ -50,7 +50,7 @@ This isn't documentation written after the fact. It's a real-time record of *how
 
 Ten Claude Code sessions, started at the same second in ten git worktrees of one repository, each building a Tetris from nothing, all logging to one shared deciduous workspace and told to read each other's code and reasoning. Twenty-six minutes later: ten playable games, 386 graph nodes, 170 borrowed ideas with provenance. One finding (some SRS kicks lift a piece two rows, so two hidden rows refuse a legal rotation at the ceiling) reached eight of the nine other branches in eighteen minutes (agent-1 started with a forty-row board and never needed it), and two of the agents that took it used it to find the same silent bug in their own `merge()`.
 
-**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://notactuallytreyanastasio.github.io/deciduous/remote.html#alongside)**
+**[The arena write-up](https://notactuallytreyanastasio.github.io/tetris-arena/)** · **[the repository](https://github.com/notactuallytreyanastasio/tetris-arena)** · **[how it works](https://deciduous.dev/remote.html#alongside)**
 
 What made it work is one server, reachable over MCP from every directory, with the branch as the unit of coordination:
 
@@ -59,6 +59,85 @@ What made it work is one server, reachable over MCP from every directory, with t
 - **Provenance.** A `took_from` edge records a borrow across branches, and `log_observation` writes the observation and the edge in one call. In the arena the borrows lived in observation titles and had to be recovered with a regular expression; that is the wrong place for them.
 
 Set it up with `deciduous remote init <url>` once the server is running (`deciduous_mcp/DEPLOY.md`).
+
+---
+
+## First-time setup
+
+Every project writes to a shared graph server, and `deciduous init` does not
+finish until the project points at one that answers.
+
+**1. Install the binary** (1.0.5 or newer), and Docker:
+
+```bash
+brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
+# or
+cargo install deciduous --locked                      # needs a Rust toolchain
+
+deciduous --version
+which -a deciduous    # with both installed, the first one on PATH runs
+```
+
+[Docker Desktop](https://docs.docker.com/get-docker/) (or Docker Engine with
+Compose) must be installed and running, unless you only use a server someone
+else runs (step 2b).
+
+**2a. Set up a project on this machine's server:**
+
+```bash
+cd your-project
+deciduous init            # Claude Code; --opencode, --windsurf or --both for others
+```
+
+`init` writes the slash commands, skills and a `CLAUDE.md` section, then sets
+up the server. The first time on a machine, it downloads the server bundle for
+its own version and checks it against the release's checksums. It then starts
+PostgreSQL 17 and the server on `127.0.0.1:4000` with Docker (a few minutes for
+the first build). It stores the token in `~/.config/deciduous/credentials`
+(mode 0600), and registers the server with Claude Code. Every later project on
+the machine finds the running server in about a second. Commit the project
+files (by path, not `git add -A`) so every clone gets them.
+
+To choose interactively instead, run `deciduous remote setup`. It asks whether
+the graph lives on this machine or on a server someone else runs, then does the
+rest (`--local` or `--url <url>` answer the question in a script).
+
+**2b. Or point the project at a team's server** before running `init`:
+
+```bash
+deciduous remote login --url https://your-server.example/deciduous-mcp   # token on stdin, once per machine
+cd your-project
+deciduous remote init https://your-server.example/deciduous-mcp
+deciduous init            # finds the remote, checks it, installs nothing
+claude mcp add --scope user --transport http deciduous \
+  https://your-server.example/deciduous-mcp/mcp \
+  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+```
+
+**3. Restart Claude Code.** When it connects, the server sends the logging
+instructions (when to write, and how to write one step in one call). There is
+no hook to install. Agents write through the MCP tools. `deciduous add` from
+the CLI writes to the local database until you run `deciduous remote push`.
+
+If anything is missing (no Docker, a server that does not answer, no token),
+`init` and `update` stop with exit 1 and say how to fix it. Upgrading later is
+`brew upgrade deciduous` or the same `cargo install` line, then
+`deciduous update` in each project (`deciduous update --all ~/code` for many).
+
+**4. See several agents work together** (macOS, in iTerm2 or Ghostty):
+
+```bash
+deciduous demo-swarm --preview   # the walkthrough, in this terminal; nothing is started
+deciduous demo-swarm --dry-run   # builds the arena and the window, starts no agents
+deciduous demo-swarm             # one Opus lead and four Sonnet workers on one graph
+```
+
+`--ask` keeps Claude Code's permission prompts in every pane. After
+`deciduous update`, Claude Code also has it as `/demo-swarm`.
+
+Written for the agent doing the setup rather than for you:
+[deciduous.dev/agents/](https://deciduous.dev/agents/index.md) and
+[deciduous.dev/llms.txt](https://deciduous.dev/llms.txt).
 
 ---
 
@@ -119,7 +198,7 @@ Erlang/OTP and Elixir included. The deployment guide covers their one-time
 ### Via Cargo
 
 ```bash
-cargo install deciduous
+cargo install deciduous --locked
 ```
 
 ### From Source
@@ -201,24 +280,19 @@ deciduous init --both --windsurf   # All three
 
 ### MCP Server
 
-Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph. The [shared graph server](https://notactuallytreyanastasio.github.io/deciduous/remote.html) is a second endpoint, over HTTP, with 18 tools of its own and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
+Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server that works with Claude Code, Claude Desktop, and any MCP-compatible client. Instead of shelling out to the CLI, the AI gets direct access to 32 tools for managing and querying the decision graph. The [shared graph server](https://deciduous.dev/remote.html) is a second endpoint, over HTTP, with 18 tools of its own and the multi-agent ones (`check_activity`, `branch` on every write, `took_from`) live there.
 
 > **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
 
-**Claude Code** (project-level):
+**Claude Code** (this project's local database, over stdio):
 
-Add to `.claude/settings.local.json`:
-
-```json
-{
-  "mcpServers": {
-    "deciduous": {
-      "command": "deciduous",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+claude mcp add deciduous -- deciduous mcp
 ```
+
+Claude Code reads MCP servers from `claude mcp add` (or a project `.mcp.json`),
+not from `.claude/settings.local.json`. For the shared server, see step 4 of
+[First-time setup](#first-time-setup).
 
 **Claude Desktop**:
 
@@ -242,7 +316,7 @@ Use the **absolute path** to the `deciduous` binary (run `which deciduous` to fi
 
 **Claude Code (user-level)**:
 
-Add the project-level config above to `~/.claude/settings.json` instead of `.claude/settings.local.json` to make the server available across all projects.
+Add `--scope user` to the `claude mcp add` line to make the server available in every project.
 
 Once configured, the AI gets tools for:
 
@@ -300,7 +374,7 @@ deciduous add outcome "Rate limiting working in prod" -c 95
 deciduous link 5 6 -r "Implementation complete"
 
 # Share it: .deciduous/graph.json is written as you go;
-# sync imports teammates' records and refreshes docs/graph-data.json
+# sync imports teammates' records into the local database
 deciduous sync
 ```
 
@@ -546,7 +620,7 @@ The `update` command auto-detects which assistants are installed and updates the
 
 | Files | What's Updated |
 |-------|----------------|
-| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/sync-graph`, `/decision-graph`, `/sync`) |
+| `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/decision-graph`, `/sync`) |
 | `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
 | `.claude/hooks/version-check.sh` | Once-a-day update check (the logging hooks earlier versions installed are removed) |
 | `.claude/agents.toml` | Subagent configurations |
@@ -733,4 +807,4 @@ It almost has the word "decision" in it, and they're trees.
 
 ---
 
-**[Tutorial](https://notactuallytreyanastasio.github.io/deciduous/tutorial/)** · **[Live Demo](https://notactuallytreyanastasio.github.io/deciduous/demo/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**
+**[Tutorial](https://deciduous.dev/tutorial/)** · **[Live Demo](https://deciduous.dev/demo/)** · **[GitHub](https://github.com/notactuallytreyanastasio/deciduous)**

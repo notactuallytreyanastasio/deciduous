@@ -12,6 +12,15 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.5",
+        highlights: &[
+            "`deciduous init` and `update` make sure the project points at a shared graph server that answers, and fail if it does not. With no remote configured, init sets up PostgreSQL and the server on this machine with Docker from the release's verified bundle, stores the token and registers it with Claude Code",
+            "DECIDUOUS_NO_SERVER=1 skips that step for tests and CI",
+            "`deciduous remote setup`: a wizard that connects a project to this machine's server or to one someone else runs",
+            "GitHub Pages removed: no docs/ viewer, Pages workflow or /sync-graph from init, and sync no longer exports docs/graph-data.json; update removes what deciduous wrote",
+        ],
+    },
+    Release {
         version: "1.0.4",
         highlights: &[
             "The MCP server tells every agent when and how to log, in the `instructions` of its initialize reply: no project configuration, and nothing that can block a tool call",
