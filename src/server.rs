@@ -166,8 +166,10 @@ fn docker_ready() -> Result<(), String> {
              PostgreSQL server, and without a remote configured `init` sets one up \
              on this machine with Docker.\n\n\
              Install Docker Desktop (https://docs.docker.com/get-docker/) and rerun, or \
-             point this project at an existing server:\n\n    \
-             deciduous remote login --url <url>\n    deciduous remote init <url>"
+             point this project at an existing server first:\n\n    \
+             deciduous remote login --url <url>\n    deciduous remote init <url>\n\n\
+             Every project needs a server, so this is not skipped. Tests and CI that \
+             run init in a throwaway directory can set DECIDUOUS_NO_SERVER=1."
                 .into(),
         );
     }
