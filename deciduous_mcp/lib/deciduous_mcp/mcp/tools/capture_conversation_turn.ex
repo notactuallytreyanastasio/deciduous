@@ -32,6 +32,7 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
 
   alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Graph.{Nodes, Edges}
+  alias DeciduousMcp.Repo
 
   def definition do
     %{
@@ -45,7 +46,8 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
         properties: %{
           summary: %{
             type: "string",
-            description: "Brief summary of what happened in this conversation turn (1-2 sentences)"
+            description:
+              "Brief summary of what happened in this conversation turn (1-2 sentences)"
           },
           goal: %{
             type: "object",
@@ -128,7 +130,81 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
     end
   end
 
+  # All of a turn or none of it. Every node and edge is written in one
+  # transaction; an edge that cannot be made (a parent_node_id that is not a
+  # node) rolls the whole turn back with a sentence. Before, the writes were
+  # separate, edge results were discarded, and a failure halfway left the
+  # nodes before it in the graph while the caller was told it failed.
+  # A section given as a plain string is its title.
   defp do_call(workspace_id, args) do
+    args = normalise(args)
+
+    Repo.transaction(fn ->
+      {:ok, json} = build(workspace_id, args)
+      json
+    end)
+    |> case do
+      {:ok, json} ->
+        {:ok, json}
+
+      {:error, message} when is_binary(message) ->
+        {:error, %{code: -1, message: message}}
+
+      {:error, other} ->
+        {:error,
+         %{code: -1, message: "Turn not captured, nothing was written: #{inspect(other)}"}}
+    end
+  rescue
+    e ->
+      {:error,
+       %{code: -1, message: "Turn not captured, nothing was written: #{Exception.message(e)}"}}
+  end
+
+  defp normalise(args) do
+    one = fn
+      v when is_binary(v) -> %{"title" => v}
+      v -> v
+    end
+
+    many = fn
+      l when is_list(l) -> Enum.map(l, one)
+      v -> v
+    end
+
+    args
+    |> Map.update("goal", nil, one)
+    |> Map.update("decision", nil, one)
+    |> Map.update("action", nil, one)
+    |> Map.update("outcome", nil, one)
+    |> Map.update("observations", nil, many)
+    |> Map.update("options_considered", nil, many)
+    |> Map.reject(fn {_k, v} -> is_nil(v) end)
+  end
+
+  defp insert!(workspace_id, attrs) do
+    case Nodes.create_node(workspace_id, attrs) do
+      {:ok, node} ->
+        node
+
+      {:error, reason} ->
+        Repo.rollback("Turn not captured, nothing was written: #{inspect(reason)}")
+    end
+  end
+
+  defp link!(workspace_id, attrs) do
+    case Edges.create_edge(workspace_id, attrs) do
+      {:ok, edge} ->
+        edge
+
+      {:error, {:node_not_found, id}} ->
+        Repo.rollback("#{inspect(id)} is not a node in this workspace; nothing was written")
+
+      {:error, reason} ->
+        Repo.rollback("Turn not captured, nothing was written: #{inspect(reason)}")
+    end
+  end
+
+  defp build(workspace_id, args) do
     branch = args["branch"]
     confidence = args["confidence"]
     parent_id = args["parent_node_id"]
@@ -137,192 +213,186 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
     # Track the "previous" node for chaining edges
     prev_node_id = parent_id
 
-    try do
-      # 1. Create goal if present
-      {created_nodes, prev_node_id} =
-        if args["goal"] do
-          {:ok, node} =
-            Nodes.create_node(workspace_id, %{
-              node_type: "goal",
-              title: args["goal"]["title"],
-              description: args["goal"]["description"],
-              status: "active",
-              metadata: build_metadata(args["goal"]["prompt"], branch, confidence, nil)
-            })
+    # 1. Create goal if present
+    {created_nodes, prev_node_id} =
+      if args["goal"] do
+        node =
+          insert!(workspace_id, %{
+            node_type: "goal",
+            title: args["goal"]["title"],
+            description: args["goal"]["description"],
+            status: "active",
+            metadata: build_metadata(args["goal"]["prompt"], branch, confidence, nil)
+          })
 
-          if prev_node_id do
-            Edges.create_edge(workspace_id, %{
-              from_node_id: prev_node_id,
-              to_node_id: node.id,
-              edge_type: "leads_to",
-              rationale: "Continuation from previous context"
-            })
-          end
-
-          {[%{id: node.id, type: "goal", title: node.title} | created_nodes], node.id}
-        else
-          {created_nodes, prev_node_id}
+        if prev_node_id do
+          link!(workspace_id, %{
+            from_node_id: prev_node_id,
+            to_node_id: node.id,
+            edge_type: "leads_to",
+            rationale: "Continuation from previous context"
+          })
         end
 
-      # 2. Create observations
-      {created_nodes, prev_node_id} =
-        Enum.reduce(args["observations"] || [], {created_nodes, prev_node_id}, fn obs,
-                                                                                    {nodes_acc,
-                                                                                     prev} ->
-          {:ok, node} =
-            Nodes.create_node(workspace_id, %{
-              node_type: "observation",
-              title: obs["title"],
-              description: obs["description"],
-              status: "active",
-              metadata: build_metadata(nil, branch, confidence, nil)
-            })
+        {[%{id: node.id, type: "goal", title: node.title} | created_nodes], node.id}
+      else
+        {created_nodes, prev_node_id}
+      end
 
-          if prev do
-            Edges.create_edge(workspace_id, %{
-              from_node_id: prev,
-              to_node_id: node.id,
-              edge_type: "leads_to",
-              rationale: "Observed during work"
-            })
-          end
+    # 2. Create observations
+    {created_nodes, prev_node_id} =
+      Enum.reduce(args["observations"] || [], {created_nodes, prev_node_id}, fn obs,
+                                                                                {nodes_acc, prev} ->
+        node =
+          insert!(workspace_id, %{
+            node_type: "observation",
+            title: obs["title"],
+            description: obs["description"],
+            status: "active",
+            metadata: build_metadata(nil, branch, confidence, nil)
+          })
 
-          {[%{id: node.id, type: "observation", title: node.title} | nodes_acc], prev || node.id}
+        if prev do
+          link!(workspace_id, %{
+            from_node_id: prev,
+            to_node_id: node.id,
+            edge_type: "leads_to",
+            rationale: "Observed during work"
+          })
+        end
+
+        {[%{id: node.id, type: "observation", title: node.title} | nodes_acc], prev || node.id}
+      end)
+
+    # 3. Create options
+    option_ids =
+      Enum.map(args["options_considered"] || [], fn opt ->
+        node =
+          insert!(workspace_id, %{
+            node_type: "option",
+            title: opt["title"],
+            description: opt["description"],
+            status: if(opt["chosen"], do: "completed", else: "rejected"),
+            metadata: build_metadata(nil, branch, confidence, nil)
+          })
+
+        if prev_node_id do
+          link!(workspace_id, %{
+            from_node_id: prev_node_id,
+            to_node_id: node.id,
+            edge_type: "leads_to",
+            rationale: "Option considered"
+          })
+        end
+
+        %{id: node.id, type: "option", title: node.title, chosen: opt["chosen"]}
+      end)
+
+    created_nodes = option_ids ++ created_nodes
+
+    # 4. Create decision if present
+    {created_nodes, prev_node_id} =
+      if args["decision"] do
+        node =
+          insert!(workspace_id, %{
+            node_type: "decision",
+            title: args["decision"]["title"],
+            description: args["decision"]["rationale"],
+            status: "completed",
+            metadata: build_metadata(nil, branch, confidence, nil)
+          })
+
+        # Link options to decision with chosen/rejected edges
+        Enum.each(option_ids, fn opt ->
+          edge_type = if opt.chosen, do: "chosen", else: "rejected"
+
+          link!(workspace_id, %{
+            from_node_id: node.id,
+            to_node_id: opt.id,
+            edge_type: edge_type,
+            rationale: args["decision"]["rationale"]
+          })
         end)
 
-      # 3. Create options
-      option_ids =
-        Enum.map(args["options_considered"] || [], fn opt ->
-          {:ok, node} =
-            Nodes.create_node(workspace_id, %{
-              node_type: "option",
-              title: opt["title"],
-              description: opt["description"],
-              status: if(opt["chosen"], do: "completed", else: "rejected"),
-              metadata: build_metadata(nil, branch, confidence, nil)
-            })
-
-          if prev_node_id do
-            Edges.create_edge(workspace_id, %{
-              from_node_id: prev_node_id,
-              to_node_id: node.id,
-              edge_type: "leads_to",
-              rationale: "Option considered"
-            })
-          end
-
-          %{id: node.id, type: "option", title: node.title, chosen: opt["chosen"]}
-        end)
-
-      created_nodes = option_ids ++ created_nodes
-
-      # 4. Create decision if present
-      {created_nodes, prev_node_id} =
-        if args["decision"] do
-          {:ok, node} =
-            Nodes.create_node(workspace_id, %{
-              node_type: "decision",
-              title: args["decision"]["title"],
-              description: args["decision"]["rationale"],
-              status: "completed",
-              metadata: build_metadata(nil, branch, confidence, nil)
-            })
-
-          # Link options to decision with chosen/rejected edges
-          Enum.each(option_ids, fn opt ->
-            edge_type = if opt.chosen, do: "chosen", else: "rejected"
-
-            Edges.create_edge(workspace_id, %{
-              from_node_id: node.id,
-              to_node_id: opt.id,
-              edge_type: edge_type,
-              rationale: args["decision"]["rationale"]
-            })
-          end)
-
-          # Link from previous context to decision
-          if prev_node_id && Enum.empty?(option_ids) do
-            Edges.create_edge(workspace_id, %{
-              from_node_id: prev_node_id,
-              to_node_id: node.id,
-              edge_type: "leads_to"
-            })
-          end
-
-          {[%{id: node.id, type: "decision", title: node.title} | created_nodes], node.id}
-        else
-          {created_nodes, prev_node_id}
+        # Link from previous context to decision
+        if prev_node_id && Enum.empty?(option_ids) do
+          link!(workspace_id, %{
+            from_node_id: prev_node_id,
+            to_node_id: node.id,
+            edge_type: "leads_to"
+          })
         end
 
-      # 5. Create action if present
-      {created_nodes, prev_node_id} =
-        if args["action"] do
-          {:ok, node} =
-            Nodes.create_node(workspace_id, %{
-              node_type: "action",
-              title: args["action"]["title"],
-              description: args["action"]["description"],
-              status: "completed",
-              metadata:
-                build_metadata(nil, branch, confidence, args["action"]["commit"])
-                |> maybe_put("files", args["action"]["files"])
-            })
+        {[%{id: node.id, type: "decision", title: node.title} | created_nodes], node.id}
+      else
+        {created_nodes, prev_node_id}
+      end
 
-          if prev_node_id do
-            Edges.create_edge(workspace_id, %{
-              from_node_id: prev_node_id,
-              to_node_id: node.id,
-              edge_type: "leads_to",
-              rationale: "Implementation"
-            })
-          end
+    # 5. Create action if present
+    {created_nodes, prev_node_id} =
+      if args["action"] do
+        node =
+          insert!(workspace_id, %{
+            node_type: "action",
+            title: args["action"]["title"],
+            description: args["action"]["description"],
+            status: "completed",
+            metadata:
+              build_metadata(nil, branch, confidence, args["action"]["commit"])
+              |> maybe_put("files", args["action"]["files"])
+          })
 
-          {[%{id: node.id, type: "action", title: node.title} | created_nodes], node.id}
-        else
-          {created_nodes, prev_node_id}
+        if prev_node_id do
+          link!(workspace_id, %{
+            from_node_id: prev_node_id,
+            to_node_id: node.id,
+            edge_type: "leads_to",
+            rationale: "Implementation"
+          })
         end
 
-      # 6. Create outcome if present
-      created_nodes =
-        if args["outcome"] do
-          status = if args["outcome"]["success"] != false, do: "completed", else: "rejected"
+        {[%{id: node.id, type: "action", title: node.title} | created_nodes], node.id}
+      else
+        {created_nodes, prev_node_id}
+      end
 
-          {:ok, node} =
-            Nodes.create_node(workspace_id, %{
-              node_type: "outcome",
-              title: args["outcome"]["title"],
-              description: args["outcome"]["description"],
-              status: status,
-              metadata: build_metadata(nil, branch, confidence, nil)
-            })
+    # 6. Create outcome if present
+    created_nodes =
+      if args["outcome"] do
+        status = if args["outcome"]["success"] != false, do: "completed", else: "rejected"
 
-          if prev_node_id do
-            Edges.create_edge(workspace_id, %{
-              from_node_id: prev_node_id,
-              to_node_id: node.id,
-              edge_type: "leads_to",
-              rationale: "Result"
-            })
-          end
+        node =
+          insert!(workspace_id, %{
+            node_type: "outcome",
+            title: args["outcome"]["title"],
+            description: args["outcome"]["description"],
+            status: status,
+            metadata: build_metadata(nil, branch, confidence, nil)
+          })
 
-          [%{id: node.id, type: "outcome", title: node.title} | created_nodes]
-        else
-          created_nodes
+        if prev_node_id do
+          link!(workspace_id, %{
+            from_node_id: prev_node_id,
+            to_node_id: node.id,
+            edge_type: "leads_to",
+            rationale: "Result"
+          })
         end
 
-      created_nodes = Enum.reverse(created_nodes)
+        [%{id: node.id, type: "outcome", title: node.title} | created_nodes]
+      else
+        created_nodes
+      end
 
-      {:ok,
-       Jason.encode!(%{
-         summary: args["summary"],
-         nodes_created: length(created_nodes),
-         nodes: created_nodes,
-         message: "Conversation turn captured successfully"
-       })}
-    rescue
-      e ->
-        {:error, %{code: -1, message: "Failed to capture turn: #{Exception.message(e)}"}}
-    end
+    created_nodes = Enum.reverse(created_nodes)
+
+    {:ok,
+     Jason.encode!(%{
+       summary: args["summary"],
+       nodes_created: length(created_nodes),
+       nodes: created_nodes,
+       message: "Conversation turn captured successfully"
+     })}
   end
 
   defp build_metadata(prompt, branch, confidence, commit) do
