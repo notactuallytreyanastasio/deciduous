@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.0.6] - 2026-09-23
+
+### Changed
+- **`init` and `update` ask where the graph lives instead of choosing for you.** In 1.0.5 a project with no `[remote]` got a local Docker server without being asked. Now, in a terminal, they run the `deciduous remote setup` questions: this machine (PostgreSQL and the server in Docker), or a server someone else runs (URL and token). They continue once the project points at a server that answers. With no terminal they stop with exit 1 and name `deciduous remote setup --local` and `--url <url>`, so a script says which it wants. A project that already has a `[remote]` is only checked, as before.
+
 ## [1.0.5] - 2026-09-23
 
 A project is not set up until it points at a server that answers. Since 1.0.3 agents write through the HTTP MCP server, so a project with no server gives its agents nowhere to write, and `init` used to finish without one.

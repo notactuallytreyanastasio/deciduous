@@ -67,7 +67,7 @@ Set it up with `deciduous remote init <url>` once the server is running (`decidu
 Every project writes to a shared graph server, and `deciduous init` does not
 finish until the project points at one that answers.
 
-**1. Install the binary** (1.0.5 or newer), and Docker:
+**1. Install the binary** (1.0.6 or newer), and Docker if the graph will live on this machine:
 
 ```bash
 brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
@@ -79,40 +79,44 @@ which -a deciduous    # with both installed, the first one on PATH runs
 ```
 
 [Docker Desktop](https://docs.docker.com/get-docker/) (or Docker Engine with
-Compose) must be installed and running, unless you only use a server someone
-else runs (step 2b).
+Compose) must be installed and running unless you only use a server someone
+else runs.
 
-**2a. Set up a project on this machine's server:**
+**2. Set up a project:**
 
 ```bash
 cd your-project
 deciduous init            # Claude Code; --opencode, --windsurf or --both for others
 ```
 
-`init` writes the slash commands, skills and a `CLAUDE.md` section, then sets
-up the server. The first time on a machine, it downloads the server bundle for
-its own version and checks it against the release's checksums. It then starts
-PostgreSQL 17 and the server on `127.0.0.1:4000` with Docker (a few minutes for
-the first build). It stores the token in `~/.config/deciduous/credentials`
-(mode 0600), and registers the server with Claude Code. Every later project on
-the machine finds the running server in about a second. Commit the project
-files (by path, not `git add -A`) so every clone gets them.
+`init` writes the slash commands, skills and a `CLAUDE.md` section. Then, if
+the project has no server yet, it asks where its graph should live:
 
-To choose interactively instead, run `deciduous remote setup`. It asks whether
-the graph lives on this machine or on a server someone else runs, then does the
-rest (`--local` or `--url <url>` answer the question in a script).
-
-**2b. Or point the project at a team's server** before running `init`:
-
-```bash
-deciduous remote login --url https://your-server.example/deciduous-mcp   # token on stdin, once per machine
-cd your-project
-deciduous remote init https://your-server.example/deciduous-mcp
-deciduous init            # finds the remote, checks it, installs nothing
-claude mcp add --scope user --transport http deciduous \
-  https://your-server.example/deciduous-mcp/mcp \
-  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
 ```
+   This project has no server yet ([remote] in .deciduous/config.toml).
+
+Where should this project's graph live?
+
+  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1:4000
+  2) A server someone else runs: you need its URL and token
+
+Choose 1 or 2 [1]:
+```
+
+- **1.** The first time on a machine, `init` downloads the server bundle for
+  its own version, checks it against the release's checksums, and starts
+  PostgreSQL 17 and the server with Docker (a few minutes). Every later
+  project finds the running server in about a second.
+- **2.** Asks for the URL and the token (typed without being shown), and checks
+  them against the server before storing anything.
+
+Either way it stores the token in `~/.config/deciduous/credentials` (mode
+0600), writes `[remote]` to `.deciduous/config.toml`, and registers the server
+with Claude Code. `deciduous update` asks the same question in a project that
+has no server. `deciduous remote setup` asks it on its own. In a script there
+is no terminal to ask, so give the answer instead:
+`deciduous remote setup --local` or `--url <url>`. Commit the project files
+(by path, not `git add -A`) so every clone gets them.
 
 **3. Restart Claude Code.** When it connects, the server sends the logging
 instructions (when to write, and how to write one step in one call). There is

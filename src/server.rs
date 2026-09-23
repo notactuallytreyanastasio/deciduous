@@ -7,11 +7,13 @@
 //!
 //! - a project with `[remote] url` is checked: the server must answer and a
 //!   token must be stored;
-//! - a project without one gets this machine's local server, set up once
-//!   with Docker from the release's `deciduous-mcp-docker.tar.gz` (the same
-//!   version as this binary, verified against the release's `checksums.txt`)
-//!   and its `scripts/setup.sh`: PostgreSQL 17 and the server on
-//!   `127.0.0.1:4000`, credentials in `~/.config/deciduous/server/.env`.
+//! - a project without one is asked where its graph lives (`setup_wizard`),
+//!   in a terminal; with no terminal the command stops and names
+//!   `remote setup --local` / `--url`. "This machine" means a server set up
+//!   once with Docker from the release's `deciduous-mcp-docker.tar.gz` (the
+//!   same version as this binary, verified against the release's
+//!   `checksums.txt`) and its `scripts/setup.sh`: PostgreSQL 17 and the server
+//!   on `127.0.0.1:4000`, credentials in `~/.config/deciduous/server/.env`.
 //!
 //! No Docker is an error, not a skip. `DECIDUOUS_NO_SERVER=1` skips the step
 //! for tests and CI, which run `init` in throwaway directories.
@@ -81,7 +83,26 @@ pub fn ensure(project: &Path, caller: Caller) -> Result<(), String> {
 
     match remote::read_remote_url(project) {
         Some(url) => check_configured(project, &url, caller),
-        None => connect_local(project),
+        // Where the graph lives is the user's choice, not a default: ask in a
+        // terminal, and without one say how to answer on the command line.
+        None => {
+            use std::io::IsTerminal;
+            if std::io::stdin().is_terminal() {
+                println!(
+                    "   This project has no server yet ([remote] in .deciduous/config.toml).\n"
+                );
+                setup_wizard(project, SetupChoice::Ask)
+            } else {
+                Err(format!(
+                    "{} has no server configured ([remote] in .deciduous/config.toml), and \
+                     there is no terminal to ask where its graph should live. Choose one:\n\n    \
+                     deciduous remote setup --local          # this machine: PostgreSQL + server in Docker\n    \
+                     deciduous remote setup --url <url>      # a server someone else runs\n\n\
+                     then rerun this command. Tests and CI in a throwaway directory can set {SKIP_ENV}=1.",
+                    project.display()
+                ))
+            }
+        }
     }
 }
 
