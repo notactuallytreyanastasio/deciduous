@@ -964,6 +964,45 @@ fn a_node_the_server_deleted_is_not_seeded_back_and_pull_removes_it() {
     assert!(out.contains("In sync"), "{out}");
 }
 
+// The pull report counted a node as "updated" when only the spelling of
+// its timestamp differed (-04:00 here, Z on the server), or when the server's
+// row was newer with the same content.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_pull_that_changes_no_content_reports_no_updates() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-pullcount");
+    let dir = sb.remote_repo("pullcount", &url, &ws);
+
+    sb.dx_ok(&dir, &["add", "goal", "one"]);
+    sb.dx_ok(&dir, &["add", "goal", "two"]);
+    sb.dx_ok(&dir, &["status", "2", "completed"]);
+    sb.dx_ok(&dir, &["link", "1", "2"]);
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("In sync"), "{out}");
+
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    assert!(
+        out.contains("imported 0 new node(s), updated 0, removed 0"),
+        "{out}"
+    );
+
+    // A real change is still counted.
+    let g = export(&url, &token, &ws);
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[(
+            "update_node",
+            serde_json::json!({"node_id": server_id(&g, "one"), "title": "one, retitled"}),
+        )],
+    );
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    assert!(out.contains("updated 1,"), "{out}");
+}
+
 // Two ops merging different metadata keys into one node at the same moment:
 // ops.ex read the map, merged, and wrote it back without a row lock.
 #[test]
