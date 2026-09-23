@@ -895,6 +895,38 @@ mod tests {
         );
     }
 
+    /// T12: every argument a handler refuses the call without is marked
+    /// required in the schema, so a client learns it from tools/list
+    /// rather than from the refusal.
+    #[test]
+    fn t12_every_argument_a_handler_requires_is_marked_required() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = crate::db::Database::open_at(dir.path().join("t.db")).unwrap();
+        for tool in all_tool_definitions() {
+            let result = crate::mcp::handlers::dispatch(&db, &tool.name, serde_json::json!({}));
+            let text = result
+                .content
+                .first()
+                .map(|c| c.text.clone())
+                .unwrap_or_default();
+            if let Some(rest) = text.split("Missing required parameter: ").nth(1) {
+                let field = rest
+                    .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+                    .next()
+                    .unwrap();
+                let required: Vec<&str> = tool.input_schema["required"]
+                    .as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str()).collect())
+                    .unwrap_or_default();
+                assert!(
+                    required.contains(&field),
+                    "{} refuses a call without {field} but does not mark it required",
+                    tool.name
+                );
+            }
+        }
+    }
+
     #[test]
     fn test_validate_tool_args_unknown_tool() {
         let args = serde_json::json!({});

@@ -58,7 +58,8 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
               title: %{type: "string"},
               description: %{type: "string"},
               prompt: %{type: "string", description: "The user's verbatim request"}
-            }
+            },
+            required: ["title"]
           },
           observations: %{
             type: "array",
@@ -91,7 +92,8 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
             properties: %{
               title: %{type: "string"},
               rationale: %{type: "string", description: "Why this choice was made"}
-            }
+            },
+            required: ["title"]
           },
           action: %{
             type: ["object", "string"],
@@ -101,7 +103,8 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
               description: %{type: "string"},
               files: %{type: "array", items: %{type: "string"}},
               commit: %{type: "string"}
-            }
+            },
+            required: ["title"]
           },
           outcome: %{
             type: ["object", "string"],
@@ -110,7 +113,8 @@ defmodule DeciduousMcp.MCP.Tools.CaptureConversationTurn do
               title: %{type: "string"},
               description: %{type: "string"},
               success: %{type: "boolean"}
-            }
+            },
+            required: ["title"]
           },
           parent_node_id: %{
             type: "string",
