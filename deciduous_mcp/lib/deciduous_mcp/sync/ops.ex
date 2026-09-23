@@ -503,6 +503,16 @@ defmodule DeciduousMcp.Sync.Ops do
             {:error, %Ecto.Changeset{} = cs} ->
               {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{errors(cs)}"}
 
+            # Edges.create_edge reads both ends again, FOR SHARE, and finds
+            # one gone when a delete committed after the check above. Said
+            # as the check above says it, by change_id; it was the inspected
+            # tuple with a server UUID the CLI has never seen (SERVER-N8).
+            {:error, {:node_not_found, id}} ->
+              cid = if id == from.id, do: from_cid, else: to_cid
+
+              {:rejected,
+               "create_edge #{from_cid} -> #{to_cid}: node #{cid} was deleted on the server"}
+
             {:error, other} ->
               {:rejected, "create_edge #{from_cid} -> #{to_cid}: #{describe(other)}"}
           end
