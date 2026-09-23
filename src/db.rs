@@ -676,6 +676,13 @@ type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 /// it so teammates receive it through git. See [`crate::records`].
 pub struct Database {
     pool: DbPool,
+    /// The database file, absolute. Everything else that belongs to the
+    /// project (documents, the active-session file) is found next to it,
+    /// never relative to the working directory: an MCP server started in
+    /// `repo/src` opens `repo/.deciduous/deciduous.db` by walking up, and a
+    /// cwd-relative `.deciduous/documents` there created a second
+    /// `.deciduous/` that every later command in `src` then opened instead.
+    path: std::path::PathBuf,
     /// Attached graph file, if any. Behind a lock so `deciduous sync` can
     /// attach a store it just created without a mutable handle.
     store: std::sync::RwLock<Option<RecordStore>>,
@@ -765,6 +772,8 @@ impl Database {
 
         let db = Self {
             pool,
+            path: std::path::absolute(path.as_ref())
+                .unwrap_or_else(|_| path.as_ref().to_path_buf()),
             store: std::sync::RwLock::new(None),
             oplog: std::sync::RwLock::new(None),
         };
@@ -979,6 +988,32 @@ impl Database {
             }
         }
         out
+    }
+
+    /// The database file this handle opened, as an absolute path.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The directory holding the database: `.deciduous/` in a project,
+    /// `graphs/<id>/` under the API daemon.
+    pub fn data_dir(&self) -> &Path {
+        self.path.parent().unwrap_or(Path::new("."))
+    }
+
+    /// Where attached documents are stored.
+    pub fn documents_dir(&self) -> std::path::PathBuf {
+        self.data_dir().join("documents")
+    }
+
+    /// The project directory: the one containing `.deciduous/`. `None` when
+    /// the database does not sit in a `.deciduous/` directory (the API
+    /// daemon, a scratch database), which has no project around it.
+    pub fn project_root(&self) -> Option<&Path> {
+        let dir = self.data_dir();
+        (dir.file_name()? == ".deciduous")
+            .then(|| dir.parent())
+            .flatten()
     }
 
     /// Attach (or detach) the graph file that mutations are mirrored into.

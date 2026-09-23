@@ -619,7 +619,7 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     };
 
     // Store file in .deciduous/documents/
-    let docs_dir = std::path::PathBuf::from(".deciduous/documents");
+    let docs_dir = db.documents_dir();
     std::fs::create_dir_all(&docs_dir)
         .map_err(|e| HandlerError::from(format!("Failed to create documents dir: {e}")))?;
 
@@ -894,7 +894,7 @@ fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
 
 fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
     db.store().or_else(|| {
-        crate::records::RecordStore::path_for_db(&Database::db_path())
+        crate::records::RecordStore::path_for_db(db.path())
             .and_then(crate::records::RecordStore::open)
     })
 }
@@ -955,7 +955,7 @@ fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     let store = match store_for(db) {
         Some(s) => s,
         None => {
-            let path = crate::records::RecordStore::path_for_db(&Database::db_path())
+            let path = crate::records::RecordStore::path_for_db(db.path())
                 .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep the graph file"))?;
             let store = crate::records::RecordStore::create(&path).map_err(|e| {
                 HandlerError::from(format!("could not create {}: {e}", path.display()))

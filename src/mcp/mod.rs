@@ -21,8 +21,9 @@ use protocol::{
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 
-/// Path to the active session file (persisted across server restarts).
-const SESSION_FILE: &str = ".deciduous/active_session";
+/// Name of the active session file, next to the database (persisted across
+/// server restarts).
+const SESSION_FILE: &str = "active_session";
 
 /// MCP server state — holds database connection and active session.
 ///
@@ -34,18 +35,22 @@ const SESSION_FILE: &str = ".deciduous/active_session";
 pub struct McpServer {
     db: Database,
     active_session_id: Option<i32>,
+    /// Resolved once, from the database's location, never from the cwd.
+    session_file: std::path::PathBuf,
 }
 
 impl McpServer {
     pub fn new(db: Database) -> Self {
+        let session_file = db.data_dir().join(SESSION_FILE);
         // Try to resume from persisted session file
-        let active_session_id = load_session_from_disk(&db);
+        let active_session_id = load_session_from_disk(&db, &session_file);
         if let Some(id) = active_session_id {
             eprintln!("deciduous-mcp: resumed active session #{id}");
         }
         Self {
             db,
             active_session_id,
+            session_file,
         }
     }
 
@@ -188,7 +193,13 @@ impl McpServer {
         let _ = self.db.add_node_to_session(session_id, node_id);
 
         self.active_session_id = Some(session_id);
-        save_session_to_disk(session_id);
+        if let Err(e) = save_session_to_disk(&self.session_file, session_id) {
+            return protocol::tool_result_error(format!(
+                "Session #{session_id} started (root goal #{node_id}) but could not be saved to {}: {e}. \
+                 It will not survive a server restart.",
+                self.session_file.display()
+            ));
+        }
 
         eprintln!(
             "deciduous-mcp: started session #{session_id} '{}' (root goal #{})",
@@ -225,7 +236,13 @@ impl McpServer {
         eprintln!("deciduous-mcp: ended session #{session_id} ({node_count} nodes)");
 
         self.active_session_id = None;
-        clear_session_from_disk();
+        if let Err(e) = clear_session_from_disk(&self.session_file) {
+            return protocol::tool_result_error(format!(
+                "Ended session #{session_id}, but {} could not be removed: {e}. \
+                 A restarted server would resume the ended session.",
+                self.session_file.display()
+            ));
+        }
 
         protocol::tool_result_json(&json!({
             "session_id": session_id,
@@ -264,7 +281,13 @@ impl McpServer {
         }
 
         self.active_session_id = Some(session_id);
-        save_session_to_disk(session_id);
+        if let Err(e) = save_session_to_disk(&self.session_file, session_id) {
+            return protocol::tool_result_error(format!(
+                "Resumed session #{session_id} but could not save it to {}: {e}. \
+                 It will not survive a server restart.",
+                self.session_file.display()
+            ));
+        }
 
         let node_count = self
             .db
@@ -369,28 +392,31 @@ impl McpServer {
 // ---------------------------------------------------------------------------
 
 /// Load active session ID from disk. Returns None if no file or session ended.
-fn load_session_from_disk(db: &Database) -> Option<i32> {
-    let content = std::fs::read_to_string(SESSION_FILE).ok()?;
+fn load_session_from_disk(db: &Database, file: &std::path::Path) -> Option<i32> {
+    let content = std::fs::read_to_string(file).ok()?;
     let session_id: i32 = content.trim().parse().ok()?;
     // Verify the session exists and is still active
     match db.get_session(session_id) {
         Ok(Some(s)) if s.ended_at.is_none() => Some(session_id),
         _ => {
             // Stale file — clean it up
-            let _ = std::fs::remove_file(SESSION_FILE);
+            let _ = std::fs::remove_file(file);
             None
         }
     }
 }
 
 /// Persist active session ID to disk.
-fn save_session_to_disk(session_id: i32) {
-    let _ = std::fs::write(SESSION_FILE, session_id.to_string());
+fn save_session_to_disk(file: &std::path::Path, session_id: i32) -> io::Result<()> {
+    std::fs::write(file, session_id.to_string())
 }
 
-/// Remove the session file from disk.
-fn clear_session_from_disk() {
-    let _ = std::fs::remove_file(SESSION_FILE);
+/// Remove the session file from disk. Already gone is fine.
+fn clear_session_from_disk(file: &std::path::Path) -> io::Result<()> {
+    match std::fs::remove_file(file) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
 }
 
 /// Run the MCP server on stdin/stdout.

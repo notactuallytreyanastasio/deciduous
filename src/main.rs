@@ -3370,7 +3370,7 @@ fn main() {
                 let file_size = file_bytes.len() as i32;
 
                 // Store file in .deciduous/documents/
-                let docs_dir = PathBuf::from(".deciduous/documents");
+                let docs_dir = db.documents_dir();
                 if let Err(e) = std::fs::create_dir_all(&docs_dir) {
                     eprintln!("{} Failed to create documents dir: {}", "Error:".red(), e);
                     exit(1);
@@ -3501,8 +3501,7 @@ fn main() {
                             exit(1);
                         }
                     };
-                    let file_path =
-                        PathBuf::from(".deciduous/documents").join(&doc.storage_filename);
+                    let file_path = db.documents_dir().join(&doc.storage_filename);
                     match generate_ai_description(&doc.original_filename, &file_path) {
                         Some(d) => (d, "ai"),
                         None => {
@@ -3575,8 +3574,7 @@ fn main() {
 
             DocAction::Open { doc_id } => match db.get_document(doc_id) {
                 Ok(Some(doc)) => {
-                    let file_path =
-                        PathBuf::from(".deciduous/documents").join(&doc.storage_filename);
+                    let file_path = db.documents_dir().join(&doc.storage_filename);
                     if !file_path.exists() {
                         eprintln!(
                             "{} File not found on disk: {}",
@@ -3619,7 +3617,7 @@ fn main() {
             },
 
             DocAction::Gc { dry_run } => {
-                let docs_dir = PathBuf::from(".deciduous/documents");
+                let docs_dir = db.documents_dir();
                 if !docs_dir.exists() {
                     println!("No documents directory found.");
                     return;

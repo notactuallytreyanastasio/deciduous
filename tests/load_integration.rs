@@ -687,3 +687,61 @@ fn out_of_range_ids_are_refused_over_the_api() {
     assert_eq!(b["data"]["is_error"], true, "{b}");
     assert_eq!(p.sql("select count(*) from decision_edges"), 0);
 }
+
+// ============================================================================
+// R5: an MCP server started in a subdirectory uses the project's .deciduous/
+// ============================================================================
+
+#[test]
+fn mcp_in_a_subdirectory_keeps_documents_and_sessions_in_the_project() {
+    let p = Project::new();
+    assert!(p.cli(&["add", "goal", "root goal"]).status.success());
+    let src = p.root().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("notes.md"), "# notes\n").unwrap();
+
+    let mut m = p.mcp_in(&src);
+    let r = m
+        .call(
+            "attach_document",
+            json!({"node_id": 1, "file_path": "notes.md"}),
+        )
+        .unwrap();
+    assert!(r["doc_id"].is_number(), "{r}");
+    let s = m
+        .call(
+            "start_session",
+            json!({"name":"sub","goal_title":"from src"}),
+        )
+        .unwrap();
+    let sid = s["session_id"].as_i64().unwrap();
+    m.close();
+
+    assert!(
+        !src.join(".deciduous").exists(),
+        "a second .deciduous/ appeared in src/, splitting the graph"
+    );
+    let docs: Vec<_> = std::fs::read_dir(p.root().join(".deciduous/documents"))
+        .expect("documents stored in the project")
+        .collect();
+    assert_eq!(docs.len(), 1);
+    assert_eq!(
+        std::fs::read_to_string(p.root().join(".deciduous/active_session"))
+            .expect("session file in the project")
+            .trim(),
+        sid.to_string()
+    );
+
+    // A restarted server, and the CLI, both from src/, see the same graph
+    // and the same session.
+    let mut m = p.mcp_in(&src);
+    let got = m.call("get_session", json!({})).unwrap();
+    assert_eq!(got["session_id"], sid, "{got}");
+    m.close();
+    let out = p.cli_in(&src, &["nodes"]);
+    assert!(
+        text(&out.stdout).contains("root goal"),
+        "{}",
+        text(&out.stdout)
+    );
+}

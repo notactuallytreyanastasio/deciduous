@@ -1115,9 +1115,7 @@ fn handle_document_file(request: Request, path: &str) -> std::io::Result<()> {
     };
 
     // Find the file in .deciduous/documents/
-    let file_path = std::path::PathBuf::from(".deciduous")
-        .join("documents")
-        .join(&doc.storage_filename);
+    let file_path = db.documents_dir().join(&doc.storage_filename);
 
     if !file_path.exists() {
         let response = Response::from_string("File not found on disk").with_status_code(404);
