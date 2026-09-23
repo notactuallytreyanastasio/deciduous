@@ -84,6 +84,9 @@ defmodule Hermes.Server.Base do
       module: module,
       server_info: server_info,
       capabilities: capabilities,
+      # deciduous patch 5: text for the initialize result's `instructions`,
+      # which clients put in the model's context. nil sends none (upstream).
+      instructions: server_instructions(module),
       supported_versions: protocol_versions,
       transport: Map.new(opts.transport),
       registry: opts.registry,
@@ -558,6 +561,19 @@ defmodule Hermes.Server.Base do
     {:reply, {:error, error}, state}
   end
 
+  defp server_instructions(module) do
+    Code.ensure_loaded(module)
+
+    if function_exported?(module, :server_instructions, 0),
+      do: module.server_instructions(),
+      else: nil
+  end
+
+  defp maybe_put_instructions(result, text) when is_binary(text) and text != "",
+    do: Map.put(result, "instructions", text)
+
+  defp maybe_put_instructions(result, _), do: result
+
   # Request handling
 
   defp handle_request(%{"params" => params} = request, session, state) when Message.is_initialize(request) do
@@ -578,11 +594,13 @@ defmodule Hermes.Server.Base do
         client_capabilities
       )
 
-    result = %{
-      "protocolVersion" => protocol_version,
-      "serverInfo" => state.server_info,
-      "capabilities" => state.capabilities
-    }
+    result =
+      %{
+        "protocolVersion" => protocol_version,
+        "serverInfo" => state.server_info,
+        "capabilities" => state.capabilities
+      }
+      |> maybe_put_instructions(state.instructions)
 
     Logging.server_event("initializing", %{
       client_info: params["clientInfo"],
