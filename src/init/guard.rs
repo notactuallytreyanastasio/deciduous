@@ -39,6 +39,7 @@ pub enum Outcome {
     BlockReplaced,
     Appended,
     KeptYours,
+    Removed,
 }
 
 impl Outcome {
@@ -50,6 +51,7 @@ impl Outcome {
             Outcome::BlockReplaced => "Updated (deciduous block)",
             Outcome::Appended => "Kept yours, appended deciduous block",
             Outcome::KeptYours => "Kept yours",
+            Outcome::Removed => "Removed",
         }
     }
 }
@@ -234,6 +236,28 @@ pub fn write(
     Ok(outcome)
 }
 
+/// Deletes a harness file deciduous no longer ships, by the same test
+/// `write` uses for "written by deciduous": its hash is in the manifest, or
+/// it is a template text some release shipped. Anything else is the user's
+/// and stays. `None` when there was nothing at `path`.
+pub fn remove(root: &Path, path: &Path) -> Result<Option<Outcome>, String> {
+    let rel = relative(root, path);
+    let Ok(existing) = fs::read_to_string(path) else {
+        return Ok(None);
+    };
+    let mut manifest = read_manifest(root);
+    let ours =
+        manifest.get(&rel).is_some_and(|h| sha(&existing) == *h) || shipped_by_deciduous(&existing);
+    if !ours {
+        return Ok(Some(Outcome::KeptYours));
+    }
+    backup(root, &rel)?;
+    fs::remove_file(path).map_err(|e| format!("Could not remove {rel}: {e}"))?;
+    manifest.remove(&rel);
+    write_manifest(root, &manifest);
+    Ok(Some(Outcome::Removed))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -328,6 +352,31 @@ mod tests {
     }
 
     #[test]
+    fn remove_deletes_what_deciduous_wrote_and_keeps_the_rest() {
+        let t = project();
+        fs::create_dir_all(t.path().join(".claude/hooks")).unwrap();
+        let ours = t.path().join(".claude/hooks/require-action-node.sh");
+        write(
+            t.path(),
+            &ours,
+            "#!/bin/sh\nexec deciduous log-loop pre\n",
+            true,
+        )
+        .unwrap();
+        assert_eq!(remove(t.path(), &ours).unwrap(), Some(Outcome::Removed));
+        assert!(!ours.exists());
+        assert!(backup_dir(t.path())
+            .is_some_and(|d| d.join(".claude/hooks/require-action-node.sh").exists()));
+
+        let theirs = t.path().join(".claude/hooks/post-commit-reminder.sh");
+        fs::write(&theirs, "#!/bin/sh\n# mine\nexit 0\n").unwrap();
+        assert_eq!(remove(t.path(), &theirs).unwrap(), Some(Outcome::KeptYours));
+        assert!(theirs.exists());
+
+        assert_eq!(remove(t.path(), &ours).unwrap(), None);
+    }
+
+    #[test]
     fn every_current_harness_template_is_in_the_known_list() {
         // Fails when a template changes without running
         // `python3 scripts/gen_known_templates.py > src/init/known_templates.rs`.
@@ -345,28 +394,13 @@ mod tests {
             ("DECISION_GRAPH_MD", t::DECISION_GRAPH_MD),
             ("SYNC_MD", t::SYNC_MD),
             ("WORK_MD", t::WORK_MD),
-            ("HOOK_REQUIRE_ACTION_NODE", t::HOOK_REQUIRE_ACTION_NODE),
-            ("HOOK_POST_COMMIT_REMINDER", t::HOOK_POST_COMMIT_REMINDER),
             ("HOOK_VERSION_CHECK", t::HOOK_VERSION_CHECK),
             ("CLAUDE_AGENTS_TOML", t::CLAUDE_AGENTS_TOML),
             ("SKILL_PULSE", t::SKILL_PULSE),
             ("SKILL_NARRATIVES", t::SKILL_NARRATIVES),
             ("SKILL_ARCHAEOLOGY", t::SKILL_ARCHAEOLOGY),
             ("WINDSURF_HOOKS_JSON", t::WINDSURF_HOOKS_JSON),
-            (
-                "WINDSURF_HOOK_REQUIRE_ACTION_NODE",
-                t::WINDSURF_HOOK_REQUIRE_ACTION_NODE,
-            ),
-            (
-                "WINDSURF_HOOK_POST_COMMIT_REMINDER",
-                t::WINDSURF_HOOK_POST_COMMIT_REMINDER,
-            ),
             ("WINDSURF_RULES_DECIDUOUS", t::WINDSURF_RULES_DECIDUOUS),
-            ("PLUGIN_REQUIRE_ACTION_NODE", o::PLUGIN_REQUIRE_ACTION_NODE),
-            (
-                "PLUGIN_POST_COMMIT_REMINDER",
-                o::PLUGIN_POST_COMMIT_REMINDER,
-            ),
             ("PLUGIN_VERSION_CHECK", o::PLUGIN_VERSION_CHECK),
             ("AGENT_DECIDUOUS", o::AGENT_DECIDUOUS),
             ("TOOL_DECIDUOUS", o::TOOL_DECIDUOUS),

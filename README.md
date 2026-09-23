@@ -548,7 +548,7 @@ The `update` command auto-detects which assistants are installed and updates the
 |-------|----------------|
 | `.claude/commands/*.md` | Slash commands (`/decision`, `/recover`, `/work`, `/document`, `/build-test`, `/serve-ui`, `/sync-graph`, `/decision-graph`, `/sync`) |
 | `.claude/skills/*.md` | Skills (`/pulse`, `/narratives`, `/archaeology`) |
-| `.claude/hooks/*.sh` | Enforcement hooks |
+| `.claude/hooks/version-check.sh` | Once-a-day update check (the logging hooks earlier versions installed are removed) |
 | `.claude/agents.toml` | Subagent configurations |
 | `CLAUDE.md` | Decision Graph Workflow section (preserves custom content) |
 
@@ -556,7 +556,7 @@ The `update` command auto-detects which assistants are installed and updates the
 
 | Files | What's Updated |
 |-------|----------------|
-| `.opencode/plugins/*.ts` | TypeScript hooks (pre-edit, post-commit) |
+| `.opencode/plugins/version-check.ts` | Once-a-day update check |
 | `.opencode/commands/*.md` | Command templates |
 | `.opencode/skills/*/SKILL.md` | Skill definitions |
 | `.opencode/agents/*.md` | Custom deciduous agent |
@@ -568,11 +568,10 @@ The `update` command auto-detects which assistants are installed and updates the
 
 | Files | What's Updated |
 |-------|----------------|
-| `.windsurf/hooks.json` | Cascade hooks configuration |
-| `.windsurf/hooks/*.sh` | Hook scripts (pre-write, post-command) |
+| `.windsurf/hooks.json`, `.windsurf/hooks/version-check.sh` | Once-a-day update check |
 | `.windsurf/rules/deciduous.md` | Always-on rules for Cascade |
 
-**Not touched:** Settings files, `.deciduous/config.toml`, `docs/` - your configs stay intact.
+**Kept:** anything deciduous did not write. A file you changed is left alone (Markdown gets the new text appended in a marked block), everything `update` changes is backed up to `.deciduous/update-backups/<time>/` first, and `.claude/settings.json` only loses the `deciduous log-loop` entries. `.deciduous/config.toml` and `docs/` are not touched.
 
 ### Automatic Version Checking
 
@@ -592,43 +591,18 @@ The check is rate-limited (once per 24h), has a 3-second timeout, and never bloc
 
 ---
 
-## How the Hooks/Plugins Work
+## Why there are no logging hooks
 
-Each AI assistant integration includes hooks and plugins that enforce the decision graph workflow:
+Up to 1.0.2, deciduous installed a hook that denied an agent's next tool call
+until it wrote to the graph. It could leave a session unable to do anything:
+a graph write sent beside the next action did not count, a session whose
+settings changed underneath it could not reset the count, and an environment
+variable typed into the session never reached the hook. 1.0.3 removes it, and
+`deciduous update` takes it out of projects that have it. The only hook left is
+the once-a-day version check, which never blocks.
 
-### Pre-Edit Hook (Blocks edits without context)
-
-Before the AI can edit files, it must have logged a recent goal or action node (within 15 minutes). This ensures decisions are captured *before* code is written.
-
-```
-AI tries to edit → Hook checks for recent node → Blocks if missing → AI logs decision → Edit proceeds
-```
-
-### Post-Commit Hook (Reminds to link commits)
-
-After any `git commit`, the AI is reminded to:
-1. Create an outcome or action node with `--commit HEAD`
-2. Link it to the parent goal/action
-
-This connects your git history to the decision graph.
-
-### Version-Check Hook (Notifies of new versions)
-
-Checks crates.io once per 24 hours for newer versions of deciduous. Patch updates get a quiet one-liner; minor/major updates get a prominent banner encouraging upgrade. Always-on, non-blocking.
-
-```
-Session starts → Hook checks cached version → If stale, queries crates.io (3s timeout) → AI tells user
-```
-
-### Assistant-Specific Implementation
-
-| Assistant | Pre-Edit | Post-Commit | Version Check |
-|-----------|----------|-------------|---------------|
-| **Claude Code** | `PreToolUse` on `Edit\|Write` | `PostToolUse` on `Bash` | `PreToolUse` on `Bash` |
-| **OpenCode** | TypeScript `pre-edit` | TypeScript `post-commit` | TypeScript `pre-tool` |
-| **Windsurf** | Cascade `pre_write_code` | Cascade `post_run_command` | Cascade `pre_write_code` |
-
-Pre-edit and post-commit hooks use **exit code 2** to block/alert. Version-check hooks use **exit code 0** (informational, never blocks).
+Logging is encouraged by what the agent reads anyway: the `CLAUDE.md` section,
+and the MCP tools' own descriptions and replies.
 
 ---
 

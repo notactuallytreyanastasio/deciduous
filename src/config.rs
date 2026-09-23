@@ -50,24 +50,14 @@ pub struct HooksConfig {
     pub post_tool_use: Vec<Hook>,
 }
 
-impl HooksConfig {
-    /// Whether the project wants the log-loop hooks at all: hooks on, and the
-    /// require-action-node hook (the one they replace) not switched off.
-    pub fn log_loop_enabled(&self) -> bool {
-        self.enabled
-            && self
-                .pre_tool_use
-                .iter()
-                .any(|h| h.name == "require-action-node" && h.enabled)
-    }
-}
-
+// No hooks by default. require-action-node and post-commit-reminder were
+// removed in 1.0.3; only hooks a project lists in config.toml are installed.
 fn default_pre_tool_use_hooks() -> Vec<Hook> {
-    vec![Hook::default_require_action_node()]
+    Vec::new()
 }
 
 fn default_post_tool_use_hooks() -> Vec<Hook> {
-    vec![Hook::default_post_commit_reminder()]
+    Vec::new()
 }
 
 impl Default for HooksConfig {
@@ -107,30 +97,6 @@ pub struct Hook {
 }
 
 impl Hook {
-    /// Default pre-edit hook that requires an action node
-    pub fn default_require_action_node() -> Self {
-        Self {
-            name: "require-action-node".to_string(),
-            description: "Blocks work after too many actions without a graph write".to_string(),
-            matcher: "Edit|Write|NotebookEdit|Bash".to_string(),
-            enabled: true,
-            script: None, // Uses built-in template
-            script_path: None,
-        }
-    }
-
-    /// Default post-commit hook that reminds to link commits
-    pub fn default_post_commit_reminder() -> Self {
-        Self {
-            name: "post-commit-reminder".to_string(),
-            description: "Reminds to link commits to the decision graph".to_string(),
-            matcher: "Bash".to_string(),
-            enabled: true,
-            script: None, // Uses built-in template
-            script_path: None,
-        }
-    }
-
     /// Check if this hook uses a built-in script
     pub fn uses_builtin(&self) -> bool {
         self.script.is_none() && self.script_path.is_none()
@@ -377,20 +343,9 @@ auto_detect = true
         let config = Config::default();
         assert!(config.hooks.enabled);
 
-        // Should have default pre-tool-use hook
-        assert_eq!(config.hooks.pre_tool_use.len(), 1);
-        assert_eq!(config.hooks.pre_tool_use[0].name, "require-action-node");
-        assert_eq!(
-            config.hooks.pre_tool_use[0].matcher,
-            "Edit|Write|NotebookEdit|Bash"
-        );
-        assert!(config.hooks.pre_tool_use[0].enabled);
-
-        // Should have default post-tool-use hook
-        assert_eq!(config.hooks.post_tool_use.len(), 1);
-        assert_eq!(config.hooks.post_tool_use[0].name, "post-commit-reminder");
-        assert_eq!(config.hooks.post_tool_use[0].matcher, "Bash");
-        assert!(config.hooks.post_tool_use[0].enabled);
+        // No logging hooks by default since 1.0.3.
+        assert!(config.hooks.pre_tool_use.is_empty());
+        assert!(config.hooks.post_tool_use.is_empty());
     }
 
     #[test]
@@ -440,7 +395,14 @@ enabled = false
 
     #[test]
     fn test_hook_uses_builtin() {
-        let hook = Hook::default_require_action_node();
+        let hook = Hook {
+            name: "require-action-node".to_string(),
+            description: "".to_string(),
+            matcher: "Edit".to_string(),
+            enabled: true,
+            script: None,
+            script_path: None,
+        };
         assert!(hook.uses_builtin());
 
         let custom_hook = Hook {
