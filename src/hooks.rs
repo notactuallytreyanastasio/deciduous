@@ -449,7 +449,7 @@ mod tests {
         let script = get_hook_script(&hook, &Config::default()).unwrap();
         assert!(script.contains("require-action-node"));
         // The rules live in the binary; the script only hands over to it.
-        assert!(script.contains("exec deciduous log-loop pre"));
+        assert!(script.contains("deciduous log-loop pre || exit 0"));
         assert!(!script.contains("deciduous nodes"));
     }
 

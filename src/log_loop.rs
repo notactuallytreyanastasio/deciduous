@@ -346,7 +346,7 @@ pub fn merge_claude_settings(settings: &mut Value) -> bool {
         }
         if !found {
             entries.push(json!({"matcher": PRE_MATCHER,
-                "hooks": [{"type": "command", "command": "deciduous log-loop pre"}]}));
+                "hooks": [{"type": "command", "command": "deciduous log-loop pre || true"}]}));
             changed = true;
         }
     }
@@ -358,12 +358,12 @@ pub fn merge_claude_settings(settings: &mut Value) -> bool {
             .any(|e| runs(e, "post-commit-reminder") || runs(e, "log-loop post-bash"))
         {
             entries.push(json!({"matcher": "Bash",
-                "hooks": [{"type": "command", "command": "deciduous log-loop post-bash"}]}));
+                "hooks": [{"type": "command", "command": "deciduous log-loop post-bash || true"}]}));
             changed = true;
         }
         if !entries.iter().any(|e| runs(e, "log-loop post-log")) {
             entries.push(json!({"matcher": MCP_WRITE_MATCHER,
-                "hooks": [{"type": "command", "command": "deciduous log-loop post-log"}]}));
+                "hooks": [{"type": "command", "command": "deciduous log-loop post-log || true"}]}));
             changed = true;
         }
     }
@@ -372,7 +372,7 @@ pub fn merge_claude_settings(settings: &mut Value) -> bool {
     if let Some(entries) = stop.as_array_mut() {
         if !entries.iter().any(|e| runs(e, "log-loop stop")) {
             entries.push(
-                json!({"hooks": [{"type": "command", "command": "deciduous log-loop stop"}]}),
+                json!({"hooks": [{"type": "command", "command": "deciduous log-loop stop || true"}]}),
             );
             changed = true;
         }
@@ -495,7 +495,7 @@ mod tests {
         assert_eq!(v["hooks"]["PostToolUse"][1]["matcher"], MCP_WRITE_MATCHER);
         assert_eq!(
             v["hooks"]["Stop"][0]["hooks"][0]["command"],
-            "deciduous log-loop stop"
+            "deciduous log-loop stop || true"
         );
 
         // Idempotent.
