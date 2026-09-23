@@ -3,6 +3,8 @@
 //! `deciduous init` creates all the files needed for decision graph tracking
 //! with AI assistant integration (Claude Code and/or OpenCode).
 
+pub mod guard;
+mod known_templates;
 pub mod templates;
 
 use crate::opencode;
@@ -415,17 +417,35 @@ pub fn update_tooling() -> Result<(), String> {
     }
 
     // Make sure the record store exists and is tracked (projects initialised
-    // before 0.17 ignored all of .deciduous/)
-    ensure_gitignore(&cwd)?;
-    ensure_gitattributes(&cwd)?;
-    if ensure_merge_driver(&cwd)? {
+    // before 0.17 ignored all of .deciduous/). Not on a project that points at
+    // a shared server: its graph lives there, and the graph.json sync would
+    // only write into .gitignore, .gitattributes and .git/config, which are
+    // the project's files, for nothing.
+    if crate::config::Config::load().remote.is_configured() {
         println!(
-            "   {} git merge driver for graph records",
-            "Configured".green()
+            "   {} .gitignore, .gitattributes, git merge driver, graph.json (remote configured; the graph lives on the server)",
+            "Skipped".dimmed()
         );
+    } else {
+        ensure_gitignore(&cwd)?;
+        ensure_gitattributes(&cwd)?;
+        if ensure_merge_driver(&cwd)? {
+            println!(
+                "   {} git merge driver for graph records",
+                "Configured".green()
+            );
+        }
+        if deciduous_dir.exists() {
+            ensure_graph_file(&cwd)?;
+        }
     }
-    if deciduous_dir.exists() {
-        ensure_graph_file(&cwd)?;
+
+    if let Some(dir) = guard::backup_dir(&cwd) {
+        println!(
+            "   {} previous versions of changed files in {}",
+            "Backed up".green(),
+            dir.strip_prefix(&cwd).unwrap_or(&dir).display()
+        );
     }
 
     // Write version file for auto-update detection
@@ -616,6 +636,7 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
 
     // Update CLAUDE.md section
     let claude_md_path = cwd.join("CLAUDE.md");
+    guard::backup(cwd, "CLAUDE.md")?;
     replace_config_md_section(&claude_md_path, CLAUDE_MD_SECTION, "CLAUDE.md")?;
 
     // Update Windsurf if .windsurf directory exists
@@ -761,8 +782,39 @@ pub fn merge_log_loop_settings(path: &Path) -> Result<(), String> {
         serde_json::from_str(CLAUDE_SETTINGS_JSON).expect("template is valid JSON")
     };
 
-    if crate::log_loop::merge_claude_settings(&mut settings) || !path.exists() {
-        let body = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+    let mut changed = crate::log_loop::merge_claude_settings(&mut settings);
+    // A hook script the user wrote was kept by the guard, so the entry that
+    // runs it does not run log-loop. Add log-loop as its own entry beside it.
+    if let Some(hooks_dir) = path.parent().map(|p| p.join("hooks")) {
+        for (script, event, matcher, command) in [
+            (
+                "require-action-node.sh",
+                "PreToolUse",
+                "Edit|Write|NotebookEdit|Bash",
+                "deciduous log-loop pre || true",
+            ),
+            (
+                "post-commit-reminder.sh",
+                "PostToolUse",
+                "Bash",
+                "deciduous log-loop post-bash || true",
+            ),
+        ] {
+            let theirs = fs::read_to_string(hooks_dir.join(script))
+                .map(|s| !s.contains("log-loop"))
+                .unwrap_or(false);
+            if theirs {
+                changed |= crate::log_loop::ensure_entry(&mut settings, event, matcher, command);
+            }
+        }
+    }
+
+    if changed || !path.exists() {
+        if let Some(root) = path.parent().and_then(|p| p.parent()) {
+            guard::backup(root, ".claude/settings.json")?;
+        }
+        let original = fs::read_to_string(path).unwrap_or_default();
+        let body = render_in_original_order(&settings, &original);
         fs::write(path, body + "\n")
             .map_err(|e| format!("Could not write {}: {}", path.display(), e))?;
         println!(
@@ -771,6 +823,151 @@ pub fn merge_log_loop_settings(path: &Path) -> Result<(), String> {
         );
     }
     Ok(())
+}
+
+/// Pretty-prints `value` (2-space indent, like `to_string_pretty`) with each
+/// object's keys in the order they first appear in `original`, and keys that
+/// are new after them in the order serde_json holds them. serde_json's map is
+/// sorted, and `preserve_order` cannot be turned on for one call: it would
+/// reorder every JSON the program writes, graph.json included. A user's
+/// settings.json keeps its shape; only what deciduous adds is new.
+fn render_in_original_order(value: &serde_json::Value, original: &str) -> String {
+    let orders = key_orders(original);
+    let mut out = String::new();
+    render_ordered(value, &orders, "", 0, &mut out);
+    out
+}
+
+/// For every object in `raw`, keyed by its path ("/hooks/PreToolUse/0"), its
+/// keys in the order written. A small scanner, not a full JSON parser: it only
+/// has to find keys in a document serde_json has already accepted.
+fn key_orders(raw: &str) -> std::collections::HashMap<String, Vec<String>> {
+    fn skip_ws(b: &[u8], i: &mut usize) {
+        while *i < b.len() && (b[*i] as char).is_whitespace() {
+            *i += 1;
+        }
+    }
+    fn string(b: &[u8], i: &mut usize) -> String {
+        let start = *i;
+        *i += 1;
+        while *i < b.len() && b[*i] != b'"' {
+            if b[*i] == b'\\' {
+                *i += 1;
+            }
+            *i += 1;
+        }
+        *i += 1;
+        serde_json::from_slice(&b[start..*i]).unwrap_or_default()
+    }
+    fn value(
+        b: &[u8],
+        i: &mut usize,
+        path: &str,
+        out: &mut std::collections::HashMap<String, Vec<String>>,
+    ) {
+        skip_ws(b, i);
+        match b.get(*i) {
+            Some(b'{') => {
+                *i += 1;
+                let mut keys = Vec::new();
+                loop {
+                    skip_ws(b, i);
+                    match b.get(*i) {
+                        Some(b'}') => {
+                            *i += 1;
+                            break;
+                        }
+                        Some(b',') => *i += 1,
+                        Some(b'"') => {
+                            let k = string(b, i);
+                            skip_ws(b, i);
+                            *i += 1; // ':'
+                            value(b, i, &format!("{path}/{k}"), out);
+                            keys.push(k);
+                        }
+                        _ => return,
+                    }
+                }
+                out.insert(path.to_string(), keys);
+            }
+            Some(b'[') => {
+                *i += 1;
+                let mut n = 0;
+                loop {
+                    skip_ws(b, i);
+                    match b.get(*i) {
+                        Some(b']') => {
+                            *i += 1;
+                            break;
+                        }
+                        Some(b',') => *i += 1,
+                        Some(_) => {
+                            value(b, i, &format!("{path}/{n}"), out);
+                            n += 1;
+                        }
+                        None => return,
+                    }
+                }
+            }
+            Some(b'"') => {
+                string(b, i);
+            }
+            Some(_) => {
+                while *i < b.len() && !matches!(b[*i], b',' | b'}' | b']') {
+                    *i += 1;
+                }
+            }
+            None => {}
+        }
+    }
+    let mut out = std::collections::HashMap::new();
+    let mut i = 0;
+    value(raw.as_bytes(), &mut i, "", &mut out);
+    out
+}
+
+fn render_ordered(
+    v: &serde_json::Value,
+    orders: &std::collections::HashMap<String, Vec<String>>,
+    path: &str,
+    depth: usize,
+    out: &mut String,
+) {
+    use serde_json::Value;
+    let pad = "  ".repeat(depth + 1);
+    let close = "  ".repeat(depth);
+    match v {
+        Value::Object(map) if !map.is_empty() => {
+            let known = orders.get(path);
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort_by_key(|k| {
+                known
+                    .and_then(|o| o.iter().position(|x| x == *k))
+                    .unwrap_or(usize::MAX)
+            });
+            out.push_str("{\n");
+            for (i, k) in keys.iter().enumerate() {
+                out.push_str(&pad);
+                out.push_str(&serde_json::to_string(k).unwrap());
+                out.push_str(": ");
+                render_ordered(&map[*k], orders, &format!("{path}/{k}"), depth + 1, out);
+                out.push_str(if i + 1 < keys.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&close);
+            out.push('}');
+        }
+        Value::Array(items) if !items.is_empty() => {
+            out.push_str("[\n");
+            for (i, item) in items.iter().enumerate() {
+                out.push_str(&pad);
+                render_ordered(item, orders, &format!("{path}/{i}"), depth + 1, out);
+                out.push_str(if i + 1 < items.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&close);
+            out.push(']');
+        }
+        other => out.push_str(&serde_json::to_string(other).unwrap()),
+    }
 }
 
 fn write_file_if_missing(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
@@ -825,39 +1022,94 @@ fn write_executable_if_missing(
     write_file_if_missing(path, content, display_name)
 }
 
+/// `deciduous update --all <dir>`: every deciduous project directly under
+/// `dir`, and `dir` itself if it is one, updated one after another. A project
+/// is a directory with `.deciduous/` and an assistant integration to update.
+/// One project failing does not stop the rest. Returns how many failed.
+pub fn update_all(root: &Path) -> usize {
+    let start = std::env::current_dir().unwrap_or_default();
+    let mut dirs: Vec<std::path::PathBuf> = vec![root.to_path_buf()];
+    if let Ok(entries) = fs::read_dir(root) {
+        let mut children: Vec<_> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.is_dir())
+            .collect();
+        children.sort();
+        dirs.extend(children);
+    }
+    let is_project = |d: &Path| {
+        d.join(".deciduous").is_dir()
+            && [".claude", ".opencode", ".windsurf"]
+                .iter()
+                .any(|a| d.join(a).is_dir())
+    };
+    let (mut ok, mut failed) = (0usize, Vec::new());
+    for d in dirs.into_iter().filter(|d| is_project(d)) {
+        println!("\n{} {}", "==>".cyan(), d.display());
+        let result = std::env::set_current_dir(&d)
+            .map_err(|e| format!("cannot enter {}: {e}", d.display()))
+            .and_then(|_| update_tooling());
+        match result {
+            Ok(()) => ok += 1,
+            Err(e) => {
+                eprintln!("   {} {}", "Failed:".red(), e);
+                failed.push(d.display().to_string());
+            }
+        }
+    }
+    let _ = std::env::set_current_dir(start);
+    println!(
+        "\n{} {} updated, {} failed",
+        "Done:".green(),
+        ok,
+        failed.len()
+    );
+    for f in &failed {
+        println!("   {} {}", "failed".red(), f);
+    }
+    failed.len()
+}
+
+/// The project root for a harness path: callers pass the path relative to the
+/// project as `display_name`, so the root is the path with that suffix removed.
+fn harness_root(path: &Path, display_name: &str) -> std::path::PathBuf {
+    let full = path.to_string_lossy();
+    match full.strip_suffix(display_name) {
+        Some(root) if !root.is_empty() => std::path::PathBuf::from(root),
+        _ => std::env::current_dir().unwrap_or_default(),
+    }
+}
+
+/// Writes a harness file through [`guard::write`]: replaces what deciduous
+/// wrote, keeps (and for Markdown, appends to) what someone else wrote.
 fn write_file_overwrite(path: &Path, content: &str, display_name: &str) -> Result<(), String> {
-    fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
-    println!("   {} {}", "Updated".green(), display_name);
-    Ok(())
+    write_guarded(path, content, display_name, false)
 }
 
-#[cfg(unix)]
 fn write_executable_overwrite(
     path: &Path,
     content: &str,
     display_name: &str,
 ) -> Result<(), String> {
-    use std::os::unix::fs::PermissionsExt;
-
-    fs::write(path, content).map_err(|e| format!("Could not write {}: {}", display_name, e))?;
-    // Make executable (chmod +x)
-    let mut perms = fs::metadata(path)
-        .map_err(|e| format!("Could not get metadata for {}: {}", display_name, e))?
-        .permissions();
-    perms.set_mode(0o755);
-    fs::set_permissions(path, perms)
-        .map_err(|e| format!("Could not set permissions for {}: {}", display_name, e))?;
-    println!("   {} {} (executable)", "Updated".green(), display_name);
-    Ok(())
+    write_guarded(path, content, display_name, true)
 }
 
-#[cfg(not(unix))]
-fn write_executable_overwrite(
+fn write_guarded(
     path: &Path,
     content: &str,
     display_name: &str,
+    executable: bool,
 ) -> Result<(), String> {
-    write_file_overwrite(path, content, display_name)
+    let outcome = guard::write(&harness_root(path, display_name), path, content, executable)?;
+    let label = outcome.label();
+    let label = match outcome {
+        guard::Outcome::KeptYours | guard::Outcome::Appended => label.yellow(),
+        guard::Outcome::Unchanged => label.dimmed(),
+        _ => label.green(),
+    };
+    println!("   {} {}", label, display_name);
+    Ok(())
 }
 
 fn replace_config_md_section(
@@ -1231,13 +1483,48 @@ mod tests {
     }
 
     #[test]
+    fn settings_keep_their_key_order_when_log_loop_is_merged_in() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".claude")).unwrap();
+        let p = tmp.path().join(".claude/settings.json");
+        let original = "{\n  \"permissions\": {\n    \"allow\": [\n      \"Bash(mix *)\"\n    ]\n  },\n  \"hooks\": {\n    \"PreToolUse\": [\n      {\n        \"matcher\": \"Edit\",\n        \"hooks\": [\n          {\n            \"type\": \"command\",\n            \"command\": \"mine.sh\"\n          }\n        ]\n      }\n    ]\n  },\n  \"model\": \"x\"\n}\n";
+        fs::write(&p, original).unwrap();
+        merge_log_loop_settings(&p).unwrap();
+        let after = fs::read_to_string(&p).unwrap();
+        let (perm, hooks, model) = (
+            after.find("\"permissions\"").unwrap(),
+            after.find("\"hooks\"").unwrap(),
+            after.find("\"model\"").unwrap(),
+        );
+        assert!(
+            perm < hooks && hooks < model,
+            "top-level order kept:\n{after}"
+        );
+        let (m, h) = (
+            after.find("\"matcher\": \"Edit\"").unwrap(),
+            after.find("\"command\": \"mine.sh\"").unwrap(),
+        );
+        assert!(m < h, "matcher still before hooks in the user's entry");
+        assert!(after.contains("deciduous log-loop stop || true"));
+        let v: serde_json::Value = serde_json::from_str(&after).unwrap();
+        assert_eq!(v["permissions"]["allow"][0], "Bash(mix *)");
+    }
+
+    #[test]
     fn test_write_file_overwrite() {
         let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join(".deciduous")).unwrap();
         let file_path = tmp.path().join("test.txt");
 
-        fs::write(&file_path, "original").unwrap();
+        // Written by deciduous, then updated: replaced.
+        write_file_overwrite(&file_path, "original", "test.txt").unwrap();
         write_file_overwrite(&file_path, "updated", "test.txt").unwrap();
         assert_eq!(fs::read_to_string(&file_path).unwrap(), "updated");
+
+        // Written by someone else: kept.
+        fs::write(&file_path, "someone else's").unwrap();
+        write_file_overwrite(&file_path, "updated again", "test.txt").unwrap();
+        assert_eq!(fs::read_to_string(&file_path).unwrap(), "someone else's");
     }
 
     #[test]

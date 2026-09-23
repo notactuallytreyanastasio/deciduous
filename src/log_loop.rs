@@ -539,6 +539,32 @@ pub const MCP_WRITE_MATCHER: &str = "mcp__.*deciduous.*__(add_node|add_edge|upda
 
 const PRE_MATCHER: &str = "Edit|Write|NotebookEdit|Bash";
 
+/// Adds one `{matcher, hooks: [{command}]}` entry under `event` unless some
+/// entry there already runs exactly `command`. Returns whether it added one.
+pub fn ensure_entry(settings: &mut Value, event: &str, matcher: &str, command: &str) -> bool {
+    let Some(obj) = settings.as_object_mut() else {
+        return false;
+    };
+    let hooks = obj.entry("hooks").or_insert_with(|| json!({}));
+    let Some(hooks) = hooks.as_object_mut() else {
+        return false;
+    };
+    let entries = hooks.entry(event).or_insert_with(|| json!([]));
+    let Some(entries) = entries.as_array_mut() else {
+        return false;
+    };
+    let present = entries.iter().any(|e| {
+        e["hooks"]
+            .as_array()
+            .is_some_and(|hs| hs.iter().any(|h| h["command"] == command))
+    });
+    if !present {
+        entries
+            .push(json!({"matcher": matcher, "hooks": [{"type": "command", "command": command}]}));
+    }
+    !present
+}
+
 /// Brings a project's `.claude/settings.json` up to the log-loop hooks
 /// without touching anything the user added. Returns whether it changed.
 ///

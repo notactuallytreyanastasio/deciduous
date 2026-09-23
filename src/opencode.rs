@@ -2782,24 +2782,31 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
 
     // Update plugins (overwrite)
     let plugin_path = plugin_dir.join("require-action-node.ts");
-    fs::write(&plugin_path, PLUGIN_REQUIRE_ACTION_NODE)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
+    crate::init::guard::write(
+        project_root,
+        &plugin_path,
+        PLUGIN_REQUIRE_ACTION_NODE,
+        false,
+    )?;
     println!(
         "   {} .opencode/plugins/require-action-node.ts",
         "Updated".green()
     );
 
     let plugin_path = plugin_dir.join("post-commit-reminder.ts");
-    fs::write(&plugin_path, PLUGIN_POST_COMMIT_REMINDER)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
+    crate::init::guard::write(
+        project_root,
+        &plugin_path,
+        PLUGIN_POST_COMMIT_REMINDER,
+        false,
+    )?;
     println!(
         "   {} .opencode/plugins/post-commit-reminder.ts",
         "Updated".green()
     );
 
     let plugin_path = plugin_dir.join("version-check.ts");
-    fs::write(&plugin_path, PLUGIN_VERSION_CHECK)
-        .map_err(|e| format!("Could not write plugin: {}", e))?;
+    crate::init::guard::write(project_root, &plugin_path, PLUGIN_VERSION_CHECK, false)?;
     println!(
         "   {} .opencode/plugins/version-check.ts",
         "Updated".green()
@@ -2820,8 +2827,7 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
 
     for (name, content) in commands {
         let cmd_path = command_dir.join(name);
-        fs::write(&cmd_path, content)
-            .map_err(|e| format!("Could not write command {}: {}", name, e))?;
+        crate::init::guard::write(project_root, &cmd_path, content, false)?;
         println!("   {} .opencode/commands/{}", "Updated".green(), name);
     }
 
@@ -2839,8 +2845,7 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
                 .map_err(|e| format!("Could not create {:?}: {}", skill_subdir, e))?;
         }
         let skill_path = skill_subdir.join("SKILL.md");
-        fs::write(&skill_path, content)
-            .map_err(|e| format!("Could not write skill {}: {}", name, e))?;
+        crate::init::guard::write(project_root, &skill_path, content, false)?;
         println!(
             "   {} .opencode/skills/{}/SKILL.md",
             "Updated".green(),
@@ -2850,12 +2855,12 @@ pub fn update_opencode(project_root: &Path) -> Result<(), String> {
 
     // Update agent (overwrite)
     let agent_path = agent_dir.join("deciduous.md");
-    fs::write(&agent_path, AGENT_DECIDUOUS).map_err(|e| format!("Could not write agent: {}", e))?;
+    crate::init::guard::write(project_root, &agent_path, AGENT_DECIDUOUS, false)?;
     println!("   {} .opencode/agents/deciduous.md", "Updated".green());
 
     // Update tool (overwrite)
     let tool_path = tool_dir.join("deciduous.ts");
-    fs::write(&tool_path, TOOL_DECIDUOUS).map_err(|e| format!("Could not write tool: {}", e))?;
+    crate::init::guard::write(project_root, &tool_path, TOOL_DECIDUOUS, false)?;
     println!("   {} .opencode/tools/deciduous.ts", "Updated".green());
 
     // Note: We don't overwrite opencode.json or AGENTS.md as they may have user customizations
