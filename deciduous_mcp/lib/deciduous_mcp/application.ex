@@ -73,6 +73,8 @@ defmodule DeciduousMcp.Application do
       {Bandit, plug: DeciduousMcp.Web.Router, scheme: :http, port: port}
     ]
 
+    log_db_tls()
+
     opts = [strategy: :one_for_one, name: DeciduousMcp.Supervisor]
 
     case Supervisor.start_link(children, opts) do
@@ -109,6 +111,24 @@ defmodule DeciduousMcp.Application do
 
             openssl rand -hex 32
         """
+    end
+  end
+
+  # One line at boot saying how the database connection is secured, so a
+  # TLS failure later is read against what was actually configured.
+  defp log_db_tls do
+    case Application.get_env(:deciduous_mcp, :db_tls) do
+      nil ->
+        :ok
+
+      :unverified ->
+        Logger.warning(
+          "Database TLS: encrypted but the server is NOT authenticated (DB_SSL_VERIFY=none). " <>
+            "Use DB_SSL_VERIFY=ca with DB_SSL_CA_FILE to verify it."
+        )
+
+      description ->
+        Logger.info("Database TLS: #{description}")
     end
   end
 

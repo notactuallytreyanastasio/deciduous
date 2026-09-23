@@ -95,7 +95,7 @@ if [ ! -e "$env_file" ]; then
       printf "POSTGRES_PASSWORD='%s'\n" "$password"
       printf "DATABASE_URL='%s'\n" "$database_url"
       printf 'DB_SSL=%s\n' "${DB_SSL:-false}"
-      printf 'DB_SSL_VERIFY=%s\n' "${DB_SSL_VERIFY:-peer}"
+      printf 'DB_SSL_VERIFY=%s\n' "${DB_SSL_VERIFY:-full}"
       printf 'DB_SSL_CA_FILE=%s\n' "${DB_SSL_CA_FILE:-}"
       printf 'POOL_SIZE=%s\n' "${POOL_SIZE:-10}"
     } > "$settings_tmp"

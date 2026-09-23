@@ -112,12 +112,29 @@ reachable private address or attach the server to the database's Docker network.
 URL-encode reserved characters in the password.
 
 For a TLS database connection, set `DB_SSL=true` before first setup or in
-`.env`. The server verifies the database certificate using system certificate
-authorities by default. For a private CA, put its PEM file at
-`certs/postgres-ca.pem` and set
-`DB_SSL_CA_FILE=/app/certs/postgres-ca.pem`. Compose mounts this directory
-read-only. `DB_SSL_VERIFY=none` explicitly disables certificate verification;
-use it only for a legacy database on a trusted private network.
+`.env`. `DB_SSL_VERIFY` says how much of the server is checked, in libpq's
+terms:
+
+| `DB_SSL_VERIFY` | libpq `sslmode` | Checks |
+|---|---|---|
+| `full` (default; `peer` still accepted) | `verify-full` | the chain, and that the certificate names the host in `DATABASE_URL`: a DNS name, or for an IP address an IP subjectAltName |
+| `ca` | `verify-ca` | the chain only. For a database reached by an address its certificate does not name |
+| `none` | `require` | nothing: encrypted, server not authenticated. Logged as a warning at every boot |
+
+The chain is checked against the system certificate authorities, or against a
+private CA: put its PEM file at `certs/postgres-ca.pem` and set
+`DB_SSL_CA_FILE=/app/certs/postgres-ca.pem` (compose mounts the directory
+read-only). The server reads that file at boot and refuses to start if it is
+missing or holds no certificate, rather than failing every connection later.
+Each boot logs one line saying which mode is in effect:
+
+    Database TLS: verify-full: chain against DB_SSL_CA_FILE (/app/certs/postgres-ca.pem, 1 certificate(s)), certificate must name db.internal
+
+A 1.0.1 deployment with `DB_SSL=true` was not verifying anything. Upgrading:
+with a public CA and the right hostname, nothing to do; with a private CA, set
+`DB_SSL_CA_FILE`; with a certificate that does not name the address you
+connect to, also set `DB_SSL_VERIFY=ca`. Reach for `none` only when no CA
+file can be had.
 
 Subsequent `./scripts/setup.sh` calls remember that this is an external
 database. Do not apply `STRUCTURE.sql` to an existing database. Its migration

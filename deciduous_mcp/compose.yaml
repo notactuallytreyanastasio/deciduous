@@ -12,7 +12,7 @@ services:
       PORT: "4000"
       POOL_SIZE: ${POOL_SIZE:-10}
       DB_SSL: ${DB_SSL:-false}
-      DB_SSL_VERIFY: ${DB_SSL_VERIFY:-peer}
+      DB_SSL_VERIFY: ${DB_SSL_VERIFY:-full}
       DB_SSL_CA_FILE: ${DB_SSL_CA_FILE:-}
     volumes:
       - ./certs:/app/certs:ro
