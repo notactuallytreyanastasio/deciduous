@@ -42,6 +42,13 @@ DOES=("pure functions only: board, pieces, 7-bag with injected randomness, SRS r
 
 die() { print -u2 -- "demo-swarm: $*"; exit 1 }
 
+# A session is up when Claude Code has written its transcript. That happens
+# within a second of start, and never while a startup dialog is waiting.
+transcript_of() {
+  local -a f=(${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/*/$1.jsonl(N))
+  (( $#f )) && print -r -- $f[1]
+}
+
 # ------------------------------------------------------------ timing / keys
 FAST=0
 nap() { (( FAST )) && return 0; zselect -t $1 || true; poll_key }   # centiseconds
@@ -358,7 +365,7 @@ write_manifest() {
   source $dir/.swarm/env
   {
     print -r -- '{'
-    print -r -- "  \"format\": \"one macOS script -r file per pane: repeated {u64 len, u64 sec, u32 usec, u32 dir ('s' start, 'o' output, 'i' input, 'e' end)} + len bytes, little-endian; <name>.size holds cols rows and the epoch the pane started; each claude transcript is ~/.claude/projects/*/<session_id>.jsonl\","
+    print -r -- "  \"format\": \"one macOS script -r file per pane: repeated {u64 len, u64 sec, u32 usec, u32 dir ('s' start, 'o' output, 'i' input, 'e' end)} + len bytes, little-endian; <name>.size holds cols rows and the epoch the pane started; each claude transcript is ~/.claude/projects/*/<session_id>.jsonl; <name>.transcript holds its path once the session is up, <name>.no-transcript says it never came up\","
     print -r -- "  \"tag\": \"$TAG\", \"workspace\": \"$WS\", \"arena\": \"$dir\","
     print -r -- "  \"started\": $EPOCHSECONDS, \"terminal\": \"$TERMKIND\", \"dry_run\": $(( DRY ? 1 : 0 )),"
     print -r -- "  \"sessions\": ["
@@ -504,7 +511,26 @@ start_claude() {
     print -r -- "${(q-)cmd[@]}" | fold -w $(( COLUMNS - ${#MARGIN} - 2 )) | sed "s/^/$MARGIN/"
     return 0
   fi
-  exec $cmd
+  # Writes where this pane's transcript is, or that there is none, next to
+  # its recording. It ignores the hangup that closing the pane sends, so a
+  # session that never came up is still written down; it stops when the
+  # pane's process ($$, which exec hands to claude) is gone. The lead may
+  # wait on the user's answer for as long as that takes; a worker has no
+  # question to wait on, so two minutes without a transcript is a failure.
+  {
+    trap '' HUP
+    local t pane=$$ until=$(( EPOCHSECONDS + 120 ))
+    while ! t=$(transcript_of ${(P)sid_var}); do
+      kill -0 $pane 2>/dev/null || break
+      [[ $me == lead ]] || (( EPOCHSECONDS < until )) || break
+      zselect -t 50 || true
+    done
+    if [[ -n $t ]]; then print -r -- $t > $dir/.swarm/rec/$me.transcript
+    else print -r -- "session ${(P)sid_var} never wrote a transcript" > $dir/.swarm/rec/$me.no-transcript; fi
+  } &!
+  [[ $me == lead ]] || exec $cmd
+  $cmd
+  : > $dir/.swarm/lead-exited
 }
 
 # ------------------------------------------------------- worker standby
@@ -521,6 +547,22 @@ standby() {
     print -rn -- "$CR  $C_FAINT${spin[f % 10 + 1]}  waiting for the lead$RST  "
     f=$(( f + 1 )); zselect -t 8 || true
   done
+  # Claude Code asks "Do you trust this folder?" once per git repository, and
+  # --dangerously-skip-permissions does not answer it. This worktree inherits
+  # the arena's answer, so it waits for the lead's session to exist: then the
+  # question has been answered, once, in the pane the user is watching, and
+  # this one starts without it. Started any earlier, every pane asks, and a
+  # pane nobody answers never starts at all.
+  if (( ! DRY )); then
+    while [[ -z $(transcript_of $SID_lead) ]]; do
+      if [[ -e $dir/.swarm/lead-exited ]]; then
+        print -r -- "$CR  ${C_LEAD}✕$RST  ${C_TXT}the lead's session ended before it began, so this one will not start$RST${e}[K"
+        exit 1
+      fi
+      print -rn -- "$CR  $C_FAINT${spin[f % 10 + 1]}  waiting for the lead's session$RST${e}[K"
+      f=$(( f + 1 )); zselect -t 20 || true
+    done
+  fi
   zselect -t $(( i * 35 )) || true
   print -r -- "$CR  $col●$RST  ${C_TXT}starting$RST  $C_FAINT·  claude --model sonnet$RST     "
   : > $dir/.swarm/online/$me
@@ -626,6 +668,15 @@ tour() {
 
   section 04 "Starting"
   : > $dir/.swarm/go
+  if (( ! ${DRY:-1} )) && [[ -z ${DEMO_SWARM_PREVIEW:-} ]]; then
+    say "Claude Code asks one question first: whether to trust this folder."
+    dim "Answer it in this pane. The workers start once the lead's session is"
+    dim "up; each of their panes says when it has. Every pane is recorded to"
+    dim ".swarm/rec, and manifest.json says which transcript is whose."
+    beat 180
+    clear
+    return 0
+  fi
   local online=0 deadline=$(( EPOCHSECONDS + 30 )) f=0 spin=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
   for (( i = 1; i <= N; i++ )); do print; done
   while (( online < N && EPOCHSECONDS < deadline )); do
