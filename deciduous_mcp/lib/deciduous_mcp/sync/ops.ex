@@ -92,6 +92,7 @@ defmodule DeciduousMcp.Sync.Ops do
   end
 
   @max_id 255
+  @max_float 1.7976931348623157e308
 
   defp malformed(op) do
     cond do
@@ -107,6 +108,12 @@ defmodule DeciduousMcp.Sync.Ops do
 
       String.length(op["kind"]) > @max_id ->
         "kind is #{String.length(op["kind"])} characters; the limit is #{@max_id}"
+
+      # Ecto casts the weight with :erlang.float/1, which raises (an empty
+      # 500 for the whole request) on an integer past the float range.
+      is_integer(op["weight"]) and abs(op["weight"]) > @max_float ->
+        "weight #{op["weight"] |> Integer.to_string() |> String.slice(0, 20)}... " <>
+          "(#{op["weight"] |> Integer.to_string() |> String.length()} digits) is too large for a float"
 
       key =
           Enum.find(~w(change_id from_change_id to_change_id), fn k ->
@@ -125,7 +132,8 @@ defmodule DeciduousMcp.Sync.Ops do
   defp nul_path(v, path) when is_map(v) do
     Enum.find_value(v, fn {k, x} ->
       if is_binary(k) and String.contains?(k, <<0>>),
-        do: render_path([inspect(k) | path]),
+        # As text ("a\0b"), not as an Elixir binary (<<97, 0, 98>>).
+        do: render_path([inspect(k, binaries: :as_strings) | path]),
         else: nul_path(x, [k | path])
     end)
   end

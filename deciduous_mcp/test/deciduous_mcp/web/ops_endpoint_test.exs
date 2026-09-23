@@ -349,4 +349,45 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       assert dup["result"] == "duplicate"
     end
   end
+
+  # NEW (low), adversarial round 2: an integer weight too large for a
+  # float raised ArgumentError while the edge was cast, and the whole
+  # request answered an empty 500. 1e300 and 1.7976931348623157e308 were
+  # applied; 10**400 was not. The Rust client sends an f64 and cannot send
+  # it; any other /ops client can.
+  test "new: a weight too large for a float is rejected alone", %{token: token} do
+    ws = "ops-weight-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("a", "a"), create("c", "c")])
+
+    huge = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "create_edge",
+      from_change_id: "a",
+      to_change_id: "c",
+      edge_type: "leads_to",
+      weight: Integer.pow(10, 400)
+    }
+
+    {status, body} = ops(token, ws, [huge, create("after", "after")])
+    assert status == 200, "#{status} #{inspect(body)}"
+    [r, after_result] = body["results"]
+    assert r["result"] == "rejected", inspect(r)
+    assert r["reason"] =~ "weight", inspect(r)
+    assert after_result["result"] == "applied"
+
+    fine = %{huge | op_id: Ecto.UUID.generate(), weight: 1.7976931348623157e308}
+    {200, %{"results" => [ok]}} = ops(token, ws, [fine])
+    assert ok["result"] == "applied", inspect(ok)
+  end
+
+  # NEW (low): the reason for a NUL in a metadata key printed the key as an
+  # Elixir binary, "at metadata.<<97, 0, 98>>".
+  test "new: a NUL in a metadata key is named as text", %{token: token} do
+    ws = "ops-nulkey-" <> Integer.to_string(System.unique_integer([:positive]))
+    key = "a" <> <<0>> <> "b"
+    {200, %{"results" => [r]}} = ops(token, ws, [create("k", "k", %{metadata: %{key => "v"}})])
+    assert r["result"] == "rejected"
+    refute r["reason"] =~ "<<", r["reason"]
+    assert r["reason"] =~ ~S(metadata."a\0b"), r["reason"]
+  end
 end
