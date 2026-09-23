@@ -1172,6 +1172,10 @@ fn a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp() {
     let goal = alice.add("goal", "A", &[]);
     let cid = alice.change_id(goal);
     let good = alice.doc();
+    // Both edits are later than the node's own record: the local row must not
+    // win on age. Relative to now, not a date that was the future once.
+    let ours_at = (chrono::Utc::now() + chrono::Duration::hours(1)).to_rfc3339();
+    let theirs_at = (chrono::Utc::now() + chrono::Duration::hours(2)).to_rfc3339();
 
     // A commit whose graph.json no reader can parse, not even by resolving
     // markers: the ancestor of the merge below.
@@ -1184,21 +1188,11 @@ fn a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp() {
         d
     };
     alice.git(&["checkout", "-q", "-b", "theirs"]);
-    alice.write_doc(&at(
-        &good,
-        "status",
-        "completed",
-        "2026-09-23T20:00:00+00:00",
-    ));
-    alice.commit_graph("theirs: completed at 20:00");
+    alice.write_doc(&at(&good, "status", "completed", &theirs_at));
+    alice.commit_graph("theirs: completed an hour after ours");
     alice.git(&["checkout", "-q", "main"]);
-    alice.write_doc(&at(
-        &good,
-        "title",
-        "OURS RENAMED",
-        "2026-09-23T19:00:00+00:00",
-    ));
-    alice.commit_graph("ours: renamed at 19:00");
+    alice.write_doc(&at(&good, "title", "OURS RENAMED", &ours_at));
+    alice.commit_graph("ours: renamed");
 
     // Without the ancestor, every differing field would go to the newer
     // record: title "A", and our rename silently gone.
@@ -1234,24 +1228,12 @@ fn a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp() {
     let theirs = alice.dir.join("theirs.json");
     fs::write(
         &ours,
-        serde_json::to_string(&at(
-            &good,
-            "title",
-            "OURS RENAMED",
-            "2026-09-23T19:00:00+00:00",
-        ))
-        .unwrap(),
+        serde_json::to_string(&at(&good, "title", "OURS RENAMED", &ours_at)).unwrap(),
     )
     .unwrap();
     fs::write(
         &theirs,
-        serde_json::to_string(&at(
-            &good,
-            "status",
-            "completed",
-            "2026-09-23T20:00:00+00:00",
-        ))
-        .unwrap(),
+        serde_json::to_string(&at(&good, "status", "completed", &theirs_at)).unwrap(),
     )
     .unwrap();
     let out = alice.run(&[
