@@ -124,8 +124,10 @@ defmodule DeciduousMcp.MCP.Component do
 
     case invalid_id(params) do
       {key, value} ->
-        {:error, Error.execution("#{key} is not a node id: #{inspect(value)}#{id_hint(key)}"),
-         frame}
+        {:error,
+         Error.execution(
+           "#{key} is not a node id: #{inspect(value, binaries: :as_strings, limit: 5, printable_limit: 60)}#{id_hint(key)}"
+         ), frame}
 
       nil ->
         schema = DeciduousMcp.MCP.ArgCheck.with_limits(module.definition()[:input_schema] || %{})

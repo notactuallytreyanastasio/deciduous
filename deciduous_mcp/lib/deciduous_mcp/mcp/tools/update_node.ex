@@ -20,12 +20,22 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
             enum: ["pending", "active", "completed", "rejected", "superseded", "abandoned"],
             description: "New status"
           },
+          # The keys add_node writes, with add_node's types. Other keys are
+          # still accepted; every string is bounded, and so is the call. A
+          # key sent as null passes the type check and removes the key.
           metadata: %{
             type: "object",
             description:
               "Metadata keys to change. Merged into the node's existing metadata: keys " <>
                 "sent are set, a key sent as null is removed, keys not sent are kept " <>
-                "(branch, prompt, commit, files). confidence must be a number 0-100."
+                "(branch, prompt, commit, files). confidence must be a number 0-100.",
+            properties: %{
+              confidence: %{type: "integer", minimum: 0, maximum: 100},
+              commit: %{type: "string"},
+              prompt: %{type: "string"},
+              branch: %{type: "string"},
+              files: %{type: "array", items: %{type: "string"}}
+            }
           },
           branch: %{
             type: "string",
@@ -73,7 +83,11 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
         {:error, %{code: -1, message: "Update failed: #{changeset_errors(changeset)}"}}
 
       {:error, reason} ->
-        {:error, %{code: -1, message: "Update failed: #{DeciduousMcp.MCP.Component.describe_error(reason)}"}}
+        {:error,
+         %{
+           code: -1,
+           message: "Update failed: #{DeciduousMcp.MCP.Component.describe_error(reason)}"
+         }}
     end
   end
 

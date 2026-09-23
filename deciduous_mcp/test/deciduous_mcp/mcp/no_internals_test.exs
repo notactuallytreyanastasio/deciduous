@@ -34,11 +34,17 @@ defmodule DeciduousMcp.MCP.NoInternalsTest do
         "workspace" => "no-internals"
       })
 
+    # A self edge is refused by Edge.changeset, not by the argument check
+    # (update_node's metadata.confidence, used here before, now is).
     result =
-      McpHttp.call(sid, "update_node", %{"node_id" => id, "metadata" => %{"confidence" => 150}})
+      McpHttp.call(sid, "add_edge", %{
+        "from_node_id" => id,
+        "to_node_id" => id,
+        "workspace" => "no-internals"
+      })
 
     assert {:tool_error, message} = result, inspect(result)
-    assert message =~ "metadata: confidence must be between 0 and 100"
+    assert message =~ "to_node_id: cannot create edge from a node to itself"
     refute message =~ @leak
     refute message =~ "private description"
   end

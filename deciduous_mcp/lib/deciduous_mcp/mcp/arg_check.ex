@@ -33,6 +33,21 @@ defmodule DeciduousMcp.MCP.ArgCheck do
 
   @title_max 10_000
   @text_max 262_144
+  # Every string in one call, keys included. Each string was bounded, the
+  # call was not: update_node's metadata took 28 keys of 262,144 characters
+  # and stored 7,340,032 characters on one node. 1 Mi is four full-length
+  # descriptions, more than any one step of reasoning needs.
+  @call_text_max 1_048_576
+  # Arrays that do not declare maxItems. add_node files with 200,000 items
+  # and capture_conversation_turn with 5,000 observations were written.
+  @items_max 1_000
+
+  # What does not count as content for a title: whitespace, separators,
+  # controls, and format characters (U+200B zero width space, U+2060 word
+  # joiner, U+FEFF byte order mark), which String.trim/1 keeps and which
+  # render as nothing.
+  @invisible "[\\s\\p{Z}\\p{Cc}\\p{Cf}]"
+  @invisible_edges Regex.compile!("\\A#{@invisible}+|#{@invisible}+\\z", "u")
 
   @doc "Adds the default string bounds to a tool's input schema (atom or string keys)."
   def with_limits(%{} = schema) do
@@ -48,12 +63,17 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   defp limit_property(name, %{} = spec) do
     spec = with_limits(spec)
 
-    if string_type?(spec[:type]) and not Map.has_key?(spec, :maxLength) do
-      spec
-      |> Map.put(:maxLength, if(name == "title", do: @title_max, else: @text_max))
-      |> then(fn s -> if name == "title", do: Map.put_new(s, :minLength, 1), else: s end)
-    else
-      spec
+    cond do
+      string_type?(spec[:type]) and not Map.has_key?(spec, :maxLength) ->
+        spec
+        |> Map.put(:maxLength, if(name == "title", do: @title_max, else: @text_max))
+        |> then(fn s -> if name == "title", do: Map.put_new(s, :minLength, 1), else: s end)
+
+      spec[:type] == "array" ->
+        Map.put_new(spec, :maxItems, @items_max)
+
+      true ->
+        spec
     end
   end
 
@@ -75,8 +95,9 @@ defmodule DeciduousMcp.MCP.ArgCheck do
     # Declared bounds first, so a title over its own limit is told that
     # limit rather than the general one.
     with :ok <- no_nul(args, "arguments"),
-         :ok <- check_object(schema, args, nil) do
-      no_oversized_string(args, "arguments")
+         :ok <- check_object(schema, args, nil),
+         :ok <- no_oversized_string(args, "arguments") do
+      within_call_limit(args)
     end
   end
 
@@ -176,7 +197,8 @@ defmodule DeciduousMcp.MCP.ArgCheck do
     length = String.length(value)
 
     cond do
-      is_integer(spec[:minLength]) and String.length(String.trim(value)) < spec[:minLength] ->
+      is_integer(spec[:minLength]) and
+          String.length(Regex.replace(@invisible_edges, value, "")) < spec[:minLength] ->
         {:error, "#{path} must not be blank"}
 
       is_integer(spec[:maxLength]) and length > spec[:maxLength] ->
@@ -189,20 +211,25 @@ defmodule DeciduousMcp.MCP.ArgCheck do
 
   defp check_length(_spec, _value, _path), do: :ok
 
-  defp check_items(%{items: items} = spec, list, path) when is_list(list) do
+  defp check_items(spec, list, path) when is_list(list) do
     max = spec[:maxItems]
 
-    if is_integer(max) and length(list) > max do
-      {:error, "#{path} has #{length(list)} items; the limit is #{max}"}
-    else
-      list
-      |> Enum.with_index()
-      |> Enum.reduce_while(:ok, fn {item, i}, :ok ->
-        case check_value(items, item, "#{path}[#{i}]") do
-          :ok -> {:cont, :ok}
-          error -> {:halt, error}
-        end
-      end)
+    cond do
+      is_integer(max) and length(list) > max ->
+        {:error, "#{path} has #{length(list)} items; the limit is #{max}"}
+
+      is_map(spec[:items]) ->
+        list
+        |> Enum.with_index()
+        |> Enum.reduce_while(:ok, fn {item, i}, :ok ->
+          case check_value(spec[:items], item, "#{path}[#{i}]") do
+            :ok -> {:cont, :ok}
+            error -> {:halt, error}
+          end
+        end)
+
+      true ->
+        :ok
     end
   end
 
@@ -238,6 +265,30 @@ defmodule DeciduousMcp.MCP.ArgCheck do
     do: each_list(list, path, &no_oversized_string/2)
 
   defp no_oversized_string(_value, _path), do: :ok
+
+  defp within_call_limit(args) do
+    total = text_size(args)
+
+    if total > @call_text_max,
+      do:
+        {:error,
+         "the arguments hold #{total} characters of text in all (largest: #{largest_key(args)}); " <>
+           "the limit for one call is #{@call_text_max}"},
+      else: :ok
+  end
+
+  defp text_size(v) when is_binary(v), do: String.length(v)
+
+  defp text_size(%{} = map),
+    do: Enum.reduce(map, 0, fn {k, v}, acc -> acc + text_size(to_string(k)) + text_size(v) end)
+
+  defp text_size(list) when is_list(list), do: Enum.reduce(list, 0, &(text_size(&1) + &2))
+  defp text_size(_), do: 0
+
+  defp largest_key(args) do
+    {key, _} = Enum.max_by(args, fn {_k, v} -> text_size(v) end)
+    key
+  end
 
   defp each(map, path, fun, check_keys?) do
     Enum.reduce_while(map, :ok, fn {k, v}, :ok ->
