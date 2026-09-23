@@ -173,13 +173,131 @@ pub fn replace_lone_surrogates(input: &str) -> std::borrow::Cow<'_, str> {
 
 /// The `id` of a message that failed validation, if it has a usable one,
 /// so the error reply reaches the request that caused it. `Null` when the
-/// text is not JSON at all or the id is not a string or number.
+/// text does not start with a JSON value or the id is not a string or
+/// number. Only the first value is read, so a request followed by stray
+/// bytes (a NUL, a second message) still gets its error under its own id.
 pub fn request_id(input: &str) -> Value {
-    serde_json::from_str::<Value>(&replace_lone_surrogates(input))
-        .ok()
+    serde_json::Deserializer::from_str(&replace_lone_surrogates(input))
+        .into_iter::<Value>()
+        .next()
+        .and_then(Result::ok)
         .and_then(|v| v.get("id").cloned())
         .filter(|id| id.is_string() || id.is_number())
         .unwrap_or(Value::Null)
+}
+
+/// The `id` member of a top-level JSON object exactly as it was written,
+/// when it is a string that cannot be decoded as-is: one holding a lone
+/// surrogate like `"\ud800"`. Such an id cannot be held in a Rust string,
+/// and replacing the half with U+FFFD, as the rest of the message is,
+/// answers an id the client never sent. The reply must carry the original
+/// text instead; see [`splice_raw_id`].
+pub fn undecodable_raw_id(input: &str) -> Option<&str> {
+    let raw = raw_member(input, "id")?;
+    (raw.starts_with('"') && serde_json::from_str::<String>(raw).is_err()).then_some(raw)
+}
+
+/// Serialize `response` with its `id` written as `raw_id`, verbatim.
+pub fn splice_raw_id(response: &Value, raw_id: &str) -> Option<String> {
+    let mut obj = response.as_object()?.clone();
+    obj.remove("id")?;
+    let rest = serde_json::to_string(&obj).ok()?;
+    let rest = rest.strip_prefix('{')?;
+    Some(if rest == "}" {
+        format!("{{\"id\":{raw_id}}}")
+    } else {
+        format!("{{\"id\":{raw_id},{rest}")
+    })
+}
+
+/// The raw text of member `key` of the top-level object in `input`, the
+/// last one if it repeats (as serde_json keeps the last). A lexer only: it
+/// knows where strings, objects and arrays end and nothing else.
+fn raw_member<'a>(input: &'a str, key: &str) -> Option<&'a str> {
+    fn ws(b: &[u8], mut i: usize) -> usize {
+        while b.get(i).is_some_and(|c| c.is_ascii_whitespace()) {
+            i += 1;
+        }
+        i
+    }
+    fn string_end(b: &[u8], mut i: usize) -> Option<usize> {
+        i += 1;
+        while i < b.len() {
+            match b[i] {
+                b'\\' => i += 2,
+                b'"' => return Some(i + 1),
+                _ => i += 1,
+            }
+        }
+        None
+    }
+    fn value_end(b: &[u8], mut i: usize) -> Option<usize> {
+        match *b.get(i)? {
+            b'"' => string_end(b, i),
+            b'{' | b'[' => {
+                let mut depth = 0usize;
+                while i < b.len() {
+                    match b[i] {
+                        b'"' => {
+                            i = string_end(b, i)?;
+                            continue;
+                        }
+                        b'{' | b'[' => depth += 1,
+                        b'}' | b']' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(i + 1);
+                            }
+                        }
+                        _ => {}
+                    }
+                    i += 1;
+                }
+                None
+            }
+            _ => {
+                while i < b.len() && !matches!(b[i], b',' | b'}' | b']') && !b[i].is_ascii_whitespace() {
+                    i += 1;
+                }
+                Some(i)
+            }
+        }
+    }
+
+    let b = input.as_bytes();
+    let quoted = format!("\"{key}\"");
+    let mut i = ws(b, 0);
+    if b.get(i) != Some(&b'{') {
+        return None;
+    }
+    i += 1;
+    let mut found = None;
+    loop {
+        i = ws(b, i);
+        match *b.get(i)? {
+            b'}' => return found,
+            b'"' => {}
+            _ => return None,
+        }
+        let key_end = string_end(b, i)?;
+        let is_key = input.get(i..key_end) == Some(quoted.as_str());
+        i = ws(b, key_end);
+        if *b.get(i)? != b':' {
+            return None;
+        }
+        i = ws(b, i + 1);
+        let start = i;
+        i = value_end(b, i)?;
+        if is_key {
+            found = Some(input.get(start..i)?);
+        }
+        i = ws(b, i);
+        match *b.get(i)? {
+            b',' => i += 1,
+            b'}' => return found,
+            _ => return None,
+        }
+    }
 }
 
 /// Parse a raw JSON string into a `JsonRpcRequest`.
@@ -524,6 +642,19 @@ mod tests {
         let pair = pair.as_str();
         assert_eq!(replace_lone_surrogates(pair), pair);
         assert!(parse_request(r#"{"jsonrpc":"2.0","id":1,"method":"x\ud800"}"#).is_ok());
+    }
+
+    #[test]
+    fn a_lone_surrogate_id_is_echoed_as_it_was_sent() {
+        let line = r#"{"jsonrpc":"2.0","id":"a\ud800","method":"ping","p":{"id":1,"x":["}"]}}"#;
+        let raw = undecodable_raw_id(line).unwrap();
+        assert_eq!(raw, r#""a\ud800""#);
+        let out = splice_raw_id(&json!({"jsonrpc":"2.0","id":"x","result":{}}), raw).unwrap();
+        assert_eq!(out, r#"{"id":"a\ud800","jsonrpc":"2.0","result":{}}"#);
+        assert_eq!(undecodable_raw_id(r#"{"id":"fine","method":"ping"}"#), None);
+        assert_eq!(undecodable_raw_id(r#"{"id":7}"#), None);
+        assert_eq!(undecodable_raw_id("not json"), None);
+        assert_eq!(request_id("{\"id\":9,\"method\":\"ping\"}\u{0}"), json!(9));
     }
 
     #[test]

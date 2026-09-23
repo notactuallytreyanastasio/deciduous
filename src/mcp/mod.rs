@@ -505,12 +505,17 @@ pub fn run_server() -> io::Result<()> {
         if stdin.read_until(b'\n', &mut buf)? == 0 {
             break;
         }
+        let mut raw_id = None;
         let response = match std::str::from_utf8(&buf) {
             Ok(line) => {
-                let trimmed = line.trim();
+                // RFC 8259 lets a parser ignore a leading byte order mark,
+                // and `trim` does not count U+FEFF as whitespace: the
+                // message was answered as a parse error with id null.
+                let trimmed = line.trim().trim_start_matches('\u{feff}').trim_start();
                 if trimmed.is_empty() {
                     continue;
                 }
+                raw_id = protocol::undecodable_raw_id(trimmed);
                 server.handle_message(trimmed)
             }
             Err(e) => {
@@ -524,7 +529,9 @@ pub fn run_server() -> io::Result<()> {
         };
 
         if let Some(resp) = response {
-            let serialized = serde_json::to_string(&resp).unwrap_or_else(|_| {
+            let spliced = raw_id.and_then(|raw| protocol::splice_raw_id(&resp, raw));
+            let serialized = spliced.map(Ok).unwrap_or_else(|| serde_json::to_string(&resp));
+            let serialized = serialized.unwrap_or_else(|_| {
                 r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Serialization error"}}"#.to_string()
             });
             writeln!(stdout, "{serialized}")?;

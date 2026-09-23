@@ -1711,6 +1711,29 @@ fn starting_a_session_after_resuming_one_reports_it_and_ending_keeps_the_others(
     c.close();
 }
 
+#[test]
+fn request_ids_survive_a_lone_surrogate_a_bom_and_trailing_bytes() {
+    let p = Project::new();
+    let mut m = p.mcp();
+
+    // The id itself holds the lone surrogate: echo it as it was sent.
+    m.send_raw(b"{\"jsonrpc\":\"2.0\",\"id\":\"a\\ud800\",\"method\":\"ping\"}\n");
+    let l = m.read_line(Duration::from_secs(10)).expect("no reply");
+    assert!(l.contains(r#""id":"a\ud800""#), "id not echoed: {l}");
+
+    // RFC 8259 lets a parser ignore a byte order mark.
+    let r = m.raw_reply(b"\xef\xbb\xbf{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"ping\"}\n");
+    assert_eq!(r["id"], 8, "BOM: {r}");
+    assert!(r["result"].is_object(), "{r}");
+
+    // Trailing garbage is an error, but an error for this request.
+    let r = m.raw_reply(b"{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"ping\"}\x00\n");
+    assert_eq!(r["id"], 9, "trailing NUL: {r}");
+    assert!(r["error"].is_object(), "{r}");
+    m.ping_alive();
+    m.close();
+}
+
 // ============================================================================
 // R4, again: the file checked is the file read
 // ============================================================================
