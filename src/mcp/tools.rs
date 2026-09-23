@@ -686,7 +686,86 @@ pub fn validate_tool_args(tool_name: &str, args: &Value) -> Result<(), String> {
         }
     }
 
+    // An argument the tool does not declare. Every handler reads only the
+    // names its schema declares, so an unknown one used to vanish and the
+    // call succeeded doing something else: a misspelt `stauts` left the
+    // status as it was and answered success.
+    let declared: Vec<&str> = schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .map(|p| p.keys().map(String::as_str).collect())
+        .unwrap_or_default();
+    if let Some(obj) = args.as_object() {
+        let mut unknown: Vec<&str> = obj
+            .keys()
+            .map(String::as_str)
+            .filter(|k| !declared.contains(k))
+            .collect();
+        if !unknown.is_empty() {
+            unknown.sort_unstable();
+            let named: Vec<String> = unknown
+                .iter()
+                .map(|k| match suggest(k, &declared) {
+                    Some(s) => format!("\"{k}\" (did you mean {s}?)"),
+                    None => format!("\"{k}\""),
+                })
+                .collect();
+            let mut all = declared.clone();
+            all.sort_unstable();
+            return Err(format!(
+                "{tool_name} has no argument{} {}. Its arguments are: {}",
+                if unknown.len() == 1 { "" } else { "s" },
+                named.join("; "),
+                all.join(", ")
+            ));
+        }
+    }
+
     Ok(())
+}
+
+/// The declared argument a caller most likely meant by `key`.
+fn suggest<'a>(key: &str, declared: &[&'a str]) -> Option<&'a str> {
+    const ALIASES: &[(&str, &[&str])] = &[
+        ("type", &["node_type", "edge_type"]),
+        ("from", &["from_id"]),
+        ("to", &["to_id"]),
+        ("from_node_id", &["from_id"]),
+        ("to_node_id", &["to_id"]),
+        ("id", &["node_id"]),
+        ("parent_id", &["from_id", "node_id"]),
+        ("name", &["title"]),
+        ("text", &["description", "title"]),
+        ("search", &["query"]),
+        ("q", &["query"]),
+        ("reason", &["rationale"]),
+    ];
+    if let Some((_, targets)) = ALIASES.iter().find(|(k, _)| *k == key) {
+        if let Some(t) = targets.iter().find(|t| declared.contains(t)) {
+            return declared.iter().copied().find(|d| d == t);
+        }
+    }
+    declared
+        .iter()
+        .copied()
+        .map(|d| (d, edit_distance(key, d)))
+        .filter(|(d, dist)| *dist <= 2.max(d.len() / 4))
+        .min_by_key(|(_, dist)| *dist)
+        .map(|(d, _)| d)
+}
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.chars().enumerate() {
+        let mut cur = vec![i + 1; b.len() + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let sub = prev[j] + usize::from(ca != *cb);
+            cur[j + 1] = sub.min(prev[j + 1] + 1).min(cur[j] + 1);
+        }
+        prev = cur;
+    }
+    prev[b.len()]
 }
 
 // ---------------------------------------------------------------------------
@@ -789,6 +868,31 @@ mod tests {
         // list_nodes has no required fields
         let args = serde_json::json!({});
         assert!(validate_tool_args("list_nodes", &args).is_ok());
+    }
+
+    /// T7/T11: an argument the tool does not declare used to be ignored,
+    /// so a misspelt name did something other than what was asked.
+    #[test]
+    fn t7_unknown_argument_is_refused_naming_the_right_one() {
+        let args = serde_json::json!({"node_id": 1, "stauts": "completed", "status": "completed"});
+        let err = validate_tool_args("update_status", &args).unwrap_err();
+        assert!(err.contains("\"stauts\""), "{err}");
+        assert!(err.contains("did you mean status?"), "{err}");
+
+        let args = serde_json::json!({"node_type": "goal", "title": "t", "type": "goal"});
+        let err = validate_tool_args("add_node", &args).unwrap_err();
+        assert!(err.contains("did you mean node_type?"), "{err}");
+
+        let args = serde_json::json!({"from": 1, "to_id": 2, "from_id": 1});
+        let err = validate_tool_args("link_nodes", &args).unwrap_err();
+        assert!(err.contains("\"from\" (did you mean from_id?)"), "{err}");
+
+        let args = serde_json::json!({"node_type": "goal", "title": "t", "qqq": 1});
+        let err = validate_tool_args("add_node", &args).unwrap_err();
+        assert!(
+            err.contains("\"qqq\"") && err.contains("Its arguments are:"),
+            "{err}"
+        );
     }
 
     #[test]

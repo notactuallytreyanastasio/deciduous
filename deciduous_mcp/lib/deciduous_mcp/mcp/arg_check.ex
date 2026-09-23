@@ -103,6 +103,98 @@ defmodule DeciduousMcp.MCP.ArgCheck do
 
   def check(_schema, args), do: {:error, "arguments must be an object, got #{describe(args)}"}
 
+  # --- names ------------------------------------------------------------------
+
+  # A caller's likely meaning for a name the tool does not have, most likely
+  # first. Only the ones the tool declares are offered.
+  @aliases %{
+    "parent_id" => ~w(parent_node_id related_to),
+    "parent" => ~w(parent_id parent_node_id related_to),
+    "parent_node_id" => ~w(parent_id related_to),
+    "related_to" => ~w(parent_id parent_node_id),
+    "node_id" => ~w(parent_node_id goal_node_id related_to),
+    "id" => ~w(node_id),
+    "goal_id" => ~w(goal_node_id parent_node_id parent_id),
+    "node_type" => ~w(type),
+    "type" => ~w(node_type edge_type),
+    "kind" => ~w(node_type type edge_type),
+    "from" => ~w(from_node_id),
+    "from_id" => ~w(from_node_id),
+    "to" => ~w(to_node_id),
+    "to_id" => ~w(to_node_id),
+    "name" => ~w(title),
+    "text" => ~w(description title),
+    "content" => ~w(description),
+    "body" => ~w(description),
+    "reason" => ~w(rationale description),
+    "query" => ~w(search question),
+    "q" => ~w(search question),
+    "chosen" => ~w(chosen_option),
+    "options" => ~w(options_considered alternatives),
+    "project" => ~w(workspace),
+    "repo" => ~w(workspace)
+  }
+
+  @doc """
+  `:ok`, or `{:error, message}` naming every argument the tool does not
+  declare, each with the one it most likely meant.
+
+  Hermes hands a tool only the keys its schema declares (Peri returns what
+  it validated), so without this an unknown name did not fail: it vanished,
+  and the call succeeded doing something other than what was asked.
+  `args` must be the arguments as the client sent them.
+  """
+  def unknown_arguments(tool, schema, args) when is_map(args) do
+    props = Map.get(schema, :properties, %{})
+    declared = props |> Map.keys() |> Enum.map(&to_string/1)
+
+    case args |> Map.keys() |> Enum.map(&to_string/1) |> Enum.reject(&(&1 in declared)) do
+      [] ->
+        :ok
+
+      unknown ->
+        named =
+          unknown
+          |> Enum.sort()
+          |> Enum.map_join("; ", fn key ->
+            case suggestions(key, props, declared) do
+              [] -> inspect(key)
+              meant -> "#{inspect(key)} (did you mean #{Enum.join(meant, " or ")}?)"
+            end
+          end)
+
+        noun = if length(unknown) == 1, do: "argument", else: "arguments"
+
+        {:error,
+         "#{tool} has no #{noun} #{named}. Its arguments are: " <>
+           Enum.join(Enum.sort(declared), ", ")}
+    end
+  end
+
+  def unknown_arguments(_tool, _schema, _args), do: :ok
+
+  defp suggestions(key, props, declared) do
+    nested =
+      case props[:metadata] || props["metadata"] do
+        %{properties: meta} ->
+          if Enum.any?(Map.keys(meta), &(to_string(&1) == key)), do: ["metadata.#{key}"], else: []
+
+        _ ->
+          []
+      end
+
+    aliased = Enum.filter(Map.get(@aliases, key, []), &(&1 in declared))
+
+    near =
+      declared
+      |> Enum.map(&{&1, String.jaro_distance(key, &1)})
+      |> Enum.filter(fn {_, d} -> d >= 0.85 end)
+      |> Enum.sort_by(fn {_, d} -> -d end)
+      |> Enum.map(&elem(&1, 0))
+
+    Enum.uniq(nested ++ aliased ++ near) |> Enum.take(2)
+  end
+
   # --- schema ---------------------------------------------------------------
 
   defp check_value(spec, value, path) do

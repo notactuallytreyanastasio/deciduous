@@ -68,6 +68,61 @@ defmodule DeciduousMcp.MCP.Scope do
     end)
   end
 
+  @node_scoped ~w(update_node delete_node delete_edge show_node get_ancestors get_descendants)
+
+  @doc "True for a tool that names its node by id and acts in that node's workspace."
+  def node_scoped?(tool), do: tool in @node_scoped
+
+  @doc """
+  Adds `workspace` to a tool that names its node by id.
+
+  Such a tool acts in the node's own workspace. The instructions tell an
+  agent to pass `workspace` on every write, and refusing the argument would
+  punish it for that; ignoring it would let a caller who is wrong about
+  where a node lives go on believing it. So it is checked
+  (`check_node_workspace/2`).
+  """
+  def with_node_workspace_arg(definition) do
+    property = %{
+      workspace: %{
+        type: "string",
+        description:
+          "Optional. The workspace you believe the node is in; the call is refused if " <>
+            "the node is in another one. The node's own workspace is always the one used."
+      }
+    }
+
+    update_in(definition, [:input_schema, :properties], &Map.merge(&1, property))
+  end
+
+  @doc """
+  For a tool that names its node by id, `:ok` unless the call also names a
+  workspace and the node is in a different one. A node that cannot be found
+  is left to the tool to report.
+  """
+  def check_node_workspace(tool, %{"workspace" => raw} = args)
+      when tool in @node_scoped and is_binary(raw) do
+    node_id = args["node_id"] || args["from_node_id"]
+
+    with {:ok, wanted} when wanted != @global <- Workspaces.normalize_name(raw),
+         true <- is_binary(node_id),
+         {:ok, node} <- lookup_node(node_id),
+         {:ok, ws} <- Workspaces.get_workspace(node.workspace_id),
+         false <- ws.name == wanted do
+      {:error,
+       "node #{node_id} is in workspace #{inspect(ws.name)}, not #{inspect(wanted)}. " <>
+         "Pass the node's own workspace, or none"}
+    else
+      {:error, reason} when is_atom(reason) and reason != :not_found ->
+        {:error, Workspaces.describe_name_error(raw, reason)}
+
+      _ ->
+        :ok
+    end
+  end
+
+  def check_node_workspace(_tool, _args), do: :ok
+
   @doc """
   Resolves a write scope, and claims the branch lock for it.
 

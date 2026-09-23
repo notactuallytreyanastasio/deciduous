@@ -46,6 +46,7 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
         required: ["node_id"]
       }
     }
+    |> DeciduousMcp.MCP.Scope.with_node_workspace_arg()
   end
 
   def call(%{arguments: args, server: frame}) do

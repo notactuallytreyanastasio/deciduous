@@ -121,7 +121,32 @@ defmodule DeciduousMcp.MCP.Component do
 
   def dispatch_tool(module, params, frame) do
     params = params || %{}
+    definition = module.definition()
 
+    with :ok <-
+           DeciduousMcp.MCP.ArgCheck.unknown_arguments(
+             definition[:name],
+             definition[:input_schema] || %{},
+             sent_arguments(frame, params)
+           ),
+         :ok <- DeciduousMcp.MCP.Scope.check_node_workspace(definition[:name], params) do
+      dispatch_known_tool(module, params, frame)
+    else
+      {:error, message} ->
+        {:error, Error.execution(message <> "; nothing was written"), frame}
+    end
+  end
+
+  # The arguments as the client sent them. `params` is Peri's output, which
+  # holds only the declared keys; the request on the frame is the original.
+  defp sent_arguments(frame, params) do
+    case frame do
+      %{request: %{params: %{"arguments" => args}}} when is_map(args) -> args
+      _ -> params
+    end
+  end
+
+  defp dispatch_known_tool(module, params, frame) do
     case invalid_id(params) do
       {key, value} ->
         {:error,
@@ -248,9 +273,14 @@ defmodule DeciduousMcp.MCP.Component do
     end
   end
 
+  # A tool that names its node by id takes `workspace` only to check it
+  # (Scope.check_node_workspace/2); it never creates one.
   defp names_workspace?(module) do
-    props = get_in(module.definition(), [:input_schema, :properties]) || %{}
-    Map.has_key?(props, :workspace) or Map.has_key?(props, "workspace")
+    definition = module.definition()
+    props = get_in(definition, [:input_schema, :properties]) || %{}
+
+    (Map.has_key?(props, :workspace) or Map.has_key?(props, "workspace")) and
+      not DeciduousMcp.MCP.Scope.node_scoped?(definition[:name])
   end
 
   defp has_nodes?(name) do

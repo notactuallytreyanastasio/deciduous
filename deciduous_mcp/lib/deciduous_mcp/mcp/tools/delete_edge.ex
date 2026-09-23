@@ -28,6 +28,7 @@ defmodule DeciduousMcp.MCP.Tools.DeleteEdge do
         required: ["from_node_id", "to_node_id"]
       }
     }
+    |> DeciduousMcp.MCP.Scope.with_node_workspace_arg()
   end
 
   def call(%{arguments: args, server: frame}) do
