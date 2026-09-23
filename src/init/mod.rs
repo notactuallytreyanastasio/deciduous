@@ -456,17 +456,16 @@ pub fn update_tooling() -> Result<(), String> {
     println!("  - Slash commands (/decision, /recover, /work, /document, /build-test, /serve-ui, /sync-graph, /decision-graph, /sync)");
     println!("  - Skills (/pulse, /narratives, /archaeology)");
     if has_claude {
-        println!("  - Enforcement hooks (block edits without action nodes)");
-        println!("  - Post-commit reminders (link commits to graph)");
         println!("  - Agent configurations (agents.toml)");
+        println!("  - No logging hooks: the ones earlier versions installed are removed");
     }
     if has_opencode {
-        println!("  - OpenCode plugins (TypeScript hooks)");
+        println!("  - OpenCode version-check plugin (the logging plugins are removed)");
         println!("  - OpenCode skills, agents, and tools");
         println!("  - OpenCode configuration (opencode.json)");
     }
     if has_windsurf {
-        println!("  - Windsurf hooks and rules");
+        println!("  - Windsurf rules and version-check hook");
     }
     println!();
 
