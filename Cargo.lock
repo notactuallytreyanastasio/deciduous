@@ -362,6 +362,7 @@ dependencies = [
  "clap_complete",
  "colored",
  "diesel",
+ "libc",
  "libsqlite3-sys",
  "regex",
  "rusqlite",

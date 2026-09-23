@@ -120,6 +120,49 @@ fn get_db_path() -> std::path::PathBuf {
     std::path::PathBuf::from(".deciduous/deciduous.db")
 }
 
+/// Node types a new node may have.
+pub const NODE_TYPES: &[&str] = &[
+    "goal",
+    "decision",
+    "option",
+    "action",
+    "outcome",
+    "observation",
+    "revisit",
+];
+
+/// Statuses a node may be set to.
+pub const NODE_STATUSES: &[&str] = &[
+    "pending",
+    "active",
+    "completed",
+    "rejected",
+    "superseded",
+    "abandoned",
+];
+
+/// Edge types a new edge may have.
+pub const EDGE_TYPES: &[&str] = &[
+    "leads_to",
+    "requires",
+    "chosen",
+    "rejected",
+    "blocks",
+    "enables",
+    "took_from",
+];
+
+fn one_of(what: &str, value: &str, allowed: &[&str]) -> Result<()> {
+    if allowed.contains(&value) {
+        Ok(())
+    } else {
+        Err(DbError::Validation(format!(
+            "unknown {what} '{value}'; expected one of: {}",
+            allowed.join(", ")
+        )))
+    }
+}
+
 /// Current schema version for deciduous
 pub const CURRENT_SCHEMA: DecisionSchema = DecisionSchema {
     major: 1,
@@ -637,6 +680,36 @@ struct FtsSearchRow {
 // ============================================================================
 
 type DbPool = Pool<ConnectionManager<SqliteConnection>>;
+
+/// How long a statement waits for another process's write lock before it
+/// gives up with "database is locked". A CLI command, two MCP servers and the
+/// API daemon routinely write one file at once; a single write holds the lock
+/// for milliseconds, so ten seconds is only ever reached by a stuck process.
+pub const BUSY_TIMEOUT_MS: u32 = 10_000;
+
+/// Set on every pooled connection before first use.
+///
+/// `busy_timeout` is per connection and defaults to 0, which is what made
+/// half of all concurrent MCP writes fail immediately. `journal_mode=WAL` is
+/// stored in the file, so the first connection converts the database once;
+/// after that readers never block the writer and the writer never blocks
+/// readers. The timeout goes first so the conversion itself waits for a lock
+/// rather than failing on one.
+#[derive(Debug)]
+struct SqlitePragmas;
+
+impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for SqlitePragmas {
+    fn on_acquire(
+        &self,
+        conn: &mut SqliteConnection,
+    ) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::connection::SimpleConnection;
+        conn.batch_execute(&format!(
+            "PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}; PRAGMA journal_mode = WAL;"
+        ))
+        .map_err(diesel::r2d2::Error::QueryError)
+    }
+}
 type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 
 /// Database connection wrapper with connection pool.
@@ -646,12 +719,27 @@ type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 /// it so teammates receive it through git. See [`crate::records`].
 pub struct Database {
     pool: DbPool,
+    /// The database file, absolute. Everything else that belongs to the
+    /// project (documents, the active-session file) is found next to it,
+    /// never relative to the working directory: an MCP server started in
+    /// `repo/src` opens `repo/.deciduous/deciduous.db` by walking up, and a
+    /// cwd-relative `.deciduous/documents` there created a second
+    /// `.deciduous/` that every later command in `src` then opened instead.
+    path: std::path::PathBuf,
     /// Attached graph file, if any. Behind a lock so `deciduous sync` can
     /// attach a store it just created without a mutable handle.
     store: std::sync::RwLock<Option<RecordStore>>,
     /// Log of writes bound for the shared server, attached when the
     /// project has a `[remote]`. See [`crate::oplog`].
     oplog: std::sync::RwLock<Option<crate::oplog::OpLog>>,
+    /// Whether to attach the graph file next to the database once it
+    /// appears. A long-lived handle (the API daemon's per-graph cache, an
+    /// MCP server) that opened before `deciduous sync` created graph.json
+    /// otherwise never wrote to it: every record after that was missing
+    /// until someone ran sync again. `set_store(None)` turns it off.
+    auto_attach: std::sync::atomic::AtomicBool,
+    /// Author for a graph file attached later (see `set_store_author`).
+    store_author: std::sync::RwLock<Option<String>>,
 }
 
 /// Error type for database operations
@@ -700,6 +788,12 @@ fn one_field(key: &str, value: &str) -> serde_json::Map<String, serde_json::Valu
     m
 }
 
+fn node_not_found(node_id: i32) -> DbError {
+    DbError::Validation(format!(
+        "Node {node_id} does not exist. Run 'deciduous nodes' to see existing nodes."
+    ))
+}
+
 impl Database {
     /// Get the database path that will be used
     pub fn db_path() -> std::path::PathBuf {
@@ -729,18 +823,25 @@ impl Database {
         let manager = ConnectionManager::<SqliteConnection>::new(&path_str);
         let pool = Pool::builder()
             .max_size(5)
+            .connection_customizer(Box::new(SqlitePragmas))
             .build(manager)
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
         let db = Self {
             pool,
+            path: std::path::absolute(path.as_ref())
+                .unwrap_or_else(|_| path.as_ref().to_path_buf()),
             store: std::sync::RwLock::new(None),
             oplog: std::sync::RwLock::new(None),
+            auto_attach: std::sync::atomic::AtomicBool::new(true),
+            store_author: std::sync::RwLock::new(None),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
         db.init_schema()?;
-        db.set_store(RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open));
+        if let Some(store) = RecordStore::path_for_db(path.as_ref()).and_then(RecordStore::open) {
+            db.set_store(Some(store));
+        }
         db.set_oplog(crate::oplog::OpLog::for_db(path.as_ref()));
         Ok(db)
     }
@@ -950,16 +1051,76 @@ impl Database {
         out
     }
 
+    /// The database file this handle opened, as an absolute path.
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+
+    /// The directory holding the database: `.deciduous/` in a project,
+    /// `graphs/<id>/` under the API daemon.
+    pub fn data_dir(&self) -> &Path {
+        self.path.parent().unwrap_or(Path::new("."))
+    }
+
+    /// Where attached documents are stored.
+    pub fn documents_dir(&self) -> std::path::PathBuf {
+        self.data_dir().join("documents")
+    }
+
+    /// The project directory: the one containing `.deciduous/`. `None` when
+    /// the database does not sit in a `.deciduous/` directory (the API
+    /// daemon, a scratch database), which has no project around it.
+    pub fn project_root(&self) -> Option<&Path> {
+        let dir = self.data_dir();
+        (dir.file_name()? == ".deciduous")
+            .then(|| dir.parent())
+            .flatten()
+    }
+
     /// Attach (or detach) the graph file that mutations are mirrored into.
+    /// Detaching also stops the graph file being attached when it appears.
     pub fn set_store(&self, store: Option<RecordStore>) {
+        self.auto_attach
+            .store(store.is_some(), std::sync::atomic::Ordering::SeqCst);
         if let Ok(mut slot) = self.store.write() {
             *slot = store;
         }
     }
 
-    /// The attached graph file, if sync is enabled for this database.
+    /// Attribute records in the graph file to `author`, including a graph
+    /// file that is only attached later. Setting it on the store alone was
+    /// lost when a store was attached after the fact.
+    pub fn set_store_author(&self, author: &str) {
+        if let Ok(mut a) = self.store_author.write() {
+            *a = Some(author.to_string());
+        }
+        if let Ok(mut slot) = self.store.write() {
+            if let Some(store) = slot.take() {
+                *slot = Some(store.with_author(author));
+            }
+        }
+    }
+
+    /// The attached graph file, if sync is enabled for this database. If
+    /// none is attached yet but one now exists next to the database, it is
+    /// attached here: one `stat` per write while there is none.
     pub fn store(&self) -> Option<RecordStore> {
-        self.store.read().ok().and_then(|s| s.clone())
+        if let Some(store) = self.store.read().ok().and_then(|s| s.clone()) {
+            return Some(store);
+        }
+        if !self.auto_attach.load(std::sync::atomic::Ordering::SeqCst) {
+            return None;
+        }
+        let found = RecordStore::path_for_db(&self.path).and_then(RecordStore::open)?;
+        let mut slot = self.store.write().ok()?;
+        if slot.is_none() {
+            let author = self.store_author.read().ok().and_then(|a| a.clone());
+            *slot = Some(match author {
+                Some(a) => found.with_author(a),
+                None => found,
+            });
+        }
+        slot.clone()
     }
 
     // ------------------------------------------------------------------
@@ -1179,6 +1340,25 @@ impl Database {
         }
 
         Ok(true) // Migration performed
+    }
+
+    /// Write a consistent, self-contained copy of the database to `dest`,
+    /// including writes still sitting in the WAL. Refuses to overwrite.
+    pub fn backup_to(&self, dest: &Path) -> Result<()> {
+        if dest.exists() {
+            return Err(DbError::Validation(format!(
+                "{} already exists; refusing to overwrite it",
+                dest.display()
+            )));
+        }
+        let target = dest.to_str().ok_or_else(|| {
+            DbError::Validation(format!("{} is not a UTF-8 path", dest.display()))
+        })?;
+        let mut conn = self.get_conn()?;
+        diesel::sql_query("VACUUM INTO ?")
+            .bind::<diesel::sql_types::Text, _>(target)
+            .execute(&mut conn)?;
+        Ok(())
     }
 
     fn get_conn(&self) -> Result<DbConn> {
@@ -1710,6 +1890,12 @@ impl Database {
         branch: Option<&str>,
         created_at: Option<&str>,
     ) -> Result<i32> {
+        one_of("node type", node_type, NODE_TYPES)?;
+        if title.trim().is_empty() {
+            return Err(DbError::Validation(
+                "a node needs a non-empty title".to_string(),
+            ));
+        }
         self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = created_at
@@ -2210,6 +2396,12 @@ impl Database {
         edge_type: &str,
         rationale: Option<&str>,
     ) -> Result<i32> {
+        one_of("edge type", edge_type, EDGE_TYPES)?;
+        if from_id == to_id {
+            return Err(DbError::Validation(format!(
+                "cannot link node {from_id} to itself"
+            )));
+        }
         self.require_readable_store()?;
         let mut conn = self.get_conn()?;
 
@@ -2483,19 +2675,23 @@ impl Database {
 
     /// Update node status
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
+        one_of("status", status, NODE_STATUSES)?;
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
         let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
-        diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
+        let updated = diesel::update(decision_nodes::table.filter(decision_nodes::id.eq(node_id)))
             .set((
                 decision_nodes::status.eq(status),
                 decision_nodes::updated_at.eq(&now),
             ))
             .execute(&mut conn)?;
         drop(conn);
+        if updated == 0 {
+            return Err(node_not_found(node_id));
+        }
 
         self.publish_node_edit(node_id, before);
         self.log_node_update(
@@ -2519,7 +2715,9 @@ impl Database {
         let current_meta: Option<String> = decision_nodes::table
             .filter(decision_nodes::id.eq(node_id))
             .select(decision_nodes::metadata_json)
-            .first(&mut conn)?;
+            .first(&mut conn)
+            .optional()?
+            .ok_or_else(|| node_not_found(node_id))?;
 
         // Parse existing metadata or create new
         let mut meta: serde_json::Value = current_meta
@@ -2565,7 +2763,9 @@ impl Database {
         let current_meta: Option<String> = decision_nodes::table
             .filter(decision_nodes::id.eq(node_id))
             .select(decision_nodes::metadata_json)
-            .first(&mut conn)?;
+            .first(&mut conn)
+            .optional()?
+            .ok_or_else(|| node_not_found(node_id))?;
 
         // Parse existing metadata or create new
         let mut meta: serde_json::Value = current_meta
@@ -3440,6 +3640,11 @@ impl Database {
 
     /// Create a new theme
     pub fn create_theme(&self, name: &str, color: &str, description: Option<&str>) -> Result<i32> {
+        if name.trim().is_empty() {
+            return Err(DbError::Validation(
+                "a theme needs a non-empty name".to_string(),
+            ));
+        }
         self.require_readable_store()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
@@ -3563,53 +3768,56 @@ impl Database {
         Ok(())
     }
 
-    /// Remove a theme from a node
+    /// The theme named `theme_name` and the node `node_id`, or an error
+    /// naming whichever is missing. Untagging either one that does not
+    /// exist answered "was not tagged", as if the call had been meaningful.
+    fn existing_tag_parts(&self, node_id: i32, theme_name: &str) -> Result<Theme> {
+        let theme = self
+            .get_theme_by_name(theme_name)?
+            .ok_or_else(|| DbError::Validation(format!("Theme '{theme_name}' not found")))?;
+        self.get_node(node_id)?
+            .ok_or_else(|| DbError::Validation(format!("Node {node_id} not found")))?;
+        Ok(theme)
+    }
+
+    /// Remove a theme from a node. `Ok(false)` only when both exist and the
+    /// node simply was not tagged.
     pub fn untag_node(&self, node_id: i32, theme_name: &str) -> Result<bool> {
         self.require_readable_store()?;
-        let theme = self.get_theme_by_name(theme_name)?;
-
-        if let Some(theme) = theme {
-            let mut conn = self.get_conn()?;
-            let deleted = diesel::delete(
-                node_themes::table
-                    .filter(node_themes::node_id.eq(node_id))
-                    .filter(node_themes::theme_id.eq(theme.id)),
-            )
-            .execute(&mut conn)?;
-            drop(conn);
-            if deleted > 0 {
-                if let Ok(Some(node)) = self.get_node(node_id) {
-                    self.tombstone_tag(&node.change_id, &theme.change_id);
-                }
+        let theme = self.existing_tag_parts(node_id, theme_name)?;
+        let mut conn = self.get_conn()?;
+        let deleted = diesel::delete(
+            node_themes::table
+                .filter(node_themes::node_id.eq(node_id))
+                .filter(node_themes::theme_id.eq(theme.id)),
+        )
+        .execute(&mut conn)?;
+        drop(conn);
+        if deleted > 0 {
+            if let Ok(Some(node)) = self.get_node(node_id) {
+                self.tombstone_tag(&node.change_id, &theme.change_id);
             }
-            Ok(deleted > 0)
-        } else {
-            Ok(false)
         }
+        Ok(deleted > 0)
     }
 
     /// Confirm a suggested tag (change source from "suggested" to "manual")
     pub fn confirm_tag(&self, node_id: i32, theme_name: &str) -> Result<bool> {
         self.require_readable_store()?;
-        let theme = self.get_theme_by_name(theme_name)?;
-
-        if let Some(theme) = theme {
-            let mut conn = self.get_conn()?;
-            let updated = diesel::update(
-                node_themes::table
-                    .filter(node_themes::node_id.eq(node_id))
-                    .filter(node_themes::theme_id.eq(theme.id)),
-            )
-            .set(node_themes::source.eq("manual"))
-            .execute(&mut conn)?;
-            drop(conn);
-            if updated > 0 {
-                self.publish_tag(node_id, theme.id);
-            }
-            Ok(updated > 0)
-        } else {
-            Ok(false)
+        let theme = self.existing_tag_parts(node_id, theme_name)?;
+        let mut conn = self.get_conn()?;
+        let updated = diesel::update(
+            node_themes::table
+                .filter(node_themes::node_id.eq(node_id))
+                .filter(node_themes::theme_id.eq(theme.id)),
+        )
+        .set(node_themes::source.eq("manual"))
+        .execute(&mut conn)?;
+        drop(conn);
+        if updated > 0 {
+            self.publish_tag(node_id, theme.id);
         }
+        Ok(updated > 0)
     }
 
     /// Get themes for a specific node
@@ -3664,6 +3872,11 @@ impl Database {
 
     /// Create a new session with an optional name and root goal node.
     pub fn create_session(&self, name: Option<&str>, root_node_id: Option<i32>) -> Result<i32> {
+        if name.is_some_and(|n| n.trim().is_empty()) {
+            return Err(DbError::Validation(
+                "a session name, when given, must not be empty".to_string(),
+            ));
+        }
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -3699,6 +3912,21 @@ impl Database {
             ))
             .execute(&mut conn)?;
 
+        Ok(())
+    }
+
+    /// Reopen an ended session: clear `ended_at`, keep its summary.
+    pub fn reopen_session(&self, session_id: i32) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        let n =
+            diesel::update(decision_sessions::table.filter(decision_sessions::id.eq(session_id)))
+                .set(decision_sessions::ended_at.eq(None::<String>))
+                .execute(&mut conn)?;
+        if n == 0 {
+            return Err(DbError::Validation(format!(
+                "Session {session_id} not found"
+            )));
+        }
         Ok(())
     }
 

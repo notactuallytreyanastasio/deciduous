@@ -33,6 +33,10 @@ use crate::mcp::handlers;
 use crate::mcp::protocol::ToolCallResult;
 
 const MAX_BODY_BYTES: usize = 1_048_576;
+
+/// Author on graph-file records written through the API. The daemon has no
+/// idea who its caller is, and its own git identity is not the caller's.
+pub const API_AUTHOR: &str = "deciduous-api";
 const DEFAULT_QUERY_ROWS: usize = 500;
 const MAX_QUERY_ROWS: usize = 5_000;
 
@@ -143,22 +147,30 @@ impl Registry {
     /// to a file that is gone — the wedge where PUT answered 201 while every
     /// subsequent write 404'd forever.
     fn database(&self, graph_id: &str, create: bool) -> Result<Arc<Database>, ApiError> {
+        self.open_graph(graph_id, create).map(|(db, _)| db)
+    }
+
+    /// [`database`](Self::database), also saying whether this call created
+    /// the graph. Existence is checked under the registry lock: checked
+    /// before it, thirty concurrent PUTs of one new graph each saw "absent"
+    /// and one to three of them answered 201 created.
+    fn open_graph(&self, graph_id: &str, create: bool) -> Result<(Arc<Database>, bool), ApiError> {
         if !valid_graph_id(graph_id) {
             return Err(ApiError::bad_request(
                 "graph id must be 1-64 chars of [a-z0-9_-], starting alphanumeric",
             ));
         }
 
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
         let on_disk = self.exists(graph_id);
         if !create && !on_disk {
             return Err(ApiError::not_found(&format!("no such graph: {graph_id}")));
         }
 
-        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
         if on_disk {
             // File still present: a cached handle is trustworthy.
             if let Some(db) = open.get(graph_id) {
-                return Ok(Arc::clone(db));
+                return Ok((Arc::clone(db), false));
             }
         } else {
             // File gone but we were asked to create: drop any stale handle so
@@ -171,9 +183,13 @@ impl Registry {
             .map_err(|e| ApiError::internal(&format!("create graph dir: {e}")))?;
         let db = Database::open_at(self.db_path(graph_id))
             .map_err(|e| ApiError::internal(&format!("open graph db: {e}")))?;
+        // Records written through the API are attributed to the API, never
+        // to whoever `git config user.name` names in the daemon's cwd. Also
+        // for a graph.json that `deciduous sync` creates after this open.
+        db.set_store_author(API_AUTHOR);
         let db = Arc::new(db);
         open.insert(graph_id.to_string(), Arc::clone(&db));
-        Ok(db)
+        Ok((db, !on_disk))
     }
 }
 
@@ -284,10 +300,9 @@ fn route(
         (Method::Get, ["api", "v1", "graphs"]) => Ok((200, json!({"graphs": registry.list()}))),
 
         (Method::Put, ["api", "v1", "graphs", graph_id]) => {
-            let existed = registry.exists(graph_id);
-            registry.database(graph_id, true)?;
-            let status = if existed { 200 } else { 201 };
-            Ok((status, json!({"graph_id": graph_id, "created": !existed})))
+            let (_, created) = registry.open_graph(graph_id, true)?;
+            let status = if created { 201 } else { 200 };
+            Ok((status, json!({"graph_id": graph_id, "created": created})))
         }
 
         (Method::Post, ["api", "v1", "graphs", graph_id, "tools", tool_name]) => {
@@ -305,7 +320,7 @@ fn route(
             }
             let db = registry.database(graph_id, false)?;
             let args = read_json_body(request)?;
-            let result = handlers::dispatch(&db, tool_name, args);
+            let result = handlers::dispatch_as(&db, tool_name, args, handlers::Caller::Remote);
             Ok((200, tool_result_to_json(result)))
         }
 
@@ -390,6 +405,94 @@ fn tool_result_to_json(result: ToolCallResult) -> Value {
 
 // ── Read-only SQL over a graph ────────────────────────────────────────────
 
+/// Wall-clock budget for one `/query`. A recursive CTE without a bound
+/// never finishes, and the daemon runs one thread per request: four aborted
+/// requests pinned it at 400% CPU until it was killed.
+const QUERY_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Largest string or blob a query may build (SQLITE_LIMIT_LENGTH). The
+/// default is 1 GB; `printf('%.*c', 200000000, 'x')` built 200 MB in 62 ms.
+const QUERY_MAX_VALUE_BYTES: i32 = 1_000_000;
+
+/// Largest `/query` result, as serialized JSON. SQLITE_LIMIT_LENGTH caps
+/// one value, not the response: 1000 rows of a 999 KB value made a 999 MB
+/// body, and the daemon kept 1.6 GB of it after the request ended.
+const QUERY_MAX_RESPONSE_BYTES: usize = 8 * 1024 * 1024;
+
+/// Counts what serde_json would write, without keeping it.
+struct ByteCount(usize);
+
+impl std::io::Write for ByteCount {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0 += buf.len();
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// Table-valued pragmas that only describe this graph's schema. Every other
+/// pragma, and `pragma_database_list` in particular (it returns the data
+/// directory's absolute path), is refused.
+const SCHEMA_PRAGMAS: &[&str] = &[
+    "table_info",
+    "table_xinfo",
+    "table_list",
+    "index_list",
+    "index_info",
+    "index_xinfo",
+    "foreign_key_list",
+];
+
+/// What a `/query` statement may do: read tables of the one database this
+/// connection opened. Enforced by SQLite's authorizer while the statement
+/// is prepared, so it covers every spelling (`PRAGMA x`, `pragma_x(...)`,
+/// a view, a CTE) rather than whatever a text check thought of.
+///
+/// ATTACH is the reason this exists. It is read-only by SQLite's own
+/// definition, so `stmt.readonly()` let it through, and its error told the
+/// caller whether any path on the server existed ("file is not a database"
+/// versus "unable to open database file").
+fn query_authorizer(ctx: rusqlite::hooks::AuthContext<'_>) -> rusqlite::hooks::Authorization {
+    use rusqlite::hooks::{AuthAction, Authorization};
+    let schema_pragma = |name: &str| SCHEMA_PRAGMAS.contains(&name.trim_start_matches("pragma_"));
+    match ctx.action {
+        AuthAction::Select | AuthAction::Recursive | AuthAction::Function { .. } => {
+            Authorization::Allow
+        }
+        AuthAction::Read { table_name, .. } => {
+            if table_name.starts_with("pragma_") && !schema_pragma(table_name) {
+                Authorization::Deny
+            } else {
+                Authorization::Allow
+            }
+        }
+        AuthAction::Pragma {
+            pragma_name,
+            pragma_value: _,
+        } if schema_pragma(pragma_name) => Authorization::Allow,
+        _ => Authorization::Deny,
+    }
+}
+
+fn sql_error(e: rusqlite::Error) -> ApiError {
+    let msg = e.to_string();
+    if msg.contains("not authorized") || msg.contains("is prohibited") {
+        ApiError::forbidden(
+            "statement refused: /query may only read this graph's tables \
+             (no ATTACH, no pragmas beyond table/index/foreign-key info)",
+        )
+    } else if msg.contains("interrupted") {
+        ApiError::bad_request(&format!(
+            "query stopped: it exceeded the {} s time limit",
+            QUERY_TIME_LIMIT.as_secs()
+        ))
+    } else {
+        ApiError::bad_request(&format!("SQL error: {msg}"))
+    }
+}
+
 fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, ApiError> {
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
@@ -401,10 +504,16 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
         .map_err(|e| ApiError::internal(&format!("query_only pragma: {e}")))?;
     conn.busy_timeout(std::time::Duration::from_millis(2_000))
         .map_err(|e| ApiError::internal(&format!("busy timeout: {e}")))?;
+    conn.set_limit(
+        rusqlite::limits::Limit::SQLITE_LIMIT_LENGTH,
+        QUERY_MAX_VALUE_BYTES,
+    );
+    conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_ATTACHED, 0);
+    let deadline = std::time::Instant::now() + QUERY_TIME_LIMIT;
+    conn.progress_handler(10_000, Some(move || std::time::Instant::now() > deadline));
+    conn.authorizer(Some(query_authorizer));
 
-    let mut stmt = conn
-        .prepare(sql)
-        .map_err(|e| ApiError::bad_request(&format!("SQL error: {e}")))?;
+    let mut stmt = conn.prepare(sql).map_err(sql_error)?;
     if !stmt.readonly() {
         return Err(ApiError::forbidden(
             "only read-only SELECT statements are allowed",
@@ -416,22 +525,31 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
 
     let mut rows_out: Vec<Vec<Value>> = Vec::new();
     let mut truncated = false;
-    let mut rows = stmt
-        .query([])
-        .map_err(|e| ApiError::bad_request(&format!("SQL error: {e}")))?;
-    while let Some(row) = rows
-        .next()
-        .map_err(|e| ApiError::bad_request(&format!("SQL error: {e}")))?
-    {
+    let mut size = ByteCount(0);
+    let mut rows = stmt.query([]).map_err(sql_error)?;
+    while let Some(row) = rows.next().map_err(sql_error)? {
         if rows_out.len() >= limit {
             truncated = true;
             break;
         }
         let mut out = Vec::with_capacity(n_cols);
         for i in 0..n_cols {
-            out.push(sqlite_value_to_json(row.get_ref(i).map_err(|e| {
-                ApiError::internal(&format!("read column {i}: {e}"))
-            })?));
+            let value = sqlite_value_to_json(
+                row.get_ref(i)
+                    .map_err(|e| ApiError::internal(&format!("read column {i}: {e}")))?,
+            );
+            // Counted as it is built, so the limit bounds the memory too,
+            // not only the body: checking the finished Vec would already
+            // have held all of it.
+            let _ = serde_json::to_writer(&mut size, &value);
+            if size.0 > QUERY_MAX_RESPONSE_BYTES {
+                return Err(ApiError::bad_request(&format!(
+                    "query result is larger than {QUERY_MAX_RESPONSE_BYTES} bytes \
+                     (reached in row {}); select fewer or shorter columns, or lower the limit",
+                    rows_out.len() + 1
+                )));
+            }
+            out.push(value);
         }
         rows_out.push(out);
     }

@@ -72,7 +72,7 @@ pub use db::{
 pub use events::{Checkpoint, Event, MaterializedState};
 pub use export::{
     filter_graph_by_ids, filter_graph_from_roots, generate_pr_writeup, graph_to_dot,
-    parse_node_range, DotConfig, WriteupConfig,
+    parse_node_range, parse_root_ids, DotConfig, NodeSpec, WriteupConfig,
 };
 pub use hooks::{hooks_status, install_hooks, integration_status, uninstall_hooks};
 pub use narratives::PivotChain;

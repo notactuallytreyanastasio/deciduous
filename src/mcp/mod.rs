@@ -21,8 +21,9 @@ use protocol::{
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 
-/// Path to the active session file (persisted across server restarts).
-const SESSION_FILE: &str = ".deciduous/active_session";
+/// Name of the active session file, next to the database (persisted across
+/// server restarts).
+const SESSION_FILE: &str = "active_session";
 
 /// MCP server state — holds database connection and active session.
 ///
@@ -34,18 +35,22 @@ const SESSION_FILE: &str = ".deciduous/active_session";
 pub struct McpServer {
     db: Database,
     active_session_id: Option<i32>,
+    /// Resolved once, from the database's location, never from the cwd.
+    session_file: std::path::PathBuf,
 }
 
 impl McpServer {
     pub fn new(db: Database) -> Self {
+        let session_file = db.data_dir().join(SESSION_FILE);
         // Try to resume from persisted session file
-        let active_session_id = load_session_from_disk(&db);
+        let active_session_id = load_session_from_disk(&db, &session_file);
         if let Some(id) = active_session_id {
             eprintln!("deciduous-mcp: resumed active session #{id}");
         }
         Self {
             db,
             active_session_id,
+            session_file,
         }
     }
 
@@ -54,19 +59,26 @@ impl McpServer {
         let request = match parse_request(raw) {
             Ok(req) => req,
             Err(e) => {
-                return Some(
-                    serde_json::to_value(JsonRpcErrorResponse {
-                        jsonrpc: "2.0".to_string(),
-                        id: Value::Null,
-                        error: e,
-                    })
-                    .unwrap_or(json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}})),
-                );
+                // Answer the request that caused it whenever its id can be
+                // read: a reply with "id": null matches nothing, and the
+                // client waits for its answer forever.
+                return Some(error_to_value(JsonRpcErrorResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: protocol::request_id(raw),
+                    error: e,
+                }));
             }
         };
 
-        // Notifications (no id) don't get responses
+        // Notifications (no id member at all) don't get responses
         let id = match request.id {
+            Some(Value::Null) => {
+                return Some(error_to_value(error_response(
+                    Value::Null,
+                    protocol::INVALID_REQUEST,
+                    "id must be a string or a number, not null",
+                )));
+            }
             Some(id) => id,
             None => {
                 handle_notification(&request.method);
@@ -77,7 +89,7 @@ impl McpServer {
         let result = match request.method.as_str() {
             "initialize" => handle_initialize(request.params),
             "tools/list" => handle_tools_list(),
-            "tools/call" => self.handle_tools_call(request.params),
+            "tools/call" => self.handle_tools_call(&id, request.params),
             "ping" => Ok(json!({})),
             method => Err(error_to_value(error_response(
                 id.clone(),
@@ -92,14 +104,18 @@ impl McpServer {
         })
     }
 
-    fn handle_tools_call(&mut self, params: Option<Value>) -> Result<Value, Value> {
-        let params = params.ok_or_else(|| {
-            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32602,"message":"Missing params"}})
-        })?;
+    fn handle_tools_call(&mut self, id: &Value, params: Option<Value>) -> Result<Value, Value> {
+        let invalid = |message: String| {
+            error_to_value(error_response(
+                id.clone(),
+                protocol::INVALID_PARAMS,
+                message,
+            ))
+        };
+        let params = params.ok_or_else(|| invalid("Missing params".to_string()))?;
 
-        let call: ToolCallParams = serde_json::from_value(params).map_err(|e| {
-            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32602,"message":format!("Invalid params: {e}")}})
-        })?;
+        let call: ToolCallParams =
+            serde_json::from_value(params).map_err(|e| invalid(format!("Invalid params: {e}")))?;
 
         if !tools::is_valid_tool(&call.name) {
             let result = tool_result_error(format!(
@@ -132,11 +148,8 @@ impl McpServer {
                         if result.is_error.is_none() {
                             if let Some(text) = result.content.first().map(|c| &c.text) {
                                 if let Ok(val) = serde_json::from_str::<Value>(text) {
-                                    if let Some(node_id) =
-                                        val.get("node_id").and_then(Value::as_i64)
-                                    {
-                                        let _ =
-                                            self.db.add_node_to_session(session_id, node_id as i32);
+                                    if let Ok(Some(node_id)) = handlers::get_id(&val, "node_id") {
+                                        let _ = self.db.add_node_to_session(session_id, node_id);
                                     }
                                 }
                             }
@@ -156,6 +169,11 @@ impl McpServer {
             .get("name")
             .and_then(Value::as_str)
             .unwrap_or("unnamed session");
+        // Checked before the root goal is created, so a refused start leaves
+        // nothing behind.
+        if name.trim().is_empty() {
+            return protocol::tool_result_error("a session name, when given, must not be empty");
+        }
         let goal_title = args
             .get("goal_title")
             .and_then(Value::as_str)
@@ -190,19 +208,44 @@ impl McpServer {
         // Associate root node with session
         let _ = self.db.add_node_to_session(session_id, node_id);
 
+        // One file per project, so two servers in one project share it. Say
+        // when this start displaces a live session: a restart will now
+        // resume this one instead. That includes the session this server is
+        // in: a server adopts whatever the file names when it starts, so
+        // "my own session" is often another server's, and leaving it out
+        // (as this did) hid exactly the common case.
+        let replaced = load_session_from_disk(&self.db, &self.session_file);
         self.active_session_id = Some(session_id);
-        save_session_to_disk(session_id);
+        if let Err(e) = save_session_to_disk(&self.session_file, session_id) {
+            return protocol::tool_result_error(format!(
+                "Session #{session_id} started (root goal #{node_id}) but could not be saved to {}: {e}. \
+                 It will not survive a server restart.",
+                self.session_file.display()
+            ));
+        }
 
         eprintln!(
             "deciduous-mcp: started session #{session_id} '{}' (root goal #{})",
             name, node_id
         );
 
+        let mut message = format!(
+            "Started session #{} '{}' with root goal #{}",
+            session_id, name, node_id
+        );
+        if let Some(other) = replaced {
+            message.push_str(&format!(
+                ". Session #{other} is still open, and another deciduous server in this \
+                 project may be using it, but it is no longer the one {} resumes after a restart",
+                self.session_file.display()
+            ));
+        }
         protocol::tool_result_json(&json!({
             "session_id": session_id,
             "root_node_id": node_id,
             "name": name,
-            "message": format!("Started session #{} '{}' with root goal #{}", session_id, name, node_id)
+            "replaced_session_id": replaced,
+            "message": message
         }))
     }
 
@@ -228,7 +271,16 @@ impl McpServer {
         eprintln!("deciduous-mcp: ended session #{session_id} ({node_count} nodes)");
 
         self.active_session_id = None;
-        clear_session_from_disk();
+        // Only if the file still names this session. Another server may have
+        // started its own since, and deleting the file then dropped that
+        // live session from every restart, with no warning to anyone.
+        if let Err(e) = clear_session_from_disk(&self.session_file, session_id) {
+            return protocol::tool_result_error(format!(
+                "Ended session #{session_id}, but {} could not be removed: {e}. \
+                 A restarted server would resume the ended session.",
+                self.session_file.display()
+            ));
+        }
 
         protocol::tool_result_json(&json!({
             "session_id": session_id,
@@ -238,16 +290,12 @@ impl McpServer {
     }
 
     fn handle_resume_session(&mut self, args: &Value) -> protocol::ToolCallResult {
-        let session_id = match args.get("session_id").and_then(Value::as_i64) {
-            Some(id) => match i32::try_from(id) {
-                Ok(id) => id,
-                Err(_) => {
-                    return protocol::tool_result_error(format!(
-                        "session_id: {id} is not a session id"
-                    ))
-                }
-            },
-            None => return protocol::tool_result_error("Missing required parameter: session_id"),
+        let session_id = match handlers::get_id(args, "session_id") {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                return protocol::tool_result_error("Missing required parameter: session_id")
+            }
+            Err(e) => return protocol::tool_result_error(e.message),
         };
 
         // Verify session exists
@@ -259,19 +307,25 @@ impl McpServer {
             Err(e) => return protocol::tool_result_error(format!("Error: {e}")),
         };
 
-        // Reopen if it was ended
-        if session.ended_at.is_some() {
-            // Clear ended_at to reactivate
-            if let Err(e) = self.db.end_session(session_id, None) {
+        // Reopen if it was ended. This used to call end_session(id, None),
+        // which stamped a new ended_at and wiped the summary while the reply
+        // said "Resumed", and the file check at the next start then threw the
+        // ended session away.
+        let reopened = session.ended_at.is_some();
+        if reopened {
+            if let Err(e) = self.db.reopen_session(session_id) {
                 return protocol::tool_result_error(format!("Failed to reopen session: {e}"));
             }
-            // end_session sets ended_at, but we want to clear it — use raw update
-            // For now, just create a fresh session that continues the tree
-            eprintln!("deciduous-mcp: note - session #{session_id} was ended, resuming anyway");
         }
 
         self.active_session_id = Some(session_id);
-        save_session_to_disk(session_id);
+        if let Err(e) = save_session_to_disk(&self.session_file, session_id) {
+            return protocol::tool_result_error(format!(
+                "Resumed session #{session_id} but could not save it to {}: {e}. \
+                 It will not survive a server restart.",
+                self.session_file.display()
+            ));
+        }
 
         let node_count = self
             .db
@@ -286,21 +340,20 @@ impl McpServer {
             "name": session.name,
             "root_node_id": session.root_node_id,
             "node_count": node_count,
-            "message": format!("Resumed session #{} ({} nodes)", session_id, node_count)
+            "reopened": reopened,
+            "message": format!(
+                "Resumed session #{} ({} nodes){}",
+                session_id,
+                node_count,
+                if reopened { "; it had been ended and is open again" } else { "" }
+            )
         }))
     }
 
     fn handle_get_session(&self, args: &Value) -> protocol::ToolCallResult {
-        let session_id = match args.get("session_id").and_then(Value::as_i64) {
-            Some(id) => match i32::try_from(id) {
-                Ok(id) => Some(id),
-                Err(_) => {
-                    return protocol::tool_result_error(format!(
-                        "session_id: {id} is not a session id"
-                    ))
-                }
-            },
-            None => self.active_session_id,
+        let session_id = match handlers::get_id(args, "session_id") {
+            Ok(id) => id.or(self.active_session_id),
+            Err(e) => return protocol::tool_result_error(e.message),
         };
 
         let session_id = match session_id {
@@ -383,28 +436,37 @@ impl McpServer {
 // ---------------------------------------------------------------------------
 
 /// Load active session ID from disk. Returns None if no file or session ended.
-fn load_session_from_disk(db: &Database) -> Option<i32> {
-    let content = std::fs::read_to_string(SESSION_FILE).ok()?;
+fn load_session_from_disk(db: &Database, file: &std::path::Path) -> Option<i32> {
+    let content = std::fs::read_to_string(file).ok()?;
     let session_id: i32 = content.trim().parse().ok()?;
     // Verify the session exists and is still active
     match db.get_session(session_id) {
         Ok(Some(s)) if s.ended_at.is_none() => Some(session_id),
         _ => {
             // Stale file — clean it up
-            let _ = std::fs::remove_file(SESSION_FILE);
+            let _ = std::fs::remove_file(file);
             None
         }
     }
 }
 
 /// Persist active session ID to disk.
-fn save_session_to_disk(session_id: i32) {
-    let _ = std::fs::write(SESSION_FILE, session_id.to_string());
+fn save_session_to_disk(file: &std::path::Path, session_id: i32) -> io::Result<()> {
+    std::fs::write(file, session_id.to_string())
 }
 
-/// Remove the session file from disk.
-fn clear_session_from_disk() {
-    let _ = std::fs::remove_file(SESSION_FILE);
+/// Remove the session file if it names `session_id`. Already gone, or
+/// naming another session, is fine.
+fn clear_session_from_disk(file: &std::path::Path, session_id: i32) -> io::Result<()> {
+    match std::fs::read_to_string(file) {
+        Ok(content) if content.trim() != session_id.to_string() => return Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        _ => {}
+    }
+    match std::fs::remove_file(file) {
+        Err(e) if e.kind() != io::ErrorKind::NotFound => Err(e),
+        _ => Ok(()),
+    }
 }
 
 /// Run the MCP server on stdin/stdout.
@@ -413,11 +475,20 @@ pub fn run_server() -> io::Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
+    let db_path = Database::db_path();
     let db = match Database::open() {
         Ok(db) => db,
         Err(e) => {
-            eprintln!("deciduous-mcp: Failed to open database: {e}");
-            eprintln!("deciduous-mcp: Make sure you're in a directory with .deciduous/ or set DECIDUOUS_DB_PATH");
+            eprintln!(
+                "deciduous-mcp: Failed to open database {}: {e}",
+                db_path.display()
+            );
+            // Only a missing project is fixed by changing directory; a locked
+            // or unreadable database is not, and saying so sent people
+            // looking for a .deciduous/ that was right there.
+            if !db_path.parent().is_some_and(|d| d.is_dir()) {
+                eprintln!("deciduous-mcp: Make sure you're in a directory with .deciduous/ or set DECIDUOUS_DB_PATH");
+            }
             return Err(io::Error::other(e.to_string()));
         }
     };
@@ -429,17 +500,45 @@ pub fn run_server() -> io::Result<()> {
         env!("CARGO_PKG_VERSION")
     );
 
-    for line in stdin.lock().lines() {
-        let line = line?;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+    // Read bytes, not `lines()`: one invalid UTF-8 byte made `lines()`
+    // return an error, which ended the loop and the server with it, and the
+    // client lost every tool for the rest of the session.
+    let mut stdin = stdin.lock();
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        if stdin.read_until(b'\n', &mut buf)? == 0 {
+            break;
         }
-
-        let response = server.handle_message(trimmed);
+        let mut raw_id = None;
+        let response = match std::str::from_utf8(&buf) {
+            Ok(line) => {
+                // RFC 8259 lets a parser ignore a leading byte order mark,
+                // and `trim` does not count U+FEFF as whitespace: the
+                // message was answered as a parse error with id null.
+                let trimmed = line.trim().trim_start_matches('\u{feff}').trim_start();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                raw_id = protocol::undecodable_raw_id(trimmed);
+                server.handle_message(trimmed)
+            }
+            Err(e) => {
+                let lossy = String::from_utf8_lossy(&buf);
+                Some(error_to_value(error_response(
+                    protocol::request_id(lossy.trim()),
+                    protocol::PARSE_ERROR,
+                    format!("Parse error: the message is not valid UTF-8 ({e})"),
+                )))
+            }
+        };
 
         if let Some(resp) = response {
-            let serialized = serde_json::to_string(&resp).unwrap_or_else(|_| {
+            let spliced = raw_id.and_then(|raw| protocol::splice_raw_id(&resp, raw));
+            let serialized = spliced
+                .map(Ok)
+                .unwrap_or_else(|| serde_json::to_string(&resp));
+            let serialized = serialized.unwrap_or_else(|_| {
                 r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Serialization error"}}"#.to_string()
             });
             writeln!(stdout, "{serialized}")?;

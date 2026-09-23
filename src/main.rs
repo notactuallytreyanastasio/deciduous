@@ -232,6 +232,7 @@ enum Command {
         api: bool,
 
         /// API mode: data directory holding graphs/<id>/deciduous.db
+        /// (required; falls back to DECIDUOUS_API_DATA_DIR)
         #[arg(long)]
         data_dir: Option<PathBuf>,
 
@@ -307,8 +308,8 @@ enum Command {
         #[arg(short, long)]
         title: Option<String>,
 
-        /// Graph direction: TB (top-bottom) or LR (left-right)
-        #[arg(long, default_value = "TB")]
+        /// Graph direction: TB (top-bottom), LR (left-right), BT or RL
+        #[arg(long, default_value = "TB", value_parser = ["TB", "LR", "BT", "RL"])]
         rankdir: String,
     },
 
@@ -813,7 +814,7 @@ enum OpencodeAction {
 enum NarrativesAction {
     /// Initialize narratives.md with active goal titles as sections
     Init {
-        /// Output path (default: .deciduous/narratives.md)
+        /// Output path (default: narratives.md in the project's .deciduous/)
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -824,7 +825,7 @@ enum NarrativesAction {
 
     /// Display narratives.md contents
     Show {
-        /// Path to narratives.md (default: .deciduous/narratives.md)
+        /// Path to narratives.md (default: the one in the project's .deciduous/)
         #[arg(short, long)]
         path: Option<PathBuf>,
     },
@@ -1062,6 +1063,124 @@ fn exit(code: i32) -> ! {
     std::process::exit(code)
 }
 
+/// The subgraph `dot` and `writeup` export: `--nodes`, `--roots`, or all
+/// of it. A part of either spec that is not an id exits with an error
+/// naming it; it used to be dropped, and `--roots zz` printed an empty
+/// digraph with exit code 0.
+fn cli_export_subgraph(
+    graph: deciduous::DecisionGraph,
+    nodes: Option<String>,
+    roots: Option<String>,
+) -> deciduous::DecisionGraph {
+    let result = if let Some(node_spec) = nodes {
+        parse_node_range(&node_spec).map(|spec| filter_graph_by_ids(&graph, &spec.select(&graph)))
+    } else if let Some(root_spec) = roots {
+        deciduous::parse_root_ids(&root_spec)
+            .map(|ids| deciduous::filter_graph_from_roots(&graph, &ids))
+    } else {
+        Ok(graph)
+    };
+    result.unwrap_or_else(|e| {
+        eprintln!("{} {}", "Error:".red(), e);
+        exit(1);
+    })
+}
+
+/// `deciduous serve --api`. Returns the process exit code.
+fn run_api_daemon(
+    port: u16,
+    data_dir: Option<PathBuf>,
+    token: Option<String>,
+    bind: String,
+) -> i32 {
+    let token_flag = token.filter(|t| !t.is_empty());
+    if token_flag.is_some() {
+        eprintln!(
+            "{} --token is visible to every user on this machine in `ps`; \
+             prefer DECIDUOUS_API_TOKEN",
+            "Warning:".yellow()
+        );
+    }
+    // An empty --token (an unset shell variable) falls back to the
+    // environment rather than winning over it.
+    let token = token_flag.or_else(|| {
+        std::env::var("DECIDUOUS_API_TOKEN")
+            .ok()
+            .filter(|t| !t.is_empty())
+    });
+    let Some(token) = token else {
+        eprintln!(
+            "{} API mode needs a bearer token: pass --token or set DECIDUOUS_API_TOKEN",
+            "Error:".red()
+        );
+        return 1;
+    };
+    // The Authorization header is trimmed before it is compared, so a token
+    // with leading or trailing whitespace could never match: the daemon
+    // would start and refuse every request.
+    if token.trim() != token || token.trim().is_empty() {
+        eprintln!(
+            "{} the API token has leading or trailing whitespace (or is only whitespace), \
+             so no request could ever authenticate with it",
+            "Error:".red()
+        );
+        return 1;
+    }
+    // An HTTP header value is visible ASCII plus spaces. A client cannot
+    // send `tökén` or a token with a newline in it, so a daemon started with
+    // one listens and refuses every request.
+    if let Some(bad) = token.chars().find(|c| !(c.is_ascii_graphic() || *c == ' ')) {
+        eprintln!(
+            "{} the API token contains {:?}; a token is sent in an HTTP header, which \
+             carries only visible ASCII characters and spaces",
+            "Error:".red(),
+            bad
+        );
+        return 1;
+    }
+    // No default. The old one, `./.deciduous/api-data`, made the cwd look
+    // like a project: started in a project's subdirectory it created a second
+    // `.deciduous/` there, and every CLI call in that directory then found
+    // the new, empty one instead of the project's.
+    let data_dir = data_dir.or_else(|| {
+        std::env::var("DECIDUOUS_API_DATA_DIR")
+            .ok()
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from)
+    });
+    let Some(data_dir) = data_dir else {
+        eprintln!(
+            "{} API mode needs a data directory for its graphs: pass --data-dir <dir> \
+             or set DECIDUOUS_API_DATA_DIR",
+            "Error:".red()
+        );
+        return 1;
+    };
+    let config = deciduous::api::ApiConfig {
+        bind: bind.clone(),
+        port,
+        data_dir: data_dir.clone(),
+        token,
+    };
+    match deciduous::api::ApiServer::bind(config) {
+        Ok(server) => {
+            println!(
+                "{} API daemon on http://{}:{} (graphs in {})",
+                "Deciduous".cyan(),
+                bind,
+                server.port(),
+                data_dir.display()
+            );
+            server.run();
+            0
+        }
+        Err(e) => {
+            eprintln!("{} API server error: {}", "Error:".red(), e);
+            1
+        }
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -1288,6 +1407,21 @@ fn main() {
             &mut std::io::stdout(),
         );
         return;
+    }
+
+    // The API daemon serves the graphs under its data directory and nothing
+    // else. Opening the cwd's database first (as every other command does)
+    // created .deciduous/deciduous.db wherever it was started, or opened a
+    // parent project's database by walking up.
+    if let Command::Serve {
+        api: true,
+        port,
+        data_dir,
+        token,
+        bind,
+    } = args.command
+    {
+        std::process::exit(run_api_daemon(port, data_dir, token, bind));
     }
 
     let db = match Database::open() {
@@ -1907,53 +2041,9 @@ fn main() {
             }
         },
 
-        Command::Serve {
-            port,
-            api,
-            data_dir,
-            token,
-            bind,
-        } => {
+        Command::Serve { port, api, .. } => {
             if api {
-                let token = token
-                    .or_else(|| std::env::var("DECIDUOUS_API_TOKEN").ok())
-                    .filter(|t| !t.is_empty());
-                let Some(token) = token else {
-                    eprintln!(
-                        "{} API mode needs a bearer token: pass --token or set DECIDUOUS_API_TOKEN",
-                        "Error:".red()
-                    );
-                    exit(1);
-                };
-                let data_dir = data_dir
-                    .or_else(|| {
-                        std::env::var("DECIDUOUS_API_DATA_DIR")
-                            .ok()
-                            .map(PathBuf::from)
-                    })
-                    .unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
-                let config = deciduous::api::ApiConfig {
-                    bind: bind.clone(),
-                    port,
-                    data_dir: data_dir.clone(),
-                    token,
-                };
-                match deciduous::api::ApiServer::bind(config) {
-                    Ok(server) => {
-                        println!(
-                            "{} API daemon on http://{}:{} (graphs in {})",
-                            "Deciduous".cyan(),
-                            bind,
-                            server.port(),
-                            data_dir.display()
-                        );
-                        server.run();
-                    }
-                    Err(e) => {
-                        eprintln!("{} API server error: {}", "Error:".red(), e);
-                        exit(1);
-                    }
-                }
+                unreachable!("serve --api is handled before the database is opened");
             } else {
                 println!(
                     "{} Starting graph viewer at http://localhost:{}",
@@ -2949,7 +3039,18 @@ fn main() {
                 PathBuf::from(format!("deciduous_backup_{}.db", timestamp))
             });
 
-            match std::fs::copy(&db_path, &backup_path) {
+            // Not a file copy: in WAL mode the newest writes sit in
+            // deciduous.db-wal until a checkpoint, and copying the main file
+            // alone drops them without a word. VACUUM INTO reads through
+            // SQLite and writes one self-contained file.
+            match db
+                .backup_to(&backup_path)
+                .map_err(|e| e.to_string())
+                .and_then(|_| {
+                    std::fs::metadata(&backup_path)
+                        .map(|m| m.len())
+                        .map_err(|e| e.to_string())
+                }) {
                 Ok(bytes) => {
                     println!(
                         "{} backup: {} ({} bytes)",
@@ -3000,19 +3101,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = if let Some(node_spec) = nodes {
-                        let node_ids = parse_node_range(&node_spec);
-                        filter_graph_by_ids(&graph, &node_ids)
-                    } else if let Some(root_spec) = roots {
-                        // Parse root IDs and traverse
-                        let root_ids: Vec<i32> = root_spec
-                            .split(',')
-                            .filter_map(|s| s.trim().parse().ok())
-                            .collect();
-                        deciduous::filter_graph_from_roots(&graph, &root_ids)
-                    } else {
-                        graph
-                    };
+                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
 
                     let config = DotConfig {
                         title,
@@ -3131,18 +3220,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = if let Some(node_spec) = nodes {
-                        let node_ids = parse_node_range(&node_spec);
-                        filter_graph_by_ids(&graph, &node_ids)
-                    } else if let Some(root_spec) = roots {
-                        let root_ids: Vec<i32> = root_spec
-                            .split(',')
-                            .filter_map(|s| s.trim().parse().ok())
-                            .collect();
-                        deciduous::filter_graph_from_roots(&graph, &root_ids)
-                    } else {
-                        graph
-                    };
+                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
 
                     // Auto-detect GitHub repo from git remote
                     let github_repo = ProcessCommand::new("git")
@@ -3359,7 +3437,7 @@ fn main() {
                 let file_size = file_bytes.len() as i32;
 
                 // Store file in .deciduous/documents/
-                let docs_dir = PathBuf::from(".deciduous/documents");
+                let docs_dir = db.documents_dir();
                 if let Err(e) = std::fs::create_dir_all(&docs_dir) {
                     eprintln!("{} Failed to create documents dir: {}", "Error:".red(), e);
                     exit(1);
@@ -3490,8 +3568,7 @@ fn main() {
                             exit(1);
                         }
                     };
-                    let file_path =
-                        PathBuf::from(".deciduous/documents").join(&doc.storage_filename);
+                    let file_path = db.documents_dir().join(&doc.storage_filename);
                     match generate_ai_description(&doc.original_filename, &file_path) {
                         Some(d) => (d, "ai"),
                         None => {
@@ -3564,8 +3641,7 @@ fn main() {
 
             DocAction::Open { doc_id } => match db.get_document(doc_id) {
                 Ok(Some(doc)) => {
-                    let file_path =
-                        PathBuf::from(".deciduous/documents").join(&doc.storage_filename);
+                    let file_path = db.documents_dir().join(&doc.storage_filename);
                     if !file_path.exists() {
                         eprintln!(
                             "{} File not found on disk: {}",
@@ -3608,7 +3684,7 @@ fn main() {
             },
 
             DocAction::Gc { dry_run } => {
-                let docs_dir = PathBuf::from(".deciduous/documents");
+                let docs_dir = db.documents_dir();
                 if !docs_dir.exists() {
                     println!("No documents directory found.");
                     return;
@@ -4122,14 +4198,16 @@ fn main() {
 
         Command::Narratives { action } => match action {
             NarrativesAction::Init { output, force } => {
-                let path = output.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
+                // Next to the database, not `./.deciduous/`: run from a
+                // subdirectory, that created a second `.deciduous/` there.
+                let path = output.unwrap_or_else(|| db.data_dir().join("narratives.md"));
                 if let Err(e) = deciduous::narratives::init_narratives(&db, &path, force) {
                     eprintln!("{} {}", "Error:".red(), e);
                     exit(1);
                 }
             }
             NarrativesAction::Show { path } => {
-                let p = path.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
+                let p = path.unwrap_or_else(|| db.data_dir().join("narratives.md"));
                 match deciduous::narratives::show_narratives(&p) {
                     Ok(content) => print!("{}", content),
                     Err(e) => {

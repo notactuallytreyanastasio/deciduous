@@ -46,11 +46,27 @@ impl From<&str> for HandlerError {
 
 pub type HandlerResult = std::result::Result<ToolCallResult, HandlerError>;
 
-/// Dispatch a tool call to the appropriate handler.
+/// Where a tool call came from, as far as the handlers need to know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Caller {
+    /// A stdio MCP server started inside the project: its working directory
+    /// is the caller's checkout, so the current git branch is the caller's.
+    Local,
+    /// The API daemon. Its working directory is the daemon's, not the
+    /// caller's, so nothing may be read from it on the caller's behalf.
+    Remote,
+}
+
+/// Dispatch a tool call from a local (stdio MCP) caller.
 pub fn dispatch(db: &Database, tool_name: &str, args: Value) -> ToolCallResult {
+    dispatch_as(db, tool_name, args, Caller::Local)
+}
+
+/// Dispatch a tool call on behalf of `caller`.
+pub fn dispatch_as(db: &Database, tool_name: &str, args: Value, caller: Caller) -> ToolCallResult {
     let result = match tool_name {
         // CRUD
-        "add_node" => handle_add_node(db, &args),
+        "add_node" => handle_add_node(db, &args, caller),
         "link_nodes" => handle_link_nodes(db, &args),
         "unlink_nodes" => handle_unlink_nodes(db, &args),
         "delete_node" => handle_delete_node(db, &args),
@@ -104,18 +120,66 @@ fn get_str<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
     args.get(key).and_then(Value::as_str)
 }
 
-fn get_i32(args: &Value, key: &str) -> Option<i32> {
-    args.get(key).and_then(Value::as_i64).map(|v| v as i32)
+/// A database id argument. Ids are SQLite rowids stored as `i32`; a JSON
+/// number that does not fit is refused with the number in the message.
+/// `as i32` here once turned `4294967298` into node 2 and deleted it.
+pub fn get_id(args: &Value, key: &str) -> Result<Option<i32>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => id_from_number(key, n).map(Some),
+        Some(other) => Err(HandlerError::from(format!(
+            "{key} must be an integer id, got {other}"
+        ))),
+    }
+}
+
+fn id_from_number(key: &str, n: &serde_json::Number) -> Result<i32, HandlerError> {
+    match n.as_i64() {
+        Some(v) => i32::try_from(v)
+            .map_err(|_| HandlerError::from(format!("{key} {v} is out of range for an id"))),
+        None => Err(HandlerError::from(format!(
+            "{key} {n} is out of range for an id (ids are integers up to {})",
+            i32::MAX
+        ))),
+    }
+}
+
+/// A non-negative count (a limit, a depth). Negative numbers used to wrap
+/// to "unlimited" through `as usize`.
+fn get_count(args: &Value, key: &str) -> Result<Option<usize>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::Number(n)) => n
+            .as_u64()
+            .and_then(|v| usize::try_from(v).ok())
+            .map(Some)
+            .ok_or_else(|| {
+                HandlerError::from(format!("{key} must be a non-negative integer, got {n}"))
+            }),
+        Some(other) => Err(HandlerError::from(format!(
+            "{key} must be a non-negative integer, got {other}"
+        ))),
+    }
 }
 
 fn get_bool(args: &Value, key: &str) -> Option<bool> {
     args.get(key).and_then(Value::as_bool)
 }
 
-fn get_u8(args: &Value, key: &str) -> Option<u8> {
-    args.get(key)
-        .and_then(Value::as_u64)
-        .map(|v| v.min(100) as u8)
+/// A 0-100 confidence. Anything else is an error, not silently dropped:
+/// `-5`, `"90"` and `150` all used to produce a node with no confidence (or
+/// 100) and a success reply.
+fn get_confidence(args: &Value, key: &str) -> Result<Option<u8>, HandlerError> {
+    match args.get(key) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .filter(|n| *n <= 100)
+            .map(|n| Some(n as u8))
+            .ok_or_else(|| {
+                HandlerError::from(format!("{key} must be an integer from 0 to 100, got {v}"))
+            }),
+    }
 }
 
 fn require_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, HandlerError> {
@@ -134,10 +198,7 @@ fn get_node_ref(db: &Database, args: &Value, key: &str) -> Result<Option<i32>, H
         // node (4294967298 as i32 is 2), and a digit-only CHANGE value is
         // looked up as a change_id prefix, as the CLI does.
         Some(Value::Number(n)) => {
-            let id = n
-                .as_i64()
-                .and_then(|v| i32::try_from(v).ok())
-                .ok_or_else(|| HandlerError::from(format!("{key}: {n} is not a node id")))?;
+            let id = id_from_number(key, n)?;
             db.resolve_node_ref(&id.to_string())
                 .map(Some)
                 .map_err(|e| HandlerError::from(format!("{key}: {e}")))
@@ -215,27 +276,32 @@ fn edge_to_json(edge: &crate::db::DecisionEdge) -> Value {
 // CRUD handlers
 // ---------------------------------------------------------------------------
 
-fn handle_add_node(db: &Database, args: &Value) -> HandlerResult {
+fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult {
     let node_type = require_str(args, "node_type")?;
     let title = require_str(args, "title")?;
     let description = get_str(args, "description");
-    let confidence = get_u8(args, "confidence");
+    let confidence = get_confidence(args, "confidence")?;
     let prompt = get_str(args, "prompt");
     let files = get_str(args, "files");
     let branch = get_str(args, "branch");
     let commit = get_str(args, "commit");
 
-    // Resolve HEAD to actual commit hash
-    let resolved_commit = match commit {
-        Some("HEAD") => db::get_current_git_commit(),
-        Some(c) => Some(c.to_string()),
-        None => None,
-    };
+    // HEAD and the default branch come from the working directory's git
+    // checkout, which is only the caller's when the caller is local.
+    let resolved_commit =
+        match (commit, caller) {
+            (Some("HEAD"), Caller::Local) => db::get_current_git_commit(),
+            (Some("HEAD"), Caller::Remote) => return Err(HandlerError::from(
+                "commit \"HEAD\" would name the server's checkout, not yours; pass the commit hash",
+            )),
+            (Some(c), _) => Some(c.to_string()),
+            (None, _) => None,
+        };
 
-    // Auto-detect branch if not specified
-    let resolved_branch = match branch {
-        Some(b) => Some(b.to_string()),
-        None => db::get_current_git_branch(),
+    let resolved_branch = match (branch, caller) {
+        (Some(b), _) => Some(b.to_string()),
+        (None, Caller::Local) => db::get_current_git_branch(),
+        (None, Caller::Remote) => None,
     };
 
     let node_id = db.create_node_full(
@@ -545,6 +611,140 @@ fn handle_search_nodes(db: &Database, args: &Value) -> HandlerResult {
 // Document handlers
 // ---------------------------------------------------------------------------
 
+/// Largest file `attach_document` will copy into `.deciduous/documents/`.
+pub const MAX_DOCUMENT_BYTES: u64 = 25 * 1024 * 1024;
+
+/// Resolve and read a file an MCP client asked to attach.
+///
+/// The client is an agent, and the path is whatever it was told. Only a
+/// regular file whose real location (symlinks followed) is inside the
+/// project is read, and only up to [`MAX_DOCUMENT_BYTES`]. Without this,
+/// `../../etc/passwd` or a symlink named `innocent.png` was copied into the
+/// project, a FIFO hung the single-threaded server forever, and `/dev/zero`
+/// grew it by gigabytes until it was killed.
+///
+/// Every check is made on the open file, never on the path: the path is
+/// opened once, and where the file is, what it is and how big it is are
+/// then asked of that descriptor. Checking the path and then opening it
+/// resolved the path twice, and a directory swapped for a symlink in
+/// between read a file outside the project, while a regular file swapped
+/// for a FIFO hung the server in `open`.
+fn read_attachable(
+    db: &Database,
+    file_path: &str,
+) -> Result<(std::path::PathBuf, Vec<u8>), HandlerError> {
+    use std::io::Read;
+
+    let root = db.project_root().ok_or_else(|| {
+        HandlerError::from(format!(
+            "attach_document needs a project: the database {} is not in a .deciduous/ directory",
+            db.path().display()
+        ))
+    })?;
+    let root = root.canonicalize().map_err(|e| {
+        HandlerError::from(format!("cannot resolve project {}: {e}", root.display()))
+    })?;
+    let file = open_without_blocking(file_path)
+        .map_err(|e| HandlerError::from(format!("File not found: {file_path} ({e})")))?;
+    let real = opened_path(&file, file_path)
+        .map_err(|e| HandlerError::from(format!("cannot resolve {file_path}: {e}")))?;
+    if !real.starts_with(&root) {
+        return Err(HandlerError::from(format!(
+            "{file_path} resolves to {}, which is outside the project {}; only files inside it can be attached",
+            real.display(),
+            root.display()
+        )));
+    }
+    let meta = file
+        .metadata()
+        .map_err(|e| HandlerError::from(format!("Failed to read {file_path}: {e}")))?;
+    if !meta.is_file() {
+        return Err(HandlerError::from(format!(
+            "{file_path} is not a regular file; only regular files can be attached"
+        )));
+    }
+    // A hard link is a regular file inside the project whatever it links
+    // to, and no path check can see the other names. A file with more than
+    // one link is refused rather than guessed about.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() > 1 {
+            return Err(HandlerError::from(format!(
+                "{file_path} has {} hard links, and another of them may be outside the project; \
+                 copy it to a file of its own to attach it",
+                meta.nlink()
+            )));
+        }
+    }
+    if meta.len() > MAX_DOCUMENT_BYTES {
+        return Err(HandlerError::from(format!(
+            "{file_path} is {} bytes, larger than the {} byte limit for attachments",
+            meta.len(),
+            MAX_DOCUMENT_BYTES
+        )));
+    }
+    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    file.take(MAX_DOCUMENT_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
+    if bytes.len() as u64 > MAX_DOCUMENT_BYTES {
+        return Err(HandlerError::from(format!(
+            "{file_path} grew past the {MAX_DOCUMENT_BYTES} byte limit for attachments while it was read"
+        )));
+    }
+    Ok((real, bytes))
+}
+
+/// Open for reading without waiting: a FIFO with no writer, or a terminal,
+/// would otherwise block in `open` itself, before anything could look at
+/// what it is.
+#[cfg(unix)]
+fn open_without_blocking(path: &str) -> std::io::Result<std::fs::File> {
+    use std::os::unix::fs::OpenOptionsExt;
+    std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK | libc::O_NOCTTY)
+        .open(path)
+}
+
+#[cfg(not(unix))]
+fn open_without_blocking(path: &str) -> std::io::Result<std::fs::File> {
+    std::fs::File::open(path)
+}
+
+/// Where the open file actually is, asked of the descriptor, so it is the
+/// file that will be read and not whatever the path names by now.
+#[cfg(target_os = "macos")]
+fn opened_path(file: &std::fs::File, _path: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::os::unix::ffi::OsStrExt;
+    use std::os::unix::io::AsRawFd;
+    let mut buf = vec![0u8; libc::PATH_MAX as usize];
+    // SAFETY: F_GETPATH writes at most PATH_MAX bytes, NUL-terminated.
+    if unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETPATH, buf.as_mut_ptr()) } == -1 {
+        return Err(std::io::Error::last_os_error());
+    }
+    let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
+    Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(
+        &buf[..len],
+    )))
+}
+
+#[cfg(target_os = "linux")]
+fn opened_path(file: &std::fs::File, _path: &str) -> std::io::Result<std::path::PathBuf> {
+    use std::os::unix::io::AsRawFd;
+    std::fs::read_link(format!("/proc/self/fd/{}", file.as_raw_fd()))
+}
+
+/// Elsewhere there is no portable way to ask a descriptor for its path, so
+/// the path is resolved again. That leaves the swap race described above
+/// open on those systems; the type, link-count and size checks still use
+/// the descriptor.
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+fn opened_path(_file: &std::fs::File, path: &str) -> std::io::Result<std::path::PathBuf> {
+    std::path::Path::new(path).canonicalize()
+}
+
 fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     use sha2::{Digest, Sha256};
 
@@ -552,18 +752,15 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     let file_path = require_str(args, "file_path")?;
     let description = get_str(args, "description");
 
+    let (_real, file_bytes) = read_attachable(db, file_path)?;
+    // Named as the caller named it; the real path only decided whether it
+    // may be read at all.
     let path = std::path::Path::new(file_path);
-    if !path.exists() {
-        return Err(HandlerError::from(format!("File not found: {file_path}")));
-    }
 
     let original_filename = path
         .file_name()
         .map(|f| f.to_string_lossy().to_string())
         .unwrap_or_else(|| "unknown".to_string());
-
-    let file_bytes =
-        std::fs::read(path).map_err(|e| HandlerError::from(format!("Failed to read file: {e}")))?;
 
     let hash = format!("{:x}", Sha256::digest(&file_bytes));
     let hash_prefix = &hash[..8];
@@ -584,7 +781,7 @@ fn handle_attach_document(db: &Database, args: &Value) -> HandlerResult {
     };
 
     // Store file in .deciduous/documents/
-    let docs_dir = std::path::PathBuf::from(".deciduous/documents");
+    let docs_dir = db.documents_dir();
     std::fs::create_dir_all(&docs_dir)
         .map_err(|e| HandlerError::from(format!("Failed to create documents dir: {e}")))?;
 
@@ -719,7 +916,7 @@ fn handle_untag_node(db: &Database, args: &Value) -> HandlerResult {
 
 fn handle_trace_chain(db: &Database, args: &Value) -> HandlerResult {
     let node_id = require_node_ref(db, args, "node_id")?;
-    let max_depth = get_i32(args, "max_depth").unwrap_or(0) as usize;
+    let max_depth = get_count(args, "max_depth")?.unwrap_or(0);
     let direction = get_str(args, "direction")
         .map(query::TraceDirection::parse)
         .unwrap_or(query::TraceDirection::Both);
@@ -744,7 +941,7 @@ fn handle_get_node_context(db: &Database, args: &Value) -> HandlerResult {
 }
 
 fn handle_get_timeline(db: &Database, args: &Value) -> HandlerResult {
-    let limit = get_i32(args, "limit").unwrap_or(50) as usize;
+    let limit = get_count(args, "limit")?.unwrap_or(50);
     let node_type = get_str(args, "node_type");
     let branch = get_str(args, "branch");
     let since = get_str(args, "since");
@@ -784,26 +981,33 @@ fn handle_get_branch_summary(db: &Database, args: &Value) -> HandlerResult {
 // Export handlers
 // ---------------------------------------------------------------------------
 
+/// The subgraph an export names with `nodes` (ids and ranges) or `roots`
+/// (ids to walk down from), or the whole graph. An unparseable spec is an
+/// error naming the part it could not read.
+fn export_subgraph(
+    graph: crate::db::DecisionGraph,
+    args: &Value,
+) -> Result<crate::db::DecisionGraph, HandlerError> {
+    if let Some(nodes_spec) = get_str(args, "nodes") {
+        let spec = crate::export::parse_node_range(nodes_spec).map_err(HandlerError::from)?;
+        Ok(crate::export::filter_graph_by_ids(
+            &graph,
+            &spec.select(&graph),
+        ))
+    } else if let Some(roots_spec) = get_str(args, "roots") {
+        let root_ids = crate::export::parse_root_ids(roots_spec).map_err(HandlerError::from)?;
+        Ok(crate::export::filter_graph_from_roots(&graph, &root_ids))
+    } else {
+        Ok(graph)
+    }
+}
+
 fn handle_export_dot(db: &Database, args: &Value) -> HandlerResult {
     let graph = db.get_graph()?;
     let title = get_str(args, "title");
     let rankdir = get_str(args, "rankdir").unwrap_or("TB");
-    let roots_str = get_str(args, "roots");
-    let nodes_str = get_str(args, "nodes");
-
-    // Filter graph if roots or nodes specified
-    let filtered_graph = if let Some(nodes_spec) = nodes_str {
-        let node_ids = crate::export::parse_node_range(nodes_spec);
-        crate::export::filter_graph_by_ids(&graph, &node_ids)
-    } else if let Some(roots_spec) = roots_str {
-        let root_ids: Vec<i32> = roots_spec
-            .split(',')
-            .filter_map(|s| s.trim().parse().ok())
-            .collect();
-        crate::export::filter_graph_from_roots(&graph, &root_ids)
-    } else {
-        graph
-    };
+    crate::export::validate_rankdir(rankdir).map_err(HandlerError::from)?;
+    let filtered_graph = export_subgraph(graph, args)?;
 
     let config = crate::export::DotConfig {
         title: title.map(|s| s.to_string()),
@@ -821,24 +1025,9 @@ fn handle_export_dot(db: &Database, args: &Value) -> HandlerResult {
 fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
     let graph = db.get_graph()?;
     let title = get_str(args, "title");
-    let roots_str = get_str(args, "roots");
-    let nodes_str = get_str(args, "nodes");
     let no_dot = get_bool(args, "no_dot").unwrap_or(false);
     let no_test_plan = get_bool(args, "no_test_plan").unwrap_or(false);
-
-    // Filter graph if specified
-    let filtered_graph = if let Some(nodes_spec) = nodes_str {
-        let node_ids = crate::export::parse_node_range(nodes_spec);
-        crate::export::filter_graph_by_ids(&graph, &node_ids)
-    } else if let Some(roots_spec) = roots_str {
-        let root_ids: Vec<i32> = roots_spec
-            .split(',')
-            .filter_map(|s| s.trim().parse().ok())
-            .collect();
-        crate::export::filter_graph_from_roots(&graph, &root_ids)
-    } else {
-        graph
-    };
+    let filtered_graph = export_subgraph(graph, args)?;
 
     let config = crate::export::WriteupConfig {
         title: title
@@ -859,7 +1048,7 @@ fn handle_generate_writeup(db: &Database, args: &Value) -> HandlerResult {
 
 fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
     db.store().or_else(|| {
-        crate::records::RecordStore::path_for_db(&Database::db_path())
+        crate::records::RecordStore::path_for_db(db.path())
             .and_then(crate::records::RecordStore::open)
     })
 }
@@ -920,7 +1109,7 @@ fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     let store = match store_for(db) {
         Some(s) => s,
         None => {
-            let path = crate::records::RecordStore::path_for_db(&Database::db_path())
+            let path = crate::records::RecordStore::path_for_db(db.path())
                 .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep the graph file"))?;
             let store = crate::records::RecordStore::create(&path).map_err(|e| {
                 HandlerError::from(format!("could not create {}: {e}", path.display()))
@@ -1043,7 +1232,9 @@ mod tests {
         let args = json!({"name": "hello", "count": 42, "flag": true});
         assert_eq!(get_str(&args, "name"), Some("hello"));
         assert_eq!(get_str(&args, "missing"), None);
-        assert_eq!(get_i32(&args, "count"), Some(42));
+        assert_eq!(get_id(&args, "count").unwrap(), Some(42));
+        assert!(get_id(&json!({"id": 4294967298u64}), "id").is_err());
+        assert!(get_count(&json!({"n": -1}), "n").is_err());
         assert_eq!(get_bool(&args, "flag"), Some(true));
     }
 

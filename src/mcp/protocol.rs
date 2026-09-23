@@ -15,7 +15,9 @@ use serde_json::Value;
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
-    #[serde(default)]
+    /// `None` only when the member is absent (a notification). A present
+    /// `"id": null` is `Some(Value::Null)`: it is a request and gets a reply.
+    #[serde(default, deserialize_with = "present")]
     pub id: Option<Value>,
     pub method: String,
     #[serde(default)]
@@ -101,9 +103,210 @@ pub fn error_response_with_data(
     }
 }
 
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(d).map(Some)
+}
+
+/// Replace `\uD800`-style escapes that are not half of a surrogate pair
+/// with `\uFFFD`.
+///
+/// JSON's grammar allows them (JavaScript's JSON.stringify emits them for a
+/// string cut in the middle of an emoji); serde_json refuses the whole
+/// document. Refusing means answering with `"id": null`, which the client
+/// cannot match to its request, so it waits forever. Replacing the lone
+/// half with U+FFFD is what every lossy UTF-16 decoder does.
+pub fn replace_lone_surrogates(input: &str) -> std::borrow::Cow<'_, str> {
+    fn hex4(b: &[u8]) -> Option<u16> {
+        let s = std::str::from_utf8(b.get(..4)?).ok()?;
+        u16::from_str_radix(s, 16).ok()
+    }
+    let bytes = input.as_bytes();
+    if !input.contains("\\u") {
+        return std::borrow::Cow::Borrowed(input);
+    }
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0;
+    let mut last = 0;
+    let mut changed = false;
+    while i < bytes.len() {
+        if bytes[i] != b'\\' {
+            i += 1;
+            continue;
+        }
+        if bytes.get(i + 1) != Some(&b'u') {
+            i += 2; // any other escape, including an escaped backslash
+            continue;
+        }
+        let Some(unit) = hex4(&bytes[i + 2..]) else {
+            i += 2;
+            continue;
+        };
+        match unit {
+            0xD800..=0xDBFF => {
+                let next_is_low = bytes.get(i + 6) == Some(&b'\\')
+                    && bytes.get(i + 7) == Some(&b'u')
+                    && hex4(&bytes[(i + 8).min(bytes.len())..])
+                        .is_some_and(|u| (0xDC00..=0xDFFF).contains(&u));
+                if next_is_low {
+                    i += 12;
+                    continue;
+                }
+            }
+            0xDC00..=0xDFFF => {}
+            _ => {
+                i += 6;
+                continue;
+            }
+        }
+        out.push_str(&input[last..i]);
+        out.push_str("\\uFFFD");
+        i += 6;
+        last = i;
+        changed = true;
+    }
+    if !changed {
+        return std::borrow::Cow::Borrowed(input);
+    }
+    out.push_str(&input[last..]);
+    std::borrow::Cow::Owned(out)
+}
+
+/// The `id` of a message that failed validation, if it has a usable one,
+/// so the error reply reaches the request that caused it. `Null` when the
+/// text does not start with a JSON value or the id is not a string or
+/// number. Only the first value is read, so a request followed by stray
+/// bytes (a NUL, a second message) still gets its error under its own id.
+pub fn request_id(input: &str) -> Value {
+    serde_json::Deserializer::from_str(&replace_lone_surrogates(input))
+        .into_iter::<Value>()
+        .next()
+        .and_then(Result::ok)
+        .and_then(|v| v.get("id").cloned())
+        .filter(|id| id.is_string() || id.is_number())
+        .unwrap_or(Value::Null)
+}
+
+/// The `id` member of a top-level JSON object exactly as it was written,
+/// when it is a string that cannot be decoded as-is: one holding a lone
+/// surrogate like `"\ud800"`. Such an id cannot be held in a Rust string,
+/// and replacing the half with U+FFFD, as the rest of the message is,
+/// answers an id the client never sent. The reply must carry the original
+/// text instead; see [`splice_raw_id`].
+pub fn undecodable_raw_id(input: &str) -> Option<&str> {
+    let raw = raw_member(input, "id")?;
+    (raw.starts_with('"') && serde_json::from_str::<String>(raw).is_err()).then_some(raw)
+}
+
+/// Serialize `response` with its `id` written as `raw_id`, verbatim.
+pub fn splice_raw_id(response: &Value, raw_id: &str) -> Option<String> {
+    let mut obj = response.as_object()?.clone();
+    obj.remove("id")?;
+    let rest = serde_json::to_string(&obj).ok()?;
+    let rest = rest.strip_prefix('{')?;
+    Some(if rest == "}" {
+        format!("{{\"id\":{raw_id}}}")
+    } else {
+        format!("{{\"id\":{raw_id},{rest}")
+    })
+}
+
+/// The raw text of member `key` of the top-level object in `input`, the
+/// last one if it repeats (as serde_json keeps the last). A lexer only: it
+/// knows where strings, objects and arrays end and nothing else.
+fn raw_member<'a>(input: &'a str, key: &str) -> Option<&'a str> {
+    fn ws(b: &[u8], mut i: usize) -> usize {
+        while b.get(i).is_some_and(|c| c.is_ascii_whitespace()) {
+            i += 1;
+        }
+        i
+    }
+    fn string_end(b: &[u8], mut i: usize) -> Option<usize> {
+        i += 1;
+        while i < b.len() {
+            match b[i] {
+                b'\\' => i += 2,
+                b'"' => return Some(i + 1),
+                _ => i += 1,
+            }
+        }
+        None
+    }
+    fn value_end(b: &[u8], mut i: usize) -> Option<usize> {
+        match *b.get(i)? {
+            b'"' => string_end(b, i),
+            b'{' | b'[' => {
+                let mut depth = 0usize;
+                while i < b.len() {
+                    match b[i] {
+                        b'"' => {
+                            i = string_end(b, i)?;
+                            continue;
+                        }
+                        b'{' | b'[' => depth += 1,
+                        b'}' | b']' => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(i + 1);
+                            }
+                        }
+                        _ => {}
+                    }
+                    i += 1;
+                }
+                None
+            }
+            _ => {
+                while i < b.len()
+                    && !matches!(b[i], b',' | b'}' | b']')
+                    && !b[i].is_ascii_whitespace()
+                {
+                    i += 1;
+                }
+                Some(i)
+            }
+        }
+    }
+
+    let b = input.as_bytes();
+    let quoted = format!("\"{key}\"");
+    let mut i = ws(b, 0);
+    if b.get(i) != Some(&b'{') {
+        return None;
+    }
+    i += 1;
+    let mut found = None;
+    loop {
+        i = ws(b, i);
+        match *b.get(i)? {
+            b'}' => return found,
+            b'"' => {}
+            _ => return None,
+        }
+        let key_end = string_end(b, i)?;
+        let is_key = input.get(i..key_end) == Some(quoted.as_str());
+        i = ws(b, key_end);
+        if *b.get(i)? != b':' {
+            return None;
+        }
+        i = ws(b, i + 1);
+        let start = i;
+        i = value_end(b, i)?;
+        if is_key {
+            found = Some(input.get(start..i)?);
+        }
+        i = ws(b, i);
+        match *b.get(i)? {
+            b',' => i += 1,
+            b'}' => return found,
+            _ => return None,
+        }
+    }
+}
+
 /// Parse a raw JSON string into a `JsonRpcRequest`.
 pub fn parse_request(input: &str) -> Result<JsonRpcRequest, JsonRpcError> {
-    let value: Value = serde_json::from_str(input).map_err(|e| JsonRpcError {
+    let input = replace_lone_surrogates(input);
+    let value: Value = serde_json::from_str(&input).map_err(|e| JsonRpcError {
         code: PARSE_ERROR,
         message: format!("Parse error: {e}"),
         data: None,
@@ -423,5 +626,45 @@ mod tests {
         assert!(value.get("serverInfo").is_some());
         assert!(value["serverInfo"].get("name").is_some());
         assert!(value["capabilities"]["tools"].get("listChanged").is_some());
+    }
+
+    #[test]
+    fn lone_surrogates_are_replaced_and_pairs_kept() {
+        let bs = '\\';
+        let esc = |hex: &str| format!("{bs}u{hex}");
+        assert_eq!(
+            replace_lone_surrogates(&format!("\"a{}b\"", esc("d800"))),
+            format!("\"a{}b\"", esc("FFFD"))
+        );
+        assert_eq!(
+            replace_lone_surrogates(&format!("\"{}\"", esc("dc00"))),
+            format!("\"{}\"", esc("FFFD"))
+        );
+        // A real pair (U+1F600) and an escaped backslash are left alone.
+        let pair = format!("\"{}{} and {bs}{}\"", esc("d83d"), esc("de00"), esc("d800"));
+        let pair = pair.as_str();
+        assert_eq!(replace_lone_surrogates(pair), pair);
+        assert!(parse_request(r#"{"jsonrpc":"2.0","id":1,"method":"x\ud800"}"#).is_ok());
+    }
+
+    #[test]
+    fn a_lone_surrogate_id_is_echoed_as_it_was_sent() {
+        let line = r#"{"jsonrpc":"2.0","id":"a\ud800","method":"ping","p":{"id":1,"x":["}"]}}"#;
+        let raw = undecodable_raw_id(line).unwrap();
+        assert_eq!(raw, r#""a\ud800""#);
+        let out = splice_raw_id(&json!({"jsonrpc":"2.0","id":"x","result":{}}), raw).unwrap();
+        assert_eq!(out, r#"{"id":"a\ud800","jsonrpc":"2.0","result":{}}"#);
+        assert_eq!(undecodable_raw_id(r#"{"id":"fine","method":"ping"}"#), None);
+        assert_eq!(undecodable_raw_id(r#"{"id":7}"#), None);
+        assert_eq!(undecodable_raw_id("not json"), None);
+        assert_eq!(request_id("{\"id\":9,\"method\":\"ping\"}\u{0}"), json!(9));
+    }
+
+    #[test]
+    fn request_id_recovers_the_id_of_an_invalid_request() {
+        assert_eq!(request_id(r#"{"jsonrpc":"1.0","id":7,"method":"x"}"#), 7);
+        assert_eq!(request_id(r#"{"id":"abc"}"#), "abc");
+        assert_eq!(request_id("not json"), Value::Null);
+        assert_eq!(request_id(r#"{"id":{"x":1}}"#), Value::Null);
     }
 }

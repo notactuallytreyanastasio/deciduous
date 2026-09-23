@@ -410,22 +410,31 @@ fn to_stable_json<T: Serialize>(value: &T) -> io::Result<String> {
 }
 
 /// Write `content` to `path` only if it differs from what is there.
-/// Writes go to a temp file first and are renamed into place, so two
-/// processes writing at once can never interleave bytes (the failure that
-/// corrupted the old JSONL logs). Returns `true` if the file changed.
+/// Returns `true` if the file changed.
 fn write_if_changed(path: &Path, content: &str) -> io::Result<bool> {
     if let Ok(existing) = fs::read_to_string(path) {
         if existing == content {
             return Ok(false);
         }
     }
+    write_atomically(path, content)?;
+    Ok(true)
+}
+
+/// Write to a temp file and rename it into place, so a reader never sees a
+/// half-written file and two writers never interleave bytes (the failure
+/// that corrupted the old JSONL logs). Atomic is not the same as safe under
+/// concurrency: two renames still race, last one wins. [`RecordStore`]
+/// serializes its writes with [`FileLock`] for that.
+fn write_atomically(path: &Path, content: &str) -> io::Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        if !parent.as_os_str().is_empty() {
+            fs::create_dir_all(parent)?;
+        }
     }
     let tmp = path.with_extension(format!("json.tmp-{}", std::process::id()));
     fs::write(&tmp, content)?;
-    fs::rename(&tmp, path)?;
-    Ok(true)
+    fs::rename(&tmp, path)
 }
 
 /// A record that could not be read out of the graph file.
@@ -568,33 +577,20 @@ fn has_conflict_markers(text: &str) -> bool {
     text.starts_with("<<<<<<<") || text.contains("\n<<<<<<<")
 }
 
-/// Read the graph file. A missing or empty file is an empty graph; anything
-/// else that will not parse is an error, never an empty graph, so a corrupt
-/// file is reported instead of being overwritten with local rows.
-fn load_doc(path: &Path) -> io::Result<GraphDoc> {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(GraphDoc::default()),
-        Err(e) => return Err(e),
+fn unreadable(path: &Path, text: &str, e: serde_json::Error) -> io::Error {
+    // Not "run `deciduous sync`" for a file that is merely broken: that
+    // is often the very command that just failed.
+    let hint = if has_conflict_markers(text) {
+        "; it still has git conflict markers, run `deciduous sync` to merge it"
+    } else if text.contains("<<<<<<<") {
+        "; it has conflict markers that are not at the start of a line, so they are not git's as written and `deciduous sync` cannot split them (a hand edit or reformat?). Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`"
+    } else {
+        "; left untouched. Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`; local rows missing from it are exported by the next sync"
     };
-    if text.trim().is_empty() {
-        return Ok(GraphDoc::default());
-    }
-    serde_json::from_str(&text).map_err(|e| {
-        // Not "run `deciduous sync`" for a file that is merely broken: that
-        // is often the very command that just failed.
-        let hint = if has_conflict_markers(&text) {
-            "; it still has git conflict markers, run `deciduous sync` to merge it"
-        } else if text.contains("<<<<<<<") {
-            "; it has conflict markers that are not at the start of a line, so they are not git's as written and `deciduous sync` cannot split them (a hand edit or reformat?). Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`"
-        } else {
-            "; left untouched. Fix it by hand, or restore the committed version with `git checkout -- .deciduous/graph.json`; local rows missing from it are exported by the next sync"
-        };
-        io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("{} is not readable ({}){}", path.display(), e, hint),
-        )
-    })
+    io::Error::new(
+        io::ErrorKind::InvalidData,
+        format!("{} is not readable ({}){}", path.display(), e, hint),
+    )
 }
 
 /// Pull one kind of record out of the document, rejecting any whose key
@@ -750,13 +746,68 @@ fn put<T: PartialEq>(map: &mut BTreeMap<String, T>, key: String, rec: T) -> bool
 // ============================================================================
 
 /// What the graph file looked like when we last read it, so a write by
-/// another process is noticed instead of silently clobbered.
-type Stamp = Option<(u64, Option<SystemTime>)>;
+/// another process is noticed on the next read. Includes the inode: every
+/// write is a rename, so a new file always has a new inode even when its
+/// size and (coarse) mtime match the old one.
+type Stamp = Option<(u64, Option<SystemTime>, u64)>;
 
 fn stamp_of(path: &Path) -> Stamp {
-    fs::metadata(path)
-        .ok()
-        .map(|m| (m.len(), m.modified().ok()))
+    fs::metadata(path).ok().map(|m| {
+        #[cfg(unix)]
+        let ino = std::os::unix::fs::MetadataExt::ino(&m);
+        #[cfg(not(unix))]
+        let ino = 0;
+        (m.len(), m.modified().ok(), ino)
+    })
+}
+
+fn digest(text: &str) -> [u8; 32] {
+    Sha256::digest(text.as_bytes()).into()
+}
+
+/// Read the graph file's raw text. Missing is empty.
+fn read_text(path: &Path) -> io::Result<String> {
+    match fs::read_to_string(path) {
+        Ok(t) => Ok(t),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(String::new()),
+        Err(e) => Err(e),
+    }
+}
+
+/// Parse graph file text. Empty is an empty graph; anything else that will
+/// not parse is an error, never an empty graph, so a corrupt file is
+/// reported instead of being overwritten with local rows.
+fn parse_doc(path: &Path, text: &str) -> io::Result<GraphDoc> {
+    if text.trim().is_empty() {
+        return Ok(GraphDoc::default());
+    }
+    serde_json::from_str(text).map_err(|e| unreadable(path, text, e))
+}
+
+/// Exclusive, cross-process lock on a project's graph file, held for one
+/// read-modify-write. It lives in its own file (`graph.json.lock`, ignored
+/// by the `.deciduous/*` rule) because `graph.json` itself is replaced by a
+/// rename on every write, and a lock on a file that has just been renamed
+/// away protects nothing. The OS drops it if the process dies.
+struct FileLock(#[allow(dead_code)] fs::File);
+
+impl FileLock {
+    fn acquire(graph: &Path) -> io::Result<Self> {
+        let path = graph.with_extension("json.lock");
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)?;
+            }
+        }
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)?;
+        file.lock()
+            .map_err(|e| io::Error::new(e.kind(), format!("locking {}: {}", path.display(), e)))?;
+        Ok(Self(file))
+    }
 }
 
 /// The document as this process currently holds it.
@@ -764,17 +815,34 @@ fn stamp_of(path: &Path) -> Stamp {
 struct Cache {
     doc: Option<GraphDoc>,
     stamp: Stamp,
+    /// The document exactly as it was last read from or written to disk,
+    /// and a digest of that file's text. `doc` minus `base` is what this
+    /// process changed; the file minus `base` is what everyone else did.
+    base: Option<GraphDoc>,
+    base_digest: Option<[u8; 32]>,
     /// Depth of open batches. While it is above zero, mutations stay in
     /// memory and the file is written once, on the way out.
     batch_depth: usize,
     /// Mutations not yet on disk.
     dirty: bool,
+    /// The pending document replaces the file outright instead of merging
+    /// with it: the conflict repair, whose input is the file that will not
+    /// parse.
+    replace: bool,
 }
 
 /// Handle on a project's `.deciduous/graph.json`.
 ///
 /// Cheap to clone: clones share one cached document, so `Database` handing
 /// a store to each writer does not mean re-reading the file each time.
+///
+/// Several processes write one file at once (two MCP servers, the CLI, the
+/// API daemon). Every write therefore happens under [`FileLock`], against
+/// the file as it is on disk at that moment, never against a copy read
+/// earlier: a single mutation re-reads, applies and renames into place
+/// inside the lock, and a batch, which accumulates in memory, is merged
+/// three ways (what it started from, what it made, what is there now) with
+/// the same record-by-record rules as the git merge driver.
 #[derive(Debug, Clone)]
 pub struct RecordStore {
     path: PathBuf,
@@ -816,7 +884,10 @@ impl RecordStore {
             }
         }
         if !path.is_file() {
-            write_if_changed(&path, &to_stable_json(&GraphDoc::default())?)?;
+            let _lock = FileLock::acquire(&path)?;
+            if !path.is_file() {
+                write_if_changed(&path, &to_stable_json(&GraphDoc::default())?)?;
+            }
         }
         Ok(Self::at(path))
     }
@@ -868,19 +939,73 @@ impl RecordStore {
         }
         let stamp = stamp_of(&self.path);
         if cache.doc.is_none() || cache.stamp != stamp {
-            cache.doc = Some(load_doc(&self.path)?);
-            cache.stamp = stamp;
+            self.load_from_disk(cache)?;
         }
         Ok(())
     }
 
+    /// Read the file into the cache as both the working document and the
+    /// base. Skips the parse when the text is what we already hold.
+    fn load_from_disk(&self, cache: &mut Cache) -> io::Result<()> {
+        let stamp = stamp_of(&self.path);
+        let text = read_text(&self.path)?;
+        let d = digest(&text);
+        if cache.base_digest != Some(d) || cache.base.is_none() {
+            let doc = parse_doc(&self.path, &text)?;
+            cache.base = Some(doc);
+            cache.base_digest = Some(d);
+        }
+        cache.doc = cache.base.clone();
+        cache.stamp = stamp;
+        Ok(())
+    }
+
+    /// Write the pending document, under the file lock, on top of whatever
+    /// the file holds *now*.
     fn flush(&self, cache: &mut Cache) -> io::Result<bool> {
-        let Some(doc) = cache.doc.as_ref() else {
+        if cache.doc.is_none() {
             return Ok(false);
-        };
-        let changed = write_if_changed(&self.path, &to_stable_json(doc)?)?;
-        cache.dirty = false;
+        }
+        let _lock = FileLock::acquire(&self.path)?;
+        self.flush_locked(cache)
+    }
+
+    /// [`flush`](Self::flush) for a caller already holding the file lock.
+    fn flush_locked(&self, cache: &mut Cache) -> io::Result<bool> {
+        let text = read_text(&self.path)?;
+        let on_disk = digest(&text);
+        if !cache.replace && cache.base_digest != Some(on_disk) {
+            // Someone else wrote since we read. Keep their records and ours.
+            let theirs = parse_doc(&self.path, &text)?;
+            let bad = |e: serde_json::Error| io::Error::other(e);
+            let base = cache
+                .base
+                .as_ref()
+                .map(serde_json::to_value)
+                .transpose()
+                .map_err(bad)?;
+            let ours =
+                serde_json::to_value(cache.doc.as_ref().expect("checked above")).map_err(bad)?;
+            let theirs_v = serde_json::to_value(&theirs).map_err(bad)?;
+            let merged = merge_docs(base.as_ref(), &ours, &theirs_v)?;
+            cache.doc = Some(serde_json::from_value(merged).map_err(|e| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("merging with a concurrent write produced something unreadable: {e}"),
+                )
+            })?);
+        }
+        let doc = cache.doc.as_ref().expect("checked above");
+        let content = to_stable_json(doc)?;
+        let changed = content != text;
+        if changed {
+            write_atomically(&self.path, &content)?;
+        }
+        cache.base = cache.doc.clone();
+        cache.base_digest = Some(digest(&content));
         cache.stamp = stamp_of(&self.path);
+        cache.dirty = false;
+        cache.replace = false;
         Ok(changed)
     }
 
@@ -891,6 +1016,7 @@ impl RecordStore {
         let mut cache = self.lock();
         cache.doc = Some(doc);
         cache.dirty = true;
+        cache.replace = true;
         if cache.batch_depth == 0 {
             self.flush(&mut cache)
         } else {
@@ -907,17 +1033,33 @@ impl RecordStore {
 
     /// Apply `f` to the document. `f` reports whether it changed anything;
     /// if it did, the file is rewritten unless a batch is open.
+    ///
+    /// Outside a batch the whole read-apply-write runs under the file lock,
+    /// so `f` sees exactly what is on disk and nothing can land between the
+    /// read and the rename.
     fn mutate(&self, f: impl FnOnce(&mut GraphDoc) -> io::Result<bool>) -> io::Result<bool> {
         let mut cache = self.lock();
-        self.refresh(&mut cache)?;
-        let doc = cache.doc.as_mut().expect("refresh leaves a document");
+        if cache.batch_depth > 0 {
+            self.refresh(&mut cache)?;
+            let doc = cache.doc.as_mut().expect("refresh leaves a document");
+            if !f(doc)? {
+                return Ok(false);
+            }
+            cache.dirty = true;
+            return Ok(true);
+        }
+        let _lock = FileLock::acquire(&self.path)?;
+        if !cache.dirty {
+            self.load_from_disk(&mut cache)?;
+        }
+        let doc = cache.doc.as_mut().expect("load leaves a document");
         if !f(doc)? {
             return Ok(false);
         }
         cache.dirty = true;
-        if cache.batch_depth == 0 {
-            self.flush(&mut cache)?;
-        }
+        // Still under the lock: the file is what `f` saw, so this writes
+        // without merging.
+        self.flush_locked(&mut cache)?;
         Ok(true)
     }
 
@@ -2874,7 +3016,8 @@ impl RecordStore {
             return Ok(Vec::new());
         }
         let display = self.path.display().to_string();
-        let current = serde_json::to_value(load_doc(&self.path)?).map_err(io::Error::other)?;
+        let current = serde_json::to_value(parse_doc(&self.path, &read_text(&self.path)?)?)
+            .map_err(io::Error::other)?;
         let mut merged = current.clone();
         let mut from = Vec::new();
         for (label, base, commit) in &ops {
@@ -3056,6 +3199,10 @@ impl RecordStore {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    fn load_doc(path: &Path) -> io::Result<GraphDoc> {
+        parse_doc(path, &read_text(path)?)
+    }
 
     fn store() -> (TempDir, RecordStore) {
         let dir = TempDir::new().unwrap();
@@ -3963,6 +4110,37 @@ mod tests {
         assert_eq!(
             merged["nodes"]["n"]["updated_at"],
             "2026-01-05T00:00:00+00:00"
+        );
+    }
+
+    /// Two handles with separate caches stand in for two processes: a batch
+    /// open in one while the other writes must not drop the other's record
+    /// when it lands, and must not resurrect what the other deleted.
+    #[test]
+    fn a_batch_merges_with_a_write_that_landed_while_it_was_open() {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join(STORE_FILE_NAME);
+        let a = RecordStore::create(&path).unwrap().with_author("a");
+        let b = RecordStore::open(&path).unwrap().with_author("b");
+        a.write_node(&node("doomed", "D", "2026-01-01T00:00:00+00:00"))
+            .unwrap();
+        a.batch(|| {
+            a.write_node(&node("from-a", "A", "2026-01-02T00:00:00+00:00"))
+                .unwrap();
+            b.write_node(&node("from-b", "B", "2026-01-02T00:00:00+00:00"))
+                .unwrap();
+            let mut dead = node("doomed", "D", "2026-01-03T00:00:00+00:00");
+            dead.deleted_at = Some("2026-01-03T00:00:00+00:00".into());
+            b.write_node(&dead).unwrap();
+        })
+        .unwrap();
+        let doc = load_doc(&path).unwrap();
+        assert!(doc.nodes.contains_key("from-a"));
+        assert!(doc.nodes.contains_key("from-b"));
+        assert!(
+            doc.nodes["doomed"].is_tombstone(),
+            "{:?}",
+            doc.nodes["doomed"]
         );
     }
 
