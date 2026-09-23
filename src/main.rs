@@ -560,6 +560,16 @@ enum RemoteAction {
         #[arg(long, conflicts_with_all = ["seed", "overwrite"])]
         drop_rejected: bool,
 
+        /// Send the rejected ops again (after the cause is fixed, or for an
+        /// op this machine set aside because the server failed on it)
+        #[arg(long, conflicts_with_all = ["drop_rejected", "seed", "overwrite"])]
+        retry_rejected: bool,
+
+        /// Discard one op, waiting or rejected, by the start of its id (as
+        /// `remote status` prints it)
+        #[arg(long, value_name = "OP_ID", conflicts_with_all = ["drop_rejected", "retry_rejected", "seed", "overwrite"])]
+        drop: Option<String>,
+
         /// Also send nodes, edges and documents the server lacks that no op
         /// covers: history written before this project had a remote. Never
         /// changes a row the server already has.
@@ -2356,15 +2366,20 @@ fn main() {
                             log.path().display()
                         );
                         for op in st.pending.iter().take(20) {
-                            println!("  waiting   {}", op.body.describe());
+                            println!(
+                                "  waiting   {}  {}",
+                                op.op_id.chars().take(8).collect::<String>(),
+                                op.body.describe()
+                            );
                         }
                         if st.pending.len() > 20 {
                             println!("  ... and {} more", st.pending.len() - 20);
                         }
                         for (op, ack) in &st.rejected {
                             println!(
-                                "  {}  {}  {}",
+                                "  {}  {}  {}  {}",
                                 "rejected".red(),
+                                op.op_id.chars().take(8).collect::<String>(),
                                 op.body.describe(),
                                 ack.reason.as_deref().unwrap_or("").dimmed()
                             );
@@ -2537,6 +2552,8 @@ fn main() {
                 RemoteAction::Push {
                     overwrite,
                     drop_rejected,
+                    retry_rejected,
+                    drop,
                     seed,
                     repair,
                 } => {
@@ -2571,6 +2588,35 @@ fn main() {
                             }
                         }
                         return;
+                    }
+
+                    if let Some(prefix) = drop {
+                        match log.drop_op(&prefix) {
+                            Ok(op) => println!(
+                                "{} {} {} from {}",
+                                "Dropped".yellow(),
+                                &op.op_id,
+                                op.body.describe(),
+                                log.path().display()
+                            ),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        return;
+                    }
+
+                    if retry_rejected {
+                        match log.retry_rejected() {
+                            Ok(n) => {
+                                println!("{} {} rejected op(s) to send again", "Queued".yellow(), n)
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
                     }
 
                     match deciduous::remote::replay(&remote, &log) {

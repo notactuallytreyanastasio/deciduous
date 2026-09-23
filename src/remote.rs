@@ -777,6 +777,9 @@ pub enum ReplayError {
     /// request (another repository's workspace, a bad token), a server
     /// error, or a body that is not an ops report.
     Server(String),
+    /// The server failed on the request (HTTP 500): not a refusal, and not
+    /// an outage. See [`replay`] for how the op responsible is found.
+    Failed(String),
     /// Nothing was sent because this machine's settings are incomplete: no
     /// token, a workspace that could not be resolved.
     Config(String),
@@ -788,6 +791,7 @@ impl std::fmt::Display for ReplayError {
             ReplayError::Log(e)
             | ReplayError::Unreachable(e)
             | ReplayError::Server(e)
+            | ReplayError::Failed(e)
             | ReplayError::Config(e) => f.write_str(e),
         }
     }
@@ -909,6 +913,10 @@ impl Remote {
             .send_json(payload)
             .map_err(|e| match e {
                 ureq::Error::Status(409, _) => ReplayError::Server(self.claim_refused()),
+                e @ ureq::Error::Status(500, _) => ReplayError::Failed(describe(e)),
+                // A proxy's answer that the server behind it is down or
+                // slow: an outage, which passes by itself.
+                e @ ureq::Error::Status(502..=504, _) => ReplayError::Unreachable(describe(e)),
                 e @ ureq::Error::Status(..) => ReplayError::Server(describe(e)),
                 e @ ureq::Error::Transport(_) => ReplayError::Unreachable(describe(e)),
             })?
@@ -969,8 +977,14 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
     };
     print_unreadable(&state, log);
 
+    let mut answered = false;
     for batch in state.pending.chunks(REPLAY_BATCH) {
-        let acks = remote.post_ops(batch)?;
+        let acks = match remote.post_ops(batch) {
+            Ok(acks) => acks,
+            Err(ReplayError::Failed(e)) => isolate(remote, batch, &e, answered)?,
+            Err(e) => return Err(e),
+        };
+        answered = true;
         log.record_acks(&acks).map_err(ReplayError::Log)?;
         report.sent += batch.len();
         for (op, ack) in batch.iter().zip(&acks) {
@@ -989,6 +1003,57 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
 
     log.compact().map_err(ReplayError::Log)?;
     Ok(report)
+}
+
+/// The server failed (HTTP 500) on a batch. One op it cannot handle fails
+/// the whole request, and every later write joins the same batch, so
+/// sending it again as it was would fail the same way forever (SERVER-N1:
+/// one NUL in a prompt stopped every write after it from reaching the
+/// server). The batch is sent again one op at a time. An op the server
+/// fails on alone, in a replay where it answered other ops, is set aside:
+/// answered locally as rejected, with the reason, so it stays in the log,
+/// is listed by `remote status`, and can be resent (`remote push
+/// --retry-rejected`) or dropped (`--drop <op id>`).
+///
+/// If the server answered nothing at all in this replay, a 500 says nothing
+/// about any one op (a broken deploy fails every request), and nothing is
+/// set aside: the error is returned and every op keeps waiting.
+fn isolate(
+    remote: &Remote,
+    batch: &[crate::oplog::Op],
+    first: &str,
+    answered_before: bool,
+) -> Result<Vec<crate::oplog::Ack>, ReplayError> {
+    let mut acks = Vec::with_capacity(batch.len());
+    let mut failed = Vec::new();
+    for op in batch {
+        match remote.post_ops(std::slice::from_ref(op)) {
+            Ok(mut a) => acks.append(&mut a),
+            Err(ReplayError::Failed(e)) => {
+                failed.push(acks.len());
+                acks.push(crate::oplog::Ack {
+                    op_id: op.op_id.clone(),
+                    result: "rejected".into(),
+                    reason: Some(format!(
+                        "set aside by this machine, not answered by the server: the server failed on \
+                         this op alone ({e}) while it answered the others, so it was taken out of the \
+                         queue to let the writes after it through. `deciduous remote push \
+                         --retry-rejected` sends it again; `deciduous remote push --drop {}` discards it",
+                        op.op_id.chars().take(8).collect::<String>()
+                    )),
+                    at: chrono::Utc::now().to_rfc3339(),
+                });
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    if !answered_before && failed.len() == batch.len() {
+        return Err(ReplayError::Failed(format!(
+            "{first}; sent one at a time, every op failed the same way, so no one op is to blame \
+             and nothing was set aside"
+        )));
+    }
+    Ok(acks)
 }
 
 /// Says which lines of the log could not be read, every time the log is
@@ -1095,6 +1160,14 @@ pub fn replay_after_write(log: &crate::oplog::OpLog) {
             "{} the local write succeeded but the server refused it: {e}\n\
              {} wait in {}, and every later write will be refused the same way \
              until that is fixed. `deciduous remote status` lists them.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Failed(e)) => eprintln!(
+            "{} the local write succeeded but the server failed on the request: {e}\n\
+             {} wait in {}. They are sent again on the next write; an op the server keeps \
+             failing on is set aside then, as rejected, once the server has answered another.",
             "Warning:".yellow(),
             waiting(),
             log.path().display(),

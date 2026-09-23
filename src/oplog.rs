@@ -339,6 +339,16 @@ pub fn take_appended() -> Option<OpLog> {
         .map(|path| OpLog { path })
 }
 
+/// What a rewrite keeps of one op.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Keep {
+    /// The op and its answer.
+    Both,
+    /// The op, pending again.
+    Op,
+    Nothing,
+}
+
 #[derive(Debug, Clone)]
 pub struct OpLog {
     path: PathBuf,
@@ -494,6 +504,54 @@ impl OpLog {
         Ok(before)
     }
 
+    /// Makes every rejected op pending again (its rejection is forgotten),
+    /// so the next replay sends it. Returns how many.
+    pub fn retry_rejected(&self) -> Result<usize, String> {
+        let _lock = self.lock()?;
+        let before = self.read()?.rejected.len();
+        self.rewrite_with(|_, ack| match ack {
+            None => Keep::Op,
+            Some(a) if a.is_rejected() => Keep::Op,
+            Some(_) => Keep::Nothing,
+        })?;
+        Ok(before)
+    }
+
+    /// Drops the op whose id starts with `prefix`, whatever its state.
+    /// Refuses a prefix that matches no op, or more than one.
+    pub fn drop_op(&self, prefix: &str) -> Result<Op, String> {
+        let _lock = self.lock()?;
+        let st = self.read()?;
+        let matches: Vec<&Op> = st
+            .pending
+            .iter()
+            .chain(st.rejected.iter().map(|(op, _)| op))
+            .filter(|op| !prefix.is_empty() && op.op_id.starts_with(prefix))
+            .collect();
+        let op = match matches.as_slice() {
+            [one] => (*one).clone(),
+            [] => {
+                return Err(format!(
+                    "no waiting or rejected op in {} has an id starting with {prefix:?}; \
+                     `deciduous remote status` lists them with their ids",
+                    self.path.display()
+                ))
+            }
+            many => {
+                return Err(format!(
+                    "{} ops have an id starting with {prefix:?} ({}); give more of the id",
+                    many.len(),
+                    many.iter()
+                        .map(|o| o.op_id.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ))
+            }
+        };
+        self.rewrite(|o, _| o.op_id != op.op_id)?;
+        Ok(op)
+    }
+
     /// Drops the rejected ops that touch any of `change_ids`: the nodes the
     /// server deleted, after a pull removed them here. Such an op was
     /// refused because the node is gone and can never apply; kept, it held
@@ -510,6 +568,16 @@ impl OpLog {
     }
 
     fn rewrite(&self, keep: impl Fn(&Op, Option<&Ack>) -> bool) -> Result<usize, String> {
+        self.rewrite_with(|op, ack| {
+            if keep(op, ack) {
+                Keep::Both
+            } else {
+                Keep::Nothing
+            }
+        })
+    }
+
+    fn rewrite_with(&self, keep: impl Fn(&Op, Option<&Ack>) -> Keep) -> Result<usize, String> {
         let _lock = self.lock()?;
         let Parsed {
             entries,
@@ -548,16 +616,16 @@ impl OpLog {
         for e in &entries {
             if let Entry::Op(op) = e {
                 let ack = acks.get(op.op_id.as_str()).copied();
-                if keep(op, ack) {
-                    kept.push(serde_json::to_string(e).map_err(|e| e.to_string())?);
-                    if let Some(a) = ack {
-                        kept.push(
-                            serde_json::to_string(&Entry::Ack(a.clone()))
-                                .map_err(|e| e.to_string())?,
-                        );
-                    }
-                } else {
+                let k = keep(op, ack);
+                if k == Keep::Nothing {
                     dropped += 1;
+                    continue;
+                }
+                kept.push(serde_json::to_string(e).map_err(|e| e.to_string())?);
+                if let (Keep::Both, Some(a)) = (k, ack) {
+                    kept.push(
+                        serde_json::to_string(&Entry::Ack(a.clone())).map_err(|e| e.to_string())?,
+                    );
                 }
             }
         }

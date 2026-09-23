@@ -1588,3 +1588,138 @@ fn rust_n5_concurrent_local_writers_queue_a_true_was_in_commit_order() {
     );
     assert!(broken.is_empty(), "{} stale: {broken:?}", broken.len());
 }
+
+/// A server that answers /ops the way 1.0.8's did for an op it could not
+/// store: an empty 500 for the whole request whenever the batch holds a node
+/// titled "poison", and every op applied otherwise. Returns the URL and the
+/// titles it applied.
+fn poison_stub() -> (String, std::sync::Arc<std::sync::Mutex<Vec<String>>>) {
+    let applied = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let server = tiny_http::Server::http("127.0.0.1:0").unwrap();
+    let port = server.server_addr().to_ip().unwrap().port();
+    let seen = applied.clone();
+    std::thread::spawn(move || {
+        for mut req in server.incoming_requests() {
+            let mut body = String::new();
+            let _ = req.as_reader().read_to_string(&mut body);
+            let path = req.url().split('?').next().unwrap_or("").to_string();
+            let reply = match path.as_str() {
+                "/health" => "ok".to_string(),
+                "/claim" => r#"{"workspace":"stub","claim":"unchecked"}"#.to_string(),
+                "/locate" => r#"{"workspaces":[]}"#.to_string(),
+                "/ops" => {
+                    let v: Value = serde_json::from_str(&body).unwrap();
+                    let ops = v["ops"].as_array().unwrap();
+                    if ops.iter().any(|op| op["title"] == "poison") {
+                        let _ = req.respond(tiny_http::Response::empty(500));
+                        continue;
+                    }
+                    let mut seen = seen.lock().unwrap();
+                    let results: Vec<Value> = ops
+                        .iter()
+                        .map(|op| {
+                            if let Some(t) = op["title"].as_str() {
+                                seen.push(t.to_string());
+                            }
+                            serde_json::json!({"op_id": op["op_id"], "result": "applied"})
+                        })
+                        .collect();
+                    serde_json::json!({"workspace": "stub", "results": results}).to_string()
+                }
+                _ => {
+                    let _ = req.respond(tiny_http::Response::empty(404));
+                    continue;
+                }
+            };
+            let _ = req.respond(tiny_http::Response::from_string(reply));
+        }
+    });
+    (format!("http://127.0.0.1:{port}"), applied)
+}
+
+// SERVER-N1, the client half: one op the server fails on (HTTP 500 for the
+// whole request) wedged the log for good. Every later write joined the same
+// batch, got the same 500, and `push --drop-rejected` dropped nothing,
+// because nothing had been answered "rejected". The batch is now split, the
+// op the server fails on alone (while it answers the others) is set aside
+// as rejected, and it can be listed, resent or dropped by id.
+#[test]
+fn server_n1_an_op_the_server_fails_on_is_set_aside_and_the_rest_delivered() {
+    let (url, applied) = poison_stub();
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("poisoned");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\nworkspace = \"poisoned\"\n"),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "before"]);
+    sb.dx_ok(&dir, &["add", "goal", "poison"]);
+    let out = sb.dx_ok(&dir, &["add", "goal", "after"]);
+    sb.dx_ok(&dir, &["add", "goal", "later"]);
+    assert_eq!(
+        *applied.lock().unwrap(),
+        ["before", "after", "later"],
+        "{out}"
+    );
+    assert!(out.contains("poison") && out.contains("500"), "{out}");
+
+    // Set aside, not lost: the op is in the log with a rejection saying why.
+    let lines = log_lines(&dir);
+    let poison = lines
+        .iter()
+        .find(|l| l["title"] == "poison")
+        .expect("the op is kept");
+    let id = poison["op_id"].as_str().unwrap().to_string();
+    let ack = lines
+        .iter()
+        .find(|l| l["entry"] == "ack" && l["op_id"] == id.as_str())
+        .expect("and answered");
+    assert_eq!(ack["result"], "rejected");
+    assert!(ack["reason"].as_str().unwrap().contains("500"), "{ack}");
+
+    // Resent on request (the server still fails on it, so it stays).
+    let retry = sb.dx(&dir, &["remote", "push", "--retry-rejected"]);
+    let retry = format!("{}{}", text(&retry.stdout), text(&retry.stderr));
+    assert!(retry.contains("1 rejected op(s)"), "{retry}");
+    assert!(log_lines(&dir).iter().any(|l| l["op_id"] == id.as_str()));
+
+    // Dropped by its id, alone.
+    sb.dx_ok(&dir, &["add", "goal", "keep-waiting-offline"]);
+    let dropped = sb.dx_ok(&dir, &["remote", "push", "--drop", &id[..8]]);
+    assert!(dropped.contains("create goal"), "{dropped}");
+    assert!(!log_lines(&dir).iter().any(|l| l["op_id"] == id.as_str()));
+}
+
+// SERVER-N1 against the real server: a NUL in one write's prompt.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn server_n1_a_nul_in_one_write_does_not_stop_the_writes_after_it() {
+    use std::io::Write;
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-poison");
+    let dir = sb.remote_repo("poison", &url, &ws);
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .args(["add", "goal", "poison", "--prompt-stdin"])
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"has\0nul").unwrap();
+    let out = child.wait_with_output().unwrap();
+    let said = format!("{}{}", text(&out.stdout), text(&out.stderr));
+    assert!(said.contains("NUL"), "the refusal names the cause: {said}");
+    sb.dx_ok(&dir, &["add", "goal", "after"]);
+    assert_eq!(live_titles(&export(&url, &token, &ws)), ["after"]);
+    let st = sb.dx(&dir, &["remote", "status"]);
+    let st = text(&st.stdout);
+    assert!(st.contains("0 write(s) waiting, 1 rejected"), "{st}");
+}
