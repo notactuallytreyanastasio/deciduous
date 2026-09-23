@@ -685,6 +685,170 @@ impl Drop for ReplayOnExit {
     }
 }
 
+/// How the local graph and the server's differ, row by row.
+///
+/// `remote status` used to compare counts, and said "OK: counts match" when
+/// one side had an unpushed node and the other an agent's different node
+/// (31 vs 31), or when every count matched and a status did not (C2, C9).
+/// Equal counts say nothing about equal content, so this compares content:
+/// live nodes by change_id, field by field, and edges by
+/// (from, to, type).
+#[derive(Debug, Default)]
+pub struct ContentDiff {
+    pub local_nodes: usize,
+    pub server_nodes: usize,
+    pub local_edges: usize,
+    pub server_edges: usize,
+    /// (change_id, "type \"title\"")
+    pub only_local: Vec<(String, String)>,
+    pub only_server: Vec<(String, String)>,
+    pub differ: Vec<NodeDifference>,
+    pub edges_only_local: Vec<String>,
+    pub edges_only_server: Vec<String>,
+}
+
+impl ContentDiff {
+    pub fn is_empty(&self) -> bool {
+        self.only_local.is_empty()
+            && self.only_server.is_empty()
+            && self.differ.is_empty()
+            && self.edges_only_local.is_empty()
+            && self.edges_only_server.is_empty()
+    }
+}
+
+/// One node both sides hold with different content.
+#[derive(Debug)]
+pub struct NodeDifference {
+    pub change_id: String,
+    pub title: String,
+    /// (field, here, on the server)
+    pub fields: Vec<(String, String, String)>,
+}
+
+pub fn content_diff(
+    nodes: &[crate::db::DecisionNode],
+    edges: &[crate::db::DecisionEdge],
+    server: &RemoteGraph,
+) -> ContentDiff {
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
+
+    let short = |c: &str| c.chars().take(8).collect::<String>();
+    let label = |t: &str, title: &str, cid: &str| format!("{t} {} \"{title}\"", short(cid));
+    let shown = |s: &str| {
+        let s: String = s.chars().take(60).collect();
+        format!("{s:?}")
+    };
+
+    // A server that exports tombstones marks them with deleted_at; they are
+    // not part of the live graph on either side.
+    let server_nodes: BTreeMap<&str, &RemoteNode> = server
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_none())
+        .map(|n| (n.change_id.as_str(), n))
+        .collect();
+    let local_nodes: BTreeMap<&str, &crate::db::DecisionNode> =
+        nodes.iter().map(|n| (n.change_id.as_str(), n)).collect();
+
+    let mut d = ContentDiff {
+        local_nodes: local_nodes.len(),
+        server_nodes: server_nodes.len(),
+        ..Default::default()
+    };
+
+    for (cid, n) in &local_nodes {
+        let Some(s) = server_nodes.get(cid) else {
+            d.only_local
+                .push((cid.to_string(), label(&n.node_type, &n.title, cid)));
+            continue;
+        };
+        let mut fields = Vec::new();
+        let mut cmp = |name: &str, here: &str, there: &str| {
+            if here != there {
+                fields.push((name.to_string(), shown(here), shown(there)));
+            }
+        };
+        cmp("type", &n.node_type, &s.node_type);
+        cmp("title", &n.title, &s.title);
+        cmp("status", &n.status, &s.status);
+        cmp(
+            "description",
+            n.description.as_deref().unwrap_or(""),
+            s.description.as_deref().unwrap_or(""),
+        );
+        let local_meta: serde_json::Map<String, Value> = n
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let server_meta = s
+            .metadata
+            .as_ref()
+            .and_then(|m| m.as_object().cloned())
+            .unwrap_or_default();
+        let keys: BTreeSet<&String> = local_meta.keys().chain(server_meta.keys()).collect();
+        for k in keys {
+            let here = local_meta.get(k).map(|v| v.to_string()).unwrap_or_default();
+            let there = server_meta
+                .get(k)
+                .map(|v| v.to_string())
+                .unwrap_or_default();
+            if here != there {
+                fields.push((format!("metadata.{k}"), here, there));
+            }
+        }
+        if !fields.is_empty() {
+            d.differ.push(NodeDifference {
+                change_id: cid.to_string(),
+                title: n.title.clone(),
+                fields,
+            });
+        }
+    }
+    for (cid, s) in &server_nodes {
+        if !local_nodes.contains_key(cid) {
+            d.only_server
+                .push((cid.to_string(), label(&s.node_type, &s.title, cid)));
+        }
+    }
+
+    let by_id: HashMap<i32, &str> = nodes.iter().map(|n| (n.id, n.change_id.as_str())).collect();
+    let edge_label = |f: &str, t: &str, k: &str| format!("{} -> {} ({k})", short(f), short(t));
+    let local_edges: BTreeSet<(String, String, String)> = edges
+        .iter()
+        .filter_map(|e| {
+            Some((
+                by_id.get(&e.from_node_id)?.to_string(),
+                by_id.get(&e.to_node_id)?.to_string(),
+                e.edge_type.clone(),
+            ))
+        })
+        .collect();
+    // An edge from or to a node the server deleted is not in its live graph.
+    let server_edges: BTreeSet<(String, String, String)> = server
+        .edges
+        .iter()
+        .filter_map(|e| {
+            let (f, t) = (e.from_change_id.as_deref()?, e.to_change_id.as_deref()?);
+            (server_nodes.contains_key(f) && server_nodes.contains_key(t))
+                .then(|| (f.to_string(), t.to_string(), e.edge_type.clone()))
+        })
+        .collect();
+    d.local_edges = local_edges.len();
+    d.server_edges = server_edges.len();
+    d.edges_only_local = local_edges
+        .difference(&server_edges)
+        .map(|(f, t, k)| edge_label(f, t, k))
+        .collect();
+    d.edges_only_server = server_edges
+        .difference(&local_edges)
+        .map(|(f, t, k)| edge_label(f, t, k))
+        .collect();
+    d
+}
+
 #[derive(Debug, Default)]
 pub struct RemoteCounts {
     pub nodes: usize,

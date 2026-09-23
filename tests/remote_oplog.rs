@@ -436,3 +436,60 @@ fn a_project_without_a_remote_keeps_no_log() {
     sb.dx_ok(&dir, &["add", "goal", "local"]);
     assert!(!dir.join(".deciduous").join("remote-log.jsonl").exists());
 }
+
+// ---------------------------------------------------------------------------
+// C9: remote status compares content and reports the queue, not counts.
+// ---------------------------------------------------------------------------
+
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn status_reports_waiting_writes_and_content_differences_when_counts_match() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-c9");
+    let dir = sb.remote_repo("c9", &url, &ws);
+
+    sb.dx_ok(&dir, &["add", "goal", "shared goal"]);
+
+    // Bob writes while the server is unreachable; an agent writes a different
+    // node and changes the shared one. 2 nodes here, 2 on the server.
+    set_remote_url(&dir, &dead_url());
+    sb.dx_ok(&dir, &["add", "goal", "bobs unpushed goal"]);
+    set_remote_url(&dir, &url);
+
+    let g = export(&url, &token, &ws);
+    let shared = server_node(&g, "shared goal")["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[
+            (
+                "add_node",
+                serde_json::json!({"node_type": "goal", "title": "agents goal"}),
+            ),
+            (
+                "update_node",
+                serde_json::json!({"node_id": shared, "status": "completed"}),
+            ),
+        ],
+    );
+
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(!out.contains("OK"), "counts match, content does not: {out}");
+    assert!(out.contains("1 write(s) waiting"), "{out}");
+    assert!(out.contains("bobs unpushed goal"), "{out}");
+    assert!(out.contains("agents goal"), "{out}");
+    assert!(
+        out.contains("status") && out.contains("completed"),
+        "the differing field is named: {out}"
+    );
+
+    // Once the queue is sent and the server's side pulled, nothing differs.
+    sb.dx_ok(&dir, &["remote", "pull"]);
+    let out = sb.dx_ok(&dir, &["remote", "status"]);
+    assert!(out.contains("In sync"), "{out}");
+}

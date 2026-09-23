@@ -2191,83 +2191,155 @@ fn main() {
                         }
                     };
 
-                    let local_nodes = db.get_all_nodes().map(|n: Vec<_>| n.len()).unwrap_or(0);
-                    let local_edges = db.get_all_edges().map(|e: Vec<_>| e.len()).unwrap_or(0);
-
                     println!("{} {}", "Remote:".bold(), remote.url);
                     println!("{} {}", "Workspace:".bold(), remote.workspace.cyan());
 
-                    let checked = remote.health().and_then(|_| {
+                    // The queue first: it is this machine's half of any
+                    // difference below, and it needs no server to read.
+                    let log_state = match db.oplog() {
+                        Some(log) => match log.read() {
+                            Ok(st) => Some((log, st)),
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                std::process::exit(1);
+                            }
+                        },
+                        None => None,
+                    };
+                    let (waiting, rejected) = log_state
+                        .as_ref()
+                        .map(|(_, st)| (st.pending.len(), st.rejected.len()))
+                        .unwrap_or((0, 0));
+                    if let Some((log, st)) = &log_state {
+                        println!(
+                            "{} {} write(s) waiting, {} rejected  ({})",
+                            "Log:".bold(),
+                            waiting,
+                            rejected,
+                            log.path().display()
+                        );
+                        for op in st.pending.iter().take(20) {
+                            println!("  waiting   {}", op.body.describe());
+                        }
+                        if st.pending.len() > 20 {
+                            println!("  ... and {} more", st.pending.len() - 20);
+                        }
+                        for (op, ack) in &st.rejected {
+                            println!(
+                                "  {}  {}  {}",
+                                "rejected".red(),
+                                op.body.describe(),
+                                ack.reason.as_deref().unwrap_or("").dimmed()
+                            );
+                        }
+                    }
+
+                    let (nodes, edges) = match (db.get_all_nodes(), db.get_all_edges()) {
+                        (Ok(n), Ok(e)) => (n, e),
+                        (Err(e), _) | (_, Err(e)) => {
+                            eprintln!("{} reading the local graph: {}", "Error:".red(), e);
+                            std::process::exit(1);
+                        }
+                    };
+                    // Health first, so a down server and a wrong token
+                    // read as the different problems they are.
+                    let server = match remote.health().and_then(|_| {
                         remote
                             .export()
                             .map_err(|e| format!("reached {} but {}", remote.url, e))
-                    });
-                    match checked {
-                        Ok(server) => {
-                            let c = server.live_counts();
-                            println!("\n              {:>8}  {:>8}", "local", "remote");
-                            println!("  nodes       {:>8}  {:>8}", local_nodes, c.nodes);
-                            println!("  edges       {:>8}  {:>8}", local_edges, c.edges);
-
-                            // Nodes the server deleted and this machine has
-                            // not pulled make local look bigger, and the
-                            // advice below used to say push. Push cannot
-                            // apply a deletion; only pull can. Say that
-                            // first, then compare what local will hold once
-                            // it has.
-                            let graph = db
-                                .get_graph()
-                                .ok()
-                                .and_then(|g| serde_json::to_value(&g).ok())
-                                .unwrap_or_default();
-                            let deleted = deciduous::remote::deleted_on_server(&graph, &server);
-                            let (local_nodes, local_edges) = if deleted.is_empty() {
-                                (local_nodes, local_edges)
-                            } else {
-                                println!(
-                                    "\n{} the server deleted {} node(s) this machine still has. `deciduous remote pull` to apply the deletion(s):",
-                                    "Drift:".yellow(),
-                                    deleted.len()
-                                );
-                                for d in deleted.iter().take(10) {
-                                    println!(
-                                        "  {} \"{}\" deleted at {}",
-                                        d.id, d.title, d.deleted_at
-                                    );
-                                }
-                                deciduous::remote::counts_without(&graph, &deleted)
-                            };
-
-                            // Equal counts are not proof of equal content, so
-                            // this says "match", not "in sync". And the advice
-                            // follows the direction of the drift: telling
-                            // someone to pull when their local database is the
-                            // side holding the extra nodes sends them to a
-                            // command that will do nothing.
-                            if !deleted.is_empty()
-                                && local_nodes == c.nodes
-                                && local_edges == c.edges
-                            {
-                                println!("  After that pull the counts match.");
-                            } else if local_nodes == c.nodes && local_edges == c.edges {
-                                println!("\n{} counts match.", "OK:".green());
-                            } else if local_nodes > c.nodes || local_edges > c.edges {
-                                println!(
-                                    "\n{} local holds more than the server. `deciduous remote push` to send it up.",
-                                    "Drift:".yellow()
-                                );
-                            } else {
-                                println!(
-                                    "\n{} the server holds more than this machine. `deciduous remote pull` to refresh.",
-                                    "Drift:".yellow()
-                                );
-                            }
-                        }
+                    }) {
+                        Ok(g) => g,
                         Err(e) => {
-                            println!("\n  local: {} nodes, {} edges", local_nodes, local_edges);
                             eprintln!("{} {}", "Error:".red(), e);
                             std::process::exit(1);
                         }
+                    };
+                    let d = deciduous::remote::content_diff(&nodes, &edges, &server);
+
+                    println!("\n              {:>8}  {:>8}", "local", "server");
+                    println!("  nodes       {:>8}  {:>8}", d.local_nodes, d.server_nodes);
+                    println!("  edges       {:>8}  {:>8}", d.local_edges, d.server_edges);
+
+                    let queued: std::collections::HashSet<String> = log_state
+                        .as_ref()
+                        .map(|(_, st)| {
+                            st.pending
+                                .iter()
+                                .filter_map(|op| match &op.body {
+                                    deciduous::oplog::OpBody::CreateNode { change_id, .. } => {
+                                        Some(change_id.clone())
+                                    }
+                                    _ => None,
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let list = |title: &str, rows: Vec<String>| {
+                        if rows.is_empty() {
+                            return;
+                        }
+                        println!("\n{} ({})", title.bold(), rows.len());
+                        for r in rows.iter().take(20) {
+                            println!("  {r}");
+                        }
+                        if rows.len() > 20 {
+                            println!("  ... and {} more", rows.len() - 20);
+                        }
+                    };
+                    list(
+                        "Only here",
+                        d.only_local
+                            .iter()
+                            .map(|(cid, l)| {
+                                if queued.contains(cid) {
+                                    format!("{l}  (waiting in the log)")
+                                } else {
+                                    format!(
+                                        "{l}  (no op covers it: `deciduous remote push --seed`)"
+                                    )
+                                }
+                            })
+                            .collect(),
+                    );
+                    list(
+                        "Only on the server",
+                        d.only_server.iter().map(|(_, l)| l.clone()).collect(),
+                    );
+                    list(
+                        "Different",
+                        d.differ
+                            .iter()
+                            .map(|nd| {
+                                let f: Vec<String> = nd
+                                    .fields
+                                    .iter()
+                                    .map(|(k, here, there)| {
+                                        format!("{k}: here {here}, server {there}")
+                                    })
+                                    .collect();
+                                format!(
+                                    "{} \"{}\"  {}",
+                                    nd.change_id.chars().take(8).collect::<String>(),
+                                    nd.title,
+                                    f.join("; ")
+                                )
+                            })
+                            .collect(),
+                    );
+                    list("Edges only here", d.edges_only_local.clone());
+                    list("Edges only on the server", d.edges_only_server.clone());
+
+                    if d.is_empty() && waiting == 0 && rejected == 0 {
+                        println!(
+                            "\n{} no writes waiting, and every node and edge matches field by field.",
+                            "In sync:".green()
+                        );
+                    } else {
+                        println!(
+                            "\n{} `deciduous remote push` sends what is waiting; `deciduous remote pull` \
+                             takes the server's side (newer edit wins per node).",
+                            "Differs:".yellow()
+                        );
                     }
                 }
 
