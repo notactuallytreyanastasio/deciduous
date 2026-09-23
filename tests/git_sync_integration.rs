@@ -1556,3 +1556,41 @@ fn indented_conflict_markers_are_not_sent_back_to_the_sync_that_cannot_merge_the
     }
     assert_eq!(alice.graph_text(), text);
 }
+
+// ============================================================================
+// G6 / G7: deferred. The database is shared by every branch and commit a
+// clone checks out, and cannot tell a row it never exported from a row git
+// took out of the file. These reproduce the findings for the chapter that
+// gives the database that knowledge; run with --ignored.
+// ============================================================================
+
+#[test]
+#[ignore = "G6 deferred: needs a record of which rows are unpublished local writes"]
+fn a_node_added_on_a_branch_stays_on_that_branch() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "On main", &[]);
+    alice.commit_graph("main");
+    alice.git(&["checkout", "-q", "-b", "spike"]);
+    alice.add("goal", "Spike", &[]);
+    alice.commit_graph("spike");
+    alice.git(&["checkout", "-q", "main"]);
+    let out = alice.ok(&["sync"]);
+    assert!(!alice.graph_text().contains("Spike"), "{out}");
+    assert!(alice.git(&["status", "--porcelain"]).is_empty(), "{out}");
+}
+
+#[test]
+#[ignore = "G7 deferred: needs a record of which rows are unpublished local writes"]
+fn sync_on_an_older_commit_leaves_the_tree_clean() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "First", &[]);
+    alice.commit_graph("first");
+    alice.add("goal", "Second", &[]);
+    alice.commit_graph("second");
+    alice.git(&["checkout", "-q", "HEAD~1"]);
+    let out = alice.ok(&["sync"]);
+    assert!(alice.git(&["status", "--porcelain"]).is_empty(), "{out}");
+    alice.git(&["checkout", "-q", "main"]);
+}
