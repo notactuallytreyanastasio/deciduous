@@ -140,17 +140,7 @@ defmodule DeciduousMcp.Web.Router do
         {:ok, body, conn} ->
           case Jason.decode(body) do
             {:ok, %{"change_ids" => ids}} when is_list(ids) and length(ids) <= 1000 ->
-              held = Workspaces.holding(Enum.filter(ids, &is_binary/1))
-
-              # A pinned client learns nothing about the other workspaces,
-              # as with list_workspaces.
-              held =
-                case conn.assigns[:pinned_workspace_name] do
-                  nil -> held
-                  pinned -> Enum.filter(held, &(&1.name == pinned))
-                end
-
-              json(conn, 200, %{workspaces: held})
+              locate(conn, ids)
 
             _ ->
               json(conn, 422, %{error: "body must be {\"change_ids\": [...]}, at most 1000"})
@@ -162,6 +152,31 @@ defmodule DeciduousMcp.Web.Router do
         {:error, _} ->
           json(conn, 400, %{error: "could not read body"})
       end
+    end
+  end
+
+  # A NUL went into `change_id IN (...)`, which Postgres cannot take in
+  # text, and came back as an empty HTTP 500 (SERVER-N5). No change_id can
+  # hold one, so asking for one is an error, said by position.
+  defp locate(conn, ids) do
+    case Enum.find_index(ids, &(is_binary(&1) and String.contains?(&1, <<0>>))) do
+      nil ->
+        held = Workspaces.holding(Enum.filter(ids, &is_binary/1))
+
+        # A pinned client learns nothing about the other workspaces,
+        # as with list_workspaces.
+        held =
+          case conn.assigns[:pinned_workspace_name] do
+            nil -> held
+            pinned -> Enum.filter(held, &(&1.name == pinned))
+          end
+
+        json(conn, 200, %{workspaces: held})
+
+      i ->
+        json(conn, 422, %{
+          error: "change_ids[#{i}] contains a NUL character (U+0000); no change_id can hold one"
+        })
     end
   end
 
