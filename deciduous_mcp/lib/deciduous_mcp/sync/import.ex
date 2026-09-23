@@ -151,7 +151,42 @@ defmodule DeciduousMcp.Sync.Import do
     cond do
       problems != [] -> {:error, %{rejected: "unknown vocabulary", examples: problems}}
       Enum.any?(nodes, &is_nil(&1["change_id"])) -> {:error, "every node needs a change_id"}
-      true -> {:ok, nodes}
+      true -> validate_metadata(nodes)
+    end
+  end
+
+  # insert_all skips Node.changeset, so the metadata rules update_node
+  # enforces were never applied here: {"confidence": "999"} and
+  # {"confidence": true} were stored, and metadata_json that did not decode
+  # to an object was stored as %{} -- a node's prompt and branch dropped
+  # without a word. Refused whole, like unknown vocabulary, and for the
+  # same reason: a row dropped from a 200 is a row lost silently.
+  # Returns the nodes with metadata_json decoded, so it is parsed once.
+  defp validate_metadata(nodes) do
+    {decoded, problems} =
+      Enum.map_reduce(nodes, [], fn n, problems ->
+        case decode_metadata(n["metadata_json"]) do
+          {:ok, meta} ->
+            case Node.confidence_error(meta["confidence"]) do
+              nil -> {Map.put(n, "metadata_json", meta), problems}
+              message -> {n, ["node #{n["change_id"]}: #{message}" | problems]}
+            end
+
+          {:error, message} ->
+            {n, ["node #{n["change_id"]}: #{message}" | problems]}
+        end
+      end)
+
+    case problems do
+      [] ->
+        {:ok, decoded}
+
+      _ ->
+        shown = problems |> Enum.reverse() |> Enum.take(20)
+
+        {:error,
+         "metadata rejected, nothing was written (#{length(problems)} node(s)): " <>
+           Enum.join(shown, "; ")}
     end
   end
 
@@ -176,7 +211,8 @@ defmodule DeciduousMcp.Sync.Import do
           title: n["title"] || "(untitled)",
           description: n["description"],
           status: n["status"] || "pending",
-          metadata: decode_metadata(n["metadata_json"]),
+          # Decoded and checked by validate_metadata/1.
+          metadata: n["metadata_json"],
           inserted_at: parse_time(n["created_at"], now),
           updated_at: parse_time(n["updated_at"], now)
         }
@@ -422,17 +458,19 @@ defmodule DeciduousMcp.Sync.Import do
 
   # --- Coercion ---------------------------------------------------------------
 
-  defp decode_metadata(nil), do: %{}
+  defp decode_metadata(nil), do: {:ok, %{}}
+  defp decode_metadata(map) when is_map(map), do: {:ok, map}
 
   defp decode_metadata(json) when is_binary(json) do
     case Jason.decode(json) do
-      {:ok, map} when is_map(map) -> map
-      _ -> %{}
+      {:ok, map} when is_map(map) -> {:ok, map}
+      {:ok, other} -> {:error, "metadata_json must be a JSON object, got #{inspect(other)}"}
+      {:error, _} -> {:error, "metadata_json is not valid JSON: #{inspect(String.slice(json, 0, 80))}"}
     end
   end
 
-  defp decode_metadata(map) when is_map(map), do: map
-  defp decode_metadata(_), do: %{}
+  defp decode_metadata(other),
+    do: {:error, "metadata_json must be a JSON object or a string holding one, got #{inspect(other)}"}
 
   # The CLI writes timestamps with an offset ("2016-02-01T00:00:00-05:00") and
   # backdated archaeology nodes reach back years, so these are parsed rather
