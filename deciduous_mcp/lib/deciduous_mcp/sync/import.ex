@@ -55,7 +55,8 @@ defmodule DeciduousMcp.Sync.Import do
              opts[:pinned_workspace_name]
            ),
          :ok <- validate_shapes(graph),
-         {:ok, nodes} <- validate_nodes(graph["nodes"] || []) do
+         {:ok, nodes} <- validate_nodes(graph["nodes"] || []),
+         :ok <- validate_edge_sizes(graph["edges"] || []) do
       Repo.transaction(
         fn ->
           workspace =
@@ -337,8 +338,67 @@ defmodule DeciduousMcp.Sync.Import do
     cond do
       problems != [] -> {:error, %{rejected: "unknown vocabulary", examples: problems}}
       Enum.any?(nodes, &is_nil(&1["change_id"])) -> {:error, "every node needs a change_id"}
-      true -> validate_metadata(nodes)
+      true -> with {:ok, nodes} <- validate_metadata(nodes), do: validate_sizes(nodes)
     end
+  end
+
+  # The bounds MCP and POST /ops hold a node to (DeciduousMcp.MCP.ArgCheck,
+  # with_limits: a title 10,000 characters and not blank, a branch 512,
+  # any other string 262,144). /import is the sibling path the CLI's
+  # `remote push --seed` takes, and it held none of them: a 1,000,000-
+  # character title, a 5,000,000-character description, a 600-character
+  # branch and a title of two spaces were stored (verification of
+  # SERVER-N3). Refused whole, like the vocabulary, naming the node.
+  #
+  # A missing title is still imported as "(untitled)", as before; the
+  # vocabulary keeps the legacy `feedback` and `done`, for the reason
+  # POST /ops keeps them for a create: they exist in graphs on disk, and
+  # a push of such a graph is a copy of nodes that already exist.
+  @node_schema %{
+    type: "object",
+    properties: %{
+      title: %{type: "string"},
+      description: %{type: "string"},
+      metadata: %{type: "object", properties: %{branch: %{type: "string"}}}
+    }
+  }
+
+  defp validate_sizes(nodes) do
+    schema = DeciduousMcp.MCP.ArgCheck.with_limits(@node_schema)
+
+    nodes
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, nodes}, fn {n, i}, ok ->
+      held = %{
+        "title" => n["title"],
+        "description" => n["description"],
+        "metadata" => n["metadata_json"]
+      }
+
+      case DeciduousMcp.MCP.ArgCheck.check(schema, held) do
+        :ok ->
+          {:cont, ok}
+
+        {:error, message} ->
+          {:halt, {:error, "nodes[#{i}]#{change_id_hint(n)}: #{message}; nothing was imported"}}
+      end
+    end)
+  end
+
+  @edge_limits DeciduousMcp.MCP.ArgCheck.with_limits(%{
+                 type: "object",
+                 properties: %{rationale: %{type: "string"}}
+               })
+
+  defp validate_edge_sizes(edges) do
+    edges
+    |> Enum.with_index()
+    |> Enum.reduce_while(:ok, fn {e, i}, :ok ->
+      case DeciduousMcp.MCP.ArgCheck.check(@edge_limits, %{"rationale" => e["rationale"]}) do
+        :ok -> {:cont, :ok}
+        {:error, message} -> {:halt, {:error, "edges[#{i}]: #{message}; nothing was imported"}}
+      end
+    end)
   end
 
   # insert_all skips Node.changeset, so the metadata rules update_node

@@ -126,4 +126,86 @@ defmodule DeciduousMcp.Web.OpsInputBoundsTest do
     assert %Node{inserted_at: at} = Repo.get_by!(Node, change_id: "n3-ok2")
     assert DateTime.to_iso8601(at) =~ "2025-03-04T05:06:07"
   end
+
+  test "SERVER-N3 (verification): create_edge is held to the bounds add_edge is" do
+    assert %{"result" => "applied"} = one(create("n3-ea", %{}))
+    assert %{"result" => "applied"} = one(create("n3-eb", %{}))
+
+    edge = fn extra ->
+      Map.merge(
+        %{
+          "op_id" => Ecto.UUID.generate(),
+          "kind" => "create_edge",
+          "from_change_id" => "n3-ea",
+          "to_change_id" => "n3-eb",
+          "edge_type" => "leads_to"
+        },
+        extra
+      )
+    end
+
+    for {extra, says} <- [
+          {%{"rationale" => String.duplicate("r", 2_000_000)},
+           "rationale is 2000000 characters; the limit is 262144"},
+          {%{"rationale" => %{"a" => 1}}, "rationale must be a string"},
+          {%{"weight" => -1}, "weight must be at least 0"},
+          {%{"weight" => "heavy"}, "weight must be a number"},
+          {%{"edge_type" => "bogus"}, "edge_type must be one of"}
+        ] do
+      r = one(edge.(extra))
+      assert r["result"] == "rejected", "#{inspect(Map.keys(extra))}: #{inspect(r)}"
+      assert r["reason"] =~ "create_edge n3-ea -> n3-eb"
+      assert r["reason"] =~ says
+    end
+
+    assert Repo.aggregate(DeciduousMcp.Schema.Edge, :count) == 0
+    assert %{"result" => "applied"} = one(edge.(%{"rationale" => "why", "weight" => 1.0}))
+  end
+
+  test "SERVER-N3 (verification): metadata holds files, prompt and commit to MCP's types" do
+    for {cid, meta, says} <- [
+          {"n3-files", %{"files" => "notalist"}, "metadata.files must be an array"},
+          {"n3-files2", %{"files" => [1]}, "metadata.files[0] must be a string"},
+          {"n3-prompt", %{"prompt" => %{"a" => 1}}, "metadata.prompt must be a string"},
+          {"n3-commit", %{"commit" => 7}, "metadata.commit must be a string"}
+        ] do
+      r = one(create(cid, %{"metadata" => meta}))
+      assert r["result"] == "rejected", "#{cid}: #{inspect(r)}"
+      assert r["reason"] =~ says
+      refute exists?(cid)
+    end
+
+    # Keys of the node's own, which the CLI carries from whatever wrote them.
+    assert %{"result" => "applied"} =
+             one(create("n3-own", %{"metadata" => %{"files" => ["a.rs"], "sequence" => 3}}))
+  end
+
+  test "new (low): a change_id, op_id or kind that cannot be stored is refused, with no 500 and no workspace" do
+    long = String.duplicate("c", 300)
+
+    token = Application.fetch_env!(:deciduous_mcp, :api_token)
+
+    post = fn ws, ops ->
+      conn =
+        conn(:post, "/ops", Jason.encode!(%{workspace: ws, ops: ops}))
+        |> put_req_header("authorization", "Bearer " <> token)
+        |> put_req_header("content-type", "application/json")
+        |> Router.call(@opts)
+
+      {conn.status, conn.resp_body}
+    end
+
+    for {ws, op, says} <- [
+          {"vg-cid300", create(long, %{}), "change_id is 300 characters; the limit is 255"},
+          {"vg-cidnul", create("a\u0000b", %{}), "change_id contains a NUL"},
+          {"vg-opid300", create("ok-cid", %{"op_id" => long}), "op_id is 300 characters"},
+          {"vg-opidnul", create("ok-cid", %{"op_id" => "a\u0000b"}), "op_id contains a NUL"},
+          {"vg-kind300", Map.put(create("ok-cid", %{}), "kind", long), "unknown op kind"}
+        ] do
+      {status, body} = post.(ws, [op])
+      assert status in [200, 422], "#{ws}: #{status} #{inspect(body)}"
+      assert body =~ says, "#{ws}: #{body}"
+      assert {:error, :not_found} = DeciduousMcp.Graph.Workspaces.get_by_name(ws), ws
+    end
+  end
 end

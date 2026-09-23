@@ -68,11 +68,27 @@ defmodule DeciduousMcp.Web.ImportInputTest do
     end
   end
 
-  test "an imported node with an empty title can still be updated and deleted" do
+  # /import now refuses a blank title (the SERVER-N3 case below), as /ops
+  # and MCP do. Rows it stored before that still exist, and must stay
+  # editable; this one is written the way insert_all wrote it.
+  test "a node stored with an empty title, as /import used to, can still be updated and deleted" do
     cid = Ecto.UUID.generate()
-    assert {200, _} = import!("import-blank-title", [gnode(%{"change_id" => cid, "title" => ""})])
+    {:ok, ws} = Workspaces.find_or_create("import-blank-title")
+    now = DateTime.utc_now()
 
-    {:ok, ws} = Workspaces.get_by_name("import-blank-title")
+    DeciduousMcp.Repo.insert_all(DeciduousMcp.Schema.Node, [
+      %{
+        id: Ecto.UUID.generate(),
+        workspace_id: ws.id,
+        change_id: cid,
+        node_type: "goal",
+        title: "",
+        status: "pending",
+        metadata: %{},
+        inserted_at: now,
+        updated_at: now
+      }
+    ])
 
     id =
       DeciduousMcp.Repo.get_by!(DeciduousMcp.Schema.Node, workspace_id: ws.id, change_id: cid).id
@@ -95,5 +111,35 @@ defmodule DeciduousMcp.Web.ImportInputTest do
              McpHttp.call(sid, "update_node", %{"node_id" => n.id, "title" => " "})
 
     assert message =~ "title"
+  end
+
+  test "SERVER-N3 (verification): /import is held to the sizes /ops and MCP are, and nothing is created" do
+    cases = [
+      {"n3i-title", [gnode(%{"title" => String.duplicate("t", 1_000_000)})], %{},
+       "title is 1000000 characters; the limit is 10000"},
+      {"n3i-desc", [gnode(%{"description" => String.duplicate("d", 5_000_000)})], %{},
+       "description is 5000000 characters; the limit is 262144"},
+      {"n3i-blank", [gnode(%{"title" => "  "})], %{}, "title must not be blank"},
+      {"n3i-branch",
+       [gnode(%{"metadata_json" => Jason.encode!(%{"branch" => String.duplicate("b", 600)})})],
+       %{}, "metadata.branch is 600 characters; the limit is 512"},
+      {"n3i-rationale", [gnode(%{"id" => 1}), gnode(%{"id" => 2})],
+       %{
+         edges: [
+           %{
+             "from_node_id" => 1,
+             "to_node_id" => 2,
+             "rationale" => String.duplicate("r", 300_000)
+           }
+         ]
+       }, "rationale is 300000 characters; the limit is 262144"}
+    ]
+
+    for {ws, nodes, extra, says} <- cases do
+      {status, body} = import!(ws, nodes, extra)
+      assert status == 422, "#{ws}: #{status} #{String.slice(body, 0, 300)}"
+      assert body =~ says, "#{ws}: #{String.slice(body, 0, 300)}"
+      assert {:error, :not_found} = Workspaces.get_by_name(ws), ws
+    end
   end
 end

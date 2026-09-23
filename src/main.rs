@@ -1565,14 +1565,17 @@ fn main() {
                     let dt = date.and_hms_opt(0, 0, 0).unwrap();
                     chrono::Local.from_local_datetime(&dt).unwrap().to_rfc3339()
                 }
-                // Fallback: use as-is and hope for the best
+                // Anything else is refused. It used to be stored as typed,
+                // with a warning, and queued for the server, whose POST /ops
+                // refuses a created_at that is not a time: the op stayed
+                // rejected in the log for good.
                 else {
                     eprintln!(
-                        "{} Could not parse date '{}'. Use RFC3339 or YYYY-MM-DD format.",
-                        "Warning:".yellow(),
+                        "{} could not read --date \"{}\"; use RFC 3339, \"YYYY-MM-DD HH:MM:SS\" or \"YYYY-MM-DD\". Nothing was written.",
+                        "Error:".red(),
                         d
                     );
-                    d.clone()
+                    std::process::exit(1);
                 }
             });
 

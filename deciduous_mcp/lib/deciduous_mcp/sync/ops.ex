@@ -61,13 +61,37 @@ defmodule DeciduousMcp.Sync.Ops do
   # a node it already held, and refusing it would leave that op rejected
   # in the log for good. An update sets a status the CLI chose now, and
   # holds to the current vocabulary, as MCP does.
+  #
+  # The metadata keys MCP's add_node writes are held to its types (files
+  # "notalist" and prompt {"a": 1} were applied; add_node refuses both).
+  # Other keys are the node's own and pass, bounded like every string.
   @metadata_schema %{
     type: "object",
     properties: %{
       branch: %{type: "string"},
-      confidence: %{type: "number", minimum: 0, maximum: 100}
+      confidence: %{type: "number", minimum: 0, maximum: 100},
+      prompt: %{type: "string"},
+      commit: %{type: "string"},
+      files: %{type: "array", items: %{type: "string"}}
     }
   }
+
+  # Only creates and updates of nodes went through held_to/3; a create_edge
+  # with a 2,000,000-character rationale was applied (add_edge refuses it
+  # at 262,144). The weight is a number and not negative, as the edge
+  # changeset has it; no upper bound, since a finite float is stored and
+  # read back exactly and no client writes anything but 1.0.
+  @edge_schema %{
+    type: "object",
+    properties: %{
+      edge_type: %{type: "string", enum: Edge.edge_types()},
+      rationale: %{type: "string"},
+      weight: %{type: "number", minimum: 0}
+    }
+  }
+
+  @kinds ~w(create_node update_node delete_node create_edge delete_edge
+             attach_document detach_document describe_document)
 
   @create_schema %{
     type: "object",
@@ -193,6 +217,16 @@ defmodule DeciduousMcp.Sync.Ops do
       Enum.any?(ops, fn op -> not (is_binary(op["op_id"]) and op["op_id"] != "") end) ->
         {:error, "every op needs an op_id; without one it cannot be applied at most once"}
 
+      # applied_ops.op_id is varchar(255) and text cannot hold a NUL; both
+      # were an empty 500 from the insert.
+      (i = Enum.find_index(ops, &String.contains?(&1["op_id"], <<0>>))) != nil ->
+        {:error, "ops[#{i}].op_id contains a NUL character (U+0000); nothing was applied"}
+
+      (i = Enum.find_index(ops, &(String.length(&1["op_id"]) > 255))) != nil ->
+        {:error,
+         "ops[#{i}].op_id is #{String.length(Enum.at(ops, i)["op_id"])} characters; " <>
+           "the limit is 255; nothing was applied"}
+
       true ->
         :ok
     end
@@ -209,6 +243,14 @@ defmodule DeciduousMcp.Sync.Ops do
       {:rejected, reason} -> %{op_id: op_id, result: "rejected", reason: reason}
       reason when is_binary(reason) -> %{op_id: op_id, result: "rejected", reason: reason}
     end
+  end
+
+  # An unknown kind is answered before anything is recorded: its name went
+  # into applied_ops.kind (varchar(255)), and a 300-character one was an
+  # empty 500.
+  defp apply_one(_workspace, %{"op_id" => op_id, "kind" => kind} = op) when kind not in @kinds do
+    {:rejected, reason} = apply_op(nil, kind, op)
+    %{op_id: op_id, result: "rejected", reason: reason}
   end
 
   # An op the database cannot store is an answer about that op, not a
@@ -511,6 +553,7 @@ defmodule DeciduousMcp.Sync.Ops do
     with {:ok, from_cid} <- change_id(op, "from_change_id"),
          {:ok, to_cid} <- change_id(op, "to_change_id"),
          {:ok, made} <- instant(op, "created_at"),
+         :ok <- held_to(@edge_schema, op, "create_edge #{from_cid} -> #{to_cid}"),
          {:ok, from} <- live_node(ws, from_cid),
          {:ok, to} <- live_node(ws, to_cid) do
       type = op["edge_type"] || "leads_to"
@@ -735,7 +778,7 @@ defmodule DeciduousMcp.Sync.Ops do
 
   defp apply_op(_ws, kind, _op) do
     {:rejected,
-     "unknown op kind #{inspect(kind)}; this server applies create_node, update_node, " <>
+     "unknown op kind #{inspect(kind, printable_limit: 60)}; this server applies create_node, update_node, " <>
        "delete_node, create_edge, delete_edge, attach_document, detach_document and " <>
        "describe_document. A newer CLI than this server?"}
   end
@@ -917,10 +960,28 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  # The column is varchar(255), and Postgres cannot hold a NUL in text: a
+  # 300-character change_id was an empty HTTP 500 (and, before the
+  # workspace was created only for a create that would apply, an empty
+  # workspace left behind).
   defp change_id(op, key) do
     case op[key] do
-      cid when is_binary(cid) and cid != "" -> {:ok, cid}
-      other -> {:rejected, "#{op["kind"]} needs #{key}, got #{inspect(other)}"}
+      cid when is_binary(cid) and cid != "" ->
+        cond do
+          String.contains?(cid, <<0>>) ->
+            {:rejected,
+             "#{op["kind"]} #{key} contains a NUL character (U+0000); no change_id can hold one"}
+
+          String.length(cid) > 255 ->
+            {:rejected,
+             "#{op["kind"]} #{key} is #{String.length(cid)} characters; the limit is 255"}
+
+          true ->
+            {:ok, cid}
+        end
+
+      other ->
+        {:rejected, "#{op["kind"]} needs #{key}, got #{inspect(other, printable_limit: 60)}"}
     end
   end
 
