@@ -3151,8 +3151,7 @@ pub fn write_remote_url(project: &Path, url: &str) -> Result<(), String> {
     let path = dir.join("config.toml");
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
 
-    let mut doc = existing
-        .parse::<toml_edit::DocumentMut>()
+    let mut doc = crate::config::parse_with_table(&existing, "remote")
         .map_err(|e| format!("{} is not valid TOML: {e}", path.display()))?;
 
     let remote = doc["remote"].or_insert(toml_edit::table());

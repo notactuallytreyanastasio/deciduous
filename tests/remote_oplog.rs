@@ -2711,3 +2711,32 @@ fn new_status_says_what_to_do_about_unreadable_lines() {
     assert!(!st.contains("sends what is waiting"), "{st}");
     assert!(st.contains("remote-log.unreadable"), "{st}");
 }
+
+// ---------------------------------------------------------------------------
+// NEW-8: `remote init` put `[remote]` between `[updates]` and the comments
+// that belong to it, in a file every clone commits.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn new8_remote_init_keeps_the_updates_comments_with_updates() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("cfg");
+    let path = dir.join(".deciduous").join("config.toml");
+    let before = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        before.contains("[updates]\n# Version checking"),
+        "init's config changed shape; this test needs updating:\n{before}"
+    );
+    let url = stub_server(serde_json::json!({"nodes": [], "edges": []}));
+    sb.dx_ok(&dir, &["remote", "init", &url, "--workspace", "cfg"]);
+    let after = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        after.starts_with(&before),
+        "remote init changed what was already in config.toml:\n--- before\n{before}\n--- after\n{after}"
+    );
+    let added = &after[before.len()..];
+    assert!(
+        added.contains("[remote]") && added.contains(&url) && added.contains("workspace = \"cfg\""),
+        "remote init did not append [remote]:\n{after}"
+    );
+}
