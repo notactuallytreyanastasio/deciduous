@@ -258,6 +258,8 @@ defmodule DeciduousMcp.Sync.Ops do
          :ok <- held_to(@create_schema, op, "create_node #{cid}"),
          {:ok, inserted_at} <- time(op, "created_at", cid),
          {:ok, updated_at} <- time(op, "updated_at", cid) do
+      serialize(["node", ws.id, cid])
+
       case any_node(ws, cid) do
         %Node{deleted_at: nil} ->
           {:ok, "exists"}
@@ -408,6 +410,7 @@ defmodule DeciduousMcp.Sync.Ops do
          {:ok, from} <- live_node(ws, from_cid),
          {:ok, to} <- live_node(ws, to_cid) do
       type = op["edge_type"] || "leads_to"
+      serialize(["edge", from.id, to.id, type])
 
       cond do
         edge(from.id, to.id, type) ->
@@ -871,6 +874,21 @@ defmodule DeciduousMcp.Sync.Ops do
            "`deciduous remote pull` takes the server's value; " <>
            "`deciduous remote push --repair --overwrite-server` sends this copy's over it"}
     end
+  end
+
+  # Creates of one node, or of one edge, take turns. The check above each
+  # insert ("is it there already?") and the insert are two statements, and
+  # between them a concurrent create of the same change_id could commit:
+  # the unique index then refused the insert, and the op was answered
+  # "rejected: workspace_id has already been taken" (SERVER-N4), a false
+  # alarm the CLI keeps printing, naming the wrong field. Under this lock
+  # the second creator runs its check after the first has committed, and
+  # answers `exists`, which is what happened. The lock is the
+  # transaction's, released when apply_one commits or rolls back.
+  defp serialize(parts) do
+    Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [
+      Enum.join(parts, "|")
+    ])
   end
 
   defp any_node(ws, cid, opts \\ []) do
