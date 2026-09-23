@@ -792,6 +792,87 @@ fn r14_flake_an_accept_error_does_not_stop_the_daemon() {
     }
 }
 
+/// R14, round 2: the recovery above pushed a new tiny_http server after every
+/// accept death and never dropped the old ones, then polled each in turn for
+/// 5 ms, so every request waited about 5 ms more per restart, without bound:
+/// median GET latency 0.000 s before, 0.209 s after 25 bursts of 120 idle
+/// connections, 0.823 s after 100.
+#[test]
+fn r14_restarts_do_not_slow_every_later_request() {
+    let Some(()) = local("r14_restarts_do_not_slow_every_later_request") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let data = sb.base().join("fd2");
+    std::fs::create_dir_all(&data).unwrap();
+    let port = dead_port();
+    let mut c = sb.cmd("/bin/sh", &data);
+    c.args([
+        "-c",
+        "ulimit -n 64 && exec \"$0\" serve --api --port \"$1\" --data-dir \"$2\"",
+        bin().to_str().unwrap(),
+        &port.to_string(),
+        data.to_str().unwrap(),
+    ])
+    .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    let s = Server {
+        url: format!("http://127.0.0.1:{port}"),
+        token: API_TOKEN.to_string(),
+    };
+    let get = || {
+        let t = Instant::now();
+        let r = s.try_request(
+            "GET",
+            "/api/v1/graphs",
+            Some(&s.bearer()),
+            &[],
+            None,
+            Duration::from_secs(10),
+        );
+        (r.map(|r| r.status).unwrap_or(0), t.elapsed())
+    };
+    let up = wait_for(Duration::from_secs(10), || (get().0 == 200).then_some(()));
+    assert!(up.is_some(), "serve --api never answered");
+
+    for _ in 0..25 {
+        let idle: Vec<_> = (0..120)
+            .filter_map(|_| std::net::TcpStream::connect(("127.0.0.1", port)).ok())
+            .collect();
+        std::thread::sleep(Duration::from_millis(300));
+        drop(idle);
+    }
+    // Let the last restart's backoff finish.
+    let answered = wait_for(Duration::from_secs(15), || (get().0 == 200).then_some(()));
+    let mut times: Vec<Duration> = (0..15)
+        .map(|_| get())
+        .filter(|(st, _)| *st == 200)
+        .map(|(_, t)| t)
+        .collect();
+    times.sort();
+    let _ = child.kill();
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let restarts = stderr.matches("accepting again").count();
+    assert!(
+        answered.is_some(),
+        "the daemon stopped answering; stderr:\n{stderr}"
+    );
+    assert!(
+        restarts >= 8,
+        "only {restarts} accept restarts in 25 bursts; this test proves nothing"
+    );
+    assert_eq!(times.len(), 15, "some GETs failed after the bursts");
+    let median = times[times.len() / 2];
+    eprintln!("{restarts} accept restarts; median GET {median:?}");
+    assert!(
+        median < Duration::from_millis(100),
+        "after {restarts} accept restarts the median GET takes {median:?} (all: {times:?})"
+    );
+}
+
 /// R14: `--token ""` did not fall back to DECIDUOUS_API_TOKEN, and a token
 /// of only whitespace started a daemon nobody could authenticate to.
 #[test]

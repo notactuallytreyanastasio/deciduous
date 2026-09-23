@@ -66,8 +66,8 @@ pub struct ApiServer {
     token: String,
 }
 
-/// Set by the panic hook when a panic comes from inside tiny_http, whose
-/// accept thread dies that way without telling `recv`.
+/// Set by the panic hook when tiny_http's accept thread panics, which it
+/// does without telling `recv`.
 static TINY_HTTP_PANICKED: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
@@ -76,10 +76,14 @@ fn watch_tiny_http_panics() {
     ONCE.call_once(|| {
         let previous = std::panic::take_hook();
         std::panic::set_hook(Box::new(move |info| {
-            if info
-                .location()
-                .is_some_and(|l| l.file().contains("tiny_http"))
-            {
+            // Only the accept thread's panic: RefinedTcpStream::new's
+            // try_clone().unwrap() when descriptors run out just after an
+            // accept (it is called nowhere else). A panic in a connection's
+            // task does not stop accepting, and starting another server for
+            // it only added one more to poll.
+            if info.location().is_some_and(|l| {
+                l.file().contains("tiny_http") && l.file().ends_with("refined_tcp_stream.rs")
+            }) {
                 TINY_HTTP_PANICKED.store(true, std::sync::atomic::Ordering::SeqCst);
             }
             previous(info);
@@ -137,6 +141,18 @@ impl ApiServer {
     }
 
     /// Serve forever on the current thread.
+    ///
+    /// Each tiny_http server gets a thread of its own blocked in `recv()`.
+    /// One whose accept thread died still owns connections it accepted
+    /// before, whose next requests arrive in its queue, so its thread keeps
+    /// reading it. This loop only starts a new server when one reports an
+    /// accept error or tiny_http's accept thread panicked.
+    ///
+    /// Why not poll every server from this loop (as this did): each poll
+    /// was `recv_timeout(5 ms)`, one after another, so every request waited
+    /// about 5 ms more per restart, without bound: median GET latency was
+    /// 0.209 s after 25 bursts of idle connections, 0.823 s after 100. A
+    /// dead server now costs one parked thread and nothing per request.
     pub fn run(&self) {
         let first = self
             .first
@@ -144,64 +160,77 @@ impl ApiServer {
             .unwrap_or_else(|e| e.into_inner())
             .take()
             .expect("ApiServer::run called twice");
-        // Every tiny_http server started so far. One whose accept thread
-        // died still owns connections accepted before, whose next requests
-        // arrive in its queue, so all of them are read, not only the newest.
-        let mut servers = vec![first];
+        let (died_tx, died_rx) = std::sync::mpsc::channel::<()>();
+        self.dispatch(first, died_tx.clone());
         let mut backoff = std::time::Duration::from_millis(50);
+        let mut last_restart: Option<std::time::Instant> = None;
         loop {
-            let mut accept_died =
-                TINY_HTTP_PANICKED.swap(false, std::sync::atomic::Ordering::SeqCst);
-            if accept_died {
+            let reported = match died_rx.recv_timeout(std::time::Duration::from_millis(250)) {
+                Ok(()) => true,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
+                // We hold a sender, so this cannot happen.
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => false,
+            };
+            let panicked = TINY_HTTP_PANICKED.swap(false, std::sync::atomic::Ordering::SeqCst);
+            if panicked {
                 eprintln!(
                     "deciduous api: the HTTP accept thread panicked (see above); accepting again"
                 );
             }
-            let wait = if servers.len() == 1 {
-                std::time::Duration::from_millis(250)
-            } else {
-                std::time::Duration::from_millis(5)
-            };
-            for server in &servers {
-                match server.recv_timeout(wait) {
-                    Ok(Some(request)) => {
-                        backoff = std::time::Duration::from_millis(50);
-                        let registry = Arc::clone(&self.registry);
-                        let token = self.token.clone();
-                        // one thread per request is plenty for a graph API
-                        std::thread::spawn(move || {
-                            let _ = handle(request, &registry, &token);
-                        });
-                    }
-                    Ok(None) => {}
-                    Err(e) => {
-                        eprintln!(
-                            "deciduous api: accepting a connection failed ({e}); accepting again"
-                        );
-                        accept_died = true;
-                    }
-                }
+            if !reported && !panicked {
+                continue;
             }
-            if accept_died {
-                // Descriptors that ran out come back as connections close,
-                // so retry with backoff until an accept thread runs again.
-                loop {
-                    std::thread::sleep(backoff);
-                    backoff = (backoff * 2).min(std::time::Duration::from_secs(2));
-                    match serve_on(&self.listener) {
-                        Ok(server) => {
-                            servers.push(server);
-                            break;
-                        }
-                        Err(e) => eprintln!(
-                            "deciduous api: could not accept on the socket yet ({e}); \
-                             retrying in {} ms",
-                            backoff.as_millis()
-                        ),
+            // Several dispatchers may report one shortage; one restart
+            // answers all of them.
+            while died_rx.try_recv().is_ok() {}
+            if last_restart.is_some_and(|t| t.elapsed() > std::time::Duration::from_secs(10)) {
+                backoff = std::time::Duration::from_millis(50);
+            }
+            // Descriptors that ran out come back as connections close, so
+            // retry with backoff until an accept thread runs again.
+            loop {
+                std::thread::sleep(backoff);
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(2));
+                match serve_on(&self.listener) {
+                    Ok(server) => {
+                        self.dispatch(server, died_tx.clone());
+                        last_restart = Some(std::time::Instant::now());
+                        break;
                     }
+                    Err(e) => eprintln!(
+                        "deciduous api: could not accept on the socket yet ({e}); \
+                         retrying in {} ms",
+                        backoff.as_millis()
+                    ),
                 }
             }
         }
+    }
+
+    /// Read `server`'s requests on a thread of its own, forever, handing each
+    /// to a thread of its own. An accept error is reported on `died` and the
+    /// thread goes on reading: connections accepted earlier still deliver.
+    fn dispatch(&self, server: Server, died: std::sync::mpsc::Sender<()>) {
+        let registry = Arc::clone(&self.registry);
+        let token = self.token.clone();
+        std::thread::spawn(move || loop {
+            match server.recv() {
+                Ok(request) => {
+                    let registry = Arc::clone(&registry);
+                    let token = token.clone();
+                    // one thread per request is plenty for a graph API
+                    std::thread::spawn(move || {
+                        let _ = handle(request, &registry, &token);
+                    });
+                }
+                Err(e) => {
+                    eprintln!(
+                        "deciduous api: accepting a connection failed ({e}); accepting again"
+                    );
+                    let _ = died.send(());
+                }
+            }
+        });
     }
 }
 
