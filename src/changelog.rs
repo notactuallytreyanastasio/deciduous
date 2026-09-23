@@ -12,6 +12,14 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.7",
+        highlights: &[
+            "`add`, `link`, `status` and `prompt` send the write to the server after making it locally, so the local database and the graph the agents read stop drifting apart silently; an unreachable server leaves a warning naming `deciduous remote push`, and the local write still stands",
+            "`delete` and `unlink` say they are local only: the server's /import applies additions and edits, not removals",
+            "`remote setup --local` suggests a free port in 20000-32767 instead of putting every install on 4000, which is Phoenix's default port; `--port` and DECIDUOUS_PORT answer for scripts, and an install that already has a port keeps it",
+        ],
+    },
+    Release {
         version: "1.0.6",
         highlights: &[
             "`init` and `update` ask where a project's graph lives (this machine via Docker, or a server someone else runs) when it has no [remote], instead of setting up a local server unasked; with no terminal they stop and name `remote setup --local` / `--url`",

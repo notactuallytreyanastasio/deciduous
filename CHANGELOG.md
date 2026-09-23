@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.7] - 2026-09-23
+
+A local write that the server never saw was invisible to the agents, and nothing said so. One workspace held 502 nodes and 462 edges in its local database against 0 and 0 on the server it was configured to use.
+
+### Fixed
+- **Writes from the CLI reach the server.** `add`, `link`, `status` and `prompt` write locally, then send what the server lacks, plus the node just touched. A server that cannot be reached leaves a warning that names `deciduous remote push` and says plainly that until then the local graph and the graph the agents read are different graphs; the write itself still succeeded, so the CLI stays usable offline. `remote push` is unchanged and still the way to send a backlog.
+- **`delete` and `unlink` say they are local only.** The server's `/import` applies additions and edits, not removals, so a node deleted locally stays on the server. They now print that instead of appearing to have converged.
+
+### Changed
+- **The local server's port is chosen, not assumed.** `remote setup --local` suggests a free port in 20000–32767 and takes any port you name; `--port` and `DECIDUOUS_PORT` answer for scripts. Before this, setup put every install on 4000, which is Phoenix's default: on a Phoenix project the graph server squatted the port of the dev server of the very project being logged. An install that already has a port keeps it. Port 0 is refused, because the URL written into the project's config would not survive a restart.
+- **`/demo-swarm` explains the error it cannot avoid.** The command file travels through a repository, so it can reach a machine whose deciduous is older than 1.0.4, the first release with the subcommand, and clap answers `unrecognized subcommand 'demo-swarm'`. The template now names the cause, including a second deciduous earlier on PATH than `~/.cargo/bin`, and the checks that tell which.
+
 ## [1.0.6] - 2026-09-23
 
 ### Changed
