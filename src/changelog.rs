@@ -12,6 +12,16 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.1",
+        highlights: &[
+            "The shared graph server ships as a Burrito executable with Erlang/OTP and Elixir included; users no longer need to install them separately",
+            "One-command Docker setup generates private credentials, starts persistent PostgreSQL 17, applies migrations, and waits for readiness; it also supports an existing database and preserves saved settings on repeat runs",
+            "The server's /ready endpoint checks database access and required migrations; the event listener recovers after a database outage, and DB_SSL=true verifies the database certificate and hostname by default",
+            "Native installs can bootstrap an empty PostgreSQL database from the release's STRUCTURE.sql; deployment docs cover upgrades and backup restoration that preserves graph data, documents, and database settings",
+            "Release checks exercise fresh installs, v1.0.0 upgrades, extracted Docker bundles, persistence, authentication, MCP, events, TLS, and backup restoration; native executable checks gate publication on each supported platform",
+        ],
+    },
+    Release {
         version: "1.0.0",
         highlights: &[
             "Fix: a Claude Code session idle for 30 minutes found every later MCP call hanging for 300s. The server answered the expired session under a made-up id; it now answers 404 Session not found under the request's id, and sessions live 24 hours",

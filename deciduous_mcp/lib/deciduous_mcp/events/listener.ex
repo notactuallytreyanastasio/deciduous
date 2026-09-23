@@ -53,9 +53,19 @@ defmodule DeciduousMcp.Events.Listener do
     {:ok, pid} =
       Postgrex.Notifications.start_link(Keyword.merge(config, auto_reconnect: true))
 
-    {:ok, ref} = Postgrex.Notifications.listen(pid, @channel)
+    # Auto-reconnect accepts the subscription before Postgres is reachable.
+    # Keep the listener alive; Postgrex reissues LISTEN after reconnecting.
+    ref =
+      case Postgrex.Notifications.listen(pid, @channel) do
+        {:ok, ref} ->
+          Logger.info("Events.Listener: listening on #{@channel}")
+          ref
 
-    Logger.info("Events.Listener: listening on #{@channel}")
+        {:eventually, ref} ->
+          Logger.warning("Events.Listener: waiting for Postgres to subscribe to #{@channel}")
+          ref
+      end
+
     {:ok, %{conn: pid, ref: ref}}
   end
 

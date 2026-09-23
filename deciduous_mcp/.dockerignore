@@ -1,0 +1,12 @@
+_build/
+deps/
+burrito_out/
+.git/
+.elixir_ls/
+.env
+.env.*
+!.env.example
+erl_crash.dump
+certs/
+**/*.db
+**/*.db-*

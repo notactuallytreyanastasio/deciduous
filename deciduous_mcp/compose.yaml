@@ -1,0 +1,31 @@
+# scripts/setup.sh adds compose.local.yaml when it manages PostgreSQL for you.
+services:
+  server:
+    build:
+      context: .
+    image: ${DECIDUOUS_IMAGE:-deciduous-mcp:local}
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?run scripts/setup.sh or set DATABASE_URL}
+      DECIDUOUS_MCP_TOKEN: ${DECIDUOUS_MCP_TOKEN:?run scripts/setup.sh or set DECIDUOUS_MCP_TOKEN}
+      PORT: "4000"
+      POOL_SIZE: ${POOL_SIZE:-10}
+      DB_SSL: ${DB_SSL:-false}
+      DB_SSL_VERIFY: ${DB_SSL_VERIFY:-peer}
+      DB_SSL_CA_FILE: ${DB_SSL_CA_FILE:-}
+    volumes:
+      - ./certs:/app/certs:ro
+    ports:
+      - "${DECIDUOUS_BIND_ADDRESS:-127.0.0.1}:${DECIDUOUS_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "5", "http://127.0.0.1:4000/ready"]
+      interval: 5s
+      timeout: 6s
+      start_period: 30s
+      retries: 12
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

@@ -1,0 +1,57 @@
+# Build and exercise the same native Linux executable shipped in releases.
+# Build with: docker build -f Dockerfile.burrito -t deciduous-mcp:burrito .
+ARG ELIXIR_VERSION=1.18.4
+ARG OTP_VERSION=28.3.3
+ARG DEBIAN_VERSION=bookworm-20260610-slim
+ARG BUILDER_IMAGE="hexpm/elixir:${ELIXIR_VERSION}-erlang-${OTP_VERSION}-debian-${DEBIAN_VERSION}"
+ARG RUNNER_IMAGE="debian:${DEBIAN_VERSION}"
+
+FROM ${BUILDER_IMAGE} AS burrito-builder
+ARG TARGETARCH
+ARG BURRITO_TARGET
+
+# Burrito 1.6 requires Zig 0.16.0. Verify the official archive before use.
+RUN apt-get update -y \
+    && apt-get install -y build-essential git curl xz-utils ca-certificates \
+    && apt-get clean && rm -rf /var/lib/apt/lists/* \
+    && case "${TARGETARCH:-$(dpkg --print-architecture)}" in \
+      amd64) zig_arch=x86_64; zig_sha=70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00 ;; \
+      arm64) zig_arch=aarch64; zig_sha=ea4b09bfb22ec6f6c6ceac57ab63efb6b46e17ab08d21f69f3a48b38e1534f17 ;; \
+      *) echo "Unsupported container architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac \
+    && curl -fsSL --retry 3 "https://ziglang.org/download/0.16.0/zig-${zig_arch}-linux-0.16.0.tar.xz" -o /tmp/zig.tar.xz \
+    && printf '%s  %s\n' "${zig_sha}" /tmp/zig.tar.xz | sha256sum -c - \
+    && mkdir /opt/zig \
+    && tar -xJf /tmp/zig.tar.xz -C /opt/zig --strip-components=1 \
+    && rm /tmp/zig.tar.xz \
+    && ln -s /opt/zig/zig /usr/local/bin/zig
+
+WORKDIR /app
+RUN mix local.hex --force && mix local.rebar --force
+ENV MIX_ENV=prod
+COPY mix.exs mix.lock ./
+COPY rel rel
+COPY vendor vendor
+RUN mix deps.get --only prod && mix deps.compile
+COPY config config
+COPY lib lib
+COPY priv priv
+RUN build_arch="${TARGETARCH:-$(dpkg --print-architecture)}" \
+    && export BURRITO_TARGET="${BURRITO_TARGET:-linux_${build_arch}}" \
+    && mix release deciduous_mcp \
+    && install -m 0755 "burrito_out/deciduous_mcp_${BURRITO_TARGET}" /app/deciduous-mcp
+
+FROM ${RUNNER_IMAGE} AS burrito-runtime
+RUN apt-get update -y \
+    && apt-get install -y --no-install-recommends ca-certificates curl \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+RUN chown nobody /app
+# Burrito extracts the embedded runtime here without needing a user home.
+ENV XDG_DATA_HOME=/app/.local/share
+COPY --from=burrito-builder --chown=nobody:root /app/deciduous-mcp /app/deciduous-mcp
+USER nobody
+EXPOSE 4000
+HEALTHCHECK --interval=5s --timeout=3s --start-period=30s --retries=12 \
+    CMD curl --fail --silent "http://127.0.0.1:${PORT:-4000}/ready" || exit 1
+ENTRYPOINT ["/app/deciduous-mcp"]

@@ -142,7 +142,9 @@ defmodule DeciduousMcp.Web.SessionGuardTest do
     [new_id] = get_resp_header(conn, "mcp-session-id")
     assert new_id != "session_from_before_the_restart"
 
-    assert %{"id" => 1, "result" => %{"serverInfo" => %{"version" => "1.0.0"}}} =
+    version = Application.spec(:deciduous_mcp, :vsn) |> to_string()
+
+    assert %{"id" => 1, "result" => %{"serverInfo" => %{"version" => ^version}}} =
              Jason.decode!(conn.resp_body)
   end
 

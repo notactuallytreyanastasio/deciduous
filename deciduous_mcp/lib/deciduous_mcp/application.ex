@@ -62,10 +62,16 @@ defmodule DeciduousMcp.Application do
       {Bandit, plug: DeciduousMcp.Web.Router, scheme: :http, port: port}
     ]
 
-    Logger.info("Deciduous MCP listening on port #{port}")
-
     opts = [strategy: :one_for_one, name: DeciduousMcp.Supervisor]
-    Supervisor.start_link(children, opts)
+
+    case Supervisor.start_link(children, opts) do
+      {:ok, pid} ->
+        Logger.info("Deciduous MCP listening on port #{port}")
+        {:ok, pid}
+
+      error ->
+        error
+    end
   end
 
   # Refusing to boot is the point. This process is reachable from the public
