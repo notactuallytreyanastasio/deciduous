@@ -12,6 +12,22 @@ pub struct Release {
 /// All releases, newest first
 pub const RELEASES: &[Release] = &[
     Release {
+        version: "1.0.8",
+        highlights: &[
+            "CLI writes go through a local log, .deciduous/remote-log.jsonl, and are replayed on the server one field at a time: an offline edit waits and is sent by the next write or `remote push`, a queued edit never overwrites a newer agent edit to the same field, and `delete`, `unlink`, archaeology and the local MCP server reach the server too",
+            "`remote status` compares content, not counts, lists what is waiting or was refused, names a fix for each difference, and exits 1 when anything differs; `remote push --seed` and `--repair` send what the log never had",
+            "A workspace belongs to the repository that first wrote to it (by root commit), so a same-named repository cannot read or write it; worktrees, renames, shallow clones and non-ASCII names keep their workspace",
+            "A node deleted on the server leaves the local graph on `remote pull`, even over a later local edit, and its content leaves graph.json with it",
+            "The server holds a workspace pin on every route that names a workspace, hides deleted nodes from every read and write, refuses bad input with a sentence instead of a 500, and no longer creates workspaces on reads or failed writes",
+            "graph.json keeps every edit: fields a newer version wrote, relinks, edits to future-dated nodes, failed merge-driver merges and pulled server copies are merged, not overwritten; an edit is refused while the file cannot be read",
+            "SQLite waits for its write lock, graph.json is written under a file lock, ids beyond 32 bits are refused, and attach_document reads only regular files inside the project",
+            "The log survives a crash: a write and its op commit together, a torn line is set aside, and one op the server cannot store is rejected alone instead of blocking every op behind it",
+            "Queued deletes and edits respect newer ones: a delete is refused over a newer edit, an unlink leaves a tombstone that reaches clones, and an edit made after a delete brings the node back",
+            "Every server path refuses undeclared arguments, over-long strings (counted in codepoints) and 2-cycles, and a batch that writes nothing creates and claims no workspace",
+            "`unlink` removes one edge and refuses to guess between two, a node can be named by its server id, and commands on a detached commit leave graph.json alone",
+        ],
+    },
+    Release {
         version: "1.0.7",
         highlights: &[
             "`add`, `link`, `status` and `prompt` send the write to the server after making it locally, so the local database and the graph the agents read stop drifting apart silently; an unreachable server leaves a warning naming `deciduous remote push`, and the local write still stands",
