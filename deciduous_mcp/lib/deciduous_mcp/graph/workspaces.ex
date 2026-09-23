@@ -203,9 +203,44 @@ defmodule DeciduousMcp.Graph.Workspaces do
     end)
   end
 
-  defp validate_roots(nil), do: {:ok, :none}
+  @doc """
+  Checks a claim without making one: the answer `claim/3` would give, but
+  an unclaimed workspace stays unclaimed and no root is added.
 
-  defp validate_roots(roots) when is_list(roots) do
+  For reads. GET /export with the CLI's X-Deciduous-Repo-Roots header used
+  `claim/3`, so the first repository of a name to run `remote status` or
+  `pull` owned the workspace, including an unrelated one, and the real
+  repository then got 409 on its own workspace (SERVER-N7).
+  """
+  def check_claim(%Workspace{} = ws, roots) do
+    with {:ok, roots} <- validate_roots(roots) do
+      held = (ws.settings || %{})["repo_roots"] || []
+
+      cond do
+        roots == :none -> {:ok, :unchecked}
+        held == [] -> {:ok, :unchecked}
+        roots == [] -> {:error, {:no_commit_yet, held}}
+        Enum.any?(roots, &(&1 in held)) -> {:ok, :verified}
+        true -> {:error, {:claimed_by_other_repository, held}}
+      end
+    end
+  end
+
+  # A repository has one root commit, a few when histories were merged.
+  # 20,000 were stored without complaint (SERVER-N6), and every later
+  # claim check reads them all.
+  @max_roots 100
+
+  @doc "`{:ok, sorted_roots}`, `{:ok, :none}` for nil, or `{:error, sentence}`."
+  def validate_roots(nil), do: {:ok, :none}
+
+  def validate_roots(roots) when is_list(roots) and length(roots) > @max_roots,
+    do:
+      {:error,
+       "repo_roots has #{length(roots)} entries; a repository has a handful of root " <>
+         "commits at most, and the limit is #{@max_roots}"}
+
+  def validate_roots(roots) when is_list(roots) do
     case Enum.reject(
            roots,
            &(is_binary(&1) and Regex.match?(~r/\A[0-9a-f]{40}([0-9a-f]{24})?\z/, &1))
@@ -215,11 +250,14 @@ defmodule DeciduousMcp.Graph.Workspaces do
 
       bad ->
         {:error,
-         "repo_roots must be git commit ids (40 or 64 lowercase hex); got #{inspect(bad)}"}
+         "repo_roots must be git commit ids (40 or 64 lowercase hex); got " <>
+           inspect(bad, limit: 5, printable_limit: 80)}
     end
   end
 
-  defp validate_roots(other), do: {:error, "repo_roots must be a list, got #{inspect(other)}"}
+  def validate_roots(other),
+    do:
+      {:error, "repo_roots must be a list, got #{inspect(other, limit: 5, printable_limit: 80)}"}
 
   @doc """
   Workspaces holding any of `change_ids`, with how many each holds, most

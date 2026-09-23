@@ -95,20 +95,67 @@ defmodule DeciduousMcp.Sync.Ops do
     }
   }
 
+  # A workspace is created here only when the batch holds a create_node
+  # that would be applied. Before, find_or_create ran first, so an empty
+  # batch, or one whose every op was refused, left a workspace behind
+  # (SERVER-N6), against chapter 22's rule that a failed write creates
+  # none. Against a workspace that does not exist every other op has its
+  # answer already: an update or an edge names a node the server does not
+  # hold, and a delete finds nothing to delete.
   def run(%{"ops" => ops} = payload) when is_list(ops) do
-    with {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
+    raw = payload["workspace"] || ""
+
+    with {:ok, name} <- workspace_name(raw),
          :ok <- check_batch(ops),
-         {:ok, workspace} <- Workspaces.find_or_create(name),
-         {:ok, _claim} <- Workspaces.claim(workspace, payload["repo_roots"], false) do
+         {:ok, workspace} <- workspace_for(name, ops, payload["repo_roots"]) do
       {:ok,
        %{
-         workspace: workspace.name,
+         workspace: name,
          results: Enum.map(ops, &apply_one(workspace, &1))
        }}
     end
   end
 
   def run(_), do: {:error, "payload must contain an \"ops\" list"}
+
+  defp workspace_name(raw) do
+    case Workspaces.normalize_name(raw) do
+      {:ok, "*"} -> {:error, Workspaces.describe_name_error(raw, :global)}
+      {:ok, name} -> {:ok, name}
+      {:error, reason} -> {:error, Workspaces.describe_name_error(raw, reason)}
+    end
+  end
+
+  defp workspace_for(name, ops, roots) do
+    case Workspaces.get_by_name(name) do
+      {:ok, workspace} ->
+        with {:ok, _claim} <- Workspaces.claim(workspace, roots, false), do: {:ok, workspace}
+
+      {:error, :not_found} ->
+        if Enum.any?(ops, &would_create?/1) do
+          with {:ok, workspace} <- Workspaces.find_or_create(name),
+               {:ok, _claim} <- Workspaces.claim(workspace, roots, false),
+               do: {:ok, workspace}
+        else
+          # Checked all the same: a malformed repo_roots is an error
+          # whether or not anything is written.
+          with {:ok, _} <- Workspaces.validate_roots(roots), do: {:ok, nil}
+        end
+    end
+  end
+
+  defp would_create?(%{"kind" => "create_node"} = op) do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         :ok <- held_to(@create_schema, op, cid),
+         {:ok, _} <- time(op, "created_at", cid),
+         {:ok, _} <- time(op, "updated_at", cid) do
+      true
+    else
+      _ -> false
+    end
+  end
+
+  defp would_create?(_op), do: false
 
   defp check_batch(ops) do
     cond do
@@ -123,6 +170,19 @@ defmodule DeciduousMcp.Sync.Ops do
 
       true ->
         :ok
+    end
+  end
+
+  # No workspace: nothing is recorded, since there is nowhere to record it,
+  # and nothing is created (see run/1). The answers are the ones an empty
+  # workspace would give, after the same malformed-op checks.
+  defp apply_one(nil, %{"op_id" => op_id} = op) do
+    with nil <- malformed(op),
+         {:ok, outcome} <- apply_op(nil, op["kind"], op) do
+      %{op_id: op_id, result: outcome}
+    else
+      {:rejected, reason} -> %{op_id: op_id, result: "rejected", reason: reason}
+      reason when is_binary(reason) -> %{op_id: op_id, result: "rejected", reason: reason}
     end
   end
 
@@ -891,7 +951,10 @@ defmodule DeciduousMcp.Sync.Ops do
     ])
   end
 
-  defp any_node(ws, cid, opts \\ []) do
+  defp any_node(ws, cid, opts \\ [])
+  defp any_node(nil, _cid, _opts), do: nil
+
+  defp any_node(ws, cid, opts) do
     q = from n in Node, where: n.workspace_id == ^ws.id and n.change_id == ^cid
     q = if opts[:lock], do: lock(q, "FOR UPDATE"), else: q
     Repo.one(q)
