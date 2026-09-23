@@ -107,6 +107,7 @@ fn serve_on(listener: &std::net::TcpListener) -> std::io::Result<Server> {
 /// Raises this process's open-file soft limit to its hard limit. macOS
 /// starts processes at 256, and every connection, request thread and SQLite
 /// file costs descriptors; running out is what makes accept() fail.
+#[cfg(unix)]
 fn raise_open_file_limit() {
     // SAFETY: getrlimit/setrlimit on a local struct; no pointers retained.
     unsafe {
@@ -123,6 +124,10 @@ fn raise_open_file_limit() {
         }
     }
 }
+
+/// Windows has no RLIMIT_NOFILE; its handle limit is not the constraint here.
+#[cfg(not(unix))]
+fn raise_open_file_limit() {}
 
 impl ApiServer {
     pub fn bind(config: ApiConfig) -> std::io::Result<Self> {

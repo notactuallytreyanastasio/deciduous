@@ -13,7 +13,37 @@ defmodule DeciduousMcp.Test.McpHttp do
   is shared when not async) or runs outside it (`DeciduousMcp.RealDbCase`).
   """
 
-  def port, do: String.to_integer(System.get_env("PORT") || "4000")
+  @doc """
+  The port the application's listener is bound to. `PORT=0` (what CI's
+  verify-release.sh passes, so parallel runs cannot collide) asks the OS for
+  a free port, so the number has to come from the listener, not from `PORT`.
+  """
+  def port do
+    case System.get_env("PORT") do
+      p when p in [nil, ""] -> 4000
+      "0" -> bound_port()
+      p -> String.to_integer(p)
+    end
+  end
+
+  defp bound_port do
+    DeciduousMcp.Supervisor
+    |> Supervisor.which_children()
+    |> Enum.find_value(fn {_id, pid, _type, _mods} ->
+      with true <- is_pid(pid),
+           {:ok, {_ip, port}} <- safe_listener_info(pid) do
+        port
+      else
+        _ -> nil
+      end
+    end) || raise "PORT=0 but no Bandit listener is running under DeciduousMcp.Supervisor"
+  end
+
+  defp safe_listener_info(pid) do
+    ThousandIsland.listener_info(pid)
+  catch
+    _, _ -> :error
+  end
 
   def token, do: Application.fetch_env!(:deciduous_mcp, :api_token)
 
