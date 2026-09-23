@@ -1,0 +1,636 @@
+//! The Rust MCP server over its real stdio (`deciduous mcp`) and the
+//! multi-graph API daemon over real TCP (`deciduous serve --api`), each run
+//! as its own process against a real project on disk.
+//!
+//! Gated on `DECIDUOUS_E2E=1` (see `tests/e2e_support/mod.rs`).
+
+mod e2e_support;
+
+use e2e_support::*;
+use serde_json::{json, Value};
+use std::time::{Duration, Instant};
+
+fn project(sb: &Sandbox) -> Project<'_> {
+    sb.project("repo", None)
+}
+
+// ---------------------------------------------------------------- R2
+
+/// R2: ids were truncated to 32 bits (`as i64 as i32`), so 4294967298
+/// addressed node 2: `delete_node` deleted the wrong node, `show_node` showed
+/// it, `resume_session` resumed it, `link_nodes` linked it, over stdio and
+/// over the API.
+#[test]
+fn r2_ids_beyond_i32_are_refused_not_wrapped() {
+    let Some(()) = local("r2_ids_beyond_i32_are_refused_not_wrapped") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "n1");
+    p.add("goal", "n2");
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    for id in [
+        json!(4294967297_i64),
+        json!(-4294967295_i64),
+        json!(9223372036854775807_i64),
+    ] {
+        let r = m.call("show_node", json!({"node_id": id}));
+        assert!(r.is_err(), "show_node {id} answered a node: {r:?}");
+    }
+    let r = m.call(
+        "link_nodes",
+        json!({"from_id": 4294967297_i64, "to_id": 4294967298_i64}),
+    );
+    assert!(r.is_err(), "link_nodes with wrapped ids succeeded: {r:?}");
+    let r = m.call("delete_node", json!({"node_id": 4294967298_i64}));
+    assert!(r.is_err(), "delete_node 4294967298 succeeded: {r:?}");
+    let r = m.call("resume_session", json!({"session_id": 4294967297_i64}));
+    assert!(
+        r.is_err(),
+        "resume_session with a wrapped id succeeded: {r:?}"
+    );
+    drop(m);
+    let titles: Vec<String> = p.view().nodes.values().map(|n| n.title.clone()).collect();
+    assert!(
+        titles.contains(&"n2".to_string()),
+        "node 2 was deleted through a wrapped id"
+    );
+    assert!(
+        p.view().edges.is_empty(),
+        "an edge was created through wrapped ids"
+    );
+
+    let d = api(&sb);
+    d.tool(
+        "g",
+        "add_node",
+        json!({"node_type": "goal", "title": "a1", "branch": "b"}),
+    );
+    d.tool(
+        "g",
+        "add_node",
+        json!({"node_type": "goal", "title": "a2", "branch": "b"}),
+    );
+    let (_, body) = d.tool("g", "show_node", json!({"node_id": 4294967297_i64}));
+    assert!(
+        body["data"]["is_error"] == json!(true) || body["ok"] == json!(false),
+        "API show_node with a wrapped id answered: {body}"
+    );
+}
+
+// ---------------------------------------------------------------- R4 / R5
+
+fn attach(m: &mut StdioMcp, path: &str) -> Result<Value, String> {
+    m.call("attach_document", json!({"node_id": 1, "file_path": path}))
+}
+
+/// R4: attach_document read any path: /etc/passwd, ../../ traversal, and a
+/// symlink inside the repository pointing out of it were all copied into
+/// .deciduous/documents/.
+#[test]
+fn r4_attach_document_is_confined_to_the_project() {
+    let Some(()) = local("r4_attach_document_is_confined_to_the_project") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "g");
+    let secret_dir = sb.base().join("secret");
+    std::fs::create_dir_all(&secret_dir).unwrap();
+    std::fs::write(secret_dir.join("id_rsa"), "PRIVATE KEY MATERIAL").unwrap();
+    std::os::unix::fs::symlink(secret_dir.join("id_rsa"), p.dir.join("innocent.png")).unwrap();
+    std::fs::write(p.dir.join("inside.md"), "fine").unwrap();
+
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    for bad in [
+        "/etc/passwd",
+        "../../../../../../etc/hosts",
+        "../secret/id_rsa",
+        secret_dir.join("id_rsa").to_str().unwrap(),
+        "innocent.png",
+    ] {
+        let r = attach(&mut m, bad);
+        assert!(r.is_err(), "attach_document {bad:?} was accepted: {r:?}");
+    }
+    let docs = p.dir.join(".deciduous/documents");
+    let leaked = walk_contains(&docs, b"PRIVATE KEY MATERIAL") || walk_contains(&docs, b"root:");
+    assert!(
+        !leaked,
+        "a file from outside the project was copied into documents/"
+    );
+    attach(&mut m, "inside.md").expect("a file inside the project must attach");
+}
+
+fn walk_contains(dir: &std::path::Path, needle: &[u8]) -> bool {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    rd.flatten().any(|e| {
+        let p = e.path();
+        if p.is_dir() {
+            walk_contains(&p, needle)
+        } else {
+            std::fs::read(&p)
+                .map(|b| b.windows(needle.len()).any(|w| w == needle))
+                .unwrap_or(false)
+        }
+    })
+}
+
+/// R4: a FIFO hung the single-threaded server forever; /dev/zero grew it to
+/// gigabytes. Each must fail fast and leave the server answering.
+#[test]
+fn r4_attach_document_never_hangs_on_special_files() {
+    let Some(()) = local("r4_attach_document_never_hangs_on_special_files") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "g");
+    let fifo = p.dir.join("pipe");
+    let mk = std::process::Command::new("mkfifo")
+        .arg(&fifo)
+        .status()
+        .unwrap();
+    assert!(mk.success());
+    std::os::unix::fs::symlink("/dev/zero", p.dir.join("zero.bin")).unwrap();
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    for special in ["pipe", "/dev/zero", "zero.bin", "/dev/null"] {
+        let started = Instant::now();
+        let id = 900;
+        m.send_raw(
+            json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":"attach_document","arguments":{"node_id":1,"file_path":special}}})
+                .to_string()
+                .as_bytes(),
+        );
+        let reply = wait_for(Duration::from_secs(10), || {
+            m.recv(Duration::from_millis(200))
+        });
+        let reply = reply.unwrap_or_else(|| {
+            panic!("attach_document {special:?} gave no answer in 10s (server hung)")
+        });
+        assert!(
+            started.elapsed() < Duration::from_secs(10),
+            "attach_document {special:?} took {:?}",
+            started.elapsed()
+        );
+        assert!(
+            tool_result(&reply).is_err(),
+            "attach_document {special:?} was accepted: {reply}"
+        );
+    }
+    assert!(m.alive(), "the server died");
+}
+
+/// R5: an MCP server started from a subdirectory created a second
+/// `.deciduous` there (attach_document and the session file used cwd-relative
+/// paths), after which every later command in that directory opened a new,
+/// empty graph.
+#[test]
+fn r5_a_server_started_in_a_subdirectory_uses_the_project_root() {
+    let Some(()) = local("r5_a_server_started_in_a_subdirectory_uses_the_project_root") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "root goal");
+    let src = p.dir.join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    std::fs::write(src.join("notes.md"), "notes").unwrap();
+    {
+        let mut m = StdioMcp::spawn(&sb, &src);
+        m.call_ok(
+            "start_session",
+            json!({"name": "from src", "goal_title": "session goal"}),
+        );
+        attach(&mut m, "notes.md").expect("attaching a file in the cwd");
+    }
+    assert!(
+        !src.join(".deciduous").exists(),
+        "a second .deciduous was created in the subdirectory"
+    );
+    let nodes = p.dx_in(&src, &["nodes"]);
+    assert!(
+        nodes.stdout.contains("root goal"),
+        "from the subdirectory the graph is gone:\n{}",
+        nodes.all()
+    );
+    // The session survives a restart of the server from the same place.
+    let mut m = StdioMcp::spawn(&sb, &src);
+    let s = m.call_ok("get_session", json!({}));
+    assert_eq!(
+        s["name"],
+        json!("from src"),
+        "the active session was lost: {s}"
+    );
+}
+
+// ---------------------------------------------------------------- R6 / R7 / R8
+
+const API_TOKEN: &str = "e2e-api-token-0123456789";
+
+fn api(sb: &Sandbox) -> ApiDaemon {
+    let d = ApiDaemon::spawn(sb, &sb.base().join("apidata"), API_TOKEN);
+    let s = d.as_server();
+    let r = s.request("PUT", "/api/v1/graphs/g", Some(&s.bearer()), &[], None);
+    assert!(r.status == 201 || r.status == 200, "{}", r.body);
+    d
+}
+
+fn query(d: &ApiDaemon, sql: &str) -> (u16, Value, Duration) {
+    let s = d.as_server();
+    let t = Instant::now();
+    let r = s.try_request(
+        "POST",
+        "/api/v1/graphs/g/query",
+        Some(&s.bearer()),
+        &[("content-type", "application/json")],
+        Some(json!({"sql": sql}).to_string().as_bytes()),
+        Duration::from_secs(20),
+    );
+    match r {
+        Ok(r) => (
+            r.status,
+            serde_json::from_str(&r.body).unwrap_or(Value::String(r.body)),
+            t.elapsed(),
+        ),
+        Err(e) => panic!("{sql:?} got no answer within 20s ({e}): the query has no time limit"),
+    }
+}
+
+/// R6: /query had no time limit: an endless recursive CTE pinned a core per
+/// request until the daemon was killed.
+#[test]
+fn r6_api_query_has_a_time_and_size_limit() {
+    let Some(()) = local("r6_api_query_has_a_time_and_size_limit") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let (st, body, took) = query(
+        &d,
+        "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c) SELECT x FROM c WHERE x<0",
+    );
+    assert!(
+        took < Duration::from_secs(15),
+        "an endless query ran {took:?}"
+    );
+    assert!(st >= 400, "an endless query returned {st}: {body}");
+    let (st, body, _) = query(&d, "SELECT printf('%.*c', 200000000, 'x')");
+    assert!(
+        st >= 400 || body.to_string().len() < 50_000_000,
+        "a 200 MB string was built and returned"
+    );
+    // Still serving.
+    let (st, _, _) = query(&d, "SELECT 1");
+    assert_eq!(
+        st, 200,
+        "the daemon stopped answering after a runaway query"
+    );
+}
+
+/// R7: /query ATTACH passed the read-only check, and its error told apart an
+/// existing file from a missing one; pragma_database_list leaked the data
+/// directory's absolute path.
+#[test]
+fn r7_api_query_cannot_probe_the_filesystem() {
+    let Some(()) = local("r7_api_query_cannot_probe_the_filesystem") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let (st1, b1, _) = query(&d, "ATTACH DATABASE '/etc/hosts' AS x");
+    let (st2, b2, _) = query(&d, "ATTACH DATABASE '/nonexistent/e2e/nothing' AS y");
+    assert!(st1 >= 400 && st2 >= 400, "ATTACH was allowed: {b1} / {b2}");
+    let norm = |v: &Value| {
+        v.to_string()
+            .replace("/etc/hosts", "P")
+            .replace("/nonexistent/e2e/nothing", "P")
+            .replace(" AS x", "")
+            .replace(" AS y", "")
+    };
+    assert_eq!(
+        norm(&b1),
+        norm(&b2),
+        "ATTACH errors reveal whether a file exists"
+    );
+    let (_, b, _) = query(&d, "SELECT file FROM pragma_database_list");
+    let dir = d.data_dir.canonicalize().unwrap();
+    assert!(
+        !b.to_string().contains(dir.to_str().unwrap())
+            && !b.to_string().contains(d.data_dir.to_str().unwrap()),
+        "the data directory's absolute path leaked: {b}"
+    );
+}
+
+/// R8: an API add_node without a branch got the daemon's own git branch and
+/// HEAD commit; the docs say the server never injects one.
+#[test]
+fn r8_api_never_injects_the_daemons_branch() {
+    let Some(()) = local("r8_api_never_injects_the_daemons_branch") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let data = sb.base().join("daemon-repo");
+    std::fs::create_dir_all(&data).unwrap();
+    sb.git_ok(&data, &["init", "-q"]);
+    sb.git_ok(&data, &["checkout", "-q", "-b", "daemon-branch"]);
+    sb.git_ok(&data, &["commit", "-q", "--allow-empty", "-m", "x"]);
+    let d = ApiDaemon::spawn(&sb, &data, API_TOKEN);
+    let s = d.as_server();
+    s.request("PUT", "/api/v1/graphs/g", Some(&s.bearer()), &[], None);
+    let (st, body) = d.tool("g", "add_node", json!({"node_type": "goal", "title": "t"}));
+    assert_eq!(st, 200, "{body}");
+    let id = body["data"]["result"]["node_id"].clone();
+    let (_, shown) = d.tool("g", "show_node", json!({"node_id": id}));
+    let text = shown.to_string();
+    assert!(
+        !text.contains("daemon-branch"),
+        "the daemon's branch was injected: {text}"
+    );
+}
+
+// ---------------------------------------------------------------- R9 / R10
+
+/// R9: errors for missing/invalid params and for a lone surrogate replied
+/// with "id": null, and a request with "id": null got no reply at all, so a
+/// client waiting on its id hangs.
+#[test]
+fn r9_errors_carry_the_request_id() {
+    let Some(()) = local("r9_errors_carry_the_request_id") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    for (id, line) in [
+        (41, r#"{"jsonrpc":"2.0","id":41,"method":"tools/call"}"#.to_string()),
+        (42, r#"{"jsonrpc":"2.0","id":42,"method":"tools/call","params":{"nope":1}}"#.to_string()),
+        (43, r#"{"jsonrpc":"2.0","id":43,"method":"tools/call","params":"str"}"#.to_string()),
+        (
+            44,
+            r#"{"jsonrpc":"2.0","id":44,"method":"tools/call","params":{"name":"add_node","arguments":{"node_type":"goal","title":"\ud800"}}}"#
+                .to_string(),
+        ),
+    ] {
+        m.send_raw(line.as_bytes());
+        let r = m
+            .recv(Duration::from_secs(10))
+            .unwrap_or_else(|| panic!("no reply to {line}"));
+        assert_eq!(r["id"], json!(id), "reply to {line} lost its id: {r}");
+    }
+    m.send_raw(br#"{"jsonrpc":"2.0","id":null,"method":"ping"}"#);
+    let r = m.recv(Duration::from_secs(5));
+    assert!(r.is_some(), "a request with id null got no reply");
+}
+
+/// R10: one invalid UTF-8 byte on stdin killed the server ("stream did not
+/// contain valid UTF-8"), and the client lost it for the session.
+#[test]
+fn r10_invalid_utf8_is_a_parse_error_not_a_crash() {
+    let Some(()) = local("r10_invalid_utf8_is_a_parse_error_not_a_crash") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    m.send_raw(b"\xff\xfe");
+    let r = m.recv(Duration::from_secs(5));
+    assert!(
+        r.as_ref()
+            .is_some_and(|v| v["error"]["code"] == json!(-32700)),
+        "invalid UTF-8 did not produce a parse error: {r:?}\nstderr: {}",
+        m.stderr.lock().unwrap()
+    );
+    m.send_raw(
+        br#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"add_node","arguments":{"node_type":"goal","title":"after \xff"}}}"#,
+    );
+    let r = m.recv(Duration::from_secs(5));
+    assert!(r.is_some(), "no reply to invalid UTF-8 inside a string");
+    let pong = m.request("ping", json!({}));
+    assert!(
+        pong.get("result").is_some(),
+        "the server stopped answering: {pong}"
+    );
+}
+
+// ---------------------------------------------------------------- R11
+
+/// R11: resume_session on an ended session said "Resumed" but re-ended it
+/// (is_active false, new ended_at, summary wiped).
+#[test]
+fn r11_resume_session_resumes_or_refuses() {
+    let Some(()) = local("r11_resume_session_resumes_or_refuses") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let s = m.call_ok("start_session", json!({"name": "s", "goal_title": "g"}));
+    let sid = s["session_id"].clone();
+    m.call_ok("end_session", json!({"summary": "the summary"}));
+    match m.call("resume_session", json!({"session_id": sid})) {
+        Err(_) => {
+            let got = m.call_ok("get_session", json!({"session_id": sid}));
+            assert_eq!(
+                got["summary"],
+                json!("the summary"),
+                "a refused resume wiped: {got}"
+            );
+        }
+        Ok(_) => {
+            let got = m.call_ok("get_session", json!({"session_id": sid}));
+            assert_eq!(
+                got["is_active"],
+                json!(true),
+                "\"Resumed\" but not active: {got}"
+            );
+            drop(m);
+            let mut m2 = StdioMcp::spawn(&sb, &p.dir);
+            let cur = m2.call_ok("get_session", json!({}));
+            assert_eq!(
+                cur["session_id"], sid,
+                "the resumed session did not survive a restart"
+            );
+        }
+    }
+}
+
+// ---------------------------------------------------------------- R12 / R13
+
+/// R12: invalid input reported success: a status on a node that does not
+/// exist, node type "banana", empty titles, self-loops, unknown statuses,
+/// and out-of-range or string confidences (silently dropped).
+#[test]
+fn r12_invalid_writes_are_refused() {
+    let Some(()) = local("r12_invalid_writes_are_refused") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "one");
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let cases = [
+        (
+            "update_status",
+            json!({"node_id": 99999, "status": "completed"}),
+        ),
+        ("add_node", json!({"node_type": "banana", "title": "t"})),
+        ("add_node", json!({"node_type": "goal", "title": ""})),
+        ("add_node", json!({"node_type": "goal", "title": "   "})),
+        ("link_nodes", json!({"from_id": 1, "to_id": 1})),
+        ("update_status", json!({"node_id": 1, "status": "done"})),
+        (
+            "add_node",
+            json!({"node_type": "goal", "title": "t", "confidence": -5}),
+        ),
+        (
+            "add_node",
+            json!({"node_type": "goal", "title": "t", "confidence": "90"}),
+        ),
+        (
+            "add_node",
+            json!({"node_type": "goal", "title": "t", "confidence": 101}),
+        ),
+    ];
+    for (tool, args) in cases {
+        let r = m.call(tool, args.clone());
+        assert!(r.is_err(), "{tool} {args} was accepted: {r:?}");
+    }
+    let v = p.view();
+    assert_eq!(
+        v.nodes.len(),
+        1,
+        "invalid adds created nodes: {:?}",
+        v.nodes
+    );
+    assert!(v.edges.is_empty(), "a self-loop was created");
+}
+
+/// R13: export_dot put `rankdir` into the DOT unescaped, so an argument
+/// could add nodes and edges to the rendered graph.
+#[test]
+fn r13_export_dot_rankdir_cannot_inject() {
+    let Some(()) = local("r13_export_dot_rankdir_cannot_inject") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "g");
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let r = m.call(
+        "export_dot",
+        json!({"rankdir": "LR; injected_node [label=\"INJECTED\"]; 1 -> injected_node"}),
+    );
+    if let Ok(dot) = r {
+        assert!(
+            !dot.to_string().contains("injected_node ["),
+            "rankdir injected DOT: {dot}"
+        );
+    }
+    let t = "line one\n## injected heading";
+    p.ok(&["add", "goal", t]);
+    let w = m.call_ok("generate_writeup", json!({"title": "w"}));
+    let text = w
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| w.to_string());
+    assert!(
+        !text
+            .lines()
+            .any(|l| l.trim_start() == "## injected heading"),
+        "a title with a newline added a markdown heading:\n{text}"
+    );
+}
+
+// ---------------------------------------------------------------- R14
+
+/// R14: 30 racing PUTs of the same new graph answered "created": true to
+/// more than one caller.
+#[test]
+fn r14_racing_graph_creates_report_one_creation() {
+    let Some(()) = local("r14_racing_graph_creates_report_one_creation") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = ApiDaemon::spawn(&sb, &sb.base().join("race"), API_TOKEN);
+    let s = d.as_server();
+    let created: usize = std::thread::scope(|scope| {
+        let hs: Vec<_> = (0..30)
+            .map(|_| {
+                let s = s.clone();
+                scope.spawn(move || {
+                    let r = s.request("PUT", "/api/v1/graphs/raced", Some(&s.bearer()), &[], None);
+                    let v: Value = serde_json::from_str(&r.body).unwrap_or(Value::Null);
+                    usize::from(v["data"]["created"] == json!(true))
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).sum()
+    });
+    assert_eq!(
+        created, 1,
+        "{created} callers were told they created the graph"
+    );
+}
+
+/// R14: `--token ""` did not fall back to DECIDUOUS_API_TOKEN, and a token
+/// of only whitespace started a daemon nobody could authenticate to.
+#[test]
+fn r14_api_token_edge_cases_fail_loudly() {
+    let Some(()) = local("r14_api_token_edge_cases_fail_loudly") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let data = sb.base().join("tok");
+    std::fs::create_dir_all(&data).unwrap();
+    let port = dead_port();
+    let mut c = sb.cmd(bin(), &data);
+    c.args([
+        "serve",
+        "--api",
+        "--port",
+        &port.to_string(),
+        "--data-dir",
+        data.to_str().unwrap(),
+        "--token",
+        "   ",
+    ])
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::piped());
+    let mut child = c.spawn().unwrap();
+    let exited = wait_for(Duration::from_secs(5), || child.try_wait().ok().flatten());
+    if exited.is_none() {
+        let _ = child.kill();
+        let _ = child.wait();
+        panic!("serve --api started with a whitespace-only token nobody can present");
+    }
+    assert!(
+        !exited.unwrap().success(),
+        "a whitespace-only token exited 0"
+    );
+}
+
+// ---------------------------------------------------------------- sync tool
+
+/// R14: the MCP `sync` tool on a corrupt graph.json told the agent to run
+/// `deciduous sync`, which is what it had just done.
+#[test]
+fn r14_sync_tool_error_is_not_self_referential() {
+    let Some(()) = local("r14_sync_tool_error_is_not_self_referential") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = project(&sb);
+    p.add("goal", "g");
+    std::fs::write(p.graph_file(), "{\"nodes\": {").unwrap();
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let r = m.call("sync", json!({}));
+    let text = format!("{r:?}");
+    assert!(r.is_err(), "sync accepted a corrupt graph.json: {text}");
+    assert!(
+        !text.contains("run `deciduous sync`"),
+        "self-referential advice: {text}"
+    );
+}
