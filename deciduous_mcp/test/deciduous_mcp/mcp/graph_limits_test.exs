@@ -47,11 +47,13 @@ defmodule DeciduousMcp.MCP.GraphLimitsTest do
     assert message =~ "/export"
   end
 
-  test "a walk that hits max_nodes says so", %{a: a} do
-    {:ok, json} = GetDescendants.call(%{arguments: %{"node_id" => a.id, "max_nodes" => 2}})
+  test "a walk that hits max_nodes says so", %{a: a, frame: frame} do
+    {:ok, json} =
+      GetDescendants.call(%{arguments: %{"node_id" => a.id, "max_nodes" => 2}, server: frame})
+
     %{"count" => 2, "truncated" => true} = Jason.decode!(json)
 
-    {:ok, json} = GetDescendants.call(%{arguments: %{"node_id" => a.id}})
+    {:ok, json} = GetDescendants.call(%{arguments: %{"node_id" => a.id}, server: frame})
     %{"count" => 3, "truncated" => false} = Jason.decode!(json)
   end
 end

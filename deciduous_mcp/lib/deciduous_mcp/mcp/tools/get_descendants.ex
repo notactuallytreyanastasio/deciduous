@@ -3,6 +3,7 @@ defmodule DeciduousMcp.MCP.Tools.GetDescendants do
   use DeciduousMcp.MCP.Component, type: :tool
 
   alias DeciduousMcp.Graph.Query
+  alias DeciduousMcp.MCP.Scope
 
   def definition do
     %{
@@ -30,7 +31,14 @@ defmodule DeciduousMcp.MCP.Tools.GetDescendants do
     }
   end
 
-  def call(%{arguments: %{"node_id" => node_id} = args}) do
+  def call(%{arguments: %{"node_id" => node_id} = args, server: frame}) do
+    case Scope.read_node(frame, node_id) do
+      {:ok, _node} -> walk(node_id, args)
+      {:error, message} -> {:error, %{code: -1, message: message}}
+    end
+  end
+
+  defp walk(node_id, args) do
     {nodes, truncated?} =
       Query.descendants_bounded(node_id,
         max_depth: args["max_depth"],

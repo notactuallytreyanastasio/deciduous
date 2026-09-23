@@ -2,7 +2,7 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
   @moduledoc "MCP Tool: get detailed info about a single node with its connections."
   use DeciduousMcp.MCP.Component, type: :tool
 
-  alias DeciduousMcp.Graph.Nodes
+  alias DeciduousMcp.MCP.Scope
 
   def definition do
     %{
@@ -19,8 +19,8 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
     }
   end
 
-  def call(%{arguments: %{"node_id" => node_id}}) do
-    case Nodes.get_node(node_id, [:edges_from, :edges_to, :documents, :themes]) do
+  def call(%{arguments: %{"node_id" => node_id}, server: frame}) do
+    case Scope.read_node(frame, node_id, [:edges_from, :edges_to, :documents, :themes]) do
       {:ok, node} ->
         result = %{
           id: node.id,
@@ -51,8 +51,8 @@ defmodule DeciduousMcp.MCP.Tools.ShowNode do
 
         {:ok, Jason.encode!(result)}
 
-      {:error, :not_found} ->
-        {:error, %{code: -1, message: "Node not found: #{node_id}"}}
+      {:error, message} ->
+        {:error, %{code: -1, message: message}}
     end
   end
 end
