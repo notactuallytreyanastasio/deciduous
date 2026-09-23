@@ -1,6 +1,6 @@
 {
   "name": "deciduous",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Shared decision graphs for team development. Track every goal, decision, and outcome in a collaborative PostgreSQL-backed graph that survives context loss.",
   "author": "notactuallytreyanastasio",
   "homepage": "https://github.com/notactuallytreyanastasio/deciduous",
