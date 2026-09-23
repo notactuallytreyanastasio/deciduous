@@ -62,6 +62,79 @@ Set it up with `deciduous remote init <url>` once the server is running (`decidu
 
 ---
 
+## First-time setup
+
+Five steps, from nothing to agents logging to a graph. Steps 3 and 4 are only
+for a shared graph; skip them to keep the graph in the repository.
+
+**1. Install the binary** (1.0.4 or newer):
+
+```bash
+brew install notactuallytreyanastasio/tap/deciduous   # Homebrew, macOS or Linux
+# or
+cargo install deciduous --locked                      # needs a Rust toolchain
+
+deciduous --version
+which -a deciduous    # with both installed, the first one on PATH runs
+```
+
+Upgrading later is `brew upgrade deciduous` or the same `cargo install` line.
+Then run `deciduous update` in each project.
+
+**2. Set up a project:**
+
+```bash
+cd your-project
+deciduous init            # Claude Code; --opencode, --windsurf or --both for others
+```
+
+This writes the slash commands, skills and a `CLAUDE.md` section. Commit them
+(by path, not `git add -A`) so every clone gets them.
+
+**3. Store the shared server's token** (once per machine):
+
+```bash
+deciduous remote login --url https://your-server.example/deciduous-mcp
+```
+
+It reads the token from stdin and stores it in `~/.config/deciduous/credentials`
+(mode 0600), outside every repository. Running your own server is covered in
+[Self-host the shared graph server](#self-host-the-shared-graph-server).
+
+**4. Connect Claude Code to the server, and the project to its workspace:**
+
+```bash
+claude mcp add --scope user --transport http deciduous \
+  https://your-server.example/deciduous-mcp/mcp \
+  --header "Authorization: Bearer $DECIDUOUS_MCP_TOKEN"
+claude mcp get deciduous      # Status: ✔ Connected
+
+cd your-project
+deciduous remote init https://your-server.example/deciduous-mcp
+```
+
+Restart Claude Code afterwards. When it connects, the server sends the logging
+instructions (when to write, and how to write one step in one call). There is
+no hook to install. Agents write through the MCP tools. `deciduous add` from
+the CLI writes to the local database until you run `deciduous remote push`.
+
+**5. See several agents work together** (macOS, in iTerm2 or Ghostty):
+
+```bash
+deciduous demo-swarm --preview   # the walkthrough, in this terminal; nothing is started
+deciduous demo-swarm --dry-run   # builds the arena and the window, starts no agents
+deciduous demo-swarm             # one Opus lead and four Sonnet workers on one graph
+```
+
+`--ask` keeps Claude Code's permission prompts in every pane. After
+`deciduous update`, Claude Code also has it as `/demo-swarm`.
+
+Written for the agent doing the setup rather than for you:
+[deciduous.dev/agents/](https://deciduous.dev/agents/index.md) and
+[deciduous.dev/llms.txt](https://deciduous.dev/llms.txt).
+
+---
+
 ## Installation
 
 ### Homebrew (Recommended)
@@ -119,7 +192,7 @@ Erlang/OTP and Elixir included. The deployment guide covers their one-time
 ### Via Cargo
 
 ```bash
-cargo install deciduous
+cargo install deciduous --locked
 ```
 
 ### From Source
@@ -205,20 +278,15 @@ Deciduous includes a built-in [MCP](https://modelcontextprotocol.io/) server tha
 
 > **Claude Cowork:** Coming soon. Cowork agents can't yet load custom MCP servers — track progress on [anthropics/claude-code#48909](https://github.com/anthropics/claude-code/issues/48909).
 
-**Claude Code** (project-level):
+**Claude Code** (this project's local database, over stdio):
 
-Add to `.claude/settings.local.json`:
-
-```json
-{
-  "mcpServers": {
-    "deciduous": {
-      "command": "deciduous",
-      "args": ["mcp"]
-    }
-  }
-}
+```bash
+claude mcp add deciduous -- deciduous mcp
 ```
+
+Claude Code reads MCP servers from `claude mcp add` (or a project `.mcp.json`),
+not from `.claude/settings.local.json`. For the shared server, see step 4 of
+[First-time setup](#first-time-setup).
 
 **Claude Desktop**:
 
@@ -242,7 +310,7 @@ Use the **absolute path** to the `deciduous` binary (run `which deciduous` to fi
 
 **Claude Code (user-level)**:
 
-Add the project-level config above to `~/.claude/settings.json` instead of `.claude/settings.local.json` to make the server available across all projects.
+Add `--scope user` to the `claude mcp add` line to make the server available in every project.
 
 Once configured, the AI gets tools for:
 
