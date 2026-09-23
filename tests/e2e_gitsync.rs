@@ -730,6 +730,47 @@ fn new7_the_unlink_the_refusal_suggests_removes_only_that_edge() {
     assert_eq!(edges[0]["edge_type"], json!("leads_to"), "{edges:?}");
 }
 
+/// T8, round 2: 59894f8 resolved add_node's `commit` through git, and so
+/// refused `""` ("\"\" is not a git revision"), which agents send for an
+/// optional string they have no value for. Before it the node was added.
+/// Empty means no commit: the node is added, with none.
+#[test]
+fn t8_an_empty_commit_from_an_agent_means_no_commit() {
+    let Some(()) = local("t8_an_empty_commit_from_an_agent_means_no_commit") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("emptycommit", None);
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    for (title, commit) in [("c-empty", ""), ("c-blank", "  ")] {
+        m.call(
+            "add_node",
+            json!({"node_type": "action", "title": title, "commit": commit}),
+        )
+        .unwrap_or_else(|e| panic!("add_node with commit {commit:?} was refused: {e}"));
+    }
+    // A rev git cannot resolve is still refused, and adds nothing.
+    let err = m
+        .call(
+            "add_node",
+            json!({"node_type": "action", "title": "c-bad", "commit": "no-such-rev"}),
+        )
+        .expect_err("add_node with an unresolvable commit succeeded");
+    assert!(err.contains("no-such-rev"), "{err}");
+    drop(m);
+    let g = p.graph();
+    let nodes = g["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2, "{nodes:?}");
+    for n in nodes {
+        let meta = n["metadata_json"].as_str().unwrap_or("{}");
+        assert!(
+            !meta.contains("\"commit\""),
+            "{} was stored with a commit: {meta}",
+            n["title"]
+        );
+    }
+}
+
 /// T8: `dx add --commit origin/main` stored the literal "origin/main" (only
 /// HEAD was resolved) and the confirmation printed "[commit: origin/]".
 #[test]

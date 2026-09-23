@@ -284,7 +284,9 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
     let prompt = get_str(args, "prompt");
     let files = get_str(args, "files");
     let branch = get_str(args, "branch");
-    let commit = get_str(args, "commit");
+    // "" (or blanks) is how agents fill an optional string they have no
+    // value for: no commit, as before 59894f8, not a rev git must resolve.
+    let commit = get_str(args, "commit").filter(|c| !c.trim().is_empty());
 
     // HEAD and the default branch come from the working directory's git
     // checkout, which is only the caller's when the caller is local.
