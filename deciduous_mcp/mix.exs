@@ -52,7 +52,7 @@ defmodule DeciduousMcp.MixProject do
       {:phoenix_pubsub, "~> 2.1"},
 
       # MCP Protocol - Hermes MCP (Elixir MCP SDK by Cloudwalk)
-      {:hermes_mcp, "~> 0.14"},
+      {:hermes_mcp, path: "vendor/hermes_mcp"},
 
       # UUID generation
       {:elixir_uuid, "~> 1.2"},
