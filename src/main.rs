@@ -1062,6 +1062,78 @@ fn exit(code: i32) -> ! {
     std::process::exit(code)
 }
 
+/// `deciduous serve --api`. Returns the process exit code.
+fn run_api_daemon(
+    port: u16,
+    data_dir: Option<PathBuf>,
+    token: Option<String>,
+    bind: String,
+) -> i32 {
+    let token_flag = token.filter(|t| !t.is_empty());
+    if token_flag.is_some() {
+        eprintln!(
+            "{} --token is visible to every user on this machine in `ps`; \
+             prefer DECIDUOUS_API_TOKEN",
+            "Warning:".yellow()
+        );
+    }
+    // An empty --token (an unset shell variable) falls back to the
+    // environment rather than winning over it.
+    let token = token_flag.or_else(|| {
+        std::env::var("DECIDUOUS_API_TOKEN")
+            .ok()
+            .filter(|t| !t.is_empty())
+    });
+    let Some(token) = token else {
+        eprintln!(
+            "{} API mode needs a bearer token: pass --token or set DECIDUOUS_API_TOKEN",
+            "Error:".red()
+        );
+        return 1;
+    };
+    // The Authorization header is trimmed before it is compared, so a token
+    // with leading or trailing whitespace could never match: the daemon
+    // would start and refuse every request.
+    if token.trim() != token || token.trim().is_empty() {
+        eprintln!(
+            "{} the API token has leading or trailing whitespace (or is only whitespace), \
+             so no request could ever authenticate with it",
+            "Error:".red()
+        );
+        return 1;
+    }
+    let data_dir = data_dir
+        .or_else(|| {
+            std::env::var("DECIDUOUS_API_DATA_DIR")
+                .ok()
+                .map(PathBuf::from)
+        })
+        .unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
+    let config = deciduous::api::ApiConfig {
+        bind: bind.clone(),
+        port,
+        data_dir: data_dir.clone(),
+        token,
+    };
+    match deciduous::api::ApiServer::bind(config) {
+        Ok(server) => {
+            println!(
+                "{} API daemon on http://{}:{} (graphs in {})",
+                "Deciduous".cyan(),
+                bind,
+                server.port(),
+                data_dir.display()
+            );
+            server.run();
+            0
+        }
+        Err(e) => {
+            eprintln!("{} API server error: {}", "Error:".red(), e);
+            1
+        }
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -1288,6 +1360,21 @@ fn main() {
             &mut std::io::stdout(),
         );
         return;
+    }
+
+    // The API daemon serves the graphs under its data directory and nothing
+    // else. Opening the cwd's database first (as every other command does)
+    // created .deciduous/deciduous.db wherever it was started, or opened a
+    // parent project's database by walking up.
+    if let Command::Serve {
+        api: true,
+        port,
+        data_dir,
+        token,
+        bind,
+    } = args.command
+    {
+        std::process::exit(run_api_daemon(port, data_dir, token, bind));
     }
 
     let db = match Database::open() {
@@ -1907,53 +1994,9 @@ fn main() {
             }
         },
 
-        Command::Serve {
-            port,
-            api,
-            data_dir,
-            token,
-            bind,
-        } => {
+        Command::Serve { port, api, .. } => {
             if api {
-                let token = token
-                    .or_else(|| std::env::var("DECIDUOUS_API_TOKEN").ok())
-                    .filter(|t| !t.is_empty());
-                let Some(token) = token else {
-                    eprintln!(
-                        "{} API mode needs a bearer token: pass --token or set DECIDUOUS_API_TOKEN",
-                        "Error:".red()
-                    );
-                    exit(1);
-                };
-                let data_dir = data_dir
-                    .or_else(|| {
-                        std::env::var("DECIDUOUS_API_DATA_DIR")
-                            .ok()
-                            .map(PathBuf::from)
-                    })
-                    .unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
-                let config = deciduous::api::ApiConfig {
-                    bind: bind.clone(),
-                    port,
-                    data_dir: data_dir.clone(),
-                    token,
-                };
-                match deciduous::api::ApiServer::bind(config) {
-                    Ok(server) => {
-                        println!(
-                            "{} API daemon on http://{}:{} (graphs in {})",
-                            "Deciduous".cyan(),
-                            bind,
-                            server.port(),
-                            data_dir.display()
-                        );
-                        server.run();
-                    }
-                    Err(e) => {
-                        eprintln!("{} API server error: {}", "Error:".red(), e);
-                        exit(1);
-                    }
-                }
+                unreachable!("serve --api is handled before the database is opened");
             } else {
                 println!(
                     "{} Starting graph viewer at http://localhost:{}",

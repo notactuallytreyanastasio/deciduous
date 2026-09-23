@@ -147,22 +147,30 @@ impl Registry {
     /// to a file that is gone — the wedge where PUT answered 201 while every
     /// subsequent write 404'd forever.
     fn database(&self, graph_id: &str, create: bool) -> Result<Arc<Database>, ApiError> {
+        self.open_graph(graph_id, create).map(|(db, _)| db)
+    }
+
+    /// [`database`](Self::database), also saying whether this call created
+    /// the graph. Existence is checked under the registry lock: checked
+    /// before it, thirty concurrent PUTs of one new graph each saw "absent"
+    /// and one to three of them answered 201 created.
+    fn open_graph(&self, graph_id: &str, create: bool) -> Result<(Arc<Database>, bool), ApiError> {
         if !valid_graph_id(graph_id) {
             return Err(ApiError::bad_request(
                 "graph id must be 1-64 chars of [a-z0-9_-], starting alphanumeric",
             ));
         }
 
+        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
         let on_disk = self.exists(graph_id);
         if !create && !on_disk {
             return Err(ApiError::not_found(&format!("no such graph: {graph_id}")));
         }
 
-        let mut open = self.open.lock().unwrap_or_else(|e| e.into_inner());
         if on_disk {
             // File still present: a cached handle is trustworthy.
             if let Some(db) = open.get(graph_id) {
-                return Ok(Arc::clone(db));
+                return Ok((Arc::clone(db), false));
             }
         } else {
             // File gone but we were asked to create: drop any stale handle so
@@ -182,7 +190,7 @@ impl Registry {
         }
         let db = Arc::new(db);
         open.insert(graph_id.to_string(), Arc::clone(&db));
-        Ok(db)
+        Ok((db, !on_disk))
     }
 }
 
@@ -293,10 +301,9 @@ fn route(
         (Method::Get, ["api", "v1", "graphs"]) => Ok((200, json!({"graphs": registry.list()}))),
 
         (Method::Put, ["api", "v1", "graphs", graph_id]) => {
-            let existed = registry.exists(graph_id);
-            registry.database(graph_id, true)?;
-            let status = if existed { 200 } else { 201 };
-            Ok((status, json!({"graph_id": graph_id, "created": !existed})))
+            let (_, created) = registry.open_graph(graph_id, true)?;
+            let status = if created { 201 } else { 200 };
+            Ok((status, json!({"graph_id": graph_id, "created": created})))
         }
 
         (Method::Post, ["api", "v1", "graphs", graph_id, "tools", tool_name]) => {

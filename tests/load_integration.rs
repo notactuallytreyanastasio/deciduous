@@ -1221,3 +1221,114 @@ fn export_dot_rankdir_and_writeup_titles_cannot_inject() {
         "cli dot accepted an injected rankdir"
     );
 }
+
+// ============================================================================
+// R14: the smaller confusions
+// ============================================================================
+
+#[test]
+fn a_corrupt_graph_file_is_not_answered_with_run_deciduous_sync() {
+    let p = Project::with_graph();
+    std::fs::write(p.graph_path(), "{ this is not json").unwrap();
+    let out = p.cli(&["sync", "--no-pages"]);
+    assert!(!out.status.success());
+    let all = format!("{}{}", text(&out.stdout), text(&out.stderr));
+    assert!(all.contains("graph.json"), "{all}");
+    assert!(
+        !all.contains("run `deciduous sync`"),
+        "sync told the user to run sync: {all}"
+    );
+    let mut m = p.mcp();
+    let e = m
+        .call("sync", json!({}))
+        .expect_err("sync tool on a corrupt file");
+    assert!(!e.contains("run `deciduous sync`"), "{e}");
+    m.close();
+}
+
+#[test]
+fn api_daemon_startup_is_strict_about_tokens_and_touches_no_project() {
+    let p = Project::new();
+    let cwd = TempDir::new().unwrap();
+    let data = TempDir::new().unwrap();
+    let run = |args: &[&str], env_token: Option<&str>| {
+        let mut c = p.command(cwd.path());
+        c.args(["serve", "--api", "--port", "4829", "--data-dir"])
+            .arg(data.path())
+            .args(args)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some(t) = env_token {
+            c.env("DECIDUOUS_API_TOKEN", t);
+        }
+        c.spawn().unwrap()
+    };
+    let wait_listen = || {
+        let deadline = Instant::now() + Duration::from_secs(20);
+        while TcpStream::connect(("127.0.0.1", 4829)).is_err() {
+            assert!(Instant::now() < deadline, "daemon never listened");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    };
+    let stop = |mut c: Child| {
+        let _ = c.kill();
+        c.wait_with_output().unwrap()
+    };
+
+    // A token that can never match the trimmed Authorization header.
+    for bad in ["abc ", " ", "\tabc"] {
+        let mut c = run(&["--token", bad], None);
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let status = loop {
+            if let Some(s) = c.try_wait().unwrap() {
+                break Some(s);
+            }
+            if Instant::now() > deadline {
+                break None;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
+        let out = stop(c);
+        let err = text(&out.stderr);
+        assert!(
+            status.is_some_and(|s| !s.success()),
+            "started with token {bad:?}, which no request can ever match"
+        );
+        assert!(err.contains("whitespace") || err.contains("token"), "{err}");
+    }
+
+    // --token "" falls back to the environment instead of failing.
+    let c = run(&["--token", ""], Some(API_TOKEN));
+    wait_listen();
+    let (s, b) = http(4829, "GET", "/api/v1/graphs", API_TOKEN, &json!({}));
+    assert_eq!(s, 200, "{b}");
+
+    // Racing PUTs of one new graph: exactly one of them created it.
+    let handles: Vec<_> = (0..30)
+        .map(|_| {
+            std::thread::spawn(|| http(4829, "PUT", "/api/v1/graphs/race", API_TOKEN, &json!({})))
+        })
+        .collect();
+    let created = handles
+        .into_iter()
+        .map(|h| h.join().unwrap())
+        .filter(|(s, b)| *s == 201 && b["data"]["created"] == true)
+        .count();
+    assert_eq!(created, 1, "{created} PUTs claimed to create the graph");
+    let out = stop(c);
+    assert!(
+        !cwd.path().join(".deciduous").exists(),
+        "serve --api created a project database in its cwd"
+    );
+    let _ = out;
+
+    // A token on the command line is visible in `ps`: say so.
+    let c = run(&["--token", API_TOKEN], None);
+    wait_listen();
+    let out = stop(c);
+    assert!(
+        text(&out.stderr).contains("DECIDUOUS_API_TOKEN"),
+        "no warning about --token: {}",
+        text(&out.stderr)
+    );
+}
