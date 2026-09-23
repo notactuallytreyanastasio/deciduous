@@ -725,7 +725,9 @@ fn opened_path(file: &std::fs::File, _path: &str) -> std::io::Result<std::path::
         return Err(std::io::Error::last_os_error());
     }
     let len = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-    Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(&buf[..len])))
+    Ok(std::path::PathBuf::from(std::ffi::OsStr::from_bytes(
+        &buf[..len],
+    )))
 }
 
 #[cfg(target_os = "linux")]
@@ -988,7 +990,10 @@ fn export_subgraph(
 ) -> Result<crate::db::DecisionGraph, HandlerError> {
     if let Some(nodes_spec) = get_str(args, "nodes") {
         let spec = crate::export::parse_node_range(nodes_spec).map_err(HandlerError::from)?;
-        Ok(crate::export::filter_graph_by_ids(&graph, &spec.select(&graph)))
+        Ok(crate::export::filter_graph_by_ids(
+            &graph,
+            &spec.select(&graph),
+        ))
     } else if let Some(roots_spec) = get_str(args, "roots") {
         let root_ids = crate::export::parse_root_ids(roots_spec).map_err(HandlerError::from)?;
         Ok(crate::export::filter_graph_from_roots(&graph, &root_ids))

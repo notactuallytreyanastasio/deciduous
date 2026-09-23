@@ -256,7 +256,10 @@ fn raw_member<'a>(input: &'a str, key: &str) -> Option<&'a str> {
                 None
             }
             _ => {
-                while i < b.len() && !matches!(b[i], b',' | b'}' | b']') && !b[i].is_ascii_whitespace() {
+                while i < b.len()
+                    && !matches!(b[i], b',' | b'}' | b']')
+                    && !b[i].is_ascii_whitespace()
+                {
                     i += 1;
                 }
                 Some(i)

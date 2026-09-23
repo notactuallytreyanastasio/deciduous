@@ -1582,7 +1582,9 @@ impl Mcp {
     fn ping_alive(&mut self) {
         self.next_id += 1;
         let id = self.next_id;
-        self.send_raw(format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"ping\"}}\n").as_bytes());
+        self.send_raw(
+            format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"ping\"}}\n").as_bytes(),
+        );
         let l = self.read_line(Duration::from_secs(10)).unwrap_or_else(|| {
             panic!(
                 "server stopped answering; stderr: {}",
@@ -1791,7 +1793,11 @@ fn empty_theme_and_session_names_and_untagging_a_missing_node_are_refused() {
         ("create_theme", json!({"name":""}), "name"),
         ("create_theme", json!({"name":"   "}), "name"),
         ("start_session", json!({"name":"","goal_title":"g"}), "name"),
-        ("start_session", json!({"name":" \t","goal_title":"g"}), "name"),
+        (
+            "start_session",
+            json!({"name":" \t","goal_title":"g"}),
+            "name",
+        ),
         ("untag_node", json!({"node_id":99999,"theme":"t"}), "99999"),
         ("untag_node", json!({"node_id":1,"theme":"nope"}), "nope"),
     ] {
@@ -1864,9 +1870,8 @@ fn attach_document_reads_the_file_it_checked_while_the_path_is_swapped() {
         .unwrap()
         .success());
 
-    let cpath = |name: &str| {
-        std::ffi::CString::new(p.root().join(name).as_os_str().as_bytes()).unwrap()
-    };
+    let cpath =
+        |name: &str| std::ffi::CString::new(p.root().join(name).as_os_str().as_bytes()).unwrap();
     let stop = Arc::new(AtomicBool::new(false));
     let swapper = |a: std::ffi::CString, b: std::ffi::CString| {
         let stop = stop.clone();
@@ -1882,7 +1887,11 @@ fn attach_document_reads_the_file_it_checked_while_the_path_is_swapped() {
     let mut m = p.mcp();
     let mut hung = None;
     for i in 0..3000 {
-        let (file, _) = if i % 2 == 0 { ("d/id_rsa", 0) } else { ("f", 1) };
+        let (file, _) = if i % 2 == 0 {
+            ("d/id_rsa", 0)
+        } else {
+            ("f", 1)
+        };
         if m.call_within(
             "attach_document",
             json!({"node_id":1,"file_path":file}),

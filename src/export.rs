@@ -338,7 +338,9 @@ pub fn parse_node_range(spec: &str) -> Result<NodeSpec, String> {
             }
         };
         if range.0 > range.1 {
-            return Err(format!("nodes: {part:?} is an empty range (it runs backwards)"));
+            return Err(format!(
+                "nodes: {part:?} is an empty range (it runs backwards)"
+            ));
         }
         ranges.push(range);
     }

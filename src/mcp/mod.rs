@@ -172,9 +172,7 @@ impl McpServer {
         // Checked before the root goal is created, so a refused start leaves
         // nothing behind.
         if name.trim().is_empty() {
-            return protocol::tool_result_error(
-                "a session name, when given, must not be empty",
-            );
+            return protocol::tool_result_error("a session name, when given, must not be empty");
         }
         let goal_title = args
             .get("goal_title")
@@ -537,7 +535,9 @@ pub fn run_server() -> io::Result<()> {
 
         if let Some(resp) = response {
             let spliced = raw_id.and_then(|raw| protocol::splice_raw_id(&resp, raw));
-            let serialized = spliced.map(Ok).unwrap_or_else(|| serde_json::to_string(&resp));
+            let serialized = spliced
+                .map(Ok)
+                .unwrap_or_else(|| serde_json::to_string(&resp));
             let serialized = serialized.unwrap_or_else(|_| {
                 r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32603,"message":"Serialization error"}}"#.to_string()
             });

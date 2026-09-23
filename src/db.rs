@@ -3772,9 +3772,9 @@ impl Database {
     /// naming whichever is missing. Untagging either one that does not
     /// exist answered "was not tagged", as if the call had been meaningful.
     fn existing_tag_parts(&self, node_id: i32, theme_name: &str) -> Result<Theme> {
-        let theme = self.get_theme_by_name(theme_name)?.ok_or_else(|| {
-            DbError::Validation(format!("Theme '{theme_name}' not found"))
-        })?;
+        let theme = self
+            .get_theme_by_name(theme_name)?
+            .ok_or_else(|| DbError::Validation(format!("Theme '{theme_name}' not found")))?;
         self.get_node(node_id)?
             .ok_or_else(|| DbError::Validation(format!("Node {node_id} not found")))?;
         Ok(theme)
