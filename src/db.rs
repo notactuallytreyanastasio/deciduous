@@ -91,6 +91,12 @@ pub fn get_current_git_commit() -> Option<String> {
         })
 }
 
+/// Every kind of node reference the CLI takes, for errors that have to say.
+pub const NODE_REF_KINDS: &str = "A node is named by its local id (12, or #12 when \
+    digits could also be a change_id prefix), its change_id or a prefix of it (the CHANGE \
+    column of `deciduous nodes`, at least 4 hex characters), or, in a project with a \
+    [remote], the server's id for it (the `id` MCP tools return) or a prefix of that.";
+
 /// The full hash of the commit `rev` names in the current directory's
 /// repository: `HEAD`, a branch, a tag, `origin/main`, `HEAD~2`, a hash or a
 /// prefix of one. Anything git cannot resolve to a commit is an error naming
@@ -783,6 +789,10 @@ pub enum DbError {
     Query(diesel::result::Error),
     Pool(diesel::r2d2::Error),
     Validation(String),
+    /// A reference that names no node here: no local id, no change_id
+    /// prefix. Kept apart from Validation so the CLI can go on to ask the
+    /// server whether it is one of the server's ids.
+    NoSuchNode(String),
 }
 
 impl std::fmt::Display for DbError {
@@ -791,7 +801,7 @@ impl std::fmt::Display for DbError {
             DbError::Connection(msg) => write!(f, "Connection error: {}", msg),
             DbError::Query(e) => write!(f, "Query error: {}", e),
             DbError::Pool(e) => write!(f, "Pool error: {}", e),
-            DbError::Validation(msg) => write!(f, "{}", msg),
+            DbError::Validation(msg) | DbError::NoSuchNode(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -2676,8 +2686,8 @@ impl Database {
         if !looks_like_prefix {
             return as_id.ok_or_else(|| {
                 DbError::Validation(format!(
-                    "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
-                    reference
+                    "'{}' is not a node id, a change_id prefix or a server id. {}",
+                    reference, NODE_REF_KINDS
                 ))
             });
         }
@@ -2811,7 +2821,7 @@ impl Database {
             }
         }
         match matches.len() {
-            0 => Err(DbError::Validation(format!(
+            0 => Err(DbError::NoSuchNode(format!(
                 "No node has a change_id starting with '{}'. Run 'deciduous sync' if a teammate created it.",
                 r
             ))),

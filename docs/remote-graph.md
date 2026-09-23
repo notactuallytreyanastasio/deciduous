@@ -276,6 +276,22 @@ add_node workspace="*"
 A repo pinned by header ignores `"*"` on reads too, so a project that opted
 into isolation cannot be made to read its neighbours.
 
+## Naming a node
+
+A node has three ids, and the CLI takes all of them wherever it takes a node:
+
+| Id | Looks like | Where you see it |
+|----|-----------|------------------|
+| local id | `12` (or `#12`) | the ID column of `deciduous nodes`; differs on every machine |
+| change_id | `291cdb5a-...`, or 4+ hex characters of it | the CHANGE column; the same in every clone and on the server |
+| server id | `56eb8923-...`, or a prefix of it | the `id` every MCP tool returns, and what agents quote |
+
+A reference is tried as a local id and a change_id prefix first. Only when
+neither matches, and the project has a `[remote]`, does the CLI ask the server
+whether it is a server id, and it prints which node that turned out to be. A
+server node this clone has not pulled yet is an error that says to run
+`deciduous remote pull`; it is never taken as some other node.
+
 ## Working alongside other agents
 
 Two sessions writing to one workspace need to know the other exists and to

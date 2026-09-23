@@ -139,10 +139,10 @@ enum Command {
 
     /// Add an edge between nodes
     Link {
-        /// Source node: local id or change_id prefix
+        /// Source node: local id, change_id prefix, or server id
         from: String,
 
-        /// Target node: local id or change_id prefix
+        /// Target node: local id, change_id prefix, or server id
         to: String,
 
         /// Rationale for this connection
@@ -157,16 +157,16 @@ enum Command {
 
     /// Remove an edge between two nodes
     Unlink {
-        /// Source node: local id or change_id prefix
+        /// Source node: local id, change_id prefix, or server id
         from: String,
 
-        /// Target node: local id or change_id prefix
+        /// Target node: local id, change_id prefix, or server id
         to: String,
     },
 
     /// Delete a node and all its connected edges
     Delete {
-        /// Node to delete: local id or change_id prefix
+        /// Node to delete: local id, change_id prefix, or server id
         id: String,
 
         /// Show what would be deleted without actually deleting
@@ -176,7 +176,7 @@ enum Command {
 
     /// Update node status
     Status {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         id: String,
 
         /// New status: pending, active, completed, rejected
@@ -185,7 +185,7 @@ enum Command {
 
     /// Update or add a prompt to an existing node
     Prompt {
-        /// Node to update: local id or change_id prefix
+        /// Node to update: local id, change_id prefix, or server id
         id: String,
 
         /// The prompt text (omit to read from stdin)
@@ -212,7 +212,7 @@ enum Command {
 
     /// Show detailed information about a single node
     Show {
-        /// Node to display: local id or change_id prefix
+        /// Node to display: local id, change_id prefix, or server id
         id: String,
 
         /// Show JSON output instead of formatted
@@ -864,7 +864,7 @@ enum ArchaeologyAction {
     ///
     /// Creates: observation -> revisit -> new_decision, marks old as superseded.
     Pivot {
-        /// Existing approach being reconsidered: local id or change_id prefix
+        /// Existing approach being reconsidered: local id, change_id prefix, or server id
         from_id: String,
 
         /// Observation text (what was learned that triggers the pivot)
@@ -907,7 +907,7 @@ enum ArchaeologyAction {
 
     /// Mark a node as superseded, optionally cascading to descendants
     Supersede {
-        /// Node to mark as superseded: local id or change_id prefix
+        /// Node to mark as superseded: local id, change_id prefix, or server id
         id: String,
 
         /// Also mark all descendant nodes as superseded
@@ -924,7 +924,7 @@ enum ArchaeologyAction {
 enum DocAction {
     /// Attach a file to a decision graph node
     Attach {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Path to the file to attach
@@ -941,7 +941,7 @@ enum DocAction {
 
     /// List documents attached to a node (or all nodes)
     List {
-        /// Node to list documents for: local id or change_id prefix (omit for all)
+        /// Node to list documents for: local id, change_id prefix, or server id (omit for all)
         node_id: Option<String>,
 
         /// Show detached (removed) documents too
@@ -1026,7 +1026,7 @@ enum ThemesAction {
 enum TagAction {
     /// Add a theme to a node
     Add {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Theme name
@@ -1035,7 +1035,7 @@ enum TagAction {
 
     /// Remove a theme from a node
     Remove {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Theme name
@@ -1044,13 +1044,13 @@ enum TagAction {
 
     /// List themes for a node
     List {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
     },
 
     /// Auto-suggest themes for a node based on keywords and AI
     Suggest {
-        /// Node to suggest themes for: local id or change_id prefix (omit for all untagged nodes)
+        /// Node to suggest themes for: local id, change_id prefix, or server id (omit for all untagged nodes)
         node_id: Option<String>,
 
         /// Apply suggestions without confirmation
@@ -1060,7 +1060,7 @@ enum TagAction {
 
     /// Confirm a suggested theme (change from "suggested" to "manual")
     Confirm {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Theme name to confirm
@@ -6021,10 +6021,89 @@ fn keyword_match_score(node_title: &str, commit_message: &str) -> f64 {
 fn resolve_node_or_exit(db: &Database, reference: &str) -> i32 {
     match db.resolve_node_ref(reference) {
         Ok(id) => id,
+        Err(deciduous::db::DbError::NoSuchNode(msg)) => match resolve_server_id(db, reference) {
+            Ok(id) => id,
+            Err(why) => {
+                eprintln!(
+                    "{} {msg}\n{why}\n\n{}",
+                    "Error:".red(),
+                    deciduous::db::NODE_REF_KINDS
+                );
+                exit(1);
+            }
+        },
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
             exit(1);
         }
+    }
+}
+
+/// A reference no local id or change_id matched, tried as the server's id
+/// for a node (T5): agents quote those, and `dx link 56eb8923 ...` answered
+/// "No node has a change_id starting with '56eb8923'" for a node this clone
+/// had under change_id 291cdb5a. Asks the server only after every local
+/// kind has missed, so it costs nothing when a local reference works. The
+/// Err is the sentence explaining why the server did not resolve it.
+fn resolve_server_id(db: &Database, reference: &str) -> Result<i32, String> {
+    let cwd = std::env::current_dir().map_err(|e| format!("(no working directory: {e})"))?;
+    let cfg = Config::load();
+    if !cfg.remote.is_configured() {
+        return Err(
+            "This project has no [remote], so it was not looked up as a server id.".to_string(),
+        );
+    }
+    let remote = deciduous::remote::Remote::resolve(&cfg, &cwd)
+        .map_err(|e| format!("It was not looked up as a server id: {e}"))?;
+    let matches = deciduous::remote::find_by_server_id(&remote, reference)
+        .map_err(|e| format!("It may be a server id, but the server could not be asked: {e}"))?;
+    let describe = |m: &deciduous::remote::ServerIdMatch| {
+        format!(
+            "server id {} = change_id {} ({})",
+            m.id.chars().take(12).collect::<String>(),
+            m.change_id.chars().take(12).collect::<String>(),
+            m.title
+        )
+    };
+    let m = match matches.as_slice() {
+        [] => {
+            return Err(format!(
+                "It is not a server id in workspace {} either.",
+                remote.workspace
+            ))
+        }
+        [m] => m,
+        many => {
+            return Err(format!(
+                "As a server id prefix it matches {} nodes; use more characters: {}",
+                many.len(),
+                many.iter()
+                    .take(5)
+                    .map(describe)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ))
+        }
+    };
+    if m.deleted {
+        return Err(format!(
+            "It is the {}, which was deleted on the server.",
+            describe(m)
+        ));
+    }
+    match db.resolve_node_ref(&m.change_id) {
+        Ok(id) => {
+            eprintln!(
+                "{} '{reference}' is the {}: local #{id}",
+                "Note:".cyan(),
+                describe(m)
+            );
+            Ok(id)
+        }
+        Err(_) => Err(format!(
+            "It is the {}, which this clone does not have yet. Run `deciduous remote pull` first.",
+            describe(m)
+        )),
     }
 }
 
