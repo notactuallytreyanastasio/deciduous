@@ -37,6 +37,24 @@
 //! machine's unsent writes, and the `.deciduous/*` rule `deciduous init`
 //! writes already keeps it out of git.
 //!
+//! ## A line that cannot be read
+//!
+//! Every append is one `write` of whole lines ending in a newline, so a last
+//! line with no newline can only be an append that was cut short: a crash, a
+//! kill, a full disk. The next append used to land on that same line, and
+//! the pair stopped parsing as one: the new write was lost with the torn
+//! one, and the advice printed ("delete that line") finished the job.
+//!
+//! So the next append, under the lock, first moves a torn tail to
+//! `remote-log.unreadable` beside the log (or, if the tail is a whole entry
+//! that lost only its newline, gives it one). Reading tolerates a line it
+//! cannot parse: it is reported with its number and text on every replay and
+//! by `remote status`, and never sent; compaction moves it to the same side
+//! file. A line an older build already glued together (fragment, then a
+//! whole entry) still yields that entry. Nothing unreadable is deleted: the
+//! side file is for a person to look at, and `remote status` exits 1 while
+//! it has anything in it.
+//!
 //! ## Compaction
 //!
 //! After a replay, ops acknowledged as anything other than `rejected` are
@@ -58,6 +76,9 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 pub const FILE_NAME: &str = "remote-log.jsonl";
+/// Where lines of the log that could not be read are moved. See the module
+/// docs.
+pub const UNREADABLE_FILE: &str = "remote-log.unreadable";
 
 /// One graph change, as the server's `POST /ops` receives it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -226,6 +247,79 @@ pub struct LogState {
     pub rejected: Vec<(Op, Ack)>,
     /// Ops acknowledged and not yet compacted away.
     pub acked: usize,
+    /// Lines of the log that are not entries. Never sent.
+    pub unreadable: Vec<Unreadable>,
+    /// Lines already moved to [`UNREADABLE_FILE`].
+    pub set_aside: usize,
+}
+
+/// A line of the log that is not an entry.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Unreadable {
+    /// 1-based line number in the log.
+    pub line: usize,
+    pub text: String,
+    pub error: String,
+}
+
+impl Unreadable {
+    pub fn describe(&self) -> String {
+        let text: String = self.text.chars().take(200).collect();
+        format!("line {}: {text}  ({})", self.line, self.error)
+    }
+}
+
+/// The log's lines, parsed as far as they parse.
+struct Parsed {
+    entries: Vec<Entry>,
+    unreadable: Vec<Unreadable>,
+}
+
+fn parse(text: &str) -> Parsed {
+    let mut out = Parsed {
+        entries: Vec::new(),
+        unreadable: Vec::new(),
+    };
+    for (i, line) in text.lines().enumerate() {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let err = match serde_json::from_str::<Entry>(line) {
+            Ok(e) => {
+                out.entries.push(e);
+                continue;
+            }
+            Err(e) => e,
+        };
+        // A torn append that a later append was glued to (what builds before
+        // this one did): the fragment, then a whole entry. The entry is a
+        // write that has not been sent, so it is kept.
+        let glued = line
+            .match_indices("{\"entry\":")
+            .map(|(at, _)| at)
+            .filter(|&at| at > 0)
+            .find_map(|at| {
+                serde_json::from_str::<Entry>(&line[at..])
+                    .ok()
+                    .map(|e| (at, e))
+            });
+        match glued {
+            Some((at, entry)) => {
+                out.unreadable.push(Unreadable {
+                    line: i + 1,
+                    text: line[..at].to_string(),
+                    error: "the start of a write that was cut short; the entry after it on the same line is kept".into(),
+                });
+                out.entries.push(entry);
+            }
+            None => out.unreadable.push(Unreadable {
+                line: i + 1,
+                text: line.to_string(),
+                error: err.to_string(),
+            }),
+        }
+    }
+    out
 }
 
 /// Set when this process appends an op, so the CLI knows to replay on exit
@@ -284,6 +378,7 @@ impl OpLog {
         let line = serde_json::to_string(&Entry::Op(op.clone()))
             .map_err(|e| format!("serializing op: {e}"))?;
         let _lock = self.lock()?;
+        self.mend_torn_tail()?;
         self.append_lines(&[line])?;
         if let Ok(mut g) = APPENDED.lock() {
             *g = Some(self.path.clone());
@@ -304,12 +399,83 @@ impl OpLog {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let _lock = self.lock()?;
+        self.mend_torn_tail()?;
         self.append_lines(&lines)
     }
 
+    /// Where unreadable lines are moved: beside the log.
+    pub fn unreadable_path(&self) -> PathBuf {
+        self.path.with_file_name(UNREADABLE_FILE)
+    }
+
+    /// Before an append, under the lock: a last line with no newline is an
+    /// append that was cut short. Appending after it would glue the new
+    /// entry onto it. A tail that is a whole entry only lacks its newline
+    /// and gets one; anything else is moved to [`UNREADABLE_FILE`] and said.
+    fn mend_torn_tail(&self) -> Result<(), String> {
+        let bytes = match std::fs::read(&self.path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => return Err(format!("{}: {e}", self.path.display())),
+        };
+        if bytes.is_empty() || bytes.ends_with(b"\n") {
+            return Ok(());
+        }
+        let start = bytes
+            .iter()
+            .rposition(|&b| b == b'\n')
+            .map(|i| i + 1)
+            .unwrap_or(0);
+        let tail = &bytes[start..];
+        let io = |e: std::io::Error| format!("{}: {e}", self.path.display());
+        if serde_json::from_slice::<Entry>(tail).is_ok() {
+            let mut f = std::fs::OpenOptions::new()
+                .append(true)
+                .open(&self.path)
+                .map_err(io)?;
+            return f.write_all(b"\n").and_then(|_| f.sync_data()).map_err(io);
+        }
+        let aside = self.unreadable_path();
+        let mut side = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&aside)
+            .map_err(|e| format!("{}: {e}", aside.display()))?;
+        side.write_all(tail)
+            .and_then(|_| side.write_all(b"\n"))
+            .and_then(|_| side.sync_data())
+            .map_err(|e| format!("{}: {e}", aside.display()))?;
+        let f = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&self.path)
+            .map_err(io)?;
+        f.set_len(start as u64)
+            .and_then(|_| f.sync_data())
+            .map_err(io)?;
+        eprintln!(
+            "Warning: the last line of {} was an append cut short (a crash or a full disk), \
+             not a whole write; it was moved to {} so the next write does not land on it:\n  {}",
+            self.path.display(),
+            aside.display(),
+            String::from_utf8_lossy(tail)
+                .chars()
+                .take(200)
+                .collect::<String>()
+        );
+        Ok(())
+    }
+
+    /// What the log holds. Fails only when the file cannot be read at all;
+    /// a line that is not an entry is reported in
+    /// [`LogState::unreadable`], not an error.
     pub fn read(&self) -> Result<LogState, String> {
-        let entries = self.entries()?;
-        Ok(state(&entries))
+        let parsed = self.parsed()?;
+        let mut st = state(&parsed.entries);
+        st.unreadable = parsed.unreadable;
+        st.set_aside = std::fs::read_to_string(self.unreadable_path())
+            .map(|t| t.lines().filter(|l| !l.trim().is_empty()).count())
+            .unwrap_or(0);
+        Ok(st)
     }
 
     /// Drops acknowledged ops, keeping pending and rejected ones.
@@ -345,9 +511,30 @@ impl OpLog {
 
     fn rewrite(&self, keep: impl Fn(&Op, Option<&Ack>) -> bool) -> Result<usize, String> {
         let _lock = self.lock()?;
-        let entries = self.entries()?;
-        if entries.is_empty() {
+        let Parsed {
+            entries,
+            unreadable,
+        } = self.parsed()?;
+        if entries.is_empty() && unreadable.is_empty() {
             return Ok(0);
+        }
+        // Lines that are not entries are moved aside, never dropped: one
+        // may be a damaged write someone wants to repair and put back.
+        if !unreadable.is_empty() {
+            let aside = self.unreadable_path();
+            let mut body = String::new();
+            for u in &unreadable {
+                body.push_str(&u.text);
+                body.push('\n');
+            }
+            let mut f = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&aside)
+                .map_err(|e| format!("{}: {e}", aside.display()))?;
+            f.write_all(body.as_bytes())
+                .and_then(|_| f.sync_data())
+                .map_err(|e| format!("{}: {e}", aside.display()))?;
         }
         let mut acks: std::collections::HashMap<&str, &Ack> = std::collections::HashMap::new();
         for e in &entries {
@@ -384,27 +571,12 @@ impl OpLog {
         Ok(dropped)
     }
 
-    fn entries(&self) -> Result<Vec<Entry>, String> {
-        let text = match std::fs::read_to_string(&self.path) {
-            Ok(t) => t,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-            Err(e) => return Err(format!("{}: {e}", self.path.display())),
-        };
-        text.lines()
-            .enumerate()
-            .filter(|(_, l)| !l.trim().is_empty())
-            .map(|(i, l)| {
-                serde_json::from_str::<Entry>(l).map_err(|e| {
-                    format!(
-                        "{} line {} is not a log entry ({e}): {}\n\
-                         Nothing was sent. Fix or delete that line; every other line is one write.",
-                        self.path.display(),
-                        i + 1,
-                        l.chars().take(200).collect::<String>()
-                    )
-                })
-            })
-            .collect()
+    fn parsed(&self) -> Result<Parsed, String> {
+        match std::fs::read(&self.path) {
+            Ok(bytes) => Ok(parse(&String::from_utf8_lossy(&bytes))),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(parse("")),
+            Err(e) => Err(format!("{}: {e}", self.path.display())),
+        }
     }
 
     fn append_lines(&self, lines: &[String]) -> Result<(), String> {
@@ -563,12 +735,42 @@ mod tests {
     }
 
     #[test]
-    fn a_corrupt_line_is_an_error_naming_the_line() {
+    fn a_corrupt_line_is_reported_by_number_and_the_rest_still_read() {
         let dir = tempfile::TempDir::new().unwrap();
         let path = dir.path().join(FILE_NAME);
-        std::fs::write(&path, "{\"entry\":\"op\"\n").unwrap();
-        let err = OpLog::at(&path).read().unwrap_err();
-        assert!(err.contains("line 1"), "{err}");
+        let log = OpLog::at(&path);
+        let a = log.append(status("a", "completed")).unwrap();
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        f.write_all(b"{\"entry\":\"op\"\n").unwrap();
+        let b = log.append(status("b", "completed")).unwrap();
+        let st = log.read().unwrap();
+        assert_eq!(st.pending, vec![a, b]);
+        assert_eq!(st.unreadable.len(), 1);
+        assert_eq!(st.unreadable[0].line, 2);
+        // Compaction moves it aside rather than dropping it.
+        log.compact().unwrap();
+        let st = log.read().unwrap();
+        assert_eq!(
+            (st.pending.len(), st.unreadable.len(), st.set_aside),
+            (2, 0, 1)
+        );
+    }
+
+    #[test]
+    fn a_tail_that_lost_only_its_newline_is_kept() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let path = dir.path().join(FILE_NAME);
+        let log = OpLog::at(&path);
+        let a = log.append(status("a", "completed")).unwrap();
+        let text = std::fs::read_to_string(&path).unwrap();
+        std::fs::write(&path, text.trim_end()).unwrap();
+        let b = log.append(status("b", "completed")).unwrap();
+        let st = log.read().unwrap();
+        assert_eq!(st.pending, vec![a, b]);
+        assert!(st.unreadable.is_empty() && st.set_aside == 0);
     }
 
     #[test]

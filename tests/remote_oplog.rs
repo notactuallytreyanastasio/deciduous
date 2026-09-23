@@ -1394,3 +1394,120 @@ fn concurrent_metadata_ops_on_one_node_keep_every_key() {
         .collect();
     assert!(missing.is_empty(), "lost keys {missing:?}: {meta:?}");
 }
+
+// ---------------------------------------------------------------------------
+// Chapter 28: the log survives crashes. Round-2 findings, one test each,
+// named after the finding.
+// ---------------------------------------------------------------------------
+
+/// A repository whose remote is a port nothing listens on, written by hand
+/// (`remote init` refuses a server it cannot reach): every write queues.
+fn offline_repo(sb: &Sandbox, rel: &str) -> PathBuf {
+    let dir = sb.repo(rel);
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!(
+            "[remote]\nurl = \"{}\"\nworkspace = \"{rel}\"\n",
+            dead_url()
+        ),
+    )
+    .unwrap();
+    dir
+}
+
+fn log_path(dir: &Path) -> PathBuf {
+    dir.join(".deciduous").join("remote-log.jsonl")
+}
+
+fn queued_titles(dir: &Path) -> Vec<String> {
+    log_lines(dir)
+        .iter()
+        .filter(|l| l["kind"] == "create_node")
+        .map(|l| l["title"].as_str().unwrap().to_string())
+        .collect()
+}
+
+// RUST-N6 / BRIDGE-N5: a crash or ENOSPC mid-append leaves a last line with
+// no newline. The next O_APPEND write landed on that same line, the whole
+// line stopped parsing, and the fix the warning gave (delete that line)
+// deleted the new write with it.
+#[test]
+fn rust_n6_a_torn_last_line_does_not_swallow_the_next_write() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "torn");
+    sb.dx_ok(&dir, &["add", "goal", "before-torn"]);
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(log_path(&dir))
+        .unwrap();
+    std::io::Write::write_all(&mut f, br#"{"entry":"op","op_id":"torn"#).unwrap();
+    drop(f);
+
+    let out = sb.dx_ok(&dir, &["add", "goal", "after-torn"]);
+    // Every line of the log is a whole entry again, and the new write is one.
+    assert_eq!(queued_titles(&dir), ["before-torn", "after-torn"], "{out}");
+    // The fragment is kept where it can be read, not deleted, and said.
+    let aside = std::fs::read_to_string(dir.join(".deciduous").join("remote-log.unreadable"))
+        .unwrap_or_default();
+    assert!(
+        aside.contains(r#"{"entry":"op","op_id":"torn"#),
+        "{aside:?}"
+    );
+    assert!(out.contains("remote-log.unreadable"), "{out}");
+    // Nothing was refused by a server: none was reached.
+    assert!(!out.contains("server refused"), "{out}");
+    assert!(out.contains("2 write(s)"), "{out}");
+}
+
+// BRIDGE-N5, the log an older build already damaged: the torn fragment and
+// the whole op after it on one line. The op is intact and is still a write
+// that has not reached the server.
+#[test]
+fn bridge_n5_an_op_glued_to_a_torn_fragment_is_still_sent() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "glued");
+    sb.dx_ok(&dir, &["add", "goal", "glued-op"]);
+    let whole = std::fs::read_to_string(log_path(&dir)).unwrap();
+    std::fs::write(
+        log_path(&dir),
+        format!("{{\"entry\":\"op\",\"op_id\":\"torn{whole}"),
+    )
+    .unwrap();
+
+    let out = sb.dx(&dir, &["remote", "push"]);
+    let all = format!("{}{}", text(&out.stdout), text(&out.stderr));
+    // Push fails (no server), but it fails on the network, with the op
+    // counted, not on the file.
+    assert!(!all.contains("is not a log entry"), "{all}");
+    assert!(all.contains("1 write(s) still waiting"), "{all}");
+    assert!(
+        all.contains("remote-log.unreadable") || all.contains("could not be read"),
+        "{all}"
+    );
+}
+
+// GITSYNC-N6: one unreadable line in the middle of the log. Every later write
+// warned "the server refused it ... 0 write(s) wait", while nothing had been
+// sent and two writes were waiting.
+#[test]
+fn gitsync_n6_a_corrupt_line_is_blamed_on_the_file_and_the_writes_are_counted() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = offline_repo(&sb, "corrupt");
+    sb.dx_ok(&dir, &["add", "goal", "first"]);
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(log_path(&dir))
+        .unwrap();
+    std::io::Write::write_all(&mut f, b"{\"entry\":\"op\",\"op_id\":\"x\"\n").unwrap();
+    drop(f);
+    sb.dx_ok(&dir, &["add", "goal", "corrupt1"]);
+    let out = sb.dx_ok(&dir, &["add", "goal", "corrupt2"]);
+    assert!(!out.contains("server refused"), "{out}");
+    assert!(out.contains("3 write(s)"), "{out}");
+    assert!(
+        out.contains("line 2"),
+        "the unreadable line is named: {out}"
+    );
+    // The advice must not be to delete a line that holds a write.
+    assert!(!out.contains("delete that line"), "{out}");
+}

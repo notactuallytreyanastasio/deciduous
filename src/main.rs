@@ -2369,7 +2369,22 @@ fn main() {
                                 ack.reason.as_deref().unwrap_or("").dimmed()
                             );
                         }
+                        for u in &st.unreadable {
+                            println!("  {}  {}", "unreadable".red(), u.describe());
+                        }
+                        if st.set_aside > 0 {
+                            println!(
+                                "  {} {} line(s) that were not log entries were moved to {}; \
+                                 repair and re-append any that is a write, then delete that file",
+                                "set aside".red(),
+                                st.set_aside,
+                                log.unreadable_path().display()
+                            );
+                        }
                     }
+                    let damaged = log_state
+                        .as_ref()
+                        .is_some_and(|(_, st)| !st.unreadable.is_empty() || st.set_aside > 0);
 
                     let (nodes, edges) = match (db.get_all_nodes(), db.get_all_edges()) {
                         (Ok(n), Ok(e)) => (n, e),
@@ -2496,7 +2511,12 @@ fn main() {
                             .collect(),
                     );
 
-                    if d.is_empty() && docs_here.is_empty() && waiting == 0 && rejected == 0 {
+                    if d.is_empty()
+                        && docs_here.is_empty()
+                        && waiting == 0
+                        && rejected == 0
+                        && !damaged
+                    {
                         println!(
                             "\n{} no writes waiting, and every node, edge and document matches field by field.\n\
                              Themes and tags are not sent to the server, so they are not compared.",
@@ -2573,11 +2593,17 @@ fn main() {
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
-                            eprintln!(
-                                "{waiting} write(s) still waiting in {}.",
-                                log.path().display()
-                            );
+                            match log.read() {
+                                Ok(s) => eprintln!(
+                                    "{} write(s) still waiting in {}.",
+                                    s.pending.len(),
+                                    log.path().display()
+                                ),
+                                Err(e) => eprintln!(
+                                    "{} could not be read to count what is waiting: {e}",
+                                    log.path().display()
+                                ),
+                            }
                             exit(1);
                         }
                     }

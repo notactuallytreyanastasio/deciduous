@@ -759,6 +759,44 @@ pub struct ReplayReport {
     pub already: usize,
     /// Ops the server refused, with its reason. They stay in the log.
     pub rejected: Vec<(crate::oplog::Op, String)>,
+    /// Lines of the log that are not entries: not sent, and moved to the
+    /// side file by the compaction that ends the replay.
+    pub unreadable: Vec<crate::oplog::Unreadable>,
+}
+
+/// Why a replay stopped. The three have different fixes, and saying "the
+/// server refused it" about a line of a local file sent people to the
+/// server for a problem on their own disk.
+#[derive(Debug, Clone)]
+pub enum ReplayError {
+    /// The log file could not be read or written. No server was involved.
+    Log(String),
+    /// No answer: nothing listening, a timeout, DNS. Passes by itself.
+    Unreachable(String),
+    /// The server answered, and not with a report: a refusal of the whole
+    /// request (another repository's workspace, a bad token), a server
+    /// error, or a body that is not an ops report.
+    Server(String),
+    /// Nothing was sent because this machine's settings are incomplete: no
+    /// token, a workspace that could not be resolved.
+    Config(String),
+}
+
+impl std::fmt::Display for ReplayError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReplayError::Log(e)
+            | ReplayError::Unreachable(e)
+            | ReplayError::Server(e)
+            | ReplayError::Config(e) => f.write_str(e),
+        }
+    }
+}
+
+impl From<ReplayError> for String {
+    fn from(e: ReplayError) -> String {
+        e.to_string()
+    }
 }
 
 /// Ops per request. The server takes up to 5,000; a smaller batch keeps one
@@ -844,7 +882,10 @@ impl Remote {
     }
 
     /// Sends ops to `POST /ops` and returns the server's answer for each.
-    pub fn post_ops(&self, ops: &[crate::oplog::Op]) -> Result<Vec<crate::oplog::Ack>, String> {
+    pub fn post_ops(
+        &self,
+        ops: &[crate::oplog::Op],
+    ) -> Result<Vec<crate::oplog::Ack>, ReplayError> {
         #[derive(Deserialize)]
         struct Answer {
             op_id: String,
@@ -867,11 +908,14 @@ impl Remote {
             .timeout(std::time::Duration::from_secs(120))
             .send_json(payload)
             .map_err(|e| match e {
-                ureq::Error::Status(409, _) => self.claim_refused(),
-                e => describe(e),
+                ureq::Error::Status(409, _) => ReplayError::Server(self.claim_refused()),
+                e @ ureq::Error::Status(..) => ReplayError::Server(describe(e)),
+                e @ ureq::Error::Transport(_) => ReplayError::Unreachable(describe(e)),
             })?
             .into_json()
-            .map_err(|e| format!("the server's response was not an ops report: {e}"))?;
+            .map_err(|e| {
+                ReplayError::Server(format!("the server's response was not an ops report: {e}"))
+            })?;
 
         let now = chrono::Utc::now().to_rfc3339();
         let answers: std::collections::HashMap<String, Answer> = reply
@@ -882,22 +926,22 @@ impl Remote {
         ops.iter()
             .map(|op| {
                 let a = answers.get(&op.op_id).ok_or_else(|| {
-                    format!(
+                    ReplayError::Server(format!(
                         "the server answered for {} of {} ops and not for {} ({}); nothing was marked sent",
                         answers.len(),
                         ops.len(),
                         op.op_id,
                         op.body.describe()
-                    )
+                    ))
                 })?;
                 match a.result.as_str() {
                     "applied" | "exists" | "absent" | "duplicate" | "rejected" => {}
                     other => {
-                        return Err(format!(
+                        return Err(ReplayError::Server(format!(
                             "the server answered {other:?} for {} ({}); this CLI knows applied, exists, absent, duplicate and rejected",
                             op.op_id,
                             op.body.describe()
-                        ))
+                        )))
                     }
                 }
                 Ok(crate::oplog::Ack {
@@ -917,13 +961,17 @@ impl Remote {
 /// Acks are written batch by batch, so a failure halfway leaves the first
 /// half marked and the rest pending. A batch the server applied but whose
 /// answer never arrived is sent again next time and answered `duplicate`.
-pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, String> {
-    let state = log.read()?;
-    let mut report = ReplayReport::default();
+pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, ReplayError> {
+    let state = log.read().map_err(ReplayError::Log)?;
+    let mut report = ReplayReport {
+        unreadable: state.unreadable.clone(),
+        ..Default::default()
+    };
+    print_unreadable(&state, log);
 
     for batch in state.pending.chunks(REPLAY_BATCH) {
         let acks = remote.post_ops(batch)?;
-        log.record_acks(&acks)?;
+        log.record_acks(&acks).map_err(ReplayError::Log)?;
         report.sent += batch.len();
         for (op, ack) in batch.iter().zip(&acks) {
             match ack.result.as_str() {
@@ -939,8 +987,31 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
         }
     }
 
-    log.compact()?;
+    log.compact().map_err(ReplayError::Log)?;
     Ok(report)
+}
+
+/// Says which lines of the log could not be read, every time the log is
+/// replayed, until someone deals with them. They are not sent.
+pub fn print_unreadable(state: &crate::oplog::LogState, log: &crate::oplog::OpLog) {
+    use colored::Colorize;
+    if state.unreadable.is_empty() {
+        return;
+    }
+    eprintln!(
+        "{} {} line(s) of {} are not log entries and are not sent (the file is damaged; no server was involved):",
+        "Warning:".yellow(),
+        state.unreadable.len(),
+        log.path().display()
+    );
+    for u in &state.unreadable {
+        eprintln!("  {}", u.describe());
+    }
+    eprintln!(
+        "They are moved to {} the next time the log is compacted. If one is a write you want sent, \
+         repair its JSON and append it to the log again; every other line is sent as usual.",
+        log.unreadable_path().display()
+    );
 }
 
 /// Prints the ops a server refused, loudly, with what to do about them.
@@ -999,36 +1070,48 @@ pub fn replay_after_write(log: &crate::oplog::OpLog) {
     let remote = Remote::resolve(&cfg, &dir);
     let result = remote
         .as_ref()
-        .map_err(|e| e.clone())
+        .map_err(|e| ReplayError::Config(e.clone()))
         .and_then(|r| replay(r, log));
+    let waiting = || match log.read() {
+        Ok(s) => format!("{} write(s)", s.pending.len()),
+        Err(e) => format!("an unknown number of writes (the log could not be read: {e})"),
+    };
     match result {
         Ok(report) => print_rejected(&report.rejected, log),
-        Err(e) => {
-            let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
-            // Only a server that does not answer is an outage that passes by
-            // itself. A refusal (another repository's workspace, a bad
-            // token) or a config problem is answered the same way on every
-            // retry, and "once the server is reachable" sent people to wait
-            // for something that was never going to happen.
-            let unreachable = remote.as_ref().is_ok_and(|r| r.health().is_err());
-            if unreachable {
-                eprintln!(
-                    "{} the local write succeeded but the server did not get it: {e}\n\
-                     {waiting} write(s) queued in {}. They are sent on the next write, or now with \
-                     `deciduous remote push` once the server is reachable.",
-                    "Warning:".yellow(),
-                    log.path().display(),
-                );
-            } else {
-                eprintln!(
-                    "{} the local write succeeded but the server refused it: {e}\n\
-                     {waiting} write(s) wait in {}, and every later write will be refused the same way \
-                     until that is fixed. `deciduous remote status` lists them.",
-                    "Warning:".yellow(),
-                    log.path().display(),
-                );
-            }
-        }
+        // Only a server that does not answer is an outage that passes by
+        // itself. A refusal (another repository's workspace, a bad token)
+        // or a config problem is answered the same way on every retry, and
+        // "once the server is reachable" sent people to wait for something
+        // that was never going to happen.
+        Err(ReplayError::Unreachable(e)) => eprintln!(
+            "{} the local write succeeded but the server did not get it: {e}\n\
+             {} queued in {}. They are sent on the next write, or now with \
+             `deciduous remote push` once the server is reachable.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Server(e)) => eprintln!(
+            "{} the local write succeeded but the server refused it: {e}\n\
+             {} wait in {}, and every later write will be refused the same way \
+             until that is fixed. `deciduous remote status` lists them.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Config(e)) => eprintln!(
+            "{} the local write succeeded but could not be sent: {e}\n{} wait in {}.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
+        Err(ReplayError::Log(e)) => eprintln!(
+            "{} the local write succeeded but the log of writes for the server could not be \
+             read or written, so nothing was sent: {e}\n{} wait in {}.",
+            "Warning:".yellow(),
+            waiting(),
+            log.path().display(),
+        ),
     }
 }
 
