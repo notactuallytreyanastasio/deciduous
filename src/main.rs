@@ -581,14 +581,18 @@ enum RemoteAction {
         #[arg(long)]
         overwrite: bool,
 
-        /// Also make the server's copy of every node `remote status` lists as
-        /// Different match this one, field by field: for an edit whose write
-        /// never reached the log (made before this clone had a [remote], or
-        /// while the log could not be written). Each field is sent with the
-        /// server's current value, so an edit made there since is refused,
-        /// not overwritten.
+        /// Also send what this copy changed and never logged: for each node
+        /// `remote status` lists as Different, the fields the server has
+        /// not changed since this copy last pulled; and deletes made here
+        /// that never became ops (1.0.7, no [remote] yet, a failed append).
+        /// A field the server did change is listed, not sent.
         #[arg(long, conflicts_with_all = ["drop_rejected", "overwrite"])]
         repair: bool,
+
+        /// With --repair: also send the fields it lists as changed on the
+        /// server, over the server's value
+        #[arg(long, requires = "repair")]
+        overwrite_server: bool,
     },
 
     /// Refresh the local database from the server
@@ -2584,10 +2588,86 @@ fn main() {
                             .map(|(_, l)| format!("{l}  (`deciduous remote pull` removes it here)"))
                             .collect(),
                     );
+                    // Deleted here with no op to say so: only --repair
+                    // sends such a delete (round-2 BRIDGE-N2, team T4).
+                    let unsent_deletes: std::collections::HashSet<String> = {
+                        let store = RecordStore::path_for_db(&Database::db_path())
+                            .and_then(|p| RecordStore::open(&p));
+                        match (store, &log_state) {
+                            (Some(store), Some((_, st))) => {
+                                match deciduous::remote::repair_deletes(&nodes, &store, &server, st)
+                                {
+                                    Ok(ops) => ops
+                                        .iter()
+                                        .flat_map(|o| o.change_ids())
+                                        .map(str::to_string)
+                                        .collect(),
+                                    Err(e) => {
+                                        eprintln!("{} {}", "Error:".red(), e);
+                                        exit(1);
+                                    }
+                                }
+                            }
+                            _ => Default::default(),
+                        }
+                    };
                     list(
                         "Only on the server",
-                        d.only_server.iter().map(|(_, l)| l.clone()).collect(),
+                        d.only_server
+                            .iter()
+                            .map(|(cid, l)| {
+                                if unsent_deletes.contains(cid) {
+                                    format!(
+                                        "{l}  (deleted here, and the delete never reached the server: \
+                                         `deciduous remote push --repair` sends it)"
+                                    )
+                                } else {
+                                    l.clone()
+                                }
+                            })
+                            .collect(),
                     );
+                    let base = match deciduous::remote::known_server_state(
+                        &db,
+                        log_state.as_ref().map(|(l, _)| l),
+                    ) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
+                    let server_by_cid: std::collections::HashMap<
+                        &str,
+                        &deciduous::remote::RemoteNode,
+                    > = server
+                        .nodes
+                        .iter()
+                        .filter(|n| n.deleted_at.is_none())
+                        .map(|n| (n.change_id.as_str(), n))
+                        .collect();
+                    let node_by_cid: std::collections::HashMap<&str, &deciduous::db::DecisionNode> =
+                        nodes.iter().map(|n| (n.change_id.as_str(), n)).collect();
+                    let refused_nodes: std::collections::HashSet<String> = log_state
+                        .as_ref()
+                        .map(|(_, st)| {
+                            st.rejected
+                                .iter()
+                                .filter(|(op, a)| !a.is_set_aside() && !settled.contains(&op.op_id))
+                                .filter(|(op, _)| {
+                                    matches!(op.body, deciduous::oplog::OpBody::UpdateNode { .. })
+                                })
+                                .flat_map(|(op, _)| op.body.change_ids())
+                                .map(str::to_string)
+                                .collect()
+                        })
+                        .unwrap_or_default();
+                    let side = |cid: &str| -> deciduous::remote::Moved {
+                        match (node_by_cid.get(cid), server_by_cid.get(cid)) {
+                            (Some(n), Some(sn)) => deciduous::remote::moved(n, sn, base.get(cid)),
+                            _ => deciduous::remote::Moved::Unknown,
+                        }
+                    };
                     list(
                         "Different",
                         d.differ
@@ -2600,16 +2680,29 @@ fn main() {
                                         format!("{k}: here {here}, server {there}")
                                     })
                                     .collect();
+                                let why = if refused_nodes.contains(&nd.change_id) {
+                                    "the server refused this copy's edit: `deciduous remote pull` takes the server's value"
+                                } else {
+                                    match side(&nd.change_id) {
+                                        deciduous::remote::Moved::Here => {
+                                            "edited here since the last pull: `deciduous remote push --repair` sends it"
+                                        }
+                                        deciduous::remote::Moved::Server => {
+                                            "changed on the server since the last pull: `deciduous remote pull` takes it"
+                                        }
+                                        deciduous::remote::Moved::Unknown => {
+                                            "this copy never pulled it, so which side changed is unknown: \
+                                             `deciduous remote pull` takes the server's; \
+                                             `deciduous remote push --repair --overwrite-server` sends this copy's"
+                                        }
+                                    }
+                                };
                                 format!(
                                     "{} \"{}\"  {}  ({})",
                                     nd.change_id.chars().take(8).collect::<String>(),
                                     nd.title,
                                     f.join("; "),
-                                    if nd.here_newer {
-                                        "edited here later: `deciduous remote push --repair` sends it"
-                                    } else {
-                                        "edited on the server later: `deciduous remote pull` takes it"
-                                    }
+                                    why
                                 )
                             })
                             .collect(),
@@ -2657,15 +2750,26 @@ fn main() {
                                     .to_string(),
                             );
                         }
-                        if d.differ.iter().any(|nd| nd.here_newer) {
-                            todo.push("`deciduous remote push --repair` makes the server's fields match this copy's".to_string());
+                        let here_moved = d.differ.iter().any(|nd| {
+                            !refused_nodes.contains(&nd.change_id)
+                                && side(&nd.change_id) == deciduous::remote::Moved::Here
+                        });
+                        if here_moved || !unsent_deletes.is_empty() {
+                            todo.push("`deciduous remote push --repair` sends the edits and deletes made here that never became ops".to_string());
                         }
-                        if !d.only_server.is_empty()
+                        if d.only_server
+                            .iter()
+                            .any(|(c, _)| !unsent_deletes.contains(c))
                             || !d.deleted_on_server.is_empty()
                             || !d.edges_only_server.is_empty()
-                            || d.differ.iter().any(|nd| !nd.here_newer)
+                            || d.differ.iter().any(|nd| {
+                                refused_nodes.contains(&nd.change_id)
+                                    || side(&nd.change_id) != deciduous::remote::Moved::Here
+                            })
                         {
-                            todo.push("`deciduous remote pull` takes the server's side (newer edit wins per node)".to_string());
+                            todo.push(
+                                "`deciduous remote pull` takes the server's side".to_string(),
+                            );
                         }
                         if !nul_at.is_empty() {
                             todo.push("a node holding a NUL has to be changed here before anything can send it".to_string());
@@ -2695,6 +2799,7 @@ fn main() {
                     drop,
                     seed,
                     repair,
+                    overwrite_server,
                 } => {
                     let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
@@ -2835,6 +2940,7 @@ fn main() {
                         }
                     }
 
+                    let mut withheld_repair = false;
                     if repair {
                         let (nodes, server) = match (db.get_all_nodes(), remote.export()) {
                             (Ok(n), Ok(g)) => (n, g),
@@ -2847,36 +2953,90 @@ fn main() {
                                 exit(1);
                             }
                         };
-                        let (ops, skipped) = deciduous::remote::repair_ops(&nodes, &server);
-                        for op in &ops {
+                        let base = match deciduous::remote::known_server_state(&db, Some(&log)) {
+                            Ok(b) => b,
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        };
+                        let mut plan =
+                            deciduous::remote::repair_ops(&nodes, &server, &base, overwrite_server);
+                        let deletes = RecordStore::path_for_db(&Database::db_path())
+                            .and_then(|p| RecordStore::open(&p))
+                            .map(|store| {
+                                log.read().and_then(|st| {
+                                    deciduous::remote::repair_deletes(&nodes, &store, &server, &st)
+                                })
+                            })
+                            .unwrap_or(Ok(Vec::new()));
+                        match deletes {
+                            Ok(d) => {
+                                plan.deletes = d.len();
+                                plan.ops.extend(d);
+                            }
+                            Err(e) => {
+                                eprintln!("{} {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                        if !plan.overwrites.is_empty() {
+                            println!(
+                                "{} {} field(s) differ where the server changed the value since this copy last pulled it, or this copy never pulled it:",
+                                if overwrite_server {
+                                    "Overwriting:".yellow()
+                                } else {
+                                    "Not sent:".yellow()
+                                },
+                                plan.overwrites.len()
+                            );
+                            for o in &plan.overwrites {
+                                println!("  {o}");
+                            }
+                            if !overwrite_server {
+                                println!(
+                                    "  `deciduous remote pull` takes the server's values; `deciduous remote push --repair --overwrite-server` sends these over them."
+                                );
+                                withheld_repair = true;
+                            }
+                        }
+                        for op in &plan.ops {
                             if let Err(e) = log.append(op.clone()) {
                                 eprintln!("{} {}", "Error:".red(), e);
                                 exit(1);
                             }
                         }
-                        match deciduous::remote::replay(&remote, &log) {
-                            Ok(r) => {
-                                println!(
-                                    "{} {} node(s) to match this copy: {} applied, {} already there, {} rejected",
-                                    "Repaired".green(),
-                                    ops.len(),
-                                    r.applied,
-                                    r.already,
-                                    r.rejected.len()
-                                );
-                                deciduous::remote::print_rejected(&r.rejected, &log);
-                                refused += r.rejected.len();
+                        if !plan.ops.is_empty() {
+                            match deciduous::remote::replay(&remote, &log) {
+                                Ok(r) => {
+                                    println!(
+                                        "{} {} op(s) ({} delete(s)) to match this copy: {} applied, {} already there, {} rejected",
+                                        "Repaired".green(),
+                                        plan.ops.len(),
+                                        plan.deletes,
+                                        r.applied,
+                                        r.already,
+                                        r.rejected.len()
+                                    );
+                                    deciduous::remote::print_rejected(&r.rejected, &log);
+                                    refused += r.rejected.len();
+                                }
+                                Err(e) => {
+                                    eprintln!(
+                                        "{} {e}\nThe repair ops wait in {}.",
+                                        "Error:".red(),
+                                        log.path().display()
+                                    );
+                                    exit(1);
+                                }
                             }
-                            Err(e) => {
-                                eprintln!(
-                                    "{} {e}\nThe repair ops wait in {}.",
-                                    "Error:".red(),
-                                    log.path().display()
-                                );
-                                exit(1);
-                            }
+                        } else if plan.overwrites.is_empty() {
+                            println!(
+                                "{} nothing differs that --repair sends",
+                                "Repaired:".green()
+                            );
                         }
-                        for s in &skipped {
+                        for s in &plan.skipped {
                             println!("  {} not repaired: {s}", "note:".yellow());
                         }
                     }
@@ -2906,7 +3066,7 @@ fn main() {
                     // write(s)" let a script carry on as if it had
                     // (round-2 BRIDGE-N10).
                     if !(seed || overwrite) {
-                        if undelivered || refused > 0 {
+                        if undelivered || refused > 0 || withheld_repair {
                             exit(1);
                         }
                         return;

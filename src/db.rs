@@ -1593,6 +1593,17 @@ impl Database {
         )
         .execute(&mut conn)?;
 
+        // The server's copy of each node as of the last `remote pull`: what
+        // `remote push --repair` checks before it sends this copy's fields
+        // over the server's. See `Database::remote_base`.
+        diesel::sql_query(
+            "CREATE TABLE IF NOT EXISTS remote_base (
+                change_id TEXT PRIMARY KEY NOT NULL,
+                node_json TEXT NOT NULL
+            )",
+        )
+        .execute(&mut conn)?;
+
         // Run raw SQL to create tables if they don't exist
         diesel::sql_query(
             r#"
@@ -2339,6 +2350,47 @@ impl Database {
             return Vec::new();
         }
         Self::node_update_body(Some(before), set, metadata)
+    }
+
+    /// The server's copy of every node as it was at the last `remote pull`,
+    /// by change_id: `{"title", "description", "status", "metadata"}`.
+    ///
+    /// `remote push --repair` sends this copy's fields over the server's
+    /// for edits that never became ops. Sent blind (with the server's
+    /// current value as `was`), it overwrote every field an agent had
+    /// changed since, because nothing said which side had moved (round-2
+    /// BRIDGE-N1). A field whose server value still equals this base did
+    /// not change there since the pull, so the difference is this copy's.
+    pub fn remote_base(&self) -> Result<std::collections::HashMap<String, serde_json::Value>> {
+        #[derive(QueryableByName)]
+        struct Row {
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            change_id: String,
+            #[diesel(sql_type = diesel::sql_types::Text)]
+            node_json: String,
+        }
+        let mut conn = self.get_conn()?;
+        let rows: Vec<Row> =
+            diesel::sql_query("SELECT change_id, node_json FROM remote_base").load(&mut conn)?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| Some((r.change_id, serde_json::from_str(&r.node_json).ok()?)))
+            .collect())
+    }
+
+    /// Replaces the base with the server's live nodes, as a pull saw them.
+    pub fn set_remote_base(&self, nodes: &[(String, serde_json::Value)]) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        conn.immediate_transaction(|conn| {
+            diesel::sql_query("DELETE FROM remote_base").execute(conn)?;
+            for (cid, v) in nodes {
+                diesel::sql_query("INSERT INTO remote_base (change_id, node_json) VALUES (?, ?)")
+                    .bind::<diesel::sql_types::Text, _>(cid)
+                    .bind::<diesel::sql_types::Text, _>(v.to_string())
+                    .execute(conn)?;
+            }
+            Ok::<_, DbError>(())
+        })
     }
 
     /// Moves what reconcile queued in remote_outbox to the log, in one

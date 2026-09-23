@@ -82,6 +82,11 @@ pub const FILE_NAME: &str = "remote-log.jsonl";
 /// Where lines of the log that could not be read are moved. See the module
 /// docs.
 pub const UNREADABLE_FILE: &str = "remote-log.unreadable";
+/// Edits the server took from this machine since the last `remote pull`,
+/// one op per line. With the pull's copy of each node (the database's
+/// remote_base) it says what the server held when this machine last knew:
+/// a field that differs from both was changed there by someone else.
+pub const DELIVERED_FILE: &str = "remote-delivered.jsonl";
 
 /// One graph change, as the server's `POST /ops` receives it.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -732,6 +737,59 @@ impl OpLog {
             !(ack.is_some_and(|a| a.is_rejected())
                 && op.body.change_ids().iter().any(|c| change_ids.contains(*c)))
         })
+    }
+
+    pub fn delivered_path(&self) -> PathBuf {
+        self.path.with_file_name(DELIVERED_FILE)
+    }
+
+    /// Records creates and updates the server answered `applied` or
+    /// `exists`: it holds their values now.
+    pub fn record_delivered(&self, ops: &[&Op]) -> Result<(), String> {
+        let ops: Vec<&&Op> = ops
+            .iter()
+            .filter(|o| {
+                matches!(
+                    o.body,
+                    OpBody::CreateNode { .. } | OpBody::UpdateNode { .. }
+                )
+            })
+            .collect();
+        if ops.is_empty() {
+            return Ok(());
+        }
+        let mut text = String::new();
+        for op in ops {
+            text.push_str(&serde_json::to_string(op).map_err(|e| e.to_string())?);
+            text.push('\n');
+        }
+        let path = self.delivered_path();
+        std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&path)
+            .and_then(|mut f| f.write_all(text.as_bytes()))
+            .map_err(|e| format!("{}: {e}", path.display()))
+    }
+
+    /// What [`Self::record_delivered`] kept, oldest first. A line that does
+    /// not parse is skipped: the file only narrows what `--repair` treats
+    /// as this copy's edit, never widens it.
+    pub fn delivered(&self) -> Vec<Op> {
+        std::fs::read_to_string(self.delivered_path())
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|l| serde_json::from_str(l).ok())
+            .collect()
+    }
+
+    /// A pull has just recorded what the server holds.
+    pub fn clear_delivered(&self) -> Result<(), String> {
+        match std::fs::remove_file(self.delivered_path()) {
+            Ok(()) => Ok(()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(format!("{}: {e}", self.delivered_path().display())),
+        }
     }
 
     /// Drops the server's refusals among `op_ids` (never an op this machine

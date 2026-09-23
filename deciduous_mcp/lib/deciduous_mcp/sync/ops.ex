@@ -634,7 +634,7 @@ defmodule DeciduousMcp.Sync.Ops do
         {:rejected,
          "node #{cid} changed on the server after this edit was made (#{detail}). " <>
            "`deciduous remote pull` takes the server's value; " <>
-           "`deciduous remote push --repair` sends this copy's"}
+           "`deciduous remote push --repair --overwrite-server` sends this copy's over it"}
     end
   end
 

@@ -396,6 +396,49 @@ fn stack_an_agents_unlink_reaches_every_clone() {
     }
 }
 
+// ---------------------------------------------------------------- T4 / BRIDGE-N2
+
+/// T4 and BRIDGE-N2: a local delete that never became an op (made before
+/// this clone had a [remote], by 1.0.7, or while the log could not be
+/// written) could never be sent: status listed the node "only on the
+/// server" forever and nothing resolved it. `remote push --repair` sends it
+/// now, guarded like any delete, and a pull does not bring it back.
+#[test]
+fn t4_bridge_n2_a_delete_missing_from_the_log_can_be_sent() {
+    let Some(server) = remote("t4_bridge_n2") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "t4n2");
+    let keep = t.alice.add("goal", "keep");
+    let gone = t.alice.add("goal", "gone");
+    // The delete is made with no [remote] in the config, so no op is
+    // written, which is what 1.0.7 and a failed append both leave.
+    let cfg = t.alice.dir.join(".deciduous/config.toml");
+    let text = std::fs::read_to_string(&cfg).unwrap();
+    let mut doc: toml_edit::DocumentMut = text.parse().unwrap();
+    doc.remove("remote");
+    std::fs::write(&cfg, doc.to_string()).unwrap();
+    t.alice.ok(&["delete", &gone]);
+    std::fs::write(&cfg, text).unwrap();
+
+    let st = t.alice.dx(&["remote", "status"]);
+    assert!(!st.ok(), "status must see the difference:\n{}", st.all());
+    assert!(
+        st.all().contains("--repair"),
+        "status must name the command that sends the delete:\n{}",
+        st.all()
+    );
+    let out = t.alice.dx(&["remote", "push", "--repair"]);
+    assert!(out.ok(), "{}", out.all());
+    assert!(t.server_node(&gone).is_none(), "{}", out.all());
+    assert!(t.server_node(&keep).is_some());
+    t.alice.ok(&["remote", "pull"]);
+    assert!(status_of(&t.alice, &gone).is_none(), "pull resurrected it");
+    let st = t.alice.dx(&["remote", "status"]);
+    assert!(status_says_clean(&st), "{}", st.all());
+}
+
 // ---------------------------------------------------------------- BRIDGE-N9 / N10
 
 /// BRIDGE-N9: the refusal said "`deciduous remote pull` takes the server's
@@ -447,4 +490,97 @@ fn bridge_n9_n10_pull_takes_the_refused_field_and_the_refusal_settles() {
         "every row matches and nothing waits:\n{}",
         st.all()
     );
+}
+
+// ---------------------------------------------------------------- BRIDGE-N1
+
+/// Makes a local write that never becomes an op: the config has no
+/// [remote] while it runs, which is what 1.0.7, a clone before `remote
+/// init`, and a failed append all leave behind.
+fn unlogged(p: &Project, args: &[&str]) {
+    let cfg = p.dir.join(".deciduous/config.toml");
+    let text = std::fs::read_to_string(&cfg).unwrap();
+    let mut doc: toml_edit::DocumentMut = text.parse().unwrap();
+    doc.remove("remote");
+    std::fs::write(&cfg, doc.to_string()).unwrap();
+    let out = p.dx(args);
+    std::fs::write(&cfg, text).unwrap();
+    assert!(out.ok(), "{args:?}: {}", out.all());
+}
+
+/// BRIDGE-N1: `remote push --repair` sent every differing field with the
+/// server's current value as `was`, so an agent's edit this copy had not
+/// pulled was overwritten, title, description and status, and the refusal
+/// message told the user to run it. It now sends only fields the server
+/// has not changed since this copy last pulled, lists the others with both
+/// values, and overwrites them only with --overwrite-server.
+#[test]
+fn bridge_n1_repair_never_overwrites_an_edit_it_has_not_pulled() {
+    let Some(server) = remote("bridge_n1") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "n1");
+    let p = &t.alice;
+    let a = p.add("goal", "A");
+    let b = p.ok(&["add", "goal", "B", "-d", "B local"]);
+    let b = p.change_id_of(created_id(&b));
+    let mut agent = t.agent();
+    let ub = agent.uuid_of(&t.ws, &b);
+    agent.call_ok(
+        "update_node",
+        json!({"node_id": ub, "title": "B by agent", "description": "agent desc", "status": "completed"}),
+    );
+    let ua = agent.uuid_of(&t.ws, &a);
+    agent.call_ok("update_node", json!({"node_id": ua, "status": "active"}));
+    p.dx(&["status", &a, "completed"]);
+
+    let out = p.dx(&["remote", "push", "--repair"]);
+    let sb_ = t.server_node(&b).unwrap();
+    assert_eq!(
+        (sb_["title"].as_str(), sb_["status"].as_str()),
+        (Some("B by agent"), Some("completed")),
+        "--repair reverted the agent's edit:\n{}",
+        out.all()
+    );
+    assert_eq!(t.server_node(&a).unwrap()["status"], json!("active"));
+    assert!(!out.ok(), "withheld fields must show in the exit code");
+    assert!(
+        out.all().contains("B by agent") && out.all().contains("--overwrite-server"),
+        "it must say what it would overwrite:\n{}",
+        out.all()
+    );
+
+    // After a pull, an edit made here with no op is this copy's: --repair
+    // sends it, and nothing else.
+    p.ok(&["remote", "pull"]);
+    unlogged(p, &["status", &b, "abandoned"]);
+    let out = p.dx(&["remote", "push", "--repair"]);
+    assert!(out.ok(), "{}", out.all());
+    let sb_ = t.server_node(&b).unwrap();
+    assert_eq!(sb_["status"], json!("abandoned"));
+    assert_eq!(sb_["title"], json!("B by agent"));
+    let st = p.dx(&["remote", "status"]);
+    assert!(status_says_clean(&st), "{}", st.all());
+
+    // Both at once: the status is this copy's and is sent; the title the
+    // agent changed is listed, kept, and the exit code says so.
+    agent.call_ok(
+        "update_node",
+        json!({"node_id": ub, "title": "B again by agent"}),
+    );
+    unlogged(p, &["status", &b, "active"]);
+    let out = p.dx(&["remote", "push", "--repair"]);
+    assert!(!out.ok(), "{}", out.all());
+    assert!(out.all().contains("B again by agent"), "{}", out.all());
+    assert_eq!(t.server_node(&b).unwrap()["status"], json!("active"));
+    assert_eq!(
+        t.server_node(&b).unwrap()["title"],
+        json!("B again by agent")
+    );
+
+    // --overwrite-server does what it says, for what was listed.
+    let out = p.dx(&["remote", "push", "--repair", "--overwrite-server"]);
+    assert!(out.ok(), "{}", out.all());
+    assert_eq!(t.server_node(&b).unwrap()["title"], json!("B by agent"));
 }

@@ -1361,6 +1361,15 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
         };
         log.record_acks(&acks).map_err(ReplayError::Log)?;
         tally(&mut report, &acks);
+        let delivered: Vec<&crate::oplog::Op> = acks
+            .iter()
+            .filter(|a| a.result == "applied" || a.result == "exists")
+            .filter_map(|a| by_id.get(a.op_id.as_str()).copied())
+            .collect();
+        if let Err(e) = log.record_delivered(&delivered) {
+            // Only narrows what `--repair` will send without asking.
+            eprintln!("Warning: could not record what the server took: {e}");
+        }
         if let Some(e) = stop {
             // What was answered is recorded; the rest waits.
             log.compact().map_err(ReplayError::Log)?;
@@ -2092,23 +2101,45 @@ pub fn documents_only_here(docs: &[crate::db::NodeDocument], server: &RemoteGrap
         .collect()
 }
 
+/// What `remote push --repair` would send, and what it will not.
+#[derive(Debug, Default)]
+pub struct Repair {
+    pub ops: Vec<crate::oplog::OpBody>,
+    /// Differences an op cannot carry: a node type (not settable over
+    /// /ops), a metadata key only the server has (an op merges keys).
+    pub skipped: Vec<String>,
+    /// Fields the server changed since this copy last pulled them (or that
+    /// this copy never pulled): sending this copy's value would overwrite
+    /// that change. Sent only with `--overwrite-server`, and listed either
+    /// way, value by value.
+    pub overwrites: Vec<String>,
+    /// Deletes made here that never became ops (see [`repair_deletes`]).
+    pub deletes: usize,
+}
+
 /// Update ops that make the server's copy of every node both sides hold
 /// match this one, field by field: what `remote push --repair` queues.
 ///
-/// This is the remedy for a write whose op never reached the log: made
-/// before this clone's config had a `[remote]`, made while the log could not
-/// be written, lost to a crash between the local commit and the append, or
-/// in a log someone deleted. Each op says what it replaces (the server's
-/// current value), so an edit an agent makes between `remote status` and
-/// this is refused rather than overwritten.
+/// The remedy for a write whose op never reached the log: made before this
+/// clone's config had a `[remote]`, made while the log could not be
+/// written, or in a log someone deleted.
 ///
-/// Returns the ops and what they cannot carry: a node type (not settable
-/// over /ops) and a metadata key the server has and this copy lacks (an op
-/// merges keys; it does not remove them).
+/// It used to send every differing field, with the server's current value
+/// as `was`. That guards against an edit made between `remote status` and
+/// the repair, and against nothing older: an agent's edit the clone had
+/// not pulled yet was simply overwritten, title, description and status
+/// (round-2 BRIDGE-N1, reached by following the refusal's own advice).
+/// Now a field is sent only when the server's value still equals what this
+/// copy last pulled (`base`, see `Database::remote_base`): then the server
+/// has not changed it, and the difference is this copy's edit. Every other
+/// field is listed with both values and sent only when `overwrite_server`
+/// says so.
 pub fn repair_ops(
     nodes: &[crate::db::DecisionNode],
     server: &RemoteGraph,
-) -> (Vec<crate::oplog::OpBody>, Vec<String>) {
+    base: &std::collections::HashMap<String, Value>,
+    overwrite_server: bool,
+) -> Repair {
     use serde_json::Map;
     let live: std::collections::HashMap<&str, &RemoteNode> = server
         .nodes
@@ -2117,60 +2148,118 @@ pub fn repair_ops(
         .map(|n| (n.change_id.as_str(), n))
         .collect();
     let short = |c: &str| c.chars().take(8).collect::<String>();
-    let mut ops = Vec::new();
-    let mut skipped = Vec::new();
+    let shown = |v: &Value| {
+        let s = match v {
+            Value::Null => "nothing".to_string(),
+            Value::String(s) => format!("{:?}", s.chars().take(60).collect::<String>()),
+            other => other.to_string(),
+        };
+        s.chars().take(80).collect::<String>()
+    };
+    let blank = |v: Value| match v {
+        Value::String(s) if s.is_empty() => Value::Null,
+        v => v,
+    };
+    let mut out = Repair::default();
     for n in nodes {
         let Some(s) = live.get(n.change_id.as_str()) else {
             continue;
         };
-        let (mut set, mut was) = (Map::new(), Map::new());
+        let b = base.get(&n.change_id);
+        // Whether the server's `now` for this field is what this copy last
+        // pulled; `None` when it never pulled the node.
+        let unchanged = |field: &str, now: &Value| -> Option<bool> {
+            let b = b?;
+            let then = match field.strip_prefix("metadata.") {
+                Some(k) => b["metadata"].get(k).cloned().unwrap_or(Value::Null),
+                None => b.get(field).cloned().unwrap_or(Value::Null),
+            };
+            Some(blank(then) == blank(now.clone()))
+        };
+        let mut set = Map::new();
+        let mut was = Map::new();
+        let mut meta = Map::new();
+        let mut was_meta = Map::new();
+        let mut consider = |field: String, here: Value, there: Value| {
+            if blank(here.clone()) == blank(there.clone()) {
+                return;
+            }
+            let safe = unchanged(&field, &there);
+            if safe != Some(true) {
+                out.overwrites.push(format!(
+                    "{} \"{}\" {field}: the server has {}, this copy has {} ({})",
+                    short(&n.change_id),
+                    n.title,
+                    shown(&there),
+                    shown(&here),
+                    if safe.is_none() {
+                        "this copy has never pulled the node, so which side changed is unknown"
+                    } else {
+                        "changed on the server since this copy last pulled it"
+                    }
+                ));
+                if !overwrite_server {
+                    return;
+                }
+            }
+            match field.strip_prefix("metadata.") {
+                Some(k) => {
+                    meta.insert(k.to_string(), here);
+                    was_meta.insert(k.to_string(), there);
+                }
+                None => {
+                    set.insert(field.clone(), here);
+                    was.insert(field, there);
+                }
+            }
+        };
         let opt = |v: &Option<String>| v.clone().map(Value::String).unwrap_or(Value::Null);
-        if n.title != s.title {
-            set.insert("title".into(), Value::String(n.title.clone()));
-            was.insert("title".into(), Value::String(s.title.clone()));
-        }
-        if n.status != s.status {
-            set.insert("status".into(), Value::String(n.status.clone()));
-            was.insert("status".into(), Value::String(s.status.clone()));
-        }
-        if n.description.as_deref().unwrap_or("") != s.description.as_deref().unwrap_or("") {
-            set.insert("description".into(), opt(&n.description));
-            was.insert("description".into(), opt(&s.description));
+        consider(
+            "title".into(),
+            Value::String(n.title.clone()),
+            Value::String(s.title.clone()),
+        );
+        consider(
+            "status".into(),
+            Value::String(n.status.clone()),
+            Value::String(s.status.clone()),
+        );
+        consider(
+            "description".into(),
+            opt(&n.description),
+            opt(&s.description),
+        );
+        let here = metadata_map(n.metadata_json.as_deref());
+        let there = s
+            .metadata
+            .as_ref()
+            .and_then(|m| m.as_object().cloned())
+            .unwrap_or_default();
+        for (k, v) in &here {
+            if there.get(k) != Some(v) {
+                consider(
+                    format!("metadata.{k}"),
+                    v.clone(),
+                    there.get(k).cloned().unwrap_or(Value::Null),
+                );
+            }
         }
         if n.node_type != s.node_type {
-            skipped.push(format!(
+            out.skipped.push(format!(
                 "{} type: here {}, server {} (a node's type cannot be changed over /ops)",
                 short(&n.change_id),
                 n.node_type,
                 s.node_type
             ));
         }
-        let here: Map<String, Value> = n
-            .metadata_json
-            .as_deref()
-            .and_then(|m| serde_json::from_str::<Value>(m).ok())
-            .and_then(|v| v.as_object().cloned())
-            .unwrap_or_default();
-        let there = s
-            .metadata
-            .as_ref()
-            .and_then(|m| m.as_object().cloned())
-            .unwrap_or_default();
-        let (mut meta, mut was_meta) = (Map::new(), Map::new());
-        for (k, v) in &here {
-            if there.get(k) != Some(v) {
-                meta.insert(k.clone(), v.clone());
-                was_meta.insert(k.clone(), there.get(k).cloned().unwrap_or(Value::Null));
-            }
-        }
         for k in there.keys().filter(|k| !here.contains_key(*k)) {
-            skipped.push(format!(
+            out.skipped.push(format!(
                 "{} metadata.{k}: only on the server (an op merges keys and cannot remove one)",
                 short(&n.change_id)
             ));
         }
         if !set.is_empty() || !meta.is_empty() {
-            ops.push(crate::oplog::OpBody::UpdateNode {
+            out.ops.push(crate::oplog::OpBody::UpdateNode {
                 change_id: n.change_id.clone(),
                 set,
                 metadata: meta,
@@ -2179,7 +2268,191 @@ pub fn repair_ops(
             });
         }
     }
-    (ops, skipped)
+    out
+}
+
+/// Deletes made here that never became ops: nodes graph.json holds as a
+/// tombstone, the server holds live, and no op in the log deletes. A delete
+/// from 1.0.7, from before this clone had a `[remote]`, or one whose
+/// append failed could never be sent: `remote status` listed the node
+/// "only on the server" forever and every command left it there (round-2
+/// BRIDGE-N2; team T4). Each op carries what the tombstone recorded the
+/// node as holding, so a node changed on the server since is refused, not
+/// deleted.
+pub fn repair_deletes(
+    nodes: &[crate::db::DecisionNode],
+    store: &RecordStore,
+    server: &RemoteGraph,
+    log: &crate::oplog::LogState,
+) -> Result<Vec<crate::oplog::OpBody>, String> {
+    let here: std::collections::HashSet<&str> =
+        nodes.iter().map(|n| n.change_id.as_str()).collect();
+    let logged: std::collections::HashSet<&str> = log
+        .pending
+        .iter()
+        .chain(log.rejected.iter().map(|(op, _)| op))
+        .filter_map(|op| match &op.body {
+            crate::oplog::OpBody::DeleteNode { change_id, .. } => Some(change_id.as_str()),
+            _ => None,
+        })
+        .collect();
+    let mut out = Vec::new();
+    for s in server.nodes.iter().filter(|n| n.deleted_at.is_none()) {
+        let cid = s.change_id.as_str();
+        if here.contains(cid) || logged.contains(cid) {
+            continue;
+        }
+        let Some(rec) = store.read_node(cid).map_err(|e| e.to_string())? else {
+            continue;
+        };
+        if !rec.is_tombstone() {
+            continue;
+        }
+        let mut was = serde_json::Map::new();
+        was.insert("title".into(), Value::String(rec.title.clone()));
+        was.insert(
+            "description".into(),
+            rec.description
+                .clone()
+                .map(Value::String)
+                .unwrap_or(Value::Null),
+        );
+        was.insert("status".into(), Value::String(rec.status.clone()));
+        out.push(crate::oplog::OpBody::DeleteNode {
+            change_id: rec.change_id.clone(),
+            node_type: Some(rec.node_type.clone()),
+            was,
+            was_metadata: rec
+                .metadata
+                .as_ref()
+                .and_then(|m| m.as_object().cloned())
+                .unwrap_or_default(),
+        });
+    }
+    Ok(out)
+}
+
+/// Which side moved, for a node both hold with different content.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Moved {
+    /// Every differing field still has the server's value from the last
+    /// pull: the edit is this copy's, and `--repair` sends it.
+    Here,
+    /// A differing field changed on the server since the last pull.
+    Server,
+    /// This copy never pulled the node: nothing says which side moved.
+    Unknown,
+}
+
+pub fn moved(n: &crate::db::DecisionNode, s: &RemoteNode, base: Option<&Value>) -> Moved {
+    let Some(b) = base else {
+        return Moved::Unknown;
+    };
+    let blank = |v: Option<&Value>| match v {
+        None | Some(Value::Null) => Value::Null,
+        Some(Value::String(x)) if x.is_empty() => Value::Null,
+        Some(v) => v.clone(),
+    };
+    let there_meta = s.metadata.as_ref().and_then(|m| m.as_object());
+    for f in node_fields_differ(n, s) {
+        let (now, then) = match f.strip_prefix("metadata.") {
+            Some(k) => (
+                blank(there_meta.and_then(|m| m.get(k))),
+                blank(b["metadata"].get(k)),
+            ),
+            None if f == "type" => continue,
+            None => {
+                let now = match f.as_str() {
+                    "title" => Some(Value::String(s.title.clone())),
+                    "status" => Some(Value::String(s.status.clone())),
+                    _ => s.description.clone().map(Value::String),
+                };
+                (blank(now.as_ref()), blank(b.get(&f)))
+            }
+        };
+        if now != then {
+            return Moved::Server;
+        }
+    }
+    Moved::Here
+}
+
+/// What this machine last knew the server to hold, per node: the last
+/// pull's copy, with every create and edit the server took from here since
+/// laid over it.
+pub fn known_server_state(
+    db: &Database,
+    log: Option<&crate::oplog::OpLog>,
+) -> Result<std::collections::HashMap<String, Value>, String> {
+    let mut base = db
+        .remote_base()
+        .map_err(|e| format!("reading what was last pulled: {e}"))?;
+    let Some(log) = log else {
+        return Ok(base);
+    };
+    for op in log.delivered() {
+        match op.body {
+            crate::oplog::OpBody::CreateNode {
+                change_id,
+                title,
+                description,
+                status,
+                metadata,
+                ..
+            } => {
+                base.insert(
+                    change_id,
+                    serde_json::json!({
+                        "title": title, "description": description, "status": status,
+                        "metadata": metadata,
+                    }),
+                );
+            }
+            crate::oplog::OpBody::UpdateNode {
+                change_id,
+                set,
+                metadata,
+                ..
+            } => {
+                let Some(b) = base.get_mut(&change_id).and_then(Value::as_object_mut) else {
+                    continue;
+                };
+                for (k, v) in set {
+                    b.insert(k, v);
+                }
+                let meta = b
+                    .entry("metadata")
+                    .or_insert_with(|| Value::Object(Default::default()));
+                if let Some(m) = meta.as_object_mut() {
+                    for (k, v) in metadata {
+                        m.insert(k, v);
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    Ok(base)
+}
+
+/// The base `remote pull` records: each live server node's fields.
+pub fn base_of(graph: &RemoteGraph) -> Vec<(String, Value)> {
+    graph
+        .nodes
+        .iter()
+        .filter(|n| n.deleted_at.is_none())
+        .map(|n| {
+            (
+                n.change_id.clone(),
+                serde_json::json!({
+                    "title": n.title,
+                    "description": n.description,
+                    "status": n.status,
+                    "metadata": n.metadata.clone().unwrap_or(Value::Object(Default::default())),
+                }),
+            )
+        })
+        .collect()
 }
 
 #[derive(Debug, Default)]
@@ -2326,6 +2599,11 @@ pub fn pull(remote: &Remote, db: &Database, store: &RecordStore) -> Result<PullR
     let result = pull_server_rows(db, store, &graph, &mut written, log.as_ref());
     db.set_oplog(log.clone());
     let mut report = result?;
+    db.set_remote_base(&base_of(&graph))
+        .map_err(|e| format!("recording what was pulled: {e}"))?;
+    if let Some(log) = &log {
+        log.clear_delivered()?;
+    }
     if let Some(log) = &log {
         report.settled = drop_settled(log, db, &graph)?;
     }
