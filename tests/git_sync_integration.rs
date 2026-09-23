@@ -1280,3 +1280,120 @@ fn a_merge_whose_ancestor_will_not_parse_is_refused_not_decided_by_timestamp() {
     alice.ok(&["sync"]);
     assert_eq!(status_of(&alice, &goal.to_string()), "completed");
 }
+
+/// Seed a teammate's node into the graph file, as `git pull` would, without
+/// syncing it into the database.
+fn pull_teammate_node(dev: &Dev, change_id: &str, title: &str) {
+    let mut doc = dev.doc();
+    doc["nodes"][change_id] = node_record(change_id, title, "2026-01-02T00:00:00+00:00");
+    dev.write_doc(&doc);
+}
+
+#[test]
+fn a_prefix_of_a_pulled_but_unsynced_node_is_not_taken_as_a_local_id() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "local one", &[]);
+    alice.add("goal", "local two", &[]);
+    alice.add("goal", "abcd local", &[]);
+    let local_abcd = alice.change_id(3);
+    // After `git pull`, before `deciduous sync`.
+    pull_teammate_node(
+        &alice,
+        "0002abcd-1111-4111-8111-111111111111",
+        "teammate target",
+    );
+
+    let (_, err) = alice.fails(&["delete", "0002"]);
+    assert!(
+        err.contains("local two") && err.contains("0002abcd"),
+        "{err}"
+    );
+    assert!(err.contains("deciduous sync"), "{err}");
+    assert!(alice.node_by_title("local two").is_some());
+    alice.fails(&["show", "0002"]);
+
+    // A hex prefix one local node has and an unsynced one shares.
+    let prefix = &local_abcd[..4];
+    let twin = format!("{prefix}ffff-2222-4222-8222-222222222222");
+    pull_teammate_node(&alice, &twin, "teammate twin");
+    let (_, err) = alice.fails(&["status", prefix, "completed"]);
+    assert!(err.contains("teammate twin"), "{err}");
+    assert_eq!(status_of(&alice, "3"), "pending");
+    // A prefix only the unsynced node has names it, and says to sync.
+    let (_, err) = alice.fails(&["show", &twin[..9]]);
+    assert!(
+        err.contains("deciduous sync") && err.contains("teammate twin"),
+        "{err}"
+    );
+
+    // Explicit local ids still work, and after sync the prefix is the node.
+    alice.ok(&["show", "#2"]);
+    alice.ok(&["sync"]);
+    let shown = alice.ok(&["show", "0002a"]);
+    assert!(shown.contains("teammate target"), "{shown}");
+}
+
+/// One JSON-RPC exchange with a real `deciduous mcp` process.
+fn mcp_call(dev: &Dev, tool: &str, arguments: Value) -> Value {
+    use std::io::{BufRead, BufReader, Write};
+    let mut child = dev
+        .cmd(BIN)
+        .arg("mcp")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let msgs = [
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}),
+        serde_json::json!({"jsonrpc":"2.0","method":"notifications/initialized"}),
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":tool,"arguments":arguments}}),
+    ];
+    for m in msgs {
+        writeln!(stdin, "{m}").unwrap();
+    }
+    drop(stdin);
+    let reader = BufReader::new(child.stdout.take().unwrap());
+    let mut answer = Value::Null;
+    for line in reader.lines() {
+        let v: Value = serde_json::from_str(&line.unwrap()).unwrap();
+        if v["id"] == 2 {
+            answer = v;
+        }
+    }
+    child.wait().unwrap();
+    answer
+}
+
+#[test]
+fn an_mcp_node_id_is_never_truncated_to_another_node() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    alice.add("goal", "A", &[]);
+    alice.add("goal", "B", &[]);
+    // 2^32 + 2 truncated to i32 is 2.
+    let answer = mcp_call(
+        &alice,
+        "delete_node",
+        serde_json::json!({"node_id": 4294967298u64, "dry_run": true}),
+    );
+    let text = answer.to_string();
+    assert!(!text.contains("Would delete node #2"), "{text}");
+    assert!(text.contains("4294967298"), "{text}");
+    assert_eq!(answer["result"]["isError"], true, "{text}");
+
+    // A digit-only CHANGE value sent as a number is looked up like the
+    // string, not taken as a local id.
+    let cid = "37650685-2222-4222-8222-222222222222";
+    pull_teammate_node(&alice, cid, "all digits");
+    alice.ok(&["sync"]);
+    let answer = mcp_call(
+        &alice,
+        "delete_node",
+        serde_json::json!({"node_id": 37650685, "dry_run": true}),
+    );
+    let text = answer.to_string();
+    assert!(text.contains("all digits"), "{text}");
+}

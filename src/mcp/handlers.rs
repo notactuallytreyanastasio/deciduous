@@ -129,10 +129,19 @@ fn require_str<'a>(args: &'a Value, key: &str) -> Result<&'a str, HandlerError> 
 fn get_node_ref(db: &Database, args: &Value, key: &str) -> Result<Option<i32>, HandlerError> {
     match args.get(key) {
         None | Some(Value::Null) => Ok(None),
-        Some(Value::Number(n)) => n
-            .as_i64()
-            .map(|v| Some(v as i32))
-            .ok_or_else(|| HandlerError::from(format!("{key} must be an integer id"))),
+        // A number is resolved like the same digits sent as a string: an
+        // id that does not fit is an error, never truncated onto another
+        // node (4294967298 as i32 is 2), and a digit-only CHANGE value is
+        // looked up as a change_id prefix, as the CLI does.
+        Some(Value::Number(n)) => {
+            let id = n
+                .as_i64()
+                .and_then(|v| i32::try_from(v).ok())
+                .ok_or_else(|| HandlerError::from(format!("{key}: {n} is not a node id")))?;
+            db.resolve_node_ref(&id.to_string())
+                .map(Some)
+                .map_err(|e| HandlerError::from(format!("{key}: {e}")))
+        }
         Some(Value::String(s)) => db
             .resolve_node_ref(s)
             .map(Some)

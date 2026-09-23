@@ -239,7 +239,14 @@ impl McpServer {
 
     fn handle_resume_session(&mut self, args: &Value) -> protocol::ToolCallResult {
         let session_id = match args.get("session_id").and_then(Value::as_i64) {
-            Some(id) => id as i32,
+            Some(id) => match i32::try_from(id) {
+                Ok(id) => id,
+                Err(_) => {
+                    return protocol::tool_result_error(format!(
+                        "session_id: {id} is not a session id"
+                    ))
+                }
+            },
             None => return protocol::tool_result_error("Missing required parameter: session_id"),
         };
 
@@ -284,11 +291,17 @@ impl McpServer {
     }
 
     fn handle_get_session(&self, args: &Value) -> protocol::ToolCallResult {
-        let session_id = args
-            .get("session_id")
-            .and_then(Value::as_i64)
-            .map(|v| v as i32)
-            .or(self.active_session_id);
+        let session_id = match args.get("session_id").and_then(Value::as_i64) {
+            Some(id) => match i32::try_from(id) {
+                Ok(id) => Some(id),
+                Err(_) => {
+                    return protocol::tool_result_error(format!(
+                        "session_id: {id} is not a session id"
+                    ))
+                }
+            },
+            None => self.active_session_id,
+        };
 
         let session_id = match session_id {
             Some(id) => id,

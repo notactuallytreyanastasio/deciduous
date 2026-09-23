@@ -1809,6 +1809,15 @@ impl Database {
         // Digits only, four or more: an id, a change_id prefix, or both.
         let local = self.get_node(id)?;
         let by_prefix = self.change_id_matches(r)?;
+        let pending = self.unsynced_matches(r)?;
+        if !pending.is_empty() {
+            return Err(Self::unsynced_error(
+                r,
+                local.as_ref(),
+                &by_prefix,
+                &pending,
+            ));
+        }
         match (local, by_prefix.as_slice()) {
             (_, []) => Ok(id),
             (None, _) => self.resolve_change_id_prefix(r),
@@ -1853,8 +1862,76 @@ impl Database {
             .load(&mut conn)?)
     }
 
+    /// Live nodes in the graph file whose change_id starts with `r` and
+    /// that the database does not hold yet: pulled, not synced. Resolving
+    /// against the database alone aimed `delete 0002` at local #2 when the
+    /// node meant was a teammate's that the next sync would import.
+    /// (At most six, like [`Self::change_id_matches`].)
+    fn unsynced_matches(&self, r: &str) -> Result<Vec<(String, String)>> {
+        let Some(store) = self.store() else {
+            return Ok(Vec::new());
+        };
+        // An unreadable file is reported by whatever reads or writes it
+        // next; resolving a reference is not the place to fail on it.
+        let Ok(doc) = store.read_doc_all() else {
+            return Ok(Vec::new());
+        };
+        let mut conn = self.get_conn()?;
+        let mut out = Vec::new();
+        for rec in doc
+            .nodes
+            .values()
+            .filter(|n| !n.is_tombstone() && n.change_id.starts_with(r))
+        {
+            let known: i64 = decision_nodes::table
+                .filter(decision_nodes::change_id.eq(&rec.change_id))
+                .count()
+                .get_result(&mut conn)?;
+            if known == 0 {
+                out.push((rec.change_id.clone(), rec.title.clone()));
+                if out.len() == 6 {
+                    break;
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    fn unsynced_error(
+        r: &str,
+        local: Option<&DecisionNode>,
+        in_db: &[DecisionNode],
+        pending: &[(String, String)],
+    ) -> DbError {
+        let mut list: Vec<String> = local
+            .map(|n| format!("local id #{} ({})", n.id, n.title))
+            .into_iter()
+            .collect();
+        list.extend(in_db.iter().take(5).map(Self::describe_match));
+        list.extend(pending.iter().take(5).map(|(cid, title)| {
+            format!(
+                "{} ({}, in graph.json, not synced yet)",
+                cid.chars().take(12).collect::<String>(),
+                title
+            )
+        }));
+        DbError::Validation(format!(
+            "'{}' matches a node that is in graph.json but not in this database yet: {}. Run `deciduous sync` first, then use more change_id characters{}",
+            r,
+            list.join("; "),
+            local.map(|n| format!(" (or '#{}' for the local id)", n.id)).unwrap_or_default()
+        ))
+    }
+
     fn resolve_change_id_prefix(&self, r: &str) -> Result<i32> {
         let matches = self.change_id_matches(r)?;
+        let exact = matches.len() == 1 && matches[0].change_id == r;
+        if !exact {
+            let pending = self.unsynced_matches(r)?;
+            if !pending.is_empty() {
+                return Err(Self::unsynced_error(r, None, &matches, &pending));
+            }
+        }
         match matches.len() {
             0 => Err(DbError::Validation(format!(
                 "No node has a change_id starting with '{}'. Run 'deciduous sync' if a teammate created it.",
