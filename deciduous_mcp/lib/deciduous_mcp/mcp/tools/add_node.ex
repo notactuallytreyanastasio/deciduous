@@ -185,6 +185,17 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
                "#{parent_id} -> #{node.id}."
          }}
 
+      {:error, {:change_id_other_description, cid, node}} ->
+        {:error,
+         %{
+           code: -1,
+           message:
+             "change_id #{cid} is already node #{node.id}, #{node.node_type} " <>
+               "#{inspect(node.title)}, with another description; a retry sends the one " <>
+               "the first call did. Nothing was written. To change it, update_node " <>
+               "#{node.id} with the new description."
+         }}
+
       {:error, {:change_id_deleted, cid, node}} ->
         {:error,
          %{
@@ -220,6 +231,14 @@ defmodule DeciduousMcp.MCP.Tools.AddNode do
 
         %{deleted_at: %DateTime{}} = node ->
           Repo.rollback({:change_id_deleted, cid, node})
+
+        # A description the call sends is part of the write: a retry sends
+        # the same one, and a different one used to be dropped under
+        # created: false (T3). None sent is not compared.
+        %{node_type: type, title: title, description: description} = node
+        when type == attrs.node_type and title == attrs.title and
+               is_binary(attrs.description) and description != attrs.description ->
+          Repo.rollback({:change_id_other_description, cid, node})
 
         %{node_type: type, title: title} = node
         when type == attrs.node_type and title == attrs.title ->

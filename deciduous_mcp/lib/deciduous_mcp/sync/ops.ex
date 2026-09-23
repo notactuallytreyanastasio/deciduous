@@ -345,7 +345,26 @@ defmodule DeciduousMcp.Sync.Ops do
          {:ok, updated_at} <- time(op, "updated_at", cid) do
       Nodes.lock_change_id(ws.id, cid)
 
+      wanted_type = op["node_type"]
+
       case any_node(ws, cid) do
+        # A node of another type is another node. Before add_node took a
+        # change_id, only the CLI and the server made them, and whatever
+        # was under one was this op's node; an agent can now choose one,
+        # and `exists` for an agent's goal answered the CLI's action under
+        # the same id: the CLI believed its action was on the server
+        # (verification of chapter 30). The type is what can be compared:
+        # no path changes a node's type. The title cannot: a seed or a
+        # replayed create carries the title the CLI had, and a retitle on
+        # either side since then is the normal case, not another node.
+        %Node{deleted_at: nil, node_type: type} = node when type != wanted_type ->
+          {:rejected,
+           "create_node #{cid}: change_id #{cid} is already #{article(type)} #{type} " <>
+             "#{inspect(node.title)} on the server; this op creates " <>
+             "#{article(op["node_type"])} #{op["node_type"]} #{inspect(op["title"])}. " <>
+             "Nothing was written. Two nodes cannot share a change_id: one of the two " <>
+             "writers reused it"}
+
         %Node{deleted_at: nil} ->
           {:ok, "exists"}
 
@@ -1068,6 +1087,9 @@ defmodule DeciduousMcp.Sync.Ops do
   defp data_error?(%{pg_code: "22" <> _}), do: true
   defp data_error?(%{pg_code: "23" <> _}), do: true
   defp data_error?(_), do: false
+
+  defp article(<<first, _::binary>>) when first in ~c"aeiou", do: "an"
+  defp article(_), do: "a"
 
   defp describe(reason) when is_binary(reason), do: reason
   defp describe(reason), do: inspect(reason)
