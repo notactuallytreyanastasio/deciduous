@@ -2697,6 +2697,136 @@ impl RecordStore {
         })
     }
 
+    /// The graph file as it is in `rev`, if `rev` has it.
+    fn show_at(&self, rev: &str) -> Option<String> {
+        self.git(&["show", &format!("{}:./{}", rev, self.file_name())])
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+    }
+
+    /// Commits being brought in by a merge, rebase or cherry-pick that has
+    /// stopped, each with the commit its changes are measured from:
+    /// `(label, base, commit)`.
+    fn operations_in_progress(&self) -> Vec<(String, Option<String>, String)> {
+        let rev = |name: &str| {
+            self.git(&[
+                "rev-parse",
+                "-q",
+                "--verify",
+                &format!("{}^{{commit}}", name),
+            ])
+            .filter(|o| o.status.success())
+            .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        };
+        let mut out = Vec::new();
+        // MERGE_HEAD holds one line per head (several for an octopus).
+        let merge_heads = self
+            .git(&[
+                "rev-parse",
+                "--path-format=absolute",
+                "--git-path",
+                "MERGE_HEAD",
+            ])
+            .filter(|o| o.status.success())
+            .and_then(|o| fs::read_to_string(String::from_utf8_lossy(&o.stdout).trim()).ok())
+            .unwrap_or_default();
+        for head in merge_heads.split_whitespace() {
+            let base = self
+                .git(&["merge-base", "HEAD", head])
+                .filter(|o| o.status.success())
+                .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+            out.push((
+                format!("MERGE_HEAD {}", short(head)),
+                base,
+                head.to_string(),
+            ));
+        }
+        for name in ["REBASE_HEAD", "CHERRY_PICK_HEAD"] {
+            if let Some(commit) = rev(name) {
+                let base = rev(&format!("{}^", commit));
+                out.push((format!("{} {}", name, short(&commit)), base, commit));
+            }
+        }
+        out
+    }
+
+    /// A merge (or rebase, or cherry-pick) is in progress and the graph
+    /// file is no longer unmerged in git, but is it the merge result? When
+    /// the driver fails, git keeps our side with no markers; staging it by
+    /// hand clears the unmerged state that `ls-files -u` reports, and the
+    /// next commit records a merge without the other side's records.
+    ///
+    /// So fold each incoming commit's version into the working file with
+    /// the driver's rules, measured from its base. For a file the driver
+    /// did merge, this changes nothing: every change the incoming side made
+    /// is already there. When it does change something, the file was not
+    /// the merge result: `check` reports it, otherwise the fold is written
+    /// and staged, as the driver would have left it.
+    fn fold_in_progress(&self, check: bool) -> io::Result<Vec<ConflictRepair>> {
+        let ops = self.operations_in_progress();
+        if ops.is_empty() {
+            return Ok(Vec::new());
+        }
+        let display = self.path.display().to_string();
+        let current = serde_json::to_value(load_doc(&self.path)?).map_err(io::Error::other)?;
+        let mut merged = current.clone();
+        let mut from = Vec::new();
+        for (label, base, commit) in &ops {
+            let Some(theirs) = self.show_at(commit) else {
+                continue;
+            };
+            let what = |w: &str| format!("the graph file in {} ({})", label, w);
+            let theirs = parse_version(&theirs, &what("incoming"))?;
+            let base = match base.as_deref().and_then(|b| self.show_at(b)) {
+                Some(text) => parse_version(&text, &what("its base"))?,
+                None => None,
+            };
+            let Some(theirs) = theirs else { continue };
+            let next = merge_docs(base.as_ref(), &merged, &theirs)?;
+            let next = serde_json::from_value::<GraphDoc>(next)
+                .and_then(serde_json::to_value)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+            if next != merged {
+                from.push(label.clone());
+                merged = next;
+            }
+        }
+        if from.is_empty() {
+            return Ok(Vec::new());
+        }
+        let what = from.join(", ");
+        if check {
+            return Ok(vec![ConflictRepair {
+                path: display,
+                merged: false,
+                message: Some(format!(
+                    "a merge is in progress and the file is missing records from {}: it was staged without being merged (the merge driver failed or was not found?); `deciduous sync` will merge it",
+                    what
+                )),
+            }]);
+        }
+        let doc: GraphDoc = serde_json::from_value(merged)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e.to_string()))?;
+        self.replace_doc(doc)?;
+        {
+            let mut cache = self.lock();
+            self.flush(&mut cache)?;
+        }
+        let staged = self
+            .git(&["add", "--", &self.file_name()])
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        Ok(vec![ConflictRepair {
+            path: display,
+            merged: true,
+            message: Some(format!(
+                "a merge is in progress and the file was missing records from {}; merged them in and {}",
+                what,
+                if staged { "staged the result" } else { "`git add` failed: stage it yourself" }
+            )),
+        }])
+    }
+
     /// What is wrong with the graph file as git left it, without changing
     /// anything: unmerged in git, or carrying conflict markers.
     pub fn pending_conflicts(&self) -> Vec<ConflictRepair> {
@@ -2709,14 +2839,25 @@ impl RecordStore {
                 ),
             }];
         }
-        self.conflicted_files()
+        let markers: Vec<ConflictRepair> = self
+            .conflicted_files()
             .into_iter()
             .map(|p| ConflictRepair {
                 path: p.display().to_string(),
                 merged: false,
                 message: Some("has conflict markers; `deciduous sync` will merge it".into()),
             })
-            .collect()
+            .collect();
+        if !markers.is_empty() {
+            return markers;
+        }
+        self.fold_in_progress(true).unwrap_or_else(|e| {
+            vec![ConflictRepair {
+                path: self.path.display().to_string(),
+                merged: false,
+                message: Some(e.to_string()),
+            }]
+        })
     }
 
     /// Merge a graph file that git left unmerged or that still carries
@@ -2725,6 +2866,9 @@ impl RecordStore {
     pub fn repair_conflicted_files(&self) -> io::Result<Vec<ConflictRepair>> {
         if let Some(stages) = self.unmerged_stages() {
             return Ok(vec![self.repair_unmerged(stages)?]);
+        }
+        if self.conflicted_files().is_empty() {
+            return self.fold_in_progress(false);
         }
         let mut out = Vec::new();
         for path in self.conflicted_files() {

@@ -1036,3 +1036,131 @@ fn an_edit_is_refused_while_the_graph_file_is_unreadable_instead_of_lost() {
     alice.ok(&["sync"]);
     assert_eq!(status_of(&alice, &dated.to_string()), "completed");
 }
+
+/// Alice and Bob each add a node after a shared one; Bob pushes. Returns
+/// Alice, with her commit made and Bob's not yet pulled.
+fn diverged_alice_and_bob(team: &Team) -> Dev {
+    let alice = team.founder("alice");
+    alice.add("goal", "Shared", &[]);
+    alice.commit_graph("shared");
+    alice.git(&["push", "-q"]);
+    let bob = team.join("bob");
+    bob.add("goal", "Bob only", &[]);
+    bob.commit_graph("bob");
+    bob.git(&["push", "-q"]);
+    alice.add("goal", "Alice only", &[]);
+    alice.commit_graph("alice");
+    alice
+}
+
+/// Run git with only git itself on PATH: the driver is "command not found".
+fn git_without_driver(dev: &Dev, args: &[&str]) -> Output {
+    let gui = Dev {
+        path: base_path(),
+        ..dev.clone_handle()
+    };
+    gui.git_out(args)
+}
+
+#[test]
+fn a_failed_driver_merge_staged_by_hand_is_still_caught_and_finished_by_sync() {
+    let team = Team::new();
+    let alice = diverged_alice_and_bob(&team);
+    let out = git_without_driver(&alice, &["pull", "--no-edit"]);
+    assert!(!out.status.success());
+    // The file parses and shows no markers, so staging it looks right.
+    alice.git(&["add", ".deciduous/graph.json"]);
+    assert!(unmerged(&alice).is_empty());
+    assert!(!alice.graph_text().contains("Bob only"));
+
+    // Committing now would record a merge without Bob's node.
+    let (out, _) = alice.fails(&["sync", "--check"]);
+    assert!(out.contains("MERGE_HEAD"), "{out}");
+    let out = alice.ok(&["sync"]);
+    assert!(out.contains("MERGE_HEAD"), "{out}");
+    assert_eq!(
+        titles(&alice),
+        ["Alice only", "Bob only", "Shared"],
+        "{out}"
+    );
+    let staged = alice.git(&["show", ":.deciduous/graph.json"]);
+    assert!(
+        staged.contains("Bob only"),
+        "the merge result is not staged"
+    );
+    alice.git(&["commit", "-q", "--no-edit"]);
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+    let committed = alice.git(&["show", "HEAD:.deciduous/graph.json"]);
+    assert!(committed.contains("Bob only"));
+}
+
+#[test]
+fn a_failed_driver_rebase_staged_by_hand_is_still_caught_and_finished_by_sync() {
+    let team = Team::new();
+    let alice = diverged_alice_and_bob(&team);
+    let out = git_without_driver(&alice, &["pull", "--rebase"]);
+    assert!(!out.status.success());
+    alice.git(&["add", ".deciduous/graph.json"]);
+    assert!(unmerged(&alice).is_empty());
+
+    let (out, _) = alice.fails(&["sync", "--check"]);
+    assert!(out.contains("REBASE_HEAD"), "{out}");
+    alice.ok(&["sync"]);
+    let staged = alice.git(&["show", ":.deciduous/graph.json"]);
+    assert!(
+        staged.contains("Bob only") && staged.contains("Alice only"),
+        "{staged}"
+    );
+    let out = alice
+        .cmd("git")
+        .args(["-c", "core.editor=true", "rebase", "--continue"])
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let committed = alice.git(&["show", "HEAD:.deciduous/graph.json"]);
+    assert!(committed.contains("Bob only") && committed.contains("Alice only"));
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+}
+
+#[test]
+fn a_merge_stopped_on_another_file_leaves_a_driver_merged_graph_alone() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    fs::write(alice.dir.join("notes.txt"), "base\n").unwrap();
+    alice.git(&["add", "notes.txt"]);
+    alice.add("goal", "Shared", &[]);
+    alice.commit_graph("shared");
+    alice.git(&["push", "-q"]);
+    let bob = team.join("bob");
+    bob.ok(&["status", "1", "completed"]);
+    bob.add("goal", "Bob only", &[]);
+    fs::write(bob.dir.join("notes.txt"), "bob\n").unwrap();
+    bob.git(&["add", "notes.txt"]);
+    bob.commit_graph("bob");
+    bob.git(&["push", "-q"]);
+    alice.ok(&["prompt", "1", "alice's prompt"]);
+    alice.add("goal", "Alice only", &[]);
+    fs::write(alice.dir.join("notes.txt"), "alice\n").unwrap();
+    alice.git(&["add", "notes.txt"]);
+    alice.commit_graph("alice");
+
+    // The driver merges graph.json; notes.txt stops the merge.
+    let out = alice.git_out(&["pull", "--no-edit"]);
+    assert!(!out.status.success());
+    assert!(unmerged(&alice).is_empty());
+    let merged = alice.graph_text();
+    let out = alice.ok(&["sync"]);
+    assert!(!out.contains("MERGE_HEAD"), "{out}");
+    assert_eq!(titles(&alice), ["Alice only", "Bob only", "Shared"]);
+    assert_eq!(status_of(&alice, "1"), "completed");
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+    // Nothing but what sync imported changed the file.
+    assert_eq!(alice.graph_text(), merged);
+}
