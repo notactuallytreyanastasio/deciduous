@@ -157,6 +157,39 @@ pub enum OpBody {
         weight: Option<f64>,
         created_at: String,
     },
+    /// A document attached to a node. The bytes go to `PUT /blob/:hash`
+    /// before the op (see `remote::replay`).
+    AttachDocument {
+        change_id: String,
+        node_change_id: String,
+        content_hash: String,
+        original_filename: String,
+        storage_filename: String,
+        mime_type: String,
+        file_size: i64,
+        #[serde(default)]
+        description: Option<String>,
+        description_source: String,
+        #[serde(default)]
+        attached_by: Option<String>,
+        attached_at: String,
+    },
+    /// Detaching is how a pasted secret leaves the shared graph; it used to
+    /// stay on the server (round-2 BRIDGE-N4).
+    DetachDocument {
+        change_id: String,
+        node_change_id: String,
+    },
+    /// Applied only while the server's description is `was_description`.
+    DescribeDocument {
+        change_id: String,
+        node_change_id: String,
+        #[serde(default)]
+        description: Option<String>,
+        description_source: String,
+        #[serde(default)]
+        was_description: Option<String>,
+    },
     /// Ordered against a link of the same edge by when each was made: the
     /// server refuses an unlink older than the edge it holds. The unlink's
     /// time is the op's `at`, or `deleted_at` when the unlink came from
@@ -187,6 +220,19 @@ impl OpBody {
                 to_change_id,
                 ..
             } => vec![from_change_id, to_change_id],
+            OpBody::AttachDocument { node_change_id, .. }
+            | OpBody::DetachDocument { node_change_id, .. }
+            | OpBody::DescribeDocument { node_change_id, .. } => vec![node_change_id],
+        }
+    }
+
+    /// The document this op writes, for a document op.
+    pub fn document(&self) -> Option<&str> {
+        match self {
+            OpBody::AttachDocument { change_id, .. }
+            | OpBody::DetachDocument { change_id, .. }
+            | OpBody::DescribeDocument { change_id, .. } => Some(change_id),
+            _ => None,
         }
     }
 
@@ -237,6 +283,25 @@ impl OpBody {
                 short(from_change_id),
                 short(to_change_id)
             ),
+            OpBody::AttachDocument {
+                original_filename,
+                node_change_id,
+                ..
+            } => format!(
+                "attach \"{original_filename}\" to {}",
+                short(node_change_id)
+            ),
+            OpBody::DetachDocument {
+                change_id,
+                node_change_id,
+            } => format!(
+                "detach document {} from {}",
+                short(change_id),
+                short(node_change_id)
+            ),
+            OpBody::DescribeDocument { change_id, .. } => {
+                format!("describe document {}", short(change_id))
+            }
         }
     }
 }

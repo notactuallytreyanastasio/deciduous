@@ -1238,6 +1238,9 @@ impl Held {
                 edge_type,
                 ..
             } => vec![format!("e:{from_change_id}|{to_change_id}|{edge_type}")],
+            AttachDocument { change_id, .. }
+            | DetachDocument { change_id, .. }
+            | DescribeDocument { change_id, .. } => vec![format!("d:{change_id}")],
         }
     }
 
@@ -1257,6 +1260,9 @@ impl Held {
         {
             k.push(format!("n:{from_change_id}"));
             k.push(format!("n:{to_change_id}"));
+        }
+        if op.body.document().is_some() {
+            k.extend(op.body.change_ids().iter().map(|c| format!("n:{c}")));
         }
         k
     }
@@ -1354,6 +1360,7 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
     tally(&mut report, &behind);
 
     for batch in sendable.chunks(REPLAY_BATCH) {
+        upload_attached(remote, log, batch);
         let (acks, stop) = match remote.post_ops(batch) {
             Ok(acks) => (acks, None),
             Err(ReplayError::Failed(e)) => isolate(remote, batch, &e, &mut held),
@@ -1379,6 +1386,37 @@ pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport
 
     log.compact().map_err(ReplayError::Log)?;
     Ok(report)
+}
+
+/// Sends the bytes of every document an op in `batch` attaches, before
+/// the ops: the server keeps an attach whose bytes have not arrived as
+/// `content_missing`, and marks them found when they do. A file that
+/// cannot be read here is said, not hidden; the attach is still sent.
+fn upload_attached(remote: &Remote, log: &crate::oplog::OpLog, batch: &[crate::oplog::Op]) {
+    let Some(dir) = log.path().parent().map(|p| p.join("documents")) else {
+        return;
+    };
+    for op in batch {
+        let crate::oplog::OpBody::AttachDocument {
+            content_hash,
+            storage_filename,
+            mime_type,
+            original_filename,
+            ..
+        } = &op.body
+        else {
+            continue;
+        };
+        let sent = std::fs::read(dir.join(storage_filename))
+            .map_err(|e| format!("{}: {e}", dir.join(storage_filename).display()))
+            .and_then(|bytes| remote.upload_blob(content_hash, &bytes, Some(mime_type)));
+        if let Err(e) = sent {
+            eprintln!(
+                "Warning: the bytes of \"{original_filename}\" did not reach the server ({e}); \
+                 it is attached there without its content until they do (`deciduous remote push --seed` sends them)"
+            );
+        }
+    }
 }
 
 /// At most this many ops, in a row, that the server fails on even when sent
@@ -1629,6 +1667,11 @@ pub fn settled_refusals(
                 edge_type,
                 ..
             } => same_edge(from_change_id, to_change_id, edge_type),
+            // Documents are not compared field by field here; a refusal of
+            // one stays until someone drops it.
+            OpBody::AttachDocument { .. }
+            | OpBody::DetachDocument { .. }
+            | OpBody::DescribeDocument { .. } => false,
         })
         .map(|(op, _)| op.clone())
         .collect()
@@ -2330,6 +2373,36 @@ pub fn repair_deletes(
         });
     }
     Ok(out)
+}
+
+/// Documents detached here that the server still lists, with no detach in
+/// the log: a detach from before documents went through the log (round-2
+/// BRIDGE-N4). `--repair` sends these.
+pub fn repair_detaches(
+    docs: &[crate::db::NodeDocument],
+    server: &RemoteGraph,
+    log: &crate::oplog::LogState,
+) -> Vec<crate::oplog::OpBody> {
+    let there: std::collections::HashSet<&str> = server
+        .documents
+        .iter()
+        .filter_map(|d| d["change_id"].as_str())
+        .collect();
+    let logged: std::collections::HashSet<&str> = log
+        .pending
+        .iter()
+        .chain(log.rejected.iter().map(|(op, _)| op))
+        .filter(|op| matches!(op.body, crate::oplog::OpBody::DetachDocument { .. }))
+        .filter_map(|op| op.body.document())
+        .collect();
+    docs.iter()
+        .filter(|d| d.detached_at.is_some())
+        .filter(|d| there.contains(d.change_id.as_str()) && !logged.contains(d.change_id.as_str()))
+        .map(|d| crate::oplog::OpBody::DetachDocument {
+            change_id: d.change_id.clone(),
+            node_change_id: d.node_change_id.clone(),
+        })
+        .collect()
 }
 
 /// Which side moved, for a node both hold with different content.

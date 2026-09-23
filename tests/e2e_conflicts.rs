@@ -584,3 +584,73 @@ fn bridge_n1_repair_never_overwrites_an_edit_it_has_not_pulled() {
     assert!(out.ok(), "{}", out.all());
     assert_eq!(t.server_node(&b).unwrap()["title"], json!("B by agent"));
 }
+
+// ---------------------------------------------------------------- BRIDGE-N4
+
+/// The workspace's attached documents (the test's workspace has one node
+/// that holds any).
+fn server_docs(t: &Team) -> Vec<Value> {
+    t.server.export(&t.ws)["documents"]
+        .as_array()
+        .unwrap()
+        .to_vec()
+}
+
+/// BRIDGE-N4: documents bypassed the log. An attach reached the server
+/// only through `--seed`, and a detach or a new description never did: a
+/// document detached to take a pasted secret out of the graph stayed on
+/// the shared server, and `remote status` said nothing.
+#[test]
+fn bridge_n4_attach_describe_and_detach_go_through_the_log() {
+    let Some(server) = remote("bridge_n4") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let t = team(&sb, &server, "n4");
+    let p = &t.alice;
+    p.add("goal", "holds a file");
+    std::fs::write(p.dir.join("secret.txt"), "hunter2\n").unwrap();
+    p.ok(&["doc", "attach", "1", "secret.txt"]);
+    let docs = server_docs(&t);
+    assert_eq!(docs.len(), 1, "the attach did not reach the server");
+    assert_eq!(docs[0]["original_filename"], json!("secret.txt"));
+    let id = docs[0]["id"].as_str().unwrap();
+    let got = t.server.request(
+        "GET",
+        &format!("/documents/{id}"),
+        Some(&t.server.bearer()),
+        &[("x-deciduous-workspace", t.ws.as_str())],
+        None,
+    );
+    assert!(
+        got.status == 200 && got.body.contains("hunter2"),
+        "the bytes did not go with it: {} {}",
+        got.status,
+        got.body
+    );
+
+    p.ok(&["doc", "describe", "1", "what it is"]);
+    assert_eq!(server_docs(&t)[0]["description"], json!("what it is"));
+
+    p.ok(&["doc", "detach", "1"]);
+    assert!(
+        server_docs(&t).is_empty(),
+        "the detached document is still on the server"
+    );
+    let st = p.dx(&["remote", "status"]);
+    assert!(status_says_clean(&st), "{}", st.all());
+
+    // A detach from before documents went through the log: status names
+    // it, --repair sends it.
+    std::fs::write(p.dir.join("second.txt"), "another\n").unwrap();
+    p.ok(&["doc", "attach", "1", "second.txt"]);
+    assert_eq!(server_docs(&t).len(), 1);
+    unlogged(p, &["doc", "detach", "2"]);
+    let st = p.dx(&["remote", "status"]);
+    assert!(!st.ok(), "{}", st.all());
+    assert!(st.all().contains("Documents detached here"), "{}", st.all());
+    p.ok(&["remote", "push", "--repair"]);
+    assert!(server_docs(&t).is_empty());
+    let st = p.dx(&["remote", "status"]);
+    assert!(status_says_clean(&st), "{}", st.all());
+}

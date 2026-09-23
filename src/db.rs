@@ -3997,9 +3997,24 @@ impl Database {
             .get_node(node_id)?
             .ok_or_else(|| DbError::Validation(format!("Node {} not found", node_id)))?;
 
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
         let change_id = Uuid::new_v4().to_string();
+
+        let body = self.oplog().map(|_| crate::oplog::OpBody::AttachDocument {
+            change_id: change_id.clone(),
+            node_change_id: node.change_id.clone(),
+            content_hash: content_hash.to_string(),
+            original_filename: original_filename.to_string(),
+            storage_filename: storage_filename.to_string(),
+            mime_type: mime_type.to_string(),
+            file_size: file_size as i64,
+            description: description.map(str::to_string),
+            description_source: server_description_source(description_source),
+            attached_by: attached_by.map(str::to_string),
+            attached_at: now.clone(),
+        });
 
         let new_doc = NewNodeDocument {
             change_id: &change_id,
@@ -4017,15 +4032,19 @@ impl Database {
             detached_at: None,
         };
 
-        diesel::insert_into(node_documents::table)
-            .values(&new_doc)
-            .execute(&mut conn)?;
-
-        let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
-            "last_insert_rowid()",
-        ))
-        .first(&mut conn)?;
-
+        let (id, queued) = conn.immediate_transaction(|conn| {
+            diesel::insert_into(node_documents::table)
+                .values(&new_doc)
+                .execute(conn)?;
+            let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
+                "last_insert_rowid()",
+            ))
+            .first(conn)?;
+            let queued = self.queue_in_tx(conn, body.into_iter().collect())?;
+            Ok::<_, DbError>((id, queued))
+        })?;
+        drop(conn);
+        self.to_log(queued);
         Ok(id)
     }
 
@@ -4070,23 +4089,61 @@ impl Database {
         description: &str,
         source: &str,
     ) -> Result<()> {
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
-        diesel::update(node_documents::table.filter(node_documents::id.eq(doc_id)))
-            .set((
-                node_documents::description.eq(description),
-                node_documents::description_source.eq(source),
-            ))
-            .execute(&mut conn)?;
+        let logged = self.oplog().is_some();
+        let queued = conn.immediate_transaction(|conn| {
+            let before = node_documents::table
+                .filter(node_documents::id.eq(doc_id))
+                .first::<NodeDocument>(conn)
+                .optional()?;
+            diesel::update(node_documents::table.filter(node_documents::id.eq(doc_id)))
+                .set((
+                    node_documents::description.eq(description),
+                    node_documents::description_source.eq(source),
+                ))
+                .execute(conn)?;
+            let body = before
+                .filter(|_| logged)
+                .map(|d| crate::oplog::OpBody::DescribeDocument {
+                    change_id: d.change_id,
+                    node_change_id: d.node_change_id,
+                    description: Some(description.to_string()),
+                    description_source: server_description_source(source),
+                    was_description: d.description,
+                });
+            self.queue_in_tx(conn, body.into_iter().collect())
+        })?;
+        drop(conn);
+        self.to_log(queued);
         Ok(())
     }
 
     /// Soft-delete (detach) a document
     pub fn detach_document(&self, doc_id: i32) -> Result<()> {
+        let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
-        diesel::update(node_documents::table.filter(node_documents::id.eq(doc_id)))
-            .set(node_documents::detached_at.eq(&now))
-            .execute(&mut conn)?;
+        let logged = self.oplog().is_some();
+        let queued = conn.immediate_transaction(|conn| {
+            let before = node_documents::table
+                .filter(node_documents::id.eq(doc_id))
+                .first::<NodeDocument>(conn)
+                .optional()?;
+            diesel::update(node_documents::table.filter(node_documents::id.eq(doc_id)))
+                .set(node_documents::detached_at.eq(&now))
+                .execute(conn)?;
+            // Detaching twice tells the server nothing new.
+            let body = before
+                .filter(|d| logged && d.detached_at.is_none())
+                .map(|d| crate::oplog::OpBody::DetachDocument {
+                    change_id: d.change_id,
+                    node_change_id: d.node_change_id,
+                });
+            self.queue_in_tx(conn, body.into_iter().collect())
+        })?;
+        drop(conn);
+        self.to_log(queued);
         Ok(())
     }
 
@@ -4679,6 +4736,15 @@ pub struct NewNodeDocument<'a> {
     pub attached_at: &'a str,
     pub attached_by: Option<&'a str>,
     pub detached_at: Option<&'a str>,
+}
+
+/// The server's name for how a description was written (`none`, `user`,
+/// `ai`): the CLI stores "manual" for a description typed in.
+fn server_description_source(source: &str) -> String {
+    match source {
+        "none" | "user" | "ai" => source.to_string(),
+        _ => "user".to_string(),
+    }
 }
 
 /// Queryable node document attachment

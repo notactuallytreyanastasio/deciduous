@@ -553,4 +553,64 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
     [t] = export(token, ws)["edge_tombstones"]
     assert {t["from_change_id"], t["to_change_id"], t["edge_type"]} == {"a", "b", "leads_to"}
   end
+
+  test "bridge_n4: attach, describe and detach reach the server as ops", %{token: token} do
+    ws = "ops-n4-" <> Integer.to_string(System.unique_integer([:positive]))
+    {200, _} = ops(token, ws, [create("n", "n")])
+    hash = :crypto.hash(:sha256, "secret") |> Base.encode16(case: :lower)
+
+    attach = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "attach_document",
+      change_id: "d1",
+      node_change_id: "n",
+      content_hash: hash,
+      original_filename: "secret.txt",
+      storage_filename: hash <> ".txt",
+      mime_type: "text/plain",
+      file_size: 6,
+      description: nil,
+      description_source: "none",
+      attached_at: "2016-02-01T00:00:00Z"
+    }
+
+    {200, %{"results" => [r]}} = ops(token, ws, [attach])
+    assert r["result"] == "applied", inspect(r)
+    [d] = export(token, ws)["documents"]
+    assert d["original_filename"] == "secret.txt"
+
+    describe = fn new, was ->
+      %{
+        op_id: Ecto.UUID.generate(),
+        kind: "describe_document",
+        change_id: "d1",
+        description: new,
+        description_source: "user",
+        was_description: was
+      }
+    end
+
+    {200, %{"results" => [r]}} = ops(token, ws, [describe.("first", nil)])
+    assert r["result"] == "applied", inspect(r)
+    {200, %{"results" => [r]}} = ops(token, ws, [describe.("stale", nil)])
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ ~s(the server has "first")
+
+    detach = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "detach_document",
+      change_id: "d1",
+      at: "2016-02-01T00:00:09Z"
+    }
+
+    {200, %{"results" => [r]}} = ops(token, ws, [detach])
+    assert r["result"] == "applied", inspect(r)
+    assert export(token, ws)["documents"] == []
+
+    {200, %{"results" => [r]}} =
+      ops(token, ws, [%{attach | op_id: Ecto.UUID.generate()}])
+
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "was detached on the server"
+  end
 end

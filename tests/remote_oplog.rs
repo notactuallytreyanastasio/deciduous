@@ -1091,7 +1091,14 @@ fn an_attached_document_is_reported_and_seeded_with_its_bytes() {
     let dir = sb.remote_repo("doc", &url, &ws);
     sb.dx_ok(&dir, &["add", "goal", "has a spec"]);
     std::fs::write(dir.join("spec.txt"), "the spec, in full\n").unwrap();
+    // An attach is an op now and reaches the server by itself (round-2
+    // BRIDGE-N4). One made with no [remote] (before `remote init`, or by
+    // 1.0.7) is what status reports and --seed sends.
+    let cfg = dir.join(".deciduous").join("config.toml");
+    let saved = std::fs::read_to_string(&cfg).unwrap();
+    std::fs::write(&cfg, "").unwrap();
     sb.dx_ok(&dir, &["doc", "attach", "1", "spec.txt"]);
+    std::fs::write(&cfg, saved).unwrap();
 
     let out = text(&sb.dx(&dir, &["remote", "status"]).stdout);
     assert!(!out.contains("In sync"), "{out}");

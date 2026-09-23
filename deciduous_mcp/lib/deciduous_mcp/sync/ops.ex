@@ -40,7 +40,7 @@ defmodule DeciduousMcp.Sync.Ops do
 
   alias DeciduousMcp.Graph.{Edges, Nodes, Workspaces}
   alias DeciduousMcp.Repo
-  alias DeciduousMcp.Schema.{Edge, Node}
+  alias DeciduousMcp.Schema.{Document, Edge, Node}
   alias DeciduousMcp.Sync.Import
 
   @max_ops 5_000
@@ -432,10 +432,145 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  # --- Documents --------------------------------------------------------------
+  #
+  # Attachments went to the server only through `/import` (`remote push
+  # --seed`), and a detach or a new description never did: a document
+  # detached to take a pasted secret out of the graph stayed on the shared
+  # server with nothing to say so (round-2 BRIDGE-N4). They are ops now,
+  # like every other write. The bytes go first, by `PUT /blob/:hash`; an
+  # attach whose bytes have not arrived is kept with `content_missing`, as
+  # /import keeps one, and the upload that follows marks them found.
+
+  defp apply_op(ws, "attach_document", op) do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         {:ok, node_cid} <- change_id(op, "node_change_id"),
+         {:ok, hash} <- content_hash(op),
+         {:ok, node} <- live_node(ws, node_cid) do
+      case document(ws, cid) do
+        %Document{detached_at: nil} ->
+          {:ok, "exists"}
+
+        %Document{} ->
+          {:rejected, "document #{cid} was detached on the server; it is not attached again"}
+
+        nil ->
+          now = DateTime.utc_now()
+
+          %Document{}
+          |> Document.changeset(%{
+            change_id: cid,
+            node_id: node.id,
+            workspace_id: ws.id,
+            content_hash: hash,
+            original_filename: op["original_filename"],
+            storage_filename: op["storage_filename"],
+            mime_type: op["mime_type"] || "application/octet-stream",
+            file_size: op["file_size"],
+            description: op["description"],
+            description_source: op["description_source"] || "none",
+            attached_by: op["attached_by"],
+            content_missing: not DeciduousMcp.Storage.exists?(hash)
+          })
+          |> Ecto.Changeset.put_change(:inserted_at, Import.parse_time(op["attached_at"], now))
+          |> Repo.insert()
+          |> case do
+            {:ok, _} -> {:ok, "applied"}
+            {:error, cs} -> {:rejected, "attach_document #{cid}: #{errors(cs)}"}
+          end
+      end
+    end
+  end
+
+  defp apply_op(ws, "detach_document", op) do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         {:ok, at} <- instant(op, "at") do
+      case document(ws, cid, lock: true) do
+        %Document{detached_at: nil} = d ->
+          d
+          |> Ecto.Changeset.change(detached_at: at)
+          |> Repo.update()
+          |> case do
+            {:ok, _} -> {:ok, "applied"}
+            {:error, cs} -> {:rejected, "detach_document #{cid}: #{errors(cs)}"}
+          end
+
+        _ ->
+          {:ok, "absent"}
+      end
+    end
+  end
+
+  # Compare-and-set on the description, like update_node on a field.
+  defp apply_op(ws, "describe_document", op) do
+    with {:ok, cid} <- change_id(op, "change_id"),
+         :ok <- has_key(op, "was_description") do
+      new = op["description"]
+
+      case document(ws, cid, lock: true) do
+        nil ->
+          {:rejected, "no document #{cid} on the server"}
+
+        %Document{detached_at: %DateTime{}} ->
+          {:rejected, "document #{cid} was detached on the server"}
+
+        %Document{description: ^new} ->
+          {:ok, "exists"}
+
+        %Document{description: now} = d ->
+          if now == op["was_description"] do
+            d
+            |> Document.changeset(%{
+              description: new,
+              description_source: op["description_source"] || "user"
+            })
+            |> Repo.update()
+            |> case do
+              {:ok, _} -> {:ok, "applied"}
+              {:error, cs} -> {:rejected, "describe_document #{cid}: #{errors(cs)}"}
+            end
+          else
+            {:rejected,
+             "document #{cid} changed on the server after this edit was made (description: " <>
+               "the server has #{inspect(now)}, this edit changed #{inspect(op["was_description"])} " <>
+               "to #{inspect(new)})"}
+          end
+      end
+    end
+  end
+
   defp apply_op(_ws, kind, _op) do
     {:rejected,
      "unknown op kind #{inspect(kind)}; this server applies create_node, update_node, " <>
-       "delete_node, create_edge and delete_edge. A newer CLI than this server?"}
+       "delete_node, create_edge, delete_edge, attach_document, detach_document and " <>
+       "describe_document. A newer CLI than this server?"}
+  end
+
+  defp document(ws, cid, opts \\ []) do
+    q = from d in Document, where: d.workspace_id == ^ws.id and d.change_id == ^cid
+    q = if opts[:lock], do: lock(q, "FOR UPDATE"), else: q
+    Repo.one(q)
+  end
+
+  defp content_hash(op) do
+    case op["content_hash"] do
+      h when is_binary(h) ->
+        if String.match?(h, ~r/\A[0-9a-fA-F]{64}\z/),
+          do: {:ok, String.downcase(h)},
+          else: {:rejected, "attach_document needs a sha256 content_hash, got #{inspect(h)}"}
+
+      other ->
+        {:rejected, "attach_document needs a sha256 content_hash, got #{inspect(other)}"}
+    end
+  end
+
+  defp has_key(op, key) do
+    if Map.has_key?(op, key),
+      do: :ok,
+      else:
+        {:rejected,
+         "#{op["kind"]} #{op["change_id"]} does not say what it replaced (#{key}); without it " <>
+           "a newer edit on the server would be overwritten unseen"}
   end
 
   # --- Helpers ----------------------------------------------------------------

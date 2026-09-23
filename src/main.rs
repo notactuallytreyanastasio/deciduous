@@ -2716,9 +2716,34 @@ fn main() {
                             .map(|l| format!("{l}  (`deciduous remote push --seed` sends it)"))
                             .collect(),
                     );
+                    // Detached here, still attached on the server, and no
+                    // detach waiting: a pasted secret would sit there unseen.
+                    let docs_detached = match (db.get_node_documents(None, true), &log_state) {
+                        (Ok(docs), Some((_, st))) => {
+                            deciduous::remote::repair_detaches(&docs, &server, st)
+                        }
+                        (Ok(_), None) => Vec::new(),
+                        (Err(e), _) => {
+                            eprintln!("{} reading local documents: {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
+                    list(
+                        "Documents detached here, still on the server",
+                        docs_detached
+                            .iter()
+                            .map(|op| {
+                                format!(
+                                    "{}  (`deciduous remote push --repair` sends the detach)",
+                                    op.describe()
+                                )
+                            })
+                            .collect(),
+                    );
 
                     if d.is_empty()
                         && docs_here.is_empty()
+                        && docs_detached.is_empty()
                         && waiting == 0
                         && rejected == 0
                         && !damaged
@@ -2754,7 +2779,7 @@ fn main() {
                             !refused_nodes.contains(&nd.change_id)
                                 && side(&nd.change_id) == deciduous::remote::Moved::Here
                         });
-                        if here_moved || !unsent_deletes.is_empty() {
+                        if here_moved || !unsent_deletes.is_empty() || !docs_detached.is_empty() {
                             todo.push("`deciduous remote push --repair` sends the edits and deletes made here that never became ops".to_string());
                         }
                         if d.only_server
@@ -2970,6 +2995,14 @@ fn main() {
                                 })
                             })
                             .unwrap_or(Ok(Vec::new()));
+                        let deletes = deletes.and_then(|mut d| {
+                            let docs = db
+                                .get_node_documents(None, true)
+                                .map_err(|e| format!("reading local documents: {e}"))?;
+                            let st = log.read()?;
+                            d.extend(deciduous::remote::repair_detaches(&docs, &server, &st));
+                            Ok(d)
+                        });
                         match deletes {
                             Ok(d) => {
                                 plan.deletes = d.len();
@@ -3010,7 +3043,7 @@ fn main() {
                             match deciduous::remote::replay(&remote, &log) {
                                 Ok(r) => {
                                     println!(
-                                        "{} {} op(s) ({} delete(s)) to match this copy: {} applied, {} already there, {} rejected",
+                                        "{} {} op(s) ({} delete(s) or detach(es)) to match this copy: {} applied, {} already there, {} rejected",
                                         "Repaired".green(),
                                         plan.ops.len(),
                                         plan.deletes,
