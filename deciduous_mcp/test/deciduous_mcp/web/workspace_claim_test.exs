@@ -92,4 +92,68 @@ defmodule DeciduousMcp.Web.WorkspaceClaimTest do
 
     assert error =~ "main"
   end
+
+  test "a repository with no commit yet is refused from a claimed workspace, on every path",
+       %{token: token} do
+    {200, _} = post(token, "/claim", %{workspace: "unborn", repo_roots: [@a]})
+
+    assert {409, %{"reason" => "no_commit_yet"}} =
+             post(token, "/claim", %{workspace: "unborn", repo_roots: []})
+
+    op = %{
+      op_id: Ecto.UUID.generate(),
+      kind: "create_node",
+      change_id: "u1",
+      node_type: "goal",
+      title: "from an unborn repo",
+      status: "pending",
+      metadata: %{},
+      created_at: "2026-09-23T00:00:00Z",
+      updated_at: "2026-09-23T00:00:00Z"
+    }
+
+    assert {409, _} = post(token, "/ops", %{workspace: "unborn", repo_roots: [], ops: [op]})
+    assert Repo.aggregate(DeciduousMcp.Schema.Node, :count) == 0
+
+    # Unclaimed, an unborn repository is let in: there is nothing to compare.
+    assert {200, %{"claim" => "unchecked"}} =
+             post(token, "/claim", %{workspace: "nobody-yet", repo_roots: []})
+  end
+
+  test "/import checks the claim the way /ops does", %{token: token} do
+    {200, _} = post(token, "/claim", %{workspace: "import-claimed", repo_roots: [@a]})
+
+    graph = %{
+      "nodes" => [%{"change_id" => "i1", "node_type" => "goal", "title" => "not yours"}]
+    }
+
+    assert {409, _} =
+             post(token, "/import", %{workspace: "import-claimed", repo_roots: [@b], graph: graph})
+
+    assert Repo.aggregate(DeciduousMcp.Schema.Node, :count) == 0
+
+    assert {200, _} =
+             post(token, "/import", %{workspace: "import-claimed", repo_roots: [@a], graph: graph})
+  end
+
+  test "/export refuses a repository that names other roots in its header", %{token: token} do
+    {200, _} = post(token, "/claim", %{workspace: "export-claimed", repo_roots: [@a]})
+
+    get = fn roots ->
+      conn =
+        conn(:get, "/export?workspace=export-claimed")
+        |> put_req_header("authorization", "Bearer " <> token)
+        |> then(fn c ->
+          if roots, do: put_req_header(c, "x-deciduous-repo-roots", roots), else: c
+        end)
+        |> Router.call(@opts)
+
+      conn.status
+    end
+
+    assert get.(@b) == 409
+    assert get.("") == 409
+    assert get.(@a) == 200
+    assert get.(nil) == 200
+  end
 end

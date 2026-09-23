@@ -653,7 +653,7 @@ fn same_named_repositories_do_not_share_a_workspace_unless_named() {
     .unwrap();
     let out = sb.dx_ok(&b, &["add", "goal", "b's goal"]);
     assert!(out.contains("another repository"), "{out}");
-    assert!(out.contains("queued"), "{out}");
+    assert!(out.contains("refused"), "{out}");
     let pull = sb.dx(&b, &["remote", "pull"]);
     assert!(!pull.status.success());
     let local: Value = serde_json::from_str(&sb.dx_ok(&b, &["graph"])).unwrap();
@@ -1073,6 +1073,118 @@ fn writes_through_the_local_mcp_server_reach_the_server_while_it_runs() {
     let _ = child.kill();
     let _ = child.wait();
     assert_eq!(status, Some(Value::String("completed".into())));
+}
+
+/// A repository with no commit yet: `git init` and `deciduous init` only.
+fn unborn_repo(sb: &Sandbox, rel: &str) -> PathBuf {
+    let dir = sb.path().join(rel);
+    std::fs::create_dir_all(&dir).unwrap();
+    sb.git(&dir, &["init", "-q", "-b", "main"]);
+    sb.dx_ok(&dir, &["init"]);
+    dir
+}
+
+// C5 bypasses: a repository with no commit sent no roots and was let in;
+// /import and /export checked no claim at all, so `push --seed` from an
+// unrelated repository wrote into another project's workspace. And a
+// refusal was reported as the server being unreachable.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_claimed_workspace_refuses_unborn_and_unrelated_repositories_on_every_path() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let name = unique("wal-c5b");
+
+    let a = sb.repo(&format!("a/{name}"));
+    sb.dx_ok(&a, &["remote", "init", &url]);
+    sb.dx_ok(&a, &["add", "goal", "A's secret goal"]);
+
+    // B: same name, no commit yet.
+    let b = unborn_repo(&sb, &format!("b/{name}"));
+    std::fs::write(
+        b.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\nworkspace = \"{name}\"\n"),
+    )
+    .unwrap();
+    let out = sb.dx_ok(&b, &["add", "goal", "B goal before first commit"]);
+    assert!(out.contains("refused"), "{out}");
+    assert!(
+        !out.contains("once the server is reachable"),
+        "a refusal is not an outage: {out}"
+    );
+    assert!(!sb.dx(&b, &["remote", "pull"]).status.success());
+    let local: Value = serde_json::from_str(&sb.dx_ok(&b, &["graph"])).unwrap();
+    assert_eq!(live_titles(&local), ["B goal before first commit"]);
+
+    // C: same name, unrelated history, a 1.0.7 config; everything through
+    // /import and /export.
+    let c = sb.repo(&format!("c/{name}"));
+    std::fs::write(c.join(".deciduous").join("config.toml"), "").unwrap();
+    sb.dx_ok(&c, &["add", "goal", "C's private goal"]);
+    std::fs::write(
+        c.join(".deciduous").join("config.toml"),
+        format!("[remote]\nurl = \"{url}\"\n"),
+    )
+    .unwrap();
+    let seed = sb.dx(&c, &["remote", "push", "--seed"]);
+    assert!(!seed.status.success(), "{}", text(&seed.stdout));
+    assert!(text(&seed.stderr).contains("another repository"));
+    let over = sb.dx(&c, &["remote", "push", "--overwrite"]);
+    assert!(!over.status.success(), "{}", text(&over.stdout));
+    let st = sb.dx(&c, &["remote", "status"]);
+    assert!(!st.status.success());
+    assert!(
+        !text(&st.stdout).contains("A's secret goal"),
+        "status showed another repository's graph: {}",
+        text(&st.stdout)
+    );
+
+    assert_eq!(
+        live_titles(&export(&url, &token, &name)),
+        ["A's secret goal"]
+    );
+}
+
+// A shallow clone (CI) answers `rev-list --max-parents=0` with its shallow
+// boundary, not the root, so it was refused as "another repository".
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_shallow_clone_writes_to_its_repositorys_workspace() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let name = unique("wal-shal");
+    let dir = sb.repo(&name);
+    for i in 0..2 {
+        sb.git(
+            &dir,
+            &["commit", "-q", "--allow-empty", "-m", &format!("c{i}")],
+        );
+    }
+    sb.dx_ok(&dir, &["remote", "init", &url]);
+    sb.dx_ok(&dir, &["add", "goal", "from the full clone"]);
+    sb.git(&dir, &["add", ".deciduous/config.toml"]);
+    sb.git(&dir, &["commit", "-q", "-m", "deciduous config"]);
+
+    let ci = sb.path().join("ci").join(&name);
+    std::fs::create_dir_all(ci.parent().unwrap()).unwrap();
+    sb.git(
+        sb.path(),
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            &format!("file://{}", dir.display()),
+            ci.to_str().unwrap(),
+        ],
+    );
+    sb.dx_ok(&ci, &["init"]);
+    let out = sb.dx_ok(&ci, &["add", "goal", "from ci"]);
+    assert!(!out.contains("another repository"), "{out}");
+    assert_eq!(
+        live_titles(&export(&url, &token, &name)),
+        ["from ci", "from the full clone"]
+    );
 }
 
 // Two ops merging different metadata keys into one node at the same moment:

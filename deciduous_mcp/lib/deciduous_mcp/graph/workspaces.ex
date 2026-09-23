@@ -142,8 +142,16 @@ defmodule DeciduousMcp.Graph.Workspaces do
   every worktree of a repository, different for an unrelated one, and
   unchanged by a rename.
 
-    * no roots sent (outside git, or a repository with no commit yet):
-      `{:ok, :unchecked}`; there is nothing to compare
+    * no `repo_roots` at all (`nil`: a 1.0.7 client, a shallow clone whose
+      root is not in its history, or a directory outside git):
+      `{:ok, :unchecked}`. There is nothing to compare, and refusing would
+      lock every 1.0.7 teammate out of their own workspace.
+    * an empty list (a repository with no commit yet): `{:ok, :unchecked}`
+      while the workspace is unclaimed, and refused once it is claimed. An
+      empty list is not "no information": it is a repository that cannot
+      show it is the one that claimed the workspace, and letting it in is
+      how a fresh `git init` of a same-named project wrote into another's
+      graph and pulled its nodes.
     * workspace unclaimed: the roots are recorded, `{:ok, :claimed}`
     * any root in common: `{:ok, :verified}` (new roots, from a merged-in
       history, are added)
@@ -155,35 +163,47 @@ defmodule DeciduousMcp.Graph.Workspaces do
   """
   def claim(%Workspace{} = ws, roots, adopt?) do
     with {:ok, roots} <- validate_roots(roots) do
-      if roots == [] do
-        {:ok, :unchecked}
-      else
-        Repo.transaction(fn ->
-          ws = Repo.one!(from w in Workspace, where: w.id == ^ws.id, lock: "FOR UPDATE")
-          settings = ws.settings || %{}
-          held = settings["repo_roots"] || []
+      cond do
+        roots == :none ->
+          {:ok, :unchecked}
 
-          {outcome, merged} =
-            cond do
-              held == [] -> {:claimed, roots}
-              Enum.any?(roots, &(&1 in held)) -> {:verified, Enum.uniq(held ++ roots)}
-              adopt? -> {:adopted, Enum.uniq(held ++ roots)}
-              true -> Repo.rollback({:claimed_by_other_repository, held})
-            end
-
-          if merged != held do
-            ws
-            |> Workspace.changeset(%{settings: Map.put(settings, "repo_roots", merged)})
-            |> Repo.update!()
+        roots == [] ->
+          case (ws.settings || %{})["repo_roots"] || [] do
+            [] -> {:ok, :unchecked}
+            held -> {:error, {:no_commit_yet, held}}
           end
 
-          outcome
-        end)
+        true ->
+          claim_roots(ws, roots, adopt?)
       end
     end
   end
 
-  defp validate_roots(nil), do: {:ok, []}
+  defp claim_roots(ws, roots, adopt?) do
+    Repo.transaction(fn ->
+      ws = Repo.one!(from w in Workspace, where: w.id == ^ws.id, lock: "FOR UPDATE")
+      settings = ws.settings || %{}
+      held = settings["repo_roots"] || []
+
+      {outcome, merged} =
+        cond do
+          held == [] -> {:claimed, roots}
+          Enum.any?(roots, &(&1 in held)) -> {:verified, Enum.uniq(held ++ roots)}
+          adopt? -> {:adopted, Enum.uniq(held ++ roots)}
+          true -> Repo.rollback({:claimed_by_other_repository, held})
+        end
+
+      if merged != held do
+        ws
+        |> Workspace.changeset(%{settings: Map.put(settings, "repo_roots", merged)})
+        |> Repo.update!()
+      end
+
+      outcome
+    end)
+  end
+
+  defp validate_roots(nil), do: {:ok, :none}
 
   defp validate_roots(roots) when is_list(roots) do
     case Enum.reject(

@@ -164,20 +164,55 @@ defmodule DeciduousMcp.Web.Router do
 
       case Scope.read_target(conn_frame(conn), conn.query_params) do
         {:ok, scope} ->
-          # Tombstones: without them a node deleted on the server never
-          # left a pulled graph, and the next push re-sent it.
-          json(conn, 200, Query.get_full_graph(scope, tombstones: true))
+          case export_claim(conn, scope) do
+            # Tombstones: without them a node deleted on the server never
+            # left a pulled graph, and the next push re-sent it.
+            :ok -> json(conn, 200, Query.get_full_graph(scope, tombstones: true))
+            {:refused, claim} -> claim_refused(conn, claim)
+            {:error, message} -> json(conn, 422, %{error: message})
+          end
 
         # Nothing has been pushed here yet. That is an empty graph, and the
         # CLI's first `remote push` diffs against exactly this answer, so it
         # is returned rather than refused; `exists: false` says which kind of
-        # empty it is. Before, this read created the workspace.
+        # empty it is. Before, this read created the workspace. There is no
+        # claim to check on a workspace that does not exist.
         {:absent, name} ->
           json(conn, 200, empty_graph(name))
 
         {:error, message} ->
           json(conn, 422, %{error: message})
       end
+    end
+  end
+
+  # A 1.0.8 CLI names its repository's root commits in this header, so a
+  # pull or a status of a workspace another repository claimed is refused
+  # here, the same check /ops and /import make, instead of being left to
+  # the client calling /claim first. No header (1.0.7, a browser, the
+  # global view) is not checked.
+  defp export_claim(conn, scope) do
+    case {get_req_header(conn, "x-deciduous-repo-roots"), scope} do
+      {[], _} ->
+        :ok
+
+      {_, :global} ->
+        :ok
+
+      {[header | _], id} ->
+        roots = header |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
+
+        with {:ok, ws} <- Workspaces.get_workspace(id),
+             {:ok, _} <- Workspaces.claim(ws, roots, false) do
+          :ok
+        else
+          {:error, {refusal, _} = claim}
+          when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+            {:refused, claim}
+
+          {:error, other} ->
+            {:error, to_string_reason(other)}
+        end
     end
   end
 
@@ -304,6 +339,10 @@ defmodule DeciduousMcp.Web.Router do
       {:error, {:pinned, message}} ->
         json(conn, 403, %{error: message})
 
+      {:error, {refusal, _} = claim}
+      when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
+        claim_refused(conn, claim)
+
       # The vocabulary refusal is a map of examples; sent as JSON, not as
       # Elixir's inspect of it.
       {:error, %{} = reason} ->
@@ -322,7 +361,8 @@ defmodule DeciduousMcp.Web.Router do
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
 
-      {:error, {:claimed_by_other_repository, _} = claim} ->
+      {:error, {refusal, _} = claim}
+      when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
         claim_refused(conn, claim)
 
       {:error, reason} ->
@@ -341,12 +381,24 @@ defmodule DeciduousMcp.Web.Router do
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
 
-      {:error, {:claimed_by_other_repository, _} = claim} ->
+      {:error, {refusal, _} = claim}
+      when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
         claim_refused(conn, claim)
 
       {:error, reason} ->
         json(conn, 422, %{error: to_string_reason(reason)})
     end
+  end
+
+  defp claim_refused(conn, {:no_commit_yet, held}) do
+    json(conn, 409, %{
+      error:
+        "this workspace belongs to a repository, and this one has no commit yet, " <>
+          "so it cannot show it is that repository. Commit first, or name this one's " <>
+          "workspace explicitly",
+      reason: "no_commit_yet",
+      held_by_roots: held
+    })
   end
 
   defp claim_refused(conn, {:claimed_by_other_repository, held}) do
@@ -355,6 +407,7 @@ defmodule DeciduousMcp.Web.Router do
         "this workspace belongs to another repository (different root commits). " <>
           "Two repositories with the same directory name derive the same workspace name; " <>
           "name this one's workspace explicitly",
+      reason: "claimed_by_other_repository",
       held_by_roots: held
     })
   end

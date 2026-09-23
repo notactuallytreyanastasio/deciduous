@@ -64,6 +64,16 @@ defmodule DeciduousMcp.Sync.Import do
               {:error, reason} -> Repo.rollback(Workspaces.describe_name_error(name, reason))
             end
 
+          # The same check /ops makes. Without it, `remote push --seed` (or
+          # --overwrite) from an unrelated repository with the same directory
+          # name wrote into a workspace its /ops writes were refused from.
+          # Made here, after the workspace exists, because a refused import
+          # creates nothing: the rollback takes a new workspace with it.
+          case Workspaces.claim(workspace, payload["repo_roots"], false) do
+            {:ok, _claim} -> :ok
+            {:error, reason} -> Repo.rollback(reason)
+          end
+
           deleted = deleted_change_ids(workspace.id)
           node_report = upsert_nodes(workspace.id, nodes, deleted)
           edge_report = upsert_edges(workspace.id, graph["edges"] || [], nodes, deleted)

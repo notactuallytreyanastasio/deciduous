@@ -205,27 +205,43 @@ pub fn workspace_for(dir: &Path) -> String {
 
 /// The root commits of the repository `dir` is in: the same in every clone
 /// and worktree of it, different for an unrelated repository that happens to
-/// share its directory name, and unchanged by a rename. Sorted; empty outside
-/// git and before the first commit.
-pub fn repo_roots(dir: &Path) -> Vec<String> {
-    let mut roots: Vec<String> = std::process::Command::new("git")
-        .arg("-C")
-        .arg(dir)
-        .args(["rev-list", "--max-parents=0", "HEAD"])
-        .output()
-        .ok()
+/// share its directory name, and unchanged by a rename. Sorted.
+///
+/// * `None` when there is nothing to compare: outside git, or a shallow
+///   clone. A shallow clone's `rev-list --max-parents=0` answers with its
+///   shallow boundary, a commit in the middle of the history, and sending
+///   that got CI clones (`--depth 1`) refused as "another repository".
+/// * `Some([])` in a repository with no commit yet. That is not the same as
+///   `None`: the server refuses it from a workspace another repository has
+///   claimed, since it cannot show it is that repository.
+pub fn repo_roots(dir: &Path) -> Option<Vec<String>> {
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .ok()
+    };
+    let inside = git(&["rev-parse", "--is-shallow-repository"])
         .filter(|o| o.status.success())
-        .and_then(|o| String::from_utf8(o.stdout).ok())
-        .map(|out| {
-            out.lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
-                .collect()
-        })
-        .unwrap_or_default();
+        .and_then(|o| String::from_utf8(o.stdout).ok())?;
+    if inside.trim() == "true" {
+        return None;
+    }
+    let out = git(&["rev-list", "--max-parents=0", "HEAD"])?;
+    if !out.status.success() {
+        // Inside git, and HEAD resolves to nothing: no commit yet.
+        return Some(Vec::new());
+    }
+    let mut roots: Vec<String> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
     roots.sort();
     roots.dedup();
-    roots
+    Some(roots)
 }
 
 /// The nearest `.deciduous/config.toml` at or above `dir`.
@@ -283,9 +299,8 @@ pub struct Remote {
     pub workspace: String,
     token: String,
     /// This repository's root commit ids, sent so the server can tell two
-    /// repositories with the same directory name apart. Empty outside git
-    /// or before the first commit.
-    pub repo_roots: Vec<String>,
+    /// repositories with the same directory name apart. See [`repo_roots`].
+    pub repo_roots: Option<Vec<String>>,
 }
 
 impl Remote {
@@ -343,8 +358,14 @@ impl Remote {
     }
 
     fn get(&self, path: &str) -> ureq::Request {
-        ureq::get(&format!("{}{}", self.url, path))
-            .set("authorization", &format!("Bearer {}", self.token))
+        let req = ureq::get(&format!("{}{}", self.url, path))
+            .set("authorization", &format!("Bearer {}", self.token));
+        // The server checks the claim on /export too, so a pull or a status
+        // cannot read another repository's graph.
+        match &self.repo_roots {
+            Some(roots) => req.set("x-deciduous-repo-roots", &roots.join(",")),
+            None => req,
+        }
     }
 
     fn post(&self, path: &str) -> ureq::Request {
@@ -380,7 +401,7 @@ impl Remote {
             .get(&format!("/export?workspace={}", urlencode(&self.workspace)))
             .timeout(std::time::Duration::from_secs(300))
             .call()
-            .map_err(describe)?;
+            .map_err(|e| self.describe(e))?;
 
         resp.into_json::<RemoteGraph>()
             .map_err(|e| format!("the server's response was not a graph: {e}"))
@@ -391,13 +412,14 @@ impl Remote {
     pub fn import(&self, graph: Value) -> Result<ImportReport, String> {
         let payload = serde_json::json!({
             "workspace": self.workspace,
+            "repo_roots": self.repo_roots,
             "graph": graph,
         });
 
         self.post("/import")
             .timeout(std::time::Duration::from_secs(600))
             .send_json(payload)
-            .map_err(describe)?
+            .map_err(|e| self.describe(e))?
             .into_json::<ImportReport>()
             .map_err(|e| format!("the server's response was not an import report: {e}"))
     }
@@ -637,8 +659,29 @@ pub struct ReplayReport {
 const REPLAY_BATCH: usize = 500;
 
 impl Remote {
+    /// A failed request, described; a 409 is the server refusing this
+    /// repository, and says so.
+    fn describe(&self, e: ureq::Error) -> String {
+        match e {
+            ureq::Error::Status(409, _) => self.claim_refused(),
+            e => describe(e),
+        }
+    }
+
     /// What to say when the server refuses this repository's roots.
     fn claim_refused(&self) -> String {
+        if self.repo_roots.as_ref().is_some_and(|r| r.is_empty()) {
+            return format!(
+                "workspace \"{ws}\" on {url} belongs to a repository, and this one has no commit yet, \
+                 so the server cannot tell whether it is that repository or an unrelated project \
+                 also called {ws}; nothing it sends is accepted until it can.\n\n\
+                 Make the first commit (a clone of that repository has its commits already), or give \
+                 this project its own workspace:\n\n    \
+                 deciduous remote init {url} --workspace <another-name>",
+                ws = self.workspace,
+                url = self.url
+            );
+        }
         format!(
             "workspace \"{ws}\" on {url} belongs to another repository: an unrelated project \
              whose directory is also called {ws} (the name is the directory name, lowercased) \
@@ -677,8 +720,7 @@ impl Remote {
                 .into_json::<Reply>()
                 .map(|r| r.claim)
                 .map_err(|e| format!("the server's response was not a claim: {e}")),
-            Err(ureq::Error::Status(409, _)) => Err(self.claim_refused()),
-            Err(e) => Err(describe(e)),
+            Err(e) => Err(self.describe(e)),
         }
     }
 
@@ -824,18 +866,38 @@ pub fn replay_after_write(log: &crate::oplog::OpLog) {
         return;
     }
     let dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let result = Remote::resolve(&cfg, &dir).and_then(|remote| replay(&remote, log));
+    let remote = Remote::resolve(&cfg, &dir);
+    let result = remote
+        .as_ref()
+        .map_err(|e| e.clone())
+        .and_then(|r| replay(r, log));
     match result {
         Ok(report) => print_rejected(&report.rejected, log),
         Err(e) => {
             let waiting = log.read().map(|s| s.pending.len()).unwrap_or(0);
-            eprintln!(
-                "{} the local write succeeded but the server did not get it: {e}\n\
-                 {waiting} write(s) queued in {}. They are sent on the next write, or now with \
-                 `deciduous remote push` once the server is reachable.",
-                "Warning:".yellow(),
-                log.path().display(),
-            );
+            // Only a server that does not answer is an outage that passes by
+            // itself. A refusal (another repository's workspace, a bad
+            // token) or a config problem is answered the same way on every
+            // retry, and "once the server is reachable" sent people to wait
+            // for something that was never going to happen.
+            let unreachable = remote.as_ref().is_ok_and(|r| r.health().is_err());
+            if unreachable {
+                eprintln!(
+                    "{} the local write succeeded but the server did not get it: {e}\n\
+                     {waiting} write(s) queued in {}. They are sent on the next write, or now with \
+                     `deciduous remote push` once the server is reachable.",
+                    "Warning:".yellow(),
+                    log.path().display(),
+                );
+            } else {
+                eprintln!(
+                    "{} the local write succeeded but the server refused it: {e}\n\
+                     {waiting} write(s) wait in {}, and every later write will be refused the same way \
+                     until that is fixed. `deciduous remote status` lists them.",
+                    "Warning:".yellow(),
+                    log.path().display(),
+                );
+            }
         }
     }
 }
@@ -1563,7 +1625,7 @@ mod tests {
             url: "https://example.com/deciduous-mcp".to_string(),
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
-            repo_roots: vec![],
+            repo_roots: None,
         };
         assert_eq!(
             r.events_url(),
@@ -1577,7 +1639,7 @@ mod tests {
             url: "http://localhost:4111".to_string(),
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
-            repo_roots: vec![],
+            repo_roots: None,
         };
         assert_eq!(
             r.events_url(),
@@ -1595,7 +1657,7 @@ mod tests {
             url: "https://example.com".to_string(),
             workspace: "a b".to_string(),
             token: "tok".to_string(),
-            repo_roots: vec![],
+            repo_roots: None,
         };
         assert!(
             r.events_url().contains("workspace=a%20b"),
