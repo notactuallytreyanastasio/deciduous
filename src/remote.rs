@@ -381,7 +381,40 @@ pub struct Remote {
     pub repo_roots: Option<Vec<String>>,
 }
 
+/// The config of the project whose database lives in `data_dir` (its
+/// `.deciduous/`), read from `data_dir/config.toml`, not found by walking up
+/// from the current directory. Default when there is none.
+pub fn config_at(data_dir: &Path) -> Result<Config, String> {
+    let path = data_dir.join("config.toml");
+    match std::fs::read_to_string(&path) {
+        Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+        Err(e) => Err(format!("{}: {e}", path.display())),
+    }
+}
+
 impl Remote {
+    /// The server, workspace and repository of the project that owns the
+    /// database in `data_dir`.
+    ///
+    /// A write goes to the log beside its database, and the log has to be
+    /// replayed as that database's project: its config's url and workspace,
+    /// and the root commits of the repository it sits in. Resolving from the
+    /// current directory sent project 1's writes to project 3's workspace
+    /// whenever DECIDUOUS_DB_PATH pointed across (RUST-N1), and said nothing
+    /// at all when the current directory had no project (BRIDGE-N3).
+    ///
+    /// The url is read at replay time, not recorded per op when the op is
+    /// written. Queued writes are meant to follow a corrected url: a typo
+    /// fixed in config.toml, or a server that moved, must receive what was
+    /// queued while it was wrong.
+    pub fn for_data_dir(data_dir: &Path) -> Result<Self, String> {
+        let config = config_at(data_dir)?;
+        let data_dir = std::path::absolute(data_dir).unwrap_or_else(|_| data_dir.to_path_buf());
+        let project = data_dir.parent().unwrap_or(&data_dir);
+        Self::resolve(&config, project)
+    }
+
     pub fn resolve(config: &Config, dir: &Path) -> Result<Self, String> {
         let url = config.remote.url.clone().ok_or_else(|| {
             "no remote configured for this project.\n\nRun:\n\n    deciduous remote init <url>"
@@ -1127,12 +1160,10 @@ pub fn print_rejected(rejected: &[(crate::oplog::Op, String)], log: &crate::oplo
 pub fn replay_after_write(log: &crate::oplog::OpLog) {
     use colored::Colorize;
 
-    let cfg = Config::load();
-    if !cfg.remote.is_configured() {
-        return;
-    }
-    let dir = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let remote = Remote::resolve(&cfg, &dir);
+    // The log's own project, not the current directory's: see
+    // `Remote::for_data_dir`.
+    let data_dir = log.path().parent().unwrap_or(Path::new("."));
+    let remote = Remote::for_data_dir(data_dir);
     let result = remote
         .as_ref()
         .map_err(|e| ReplayError::Config(e.clone()))

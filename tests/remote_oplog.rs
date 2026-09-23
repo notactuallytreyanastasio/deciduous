@@ -1723,3 +1723,116 @@ fn server_n1_a_nul_in_one_write_does_not_stop_the_writes_after_it() {
     let st = text(&st.stdout);
     assert!(st.contains("0 write(s) waiting, 1 rejected"), "{st}");
 }
+
+impl Sandbox {
+    /// `deciduous` with DECIDUOUS_DB_PATH set: the database it writes is not
+    /// the one the current directory would find.
+    fn dx_db(&self, dir: &Path, db: &Path, args: &[&str]) -> Output {
+        Command::new(env!("CARGO_BIN_EXE_deciduous"))
+            .args(args)
+            .current_dir(dir)
+            .env("HOME", self.path().join("home"))
+            .env("XDG_CONFIG_HOME", self.path().join("home").join(".config"))
+            .env("DECIDUOUS_MCP_TOKEN", &self.token)
+            .env("DECIDUOUS_NO_SERVER", "1")
+            .env("DECIDUOUS_DB_PATH", db)
+            .env("NO_COLOR", "1")
+            .output()
+            .unwrap()
+    }
+}
+
+// RUST-N1 / BRIDGE-N3: the log sits beside the database, but it was replayed
+// with the config and repository of the current directory. With
+// DECIDUOUS_DB_PATH naming project 1's database from inside project 3, the
+// op went to project 3's workspace: acked, compacted out of project 1's log,
+// and missing from project 1's graph for good, while `remote pull` in
+// project 3 imported project 1's node.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn rust_n1_a_write_goes_to_its_databases_workspace_not_the_cwds() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let (ws1, ws3) = (unique("wal-p1"), unique("wal-p3"));
+    let p1 = sb.remote_repo("p1", &url, &ws1);
+    let p3 = sb.remote_repo("p3", &url, &ws3);
+    let db1 = p1.join(".deciduous").join("deciduous.db");
+
+    let out = sb.dx_db(&p3, &db1, &["add", "goal", "P1-SECRET-cli"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    sb.dx_db(&p3, &db1, &["status", "1", "completed"]);
+
+    assert_eq!(
+        live_titles(&export(&url, &token, &ws3)),
+        Vec::<String>::new()
+    );
+    let g1 = export(&url, &token, &ws1);
+    assert_eq!(server_node(&g1, "P1-SECRET-cli")["status"], "completed");
+    let st = sb.dx(&p1, &["remote", "status"]);
+    assert!(st.status.success(), "{}", text(&st.stdout));
+}
+
+// BRIDGE-N3, the silent half: `deciduous mcp` configured the way
+// docs/mcp.html shows for Claude Desktop, from a directory with no
+// .deciduous and DECIDUOUS_DB_PATH naming the project's database. The cwd
+// had no [remote], so the replay returned without a word, and the op sat in
+// the project's log until some later CLI write from inside the project.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn bridge_n3_a_stdio_server_started_elsewhere_sends_to_its_databases_workspace() {
+    use std::io::{BufRead, BufReader, Write};
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-desktop");
+    let proj = sb.remote_repo("desktop", &url, &ws);
+    let elsewhere = sb.path().join("elsewhere");
+    std::fs::create_dir_all(&elsewhere).unwrap();
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .arg("mcp")
+        .current_dir(&elsewhere)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env(
+            "DECIDUOUS_DB_PATH",
+            proj.join(".deciduous").join("deciduous.db"),
+        )
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    for (id, method, params) in [
+        (
+            1,
+            "initialize",
+            serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}),
+        ),
+        (
+            2,
+            "tools/call",
+            serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":"desktop-style"}}),
+        ),
+    ] {
+        let msg = serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+        writeln!(stdin, "{msg}").unwrap();
+        stdin.flush().unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let titles = loop {
+        let t = live_titles(&export(&url, &token, &ws));
+        if !t.is_empty() || std::time::Instant::now() > deadline {
+            break t;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(titles, ["desktop-style"]);
+}

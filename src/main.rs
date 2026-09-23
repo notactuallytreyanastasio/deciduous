@@ -2320,7 +2320,15 @@ fn main() {
                 }
 
                 RemoteAction::Status => {
-                    let cfg = Config::load();
+                    // The database's project, which is the cwd's unless
+                    // DECIDUOUS_DB_PATH says otherwise.
+                    let cfg = match deciduous::remote::config_at(db.data_dir()) {
+                        Ok(c) => c,
+                        Err(e) => {
+                            eprintln!("{} {}", "Error:".red(), e);
+                            exit(1);
+                        }
+                    };
                     if !cfg.remote.is_configured() {
                         println!(
                             "{} no remote configured for this project.",
@@ -2330,7 +2338,7 @@ fn main() {
                         return;
                     }
 
-                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2557,8 +2565,7 @@ fn main() {
                     seed,
                     repair,
                 } => {
-                    let cfg = Config::load();
-                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
@@ -2785,8 +2792,7 @@ fn main() {
                 }
 
                 RemoteAction::Pull => {
-                    let cfg = Config::load();
-                    let remote = match deciduous::remote::Remote::resolve(&cfg, &cwd) {
+                    let remote = match deciduous::remote::Remote::for_data_dir(db.data_dir()) {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
