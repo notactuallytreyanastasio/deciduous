@@ -22,6 +22,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
   import Ecto.Query
   alias DeciduousMcp.MCP.Scope
+  alias DeciduousMcp.Graph.Nodes
   alias DeciduousMcp.Repo
   alias DeciduousMcp.Schema.{Node, Edge}
 
@@ -176,7 +177,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
     # matched every workspace on the server, deleted nodes included.
     any_term =
       Enum.reduce(terms, dynamic(false), fn term, acc ->
-        pattern = "%#{term}%"
+        pattern = Nodes.contains_pattern(term)
 
         dynamic(
           [n],

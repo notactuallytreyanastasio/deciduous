@@ -281,13 +281,31 @@ defmodule DeciduousMcp.Graph.Nodes do
   defp maybe_search(query, ""), do: query
 
   defp maybe_search(query, search_term) do
-    pattern = "%#{search_term}%"
+    pattern = contains_pattern(search_term)
 
     where(
       query,
       [n],
       ilike(n.title, ^pattern) or ilike(n.description, ^pattern)
     )
+  end
+
+  @doc """
+  An ILIKE pattern matching `term` anywhere, with the term taken literally.
+
+  `%` and `_` are LIKE wildcards and `\\` is its default escape character, so
+  a term interpolated as-is turned "%" and "_" into match-everything and made
+  a search for a backslash match nothing. Backslash is escaped first, so the
+  escapes added for `%` and `_` are not themselves escaped.
+  """
+  def contains_pattern(term) do
+    escaped =
+      term
+      |> String.replace("\\", "\\\\")
+      |> String.replace("%", "\\%")
+      |> String.replace("_", "\\_")
+
+    "%" <> escaped <> "%"
   end
 
   defp audit_change(workspace_id, node, action, changes \\ %{}) do
