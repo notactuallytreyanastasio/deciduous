@@ -170,17 +170,23 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
       |> where([n], is_nil(n.deleted_at))
       |> apply_scope(scope)
 
-    # Build an OR query across all terms matching title or description
-    Enum.reduce(terms, base_query, fn term, query ->
-      pattern = "%#{term}%"
+    # The terms are OR'd with each other and then AND'd onto the scope as one
+    # group. This used `or_where` per term, which Ecto renders as
+    # `(workspace AND not deleted AND scope) OR term1 OR term2`: every term
+    # matched every workspace on the server, deleted nodes included.
+    any_term =
+      Enum.reduce(terms, dynamic(false), fn term, acc ->
+        pattern = "%#{term}%"
 
-      or_where(
-        query,
-        [n],
-        ilike(n.title, ^pattern) or ilike(n.description, ^pattern) or
-          ilike(fragment("?::text", n.metadata), ^pattern)
-      )
-    end)
+        dynamic(
+          [n],
+          ^acc or ilike(n.title, ^pattern) or ilike(n.description, ^pattern) or
+            ilike(fragment("?::text", n.metadata), ^pattern)
+        )
+      end)
+
+    base_query
+    |> where(^any_term)
     |> order_by([n], desc: n.inserted_at)
     |> limit(25)
     |> Repo.all()

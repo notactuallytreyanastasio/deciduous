@@ -67,4 +67,4 @@ jobs:
       - name: Start the release build for the tag
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release.yml --ref "v${{ needs.check-version.outputs.version }}" -f tag="v${{ needs.check-version.outputs.version }}"
+        run: gh workflow run release.yml --ref "v${{ needs.check-version.outputs.version }}" -f tag="v${{ needs.check-version.outputs.version }}" -f publish=true

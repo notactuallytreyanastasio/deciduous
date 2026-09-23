@@ -1,0 +1,35 @@
+name: Release acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'deciduous_mcp/**'
+      - '.github/workflows/release*.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'deciduous_mcp/**'
+      - '.github/workflows/release*.yml'
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to verify before publishing
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  container-acceptance:
+    name: Fresh install, v1.0.0 upgrade, and native runtime
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - name: Verify packaged releases against isolated PostgreSQL
+        run: bash deciduous_mcp/scripts/verify-release.sh

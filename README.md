@@ -90,6 +90,32 @@ chmod +x deciduous-darwin-arm64
 sudo mv deciduous-darwin-arm64 /usr/local/bin/deciduous
 ```
 
+### Self-host the shared graph server
+
+Download and extract `deciduous-mcp-docker.tar.gz` from
+[GitHub Releases](https://github.com/notactuallytreyanastasio/deciduous/releases),
+then run:
+
+```bash
+cd deciduous-mcp-docker
+./scripts/setup.sh
+```
+
+Docker with Compose is the only runtime prerequisite. Setup creates private
+credentials, starts PostgreSQL with persistent storage, applies migrations, and
+waits until the server can query the database. Your MCP endpoint is
+`http://127.0.0.1:4000/mcp`; its bearer token is in `.env`. Running setup again
+keeps the same credentials and database.
+
+Already have a Deciduous PostgreSQL database? The same setup can connect to it
+and apply pending migrations. See the [deployment guide](deciduous_mcp/DEPLOY.md)
+for that path, client configuration, backups, and upgrades. From a repository
+checkout, run `./deciduous_mcp/scripts/setup.sh`.
+
+Releases also include Burrito-built `deciduous-mcp-*` native executables with
+Erlang/OTP and Elixir included. The deployment guide covers their one-time
+`STRUCTURE.sql` bootstrap, which requires PostgreSQL 17+ and `psql` 17+.
+
 ### Via Cargo
 
 ```bash

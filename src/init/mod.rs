@@ -576,6 +576,19 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
         ".claude/hooks/version-check.sh",
     )?;
 
+    // Bring settings.json onto the log-loop hooks, keeping the user's own
+    // entries. The scripts above are wrappers around `deciduous log-loop`,
+    // but an old settings.json only ran them on Edit|Write and had no Stop
+    // or post-log entries at all.
+    if crate::config::Config::load().hooks.log_loop_enabled() {
+        merge_log_loop_settings(&claude_base.join("settings.json"))?;
+    } else {
+        println!(
+            "   {} .claude/settings.json (hooks disabled in .deciduous/config.toml; log-loop not installed)",
+            "Skipped".yellow()
+        );
+    }
+
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");
     write_file_overwrite(&agents_path, CLAUDE_AGENTS_TOML, ".claude/agents.toml")?;
@@ -726,6 +739,36 @@ fn create_dir_if_missing(path: &Path) -> Result<(), String> {
         fs::create_dir_all(path)
             .map_err(|e| format!("Could not create {}: {}", path.display(), e))?;
         println!("   {} {}", "Creating".green(), path.display());
+    }
+    Ok(())
+}
+
+/// Merges the log-loop hooks into `.claude/settings.json` (creating it from
+/// the template if absent). Refuses to touch a file it cannot parse rather
+/// than overwrite settings it does not understand.
+pub fn merge_log_loop_settings(path: &Path) -> Result<(), String> {
+    let mut settings: serde_json::Value = if path.exists() {
+        let raw = fs::read_to_string(path)
+            .map_err(|e| format!("Could not read {}: {}", path.display(), e))?;
+        serde_json::from_str(&raw).map_err(|e| {
+            format!(
+                "{} is not valid JSON ({}); fix it and rerun `deciduous update` to install the log-loop hooks",
+                path.display(),
+                e
+            )
+        })?
+    } else {
+        serde_json::from_str(CLAUDE_SETTINGS_JSON).expect("template is valid JSON")
+    };
+
+    if crate::log_loop::merge_claude_settings(&mut settings) || !path.exists() {
+        let body = serde_json::to_string_pretty(&settings).map_err(|e| e.to_string())?;
+        fs::write(path, body + "\n")
+            .map_err(|e| format!("Could not write {}: {}", path.display(), e))?;
+        println!(
+            "   {} .claude/settings.json (log-loop hooks)",
+            "Updated".green()
+        );
     }
     Ok(())
 }

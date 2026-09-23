@@ -1,0 +1,28 @@
+services:
+  server:
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17.11-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: deciduous
+      POSTGRES_DB: deciduous
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run scripts/setup.sh to generate POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deciduous -d deciduous"]
+      interval: 3s
+      timeout: 5s
+      retries: 20
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres-data:

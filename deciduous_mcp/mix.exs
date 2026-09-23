@@ -1,23 +1,18 @@
+Code.require_file("rel/burrito_server.exs", __DIR__)
+
 defmodule DeciduousMcp.MixProject do
   use Mix.Project
 
   def project do
     [
       app: :deciduous_mcp,
-      version: "1.0.1",
+      version: "1.0.2",
       elixir: "~> 1.16",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      releases: [
-        deciduous_mcp: [
-          include_executables_for: [:unix],
-          # The container runs migrations before boot via eval, so the release
-          # has to carry priv/repo/migrations.
-          applications: [deciduous_mcp: :permanent]
-        ]
-      ],
+      releases: releases(),
       description: "MCP server for Deciduous decision graphs with shared PostgreSQL backend",
       package: package()
     ]
@@ -57,6 +52,10 @@ defmodule DeciduousMcp.MixProject do
       # UUID generation
       {:elixir_uuid, "~> 1.2"},
 
+      # Wrap the server and ERTS into one native executable so self-hosters
+      # do not need Erlang or Elixir on the target machine.
+      {:burrito, "~> 1.6.0"},
+
       # Testing
       {:ex_machina, "~> 2.8", only: :test},
       {:mox, "~> 1.1", only: :test}
@@ -72,9 +71,38 @@ defmodule DeciduousMcp.MixProject do
     ]
   end
 
+  defp releases do
+    [
+      deciduous_mcp: [
+        include_executables_for: [:unix],
+        applications: [deciduous_mcp: :permanent],
+        # Ordinary releases (including Docker) need no Zig toolchain. Set
+        # BURRITO_TARGET to produce a single executable for that platform.
+        steps: release_steps(),
+        burrito: [
+          targets: [
+            darwin_arm64: [os: :darwin, cpu: :aarch64],
+            darwin_amd64: [os: :darwin, cpu: :x86_64],
+            linux_arm64: [os: :linux, cpu: :aarch64],
+            linux_amd64: [os: :linux, cpu: :x86_64],
+            windows_amd64: [os: :windows, cpu: :x86_64]
+          ]
+        ]
+      ]
+    ]
+  end
+
+  defp release_steps do
+    if System.get_env("BURRITO_TARGET") in [nil, ""] do
+      [:assemble]
+    else
+      [:assemble, &DeciduousMcp.BurritoServer.wrap/1]
+    end
+  end
+
   defp package do
     [
-      licenses: ["MIT"],
+      licenses: ["Apache-2.0"],
       links: %{"GitHub" => "https://github.com/notactuallytreyanastasio/deciduous"}
     ]
   end

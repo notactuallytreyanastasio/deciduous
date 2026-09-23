@@ -49,6 +49,7 @@ proptest-regressions/
 
 # deploy secrets (real token — never commit)
 deploy/.env
+deciduous_mcp/.env
 
 # Deciduous: local database stays private, the shared graph is tracked
 .deciduous/*

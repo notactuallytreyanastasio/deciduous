@@ -50,6 +50,18 @@ pub struct HooksConfig {
     pub post_tool_use: Vec<Hook>,
 }
 
+impl HooksConfig {
+    /// Whether the project wants the log-loop hooks at all: hooks on, and the
+    /// require-action-node hook (the one they replace) not switched off.
+    pub fn log_loop_enabled(&self) -> bool {
+        self.enabled
+            && self
+                .pre_tool_use
+                .iter()
+                .any(|h| h.name == "require-action-node" && h.enabled)
+    }
+}
+
 fn default_pre_tool_use_hooks() -> Vec<Hook> {
     vec![Hook::default_require_action_node()]
 }
@@ -99,8 +111,8 @@ impl Hook {
     pub fn default_require_action_node() -> Self {
         Self {
             name: "require-action-node".to_string(),
-            description: "Blocks Edit/Write if no recent action/goal node exists".to_string(),
-            matcher: "Edit|Write".to_string(),
+            description: "Blocks work after too many actions without a graph write".to_string(),
+            matcher: "Edit|Write|NotebookEdit|Bash".to_string(),
             enabled: true,
             script: None, // Uses built-in template
             script_path: None,
@@ -368,7 +380,10 @@ auto_detect = true
         // Should have default pre-tool-use hook
         assert_eq!(config.hooks.pre_tool_use.len(), 1);
         assert_eq!(config.hooks.pre_tool_use[0].name, "require-action-node");
-        assert_eq!(config.hooks.pre_tool_use[0].matcher, "Edit|Write");
+        assert_eq!(
+            config.hooks.pre_tool_use[0].matcher,
+            "Edit|Write|NotebookEdit|Bash"
+        );
         assert!(config.hooks.pre_tool_use[0].enabled);
 
         // Should have default post-tool-use hook

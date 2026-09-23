@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.0.2] - 2026-09-23
+
+The shared graph server can be installed without Erlang, Elixir or a hand-built database, and no MCP call can hang long enough for Claude Code to background it. Both packages move to 1.0.2 together; the release workflow refuses to publish a tag that Cargo.toml and deciduous_mcp/mix.exs do not both declare.
+
+### Added
+- **The server ships as a single executable.** Burrito wraps the release with ERTS and Elixir for macOS (arm64, x86_64), Linux (arm64, x86_64) and Windows (x86_64). A native install bootstraps an empty PostgreSQL from the release's `STRUCTURE.sql`.
+- **One-command Docker setup.** `deciduous_mcp/scripts/setup.sh` generates private credentials, starts PostgreSQL 17 on a persistent volume, applies migrations and waits for readiness. It can use an existing database instead, and a repeat run keeps the saved token and password byte for byte.
+- **`GET /ready`** answers 200 only when the database responds and every required migration is applied, and 503 until then. `/health` stays unauthenticated liveness.
+- **`deciduous log-loop`: agents log as they work.** The Claude Code hook that `init` installs counts what an agent does between graph writes and denies its next tool call after ten unlogged actions, or straight after an unlogged `git commit`, naming what went unlogged and the exact `add_node` call; a turn cannot end with three or more unlogged actions. A write through the MCP tools or `deciduous add|link|...` resets it; read-only shell commands (`git diff`, `cat`, `grep`, ...) and the CLI graph writes are never counted or denied, only a real `git commit`/`git merge` counts as a commit, the Stop check counts the current turn only, and parallel tool calls cannot lose a reset. `deciduous update` brings existing projects onto it: the two hook scripts become wrappers around the binary, and `.claude/settings.json` is merged, keeping every hook you added. `DECIDUOUS_LOG_LOOP=off` turns it off. The hook it replaces checked the local database, which never sees MCP writes, and looked for output `deciduous nodes` has never printed, so it never blocked anything.
+- **`add_node` creates and links in one call.** `parent_id` (with optional `edge_type` and `rationale`) adds the incoming edge in the same transaction; if the parent is not a node in the workspace, nothing is created. The two-step form made an agent write the second call before it had the first answer, and it did: `add_edge` sent alongside `add_node` with `"PLACEHOLDER"` where the new id belonged, five times in one night. Such an id is now refused with a pointer to `parent_id`, and the installed instructions and the log-loop hook teach the one-call form.
+- **Trigram indexes** (`pg_trgm` GIN) on node title, description and `metadata::text`. `query_nodes(search:)` and `ask_graph` were `ILIKE '%term%'` over every row: 84.5 ms on production across 30,249 nodes, now 3.0 ms, and 1.6 ms within one workspace.
+
+### Fixed
+- **A tool call that ran long was left to the client's timeout.** The transport waited up to four minutes, longer than Cloudflare's 100-second origin cut and Claude Code's 120-second background move. Hermes.Server.Base now stops any handler still running at 60 seconds, which rolls back its open transaction, and answers the request under its own id: `list_workspaces did not finish within 60s and was stopped; nothing it had not committed was kept`. The transport's own timeout is 90 seconds, as a backstop. The heaviest call measured on production is 7.2 seconds.
+- **The server never logged its own failures.** `Hermes.Logging.should_log?/1` compared log levels backwards, so at `:info` every warning and error Hermes emitted (`request_handler_crashed`, `server_call_failed`) was dropped before it reached Logger.
+- **`ask_graph` searched every workspace on the server.** Its search terms were added with `or_where`, which Ecto renders as `(workspace AND not deleted AND scope) OR term...`, so a question in one workspace returned nodes from others, deleted ones included.
+- **A 16-character node id crashed the tool call.** `Ecto.UUID.cast/1` accepts any 16-byte binary as a raw UUID, so `"PLACEHOLDER_SKIP"` passed the id check and failed in the query. Only the 36-character form is accepted now.
+- **`query_nodes` with `limit` below 1** reached Postgres as `LIMIT -5` and came back as a raw Postgrex error. It is now `limit must be at least 1, got -5`.
+- **The events listener recovers after a database outage**, and `DB_SSL=true` now verifies the certificate and hostname by default.
+
+### Changed
+- **`DB_SSL=true` now verifies the database server, in libpq's three levels.** 1.0.1 encrypted without checking who answered. `DB_SSL_VERIFY=full` (the default; `peer` still accepted) checks the chain and that the certificate names the host, including an IP address through an IP subjectAltName; `ca` checks the chain only, for a certificate that does not name the address you connect to; `none` encrypts without authenticating and says so in a warning at every boot. `DB_SSL_CA_FILE` trusts a private CA and is checked at boot: a missing file or one without a certificate stops the server with a sentence, where before it ran with every connection failing (a missing file logged nothing at all). Each boot logs the mode in effect. Verified against a TLS PostgreSQL 17 with a private CA: full over DNS and over IP connect, ca connects to a certificate naming another host, and a wrong CA is refused under both full and ca. Upgrading from 1.0.1 with `DB_SSL=true` and a private CA: set `DB_SSL_CA_FILE`, plus `DB_SSL_VERIFY=ca` if the certificate does not name the address.
+- **`/ready` waits for a pooled connection** (up to one second) instead of answering 503 whenever every connection was busy, which made a loaded server look down to healthchecks.
+- **`STRUCTURE.sql` bootstraps PostgreSQL 16 as well as 17.** The dump no longer carries `SET transaction_timeout`, which exists only in 17; checked by applying it to empty 16 and 17 databases.
+
+### Not in this release
+- Sessions still live in server memory, so a restart logs every client out. Claude Code reconnects and retries automatically, in about 0.3 s on production.
+- The CLI still keeps a local SQLite cache. Removing it is next.
+
 ## [1.0.0] - 2026-09-22
 
 The shared server is the product now. 0.19.0 put every project's graph in one Postgres; 1.0.0 is what happens when several agents write to it at once. The proof is the tetris arena: ten Claude Code sessions in ten git worktrees, one workspace, told to read each other's code and reasoning. Twenty-six minutes later there were ten playable games, 386 nodes, and 170 borrowed ideas with provenance. Write-up: https://notactuallytreyanastasio.github.io/tetris-arena/

@@ -1,6 +1,10 @@
 # Build artifacts
 target/
 .git/
+**/_build/
+**/deps/
+**/burrito_out/
+**/erl_crash.dump
 
 # Local + backup databases (never ship data into the image)
 **/*.db
@@ -27,3 +31,7 @@ docs/dist/
 
 # Secrets / deploy-local files
 deploy/.env
+**/.env
+**/.env.*
+!**/.env.example
+deciduous_mcp/certs/

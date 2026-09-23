@@ -6,6 +6,7 @@ defmodule DeciduousMcp.Web.Router do
 
     * `GET  /health` — unauthenticated liveness, so Caddy and compose can check
       the container without holding a token.
+    * `GET  /ready` — database connectivity and required migrations; 503 until ready.
     * `ALL  /mcp`    — the MCP endpoint, forwarded to Hermes' Streamable HTTP
       plug.
     * `POST /import` — bulk ingest of one project's graph.
@@ -42,6 +43,13 @@ defmodule DeciduousMcp.Web.Router do
 
   get "/health" do
     send_resp(conn, 200, "ok")
+  end
+
+  get "/ready" do
+    case DeciduousMcp.Readiness.check() do
+      :ok -> send_resp(conn, 200, "ready")
+      :unavailable -> send_resp(conn, 503, "not ready")
+    end
   end
 
   forward("/mcp",

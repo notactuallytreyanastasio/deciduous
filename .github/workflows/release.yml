@@ -7,15 +7,108 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., v0.11.1)'
+        description: 'Git tag or ref to validate (use a version tag when publishing)'
         required: true
         type: string
+      publish:
+        description: 'Publish the validated version tag to GitHub and crates.io'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  validate-ref:
+    name: Validate and pin the requested revision
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.revision.outputs.ref }}
+      tag: ${{ steps.revision.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Require an existing version tag for publishing
+        id: revision
+        env:
+          REQUESTED_REF: ${{ inputs.tag || github.ref }}
+          PUBLISH_REQUESTED: ${{ github.event_name == 'push' || inputs.publish == true }}
+        run: |
+          revision=$(git rev-parse HEAD)
+          tag=
+          if [ "$PUBLISH_REQUESTED" = true ]; then
+            tag="${REQUESTED_REF#refs/tags/}"
+            if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo 'Publishing requires an existing vMAJOR.MINOR.PATCH version tag.' >&2
+              exit 1
+            fi
+            if ! revision=$(git rev-parse --verify "refs/tags/${tag}^{commit}"); then
+              echo "Publishing tag does not exist: $tag" >&2
+              exit 1
+            fi
+          fi
+          # Every build and test uses the same commit, even if a branch moves
+          # or a branch and tag happen to have the same name.
+          printf 'ref=%s\ntag=%s\n' "$revision" "$tag" >> "$GITHUB_OUTPUT"
+      - name: Require both package versions to match the publishing tag
+        if: github.event_name == 'push' || inputs.publish == true
+        env:
+          PINNED_REVISION: ${{ steps.revision.outputs.ref }}
+          RELEASE_TAG: ${{ steps.revision.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          import tomllib
+
+          revision = os.environ["PINNED_REVISION"]
+          tag = os.environ["RELEASE_TAG"]
+          expected = tag.removeprefix("v")
+
+          def read_manifest(path):
+              return subprocess.check_output(
+                  ["git", "show", f"{revision}:{path}"], text=True
+              )
+
+          try:
+              cargo_version = tomllib.loads(read_manifest("Cargo.toml"))["package"]["version"]
+              server_match = re.search(
+                  r'(?m)^\s*version:\s*"([^"]+)"',
+                  read_manifest("deciduous_mcp/mix.exs"),
+              )
+              if server_match is None:
+                  raise ValueError("deciduous_mcp/mix.exs must declare a literal project version")
+              versions = {
+                  "Cargo.toml": cargo_version,
+                  "deciduous_mcp/mix.exs": server_match.group(1),
+              }
+          except (KeyError, ValueError, subprocess.CalledProcessError) as error:
+              sys.exit(f"Cannot verify package versions for {tag}: {error}")
+
+          mismatches = [
+              f"{path} declares {actual}; publishing tag {tag} requires {expected}"
+              for path, actual in versions.items()
+              if actual != expected
+          ]
+          if mismatches:
+              sys.exit("Release version mismatch:\n" + "\n".join(mismatches))
+          print(f"Both package versions match {tag} at {revision}")
+          PY
+
+  acceptance:
+    needs: [validate-ref]
+    uses: ./.github/workflows/release-acceptance.yml
+    with:
+      ref: ${{ needs.validate-ref.outputs.ref }}
+
   build:
+    needs: [validate-ref]
     strategy:
       matrix:
         include:
@@ -41,7 +134,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.validate-ref.outputs.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -87,14 +180,131 @@ jobs:
           name: deciduous-${{ matrix.name }}
           path: deciduous-${{ matrix.name }}${{ matrix.ext }}
 
-  release:
-    needs: [build]
-    runs-on: ubuntu-latest
+  build-mcp-server:
+    name: Build self-contained MCP server (${{ matrix.name }})
+    needs: [validate-ref]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            name: darwin-arm64
+            burrito_target: darwin_arm64
+          - os: macos-latest
+            name: darwin-amd64
+            burrito_target: darwin_amd64
+          - os: ubuntu-latest
+            name: linux-arm64
+            burrito_target: linux_arm64
+          - os: ubuntu-latest
+            name: linux-amd64
+            burrito_target: linux_amd64
+          - os: ubuntu-latest
+            name: windows-amd64
+            burrito_target: windows_amd64
+            ext: .exe
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.validate-ref.outputs.ref }}
+
+      - name: Install Erlang and Elixir for the build
+        uses: erlef/setup-beam@v1
+        with:
+          otp-version: '28.3.3'
+          elixir-version: '1.18.4'
+          version-type: strict
+
+      - name: Install Burrito build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xz-utils p7zip-full
+
+      - name: Install Burrito build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install xz
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: '0.16.0'
+          cache-key: ${{ matrix.burrito_target }}
+
+      - name: Build Burrito executable
+        working-directory: deciduous_mcp
+        env:
+          MIX_ENV: prod
+          BURRITO_TARGET: ${{ matrix.burrito_target }}
+        run: |
+          mix local.hex --force
+          mix local.rebar --force
+          mix deps.get --only prod
+          mix hex.audit
+          mix release deciduous_mcp --overwrite
+
+      - name: Name release artifact
+        shell: bash
+        run: |
+          cp "deciduous_mcp/burrito_out/deciduous_mcp_${{ matrix.burrito_target }}${{ matrix.ext }}" \
+            "deciduous-mcp-${{ matrix.name }}${{ matrix.ext }}"
+
+      - name: Upload self-contained MCP server
+        uses: actions/upload-artifact@v4
+        with:
+          name: deciduous-mcp-${{ matrix.name }}
+          path: deciduous-mcp-${{ matrix.name }}${{ matrix.ext }}
+          if-no-files-found: error
+
+  verify-mcp-binaries:
+    name: Verify MCP executable (${{ matrix.name }})
+    needs: [build-mcp-server, validate-ref]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            name: linux-amd64
+          - os: ubuntu-24.04-arm
+            name: linux-arm64
+          - os: macos-15
+            name: darwin-arm64
+          - os: macos-15-intel
+            name: darwin-amd64
+          - os: windows-2025
+            name: windows-amd64
+            ext: .exe
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-ref.outputs.ref }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: deciduous-mcp-${{ matrix.name }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Boot embedded runtime without host Erlang or Elixir
+        shell: bash
+        run: |
+          chmod +x "deciduous-mcp-${{ matrix.name }}${{ matrix.ext }}"
+          python deciduous_mcp/test/release/native_smoke.py \
+            "./deciduous-mcp-${{ matrix.name }}${{ matrix.ext }}"
+
+  release:
+    if: github.event_name == 'push' || inputs.publish == true
+    needs: [build, verify-mcp-binaries, acceptance, validate-ref]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-ref.outputs.ref }}
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -104,46 +314,62 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -la artifacts/*/
 
+      - name: Stage Postgres bootstrap schema
+        run: |
+          mkdir -p artifacts/deciduous-mcp-structure
+          cp deciduous_mcp/STRUCTURE.sql \
+            artifacts/deciduous-mcp-structure/deciduous-mcp-structure.sql
+
+      - name: Package Docker setup
+        run: |
+          mkdir -p artifacts/deciduous-mcp-docker
+          bash deciduous_mcp/scripts/package-docker.sh \
+            artifacts/deciduous-mcp-docker/deciduous-mcp-docker.tar.gz
+
       - name: Create checksums
         run: |
-          cd artifacts
-          for dir in */; do
-            for file in "$dir"*; do
-              if [ -f "$file" ]; then
-                sha256sum "$file" >> ../checksums.txt
-              fi
-            done
+          : > checksums.txt
+          for dir in artifacts/*/; do
+            (cd "$dir" && sha256sum *) >> checksums.txt
           done
-          cd ..
+          sort -o checksums.txt checksums.txt
           cat checksums.txt
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: ${{ inputs.tag || github.ref_name }}
+          tag_name: ${{ needs.validate-ref.outputs.tag }}
           files: |
             artifacts/deciduous-linux-amd64/deciduous-linux-amd64
             artifacts/deciduous-linux-arm64/deciduous-linux-arm64
             artifacts/deciduous-darwin-amd64/deciduous-darwin-amd64
             artifacts/deciduous-darwin-arm64/deciduous-darwin-arm64
             artifacts/deciduous-windows-amd64/deciduous-windows-amd64.exe
+            artifacts/deciduous-mcp-linux-amd64/deciduous-mcp-linux-amd64
+            artifacts/deciduous-mcp-linux-arm64/deciduous-mcp-linux-arm64
+            artifacts/deciduous-mcp-darwin-amd64/deciduous-mcp-darwin-amd64
+            artifacts/deciduous-mcp-darwin-arm64/deciduous-mcp-darwin-arm64
+            artifacts/deciduous-mcp-windows-amd64/deciduous-mcp-windows-amd64.exe
+            artifacts/deciduous-mcp-structure/deciduous-mcp-structure.sql
+            artifacts/deciduous-mcp-docker/deciduous-mcp-docker.tar.gz
             checksums.txt
+          fail_on_unmatched_files: true
           generate_release_notes: true
 
   publish-crate:
-    needs: [build]
+    if: github.event_name == 'push' || inputs.publish == true
+    needs: [build, verify-mcp-binaries, acceptance, validate-ref]
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.tag || github.ref }}
+          ref: ${{ needs.validate-ref.outputs.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
       - name: Publish to crates.io
-        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: cargo publish --no-verify
@@ -156,15 +382,15 @@ jobs:
   #  - Running after `release` guarantees checksums.txt is attached, so the
   #    download can't race the publish (which is what failed for 0.13.x/0.14.0).
   update-homebrew:
-    needs: [release]
+    needs: [release, validate-ref]
     runs-on: ubuntu-latest
     steps:
       - name: Resolve version + tag
         id: rel
+        env:
+          RELEASE_TAG: ${{ needs.validate-ref.outputs.tag }}
         run: |
-          TAG="${{ inputs.tag || github.ref_name }}"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+          printf 'tag=%s\nversion=%s\n' "$RELEASE_TAG" "${RELEASE_TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Download checksums
         env:
@@ -179,7 +405,11 @@ jobs:
         run: |
           for p in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
             key=$(echo "$p" | tr '-' '_')
-            echo "${key}=$(grep "$p" checksums.txt | awk '{print $1}')" >> $GITHUB_OUTPUT
+            # The release also ships `deciduous-mcp-$p`; select the CLI asset
+            # exactly so its checksum does not become a multi-line value.
+            sum=$(awk -v asset="deciduous-${p}" '$2 == asset {print $1}' checksums.txt)
+            test "${#sum}" -eq 64
+            echo "${key}=${sum}" >> $GITHUB_OUTPUT
           done
 
       - name: Generate formula
