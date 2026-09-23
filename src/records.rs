@@ -1138,14 +1138,22 @@ impl RecordStore {
                 Some(existing) => {
                     let ours = serde_json::to_value(existing).map_err(io::Error::other)?;
                     let theirs = serde_json::to_value(rec).map_err(io::Error::other)?;
-                    serde_json::from_value(merge_record_values(None, &ours, &theirs)).map_err(
-                        |e| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidData,
-                                format!("merging a record produced something unreadable: {}", e),
-                            )
-                        },
-                    )?
+                    let merged = merge_record_values(None, &ours, &theirs);
+                    if same_but_stamp(&ours, &merged) {
+                        // Nothing but updated_at would change. The server
+                        // stamps a node when it applies the op, ~50 ms after
+                        // the local write, so taking its stamp for content we
+                        // already have dirtied graph.json in every clone that
+                        // pulled after every online write. The local stamp is
+                        // also the truer one: it is when the edit was made.
+                        return Ok(false);
+                    }
+                    serde_json::from_value(merged).map_err(|e| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            format!("merging a record produced something unreadable: {}", e),
+                        )
+                    })?
                 }
             };
             Ok(put(map, key, merged))
@@ -2391,6 +2399,21 @@ fn record_ts(v: &Value) -> DateTime<Utc> {
         (None, Some(d)) => d,
         // Edges and tags are immutable: created_at is their version.
         (None, None) => get("created_at").unwrap_or(DateTime::<Utc>::UNIX_EPOCH),
+    }
+}
+
+/// Two versions of one record that differ in `updated_at` and nothing else.
+fn same_but_stamp(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Object(a), Value::Object(b)) => {
+            let strip = |m: &serde_json::Map<String, Value>| {
+                let mut m = m.clone();
+                m.remove("updated_at");
+                m
+            };
+            strip(a) == strip(b)
+        }
+        _ => a == b,
     }
 }
 

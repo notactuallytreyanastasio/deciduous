@@ -2740,3 +2740,81 @@ fn new8_remote_init_keeps_the_updates_comments_with_updates() {
         "remote init did not append [remote]:\n{after}"
     );
 }
+
+// ---------------------------------------------------------------------------
+// NEW-5: the server stamps updated_at when it applies an op, about 50 ms
+// after the local write. `remote pull` took that stamp for content it
+// already had, so every clone that pulled got a graph.json diff after every
+// online write.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn new5_pull_of_unchanged_content_leaves_graph_json_alone() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("stamp");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!(
+            "[remote]\nurl = \"{}\"\nworkspace = \"stamp\"\n",
+            dead_url()
+        ),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "written online", "-c", "80"]);
+    sb.dx_ok(&dir, &["status", "1", "active"]);
+    let cid = local_change_id(&sb, &dir, 1);
+    let graph_file = dir.join(".deciduous").join("graph.json");
+    let before = std::fs::read_to_string(&graph_file).unwrap();
+    let doc: Value = serde_json::from_str(&before).unwrap();
+    let rec = &doc["nodes"][&cid];
+    assert!(rec.is_object(), "no record for {cid} in {doc}");
+
+    // The server's copy: same content, stamped in UTC when it was applied.
+    let local_stamp = chrono::DateTime::parse_from_rfc3339(rec["updated_at"].as_str().unwrap())
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let applied = local_stamp + chrono::Duration::milliseconds(50);
+    let server_node = serde_json::json!({
+        "id": format!("srv-{cid}"), "change_id": cid, "node_type": rec["node_type"],
+        "title": rec["title"], "description": rec.get("description").cloned().unwrap_or(Value::Null),
+        "status": rec["status"], "metadata": rec["metadata"], "created_at": rec["created_at"],
+        "updated_at": applied.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        "deleted_at": null
+    });
+    let url = stub_server(serde_json::json!({
+        "nodes": [server_node], "edges": [], "documents": []
+    }));
+    set_remote_url(&dir, &url);
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    let after = std::fs::read_to_string(&graph_file).unwrap();
+    assert_eq!(
+        before, after,
+        "a pull that changed no content rewrote graph.json (pull said: {out})"
+    );
+    assert!(!out.contains("updated 1"), "{out}");
+
+    // A real change from the server is still taken, stamp and all.
+    let changed = server_node_with(&cid, rec, "completed", applied);
+    let url = stub_server(serde_json::json!({
+        "nodes": [changed], "edges": [], "documents": []
+    }));
+    set_remote_url(&dir, &url);
+    sb.dx_ok(&dir, &["remote", "pull"]);
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&graph_file).unwrap()).unwrap();
+    assert_eq!(doc["nodes"][&cid]["status"], "completed");
+}
+
+fn server_node_with(
+    cid: &str,
+    rec: &Value,
+    status: &str,
+    at: chrono::DateTime<chrono::Utc>,
+) -> Value {
+    serde_json::json!({
+        "id": format!("srv-{cid}"), "change_id": cid, "node_type": rec["node_type"],
+        "title": rec["title"], "description": rec.get("description").cloned().unwrap_or(Value::Null),
+        "status": status, "metadata": rec["metadata"], "created_at": rec["created_at"],
+        "updated_at": at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        "deleted_at": null
+    })
+}
