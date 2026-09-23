@@ -1507,6 +1507,19 @@ impl SyncReport {
     pub fn is_clean(&self) -> bool {
         self.imported() == 0 && self.exported() == 0
     }
+
+    /// Nothing moved *and* nothing is left over: no edge waiting for a node,
+    /// no record that would not read, no record the database refused, no
+    /// conflict. This is what a pre-push `sync --check` must require.
+    /// `is_clean` alone passed a graph file whose edges point at a commit
+    /// nobody pushed, or whose records a bad merge left unreadable.
+    pub fn is_settled(&self) -> bool {
+        self.is_clean()
+            && self.edges_pending == 0
+            && self.read_errors.is_empty()
+            && self.errors.is_empty()
+            && self.conflicts.is_empty()
+    }
 }
 
 /// Make the database and the store agree.

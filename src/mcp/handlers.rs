@@ -874,7 +874,8 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
         "legacy_events": store.has_legacy_events(),
         "conflicts": report.conflicts,
         "errors": report.errors,
-        "message": if report.is_clean() && report.conflicts.is_empty() {
+        "settled": report.is_settled(),
+        "message": if report.is_settled() {
             "Database and records agree.".to_string()
         } else if !report.conflicts.is_empty() {
             format!(
@@ -889,11 +890,17 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
                     .collect::<Vec<_>>()
                     .join("; ")
             )
-        } else {
+        } else if !report.is_clean() {
             format!(
                 "{} change(s) to import, {} to export. Call `sync` to apply.",
                 report.imported(),
                 report.exported()
+            )
+        } else {
+            format!(
+                "Nothing to import or export, but not settled: {} edge(s) wait for a node that is not here yet, {} record(s) could not be read.",
+                report.edges_pending,
+                report.read_errors.len()
             )
         }
     })))

@@ -664,3 +664,50 @@ fn a_committed_conflict_does_not_break_every_later_merge() {
         ]
     );
 }
+
+// ============================================================================
+// G5: sync --check as a pre-push guard
+// ============================================================================
+
+#[test]
+fn sync_check_fails_while_edges_wait_or_records_are_unreadable() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "Here", &[]);
+    let goal_cid = alice.change_id(goal);
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+    let clean = alice.doc();
+
+    // An edge to a node nobody has pushed yet: a teammate forgot a commit.
+    let mut doc = clean.clone();
+    let missing = "99999999-0000-4000-8000-000000000000";
+    let id = deciduous::edge_id(&goal_cid, missing, "leads_to");
+    doc["edges"][&id] = serde_json::json!({
+        "edge_id": id,
+        "from_change_id": goal_cid,
+        "to_change_id": missing,
+        "edge_type": "leads_to",
+        "created_at": "2026-01-01T00:00:00+00:00",
+    });
+    alice.write_doc(&doc);
+    let (out, _) = alice.fails(&["sync", "--check"]);
+    assert!(out.contains("waits for node 99999999"), "{out}");
+    // sync itself succeeds (it did what it could) and still says so.
+    let out = alice.ok(&["sync"]);
+    assert!(out.contains("waits for node 99999999"), "{out}");
+    alice.fails(&["sync", "--check"]);
+
+    // A record filed under the wrong key (a bad hand edit or merge).
+    let mut doc = clean.clone();
+    let mut rec = doc["nodes"][&goal_cid].clone();
+    rec["change_id"] = "aaaaaaaa-0000-4000-8000-000000000000".into();
+    doc["nodes"]["bbbbbbbb-0000-4000-8000-000000000000"] = rec;
+    alice.write_doc(&doc);
+    let (out, _) = alice.fails(&["sync", "--check"]);
+    assert!(out.contains("could not be read"), "{out}");
+
+    alice.write_doc(&clean);
+    let out = alice.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+}

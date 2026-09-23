@@ -2572,14 +2572,30 @@ fn main() {
             }
 
             if check {
-                if report.is_clean() && report.conflicts.is_empty() {
+                if report.is_settled() {
                     std::process::exit(0);
                 }
-                println!(
-                    "{} Run `deciduous sync` to apply, then commit {}",
-                    "Pending:".yellow(),
-                    store_path.display()
-                );
+                if !report.is_clean() || !report.conflicts.is_empty() {
+                    println!(
+                        "{} Run `deciduous sync` to apply, then commit {}",
+                        "Pending:".yellow(),
+                        store_path.display()
+                    );
+                }
+                if report.edges_pending > 0 {
+                    println!(
+                        "{} {} edge(s) wait for nodes that are not in this graph file yet; pull (or ask for) the commit that adds them",
+                        "Not settled:".yellow(),
+                        report.edges_pending
+                    );
+                }
+                if !report.read_errors.is_empty() {
+                    println!(
+                        "{} {} record(s) could not be read; `deciduous sync` will not fix them",
+                        "Not settled:".yellow(),
+                        report.read_errors.len()
+                    );
+                }
                 std::process::exit(1);
             }
         }
