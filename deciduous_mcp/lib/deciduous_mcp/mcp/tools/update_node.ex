@@ -40,7 +40,7 @@ defmodule DeciduousMcp.MCP.Tools.UpdateNode do
           branch: %{
             type: "string",
             description:
-              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+              "Git branch this write belongs to; check_activity shows who else is writing it"
           }
         },
         required: ["node_id"]

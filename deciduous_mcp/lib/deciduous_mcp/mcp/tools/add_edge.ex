@@ -27,7 +27,7 @@ defmodule DeciduousMcp.MCP.Tools.AddEdge do
           branch: %{
             type: "string",
             description:
-              "Git branch name, so this write is locked against others on the same branch (see check_activity)"
+              "Git branch this write belongs to; check_activity shows who else is writing it"
           }
         },
         required: ["from_node_id", "to_node_id"]

@@ -38,6 +38,7 @@ defmodule DeciduousMcp.Sync.Ops do
   """
   import Ecto.Query
 
+  alias DeciduousMcp.Activity
   alias DeciduousMcp.Graph.{Edges, Nodes, Workspaces}
   alias DeciduousMcp.MCP.ArgCheck
   alias DeciduousMcp.Repo
@@ -108,15 +109,39 @@ defmodule DeciduousMcp.Sync.Ops do
     with {:ok, name} <- workspace_name(raw),
          :ok <- check_batch(ops),
          {:ok, workspace} <- workspace_for(name, ops, payload["repo_roots"]) do
-      {:ok,
-       %{
-         workspace: name,
-         results: Enum.map(ops, &apply_one(workspace, &1))
-       }}
+      results = Enum.map(ops, &apply_one(workspace, &1))
+      record_activity(workspace, ops, results, payload["repo_roots"])
+      {:ok, %{workspace: name, results: results}}
     end
   end
 
   def run(_), do: {:error, "payload must contain an \"ops\" list"}
+
+  # The CLI shows up in check_activity beside the MCP sessions (team probe
+  # T10: its writes never appeared). One entry per branch a batch wrote a
+  # node on, or the no-branch entry when what it applied names none (an
+  # update or an edge op carries no branch). A CLI has no session; a
+  # repository's root commits name it across runs, and all 1.0.7-style
+  # clients that send none share one entry.
+  defp record_activity(nil, _ops, _results, _roots), do: :ok
+
+  defp record_activity(workspace, ops, results, roots) do
+    applied =
+      ops
+      |> Enum.zip(results)
+      |> Enum.filter(fn {_op, r} -> r.result == "applied" end)
+      |> Enum.map(fn {op, _} -> get_in(op, ["metadata", "branch"]) end)
+      |> Enum.map(&if(is_binary(&1), do: &1, else: ""))
+      |> Enum.uniq()
+
+    session =
+      case roots do
+        [root | _] when is_binary(root) -> "cli:" <> String.slice(root, 0, 12)
+        _ -> "cli"
+      end
+
+    Enum.each(applied, &Activity.record(workspace.id, &1, session, "deciduous CLI", nil))
+  end
 
   defp workspace_name(raw) do
     case Workspaces.normalize_name(raw) do

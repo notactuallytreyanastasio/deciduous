@@ -18,15 +18,14 @@ defmodule DeciduousMcp.MCP.Scope do
   no workspace filter at all, every project at once. Write tools reject it,
   because a node has to land somewhere specific.
 
-  Every write also claims a short advisory lock, keyed by workspace and
-  branch (`DeciduousMcp.Locks`), before it is allowed to proceed — two agents
-  on different branches never contend by default, but two on the same one do,
-  and the second gets told who is holding it rather than writing a node that
-  interleaves with a burst the first agent is mid-way through.
+  Every write also records who wrote where (`DeciduousMcp.Activity`): the
+  workspace, the branch argument, the session and its clientInfo. It is a
+  record for `check_activity`, never a refusal; see that module for why the
+  branch lock it replaced was dropped.
   """
 
   alias DeciduousMcp.Graph.{Nodes, Workspaces}
-  alias DeciduousMcp.Locks
+  alias DeciduousMcp.Activity
 
   @fallback "scratch"
   @global Workspaces.global_token()
@@ -124,28 +123,24 @@ defmodule DeciduousMcp.MCP.Scope do
   def check_node_workspace(_tool, _args), do: :ok
 
   @doc """
-  Resolves a write scope, and claims the branch lock for it.
-
-  On conflict, the error names who holds it and for how much longer, so the
-  caller (an LLM, almost always) has what it needs to just say so rather than
-  silently retrying into the same collision.
+  Resolves a write scope, and records the write in `DeciduousMcp.Activity`.
   """
   def write_workspace_id(frame, args) do
     with {:ok, workspace_id} <- resolve_for_write(frame, args) do
-      claim_lock(workspace_id, frame, args)
+      record_activity(workspace_id, frame, args)
     end
   end
 
   @doc """
-  Resolves a write scope from the node being written to, and claims the
-  branch lock for it.
+  Resolves a write scope from the node being written to, and records the
+  write.
 
   `update_node`, `delete_node` and `delete_edge` name a row by id rather than
   a workspace by name, so the workspace argument the other write tools take
   would be the wrong source of truth here: a caller that omitted it would
-  lock `scratch` while editing a node in `blog`. The node already knows its
-  workspace. Look it up, refuse if it is gone, then claim the lock exactly
-  as `write_workspace_id/2` does.
+  be recorded in `scratch` while editing a node in `blog`. The node already
+  knows its workspace. Look it up, refuse if it is gone, then record the
+  write exactly as `write_workspace_id/2` does.
 
   For an edge, the source node stands in for the edge — an edge row carries
   no branch of its own, and both of its endpoints are in one workspace by
@@ -155,7 +150,7 @@ defmodule DeciduousMcp.MCP.Scope do
     with {:ok, node} <- lookup_node(node_id),
          :ok <- check_pin(frame, node),
          :ok <- check_live(node) do
-      claim_lock(node.workspace_id, frame, args)
+      record_activity(node.workspace_id, frame, args)
     else
       {:error, :not_found} -> {:error, "Node not found: #{node_id}"}
       {:error, message} when is_binary(message) -> {:error, message}
@@ -165,7 +160,7 @@ defmodule DeciduousMcp.MCP.Scope do
   @doc """
   Checks that a node other than the one a write is scoped by may be
   touched by it: it exists, it is in the pinned workspace if there is a
-  pin, and it is not deleted. Claims no lock.
+  pin, and it is not deleted. Records nothing.
 
   delete_edge scopes itself by its source node, so an edge *into* a
   deleted node was deleted with "Edge deleted" while one out of it was
@@ -185,7 +180,7 @@ defmodule DeciduousMcp.MCP.Scope do
   # The moduledoc's promise is that a pinned repo cannot have its writes
   # redirected, nor read its neighbours. Resolving the workspace from the node would quietly break it
   # the other way round: a client pinned to `blog` naming a node in
-  # `deciduous` would take `deciduous`'s lock and edit `deciduous`'s row.
+  # `deciduous` would edit `deciduous`'s row.
   defp check_pin(frame, node) do
     case pinned(frame) do
       nil ->
@@ -225,49 +220,19 @@ defmodule DeciduousMcp.MCP.Scope do
     end
   end
 
-  defp claim_lock(workspace_id, frame, args) do
-    with {:ok, workspace} <- Workspaces.get_workspace(workspace_id) do
-      lock_key = Locks.lock_key_for(workspace, Map.get(args, "branch"))
-      session_id = session_id(frame)
-      client = client_info(frame)
+  defp record_activity(workspace_id, frame, args) do
+    client = client_info(frame)
 
-      case Locks.acquire(workspace_id, lock_key, session_id, client.name, client.version) do
-        {:ok, _lock} ->
-          {:ok, workspace_id}
+    :ok =
+      Activity.record(
+        workspace_id,
+        Map.get(args, "branch"),
+        session_id(frame),
+        client.name,
+        client.version
+      )
 
-        {:error, holder} ->
-          {:error, lock_conflict_message(workspace.name, lock_key, holder)}
-      end
-    else
-      {:error, :not_found} -> {:error, "workspace vanished between resolve and lock"}
-    end
-  end
-
-  defp lock_conflict_message(workspace_name, lock_key, holder) do
-    remaining = max(DateTime.diff(holder.expires_at, DateTime.utc_now(), :second), 0)
-    who = holder.client_name || "another client"
-
-    where =
-      case lock_key do
-        "*" -> "workspace-wide"
-        "" -> "no branch recorded"
-        branch -> "branch \"#{branch}\""
-      end
-
-    "workspace \"#{workspace_name}\" (#{where}) is locked by #{who}" <>
-      if(holder.client_version, do: " (#{holder.client_version})", else: "") <>
-      ", session #{short_session(holder.session_id)}. " <>
-      "Releases in #{remaining}s if that session goes idle, or finishes sooner. " <>
-      "Retry shortly, or write to a different branch."
-  end
-
-  # Every session id Hermes hands out starts with the literal "session_", so
-  # slicing the first N characters shows that fixed prefix, not anything that
-  # tells two sessions apart. Strip it first.
-  defp short_session(id) do
-    id
-    |> String.replace_prefix("session_", "")
-    |> String.slice(0, 8)
+    {:ok, workspace_id}
   end
 
   defp session_id(frame) do

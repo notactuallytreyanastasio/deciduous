@@ -340,8 +340,9 @@ defmodule DeciduousMcp.Web.SessionGuard do
   defp tool_call_params_problem(other),
     do: "tools/call params must be an object, got #{describe(other)}"
 
-  # clientInfo is stored on every write lock the session takes, in columns
-  # Postgres cannot put a NUL into. Accepted as it was, a 256-character or
+  # clientInfo is stored with every write the session makes (the activity
+  # record check_activity reads), in columns Postgres cannot put a NUL
+  # into. Accepted as it was, a 256-character or
   # NUL-holding name let the session initialize and then failed every
   # write it made with "add_node failed (MatchError)" (SERVER-N2). It is
   # refused here instead, where the client can still pick another.

@@ -33,7 +33,7 @@ defmodule DeciduousMcp.MCP.ArgCheck do
   """
 
   @title_max 10_000
-  # A branch is a key: the write lock's, and the btree expression index
+  # A branch is a key: the activity record's, and the btree expression index
   # idx_nodes_ws_branchkey_latest over metadata->>'branch', whose entries
   # cannot pass about 2,700 bytes. 512 characters is at most 2,048 bytes of
   # UTF-8 and longer than any branch name a person types; a 300-character

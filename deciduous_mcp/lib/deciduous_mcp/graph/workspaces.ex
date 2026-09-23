@@ -103,6 +103,21 @@ defmodule DeciduousMcp.Graph.Workspaces do
         group_by: n.workspace_id,
         select: %{workspace_id: n.workspace_id, count: count(n.id)}
 
+    # updated_at is the last write: the workspace row is written once, when
+    # it is created, and list_workspaces showed that time for a workspace
+    # written to a minute ago (team probe T10). A delete is a write too
+    # (it sets deleted_at and updated_at), so deleted nodes count here.
+    # An edge delete leaves no row and is the one write this cannot see.
+    last_node_write =
+      from n in Node,
+        group_by: n.workspace_id,
+        select: %{workspace_id: n.workspace_id, at: max(n.updated_at)}
+
+    last_edge_write =
+      from e in Edge,
+        group_by: e.workspace_id,
+        select: %{workspace_id: e.workspace_id, at: max(e.updated_at)}
+
     # An edge counts when both its ends are live, the rule /export and
     # get_graph already apply; counting every row put edges through a
     # deleted node into edge_count beside a live-only node_count.
@@ -120,6 +135,10 @@ defmodule DeciduousMcp.Graph.Workspaces do
       on: n.workspace_id == w.id,
       left_join: e in subquery(edge_counts),
       on: e.workspace_id == w.id,
+      left_join: ln in subquery(last_node_write),
+      on: ln.workspace_id == w.id,
+      left_join: le in subquery(last_edge_write),
+      on: le.workspace_id == w.id,
       order_by: [desc: coalesce(n.count, 0)],
       select: %{
         id: w.id,
@@ -127,7 +146,8 @@ defmodule DeciduousMcp.Graph.Workspaces do
         description: w.description,
         node_count: coalesce(n.count, 0),
         edge_count: coalesce(e.count, 0),
-        updated_at: w.updated_at
+        updated_at:
+          type(fragment("GREATEST(?, ?, ?)", w.updated_at, ln.at, le.at), :utc_datetime_usec)
       }
     )
     |> Repo.all()

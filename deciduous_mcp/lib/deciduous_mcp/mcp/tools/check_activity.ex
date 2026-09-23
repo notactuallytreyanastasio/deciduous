@@ -1,34 +1,37 @@
 defmodule DeciduousMcp.MCP.Tools.CheckActivity do
   @moduledoc """
-  MCP Tool: check whether another session is actively writing to this
-  workspace right now, and on what branch.
+  MCP Tool: who else is writing to this workspace, on what branch, and what
+  did everyone just do.
 
-  Read-only — it reports the same lock state `add_node` and friends contend
-  for, but taking this call never claims or renews anything. An agent that
-  starts a fresh branch off main and wants to know if it's about to collide
-  with someone else can call this before writing a single node.
+  Read-only. `sessions` lists every session, MCP or CLI, that wrote to the
+  workspace in the last five minutes (`DeciduousMcp.Activity`), with its
+  branch and client, and whether it is this session. `branches` lists every
+  branch with the most recent node on it and who has been writing it. In the
+  first arena run the agents polled `query_nodes` for decisions because that
+  was the only way to see what was new; this is the one call that replaces
+  that poll.
 
-  It also answers the question the locks alone did not: what did everyone
-  just do. `branches` lists every branch in the workspace with the most
-  recent node on it, lock or no lock. In the first arena run the agents
-  polled `query_nodes` for decisions because that was the only way to see
-  what was new; this is the one call that replaces that poll.
+  It used to list unexpired branch locks: ten-second leases that had always
+  lapsed by the time anyone asked, so a run of short-lived clients read
+  "0 active sessions" throughout, and CLI writes, which took no lock, never
+  appeared at all (team probe T10).
   """
   use DeciduousMcp.MCP.Component, type: :tool
 
+  alias DeciduousMcp.Activity
   alias DeciduousMcp.Graph.Nodes
-  alias DeciduousMcp.Locks
   alias DeciduousMcp.MCP.Scope
 
   def definition do
     %{
       name: "check_activity",
       description:
-        "List active write sessions in a workspace — which branches have a " <>
-          "session actively writing right now, which client, and whether it's " <>
-          "this session — and the most recent node on every branch, so one call " <>
-          "shows what everyone else just did. Call this before a burst of writes, " <>
-          "and after every milestone, instead of polling query_nodes.",
+        "Who has been writing to this workspace in the last five minutes: each session's " <>
+          "branch, client (MCP or the deciduous CLI) and whether it is this session; and " <>
+          "the most recent node on every branch, so one call shows what everyone else " <>
+          "just did. Writes are never refused because someone else is writing; this is " <>
+          "how you see them. Call it before a burst of writes and after every milestone, " <>
+          "instead of polling query_nodes.",
       input_schema: %{
         type: "object",
         properties: %{
@@ -68,20 +71,30 @@ defmodule DeciduousMcp.MCP.Tools.CheckActivity do
 
   defp do_call(workspace_id, frame, limit) do
     my_session = session_id(frame)
-    locks = Locks.active(workspace_id)
-    lock_by_branch = Map.new(locks, &{&1.lock_key, &1})
+    now = DateTime.utc_now()
+    seen = Activity.recent(workspace_id)
+    by_branch = Enum.group_by(seen, & &1.branch)
     {recent, total} = Nodes.latest_per_branch(workspace_id, limit: limit)
 
+    writer = fn a ->
+      %{
+        client: a.client_name,
+        client_version: a.client_version,
+        session: short_session(a.session_id),
+        is_you: a.session_id == my_session,
+        first_seen_at: DateTime.to_iso8601(a.first_seen_at),
+        last_seen_at: DateTime.to_iso8601(a.last_seen_at),
+        seconds_ago: max(DateTime.diff(now, a.last_seen_at, :second), 0)
+      }
+    end
+
     result = %{
-      active_sessions: length(locks),
+      window_seconds: Activity.window_seconds(),
+      active_sessions: seen |> Enum.map(& &1.session_id) |> Enum.uniq() |> length(),
       branches_total: total,
       branches:
         Enum.map(recent, fn node ->
           branch = get_in(node.metadata, ["branch"]) || ""
-          # Under lock_scope "workspace" every branch shares the one key "*",
-          # so a branch row looked up by its own name would show nobody
-          # holding anything while every write is blocked.
-          lock = lock_by_branch[branch] || lock_by_branch["*"]
 
           %{
             branch: if(branch == "", do: nil, else: branch),
@@ -93,27 +106,12 @@ defmodule DeciduousMcp.MCP.Tools.CheckActivity do
               status: node.status,
               created_at: DateTime.to_iso8601(node.inserted_at)
             },
-            locked_by:
-              if lock do
-                %{
-                  client: lock.client_name,
-                  session: short_session(lock.session_id),
-                  is_you: lock.session_id == my_session
-                }
-              end
+            writers: Enum.map(Map.get(by_branch, branch, []), writer)
           }
         end),
       sessions:
-        Enum.map(locks, fn l ->
-          %{
-            branch: if(l.lock_key in ["", "*"], do: nil, else: l.lock_key),
-            workspace_wide_lock: l.lock_key == "*",
-            client: l.client_name,
-            client_version: l.client_version,
-            is_you: l.session_id == my_session,
-            started_at: DateTime.to_iso8601(l.acquired_at),
-            expires_in_seconds: max(DateTime.diff(l.expires_at, DateTime.utc_now(), :second), 0)
-          }
+        Enum.map(seen, fn a ->
+          Map.put(writer.(a), :branch, if(a.branch == "", do: nil, else: a.branch))
         end)
     }
 
