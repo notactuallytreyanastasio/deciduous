@@ -64,8 +64,8 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   The guard is the first thing to decode the body, so it answers the
   malformed shapes too (`classify/1`): an empty body, a batch, an id that is
-  null or an object, a tools/call without usable params, and a request with
-  no session header. Each gets the JSON-RPC error the protocol prescribes,
+  null or an object, a missing or wrong `jsonrpc`, params that fail the
+  schema Hermes holds the method to, and a request with no session header. Each gets the JSON-RPC error the protocol prescribes,
   under the request's id when it has a usable one.
 
   Reading the body here would normally starve Hermes, which reads it itself.
@@ -76,6 +76,8 @@ defmodule DeciduousMcp.Web.SessionGuard do
   @behaviour Plug
 
   import Plug.Conn
+
+  alias Hermes.MCP.Message
 
   @session_header "mcp-session-id"
   @not_found_code -32001
@@ -156,6 +158,14 @@ defmodule DeciduousMcp.Web.SessionGuard do
       "Invalid Request: JSON-RPC batches are not supported by this server; " <>
         "send one message per POST"
 
+  # A missing member is as wrong as a wrong one: `{"id":5,"method":"ping"}`
+  # matched no clause that looked at "jsonrpc", went on to Hermes, failed its
+  # schema there and came back as 400 "Parse error" under an id it made up.
+  defp classify_message(message) when not is_map_key(message, "jsonrpc") do
+    {:refuse, 400, @invalid_request_code,
+     ~s(Invalid Request: "jsonrpc" must be "2.0", and is missing), usable_id(message)}
+  end
+
   defp classify_message(%{"jsonrpc" => version} = message) when version != "2.0" do
     {:refuse, 400, @invalid_request_code, ~s(Invalid Request: "jsonrpc" must be "2.0"),
      usable_id(message)}
@@ -174,10 +184,14 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
       method == "tools/call" ->
         case tool_call_params_problem(Map.get(message, "params")) do
-          nil -> {:pass, message}
+          nil -> check_request_params(message)
           problem -> {:refuse, 200, @invalid_params_code, "Invalid params: " <> problem, id}
         end
 
+      method in @known_request_methods ->
+        check_request_params(message)
+
+      # route/4 answers it -32601 under its id
       true ->
         {:pass, message}
     end
@@ -185,8 +199,15 @@ defmodule DeciduousMcp.Web.SessionGuard do
 
   # No id: a notification. JSON-RPC forbids answering one, including with an
   # error, and a request method sent without an id is a notification too.
+  # One Hermes would reject is dropped here for the same reason:
+  # notifications/cancelled with params "x" got 400 "Parse error".
   defp classify_message(%{"method" => method} = message) do
-    if method in @known_notifications, do: {:pass, message}, else: {:ignore, method}
+    with true <- method in @known_notifications,
+         {:ok, _} <- Message.notification_schema(message) do
+      {:pass, message}
+    else
+      _ -> {:ignore, method}
+    end
   end
 
   # A response to a request the server sent. This server sends none, but
@@ -198,6 +219,52 @@ defmodule DeciduousMcp.Web.SessionGuard do
   defp classify_message(message) do
     {:refuse, 400, @invalid_request_code, "Invalid Request: no method", usable_id(message)}
   end
+
+  # A request for a method Hermes knows is held to the params schema Hermes
+  # itself holds it to, here, so a failure is answered -32602 under the
+  # request's id. Left to Hermes, the same failure was an empty 500
+  # (tools/list with params "x"), a 400 "Parse error" under a made-up id
+  # (ping with params [1], logging/setLevel with level 5), or 202 as if the
+  # request were a notification (initialize whose clientInfo is "x": the
+  # decoder dropped the method and what was left had no method).
+  #
+  # Absent params are validated as {}: initialize, prompts/get and
+  # resources/read each have a required member, and without one Hermes's
+  # handler crashed on a function clause. MCP makes `arguments` optional on
+  # tools/call and prompts/get, and Hermes's handlers match on it, so an
+  # absent one is sent on as {}: the tool then says which argument it lacks.
+  defp check_request_params(%{"id" => id} = message) do
+    case Map.get(message, "params", %{}) do
+      %{} = params ->
+        message = Map.put(message, "params", with_default_arguments(message["method"], params))
+
+        case Message.request_schema(message) do
+          {:ok, _} ->
+            {:pass, message}
+
+          {:error, errors} ->
+            {:refuse, 200, @invalid_params_code,
+             "Invalid params for #{message["method"]}: " <> peri_errors(errors), id}
+        end
+
+      other ->
+        {:refuse, 200, @invalid_params_code,
+         "Invalid params for #{message["method"]}: params must be an object, got #{describe(other)}",
+         id}
+    end
+  end
+
+  defp with_default_arguments(method, params) when method in ["tools/call", "prompts/get"],
+    do: Map.put_new(params, "arguments", %{})
+
+  defp with_default_arguments(_method, params), do: params
+
+  defp peri_errors(errors) when is_list(errors) do
+    text = Hermes.Server.Component.Schema.format_errors(errors)
+    if String.length(text) > 300, do: String.slice(text, 0, 300) <> "...", else: text
+  end
+
+  defp peri_errors(_), do: "they do not match the method's schema"
 
   defp tool_call_params_problem(%{"name" => name} = params) when is_binary(name) do
     case Map.get(params, "arguments") do

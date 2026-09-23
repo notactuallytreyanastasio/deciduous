@@ -1,9 +1,9 @@
-# hermes_mcp 0.14.1, vendored with five patches
+# hermes_mcp 0.14.1, vendored with six patches
 
-This is the hex package `hermes_mcp` 0.14.1 as fetched, with five changes
+This is the hex package `hermes_mcp` 0.14.1 as fetched, with six changes
 deciduous needs and upstream does not have. It is a `path:` dependency in
 `mix.exs` so `mix deps.get` never overwrites it. Upgrading Hermes means
-re-applying these five hunks or confirming upstream made them unnecessary.
+re-applying these six hunks or confirming upstream made them unnecessary.
 
 ## 1. Request handlers run in a Task, not in `Hermes.Server.Base`
 
@@ -86,6 +86,20 @@ returning an empty string, sends none, as upstream does. deciduous uses it
 for the logging guidance that replaced the log-loop hook
 (`DeciduousMcp.MCP.Instructions`). Test:
 `test/deciduous_mcp/mcp/instructions_test.exs`.
+
+## 6. A crashed handler's reason goes to the log, not to the client
+
+`lib/hermes/server/base.ex`. Patch 1 turned a handler crash into a JSON-RPC
+error under the request's id, with `data: %{reason: inspect(reason)}`. The
+reason of a FunctionClauseError in a handler is the call's arguments, so a
+tools/call without `arguments` sent back the request, the session's
+`#Frame<[session_id: ..., assigns: ...]>` and the stack trace. The log line
+just above it keeps all of that; the client now gets
+`"<method> failed inside the server; nothing it had not committed was kept,
+and the details are in the server log"` and no `data`. The inputs known to
+reach it are refused before Hermes by `DeciduousMcp.Web.SessionGuard`; this
+is the net for the ones not yet known. Test:
+`test/deciduous_mcp/web/protocol_params_test.exs`.
 
 Patch files with the full rationale and measurements for 1 and 2:
 `serialization-hermes-base-async.patch` and

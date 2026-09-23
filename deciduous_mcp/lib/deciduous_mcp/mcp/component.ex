@@ -229,12 +229,20 @@ defmodule DeciduousMcp.MCP.Component do
   @doc """
   Invokes a prompt's `call/1` and unwraps the `messages` list Hermes expects.
   """
+  # Hermes's prompts handler matches `{:reply, %Response{}, frame}` and
+  # nothing else. The bare message list this returned was a CaseClauseError
+  # on every prompts/get that reached it, answered with the session's Frame
+  # in `data`; no client had ever been sent this prompt.
   def dispatch_prompt(module, args, frame) do
     case module.call(%{arguments: args || %{}, server: frame}) do
-      {:ok, %{messages: messages}} -> {:reply, messages, frame}
-      {:ok, other} -> {:reply, other, frame}
-      {:error, %{message: message}} -> {:error, Error.execution(message), frame}
-      {:error, other} -> {:error, Error.execution(describe_error(other)), frame}
+      {:ok, %{messages: messages}} ->
+        {:reply, %{Response.prompt() | messages: stringify(messages)}, frame}
+
+      {:error, %{message: message}} ->
+        {:error, Error.execution(message), frame}
+
+      {:error, other} ->
+        {:error, Error.execution(describe_error(other)), frame}
     end
   end
 
