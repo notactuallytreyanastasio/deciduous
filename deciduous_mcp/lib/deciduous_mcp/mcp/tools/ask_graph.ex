@@ -17,13 +17,26 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
 
   The tool combines full-text search, type/status filtering, and graph
   traversal to find relevant nodes and their context.
+
+  Text search covers a node's own title, description and metadata, the
+  rationale on edges pointing into it, and the descriptions of documents
+  attached to it. Results are always nodes; each carries `matched_on`, the
+  list of ways it matched ("text", "document", "edge_rationale", "type").
   """
   use DeciduousMcp.MCP.Component, type: :tool
 
   import Ecto.Query
   alias DeciduousMcp.MCP.Scope
   alias DeciduousMcp.Repo
-  alias DeciduousMcp.Schema.{Node, Edge}
+  alias DeciduousMcp.Schema.{Document, Edge, Node}
+
+  # Result budget. Node text matches come first, but only the first
+  # @text_first of them are guaranteed a slot: after those come document and
+  # edge-rationale matches, then the rest of the text matches. When nothing
+  # matches a document or an edge the order is exactly what it was before.
+  @result_limit 25
+  @text_first 15
+  @side_limit 5
 
   def definition do
     %{
@@ -74,15 +87,32 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
     # Extract search terms from the question
     search_terms = extract_search_terms(question)
 
-    # Run searches in parallel conceptually — find matching nodes
     text_matches = search_by_text(workspace_id, search_terms, scope)
+    doc_matches = search_by_document(workspace_id, search_terms, scope)
+    edge_matches = search_by_edge_rationale(workspace_id, search_terms, scope)
     type_matches = search_by_implied_type(workspace_id, question, scope)
 
-    # Merge and deduplicate results
+    {text_head, text_tail} = Enum.split(text_matches, @text_first)
+
+    tagged =
+      Enum.map(text_head, &{&1, "text"}) ++
+        Enum.map(doc_matches, &{&1, "document"}) ++
+        Enum.map(edge_matches, &{&1, "edge_rationale"}) ++
+        Enum.map(text_tail, &{&1, "text"}) ++
+        Enum.map(type_matches, &{&1, "type"})
+
+    # Every way a node matched, not just the one that placed it: a node found
+    # by its title and by a document says so.
+    matched_on =
+      Enum.reduce(tagged, %{}, fn {node, how}, acc ->
+        Map.update(acc, node.id, [how], &Enum.uniq(&1 ++ [how]))
+      end)
+
     all_matches =
-      (text_matches ++ type_matches)
+      tagged
+      |> Enum.map(&elem(&1, 0))
       |> Enum.uniq_by(& &1.id)
-      |> Enum.take(25)
+      |> Enum.take(@result_limit)
 
     # Optionally enrich with graph context
     results =
@@ -99,6 +129,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
             description: node.description,
             status: node.status,
             metadata: node.metadata,
+            matched_on: Map.fetch!(matched_on, node.id),
             created_at: DateTime.to_iso8601(node.inserted_at),
             connects_to:
               Enum.map(edges_from, fn e ->
@@ -135,6 +166,7 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
             title: node.title,
             description: node.description,
             status: node.status,
+            matched_on: Map.fetch!(matched_on, node.id),
             created_at: DateTime.to_iso8601(node.inserted_at)
           }
         end)
@@ -193,6 +225,67 @@ defmodule DeciduousMcp.MCP.Tools.AskGraph do
   end
 
   defp search_by_text(_workspace_id, [], _scope), do: []
+
+  # A document attached to a node matches on its description; the node is
+  # what comes back. Detached documents do not count, same as
+  # Graph.Documents.for_node/1. The workspace and deleted filters are on the
+  # node, because the node is what is returned.
+  defp search_by_document(workspace_id, terms, scope) when terms != [] do
+    any_term = any_term_on(terms, :description)
+
+    attached =
+      from(d in Document,
+        where: d.node_id == parent_as(:node).id and is_nil(d.detached_at),
+        where: ^any_term
+      )
+
+    workspace_id
+    |> live_nodes(scope)
+    |> where([n], exists(attached))
+    |> order_by([n], desc: n.inserted_at)
+    |> limit(@side_limit)
+    |> Repo.all()
+  end
+
+  defp search_by_document(_workspace_id, [], _scope), do: []
+
+  # An edge matches on its rationale and returns the node it points to. The
+  # rationale is written when the child is linked under its parent, and in
+  # the data it mostly names the child's role ("Option A: top bar",
+  # "result"). The parent is not lost: with include_context it is in the
+  # result's connected_from, rationale included. Returning both ends would
+  # spend two result slots per edge.
+  defp search_by_edge_rationale(workspace_id, terms, scope) when terms != [] do
+    any_term = any_term_on(terms, :rationale)
+
+    incoming =
+      from(e in Edge,
+        where: e.to_node_id == parent_as(:node).id,
+        where: ^any_term
+      )
+
+    workspace_id
+    |> live_nodes(scope)
+    |> where([n], exists(incoming))
+    |> order_by([n], desc: n.inserted_at)
+    |> limit(@side_limit)
+    |> Repo.all()
+  end
+
+  defp search_by_edge_rationale(_workspace_id, [], _scope), do: []
+
+  defp live_nodes(workspace_id, scope) do
+    from(n in Node, as: :node)
+    |> scope_ws(workspace_id)
+    |> where([n], is_nil(n.deleted_at))
+    |> apply_scope(scope)
+  end
+
+  defp any_term_on(terms, field) do
+    Enum.reduce(terms, dynamic(false), fn term, acc ->
+      dynamic([x], ^acc or ilike(field(x, ^field), ^"%#{term}%"))
+    end)
+  end
 
   defp search_by_implied_type(workspace_id, question, scope) do
     # Detect if the question implies a specific node type
