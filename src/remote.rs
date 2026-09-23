@@ -2674,6 +2674,10 @@ impl RemoteGraph {
 
 #[derive(Debug, Deserialize)]
 pub struct RemoteNode {
+    /// The server's own id for the node, the one its MCP tools return and
+    /// agents quote. Not the change_id.
+    #[serde(default)]
+    pub id: Option<String>,
     pub change_id: String,
     pub node_type: String,
     pub title: String,
@@ -3023,6 +3027,38 @@ fn refused_fields(
     out
 }
 
+/// A server node whose server id starts with the reference given.
+#[derive(Debug, Clone)]
+pub struct ServerIdMatch {
+    pub id: String,
+    pub change_id: String,
+    pub title: String,
+    pub deleted: bool,
+}
+
+/// Server nodes whose server id (not change_id) starts with `reference`,
+/// ignoring case. Agents read these ids from every MCP tool, and quote them
+/// to people, who paste them into the CLI.
+pub fn find_by_server_id(remote: &Remote, reference: &str) -> Result<Vec<ServerIdMatch>, String> {
+    let r = reference.trim().to_ascii_lowercase();
+    Ok(remote
+        .export()?
+        .nodes
+        .into_iter()
+        .filter_map(|n| {
+            let id = n.id?;
+            id.to_ascii_lowercase()
+                .starts_with(&r)
+                .then(|| ServerIdMatch {
+                    id,
+                    change_id: n.change_id,
+                    title: n.title,
+                    deleted: n.deleted_at.is_some(),
+                })
+        })
+        .collect())
+}
+
 /// What a pull changed locally. "imported 0 nodes" after a pull that applied
 /// an agent's edits read as "nothing happened"; edits and removals are
 /// counted separately so the report says what did.
@@ -3151,8 +3187,7 @@ pub fn write_remote_url(project: &Path, url: &str) -> Result<(), String> {
     let path = dir.join("config.toml");
     let existing = std::fs::read_to_string(&path).unwrap_or_default();
 
-    let mut doc = existing
-        .parse::<toml_edit::DocumentMut>()
+    let mut doc = crate::config::parse_with_table(&existing, "remote")
         .map_err(|e| format!("{} is not valid TOML: {e}", path.display()))?;
 
     let remote = doc["remote"].or_insert(toml_edit::table());
@@ -3175,6 +3210,7 @@ mod tests {
             nodes: nodes
                 .iter()
                 .map(|c| RemoteNode {
+                    id: None,
                     change_id: c.to_string(),
                     node_type: "goal".into(),
                     title: "t".into(),

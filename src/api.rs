@@ -45,13 +45,83 @@ pub struct ApiConfig {
     pub port: u16,
     pub data_dir: PathBuf,
     pub token: String,
+    /// The deciduous executable. Each `/query` runs in a child process of
+    /// it (`<exe> __api-query`, see [`query_child_main`]), so a query past
+    /// its time limit can be killed wherever it is. `serve --api` passes
+    /// its own executable.
+    pub query_exe: PathBuf,
 }
 
 /// A running API server (owned by tests or by the CLI loop).
+///
+/// The listening socket is owned here, and each tiny_http server accepts on
+/// a duplicate of it. tiny_http 0.12 ends its accept thread for good on the
+/// first error accept() returns (EMFILE when descriptors run out,
+/// ECONNABORTED when a queued client resets), and panics in it when the
+/// descriptors run out just after an accept. Either way it drops its copy of
+/// the listener. With the only copy, that closed the socket: every
+/// connection queued on it was reset ("Connection reset by peer"), `run`
+/// returned, and `serve --api` exited 0 without a word. Holding our own
+/// copy keeps the socket and its queue open while `run` starts another
+/// tiny_http on a new duplicate.
 pub struct ApiServer {
-    server: Arc<Server>,
+    listener: std::net::TcpListener,
+    first: Mutex<Option<Server>>,
     registry: Arc<Registry>,
     token: String,
+}
+
+/// The executable `/query` children run, set once by [`ApiServer::bind`].
+static QUERY_EXE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Set by the panic hook when tiny_http's accept thread panics, which it
+/// does without telling `recv`.
+static TINY_HTTP_PANICKED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn watch_tiny_http_panics() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            // Only the accept thread's panic: RefinedTcpStream::new's
+            // try_clone().unwrap() when descriptors run out just after an
+            // accept (it is called nowhere else). A panic in a connection's
+            // task does not stop accepting, and starting another server for
+            // it only added one more to poll.
+            if info.location().is_some_and(|l| {
+                l.file().contains("tiny_http") && l.file().ends_with("refined_tcp_stream.rs")
+            }) {
+                TINY_HTTP_PANICKED.store(true, std::sync::atomic::Ordering::SeqCst);
+            }
+            previous(info);
+        }));
+    });
+}
+
+/// A tiny_http server accepting on a duplicate of `listener`.
+fn serve_on(listener: &std::net::TcpListener) -> std::io::Result<Server> {
+    Server::from_listener(listener.try_clone()?, None).map_err(std::io::Error::other)
+}
+
+/// Raises this process's open-file soft limit to its hard limit. macOS
+/// starts processes at 256, and every connection, request thread and SQLite
+/// file costs descriptors; running out is what makes accept() fail.
+fn raise_open_file_limit() {
+    // SAFETY: getrlimit/setrlimit on a local struct; no pointers retained.
+    unsafe {
+        let mut lim = std::mem::zeroed::<libc::rlimit>();
+        if libc::getrlimit(libc::RLIMIT_NOFILE, &mut lim) != 0 || lim.rlim_cur >= lim.rlim_max {
+            return;
+        }
+        let wanted = lim.rlim_max;
+        lim.rlim_cur = wanted;
+        if libc::setrlimit(libc::RLIMIT_NOFILE, &lim) != 0 {
+            // macOS refuses more than OPEN_MAX for the soft limit.
+            lim.rlim_cur = wanted.min(10_240);
+            let _ = libc::setrlimit(libc::RLIMIT_NOFILE, &lim);
+        }
+    }
 }
 
 impl ApiServer {
@@ -61,9 +131,20 @@ impl ApiServer {
             .to_socket_addrs()?
             .next()
             .ok_or_else(|| std::io::Error::other("could not resolve bind address"))?;
-        let server = Server::http(addr).map_err(std::io::Error::other)?;
+        raise_open_file_limit();
+        watch_tiny_http_panics();
+        if !config.query_exe.is_file() {
+            return Err(std::io::Error::other(format!(
+                "the executable for /query children, {}, is not a file",
+                config.query_exe.display()
+            )));
+        }
+        let _ = QUERY_EXE.set(config.query_exe.clone());
+        let listener = std::net::TcpListener::bind(addr)?;
+        let server = serve_on(&listener)?;
         Ok(Self {
-            server: Arc::new(server),
+            listener,
+            first: Mutex::new(Some(server)),
             registry: Arc::new(Registry::new(config.data_dir)),
             token: config.token,
         })
@@ -71,23 +152,100 @@ impl ApiServer {
 
     /// The actual port bound (useful when configured with port 0).
     pub fn port(&self) -> u16 {
-        self.server
-            .server_addr()
-            .to_ip()
-            .map(|a| a.port())
-            .unwrap_or(0)
+        self.listener.local_addr().map(|a| a.port()).unwrap_or(0)
     }
 
     /// Serve forever on the current thread.
+    ///
+    /// Each tiny_http server gets a thread of its own blocked in `recv()`.
+    /// One whose accept thread died still owns connections it accepted
+    /// before, whose next requests arrive in its queue, so its thread keeps
+    /// reading it. This loop only starts a new server when one reports an
+    /// accept error or tiny_http's accept thread panicked.
+    ///
+    /// Why not poll every server from this loop (as this did): each poll
+    /// was `recv_timeout(5 ms)`, one after another, so every request waited
+    /// about 5 ms more per restart, without bound: median GET latency was
+    /// 0.209 s after 25 bursts of idle connections, 0.823 s after 100. A
+    /// dead server now costs one parked thread and nothing per request.
     pub fn run(&self) {
-        for request in self.server.incoming_requests() {
-            let registry = Arc::clone(&self.registry);
-            let token = self.token.clone();
-            // one thread per request is plenty for a graph API
-            std::thread::spawn(move || {
-                let _ = handle(request, &registry, &token);
-            });
+        let first = self
+            .first
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .take()
+            .expect("ApiServer::run called twice");
+        let (died_tx, died_rx) = std::sync::mpsc::channel::<()>();
+        self.dispatch(first, died_tx.clone());
+        let mut backoff = std::time::Duration::from_millis(50);
+        let mut last_restart: Option<std::time::Instant> = None;
+        loop {
+            let reported = match died_rx.recv_timeout(std::time::Duration::from_millis(250)) {
+                Ok(()) => true,
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => false,
+                // We hold a sender, so this cannot happen.
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => false,
+            };
+            let panicked = TINY_HTTP_PANICKED.swap(false, std::sync::atomic::Ordering::SeqCst);
+            if panicked {
+                eprintln!(
+                    "deciduous api: the HTTP accept thread panicked (see above); accepting again"
+                );
+            }
+            if !reported && !panicked {
+                continue;
+            }
+            // Several dispatchers may report one shortage; one restart
+            // answers all of them.
+            while died_rx.try_recv().is_ok() {}
+            if last_restart.is_some_and(|t| t.elapsed() > std::time::Duration::from_secs(10)) {
+                backoff = std::time::Duration::from_millis(50);
+            }
+            // Descriptors that ran out come back as connections close, so
+            // retry with backoff until an accept thread runs again.
+            loop {
+                std::thread::sleep(backoff);
+                backoff = (backoff * 2).min(std::time::Duration::from_secs(2));
+                match serve_on(&self.listener) {
+                    Ok(server) => {
+                        self.dispatch(server, died_tx.clone());
+                        last_restart = Some(std::time::Instant::now());
+                        break;
+                    }
+                    Err(e) => eprintln!(
+                        "deciduous api: could not accept on the socket yet ({e}); \
+                         retrying in {} ms",
+                        backoff.as_millis()
+                    ),
+                }
+            }
         }
+    }
+
+    /// Read `server`'s requests on a thread of its own, forever, handing each
+    /// to a thread of its own. An accept error is reported on `died` and the
+    /// thread goes on reading: connections accepted earlier still deliver.
+    fn dispatch(&self, server: Server, died: std::sync::mpsc::Sender<()>) {
+        let registry = Arc::clone(&self.registry);
+        let token = self.token.clone();
+        std::thread::spawn(move || loop {
+            match server.recv() {
+                Ok(request) => {
+                    let registry = Arc::clone(&registry);
+                    let token = token.clone();
+                    // one thread per request is plenty for a graph API
+                    std::thread::spawn(move || {
+                        let _ = handle(request, &registry, &token);
+                    });
+                }
+                Err(e) => {
+                    eprintln!(
+                        "deciduous api: accepting a connection failed ({e}); accepting again"
+                    );
+                    let _ = died.send(());
+                }
+            }
+        });
     }
 }
 
@@ -265,6 +423,12 @@ impl ApiError {
             message: msg.to_string(),
         }
     }
+    fn unavailable(msg: &str) -> Self {
+        Self {
+            status: 503,
+            message: msg.to_string(),
+        }
+    }
 }
 
 fn handle(mut request: Request, registry: &Registry, token: &str) -> std::io::Result<()> {
@@ -408,11 +572,55 @@ fn tool_result_to_json(result: ToolCallResult) -> Value {
 /// Wall-clock budget for one `/query`. A recursive CTE without a bound
 /// never finishes, and the daemon runs one thread per request: four aborted
 /// requests pinned it at 400% CPU until it was killed.
+///
+/// It is enforced by killing the child process the query runs in, not by
+/// anything inside SQLite. A progress handler runs every N VM ops and
+/// `sqlite3_interrupt` is seen between ops, and a single op can run far past
+/// the limit: `instr()` over two values near the length cap is one op of
+/// about 4.5 s, and LIKE with a leading % and a 50,000-byte pattern over a
+/// 1 MB value one of about 50 s. Four of those, from clients that gave up,
+/// held every /query slot and four cores for 50 s after an interrupt. Lower
+/// SQLite limits would only bound the functions someone thought of (LIKE,
+/// GLOB, instr, replace, two-argument trim are all O(n*m) in one op); a
+/// killed process stops whatever it was doing.
 const QUERY_TIME_LIMIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Queries that may execute at once. Past this, `/query` answers 503 at
+/// once: every query is a process at full CPU for up to the time limit.
+const QUERY_MAX_RUNNING: usize = 4;
+
+static QUERIES_RUNNING: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+/// A place among the `QUERY_MAX_RUNNING`, held until the query's child
+/// process has exited (killed, if it ran past the limit) and been reaped.
+struct QuerySlot;
+
+impl QuerySlot {
+    fn take() -> Option<Self> {
+        use std::sync::atomic::Ordering;
+        QUERIES_RUNNING
+            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < QUERY_MAX_RUNNING).then_some(n + 1)
+            })
+            .ok()
+            .map(|_| QuerySlot)
+    }
+}
+
+impl Drop for QuerySlot {
+    fn drop(&mut self) {
+        QUERIES_RUNNING.fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+    }
+}
 
 /// Largest string or blob a query may build (SQLITE_LIMIT_LENGTH). The
 /// default is 1 GB; `printf('%.*c', 200000000, 'x')` built 200 MB in 62 ms.
 const QUERY_MAX_VALUE_BYTES: i32 = 1_000_000;
+
+/// Most memory SQLite may hold in a /query child (PRAGMA hard_heap_limit);
+/// past it the query fails with "out of memory". Room for several values of
+/// QUERY_MAX_VALUE_BYTES, and for the page cache of a large graph.
+const QUERY_MAX_HEAP_BYTES: i64 = 64 * 1024 * 1024;
 
 /// Largest `/query` result, as serialized JSON. SQLITE_LIMIT_LENGTH caps
 /// one value, not the response: 1000 rows of a 999 KB value made a 999 MB
@@ -483,10 +691,10 @@ fn sql_error(e: rusqlite::Error) -> ApiError {
             "statement refused: /query may only read this graph's tables \
              (no ATTACH, no pragmas beyond table/index/foreign-key info)",
         )
-    } else if msg.contains("interrupted") {
+    } else if msg.contains("out of memory") {
         ApiError::bad_request(&format!(
-            "query stopped: it exceeded the {} s time limit",
-            QUERY_TIME_LIMIT.as_secs()
+            "query stopped: it needed more than the {} MB of memory a /query may use",
+            QUERY_MAX_HEAP_BYTES / (1024 * 1024)
         ))
     } else {
         ApiError::bad_request(&format!("SQL error: {msg}"))
@@ -494,6 +702,133 @@ fn sql_error(e: rusqlite::Error) -> ApiError {
 }
 
 fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, ApiError> {
+    use std::process::{Command, Stdio};
+    let _slot = QuerySlot::take().ok_or_else(|| {
+        ApiError::unavailable(&format!(
+            "{QUERY_MAX_RUNNING} queries are already running on this daemon; \
+             try again in a moment (each is stopped at {} s)",
+            QUERY_TIME_LIMIT.as_secs()
+        ))
+    })?;
+    let exe = QUERY_EXE
+        .get()
+        .ok_or_else(|| ApiError::internal("no executable for /query was configured"))?;
+    let mut child = Command::new(exe)
+        .arg(QUERY_CHILD_ARG)
+        .arg(db_path)
+        .arg(limit.to_string())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .env_remove("DECIDUOUS_API_TOKEN")
+        .spawn()
+        .map_err(|e| ApiError::internal(&format!("starting the query process: {e}")))?;
+    let deadline = std::time::Instant::now() + QUERY_TIME_LIMIT;
+    // Stdin and stdout on threads of their own: the SQL can be up to the
+    // body limit and the answer up to 8 MiB, more than a pipe holds, so
+    // writing or reading on this thread could block past the deadline.
+    let mut stdin = child.stdin.take().expect("stdin is piped");
+    let sql = sql.to_string();
+    std::thread::spawn(move || {
+        use std::io::Write;
+        let _ = stdin.write_all(sql.as_bytes());
+    });
+    let mut stdout = child.stdout.take().expect("stdout is piped");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut out = Vec::new();
+        let read = stdout.read_to_end(&mut out).map(|_| out);
+        let _ = tx.send(read);
+    });
+    let output = rx.recv_timeout(deadline.saturating_duration_since(std::time::Instant::now()));
+    let output = match output {
+        Ok(Ok(out)) => out,
+        Ok(Err(e)) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(ApiError::internal(&format!(
+                "reading the query process: {e}"
+            )));
+        }
+        Err(_) => {
+            // Past the limit: stop it now, wherever it is, and reap it
+            // before the slot is given back.
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(time_limit_error());
+        }
+    };
+    let status = child
+        .wait()
+        .map_err(|e| ApiError::internal(&format!("waiting for the query process: {e}")))?;
+    let answer: Value = serde_json::from_slice(&output).map_err(|_| {
+        ApiError::internal(&format!(
+            "the query process ended ({status}) without an answer"
+        ))
+    })?;
+    match (answer.get("ok"), answer.get("error")) {
+        (Some(result), _) => Ok(result.clone()),
+        (None, Some(err)) => Err(ApiError {
+            status: err["status"].as_u64().unwrap_or(500) as u16,
+            message: err["message"]
+                .as_str()
+                .unwrap_or("query failed")
+                .to_string(),
+        }),
+        _ => Err(ApiError::internal(&format!(
+            "the query process answered something unreadable ({status})"
+        ))),
+    }
+}
+
+/// The first argument that makes the deciduous executable a `/query` child
+/// instead of the CLI. Handled before argument parsing, so it opens nothing
+/// the CLI would (the project database, config).
+pub const QUERY_CHILD_ARG: &str = "__api-query";
+
+/// A `/query` child: `<exe> __api-query <db path> <row limit>`, SQL on
+/// stdin, one JSON object on stdout, `{"ok": result}` or `{"error":
+/// {"status", "message"}}`. `args` are the ones after QUERY_CHILD_ARG.
+/// Returns the exit code. The parent kills it at the time limit.
+pub fn query_child_main(args: &[String]) -> i32 {
+    let answer = (|| -> Result<Value, ApiError> {
+        let [db_path, limit] = args else {
+            return Err(ApiError::internal(&format!(
+                "{QUERY_CHILD_ARG} takes a database path and a row limit, got {args:?}"
+            )));
+        };
+        let limit: usize = limit
+            .parse()
+            .map_err(|_| ApiError::internal(&format!("row limit {limit:?} is not a number")))?;
+        let mut sql = String::new();
+        std::io::stdin()
+            .read_to_string(&mut sql)
+            .map_err(|e| ApiError::internal(&format!("reading the SQL: {e}")))?;
+        let conn = open_query_connection(Path::new(db_path))?;
+        execute_query(&conn, &sql, limit)
+    })();
+    let out = match answer {
+        Ok(result) => json!({ "ok": result }),
+        Err(e) => json!({ "error": { "status": e.status, "message": e.message } }),
+    };
+    use std::io::Write;
+    let mut stdout = std::io::stdout().lock();
+    let written = serde_json::to_writer(&mut stdout, &out).is_ok() && stdout.flush().is_ok();
+    if written {
+        0
+    } else {
+        1
+    }
+}
+
+fn time_limit_error() -> ApiError {
+    ApiError::bad_request(&format!(
+        "query stopped: it exceeded the {} s time limit",
+        QUERY_TIME_LIMIT.as_secs()
+    ))
+}
+
+fn open_query_connection(db_path: &Path) -> Result<rusqlite::Connection, ApiError> {
     let conn = rusqlite::Connection::open_with_flags(
         db_path,
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
@@ -509,10 +844,25 @@ fn run_readonly_query(db_path: &Path, sql: &str, limit: usize) -> Result<Value, 
         QUERY_MAX_VALUE_BYTES,
     );
     conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_ATTACHED, 0);
-    let deadline = std::time::Instant::now() + QUERY_TIME_LIMIT;
-    conn.progress_handler(10_000, Some(move || std::time::Instant::now() > deadline));
+    // SQLITE_LIMIT_LENGTH caps a value once it is finished, not an
+    // aggregate (json_group_object, group_concat) while it is built: one
+    // such query held 1.5 GB until it was killed at 5 s. The heap limit is
+    // process-wide, which is right here: this process runs one query.
+    // An aggregate that hits it may ignore the failed append and run on
+    // (json_group_array does, until its final step), so it is still stopped
+    // at the time limit; what the limit bounds is its memory: 63 MB RSS
+    // where it was 1.5 GB.
+    conn.query_row(
+        &format!("PRAGMA hard_heap_limit = {QUERY_MAX_HEAP_BYTES}"),
+        [],
+        |_| Ok(()),
+    )
+    .map_err(|e| ApiError::internal(&format!("hard_heap_limit pragma: {e}")))?;
     conn.authorizer(Some(query_authorizer));
+    Ok(conn)
+}
 
+fn execute_query(conn: &rusqlite::Connection, sql: &str, limit: usize) -> Result<Value, ApiError> {
     let mut stmt = conn.prepare(sql).map_err(sql_error)?;
     if !stmt.readonly() {
         return Err(ApiError::forbidden(

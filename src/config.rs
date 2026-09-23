@@ -186,6 +186,34 @@ impl Default for BranchConfig {
     }
 }
 
+/// Parses a config for editing, with `[name]` present. A missing table is
+/// appended to the text, after everything in it, before parsing.
+///
+/// Why not `doc[name].or_insert(table())`: toml_edit keeps comments that
+/// follow the last table's keys as the document's trailing text, and a table
+/// it inserts goes before that text. `init`'s config ends in `[updates]`
+/// followed only by comments, so `remote init` produced `[updates]`, blank,
+/// `[remote]`, url, workspace, and then `[updates]`'s comments, in a file
+/// every clone commits.
+pub fn parse_with_table(existing: &str, name: &str) -> Result<toml_edit::DocumentMut, String> {
+    let doc = existing
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(|e| e.to_string())?;
+    if doc.contains_key(name) {
+        return Ok(doc);
+    }
+    let mut text = existing.to_string();
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    if !text.is_empty() {
+        text.push('\n');
+    }
+    text.push_str(&format!("[{name}]\n"));
+    text.parse::<toml_edit::DocumentMut>()
+        .map_err(|e| e.to_string())
+}
+
 impl Config {
     /// Load config from .deciduous/config.toml
     /// Returns default config if file doesn't exist
@@ -228,7 +256,7 @@ impl Config {
         let path = dir.join("config.toml");
 
         let existing = std::fs::read_to_string(&path).unwrap_or_default();
-        let mut doc = existing.parse::<toml_edit::DocumentMut>().map_err(|e| {
+        let mut doc = parse_with_table(&existing, "remote").map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("config.toml is not valid TOML: {e}"),

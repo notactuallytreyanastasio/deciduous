@@ -19,6 +19,7 @@ fn start_server() -> (u16, tempfile::TempDir) {
         port: 0,
         data_dir: dir.path().to_path_buf(),
         token: TOKEN.to_string(),
+        query_exe: env!("CARGO_BIN_EXE_deciduous").into(),
     })
     .expect("bind api server");
     let port = server.port();

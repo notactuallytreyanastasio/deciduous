@@ -105,7 +105,9 @@ enum Command {
         #[arg(short, long, value_parser = clap::value_parser!(u8).range(0..=100))]
         confidence: Option<u8>,
 
-        /// Git commit hash to link this node to. Use "HEAD" to auto-detect current commit.
+        /// Git commit to link this node to: HEAD, a branch, a tag, origin/main,
+        /// a hash or a prefix of one. Stored as the full hash; a rev git
+        /// cannot resolve here is refused.
         #[arg(long)]
         commit: Option<String>,
 
@@ -137,10 +139,10 @@ enum Command {
 
     /// Add an edge between nodes
     Link {
-        /// Source node: local id or change_id prefix
+        /// Source node: local id, change_id prefix, or server id
         from: String,
 
-        /// Target node: local id or change_id prefix
+        /// Target node: local id, change_id prefix, or server id
         to: String,
 
         /// Rationale for this connection
@@ -155,16 +157,21 @@ enum Command {
 
     /// Remove an edge between two nodes
     Unlink {
-        /// Source node: local id or change_id prefix
+        /// Source node: local id, change_id prefix, or server id
         from: String,
 
-        /// Target node: local id or change_id prefix
+        /// Target node: local id, change_id prefix, or server id
         to: String,
+
+        /// Remove only the edge of this type (required when the two nodes
+        /// are joined by more than one)
+        #[arg(short = 't', long = "type")]
+        edge_type: Option<String>,
     },
 
     /// Delete a node and all its connected edges
     Delete {
-        /// Node to delete: local id or change_id prefix
+        /// Node to delete: local id, change_id prefix, or server id
         id: String,
 
         /// Show what would be deleted without actually deleting
@@ -174,7 +181,7 @@ enum Command {
 
     /// Update node status
     Status {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         id: String,
 
         /// New status: pending, active, completed, rejected
@@ -183,7 +190,7 @@ enum Command {
 
     /// Update or add a prompt to an existing node
     Prompt {
-        /// Node to update: local id or change_id prefix
+        /// Node to update: local id, change_id prefix, or server id
         id: String,
 
         /// The prompt text (omit to read from stdin)
@@ -210,7 +217,7 @@ enum Command {
 
     /// Show detailed information about a single node
     Show {
-        /// Node to display: local id or change_id prefix
+        /// Node to display: local id, change_id prefix, or server id
         id: String,
 
         /// Show JSON output instead of formatted
@@ -689,8 +696,8 @@ enum EventsAction {
 
     /// Emit an event for a node (for testing/manual sync)
     Emit {
-        /// Node ID to emit event for
-        node_id: i32,
+        /// Node to emit an event for: local id, change_id prefix, or server id
+        node_id: String,
     },
 }
 
@@ -753,8 +760,8 @@ enum RoadmapAction {
         /// Roadmap item change_id or title (partial match)
         item: String,
 
-        /// Outcome node ID to link
-        outcome_id: i32,
+        /// Outcome node to link: local id, change_id prefix, or server id
+        outcome_id: String,
     },
 
     /// Remove outcome link from a roadmap item
@@ -862,7 +869,7 @@ enum ArchaeologyAction {
     ///
     /// Creates: observation -> revisit -> new_decision, marks old as superseded.
     Pivot {
-        /// Existing approach being reconsidered: local id or change_id prefix
+        /// Existing approach being reconsidered: local id, change_id prefix, or server id
         from_id: String,
 
         /// Observation text (what was learned that triggers the pivot)
@@ -905,7 +912,7 @@ enum ArchaeologyAction {
 
     /// Mark a node as superseded, optionally cascading to descendants
     Supersede {
-        /// Node to mark as superseded: local id or change_id prefix
+        /// Node to mark as superseded: local id, change_id prefix, or server id
         id: String,
 
         /// Also mark all descendant nodes as superseded
@@ -922,7 +929,7 @@ enum ArchaeologyAction {
 enum DocAction {
     /// Attach a file to a decision graph node
     Attach {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Path to the file to attach
@@ -939,7 +946,7 @@ enum DocAction {
 
     /// List documents attached to a node (or all nodes)
     List {
-        /// Node to list documents for: local id or change_id prefix (omit for all)
+        /// Node to list documents for: local id, change_id prefix, or server id (omit for all)
         node_id: Option<String>,
 
         /// Show detached (removed) documents too
@@ -1024,7 +1031,7 @@ enum ThemesAction {
 enum TagAction {
     /// Add a theme to a node
     Add {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Theme name
@@ -1033,7 +1040,7 @@ enum TagAction {
 
     /// Remove a theme from a node
     Remove {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Theme name
@@ -1042,13 +1049,13 @@ enum TagAction {
 
     /// List themes for a node
     List {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
     },
 
     /// Auto-suggest themes for a node based on keywords and AI
     Suggest {
-        /// Node to suggest themes for: local id or change_id prefix (omit for all untagged nodes)
+        /// Node to suggest themes for: local id, change_id prefix, or server id (omit for all untagged nodes)
         node_id: Option<String>,
 
         /// Apply suggestions without confirmation
@@ -1058,7 +1065,7 @@ enum TagAction {
 
     /// Confirm a suggested theme (change from "suggested" to "manual")
     Confirm {
-        /// Node: local id or change_id prefix
+        /// Node: local id, change_id prefix, or server id
         node_id: String,
 
         /// Theme name to confirm
@@ -1098,22 +1105,71 @@ fn exit(code: i32) -> ! {
     if let Some(log) = deciduous::oplog::take_appended() {
         deciduous::remote::replay_after_write(&log);
     }
+    if let Some(dir) = CHECK_SCRATCH.get() {
+        let _ = std::fs::remove_dir_all(dir);
+    }
     std::process::exit(code)
+}
+
+/// Where `sync --check` keeps the empty database it compares against when
+/// the project has none. Removed by `exit()`, which every path of that
+/// command ends in.
+static CHECK_SCRATCH: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+fn check_scratch_dir() -> Result<PathBuf, String> {
+    let dir = std::env::temp_dir().join(format!(
+        "deciduous-sync-check-{}-{}",
+        std::process::id(),
+        chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
+    ));
+    std::fs::create_dir_all(&dir)
+        .map_err(|e| format!("creating a scratch directory {}: {e}", dir.display()))?;
+    let _ = CHECK_SCRATCH.set(dir.clone());
+    Ok(dir)
 }
 
 /// The subgraph `dot` and `writeup` export: `--nodes`, `--roots`, or all
 /// of it. A part of either spec that is not an id exits with an error
 /// naming it; it used to be dropped, and `--roots zz` printed an empty
 /// digraph with exit code 0.
+///
+/// Each part that is not a range of local ids is a node reference like any
+/// other command's (local id, change_id or server id, see
+/// [`resolve_node_or_exit`]); `dot --nodes 2d6aff66` used to say it was "not
+/// a node id or a range". A range is `a-b` in decimal with `a` shorter than
+/// eight digits: `12345678-1234` is the start of a UUID, not a range.
 fn cli_export_subgraph(
+    db: &Database,
     graph: deciduous::DecisionGraph,
     nodes: Option<String>,
     roots: Option<String>,
 ) -> deciduous::DecisionGraph {
+    let resolve = |spec: &str, ranges: bool| -> String {
+        spec.split(',')
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+            .map(|part| {
+                let is_range = ranges
+                    && part.split_once('-').is_some_and(|(a, b)| {
+                        a.len() < 8
+                            && !a.is_empty()
+                            && !b.is_empty()
+                            && a.bytes().chain(b.bytes()).all(|c| c.is_ascii_digit())
+                    });
+                if is_range {
+                    part.to_string()
+                } else {
+                    resolve_node_or_exit(db, part).to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    };
     let result = if let Some(node_spec) = nodes {
-        parse_node_range(&node_spec).map(|spec| filter_graph_by_ids(&graph, &spec.select(&graph)))
+        parse_node_range(&resolve(&node_spec, true))
+            .map(|spec| filter_graph_by_ids(&graph, &spec.select(&graph)))
     } else if let Some(root_spec) = roots {
-        deciduous::parse_root_ids(&root_spec)
+        deciduous::parse_root_ids(&resolve(&root_spec, false))
             .map(|ids| deciduous::filter_graph_from_roots(&graph, &ids))
     } else {
         Ok(graph)
@@ -1194,11 +1250,23 @@ fn run_api_daemon(
         );
         return 1;
     };
+    let query_exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(e) => {
+            eprintln!(
+                "{} API mode runs each /query in a child of this executable, and its path \
+                 could not be found: {e}",
+                "Error:".red()
+            );
+            return 1;
+        }
+    };
     let config = deciduous::api::ApiConfig {
         bind: bind.clone(),
         port,
         data_dir: data_dir.clone(),
         token,
+        query_exe,
     };
     match deciduous::api::ApiServer::bind(config) {
         Ok(server) => {
@@ -1220,6 +1288,12 @@ fn run_api_daemon(
 }
 
 fn main() {
+    // A `serve --api` daemon runs each /query in a child of this executable,
+    // so a query past its time limit can be killed wherever it is.
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if raw.first().map(String::as_str) == Some(deciduous::api::QUERY_CHILD_ARG) {
+        std::process::exit(deciduous::api::query_child_main(&raw[1..]));
+    }
     let args = Args::parse();
 
     // Handle init separately - it doesn't need an existing database
@@ -1462,7 +1536,16 @@ fn main() {
         std::process::exit(run_api_daemon(port, data_dir, token, bind));
     }
 
-    let db = match Database::open() {
+    // `sync --check` answers "what would sync do" and changes nothing. With
+    // no database yet (a fresh clone), opening one to ask would create it,
+    // so the check runs against an empty one in a scratch directory
+    // instead, which is exactly what `sync` would start from.
+    let opened = match &args.command {
+        Command::Sync { check: true, .. } if !Database::db_path().exists() => check_scratch_dir()
+            .and_then(|dir| Database::open_at(dir.join("deciduous.db")).map_err(|e| e.to_string())),
+        _ => Database::open().map_err(|e| e.to_string()),
+    };
+    let db = match opened {
         Ok(db) => db,
         Err(e) => {
             eprintln!("{} Failed to open database: {}", "Error:".red(), e);
@@ -1540,14 +1623,17 @@ fn main() {
                 branch.or_else(deciduous::get_current_git_branch)
             };
 
-            // Expand "HEAD" to actual commit hash
-            let effective_commit = commit.as_ref().and_then(|c| {
-                if c.eq_ignore_ascii_case("HEAD") {
-                    deciduous::get_current_git_commit()
-                } else {
-                    Some(c.clone())
+            // Any rev git can resolve (HEAD, a branch, origin/main, a hash
+            // prefix) is stored as the full hash of its commit; anything
+            // else is refused before the node is written.
+            let effective_commit = match commit.as_deref().map(deciduous::resolve_git_commit) {
+                None => None,
+                Some(Ok(hash)) => Some(hash),
+                Some(Err(e)) => {
+                    eprintln!("{} --commit: {}. Nothing was written.", "Error:".red(), e);
+                    exit(1);
                 }
-            });
+            };
 
             // Parse date parameter into RFC3339 format
             let effective_date = date.as_ref().map(|d| {
@@ -1596,7 +1682,7 @@ fn main() {
                         .unwrap_or_default();
                     let commit_str = effective_commit
                         .as_ref()
-                        .map(|c| format!(" [commit: {}]", &c[..7.min(c.len())]))
+                        .map(|c| format!(" [commit: {c}]"))
                         .unwrap_or_default();
                     let prompt_str = effective_prompt
                         .as_ref()
@@ -1661,12 +1747,24 @@ fn main() {
             }
         }
 
-        Command::Unlink { from, to } => {
+        Command::Unlink {
+            from,
+            to,
+            edge_type,
+        } => {
             let from_id = resolve_node_or_exit(&db, &from);
             let to_id = resolve_node_or_exit(&db, &to);
-            match db.delete_edge(from_id, to_id) {
-                Ok(()) => {
-                    println!("{} edge ({} -> {})", "Removed".red(), from_id, to_id);
+            match db.delete_edge(from_id, to_id, edge_type.as_deref()) {
+                Ok(removed) => {
+                    for e in removed {
+                        println!(
+                            "{} edge ({} -> {}, {})",
+                            "Removed".red(),
+                            from_id,
+                            to_id,
+                            e.edge_type
+                        );
+                    }
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -3280,10 +3378,14 @@ fn main() {
                         );
                         exit(1);
                     };
+                    // On a commit being looked at (G7), the server's records
+                    // reach the database but not that commit's graph file.
+                    let detached = deciduous::records::viewing_history(&store_path);
                     let store = match RecordStore::open(&store_path) {
-                        Some(s) => s,
+                        Some(s) => Some(s),
+                        None if detached.is_some() => None,
                         None => match RecordStore::create(&store_path) {
-                            Ok(s) => s,
+                            Ok(s) => Some(s),
                             Err(e) => {
                                 eprintln!(
                                     "{} could not open the graph file: {}",
@@ -3324,7 +3426,19 @@ fn main() {
                         }
                     }
 
-                    match deciduous::remote::pull(&remote, &db, &store) {
+                    let pulled = match (&detached, &store) {
+                        (None, Some(store)) => deciduous::remote::pull(&remote, &db, store),
+                        _ => deciduous::records::with_scratch_store(store.as_ref(), |scratch| {
+                            deciduous::remote::pull(&remote, &db, scratch)
+                        }),
+                    };
+                    if let (Some(at), Ok(_)) = (&detached, &pulled) {
+                        println!(
+                            "{} HEAD is detached at {at}, so the graph file was left as this commit has it; what was pulled is in the database, and the next `deciduous sync` on a branch exports it.",
+                            "Note:".yellow()
+                        );
+                    }
+                    match pulled {
                         Ok(r) => {
                             println!(
                                 "{} {} <- {}",
@@ -3457,9 +3571,15 @@ fn main() {
                 );
                 exit(1);
             };
-            let store = match RecordStore::open(&store_path) {
-                Some(store) => store,
-                None if check => {
+            // On a detached commit that is not mid-merge or mid-rebase, the
+            // graph file is a historical version, not the place new rows go
+            // (G7): sync imports from it and writes nothing into it, and does
+            // not create one the commit lacks.
+            let detached = deciduous::records::viewing_history(&store_path);
+            let store = match (RecordStore::open(&store_path), &detached) {
+                (Some(store), _) => Some(store),
+                (None, Some(_)) => None,
+                (None, None) if check => {
                     eprintln!(
                         "{} No graph file at {}. Run `deciduous sync` once to create it.",
                         "Error:".red(),
@@ -3467,7 +3587,7 @@ fn main() {
                     );
                     exit(1);
                 }
-                None => match RecordStore::create(&store_path) {
+                (None, None) => match RecordStore::create(&store_path) {
                     Ok(store) => {
                         println!(
                             "{} {} (commit this file)",
@@ -3476,7 +3596,7 @@ fn main() {
                         );
                         // Later mutations in this process must publish too.
                         db.set_store(Some(store.clone()));
-                        store
+                        Some(store)
                     }
                     Err(e) => {
                         eprintln!("{} Creating the graph file: {}", "Error:".red(), e);
@@ -3485,7 +3605,7 @@ fn main() {
                 },
             };
 
-            if !check {
+            if !check && detached.is_none() {
                 if let Ok(cwd) = std::env::current_dir() {
                     match deciduous::init::ensure_merge_driver(&cwd) {
                         Ok(true) => println!(
@@ -3498,48 +3618,69 @@ fn main() {
                 }
             }
 
-            if store.has_legacy_record_dir() {
-                if check {
-                    println!(
-                        "{} .deciduous/sync/ (0.17 per-record files) present; `deciduous sync` will fold it into the graph file",
-                        "Note:".yellow()
-                    );
-                } else {
-                    match store.import_legacy_record_dir() {
-                        Ok(report) => print_record_dir_import(&report),
-                        Err(e) => {
-                            eprintln!("{} Importing .deciduous/sync/: {}", "Error:".red(), e);
-                            exit(1);
+            if let Some(store) = &store {
+                if store.has_legacy_record_dir() {
+                    if check || detached.is_some() {
+                        println!(
+                            "{} .deciduous/sync/ (0.17 per-record files) present; `deciduous sync` will fold it into the graph file",
+                            "Note:".yellow()
+                        );
+                    } else {
+                        match store.import_legacy_record_dir() {
+                            Ok(report) => print_record_dir_import(&report),
+                            Err(e) => {
+                                eprintln!("{} Importing .deciduous/sync/: {}", "Error:".red(), e);
+                                exit(1);
+                            }
+                        }
+                    }
+                }
+
+                if store.has_legacy_events() {
+                    if check || detached.is_some() {
+                        println!(
+                            "{} Legacy event log present; `deciduous sync` will import it",
+                            "Note:".yellow()
+                        );
+                    } else {
+                        match store.import_legacy_events() {
+                            Ok(report) => print_legacy_import(&report),
+                            Err(e) => {
+                                eprintln!("{} Importing legacy events: {}", "Error:".red(), e);
+                                exit(1);
+                            }
                         }
                     }
                 }
             }
 
-            if store.has_legacy_events() {
-                if check {
-                    println!(
-                        "{} Legacy event log present; `deciduous sync` will import it",
-                        "Note:".yellow()
-                    );
-                } else {
-                    match store.import_legacy_events() {
-                        Ok(report) => print_legacy_import(&report),
-                        Err(e) => {
-                            eprintln!("{} Importing legacy events: {}", "Error:".red(), e);
-                            exit(1);
-                        }
-                    }
+            let reconciled = match (&detached, &store) {
+                (Some(_), _) => {
+                    deciduous::records::reconcile_viewing_history(&db, store.as_ref(), check)
                 }
-            }
-
-            let report = match reconcile(&db, &store, check) {
+                (None, Some(store)) => reconcile(&db, store, check).map(|r| (r, Vec::new())),
+                (None, None) => unreachable!("a graph file is created when HEAD is on a branch"),
+            };
+            let (report, withheld) = match reconciled {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("{} Sync: {}", "Error:".red(), e);
                     exit(1);
                 }
             };
-            print_sync_report(&report, &store);
+            match &store {
+                Some(store) => print_sync_report(&report, store),
+                None => print_sync_report_body(&report),
+            }
+            if let Some(at) = &detached {
+                if !withheld.is_empty() || store.is_none() {
+                    println!(
+                        "  {} {}",
+                        "Note:".yellow(),
+                        deciduous::records::viewing_history_note(at, store.is_some(), &withheld)
+                    );
+                }
+            }
 
             if !check && report.conflicts.iter().any(|c| !c.merged) {
                 eprintln!(
@@ -3657,7 +3798,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
+                    let filtered_graph = cli_export_subgraph(&db, graph, nodes, roots);
 
                     let config = DotConfig {
                         title,
@@ -3776,7 +3917,7 @@ fn main() {
             match db.get_graph() {
                 Ok(graph) => {
                     // Filter by specific node IDs if provided
-                    let filtered_graph = cli_export_subgraph(graph, nodes, roots);
+                    let filtered_graph = cli_export_subgraph(&db, graph, nodes, roots);
 
                     // Auto-detect GitHub repo from git remote
                     let github_repo = ProcessCommand::new("git")
@@ -3929,7 +4070,8 @@ fn main() {
                         }
                     }
                     if let EventsAction::Emit { node_id } = &action {
-                        match db.get_node(*node_id) {
+                        let node_id = resolve_node_or_exit(&db, node_id);
+                        match db.get_node(node_id) {
                             Ok(Some(node)) => {
                                 if let Err(e) = store.publish_node(&node) {
                                     eprintln!("{} {}", "Error:".red(), e);
@@ -5377,6 +5519,7 @@ fn main() {
                 }
 
                 RoadmapAction::Link { item, outcome_id } => {
+                    let outcome_id = resolve_node_or_exit(&db, &outcome_id);
                     // Find roadmap item by title or change_id
                     let items = match db.get_all_roadmap_items() {
                         Ok(i) => i,
@@ -5987,10 +6130,89 @@ fn keyword_match_score(node_title: &str, commit_message: &str) -> f64 {
 fn resolve_node_or_exit(db: &Database, reference: &str) -> i32 {
     match db.resolve_node_ref(reference) {
         Ok(id) => id,
+        Err(deciduous::db::DbError::NoSuchNode(msg)) => match resolve_server_id(db, reference) {
+            Ok(id) => id,
+            Err(why) => {
+                eprintln!(
+                    "{} {msg}\n{why}\n\n{}",
+                    "Error:".red(),
+                    deciduous::db::NODE_REF_KINDS
+                );
+                exit(1);
+            }
+        },
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
             exit(1);
         }
+    }
+}
+
+/// A reference no local id or change_id matched, tried as the server's id
+/// for a node (T5): agents quote those, and `dx link 56eb8923 ...` answered
+/// "No node has a change_id starting with '56eb8923'" for a node this clone
+/// had under change_id 291cdb5a. Asks the server only after every local
+/// kind has missed, so it costs nothing when a local reference works. The
+/// Err is the sentence explaining why the server did not resolve it.
+fn resolve_server_id(db: &Database, reference: &str) -> Result<i32, String> {
+    let cwd = std::env::current_dir().map_err(|e| format!("(no working directory: {e})"))?;
+    let cfg = Config::load();
+    if !cfg.remote.is_configured() {
+        return Err(
+            "This project has no [remote], so it was not looked up as a server id.".to_string(),
+        );
+    }
+    let remote = deciduous::remote::Remote::resolve(&cfg, &cwd)
+        .map_err(|e| format!("It was not looked up as a server id: {e}"))?;
+    let matches = deciduous::remote::find_by_server_id(&remote, reference)
+        .map_err(|e| format!("It may be a server id, but the server could not be asked: {e}"))?;
+    let describe = |m: &deciduous::remote::ServerIdMatch| {
+        format!(
+            "server id {} = change_id {} ({})",
+            m.id.chars().take(12).collect::<String>(),
+            m.change_id.chars().take(12).collect::<String>(),
+            m.title
+        )
+    };
+    let m = match matches.as_slice() {
+        [] => {
+            return Err(format!(
+                "It is not a server id in workspace {} either.",
+                remote.workspace
+            ))
+        }
+        [m] => m,
+        many => {
+            return Err(format!(
+                "As a server id prefix it matches {} nodes; use more characters: {}",
+                many.len(),
+                many.iter()
+                    .take(5)
+                    .map(describe)
+                    .collect::<Vec<_>>()
+                    .join("; ")
+            ))
+        }
+    };
+    if m.deleted {
+        return Err(format!(
+            "It is the {}, which was deleted on the server.",
+            describe(m)
+        ));
+    }
+    match db.resolve_node_ref(&m.change_id) {
+        Ok(id) => {
+            eprintln!(
+                "{} '{reference}' is the {}: local #{id}",
+                "Note:".cyan(),
+                describe(m)
+            );
+            Ok(id)
+        }
+        Err(_) => Err(format!(
+            "It is the {}, which this clone does not have yet. Run `deciduous remote pull` first.",
+            describe(m)
+        )),
     }
 }
 
@@ -6045,7 +6267,6 @@ fn print_record_dir_import(report: &deciduous::LegacyImport) {
 }
 
 fn print_sync_report(report: &SyncReport, store: &RecordStore) {
-    let verb = if report.dry_run { "would" } else { "did" };
     let on_disk = match store.read_doc_all() {
         Ok(_) => {
             let counts = store.counts();
@@ -6063,6 +6284,13 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
         store.path().display(),
         on_disk
     );
+    print_sync_report_body(report);
+}
+
+/// Everything [`print_sync_report`] prints after its first line; alone when
+/// there is no graph file (a detached commit that has none).
+fn print_sync_report_body(report: &SyncReport) {
+    let verb = if report.dry_run { "would" } else { "did" };
     let unresolved = report.conflicts.iter().any(|c| !c.merged);
     let mut lines: Vec<String> = Vec::new();
     let mut push = |n: usize, what: &str| {

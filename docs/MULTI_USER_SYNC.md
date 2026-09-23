@@ -139,6 +139,46 @@ The AI assistant templates (`/sync`, `/recover`, `/decision`) tell the assistant
 run `deciduous sync` at session start and after any pull, and to use change_id
 prefixes when linking to another person's nodes.
 
+## Branches, old commits and resets
+
+The database is one per clone and is shared by every branch and commit you
+check out; `graph.json` is versioned like any other file. `sync` treats a row
+the database has and the file lacks as a local write not yet exported, and
+exports it. It cannot tell that apart from a row git took out of the file by
+switching branch or resetting, because the database keeps no record of which
+rows have reached a file. What that means in practice:
+
+- **A detached commit is read, not written.** On `git checkout <old commit>`,
+  a bisect step or a CI checkout, `sync` imports what the commit's file adds
+  and leaves the file exactly as the commit has it, so `git checkout main`
+  still works afterwards. It says what it held back:
+  `Note: HEAD is detached at 2848ae0, so the graph file was left as this
+  commit has it: 1 node(s) not exported.` `sync --check` and the MCP `sync`
+  and `sync_status` tools agree with it, and a commit that has no graph file
+  is not given one. A
+  stopped rebase, merge, cherry-pick or revert is detached too, but there the
+  file is being rewritten, so `sync` writes it as usual.
+- **Branches share nodes (not fixed).** A node added on `spike` is exported
+  into `main`'s `graph.json` by the next `sync` on `main`. If that is not what
+  you want on `main`, do not commit it there: after switching branch, run
+  `deciduous sync --check`; if it reports exports you did not make on this
+  branch, run `sync`, then `git checkout -- .deciduous/graph.json` before
+  committing anything else, or stage the file with `git add -p`. The nodes
+  stay in the database and in `spike`'s commits either way.
+- **A reset brings rows back (not fixed).** `git reset --hard` to an earlier
+  commit on a branch removes records from the file but not from the database,
+  and the next `sync` exports them again. To remove a node for good, use
+  `deciduous delete`, which writes a tombstone every clone applies.
+- **A server does not see branches.** With a `[remote]`, every write reaches
+  the workspace as it is made, whatever the branch.
+
+Why the last three are not fixed: the fix that is safe is a local log of
+writes not yet published, exporting only what it holds and letting the file
+decide every other difference. Dropping rows missing from the file instead
+would delete local data for anyone whose rows never reached a file (rows from
+before the record store, rows written while `graph.json` was missing). That
+log is a change to what `sync` means, with its own migration, not a patch.
+
 ## How reconcile decides
 
 For each kind (nodes, themes, edges, tags), `deciduous sync` compares the file to

@@ -338,6 +338,213 @@ fn r6_flake_daemons_started_at_once_each_answer_their_first_request() {
     }
 }
 
+/// One `instr()` over the 1 MB value cap is a single VM op that runs for
+/// seconds, so a progress handler that looks at the clock every 10,000 ops
+/// never gets to look. Eight rows of it ran 35.89 s against a 5 s limit.
+const R6_SLOW_ROWS: &str =
+    "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM c WHERE x<8) \
+     SELECT x, instr(printf('%.*c',999999,'a'), printf('%.*c',499999-x,'a')||'b') FROM c";
+
+/// R6 bypass: one slow op per row walked past the 5 s limit.
+#[test]
+fn r6_bypass_one_slow_op_per_row_is_still_stopped() {
+    let Some(()) = local("r6_bypass_one_slow_op_per_row_is_still_stopped") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let (st, body, took) = query(&d, R6_SLOW_ROWS);
+    assert!(
+        took < Duration::from_millis(6_500),
+        "a query of slow single ops ran {took:?} against a 5 s limit ({st}: {body})"
+    );
+    assert!(st >= 400, "the stopped query answered {st}: {body}");
+    assert!(
+        body["error"].as_str().unwrap_or("").contains("time limit"),
+        "the refusal does not say why: {body}"
+    );
+}
+
+/// R6 bypass: clients that gave up left their queries running, four of
+/// them held the daemon at 400% CPU for 40 s. A query past its limit must
+/// stop, whoever is still waiting for it, and the daemon runs only a few
+/// at once, saying so to the rest.
+#[test]
+fn r6_bypass_abandoned_queries_do_not_pile_up() {
+    let Some(()) = local("r6_bypass_abandoned_queries_do_not_pile_up") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let s = d.as_server();
+    let t = Instant::now();
+    let statuses: Vec<Result<u16, String>> = std::thread::scope(|scope| {
+        let hs: Vec<_> = (0..12)
+            .map(|_| {
+                let s = s.clone();
+                scope.spawn(move || {
+                    s.try_request(
+                        "POST",
+                        "/api/v1/graphs/g/query",
+                        Some(&s.bearer()),
+                        &[("content-type", "application/json")],
+                        Some(json!({"sql": R6_SLOW_ROWS}).to_string().as_bytes()),
+                        Duration::from_secs(30),
+                    )
+                    .map(|r| r.status)
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let took = t.elapsed();
+    // Either the twelve arrived together, four ran and the rest were turned
+    // away (503), in about one 5 s limit; or, on a loaded machine, they
+    // arrived spread out and ran in waves of four, each stopped at 5 s: at
+    // most three waves. Both show the bound. What must never happen is a
+    // query running to its end (35 s) or more than four at once with none
+    // turned away (all done in one wave).
+    // (r6 pile-up flake: one loaded run took 15.05 s with 12 x 400, three
+    // waves, no 503, and failed the old "under 8 s and some 503" check.)
+    assert!(
+        took < Duration::from_secs(20),
+        "12 slow queries at once took {took:?}: {statuses:?}"
+    );
+    let waited_in_waves = took > Duration::from_secs(9);
+    assert!(
+        statuses.iter().any(|s| s == &Ok(503)) || waited_in_waves,
+        "12 slow queries all ran at once in {took:?}, none was turned away: {statuses:?}"
+    );
+    // A stopped query's process is killed at the limit, so the daemon is
+    // free again soon after the answers, not after the abandoned queries
+    // would have finished (35 s each).
+    let t = Instant::now();
+    loop {
+        let (st, body, _) = query(&d, "SELECT 1");
+        if st == 200 {
+            break;
+        }
+        assert_eq!(st, 503, "SELECT 1 got {st}: {body}");
+        assert!(
+            t.elapsed() < Duration::from_secs(7),
+            "stopped queries still held the daemon {:?} after they were answered",
+            t.elapsed()
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// R6 bypass, round 3: SQLITE_LIMIT_LENGTH caps a finished value, not an
+/// aggregate while it is being built. This one held 1.5 GB in its /query
+/// child from 1 s until it was killed at 5 s; four slots made that about
+/// 6 GB, for as long as a caller kept sending it.
+#[test]
+fn r6_bypass_query_memory_is_bounded() {
+    let Some(()) = local("r6_bypass_query_memory_is_bounded") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let daemon = d.child.id().to_string();
+    for agg in [
+        "json_group_object(x, printf('%.*c',100000,'a'))",
+        "json_group_array(printf('%.*c',100000,'a'))",
+    ] {
+        let sql = format!(
+            "SELECT {agg} FROM (WITH RECURSIVE r(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM r) SELECT x FROM r)"
+        );
+        let peak_kb = std::thread::scope(|scope| {
+            let q = scope.spawn(|| query(&d, &sql));
+            let mut peak = 0u64;
+            // The /query child is the daemon's child; sample its RSS.
+            for _ in 0..16 {
+                std::thread::sleep(Duration::from_millis(250));
+                let ps = std::process::Command::new("ps")
+                    .args(["-A", "-o", "ppid=,rss="])
+                    .output()
+                    .unwrap();
+                for line in String::from_utf8_lossy(&ps.stdout).lines() {
+                    let mut f = line.split_whitespace();
+                    if f.next() == Some(daemon.as_str()) {
+                        peak = peak.max(f.next().and_then(|r| r.parse().ok()).unwrap_or(0));
+                    }
+                }
+            }
+            let (st, body, _) = q.join().unwrap();
+            assert_eq!(st, 400, "{agg}: {body}");
+            peak
+        });
+        assert!(peak_kb > 0, "{agg}: never saw the /query child");
+        assert!(
+            peak_kb < 200 * 1024,
+            "{agg}: the /query child held {} MB",
+            peak_kb / 1024
+        );
+    }
+}
+
+/// R6 bypass, round 2: sqlite3_interrupt is seen between ops, and one op can
+/// run far past the limit. LIKE with a leading % and a 50,000-byte pattern
+/// over a 1 MB value is a single op of about 50 s (GLOB the same): four of
+/// them sent by clients that gave up at 2 s held the daemon at 398% CPU and
+/// every /query got 503 for about 50 s, repeatably.
+#[test]
+fn r6_bypass_one_long_op_is_stopped_at_the_limit_too() {
+    let Some(()) = local("r6_bypass_one_long_op_is_stopped_at_the_limit_too") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    let s = d.as_server();
+    let like = "SELECT printf('%.*c',999999,'a') LIKE ('%' || printf('%.*c',49990,'a') || 'b')";
+    let glob = "SELECT printf('%.*c',999999,'a') GLOB '*'||printf('%.*c',49990,'a')||'b'";
+
+    // Waited for: answered at the limit with the reason.
+    let t = Instant::now();
+    let (st, body, _) = query(&d, like);
+    assert_eq!(st, 400, "{body}");
+    assert!(
+        body["error"].as_str().unwrap_or("").contains("time limit"),
+        "{body}"
+    );
+    assert!(
+        t.elapsed() < Duration::from_millis(6500),
+        "{:?}",
+        t.elapsed()
+    );
+
+    // Abandoned: four clients give up at 2 s.
+    let t = Instant::now();
+    std::thread::scope(|scope| {
+        for sql in [like, glob, like, glob] {
+            let s = s.clone();
+            scope.spawn(move || {
+                let _ = s.try_request(
+                    "POST",
+                    "/api/v1/graphs/g/query",
+                    Some(&s.bearer()),
+                    &[("content-type", "application/json")],
+                    Some(json!({ "sql": sql }).to_string().as_bytes()),
+                    Duration::from_secs(2),
+                );
+            });
+        }
+    });
+    loop {
+        let (st, body, _) = query(&d, "SELECT 1");
+        if st == 200 {
+            break;
+        }
+        assert_eq!(st, 503, "SELECT 1 got {st}: {body}");
+        assert!(
+            t.elapsed() < Duration::from_secs(8),
+            "four abandoned single-op queries still held every /query slot {:?} after they were sent: {body}",
+            t.elapsed()
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
 /// R7: /query ATTACH passed the read-only check, and its error told apart an
 /// existing file from a missing one; pragma_database_list leaked the data
 /// directory's absolute path.
@@ -397,6 +604,50 @@ fn r8_api_never_injects_the_daemons_branch() {
         !text.contains("daemon-branch"),
         "the daemon's branch was injected: {text}"
     );
+}
+
+/// A remote caller's add_node refused only the exact string "HEAD"; "HEAD~1",
+/// "@" and "main" were stored as the commit, literally. A remote caller's
+/// revs cannot be resolved (the daemon's checkout is not theirs), so only a
+/// hash is taken.
+#[test]
+fn remote_add_node_stores_no_unresolved_rev() {
+    let Some(()) = local("remote_add_node_stores_no_unresolved_rev") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let d = api(&sb);
+    for rev in [
+        "HEAD~1",
+        "@",
+        "main",
+        "origin/main",
+        "abc",
+        "0123456789abcdefg",
+    ] {
+        let (st, body) = d.tool(
+            "g",
+            "add_node",
+            json!({"node_type": "goal", "title": rev, "commit": rev}),
+        );
+        let text = body.to_string();
+        assert!(
+            st != 200 || body["data"]["result"]["node_id"].is_null(),
+            "commit {rev:?} was accepted: {text}"
+        );
+        assert!(
+            text.contains(rev),
+            "the refusal does not name {rev:?}: {text}"
+        );
+    }
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let (st, body) = d.tool(
+        "g",
+        "add_node",
+        json!({"node_type": "goal", "title": "hash", "commit": sha}),
+    );
+    assert_eq!(st, 200, "{body}");
+    assert!(!body["data"]["result"]["node_id"].is_null(), "{body}");
 }
 
 // ---------------------------------------------------------------- R9 / R10
@@ -620,6 +871,167 @@ fn r14_racing_graph_creates_report_one_creation() {
     assert_eq!(
         created, 1,
         "{created} callers were told they created the graph"
+    );
+}
+
+/// The r14 flake: in one of six whole-battery runs, one of the 30 racing
+/// PUTs above got "Connection reset by peer". The mechanism found behind
+/// it: tiny_http ends its accept thread on the first accept() error
+/// (EMFILE, ECONNABORTED), which closes the listening socket, resets every
+/// connection queued on it, and makes `serve --api` exit 0 without a word.
+/// Driven here with EMFILE, the one accept error a test can cause at will:
+/// a descriptor limit of 64 and 80 idle connections.
+#[test]
+fn r14_flake_an_accept_error_does_not_stop_the_daemon() {
+    let Some(()) = local("r14_flake_an_accept_error_does_not_stop_the_daemon") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let data = sb.base().join("fd");
+    std::fs::create_dir_all(&data).unwrap();
+
+    let mut c = sb.cmd("/bin/sh", &data);
+    c.args([
+        "-c",
+        "ulimit -n 64 && exec \"$0\" serve --api --port \"$1\" --data-dir \"$2\"",
+        bin().to_str().unwrap(),
+        "0",
+        data.to_str().unwrap(),
+    ])
+    .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+    .stderr(std::process::Stdio::piped());
+    let (mut child, port) = spawn_listening(c);
+    let s = Server {
+        url: format!("http://127.0.0.1:{port}"),
+        token: API_TOKEN.to_string(),
+    };
+    let up = wait_for(Duration::from_secs(10), || {
+        std::net::TcpStream::connect(("127.0.0.1", port))
+            .ok()
+            .map(|_| ())
+    });
+    assert!(up.is_some(), "serve --api never listened");
+
+    // More connections than the daemon has descriptors: its accept() fails.
+    let idle: Vec<_> = (0..80)
+        .filter_map(|_| std::net::TcpStream::connect(("127.0.0.1", port)).ok())
+        .collect();
+    std::thread::sleep(Duration::from_millis(500));
+    drop(idle);
+
+    let exited = child.try_wait().unwrap();
+    let answered = wait_for(Duration::from_secs(10), || {
+        s.try_request(
+            "GET",
+            "/api/v1/graphs",
+            Some(&s.bearer()),
+            &[],
+            None,
+            Duration::from_secs(2),
+        )
+        .ok()
+        .filter(|r| r.status == 200)
+    });
+    let _ = child.kill();
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        exited.is_none(),
+        "serve --api exited ({exited:?}) after an accept error; stderr:\n{stderr}"
+    );
+    assert!(
+        answered.is_some(),
+        "serve --api stopped answering after an accept error; stderr:\n{stderr}"
+    );
+    // Whether accept() failed, or tiny_http panicked just after an accept,
+    // or the kernel kept the extra connections queued, depends on timing;
+    // what must hold in every case is the two assertions above. When it
+    // did fail, it says so.
+    if !stderr.is_empty() {
+        assert!(
+            stderr.contains("accepting again") || stderr.contains("Too many open files"),
+            "unexpected daemon stderr:\n{stderr}"
+        );
+    }
+}
+
+/// R14, round 2: the recovery above pushed a new tiny_http server after every
+/// accept death and never dropped the old ones, then polled each in turn for
+/// 5 ms, so every request waited about 5 ms more per restart, without bound:
+/// median GET latency 0.000 s before, 0.209 s after 25 bursts of 120 idle
+/// connections, 0.823 s after 100.
+#[test]
+fn r14_restarts_do_not_slow_every_later_request() {
+    let Some(()) = local("r14_restarts_do_not_slow_every_later_request") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let data = sb.base().join("fd2");
+    std::fs::create_dir_all(&data).unwrap();
+
+    let mut c = sb.cmd("/bin/sh", &data);
+    c.args([
+        "-c",
+        "ulimit -n 64 && exec \"$0\" serve --api --port \"$1\" --data-dir \"$2\"",
+        bin().to_str().unwrap(),
+        "0",
+        data.to_str().unwrap(),
+    ])
+    .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+    .stderr(std::process::Stdio::piped());
+    let (mut child, port) = spawn_listening(c);
+    let s = Server {
+        url: format!("http://127.0.0.1:{port}"),
+        token: API_TOKEN.to_string(),
+    };
+    let get = || {
+        let t = Instant::now();
+        let r = s.try_request(
+            "GET",
+            "/api/v1/graphs",
+            Some(&s.bearer()),
+            &[],
+            None,
+            Duration::from_secs(10),
+        );
+        (r.map(|r| r.status).unwrap_or(0), t.elapsed())
+    };
+    let up = wait_for(Duration::from_secs(10), || (get().0 == 200).then_some(()));
+    assert!(up.is_some(), "serve --api never answered");
+
+    for _ in 0..25 {
+        let idle: Vec<_> = (0..120)
+            .filter_map(|_| std::net::TcpStream::connect(("127.0.0.1", port)).ok())
+            .collect();
+        std::thread::sleep(Duration::from_millis(300));
+        drop(idle);
+    }
+    // Let the last restart's backoff finish.
+    let answered = wait_for(Duration::from_secs(15), || (get().0 == 200).then_some(()));
+    let mut times: Vec<Duration> = (0..15)
+        .map(|_| get())
+        .filter(|(st, _)| *st == 200)
+        .map(|(_, t)| t)
+        .collect();
+    times.sort();
+    let _ = child.kill();
+    let out = child.wait_with_output().unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let restarts = stderr.matches("accepting again").count();
+    assert!(
+        answered.is_some(),
+        "the daemon stopped answering; stderr:\n{stderr}"
+    );
+    assert!(
+        restarts >= 8,
+        "only {restarts} accept restarts in 25 bursts; this test proves nothing"
+    );
+    assert_eq!(times.len(), 15, "some GETs failed after the bursts");
+    let median = times[times.len() / 2];
+    eprintln!("{restarts} accept restarts; median GET {median:?}");
+    assert!(
+        median < Duration::from_millis(100),
+        "after {restarts} accept restarts the median GET takes {median:?} (all: {times:?})"
     );
 }
 

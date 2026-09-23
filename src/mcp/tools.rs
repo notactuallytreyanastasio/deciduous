@@ -54,7 +54,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                     },
                     "commit": {
                         "type": "string",
-                        "description": "Git commit hash to link. Use 'HEAD' to auto-detect current commit."
+                        "description": "Git commit to link: HEAD, a branch, a tag, origin/main or a hash (prefix); stored as the full hash. A rev this checkout cannot resolve is refused."
                     }
                 },
                 "required": ["node_type", "title"]
@@ -92,7 +92,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
 
         ToolDefinition {
             name: "unlink_nodes".to_string(),
-            description: "Remove an edge between two nodes.".to_string(),
+            description: "Remove an edge between two nodes. When they are joined by more than one edge type, edge_type names the one to remove; without it the call is refused and nothing is removed.".to_string(),
             input_schema: json!({
                 "type": "object",
                 "properties": {
@@ -103,6 +103,10 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                     "to_id": {
                         "type": ["integer", "string"],
                         "description": "Target node ID"
+                    },
+                    "edge_type": {
+                        "type": "string",
+                        "description": "Remove only the edge of this type (leads_to, chosen, ...)"
                     }
                 },
                 "required": ["from_id", "to_id"]

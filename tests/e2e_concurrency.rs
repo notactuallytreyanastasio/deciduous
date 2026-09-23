@@ -299,3 +299,61 @@ fn stress_twenty_parallel_cli_adds_all_succeed() {
         "graph.json lost records"
     );
 }
+
+/// T9: in the team probe, 10 parallel `dx add` in one clone with a remote
+/// configured gave 9-10 "Failed to open database: database is locked". The
+/// test above covers a clone without a remote; with one, every add also
+/// appends to remote-log.jsonl and replays to the server, which is where a
+/// second lock (the log's) and a second writer (the replay) come in.
+#[test]
+fn t9_twenty_parallel_adds_with_a_remote_all_land_locally_and_on_the_server() {
+    let Some(server) =
+        remote("t9_twenty_parallel_adds_with_a_remote_all_land_locally_and_on_the_server")
+    else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let ws = unique("t9");
+    let p = sb.project(&ws, None);
+    p.remote_init(&ws);
+    for round in 0..3 {
+        let outs: Vec<Out> = std::thread::scope(|s| {
+            let hs: Vec<_> = (0..20)
+                .map(|i| {
+                    let p = &p;
+                    s.spawn(move || p.dx(&["add", "goal", &format!("r{round}-p{i}")]))
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        let failed: Vec<String> = outs
+            .iter()
+            .filter(|o| !o.ok() || o.all().contains("locked") || o.all().contains("Warning"))
+            .map(Out::all)
+            .collect();
+        assert!(
+            failed.is_empty(),
+            "round {round}: {} of 20 failed or warned, e.g. {:?}",
+            failed.len(),
+            failed.first()
+        );
+    }
+    let doc: Value = p.graph_doc();
+    assert_eq!(doc["nodes"].as_object().unwrap().len(), 60, "graph.json");
+    // Every write reached the server, and nothing is left queued.
+    let push = p.dx(&["remote", "push"]);
+    assert!(push.ok(), "{}", push.all());
+    let live = server.export(&ws)["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|n| n["deleted_at"].is_null())
+        .count();
+    assert_eq!(live, 60, "the server has {live} of 60 nodes");
+    let st = p.dx(&["remote", "status"]);
+    assert!(
+        st.ok(),
+        "remote status after 60 parallel adds:\n{}",
+        st.all()
+    );
+}

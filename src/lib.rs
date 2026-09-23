@@ -64,10 +64,10 @@ pub mod watch;
 
 pub use config::Config;
 pub use db::{
-    build_metadata_json, get_current_git_branch, get_current_git_commit, CheckboxState, CommandLog,
-    Database, DbRecord, DbSummary, DecisionContext, DecisionEdge, DecisionGraph, DecisionNode,
-    DecisionSession, DeleteSummary, GitHubIssueCache, NodeDocument, NodeTheme, RoadmapConflict,
-    RoadmapItem, RoadmapSyncState, Theme, CURRENT_SCHEMA,
+    build_metadata_json, get_current_git_branch, get_current_git_commit, resolve_git_commit,
+    CheckboxState, CommandLog, Database, DbRecord, DbSummary, DecisionContext, DecisionEdge,
+    DecisionGraph, DecisionNode, DecisionSession, DeleteSummary, GitHubIssueCache, NodeDocument,
+    NodeTheme, RoadmapConflict, RoadmapItem, RoadmapSyncState, Theme, CURRENT_SCHEMA,
 };
 pub use events::{Checkpoint, Event, MaterializedState};
 pub use export::{

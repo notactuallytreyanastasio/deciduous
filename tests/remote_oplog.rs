@@ -2711,3 +2711,177 @@ fn new_status_says_what_to_do_about_unreadable_lines() {
     assert!(!st.contains("sends what is waiting"), "{st}");
     assert!(st.contains("remote-log.unreadable"), "{st}");
 }
+
+// ---------------------------------------------------------------------------
+// NEW-8: `remote init` put `[remote]` between `[updates]` and the comments
+// that belong to it, in a file every clone commits.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn new8_remote_init_keeps_the_updates_comments_with_updates() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("cfg");
+    let path = dir.join(".deciduous").join("config.toml");
+    let before = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        before.contains("[updates]\n# Version checking"),
+        "init's config changed shape; this test needs updating:\n{before}"
+    );
+    let url = stub_server(serde_json::json!({"nodes": [], "edges": []}));
+    sb.dx_ok(&dir, &["remote", "init", &url, "--workspace", "cfg"]);
+    let after = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        after.starts_with(&before),
+        "remote init changed what was already in config.toml:\n--- before\n{before}\n--- after\n{after}"
+    );
+    let added = &after[before.len()..];
+    assert!(
+        added.contains("[remote]") && added.contains(&url) && added.contains("workspace = \"cfg\""),
+        "remote init did not append [remote]:\n{after}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// NEW-5: the server stamps updated_at when it applies an op, about 50 ms
+// after the local write. `remote pull` took that stamp for content it
+// already had, so every clone that pulled got a graph.json diff after every
+// online write.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn new5_pull_of_unchanged_content_leaves_graph_json_alone() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.repo("stamp");
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!(
+            "[remote]\nurl = \"{}\"\nworkspace = \"stamp\"\n",
+            dead_url()
+        ),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["add", "goal", "written online", "-c", "80"]);
+    sb.dx_ok(&dir, &["status", "1", "active"]);
+    let cid = local_change_id(&sb, &dir, 1);
+    let graph_file = dir.join(".deciduous").join("graph.json");
+    let before = std::fs::read_to_string(&graph_file).unwrap();
+    let doc: Value = serde_json::from_str(&before).unwrap();
+    let rec = &doc["nodes"][&cid];
+    assert!(rec.is_object(), "no record for {cid} in {doc}");
+
+    // The server's copy: same content, stamped in UTC when it was applied.
+    let local_stamp = chrono::DateTime::parse_from_rfc3339(rec["updated_at"].as_str().unwrap())
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let applied = local_stamp + chrono::Duration::milliseconds(50);
+    let server_node = serde_json::json!({
+        "id": format!("srv-{cid}"), "change_id": cid, "node_type": rec["node_type"],
+        "title": rec["title"], "description": rec.get("description").cloned().unwrap_or(Value::Null),
+        "status": rec["status"], "metadata": rec["metadata"], "created_at": rec["created_at"],
+        "updated_at": applied.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        "deleted_at": null
+    });
+    let url = stub_server(serde_json::json!({
+        "nodes": [server_node], "edges": [], "documents": []
+    }));
+    set_remote_url(&dir, &url);
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    let after = std::fs::read_to_string(&graph_file).unwrap();
+    assert_eq!(
+        before, after,
+        "a pull that changed no content rewrote graph.json (pull said: {out})"
+    );
+    assert!(!out.contains("updated 1"), "{out}");
+
+    // A real change from the server is still taken, stamp and all.
+    let changed = server_node_with(&cid, rec, "completed", applied);
+    let url = stub_server(serde_json::json!({
+        "nodes": [changed], "edges": [], "documents": []
+    }));
+    set_remote_url(&dir, &url);
+    sb.dx_ok(&dir, &["remote", "pull"]);
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(&graph_file).unwrap()).unwrap();
+    assert_eq!(doc["nodes"][&cid]["status"], "completed");
+}
+
+/// NEW-5, round 2: a record written where HEAD is unborn has no `metadata`
+/// key (there is no branch to record), and the server serves every node with
+/// `"metadata": {}`. The first fix compared key by key, so a missing key and
+/// `{}` counted as a change: pull took the server's copy, stamp and all, and
+/// from then on graph.json was rewritten (and `sync --check` exited 1).
+#[test]
+fn new5_pull_of_unchanged_content_leaves_graph_json_alone_without_a_metadata_key() {
+    let sb = Sandbox::new("0123456789abcdef0123456789abcdef");
+    let dir = sb.path().join("unborn");
+    std::fs::create_dir_all(&dir).unwrap();
+    sb.git(&dir, &["init", "-q", "-b", "main"]);
+    sb.dx_ok(&dir, &["init"]);
+    std::fs::write(
+        dir.join(".deciduous").join("config.toml"),
+        format!(
+            "[remote]\nurl = \"{}\"\nworkspace = \"stamp\"\n",
+            dead_url()
+        ),
+    )
+    .unwrap();
+    sb.dx_ok(&dir, &["add", "action", "A1"]);
+    sb.dx_ok(&dir, &["status", "1", "completed"]);
+    let cid = local_change_id(&sb, &dir, 1);
+    let graph_file = dir.join(".deciduous").join("graph.json");
+    let before = std::fs::read_to_string(&graph_file).unwrap();
+    let doc: Value = serde_json::from_str(&before).unwrap();
+    let rec = &doc["nodes"][&cid];
+    assert!(rec.is_object(), "no record for {cid} in {doc}");
+    assert!(
+        rec.get("metadata").is_none(),
+        "the record has a metadata key, so this test proves nothing: {rec}"
+    );
+
+    let local_stamp = chrono::DateTime::parse_from_rfc3339(rec["updated_at"].as_str().unwrap())
+        .unwrap()
+        .with_timezone(&chrono::Utc);
+    let applied = local_stamp + chrono::Duration::milliseconds(54);
+    let mut server_node = server_node_with(&cid, rec, "completed", applied);
+    server_node["metadata"] = serde_json::json!({});
+    let url = stub_server(serde_json::json!({
+        "nodes": [server_node], "edges": [], "documents": []
+    }));
+    set_remote_url(&dir, &url);
+    let out = sb.dx_ok(&dir, &["remote", "pull"]);
+    let after = std::fs::read_to_string(&graph_file).unwrap();
+    assert_eq!(
+        before, after,
+        "a pull that changed no content rewrote graph.json (pull said: {out})"
+    );
+
+    // And nothing is left for sync to do: the database did not take the
+    // server's stamp either.
+    let check = sb.dx(&dir, &["sync", "--check"]);
+    assert!(
+        check.status.success(),
+        "sync --check after the pull wants to do something:\n{}{}",
+        text(&check.stdout),
+        text(&check.stderr)
+    );
+    let synced = sb.dx_ok(&dir, &["sync"]);
+    assert_eq!(
+        before,
+        std::fs::read_to_string(&graph_file).unwrap(),
+        "sync after the pull rewrote graph.json: {synced}"
+    );
+}
+
+fn server_node_with(
+    cid: &str,
+    rec: &Value,
+    status: &str,
+    at: chrono::DateTime<chrono::Utc>,
+) -> Value {
+    serde_json::json!({
+        "id": format!("srv-{cid}"), "change_id": cid, "node_type": rec["node_type"],
+        "title": rec["title"], "description": rec.get("description").cloned().unwrap_or(Value::Null),
+        "status": status, "metadata": rec["metadata"], "created_at": rec["created_at"],
+        "updated_at": at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true),
+        "deleted_at": null
+    })
+}

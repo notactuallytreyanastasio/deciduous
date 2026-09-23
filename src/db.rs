@@ -91,6 +91,42 @@ pub fn get_current_git_commit() -> Option<String> {
         })
 }
 
+/// Every kind of node reference the CLI takes, for errors that have to say.
+pub const NODE_REF_KINDS: &str = "A node is named by its local id (12, or #12 when \
+    digits could also be a change_id prefix), its change_id or a prefix of it (the CHANGE \
+    column of `deciduous nodes`, at least 4 hex characters), or, in a project with a \
+    [remote], the server's id for it (the `id` MCP tools return) or a prefix of that.";
+
+/// The full hash of the commit `rev` names in the current directory's
+/// repository: `HEAD`, a branch, a tag, `origin/main`, `HEAD~2`, a hash or a
+/// prefix of one. Anything git cannot resolve to a commit is an error naming
+/// `rev`, never the string stored as if it were a commit: `--commit
+/// origin/main` used to store the literal "origin/main".
+pub fn resolve_git_commit(rev: &str) -> std::result::Result<String, String> {
+    let rev = rev.trim();
+    if rev.is_empty() || rev.starts_with('-') {
+        return Err(format!("{rev:?} is not a git revision"));
+    }
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
+        .arg(format!("{rev}^{{commit}}"))
+        .output()
+        .map_err(|e| format!("could not run git to resolve {rev:?}: {e}"))?;
+    let hash = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if out.status.success() && !hash.is_empty() {
+        return Ok(hash);
+    }
+    let in_repo = std::process::Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    Err(if in_repo {
+        format!("{rev:?} is not a commit in this repository (git rev-parse could not resolve it)")
+    } else {
+        format!("{rev:?} cannot be resolved: this directory is not in a git repository")
+    })
+}
+
 /// Walk up directory tree to find .deciduous folder (like git finds .git)
 /// Can be overridden with DECIDUOUS_DB_PATH env var
 fn get_db_path() -> std::path::PathBuf {
@@ -744,6 +780,10 @@ pub struct Database {
     auto_attach: std::sync::atomic::AtomicBool,
     /// Author for a graph file attached later (see `set_store_author`).
     store_author: std::sync::RwLock<Option<String>>,
+    /// The HEAD file of the repository holding the graph file, found once:
+    /// reading it is how every write-through asks, cheaply, whether HEAD is
+    /// on a branch (see [`Self::write_store`]).
+    head_file: std::sync::OnceLock<Option<std::path::PathBuf>>,
 }
 
 /// Error type for database operations
@@ -753,6 +793,10 @@ pub enum DbError {
     Query(diesel::result::Error),
     Pool(diesel::r2d2::Error),
     Validation(String),
+    /// A reference that names no node here: no local id, no change_id
+    /// prefix. Kept apart from Validation so the CLI can go on to ask the
+    /// server whether it is one of the server's ids.
+    NoSuchNode(String),
 }
 
 impl std::fmt::Display for DbError {
@@ -761,7 +805,7 @@ impl std::fmt::Display for DbError {
             DbError::Connection(msg) => write!(f, "Connection error: {}", msg),
             DbError::Query(e) => write!(f, "Query error: {}", e),
             DbError::Pool(e) => write!(f, "Pool error: {}", e),
-            DbError::Validation(msg) => write!(f, "{}", msg),
+            DbError::Validation(msg) | DbError::NoSuchNode(msg) => write!(f, "{}", msg),
         }
     }
 }
@@ -846,6 +890,7 @@ impl Database {
             oplog: std::sync::RwLock::new(None),
             auto_attach: std::sync::atomic::AtomicBool::new(true),
             store_author: std::sync::RwLock::new(None),
+            head_file: std::sync::OnceLock::new(),
         };
         // Auto-migrate FIRST - add change_id columns to existing databases before init_schema creates new tables
         let _ = db.migrate_add_change_ids_raw();
@@ -1357,6 +1402,41 @@ impl Database {
         slot.clone()
     }
 
+    /// The graph file that writes are mirrored into: [`Self::store`], except
+    /// while HEAD is detached at a commit being looked at (G7), where the
+    /// file is that commit's and writing a new node into it made
+    /// `git checkout main` fail with "Your local changes ... would be
+    /// overwritten". Such a write stays in the database, and the next sync
+    /// on a branch exports it, as `deciduous sync` there already says.
+    ///
+    /// On a branch this costs one read of HEAD; git runs only when it is
+    /// detached, so a rebase (detached too, and whose file is being
+    /// merged on purpose) still writes through.
+    fn write_store(&self) -> Option<RecordStore> {
+        let store = self.store()?;
+        let head = self.head_file.get_or_init(|| {
+            let dir = store.path().parent()?;
+            let out = std::process::Command::new("git")
+                .arg("-C")
+                .arg(dir)
+                .args(["rev-parse", "--path-format=absolute", "--git-path", "HEAD"])
+                .stderr(std::process::Stdio::null())
+                .output()
+                .ok()?;
+            out.status
+                .success()
+                .then(|| std::path::PathBuf::from(String::from_utf8_lossy(&out.stdout).trim()))
+        });
+        let Some(head) = head else {
+            return Some(store);
+        };
+        match std::fs::read_to_string(head) {
+            Ok(h) if h.starts_with("ref:") => Some(store),
+            _ if crate::records::viewing_history(store.path()).is_some() => None,
+            _ => Some(store),
+        }
+    }
+
     // ------------------------------------------------------------------
     // Record store write-through. A file that cannot be read refuses the
     // operation before the database is touched (require_readable_store).
@@ -1373,7 +1453,7 @@ impl Database {
     /// versions: a record stamped later than this clock wins, and the edit
     /// the CLI reported as done is reverted.
     fn require_readable_store(&self) -> Result<()> {
-        let Some(store) = self.store() else {
+        let Some(store) = self.write_store() else {
             return Ok(());
         };
         store
@@ -1394,7 +1474,9 @@ impl Database {
     /// was before the change, so the file can keep fields a teammate changed
     /// that this write did not touch.
     fn publish_node_edit(&self, node_id: i32, before: Option<DecisionNode>) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         match self.get_node(node_id) {
             Ok(Some(node)) => match store.publish_node_edit(before.as_ref(), &node) {
                 Ok((_, Some(stamp))) => {
@@ -1416,7 +1498,7 @@ impl Database {
     /// The row as it is now, for [`Self::publish_node_edit`]. Only read when
     /// a graph file is attached.
     fn node_before_edit(&self, node_id: i32) -> Option<DecisionNode> {
-        self.store()?;
+        self.write_store()?;
         self.get_node(node_id).ok().flatten()
     }
 
@@ -1429,7 +1511,9 @@ impl Database {
     }
 
     fn publish_edge_by_id(&self, edge_id: i32) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         match self.get_edge(edge_id) {
             Ok(Some(edge)) => {
                 if let Err(e) = store.publish_edge(&edge) {
@@ -1448,7 +1532,9 @@ impl Database {
     /// Tombstone edges; `with_node` names the node whose deletion took
     /// them, so they come back if that node does.
     fn tombstone_edges_of(&self, edges: &[DecisionEdge], with_node: Option<&str>) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         for edge in edges {
             if let Err(e) = store.tombstone_edge_of(edge, with_node) {
                 Self::store_warn("could not write edge tombstone", e);
@@ -1457,7 +1543,9 @@ impl Database {
     }
 
     fn publish_theme_by_id(&self, theme_id: i32) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         match self.get_theme_by_id(theme_id) {
             Ok(Some(theme)) => match store.publish_theme_edit(&theme) {
                 Ok((_, Some(stamp))) => {
@@ -1480,7 +1568,9 @@ impl Database {
     }
 
     fn publish_tag(&self, node_id: i32, theme_id: i32) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         let node = self.get_node(node_id).ok().flatten();
         let theme = self.get_theme_by_id(theme_id).ok().flatten();
         let tag = self.get_tag(node_id, theme_id).ok().flatten();
@@ -1497,7 +1587,9 @@ impl Database {
     }
 
     fn tombstone_tag(&self, node_change_id: &str, theme_change_id: &str) {
-        let Some(store) = self.store() else { return };
+        let Some(store) = self.write_store() else {
+            return;
+        };
         if let Err(e) = store.tombstone_tag(node_change_id, theme_change_id, false) {
             Self::store_warn("could not write tag tombstone", e);
         }
@@ -2646,8 +2738,8 @@ impl Database {
         if !looks_like_prefix {
             return as_id.ok_or_else(|| {
                 DbError::Validation(format!(
-                    "'{}' is not a node id or a change_id prefix (need an integer, or at least 4 hex characters)",
-                    reference
+                    "'{}' is not a node id, a change_id prefix or a server id. {}",
+                    reference, NODE_REF_KINDS
                 ))
             });
         }
@@ -2667,7 +2759,23 @@ impl Database {
             ));
         }
         match (local, by_prefix.as_slice()) {
-            (_, []) => Ok(id),
+            // Nothing prints a local id zero-padded, so "0012" is far more
+            // likely the start of a change_id or server id than local #12,
+            // and reading it as #12 named some other node without a word.
+            (Some(node), []) if r.starts_with('0') => Err(DbError::NoSuchNode(format!(
+                "'{}' is zero-padded, so it is not read as local id {} (#{} {}; write {} or #{} for that), and no change_id starts with it.",
+                r, id, id, node.title, id, id
+            ))),
+            (Some(_), []) => Ok(id),
+            // Neither a local node nor a change_id prefix. Returning the id
+            // anyway (as this did) made "no such node" the caller's error,
+            // so a server id whose prefix is all digits (89346034-83ce...,
+            // 2.3% of them at 8 characters) was never looked up as one:
+            // `dx show 89346034` said "Node #89346034 not found".
+            (None, []) => Err(DbError::NoSuchNode(format!(
+                "No node has local id {} or a change_id starting with '{}'.",
+                id, r
+            ))),
             (None, _) => self.resolve_change_id_prefix(r),
             (Some(node), matches) => {
                 let mut list = vec![format!("local id #{} ({})", node.id, node.title)];
@@ -2781,7 +2889,7 @@ impl Database {
             }
         }
         match matches.len() {
-            0 => Err(DbError::Validation(format!(
+            0 => Err(DbError::NoSuchNode(format!(
                 "No node has a change_id starting with '{}'. Run 'deciduous sync' if a teammate created it.",
                 r
             ))),
@@ -2924,9 +3032,34 @@ impl Database {
             _ => Vec::new(),
         };
         let (id, queued) = conn.immediate_transaction(|conn| {
-            diesel::insert_into(decision_edges::table)
+            let inserted = diesel::insert_into(decision_edges::table)
                 .values(&new_edge)
-                .execute(conn)?;
+                .execute(conn);
+            if let Err(diesel::result::Error::DatabaseError(
+                diesel::result::DatabaseErrorKind::UniqueViolation,
+                _,
+            )) = inserted
+            {
+                // SQLite's text ("UNIQUE constraint failed: decision_edges...")
+                // names columns, not the edge, and not what to do instead.
+                let existing = decision_edges::table
+                    .filter(decision_edges::from_node_id.eq(from_id))
+                    .filter(decision_edges::to_node_id.eq(to_id))
+                    .filter(decision_edges::edge_type.eq(edge_type))
+                    .first::<DecisionEdge>(conn)
+                    .ok();
+                let rationale = existing
+                    .as_ref()
+                    .and_then(|e| e.rationale.as_deref())
+                    .map(|r| format!(" (rationale: {r:?})"))
+                    .unwrap_or_default();
+                return Err(DbError::Validation(format!(
+                    "node {from_id} already {edge_type} node {to_id}{rationale}; nothing was changed. \
+                     To give it a new rationale, unlink it first (`deciduous unlink {from_id} {to_id} -t {edge_type}`, \
+                     or unlink_nodes with edge_type {edge_type:?}), then link again"
+                )));
+            }
+            inserted?;
             let id: i32 = diesel::select(diesel::dsl::sql::<diesel::sql_types::Integer>(
                 "last_insert_rowid()",
             ))
@@ -2953,19 +3086,31 @@ impl Database {
     }
 
     /// Delete an edge between two nodes
-    pub fn delete_edge(&self, from_id: i32, to_id: i32) -> Result<()> {
+    /// Remove the edge from `from_id` to `to_id`, of `edge_type` when given,
+    /// and return what was removed.
+    ///
+    /// Without a type it removes the pair's edge only when there is exactly
+    /// one. It used to remove every edge between the two, whatever its type,
+    /// and print "Removed edge (5 -> 6)": the `unlink 5 6` that the
+    /// duplicate-link refusal advised for a `chosen` edge silently took the
+    /// pair's `leads_to` edge with it.
+    pub fn delete_edge(
+        &self,
+        from_id: i32,
+        to_id: i32,
+        edge_type: Option<&str>,
+    ) -> Result<Vec<DecisionEdge>> {
         self.require_readable_store()?;
         let _log = self.hold_log()?;
         let mut conn = self.get_conn()?;
 
-        // Check if the edge exists
-        let edge_exists = decision_edges::table
+        let between: Vec<DecisionEdge> = decision_edges::table
             .filter(decision_edges::from_node_id.eq(from_id))
             .filter(decision_edges::to_node_id.eq(to_id))
-            .first::<DecisionEdge>(&mut conn)
-            .optional()?;
+            .order(decision_edges::id.asc())
+            .load(&mut conn)?;
 
-        if edge_exists.is_none() {
+        if between.is_empty() {
             // Get outgoing edges from source node to provide helpful error
             let outgoing: Vec<DecisionEdge> = decision_edges::table
                 .filter(decision_edges::from_node_id.eq(from_id))
@@ -2989,23 +3134,51 @@ impl Database {
             }
         }
 
-        let doomed: Vec<DecisionEdge> = decision_edges::table
-            .filter(decision_edges::from_node_id.eq(from_id))
-            .filter(decision_edges::to_node_id.eq(to_id))
-            .load(&mut conn)?;
+        let describe = |edges: &[DecisionEdge]| {
+            edges
+                .iter()
+                .map(|e| match &e.rationale {
+                    Some(r) => format!("{} (rationale: {r:?})", e.edge_type),
+                    None => e.edge_type.clone(),
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        };
+        let doomed: Vec<DecisionEdge> = match edge_type {
+            Some(t) => {
+                let picked: Vec<DecisionEdge> = between
+                    .iter()
+                    .filter(|e| e.edge_type == t)
+                    .cloned()
+                    .collect();
+                if picked.is_empty() {
+                    return Err(DbError::Validation(format!(
+                        "No {t} edge from node {from_id} to node {to_id}; the edges between them are: {}. Nothing was removed.",
+                        describe(&between)
+                    )));
+                }
+                picked
+            }
+            None if between.len() > 1 => {
+                return Err(DbError::Validation(format!(
+                    "Node {from_id} has {} edges to node {to_id}: {}. Nothing was removed; name the one to remove with its type (`deciduous unlink {from_id} {to_id} -t {}`, or unlink_nodes with edge_type).",
+                    between.len(),
+                    describe(&between),
+                    between[0].edge_type
+                )));
+            }
+            None => between,
+        };
 
         drop(conn);
         let endpoints = self.endpoint_change_ids(&doomed);
         let (bodies, unnamed) = self.edges_deleted_bodies(&doomed, &endpoints);
         let mut conn = self.get_conn()?;
 
+        let ids: Vec<i32> = doomed.iter().map(|e| e.id).collect();
         let queued = conn.immediate_transaction(|conn| {
-            diesel::delete(
-                decision_edges::table
-                    .filter(decision_edges::from_node_id.eq(from_id))
-                    .filter(decision_edges::to_node_id.eq(to_id)),
-            )
-            .execute(conn)?;
+            diesel::delete(decision_edges::table.filter(decision_edges::id.eq_any(&ids)))
+                .execute(conn)?;
             self.queue_in_tx(conn, bodies)
         })?;
         drop(conn);
@@ -3015,7 +3188,7 @@ impl Database {
         for u in unnamed {
             self.not_queued(u);
         }
-        Ok(())
+        Ok(doomed)
     }
 
     /// Delete a node and all its connected edges
@@ -3154,7 +3327,7 @@ impl Database {
         drop(conn);
 
         if publish {
-            if let Some(store) = self.store() {
+            if let Some(store) = self.write_store() {
                 if let Err(e) = store.tombstone_node(&node) {
                     Self::store_warn("could not write node tombstone", e);
                 }
@@ -3164,7 +3337,7 @@ impl Database {
             for u in unnamed {
                 self.not_queued(u);
             }
-            if let Some(store) = self.store() {
+            if let Some(store) = self.write_store() {
                 for tag in &doomed_tags {
                     if let Ok(Some(theme)) = self.get_theme_by_id(tag.theme_id) {
                         if let Err(e) = store.tombstone_tag(&node.change_id, &theme.change_id, true)
@@ -4292,7 +4465,7 @@ impl Database {
             diesel::delete(themes::table.filter(themes::id.eq(theme.id))).execute(&mut conn)?;
             drop(conn);
 
-            if let Some(store) = self.store() {
+            if let Some(store) = self.write_store() {
                 for t in &tagged {
                     if let Ok(Some(node)) = self.get_node(t.node_id) {
                         self.tombstone_tag(&node.change_id, &theme.change_id);
@@ -5478,8 +5651,17 @@ mod tests {
 
         let err = db.resolve_node_ref("zz").unwrap_err().to_string();
         assert!(err.contains("not a node id"), "{err}");
-        // Digits that prefix no change_id are an id, even a missing one.
-        assert_eq!(db.resolve_node_ref("99999").unwrap(), 99999);
+        // Four or more digits that are neither a local id nor a change_id
+        // prefix are no node, so the CLI can go on to try them as a server
+        // id; a zero-padded one is not silently read as a local id.
+        assert!(matches!(
+            db.resolve_node_ref("99999"),
+            Err(DbError::NoSuchNode(_))
+        ));
+        assert!(matches!(
+            db.resolve_node_ref(&format!("000{a}")),
+            Err(DbError::NoSuchNode(_))
+        ));
         let err = db
             .resolve_node_ref("ffffffff-0000")
             .unwrap_err()

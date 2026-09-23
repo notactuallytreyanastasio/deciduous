@@ -1658,13 +1658,28 @@ fn a_description_cannot_swallow_the_rest_of_the_writeup() {
 /// multi-byte character and killed the stdio server, every time.
 #[test]
 fn a_non_ascii_commit_does_not_kill_the_server_in_generate_writeup() {
-    let p = Project::new();
+    // add_node resolves `commit` in the caller's checkout since T8, so the
+    // odd value arrives the way it still can: in a teammate's graph.json.
+    let p = Project::with_graph();
+    let mut doc = p.graph_doc();
+    let cid = "0e0e0e0e-0000-4000-8000-000000000001";
+    doc["nodes"][cid] = json!({
+        "change_id": cid, "node_type": "action", "title": "a", "status": "pending",
+        "metadata": {"commit": "ééééé", "branch": "b"},
+        "created_at": "2026-01-01T00:00:00+00:00", "updated_at": "2026-01-01T00:00:00+00:00"
+    });
+    std::fs::write(p.graph_path(), serde_json::to_string_pretty(&doc).unwrap()).unwrap();
+    let out = p.cli(&["sync"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
     let mut m = p.mcp();
-    m.call(
+    let refused = m.call(
         "add_node",
-        json!({"node_type":"action","title":"a","commit":"ééééé","branch":"b"}),
-    )
-    .unwrap();
+        json!({"node_type":"action","title":"b","commit":"ééééé","branch":"b"}),
+    );
+    assert!(
+        refused.as_ref().is_err_and(|e| e.contains("ééééé")),
+        "add_node stored a commit git cannot resolve: {refused:?}"
+    );
     let md = m
         .call_within("generate_writeup", json!({}), Duration::from_secs(10))
         .expect("generate_writeup never answered")

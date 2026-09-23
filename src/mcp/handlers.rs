@@ -284,19 +284,30 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
     let prompt = get_str(args, "prompt");
     let files = get_str(args, "files");
     let branch = get_str(args, "branch");
-    let commit = get_str(args, "commit");
+    // "" (or blanks) is how agents fill an optional string they have no
+    // value for: no commit, as before 59894f8, not a rev git must resolve.
+    let commit = get_str(args, "commit").filter(|c| !c.trim().is_empty());
 
     // HEAD and the default branch come from the working directory's git
     // checkout, which is only the caller's when the caller is local.
-    let resolved_commit =
-        match (commit, caller) {
-            (Some("HEAD"), Caller::Local) => db::get_current_git_commit(),
-            (Some("HEAD"), Caller::Remote) => return Err(HandlerError::from(
-                "commit \"HEAD\" would name the server's checkout, not yours; pass the commit hash",
-            )),
-            (Some(c), _) => Some(c.to_string()),
-            (None, _) => None,
-        };
+    let resolved_commit = match (commit, caller) {
+        // Any rev, resolved in the caller's own checkout, as the CLI's
+        // --commit does; one git cannot resolve is refused by name.
+        (Some(c), Caller::Local) => Some(db::resolve_git_commit(c).map_err(HandlerError::from)?),
+        // Only a hash: any other rev ("HEAD~1", "@", "main") would name
+        // the server's checkout, not the caller's, and was stored literally.
+        (Some(c), Caller::Remote) => {
+            let hex = c.len() >= 7 && c.len() <= 64 && c.bytes().all(|b| b.is_ascii_hexdigit());
+            if !hex {
+                return Err(HandlerError::from(format!(
+                    "commit {c:?} is not a commit hash; a rev would name the server's checkout, \
+                     not yours, so resolve it where you are (git rev-parse {c}) and pass the hash"
+                )));
+            }
+            Some(c.to_ascii_lowercase())
+        }
+        (None, _) => None,
+    };
 
     let resolved_branch = match (branch, caller) {
         (Some(b), _) => Some(b.to_string()),
@@ -345,12 +356,23 @@ fn handle_unlink_nodes(db: &Database, args: &Value) -> HandlerResult {
     let from_id = require_node_ref(db, args, "from_id")?;
     let to_id = require_node_ref(db, args, "to_id")?;
 
-    db.delete_edge(from_id, to_id)?;
+    let edge_type = match args.get("edge_type") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(t)) => Some(t.as_str()),
+        Some(other) => {
+            return Err(HandlerError::from(format!(
+                "edge_type must be a string, got {other}"
+            )))
+        }
+    };
+    let removed = db.delete_edge(from_id, to_id, edge_type)?;
+    let types: Vec<&str> = removed.iter().map(|e| e.edge_type.as_str()).collect();
 
     Ok(tool_result_json(&json!({
         "from_id": from_id,
         "to_id": to_id,
-        "message": format!("Removed edge {} -> {}", from_id, to_id)
+        "edge_type": types.join(", "),
+        "message": format!("Removed edge {} -> {} ({})", from_id, to_id, types.join(", "))
     })))
 }
 
@@ -1053,7 +1075,60 @@ fn store_for(db: &Database) -> Option<crate::records::RecordStore> {
     })
 }
 
+fn store_path_for(db: &Database) -> Result<std::path::PathBuf, HandlerError> {
+    db.store()
+        .map(|s| s.path().to_path_buf())
+        .or_else(|| crate::records::RecordStore::path_for_db(db.path()))
+        .ok_or_else(|| HandlerError::from("the database path has no directory of its own, so there is nowhere to keep the graph file"))
+}
+
+/// `sync` and `sync_status` on a detached commit (G7): imports only, the
+/// graph file left as the commit has it (and not created when it has none),
+/// with what was held back said in the result. The CLI's `sync` does the
+/// same through the same function, so the two agree.
+fn sync_viewing_history(
+    db: &Database,
+    at: &str,
+    store: Option<&crate::records::RecordStore>,
+    dry_run: bool,
+    path: &std::path::Path,
+) -> HandlerResult {
+    let (report, withheld) = crate::records::reconcile_viewing_history(db, store, dry_run)
+        .map_err(HandlerError::from)?;
+    let note = crate::records::viewing_history_note(at, store.is_some(), &withheld);
+    let applied = if dry_run {
+        format!(
+            "Would import {} record(s) into the database",
+            report.imported()
+        )
+    } else {
+        format!("Imported {} record(s) into the database", report.imported())
+    };
+    Ok(tool_result_json(&json!({
+        "initialized": store.is_some(),
+        "store_path": path.display().to_string(),
+        "dry_run": dry_run,
+        "detached_at": at,
+        "imported": report.imported(),
+        "exported": 0,
+        "withheld_exports": withheld,
+        "pending_import": report.imported(),
+        "pending_export": 0,
+        "edges_pending": report.edges_pending,
+        "read_errors": report.read_errors,
+        "conflicts": report.conflicts,
+        "errors": report.errors,
+        "settled": report.is_settled(),
+        "report": report,
+        "message": format!("{applied}. {note}"),
+    })))
+}
+
 fn handle_sync_status(db: &Database) -> HandlerResult {
+    let path = store_path_for(db)?;
+    if let Some(at) = crate::records::viewing_history(&path) {
+        return sync_viewing_history(db, &at, store_for(db).as_ref(), true, &path);
+    }
     let Some(store) = store_for(db) else {
         return Ok(tool_result_json(&json!({
             "initialized": false,
@@ -1106,6 +1181,10 @@ fn handle_sync_status(db: &Database) -> HandlerResult {
 
 fn handle_sync(db: &Database, args: &Value) -> HandlerResult {
     let dry_run = get_bool(args, "dry_run").unwrap_or(false);
+    let path = store_path_for(db)?;
+    if let Some(at) = crate::records::viewing_history(&path) {
+        return sync_viewing_history(db, &at, store_for(db).as_ref(), dry_run, &path);
+    }
     let store = match store_for(db) {
         Some(s) => s,
         None => {

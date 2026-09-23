@@ -428,7 +428,6 @@ fn g6_nodes_do_not_leak_across_branches() {
 
 /// G7: `sync` on an old commit dirtied the tree so `git checkout main` aborted.
 #[test]
-#[ignore = "G7: expected behaviour of sync on a detached old commit not decided; run with --ignored"]
 fn g7_sync_on_an_old_commit_does_not_block_checkout() {
     let Some(()) = local("g7_sync_on_an_old_commit_does_not_block_checkout") else {
         return;
@@ -438,16 +437,138 @@ fn g7_sync_on_an_old_commit_does_not_block_checkout() {
     p.add("goal", "one");
     p.commit_graph("one");
     let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
-    p.add("goal", "two");
+    let two = p.add("goal", "two");
     p.commit_graph("two");
     p.git_ok(&["checkout", "-q", &old]);
-    p.ok(&["sync"]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let check = p.dx(&["sync", "--check"]);
+    let out = p.ok(&["sync"]);
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "sync on a detached old commit dirtied the tree:\n{out}"
+    );
+    assert!(
+        out.contains("detached") && out.contains("not exported"),
+        "sync on a detached commit does not say what it left out:\n{out}"
+    );
+    assert!(
+        check.ok(),
+        "sync --check on the old commit disagrees with the sync that followed:\n{}",
+        check.all()
+    );
     let co = p.git(&["checkout", "-q", "main"]);
     assert!(
         co.ok(),
         "sync on an old commit blocked checkout:\n{}",
         co.all()
     );
+    // Nothing was lost: "two" is still in the database and back in the
+    // file on main, and main needs no sync.
+    assert!(!node(&p.graph_doc(), &two).is_null());
+    let settled = p.dx(&["sync", "--check"]);
+    assert!(settled.ok(), "{}", settled.all());
+}
+
+/// G7, round 2: the MCP `sync` tool called reconcile directly, with no
+/// detached-HEAD check, so on an old commit it exported into graph.json
+/// ("exported: 4") and `git checkout main` aborted again; and `sync_status`
+/// reported pending exports while CLI `sync --check` exited 0.
+#[test]
+fn g7_mcp_sync_on_an_old_commit_does_not_block_checkout() {
+    let Some(()) = local("g7_mcp_sync_on_an_old_commit_does_not_block_checkout") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    let two = p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let status = m.call_ok("sync_status", json!({}));
+    let synced = m.call_ok("sync", json!({}));
+    drop(m);
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "the MCP sync tool on a detached old commit dirtied the tree: {synced}"
+    );
+    assert_eq!(synced["exported"], json!(0), "{synced}");
+    assert!(
+        synced["message"]
+            .as_str()
+            .unwrap_or("")
+            .contains("detached"),
+        "the MCP sync on a detached commit does not say what it left out: {synced}"
+    );
+    let check = p.dx(&["sync", "--check"]);
+    assert_eq!(
+        status["settled"],
+        json!(check.ok()),
+        "sync_status ({status}) and `sync --check` ({}) disagree",
+        check.all()
+    );
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(co.ok(), "the MCP sync blocked checkout:\n{}", co.all());
+    assert!(!node(&p.graph_doc(), &two).is_null());
+}
+
+/// G7, round 2: on a detached commit that has no graph.json at all, sync
+/// created one ("Created .deciduous/graph.json (commit this file)") and then
+/// said the file "was left as this commit has it"; the new untracked file
+/// made `git checkout main` abort.
+#[test]
+fn g7_sync_on_a_commit_without_a_graph_file_creates_none() {
+    let Some(()) = local("g7_sync_on_a_commit_without_a_graph_file_creates_none") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    let root = p
+        .git_ok(&["rev-list", "--max-parents=0", "HEAD"])
+        .trim()
+        .to_string();
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let tree = p.git_ok(&["ls-tree", "-r", "--name-only", &root]);
+    assert!(
+        !tree.contains("graph.json"),
+        "the root commit has a graph file; this test proves nothing:\n{tree}"
+    );
+    p.git_ok(&["checkout", "-q", &root]);
+    assert!(!p.graph_file().exists());
+    let before = p.git_ok(&["status", "--porcelain"]);
+
+    let check = p.dx(&["sync", "--check"]);
+    let out = p.ok(&["sync"]);
+    assert!(
+        !p.graph_file().exists(),
+        "sync on a detached commit with no graph file created one:\n{out}"
+    );
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), before, "{out}");
+    assert!(
+        out.contains("detached") && out.contains("not exported"),
+        "sync does not say what it left out:\n{out}"
+    );
+    assert!(check.ok(), "sync --check disagrees:\n{}", check.all());
+
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let synced = m.call_ok("sync", json!({}));
+    drop(m);
+    assert!(
+        !p.graph_file().exists(),
+        "the MCP sync on a detached commit with no graph file created one: {synced}"
+    );
+
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(co.ok(), "sync blocked checkout:\n{}", co.all());
+    let settled = p.dx(&["sync", "--check"]);
+    assert!(settled.ok(), "{}", settled.all());
 }
 
 // ---------------------------------------------------------------- G8 / G9
@@ -569,9 +690,360 @@ fn g10_sync_check_writes_nothing() {
         dir: dir.clone(),
         sb: &sb,
     };
-    let _ = fresh.dx(&["sync", "--check"]);
+    let listing = |d: &Path| -> Vec<String> {
+        let mut v: Vec<String> = std::fs::read_dir(d.join(".deciduous"))
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        v.sort();
+        v
+    };
+    let before = listing(&dir);
+    let out = fresh.dx(&["sync", "--check"]);
     assert!(
         !Path::new(&dir).join(".deciduous/deciduous.db").exists(),
         "sync --check created deciduous.db"
+    );
+    assert_eq!(listing(&dir), before, "sync --check changed .deciduous/");
+    // A clone that has never synced is not settled: the graph file holds a
+    // node its (absent) database does not.
+    assert!(
+        !out.ok(),
+        "sync --check in a clone that never synced exited 0:\n{}",
+        out.all()
+    );
+    assert!(
+        out.all().contains("deciduous sync"),
+        "sync --check does not say what to run:\n{}",
+        out.all()
+    );
+    // And the check agrees with the sync that follows.
+    let synced = fresh.dx(&["sync"]);
+    assert!(synced.ok(), "{}", synced.all());
+    let again = fresh.dx(&["sync", "--check"]);
+    assert!(again.ok(), "sync --check after sync:\n{}", again.all());
+}
+
+/// NEW-7: linking two nodes that are already linked printed SQLite's own
+/// "Query error: UNIQUE constraint failed: decision_edges.from_node_id, ...".
+#[test]
+fn new7_linking_an_existing_edge_says_so() {
+    let Some(()) = local("new7_linking_an_existing_edge_says_so") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "from here");
+    p.add("option", "to there");
+    p.ok(&["link", "1", "2", "-r", "first"]);
+    let again = p.dx(&["link", "1", "2", "-r", "again"]);
+    assert!(
+        !again.ok(),
+        "a second identical link exited 0:\n{}",
+        again.all()
+    );
+    let text = again.all();
+    assert!(
+        !text.contains("UNIQUE constraint"),
+        "the duplicate link shows SQLite's error:\n{text}"
+    );
+    assert!(
+        text.contains("already") && text.contains("unlink"),
+        "the refusal does not say the edge exists and how to change it:\n{text}"
+    );
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let r = m.call(
+        "link_nodes",
+        json!({"from_id": 1, "to_id": 2, "rationale": "via mcp"}),
+    );
+    let err = r.expect_err("link_nodes of an existing edge succeeded");
+    assert!(
+        !err.contains("UNIQUE constraint") && err.contains("already"),
+        "link_nodes of an existing edge: {err}"
+    );
+    drop(m);
+    let edges: Vec<Value> = p.graph()["edges"].as_array().unwrap().clone();
+    assert_eq!(edges.len(), 1, "{edges:?}");
+    assert_eq!(edges[0]["rationale"], json!("first"));
+}
+
+/// NEW-7, round 2: the refusal said to `deciduous unlink 5 6` first. When
+/// two edge types join the pair, that unlink (which took no type) removed
+/// both and printed "Removed edge (5 -> 6)", deleting an edge nobody named.
+#[test]
+fn new7_the_unlink_the_refusal_suggests_removes_only_that_edge() {
+    let Some(()) = local("new7_the_unlink_the_refusal_suggests_removes_only_that_edge") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("pair", None);
+    p.add("goal", "from here");
+    p.add("option", "to there");
+    p.ok(&["link", "1", "2", "-r", "first"]);
+    p.ok(&["link", "1", "2", "-r", "x", "-t", "chosen"]);
+    let again = p.dx(&["link", "1", "2", "-r", "y", "-t", "chosen"]);
+    assert!(!again.ok(), "{}", again.all());
+    let text = again.all();
+    // Run exactly the command the refusal names.
+    let start = text.find("`deciduous unlink").expect(&text) + 1;
+    let cmd = &text[start..start + text[start..].find('`').unwrap()];
+    let args: Vec<&str> = cmd.split_whitespace().skip(1).collect();
+    let out = p.dx(&args);
+    assert!(out.ok(), "`{cmd}` failed:\n{}", out.all());
+    let edges: Vec<Value> = p.graph()["edges"].as_array().unwrap().clone();
+    assert_eq!(
+        edges.len(),
+        1,
+        "`{cmd}` (as the refusal advised) left {edges:?}; it said: {}",
+        out.all()
+    );
+    assert_eq!(edges[0]["edge_type"], json!("leads_to"), "{edges:?}");
+    p.ok(&["link", "1", "2", "-r", "y", "-t", "chosen"]);
+
+    // With two edges and no type, unlink removes nothing and names both.
+    let out = p.dx(&["unlink", "1", "2"]);
+    assert!(
+        !out.ok(),
+        "unlink of two edges with no type exited 0:\n{}",
+        out.all()
+    );
+    assert!(
+        out.all().contains("leads_to") && out.all().contains("chosen"),
+        "{}",
+        out.all()
+    );
+    assert_eq!(p.graph()["edges"].as_array().unwrap().len(), 2);
+
+    // The MCP tool: the same refusal, and edge_type picks one.
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    let err = m
+        .call("unlink_nodes", json!({"from_id": 1, "to_id": 2}))
+        .expect_err("unlink_nodes of two edges with no type succeeded");
+    assert!(err.contains("chosen") && err.contains("leads_to"), "{err}");
+    m.call_ok(
+        "unlink_nodes",
+        json!({"from_id": 1, "to_id": 2, "edge_type": "chosen"}),
+    );
+    drop(m);
+    let edges: Vec<Value> = p.graph()["edges"].as_array().unwrap().clone();
+    assert_eq!(edges.len(), 1, "{edges:?}");
+    assert_eq!(edges[0]["edge_type"], json!("leads_to"), "{edges:?}");
+}
+
+/// T8, round 2: 59894f8 resolved add_node's `commit` through git, and so
+/// refused `""` ("\"\" is not a git revision"), which agents send for an
+/// optional string they have no value for. Before it the node was added.
+/// Empty means no commit: the node is added, with none.
+#[test]
+fn t8_an_empty_commit_from_an_agent_means_no_commit() {
+    let Some(()) = local("t8_an_empty_commit_from_an_agent_means_no_commit") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("emptycommit", None);
+    let mut m = StdioMcp::spawn(&sb, &p.dir);
+    for (title, commit) in [("c-empty", ""), ("c-blank", "  ")] {
+        m.call(
+            "add_node",
+            json!({"node_type": "action", "title": title, "commit": commit}),
+        )
+        .unwrap_or_else(|e| panic!("add_node with commit {commit:?} was refused: {e}"));
+    }
+    // A rev git cannot resolve is still refused, and adds nothing.
+    let err = m
+        .call(
+            "add_node",
+            json!({"node_type": "action", "title": "c-bad", "commit": "no-such-rev"}),
+        )
+        .expect_err("add_node with an unresolvable commit succeeded");
+    assert!(err.contains("no-such-rev"), "{err}");
+    drop(m);
+    let g = p.graph();
+    let nodes = g["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 2, "{nodes:?}");
+    for n in nodes {
+        let meta = n["metadata_json"].as_str().unwrap_or("{}");
+        assert!(
+            !meta.contains("\"commit\""),
+            "{} was stored with a commit: {meta}",
+            n["title"]
+        );
+    }
+}
+
+/// T8: `dx add --commit origin/main` stored the literal "origin/main" (only
+/// HEAD was resolved) and the confirmation printed "[commit: origin/]".
+#[test]
+fn t8_commit_resolves_any_rev_and_is_shown_whole() {
+    let Some(()) = local("t8_commit_resolves_any_rev_and_is_shown_whole") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let origin = sb.origin("origin");
+    let p = sb.project("revs", Some(&origin));
+    p.git_ok(&["fetch", "-q", "origin"]);
+    let want = p.git_ok(&["rev-parse", "origin/main"]).trim().to_string();
+    assert_eq!(want.len(), 40);
+    let out = p.ok(&["add", "action", "pinned", "--commit", "origin/main"]);
+    let id = created_id(&out);
+    assert!(
+        out.contains(&want),
+        "the confirmation does not show the whole commit {want}:\n{out}"
+    );
+    let g = p.graph();
+    let node = g["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["id"].as_i64() == Some(id))
+        .unwrap()
+        .clone();
+    let meta: Value = serde_json::from_str(node["metadata_json"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        meta["commit"],
+        json!(want),
+        "--commit origin/main was stored as {}",
+        meta["commit"]
+    );
+
+    // HEAD and a branch name resolve the same way.
+    let head = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    let out = p.ok(&["add", "action", "at head", "--commit", "HEAD"]);
+    assert!(out.contains(&head), "{out}");
+
+    // A rev this repository does not have is refused, by name, and nothing
+    // is written.
+    let before = p.graph()["nodes"].as_array().unwrap().len();
+    let bad = p.dx(&["add", "action", "bogus", "--commit", "no-such-branch"]);
+    assert!(
+        !bad.ok(),
+        "--commit no-such-branch exited 0:\n{}",
+        bad.all()
+    );
+    assert!(
+        bad.all().contains("no-such-branch"),
+        "the refusal does not name the rev:\n{}",
+        bad.all()
+    );
+    assert_eq!(p.graph()["nodes"].as_array().unwrap().len(), before);
+}
+
+/// G7's fix leaves the graph file alone on a detached HEAD. A rebase that
+/// stopped is detached too, and there the file is being rewritten on
+/// purpose: sync must still export into it.
+#[test]
+fn g7_sync_during_a_stopped_rebase_still_exports() {
+    let Some(()) = local("g7_sync_during_a_stopped_rebase_still_exports") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    std::fs::write(p.dir.join("x.txt"), "base\n").unwrap();
+    p.git_ok(&["add", "x.txt"]);
+    p.git_ok(&["commit", "-q", "-m", "base"]);
+    p.git_ok(&["checkout", "-q", "-b", "feat"]);
+    std::fs::write(p.dir.join("x.txt"), "feat\n").unwrap();
+    p.git_ok(&["commit", "-q", "-am", "feat"]);
+    p.git_ok(&["checkout", "-q", "main"]);
+    std::fs::write(p.dir.join("x.txt"), "main\n").unwrap();
+    p.git_ok(&["commit", "-q", "-am", "main"]);
+    p.git_ok(&["checkout", "-q", "feat"]);
+    let stopped = p.git(&["rebase", "main"]);
+    assert!(!stopped.ok(), "the rebase was meant to stop on x.txt");
+    // A row the database has and the file does not: written, then the
+    // file put back, as a rebase step can.
+    let late = p.add("goal", "written mid-rebase");
+    p.git_ok(&["checkout", "--", ".deciduous/graph.json"]);
+    assert!(node(&p.graph_doc(), &late).is_null());
+    let out = p.ok(&["sync"]);
+    assert!(
+        !node(&p.graph_doc(), &late).is_null(),
+        "sync during a stopped rebase did not export:\n{out}"
+    );
+    let _ = p.git(&["rebase", "--abort"]);
+}
+
+/// G7, round 3: `add` on a detached old commit wrote the node straight into
+/// that commit's graph.json, so `git checkout main` aborted, and the `sync`
+/// after it said the file "was left as this commit has it".
+#[test]
+fn g7_add_on_an_old_commit_does_not_block_checkout() {
+    let Some(()) = local("g7_add_on_an_old_commit_does_not_block_checkout") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let p = sb.project("solo", None);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let e = p.add("goal", "added while looking at history");
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "add on a detached old commit wrote into its graph file"
+    );
+    let out = p.ok(&["sync"]);
+    assert!(out.contains("not exported"), "{out}");
+    assert_eq!(p.git_ok(&["status", "--porcelain"]), before, "{out}");
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(
+        co.ok(),
+        "add on an old commit blocked checkout:\n{}",
+        co.all()
+    );
+    // Not lost: the next sync on the branch exports it.
+    p.ok(&["sync"]);
+    assert!(!node(&p.graph_doc(), &e).is_null());
+}
+
+/// G7, round 3: `remote pull` on a detached old commit wrote the server's
+/// records into that commit's graph.json (34 lines), and checkout aborted.
+#[test]
+fn g7_remote_pull_on_an_old_commit_does_not_block_checkout() {
+    let Some(server) = remote("g7_remote_pull_on_an_old_commit_does_not_block_checkout") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let ws = unique("g7pull");
+    let p = sb.project(&ws, None);
+    p.remote_init(&ws);
+    p.add("goal", "one");
+    p.commit_graph("one");
+    let old = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    p.add("goal", "two");
+    p.commit_graph("two");
+    p.git_ok(&["checkout", "-q", &old]);
+    server.session(Some(&ws)).call_ok(
+        "add_node",
+        json!({"node_type": "goal", "title": "server only"}),
+    );
+    let before = p.git_ok(&["status", "--porcelain"]);
+    let out = p.ok(&["remote", "pull"]);
+    assert_eq!(
+        p.git_ok(&["status", "--porcelain"]),
+        before,
+        "remote pull on a detached old commit dirtied the tree:\n{out}"
+    );
+    assert!(out.contains("detached"), "{out}");
+    let co = p.git(&["checkout", "-q", "main"]);
+    assert!(
+        co.ok(),
+        "pull on an old commit blocked checkout:\n{}",
+        co.all()
+    );
+    p.ok(&["sync"]);
+    let doc = p.graph_doc();
+    assert!(
+        doc["nodes"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|n| n["title"] == "server only"),
+        "the pulled node never reached main's graph file"
     );
 }
