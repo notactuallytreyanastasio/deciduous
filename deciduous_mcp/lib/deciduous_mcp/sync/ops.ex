@@ -153,18 +153,39 @@ defmodule DeciduousMcp.Sync.Ops do
     end
   end
 
+  # Compare-and-set, field by field. The op carries, beside each value it
+  # sets, the value it replaced (`was` for columns, `was_metadata` for
+  # metadata keys, null for a key that was absent). A field is written only
+  # while the row still holds that value; if it holds the new value already
+  # there is nothing to do; if it holds anything else, someone changed it
+  # after this edit was made and the op is refused, whole, with both values.
+  #
+  # Comparing the op's `at` with the row's `updated_at` looks simpler and is
+  # wrong twice: an agent retitling a node would make a queued status edit
+  # to it look stale (updated_at is per row, not per field), and it trusts
+  # the laptop's clock against the server's.
+  #
+  # The row is locked for the read-merge-write, so two ops merging different
+  # metadata keys into one node at the same moment cannot lose either.
   defp apply_op(ws, "update_node", op) do
     with {:ok, cid} <- change_id(op, "change_id"),
          {:ok, set} <- settable(op["set"]),
          {:ok, meta} <- metadata(op["metadata"]),
-         {:ok, node} <- live_node(ws, cid) do
+         :ok <- nonempty(cid, set, meta),
+         {:ok, was} <- previous(op, "was", Map.keys(set)),
+         {:ok, was_meta} <- previous(op, "was_metadata", Map.keys(meta)),
+         {:ok, node} <- live_node(ws, cid, lock: true),
+         {:ok, set} <- compare(cid, set, was, &Map.get(node, String.to_existing_atom(&1))),
+         {:ok, meta} <-
+           compare(cid, meta, was_meta, &Map.get(node.metadata || %{}, &1), "metadata.") do
       attrs =
         if meta == %{},
           do: set,
           else: Map.put(set, "metadata", Map.merge(node.metadata || %{}, meta))
 
       if attrs == %{} do
-        {:rejected, "update_node #{cid} changes nothing (no set, no metadata)"}
+        # Every field already held the value this op sets.
+        {:ok, "exists"}
       else
         case Nodes.update_node(node.id, attrs) do
           {:ok, _} -> {:ok, "applied"}
@@ -283,12 +304,74 @@ defmodule DeciduousMcp.Sync.Ops do
   defp metadata(other),
     do: {:rejected, "update_node metadata must be an object, got #{inspect(other)}"}
 
-  defp any_node(ws, cid) do
-    Repo.one(from n in Node, where: n.workspace_id == ^ws.id and n.change_id == ^cid)
+  defp nonempty(cid, set, meta) do
+    if set == %{} and meta == %{},
+      do: {:rejected, "update_node #{cid} changes nothing (no set, no metadata)"},
+      else: :ok
   end
 
-  defp live_node(ws, cid) do
-    case any_node(ws, cid) do
+  # Every field an op sets must say what it replaced. An op without it
+  # cannot be checked against a newer edit, and applying it blind is the
+  # overwrite this exists to stop.
+  defp previous(op, key, fields) do
+    was = op[key] || %{}
+
+    cond do
+      not is_map(was) ->
+        {:rejected, "update_node #{key} must be an object, got #{inspect(was)}"}
+
+      (missing = Enum.reject(fields, &Map.has_key?(was, &1))) != [] ->
+        {:rejected,
+         "update_node #{op["change_id"]} does not say what it replaced for " <>
+           "#{Enum.join(missing, ", ")} (#{key}); without it a newer edit on the server " <>
+           "would be overwritten unseen. A CLI older than this server?"}
+
+      true ->
+        {:ok, was}
+    end
+  end
+
+  # Drops fields that already hold the new value; refuses if any field holds
+  # neither the new value nor the one the edit replaced.
+  defp compare(cid, fields, was, current, prefix \\ "") do
+    {conflicts, todo} =
+      Enum.reduce(fields, {[], %{}}, fn {k, v}, {bad, keep} ->
+        now = current.(k)
+
+        cond do
+          now == v -> {bad, keep}
+          now == was[k] -> {bad, Map.put(keep, k, v)}
+          true -> {[{prefix <> k, now, was[k], v} | bad], keep}
+        end
+      end)
+
+    case conflicts do
+      [] ->
+        {:ok, todo}
+
+      _ ->
+        detail =
+          conflicts
+          |> Enum.reverse()
+          |> Enum.map_join("; ", fn {k, now, was, v} ->
+            "#{k}: the server has #{inspect(now)}, this edit changed #{inspect(was)} to #{inspect(v)}"
+          end)
+
+        {:rejected,
+         "node #{cid} changed on the server after this edit was made (#{detail}). " <>
+           "`deciduous remote pull` takes the server's value; " <>
+           "`deciduous remote push --repair` sends this copy's"}
+    end
+  end
+
+  defp any_node(ws, cid, opts \\ []) do
+    q = from n in Node, where: n.workspace_id == ^ws.id and n.change_id == ^cid
+    q = if opts[:lock], do: lock(q, "FOR UPDATE"), else: q
+    Repo.one(q)
+  end
+
+  defp live_node(ws, cid, opts \\ []) do
+    case any_node(ws, cid, opts) do
       nil -> {:rejected, "no node #{cid} on the server"}
       %Node{deleted_at: nil} = node -> {:ok, node}
       %Node{} -> {:rejected, "node #{cid} was deleted on the server"}

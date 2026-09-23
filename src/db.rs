@@ -805,26 +805,67 @@ impl Database {
         }
     }
 
+    /// The node as it is before an edit, read only when there is a server
+    /// log to write the edit to: an update op says what it replaced.
+    fn before_update(&self, node_id: i32) -> Option<DecisionNode> {
+        self.oplog()?;
+        self.get_node(node_id).ok().flatten()
+    }
+
     fn log_node_update(
         &self,
         node_id: i32,
+        before: Option<DecisionNode>,
         set: serde_json::Map<String, serde_json::Value>,
         metadata: serde_json::Map<String, serde_json::Value>,
     ) {
         if self.oplog().is_none() {
             return;
         }
-        match self.get_node(node_id) {
-            Ok(Some(n)) => self.log_op(crate::oplog::OpBody::UpdateNode {
-                change_id: n.change_id,
-                set,
-                metadata,
-            }),
-            Ok(None) => {}
-            Err(e) => eprintln!(
-                "Warning: could not read node {node_id} to queue its edit for the server: {e}"
-            ),
-        }
+        let Some(before) = before else {
+            eprintln!(
+                "Warning: node {node_id} could not be read before its edit, so the edit was not queued for the server"
+            );
+            return;
+        };
+        let old_meta: serde_json::Map<String, serde_json::Value> = before
+            .metadata_json
+            .as_deref()
+            .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
+            .and_then(|v| v.as_object().cloned())
+            .unwrap_or_default();
+        let was = set
+            .keys()
+            .map(|k| {
+                let v = match k.as_str() {
+                    "title" => serde_json::Value::String(before.title.clone()),
+                    "status" => serde_json::Value::String(before.status.clone()),
+                    "description" => before
+                        .description
+                        .clone()
+                        .map(serde_json::Value::String)
+                        .unwrap_or(serde_json::Value::Null),
+                    other => unreachable!("update op sets an unknown column {other}"),
+                };
+                (k.clone(), v)
+            })
+            .collect();
+        let was_metadata = metadata
+            .keys()
+            .map(|k| {
+                (
+                    k.clone(),
+                    old_meta.get(k).cloned().unwrap_or(serde_json::Value::Null),
+                )
+            })
+            .collect();
+        self.log_op(crate::oplog::OpBody::UpdateNode {
+            change_id: before.change_id,
+            set,
+            metadata,
+            was,
+            was_metadata,
+        });
     }
 
     fn log_edge_created(&self, edge_id: i32) {
@@ -2444,6 +2485,7 @@ impl Database {
     pub fn update_node_status(&self, node_id: i32, status: &str) -> Result<()> {
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
+        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2456,7 +2498,12 @@ impl Database {
         drop(conn);
 
         self.publish_node_edit(node_id, before);
-        self.log_node_update(node_id, one_field("status", status), Default::default());
+        self.log_node_update(
+            node_id,
+            replaced,
+            one_field("status", status),
+            Default::default(),
+        );
         Ok(())
     }
 
@@ -2464,6 +2511,7 @@ impl Database {
     pub fn update_node_commit(&self, node_id: i32, commit_hash: &str) -> Result<()> {
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
+        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2498,6 +2546,7 @@ impl Database {
         self.publish_node_edit(node_id, before);
         self.log_node_update(
             node_id,
+            replaced,
             Default::default(),
             one_field("commit", commit_hash),
         );
@@ -2508,6 +2557,7 @@ impl Database {
     pub fn update_node_prompt(&self, node_id: i32, prompt: &str) -> Result<()> {
         self.require_readable_store()?;
         let before = self.node_before_edit(node_id);
+        let replaced = self.before_update(node_id);
         let mut conn = self.get_conn()?;
         let now = chrono::Local::now().to_rfc3339();
 
@@ -2540,7 +2590,12 @@ impl Database {
         drop(conn);
 
         self.publish_node_edit(node_id, before);
-        self.log_node_update(node_id, Default::default(), one_field("prompt", prompt));
+        self.log_node_update(
+            node_id,
+            replaced,
+            Default::default(),
+            one_field("prompt", prompt),
+        );
         Ok(())
     }
 

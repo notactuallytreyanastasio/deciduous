@@ -837,6 +837,62 @@ fn server_id(g: &Value, title: &str) -> String {
     server_node(g, title)["id"].as_str().unwrap().to_string()
 }
 
+// A queued op replayed after an agent changed the same field put back the
+// older value: update_node applied `set` without looking at the row.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn a_queued_edit_does_not_overwrite_a_newer_agent_edit_to_the_same_field() {
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-stale");
+    let dir = sb.remote_repo("stale", &url, &ws);
+
+    sb.dx_ok(&dir, &["add", "goal", "same field"]);
+    sb.dx_ok(&dir, &["add", "goal", "other field"]);
+
+    set_remote_url(&dir, &dead_url());
+    sb.dx_ok(&dir, &["status", "1", "completed"]);
+    sb.dx_ok(&dir, &["status", "2", "completed"]);
+    set_remote_url(&dir, &url);
+
+    let g = export(&url, &token, &ws);
+    mcp(
+        &url,
+        &token,
+        &ws,
+        &[
+            (
+                "update_node",
+                serde_json::json!({"node_id": server_id(&g, "same field"), "status": "rejected"}),
+            ),
+            (
+                "update_node",
+                serde_json::json!({"node_id": server_id(&g, "other field"), "title": "other field, retitled"}),
+            ),
+        ],
+    );
+
+    let out = sb.dx_ok(&dir, &["remote", "push"]);
+    assert!(out.contains("1 applied"), "{out}");
+    assert!(out.contains("Rejected"), "the conflict is reported: {out}");
+    assert!(
+        out.contains("changed on the server"),
+        "the reason names the conflict: {out}"
+    );
+
+    let g = export(&url, &token, &ws);
+    assert_eq!(
+        server_node(&g, "same field")["status"],
+        "rejected",
+        "the agent's newer status survived"
+    );
+    assert_eq!(
+        server_node(&g, "other field, retitled")["status"],
+        "completed",
+        "an edit to a different field still lands"
+    );
+}
+
 fn export_with_tombstones(url: &str, token: &str, workspace: &str) -> Value {
     ureq::get(&format!("{url}/export?workspace={workspace}&tombstones=1"))
         .set("authorization", &format!("Bearer {token}"))
@@ -906,4 +962,58 @@ fn a_node_the_server_deleted_is_not_seeded_back_and_pull_removes_it() {
     assert!(out.contains("removed 1"), "{out}");
     let out = sb.dx_ok(&dir, &["remote", "status"]);
     assert!(out.contains("In sync"), "{out}");
+}
+
+// Two ops merging different metadata keys into one node at the same moment:
+// ops.ex read the map, merged, and wrote it back without a row lock.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn concurrent_metadata_ops_on_one_node_keep_every_key() {
+    let (url, token) = server();
+    let ws = unique("wal-race");
+    let post = {
+        let (url, token, ws) = (url.clone(), token.clone(), ws.clone());
+        std::sync::Arc::new(move |ops: Value| -> Value {
+            ureq::post(&format!("{url}/ops"))
+                .set("authorization", &format!("Bearer {token}"))
+                .send_json(serde_json::json!({"workspace": ws, "ops": ops}))
+                .unwrap()
+                .into_json()
+                .unwrap()
+        })
+    };
+    post(serde_json::json!([{
+        "op_id": uuid::Uuid::new_v4().to_string(), "at": "2026-01-01T00:00:00Z",
+        "kind": "create_node", "change_id": "race-node", "node_type": "goal",
+        "title": "race", "status": "pending", "metadata": {},
+        "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z"
+    }]));
+
+    let n = 24;
+    let handles: Vec<_> = (0..n)
+        .map(|i| {
+            let post = post.clone();
+            std::thread::spawn(move || {
+                post(serde_json::json!([{
+                    "op_id": uuid::Uuid::new_v4().to_string(), "at": "2026-01-01T00:00:01Z",
+                    "kind": "update_node", "change_id": "race-node",
+                    "metadata": {format!("k{i}"): i},
+                    "was_metadata": {format!("k{i}"): null}
+                }]))
+            })
+        })
+        .collect();
+    for h in handles {
+        let r = h.join().unwrap();
+        assert_eq!(r["results"][0]["result"], "applied", "{r}");
+    }
+    let g = export(&url, &token, &ws);
+    let meta = server_node(&g, "race")["metadata"]
+        .as_object()
+        .unwrap()
+        .clone();
+    let missing: Vec<usize> = (0..n)
+        .filter(|i| !meta.contains_key(&format!("k{i}")))
+        .collect();
+    assert!(missing.is_empty(), "lost keys {missing:?}: {meta:?}");
 }

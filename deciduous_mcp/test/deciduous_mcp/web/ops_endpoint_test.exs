@@ -74,7 +74,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
           op_id: Ecto.UUID.generate(),
           kind: "update_node",
           change_id: "a1",
-          set: %{status: "completed"}
+          set: %{status: "completed"},
+          was: %{status: "pending"}
         }
       ])
 
@@ -98,7 +99,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
           op_id: Ecto.UUID.generate(),
           kind: "update_node",
           change_id: "m1",
-          metadata: %{prompt: "the words"}
+          metadata: %{prompt: "the words"},
+          was_metadata: %{prompt: nil}
         }
       ])
 
@@ -117,7 +119,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
       op_id: Ecto.UUID.generate(),
       kind: "update_node",
       change_id: "d1",
-      set: %{status: "completed"}
+      set: %{status: "completed"},
+      was: %{status: "pending"}
     }
 
     {200, %{"results" => [first]}} = ops(token, "ops-dup", [op])
@@ -196,7 +199,8 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
           op_id: Ecto.UUID.generate(),
           kind: "update_node",
           change_id: "z1",
-          set: %{status: "completed"}
+          set: %{status: "completed"},
+          was: %{status: "pending"}
         }
       ])
 
@@ -215,12 +219,62 @@ defmodule DeciduousMcp.Web.OpsEndpointTest do
           op_id: Ecto.UUID.generate(),
           kind: "update_node",
           change_id: "u1",
-          set: %{colour: "red"}
+          set: %{colour: "red"},
+          was: %{colour: nil}
         }
       ])
 
     assert a["result"] == "rejected" and a["reason"] =~ "rename_everything"
     assert b["result"] == "rejected" and b["reason"] =~ "colour"
+  end
+
+  test "an edit replayed after someone changed the same field is refused, not applied",
+       %{token: token} do
+    {200, _} = ops(token, "ops-cas", [create("s1", "s1"), create("s2", "s2")])
+    ws = Repo.get_by!(DeciduousMcp.Schema.Workspace, name: "ops-cas")
+
+    # An agent changes s1's status, and only s2's title, after the CLI made
+    # its (queued) edits and before they arrive.
+    {:ok, _} = Nodes.update_node(node(ws, "s1").id, %{status: "rejected"})
+    {:ok, _} = Nodes.update_node(node(ws, "s2").id, %{title: "s2 retitled"})
+
+    status = fn cid ->
+      %{
+        op_id: Ecto.UUID.generate(),
+        kind: "update_node",
+        change_id: cid,
+        set: %{status: "completed"},
+        was: %{status: "pending"}
+      }
+    end
+
+    {200, %{"results" => [a, b]}} = ops(token, "ops-cas", [status.("s1"), status.("s2")])
+
+    assert a["result"] == "rejected"
+    assert a["reason"] =~ "changed on the server"
+    assert a["reason"] =~ ~s(the server has "rejected")
+    assert node(ws, "s1").status == "rejected"
+
+    assert b["result"] == "applied"
+    assert node(ws, "s2").status == "completed"
+    assert node(ws, "s2").title == "s2 retitled"
+  end
+
+  test "an update that does not say what it replaced is refused", %{token: token} do
+    {200, _} = ops(token, "ops-nowas", [create("w1", "w1")])
+
+    {200, %{"results" => [r]}} =
+      ops(token, "ops-nowas", [
+        %{
+          op_id: Ecto.UUID.generate(),
+          kind: "update_node",
+          change_id: "w1",
+          set: %{status: "completed"}
+        }
+      ])
+
+    assert r["result"] == "rejected"
+    assert r["reason"] =~ "does not say what it replaced"
   end
 
   test "a batch without op ids is refused whole", %{token: token} do

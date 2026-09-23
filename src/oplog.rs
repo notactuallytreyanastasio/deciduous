@@ -87,12 +87,21 @@ pub enum OpBody {
     /// Only the fields named here change on the server. `set` holds
     /// top-level columns (title, description, status); `metadata` holds keys
     /// merged into the node's metadata map.
+    ///
+    /// `was` and `was_metadata` hold, for every field named, the value this
+    /// edit replaced (null for a key that was absent). The server writes a
+    /// field only while it still holds that value, so an op that waited in
+    /// the queue cannot put back an older value over an edit made since.
     UpdateNode {
         change_id: String,
         #[serde(default, skip_serializing_if = "Map::is_empty")]
         set: Map<String, Value>,
         #[serde(default, skip_serializing_if = "Map::is_empty")]
         metadata: Map<String, Value>,
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        was: Map<String, Value>,
+        #[serde(default, skip_serializing_if = "Map::is_empty")]
+        was_metadata: Map<String, Value>,
     },
     DeleteNode {
         change_id: String,
@@ -129,6 +138,7 @@ impl OpBody {
                 change_id,
                 set,
                 metadata,
+                ..
             } => {
                 let mut fields: Vec<String> = set
                     .iter()
@@ -455,10 +465,14 @@ mod tests {
     fn status(cid: &str, s: &str) -> OpBody {
         let mut set = Map::new();
         set.insert("status".into(), Value::String(s.into()));
+        let mut was = Map::new();
+        was.insert("status".into(), Value::String("pending".into()));
         OpBody::UpdateNode {
             change_id: cid.into(),
             set,
             metadata: Map::new(),
+            was,
+            was_metadata: Map::new(),
         }
     }
 
@@ -481,7 +495,7 @@ mod tests {
         .unwrap();
         assert_eq!(
             v,
-            serde_json::json!({"entry":"op","op_id":"o","at":"t","kind":"update_node","change_id":"c","set":{"status":"completed"}})
+            serde_json::json!({"entry":"op","op_id":"o","at":"t","kind":"update_node","change_id":"c","set":{"status":"completed"},"was":{"status":"pending"}})
         );
     }
 
