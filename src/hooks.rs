@@ -146,7 +146,11 @@ fn generate_settings_json(claude_dir: &Path, config: &Config) -> Result<(), Stri
             "PostToolUse": post_hooks
         }
     });
-    crate::log_loop::merge_claude_settings(&mut settings);
+    // A project that switched require-action-node off in config.toml gets
+    // exactly what it configured, not the log-loop hooks forced back in.
+    if config.hooks.log_loop_enabled() {
+        crate::log_loop::merge_claude_settings(&mut settings);
+    }
 
     let json_string = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Could not serialize settings: {}", e))?;

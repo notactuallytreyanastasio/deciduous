@@ -50,6 +50,18 @@ pub struct HooksConfig {
     pub post_tool_use: Vec<Hook>,
 }
 
+impl HooksConfig {
+    /// Whether the project wants the log-loop hooks at all: hooks on, and the
+    /// require-action-node hook (the one they replace) not switched off.
+    pub fn log_loop_enabled(&self) -> bool {
+        self.enabled
+            && self
+                .pre_tool_use
+                .iter()
+                .any(|h| h.name == "require-action-node" && h.enabled)
+    }
+}
+
 fn default_pre_tool_use_hooks() -> Vec<Hook> {
     vec![Hook::default_require_action_node()]
 }

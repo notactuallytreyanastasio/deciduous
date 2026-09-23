@@ -580,7 +580,14 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     // entries. The scripts above are wrappers around `deciduous log-loop`,
     // but an old settings.json only ran them on Edit|Write and had no Stop
     // or post-log entries at all.
-    merge_log_loop_settings(&claude_base.join("settings.json"))?;
+    if crate::config::Config::load().hooks.log_loop_enabled() {
+        merge_log_loop_settings(&claude_base.join("settings.json"))?;
+    } else {
+        println!(
+            "   {} .claude/settings.json (hooks disabled in .deciduous/config.toml; log-loop not installed)",
+            "Skipped".yellow()
+        );
+    }
 
     // Overwrite agents.toml
     let agents_path = claude_base.join("agents.toml");

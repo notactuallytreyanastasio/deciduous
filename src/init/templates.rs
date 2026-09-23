@@ -2054,11 +2054,21 @@ pub const CLAUDE_SETTINGS_JSON: &str = r#"{
         ]
       },
       {
-        "matcher": "mcp__deciduous__(add_node|add_edge|update_node|log_decision|log_observation|capture_conversation_turn|close_thread|delete_node|delete_edge)",
+        "matcher": "mcp__.*deciduous.*__(add_node|add_edge|update_node|log_decision|log_observation|capture_conversation_turn|close_thread|delete_node|delete_edge)",
         "hooks": [
           {
             "type": "command",
             "command": "deciduous log-loop post-log || true"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "deciduous log-loop turn || true"
           }
         ]
       }
