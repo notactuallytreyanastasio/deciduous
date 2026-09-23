@@ -52,42 +52,102 @@ It writes one table to `.deciduous/config.toml`:
 ```toml
 [remote]
 url = "https://<host>/deciduous-mcp"
+workspace = "my-project"
 ```
 
-A URL and nothing else. **The token is read from `DECIDUOUS_MCP_TOKEN`**, so
-committing this file leaks a hostname and no credential. That config *should*
-be committed — it is how every clone of the repo finds the same workspace.
+A URL and the workspace name, decided once, here. **The token is read from
+`DECIDUOUS_MCP_TOKEN`**, so committing this file leaks a hostname and no
+credential. That config *should* be committed — it is how every clone and
+worktree of the repo finds the same workspace, whatever its directory is
+called.
 
 ## The commands
 
 | Command | What it does |
 |---|---|
-| `deciduous remote init <url>` | Point this repo at a server; verifies before writing |
-| `deciduous remote status` | Local vs remote counts, and which side is ahead |
-| `deciduous remote pull` | Refresh the local cache from the server |
-| `deciduous remote push` | Send the local graph up (seeding and backfill) |
+| `deciduous remote init <url>` | Point this repo at a server; verifies and claims the workspace before writing, then sends local history the server lacks |
+| `deciduous remote status` | Writes waiting in the log, and every node and edge that differs, field by field |
+| `deciduous remote pull` | Send what is waiting, then refresh the local cache from the server (including its deletions) |
+| `deciduous remote push` | Send what is waiting in the log. `--seed` also sends rows no op covers (history from before the remote); `--drop-rejected` discards ops the server refused |
 
-`status` names the direction, because the fix differs:
+`status` compares content, not counts. Two graphs can hold the same number of
+nodes and different nodes:
 
 ```
-              local    remote
-  nodes           2         3
-  edges           1         1
+Log: 1 write(s) waiting, 0 rejected  (.deciduous/remote-log.jsonl)
+  waiting   create goal 6645c7fc "bobs unpushed goal"
 
-Drift: the server holds more than this machine. `deciduous remote pull` to refresh.
+                 local    server
+  nodes              2         2
+  edges              0         0
+
+Only here (1)
+  goal 6645c7fc "bobs unpushed goal"  (waiting in the log)
+
+Only on the server (1)
+  goal 0e355b0b "agents goal"
+
+Differs: `deciduous remote push` sends what is waiting; `deciduous remote pull`
+takes the server's side (newer edit wins per node).
 ```
 
-Equal counts print `counts match`, not `in sync` — two graphs can hold the same
-number of nodes and different nodes.
+## How CLI writes reach the server
+
+Every write the CLI makes to its local database (`add`, `link`, `unlink`,
+`status`, `prompt`, `delete`, the `archaeology` commands, the local MCP and
+HTTP API) also appends one operation to `.deciduous/remote-log.jsonl`:
+
+```json
+{"entry":"op","op_id":"b220f13c-…","at":"…","kind":"update_node","change_id":"d5508657-…","set":{"status":"completed"}}
+```
+
+An op names only what the write changed. Before the command exits, the ops the
+server has not acknowledged are sent, in order, to `POST /ops`, which applies
+each one field by field and at most once (by `op_id`), and the answers are
+appended to the log as acks. So:
+
+- a status change does not resend the node, and cannot put back a title an
+  agent changed in the meantime;
+- a write made while the server is down waits in the log and goes on the next
+  write or `deciduous remote push`;
+- deletes and unlinks are ops too, and reach the server;
+- sending an op twice (a lost ack, two pushes at once) changes nothing the
+  second time.
+
+**Where it lives.** Beside the database, in `.deciduous/`, which the rules
+`deciduous init` writes to `.gitignore` already ignore: it is this machine's
+unsent writes, not something to share. A project without `[remote]` keeps no
+log.
+
+**Compaction.** After each replay the file is rewritten without the ops the
+server acknowledged, so it holds only what is waiting and what was refused. It
+is as long as the queue, not as long as the project.
+
+**Refused ops.** The server refuses, with a reason, an op it cannot apply (an
+edit to a node an agent deleted, for one). Refused ops stay in the log, are
+printed on every replay, and are listed by `remote status` until
+`deciduous remote push --drop-rejected`.
 
 ## How workspaces are named
 
-The **git repository root's directory name**, lowercased. The root rather than
+The **git repository root's directory name**, lowercased, decided once by
+`remote init` and recorded in `.deciduous/config.toml`. The root rather than
 the working directory, so running the CLI from a subdirectory cannot split one
-project across two workspaces. Anything outside a git repository pools into
-`scratch` instead of minting a workspace per temporary directory.
+project across two workspaces; the main working tree rather than a linked
+worktree, so `git worktree add ../repo-feature` writes to `repo` like the
+agents in it do. Recorded rather than re-derived, so renaming the directory or
+cloning it under another name keeps writing to the same graph. (A config
+written by 1.0.7, URL only, gets the name recorded the first time it is used.)
+Anything outside a git repository pools into `scratch` instead of minting a
+workspace per temporary directory.
 
-Override it when the directory name is not what the graph should be called:
+A workspace belongs to the repository that first wrote to it, identified by
+its root commits. Two unrelated repositories that are both called `api` would
+derive the same name; the second one's `remote init`, writes and pulls are
+refused, and the error says how to name its own workspace.
+
+Override the name when the directory name is not what the graph should be
+called, or to share one workspace between repositories on purpose:
 
 ```bash
 deciduous remote init <url> --workspace my-project
