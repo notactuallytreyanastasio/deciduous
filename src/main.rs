@@ -2949,7 +2949,18 @@ fn main() {
                 PathBuf::from(format!("deciduous_backup_{}.db", timestamp))
             });
 
-            match std::fs::copy(&db_path, &backup_path) {
+            // Not a file copy: in WAL mode the newest writes sit in
+            // deciduous.db-wal until a checkpoint, and copying the main file
+            // alone drops them without a word. VACUUM INTO reads through
+            // SQLite and writes one self-contained file.
+            match db
+                .backup_to(&backup_path)
+                .map_err(|e| e.to_string())
+                .and_then(|_| {
+                    std::fs::metadata(&backup_path)
+                        .map(|m| m.len())
+                        .map_err(|e| e.to_string())
+                }) {
                 Ok(bytes) => {
                     println!(
                         "{} backup: {} ({} bytes)",

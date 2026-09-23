@@ -637,6 +637,36 @@ struct FtsSearchRow {
 // ============================================================================
 
 type DbPool = Pool<ConnectionManager<SqliteConnection>>;
+
+/// How long a statement waits for another process's write lock before it
+/// gives up with "database is locked". A CLI command, two MCP servers and the
+/// API daemon routinely write one file at once; a single write holds the lock
+/// for milliseconds, so ten seconds is only ever reached by a stuck process.
+pub const BUSY_TIMEOUT_MS: u32 = 10_000;
+
+/// Set on every pooled connection before first use.
+///
+/// `busy_timeout` is per connection and defaults to 0, which is what made
+/// half of all concurrent MCP writes fail immediately. `journal_mode=WAL` is
+/// stored in the file, so the first connection converts the database once;
+/// after that readers never block the writer and the writer never blocks
+/// readers. The timeout goes first so the conversion itself waits for a lock
+/// rather than failing on one.
+#[derive(Debug)]
+struct SqlitePragmas;
+
+impl diesel::r2d2::CustomizeConnection<SqliteConnection, diesel::r2d2::Error> for SqlitePragmas {
+    fn on_acquire(
+        &self,
+        conn: &mut SqliteConnection,
+    ) -> std::result::Result<(), diesel::r2d2::Error> {
+        use diesel::connection::SimpleConnection;
+        conn.batch_execute(&format!(
+            "PRAGMA busy_timeout = {BUSY_TIMEOUT_MS}; PRAGMA journal_mode = WAL;"
+        ))
+        .map_err(diesel::r2d2::Error::QueryError)
+    }
+}
 type DbConn = PooledConnection<ConnectionManager<SqliteConnection>>;
 
 /// Database connection wrapper with connection pool.
@@ -729,6 +759,7 @@ impl Database {
         let manager = ConnectionManager::<SqliteConnection>::new(&path_str);
         let pool = Pool::builder()
             .max_size(5)
+            .connection_customizer(Box::new(SqlitePragmas))
             .build(manager)
             .map_err(|e| DbError::Connection(e.to_string()))?;
 
@@ -1179,6 +1210,25 @@ impl Database {
         }
 
         Ok(true) // Migration performed
+    }
+
+    /// Write a consistent, self-contained copy of the database to `dest`,
+    /// including writes still sitting in the WAL. Refuses to overwrite.
+    pub fn backup_to(&self, dest: &Path) -> Result<()> {
+        if dest.exists() {
+            return Err(DbError::Validation(format!(
+                "{} already exists; refusing to overwrite it",
+                dest.display()
+            )));
+        }
+        let target = dest.to_str().ok_or_else(|| {
+            DbError::Validation(format!("{} is not a UTF-8 path", dest.display()))
+        })?;
+        let mut conn = self.get_conn()?;
+        diesel::sql_query("VACUUM INTO ?")
+            .bind::<diesel::sql_types::Text, _>(target)
+            .execute(&mut conn)?;
+        Ok(())
     }
 
     fn get_conn(&self) -> Result<DbConn> {

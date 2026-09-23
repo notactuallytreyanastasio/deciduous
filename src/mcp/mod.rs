@@ -413,11 +413,20 @@ pub fn run_server() -> io::Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
 
+    let db_path = Database::db_path();
     let db = match Database::open() {
         Ok(db) => db,
         Err(e) => {
-            eprintln!("deciduous-mcp: Failed to open database: {e}");
-            eprintln!("deciduous-mcp: Make sure you're in a directory with .deciduous/ or set DECIDUOUS_DB_PATH");
+            eprintln!(
+                "deciduous-mcp: Failed to open database {}: {e}",
+                db_path.display()
+            );
+            // Only a missing project is fixed by changing directory; a locked
+            // or unreadable database is not, and saying so sent people
+            // looking for a .deciduous/ that was right there.
+            if !db_path.parent().is_some_and(|d| d.is_dir()) {
+                eprintln!("deciduous-mcp: Make sure you're in a directory with .deciduous/ or set DECIDUOUS_DB_PATH");
+            }
             return Err(io::Error::other(e.to_string()));
         }
     };
