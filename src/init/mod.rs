@@ -14,8 +14,8 @@ use std::path::Path;
 
 use templates::{
     BUILD_TEST_MD, CLAUDE_AGENTS_TOML, CLAUDE_MD_SECTION, CLAUDE_SETTINGS_JSON, CLEANUP_WORKFLOW,
-    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEPLOY_PAGES_WORKFLOW, DOCUMENT_MD,
-    HOOK_VERSION_CHECK, PAGES_VIEWER_HTML, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
+    DECISION_GRAPH_MD, DECISION_MD, DEFAULT_CONFIG, DEMO_SWARM_MD, DEPLOY_PAGES_WORKFLOW,
+    DOCUMENT_MD, HOOK_VERSION_CHECK, PAGES_VIEWER_HTML, RECOVER_MD, SERVE_UI_MD, SKILL_ARCHAEOLOGY,
     SKILL_NARRATIVES, SKILL_PULSE, SYNC_GRAPH_MD, SYNC_MD, WINDSURF_HOOKS_JSON,
     WINDSURF_RULES_DECIDUOUS, WORK_MD,
 };
@@ -141,6 +141,10 @@ pub fn init_project(
         // Write sync.md slash command
         let sync_path = claude_dir.join("sync.md");
         write_file_if_missing(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
+
+        // Write demo-swarm.md slash command (the multi-agent demo)
+        let demo_path = claude_dir.join("demo-swarm.md");
+        write_file_if_missing(&demo_path, DEMO_SWARM_MD, ".claude/commands/demo-swarm.md")?;
 
         // Write agents.toml for subagent configuration
         let claude_base = cwd.join(".claude");
@@ -548,6 +552,10 @@ fn update_claude_code(cwd: &std::path::Path) -> Result<(), String> {
     // Overwrite sync.md slash command
     let sync_path = claude_dir.join("sync.md");
     write_file_overwrite(&sync_path, SYNC_MD, ".claude/commands/sync.md")?;
+
+    // Overwrite demo-swarm.md slash command (the multi-agent demo)
+    let demo_path = claude_dir.join("demo-swarm.md");
+    write_file_overwrite(&demo_path, DEMO_SWARM_MD, ".claude/commands/demo-swarm.md")?;
 
     // Create/update hooks directory
     let claude_base = cwd.join(".claude");
