@@ -232,6 +232,7 @@ enum Command {
         api: bool,
 
         /// API mode: data directory holding graphs/<id>/deciduous.db
+        /// (required; falls back to DECIDUOUS_API_DATA_DIR)
         #[arg(long)]
         data_dir: Option<PathBuf>,
 
@@ -813,7 +814,7 @@ enum OpencodeAction {
 enum NarrativesAction {
     /// Initialize narratives.md with active goal titles as sections
     Init {
-        /// Output path (default: .deciduous/narratives.md)
+        /// Output path (default: narratives.md in the project's .deciduous/)
         #[arg(short, long)]
         output: Option<PathBuf>,
 
@@ -824,7 +825,7 @@ enum NarrativesAction {
 
     /// Display narratives.md contents
     Show {
-        /// Path to narratives.md (default: .deciduous/narratives.md)
+        /// Path to narratives.md (default: the one in the project's .deciduous/)
         #[arg(short, long)]
         path: Option<PathBuf>,
     },
@@ -1102,13 +1103,36 @@ fn run_api_daemon(
         );
         return 1;
     }
-    let data_dir = data_dir
-        .or_else(|| {
-            std::env::var("DECIDUOUS_API_DATA_DIR")
-                .ok()
-                .map(PathBuf::from)
-        })
-        .unwrap_or_else(|| PathBuf::from(".deciduous").join("api-data"));
+    // An HTTP header value is visible ASCII plus spaces. A client cannot
+    // send `tökén` or a token with a newline in it, so a daemon started with
+    // one listens and refuses every request.
+    if let Some(bad) = token.chars().find(|c| !(c.is_ascii_graphic() || *c == ' ')) {
+        eprintln!(
+            "{} the API token contains {:?}; a token is sent in an HTTP header, which \
+             carries only visible ASCII characters and spaces",
+            "Error:".red(),
+            bad
+        );
+        return 1;
+    }
+    // No default. The old one, `./.deciduous/api-data`, made the cwd look
+    // like a project: started in a project's subdirectory it created a second
+    // `.deciduous/` there, and every CLI call in that directory then found
+    // the new, empty one instead of the project's.
+    let data_dir = data_dir.or_else(|| {
+        std::env::var("DECIDUOUS_API_DATA_DIR")
+            .ok()
+            .filter(|d| !d.is_empty())
+            .map(PathBuf::from)
+    });
+    let Some(data_dir) = data_dir else {
+        eprintln!(
+            "{} API mode needs a data directory for its graphs: pass --data-dir <dir> \
+             or set DECIDUOUS_API_DATA_DIR",
+            "Error:".red()
+        );
+        return 1;
+    };
     let config = deciduous::api::ApiConfig {
         bind: bind.clone(),
         port,
@@ -4174,14 +4198,16 @@ fn main() {
 
         Command::Narratives { action } => match action {
             NarrativesAction::Init { output, force } => {
-                let path = output.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
+                // Next to the database, not `./.deciduous/`: run from a
+                // subdirectory, that created a second `.deciduous/` there.
+                let path = output.unwrap_or_else(|| db.data_dir().join("narratives.md"));
                 if let Err(e) = deciduous::narratives::init_narratives(&db, &path, force) {
                     eprintln!("{} {}", "Error:".red(), e);
                     exit(1);
                 }
             }
             NarrativesAction::Show { path } => {
-                let p = path.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
+                let p = path.unwrap_or_else(|| db.data_dir().join("narratives.md"));
                 match deciduous::narratives::show_narratives(&p) {
                     Ok(content) => print!("{}", content),
                     Err(e) => {

@@ -1332,3 +1332,187 @@ fn api_daemon_startup_is_strict_about_tokens_and_touches_no_project() {
         text(&out.stderr)
     );
 }
+
+// ============================================================================
+// Round two: what the verifiers found after the first round of fixes
+// ============================================================================
+
+/// Wait for a child to exit on its own; kill it and report `None` if it is
+/// still running after `secs`.
+fn exits_within(c: &mut Child, secs: u64) -> Option<std::process::ExitStatus> {
+    let deadline = Instant::now() + Duration::from_secs(secs);
+    loop {
+        if let Some(s) = c.try_wait().unwrap() {
+            return Some(s);
+        }
+        if Instant::now() > deadline {
+            let _ = c.kill();
+            let _ = c.wait();
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+/// `serve --api` with no data directory used `./.deciduous/api-data`. Run
+/// from a project's subdirectory that made a second `.deciduous/` there, and
+/// every later CLI call in that directory found the new, empty one first.
+#[test]
+fn api_daemon_without_a_data_dir_refuses_to_start_and_splits_no_project() {
+    let p = Project::new();
+    assert!(p.cli(&["add", "goal", "the project goal"]).status.success());
+    let src = p.root().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+
+    let mut c = p
+        .command(&src)
+        .args(["serve", "--api", "--port", "4831"])
+        .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let status = exits_within(&mut c, 10);
+    let out = c.wait_with_output().unwrap();
+    assert!(
+        status.is_some_and(|s| !s.success()),
+        "serve --api started with no data directory"
+    );
+    assert!(
+        text(&out.stderr).contains("--data-dir"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert!(
+        !src.join(".deciduous").exists(),
+        "serve --api created a second .deciduous/ inside the project"
+    );
+    let out = p.cli_in(&src, &["nodes"]);
+    assert!(
+        text(&out.stdout).contains("the project goal"),
+        "the project's graph is no longer found from src/: {}",
+        text(&out.stdout)
+    );
+
+    // The environment variable still names one.
+    let data = TempDir::new().unwrap();
+    let mut c = p
+        .command(&src)
+        .args(["serve", "--api", "--port", "4831"])
+        .env("DECIDUOUS_API_TOKEN", API_TOKEN)
+        .env("DECIDUOUS_API_DATA_DIR", data.path())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while TcpStream::connect(("127.0.0.1", 4831)).is_err() {
+        assert!(Instant::now() < deadline, "daemon never listened");
+        assert!(c.try_wait().unwrap().is_none(), "daemon exited");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let _ = c.kill();
+    let _ = c.wait();
+    assert!(data.path().join("graphs").is_dir());
+    assert!(!src.join(".deciduous").exists());
+}
+
+/// Same split, through `narratives init`, whose default output path was
+/// `./.deciduous/narratives.md` relative to the cwd.
+#[test]
+fn narratives_init_in_a_subdirectory_writes_into_the_project() {
+    let p = Project::new();
+    assert!(p.cli(&["add", "goal", "narrated goal"]).status.success());
+    let src = p.root().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let out = p.cli_in(&src, &["narratives", "init"]);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert!(
+        !src.join(".deciduous").exists(),
+        "narratives init created a second .deciduous/ in src/"
+    );
+    let written = std::fs::read_to_string(p.root().join(".deciduous/narratives.md"))
+        .expect("narratives.md in the project's .deciduous/");
+    assert!(written.contains("narrated goal"), "{written}");
+    let out = p.cli_in(&src, &["narratives", "show"]);
+    assert!(
+        text(&out.stdout).contains("narrated goal"),
+        "{}",
+        text(&out.stderr)
+    );
+}
+
+/// A token no HTTP client can send: header values are visible ASCII.
+#[test]
+fn api_token_that_no_client_can_send_is_refused_at_startup() {
+    let p = Project::new();
+    let data = TempDir::new().unwrap();
+    for bad in ["tökén", "abc\ndef", "abc\u{7f}"] {
+        let mut c = p
+            .command(p.root())
+            .args(["serve", "--api", "--port", "4832", "--data-dir"])
+            .arg(data.path())
+            .env("DECIDUOUS_API_TOKEN", bad)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let status = exits_within(&mut c, 10);
+        let out = c.wait_with_output().unwrap();
+        assert!(
+            status.is_some_and(|s| !s.success()),
+            "started with token {bad:?}, which no HTTP client can send"
+        );
+        assert!(text(&out.stderr).contains("token"), "{}", text(&out.stderr));
+    }
+}
+
+fn rss_kb(pid: u32) -> u64 {
+    let out = Command::new("ps")
+        .args(["-o", "rss=", "-p", &pid.to_string()])
+        .output()
+        .unwrap();
+    text(&out.stdout).trim().parse().unwrap_or(0)
+}
+
+impl Mcp {
+    fn ping_alive(&mut self) {
+        self.next_id += 1;
+        let id = self.next_id;
+        self.send_raw(format!("{{\"jsonrpc\":\"2.0\",\"id\":{id},\"method\":\"ping\"}}\n").as_bytes());
+        let l = self.read_line(Duration::from_secs(10)).unwrap_or_else(|| {
+            panic!(
+                "server stopped answering; stderr: {}",
+                self.stderr.lock().unwrap()
+            )
+        });
+        let v: Value = serde_json::from_str(&l).unwrap();
+        assert_eq!(v["id"], id, "{v}");
+    }
+
+    /// A tool call that must answer within `timeout`; `None` if it did not.
+    fn call_within(
+        &mut self,
+        name: &str,
+        args: Value,
+        timeout: Duration,
+    ) -> Option<Result<Value, String>> {
+        self.next_id += 1;
+        let msg = json!({"jsonrpc":"2.0","id":self.next_id,"method":"tools/call",
+                         "params":{"name":name,"arguments":args}});
+        self.send_raw(format!("{msg}\n").as_bytes());
+        let l = self.read_line(timeout)?;
+        let r: Value = serde_json::from_str(&l).unwrap();
+        let result = &r["result"];
+        let body = result["content"][0]["text"].as_str().unwrap_or_default();
+        Some(if result["isError"].as_bool().unwrap_or(false) {
+            Err(body.to_string())
+        } else {
+            Ok(serde_json::from_str(body).unwrap_or(Value::String(body.to_string())))
+        })
+    }
+}
+
+// ============================================================================
+// R4, again: the file checked is the file read
+// ============================================================================
