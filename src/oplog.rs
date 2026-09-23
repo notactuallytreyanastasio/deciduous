@@ -782,8 +782,22 @@ impl OpLog {
         if !body.is_empty() {
             body.push('\n');
         }
-        std::fs::write(&tmp, body).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        // Synced before the rename, and the directory after it: a rename can
+        // reach the disk before the data it points at, and a power loss then
+        // leaves an empty or partial log, every waiting write with it. A kill
+        // cannot do that (rename is atomic); only the disk's own ordering can.
+        let tmp_err = |e: std::io::Error| format!("{}: {e}", tmp.display());
+        let mut f = std::fs::File::create(&tmp).map_err(tmp_err)?;
+        f.write_all(body.as_bytes())
+            .and_then(|_| f.sync_all())
+            .map_err(tmp_err)?;
+        drop(f);
         std::fs::rename(&tmp, &self.path).map_err(|e| format!("{}: {e}", self.path.display()))?;
+        if let Some(dir) = self.path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::File::open(dir)
+                .and_then(|d| d.sync_all())
+                .map_err(|e| format!("{}: {e}", dir.display()))?;
+        }
         Ok(dropped)
     }
 
