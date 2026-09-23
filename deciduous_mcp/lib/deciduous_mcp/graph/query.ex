@@ -49,18 +49,25 @@ defmodule DeciduousMcp.Graph.Query do
   These indicate missing connections in the graph.
   """
   def find_orphans(scope) do
-    # Nodes that have no incoming edges and aren't goals
-    connected_node_ids =
-      Edge
-      |> scope_ws(scope)
-      |> select([e], e.to_node_id)
-      |> Repo.all()
-
-    Node
+    # Nodes with no incoming edge from a live node, that aren't goals. An
+    # edge from a deleted node connects nothing: every other read drops it,
+    # so counting it here hid exactly the nodes a delete had just stranded.
+    # One NOT EXISTS rather than the old list of every to_node_id in the
+    # workspace sent back to Postgres as a parameter.
+    from(n in Node, as: :node)
     |> scope_ws(scope)
     |> where([n], is_nil(n.deleted_at))
     |> where([n], n.node_type != "goal")
-    |> where([n], n.id not in ^connected_node_ids)
+    |> where(
+      [n],
+      not exists(
+        from e in Edge,
+          join: p in Node,
+          on: p.id == e.from_node_id,
+          where: e.to_node_id == parent_as(:node).id and is_nil(p.deleted_at),
+          select: 1
+      )
+    )
     |> Repo.all()
   end
 
