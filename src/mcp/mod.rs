@@ -59,19 +59,26 @@ impl McpServer {
         let request = match parse_request(raw) {
             Ok(req) => req,
             Err(e) => {
-                return Some(
-                    serde_json::to_value(JsonRpcErrorResponse {
-                        jsonrpc: "2.0".to_string(),
-                        id: Value::Null,
-                        error: e,
-                    })
-                    .unwrap_or(json!({"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"Parse error"}})),
-                );
+                // Answer the request that caused it whenever its id can be
+                // read: a reply with "id": null matches nothing, and the
+                // client waits for its answer forever.
+                return Some(error_to_value(JsonRpcErrorResponse {
+                    jsonrpc: "2.0".to_string(),
+                    id: protocol::request_id(raw),
+                    error: e,
+                }));
             }
         };
 
-        // Notifications (no id) don't get responses
+        // Notifications (no id member at all) don't get responses
         let id = match request.id {
+            Some(Value::Null) => {
+                return Some(error_to_value(error_response(
+                    Value::Null,
+                    protocol::INVALID_REQUEST,
+                    "id must be a string or a number, not null",
+                )));
+            }
             Some(id) => id,
             None => {
                 handle_notification(&request.method);
@@ -82,7 +89,7 @@ impl McpServer {
         let result = match request.method.as_str() {
             "initialize" => handle_initialize(request.params),
             "tools/list" => handle_tools_list(),
-            "tools/call" => self.handle_tools_call(request.params),
+            "tools/call" => self.handle_tools_call(&id, request.params),
             "ping" => Ok(json!({})),
             method => Err(error_to_value(error_response(
                 id.clone(),
@@ -97,14 +104,18 @@ impl McpServer {
         })
     }
 
-    fn handle_tools_call(&mut self, params: Option<Value>) -> Result<Value, Value> {
-        let params = params.ok_or_else(|| {
-            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32602,"message":"Missing params"}})
-        })?;
+    fn handle_tools_call(&mut self, id: &Value, params: Option<Value>) -> Result<Value, Value> {
+        let invalid = |message: String| {
+            error_to_value(error_response(
+                id.clone(),
+                protocol::INVALID_PARAMS,
+                message,
+            ))
+        };
+        let params = params.ok_or_else(|| invalid("Missing params".to_string()))?;
 
-        let call: ToolCallParams = serde_json::from_value(params).map_err(|e| {
-            json!({"jsonrpc":"2.0","id":null,"error":{"code":-32602,"message":format!("Invalid params: {e}")}})
-        })?;
+        let call: ToolCallParams =
+            serde_json::from_value(params).map_err(|e| invalid(format!("Invalid params: {e}")))?;
 
         if !tools::is_valid_tool(&call.name) {
             let result = tool_result_error(format!(
@@ -450,14 +461,33 @@ pub fn run_server() -> io::Result<()> {
         env!("CARGO_PKG_VERSION")
     );
 
-    for line in stdin.lock().lines() {
-        let line = line?;
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
+    // Read bytes, not `lines()`: one invalid UTF-8 byte made `lines()`
+    // return an error, which ended the loop and the server with it, and the
+    // client lost every tool for the rest of the session.
+    let mut stdin = stdin.lock();
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        if stdin.read_until(b'\n', &mut buf)? == 0 {
+            break;
         }
-
-        let response = server.handle_message(trimmed);
+        let response = match std::str::from_utf8(&buf) {
+            Ok(line) => {
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    continue;
+                }
+                server.handle_message(trimmed)
+            }
+            Err(e) => {
+                let lossy = String::from_utf8_lossy(&buf);
+                Some(error_to_value(error_response(
+                    protocol::request_id(lossy.trim()),
+                    protocol::PARSE_ERROR,
+                    format!("Parse error: the message is not valid UTF-8 ({e})"),
+                )))
+            }
+        };
 
         if let Some(resp) = response {
             let serialized = serde_json::to_string(&resp).unwrap_or_else(|_| {

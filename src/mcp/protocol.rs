@@ -15,7 +15,9 @@ use serde_json::Value;
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
-    #[serde(default)]
+    /// `None` only when the member is absent (a notification). A present
+    /// `"id": null` is `Some(Value::Null)`: it is a request and gets a reply.
+    #[serde(default, deserialize_with = "present")]
     pub id: Option<Value>,
     pub method: String,
     #[serde(default)]
@@ -101,9 +103,89 @@ pub fn error_response_with_data(
     }
 }
 
+fn present<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<Value>, D::Error> {
+    Value::deserialize(d).map(Some)
+}
+
+/// Replace `\uD800`-style escapes that are not half of a surrogate pair
+/// with `\uFFFD`.
+///
+/// JSON's grammar allows them (JavaScript's JSON.stringify emits them for a
+/// string cut in the middle of an emoji); serde_json refuses the whole
+/// document. Refusing means answering with `"id": null`, which the client
+/// cannot match to its request, so it waits forever. Replacing the lone
+/// half with U+FFFD is what every lossy UTF-16 decoder does.
+pub fn replace_lone_surrogates(input: &str) -> std::borrow::Cow<'_, str> {
+    fn hex4(b: &[u8]) -> Option<u16> {
+        let s = std::str::from_utf8(b.get(..4)?).ok()?;
+        u16::from_str_radix(s, 16).ok()
+    }
+    let bytes = input.as_bytes();
+    if !input.contains("\\u") {
+        return std::borrow::Cow::Borrowed(input);
+    }
+    let mut out = String::with_capacity(input.len());
+    let mut i = 0;
+    let mut last = 0;
+    let mut changed = false;
+    while i < bytes.len() {
+        if bytes[i] != b'\\' {
+            i += 1;
+            continue;
+        }
+        if bytes.get(i + 1) != Some(&b'u') {
+            i += 2; // any other escape, including an escaped backslash
+            continue;
+        }
+        let Some(unit) = hex4(&bytes[i + 2..]) else {
+            i += 2;
+            continue;
+        };
+        match unit {
+            0xD800..=0xDBFF => {
+                let next_is_low = bytes.get(i + 6) == Some(&b'\\')
+                    && bytes.get(i + 7) == Some(&b'u')
+                    && hex4(&bytes[(i + 8).min(bytes.len())..])
+                        .is_some_and(|u| (0xDC00..=0xDFFF).contains(&u));
+                if next_is_low {
+                    i += 12;
+                    continue;
+                }
+            }
+            0xDC00..=0xDFFF => {}
+            _ => {
+                i += 6;
+                continue;
+            }
+        }
+        out.push_str(&input[last..i]);
+        out.push_str("\\uFFFD");
+        i += 6;
+        last = i;
+        changed = true;
+    }
+    if !changed {
+        return std::borrow::Cow::Borrowed(input);
+    }
+    out.push_str(&input[last..]);
+    std::borrow::Cow::Owned(out)
+}
+
+/// The `id` of a message that failed validation, if it has a usable one,
+/// so the error reply reaches the request that caused it. `Null` when the
+/// text is not JSON at all or the id is not a string or number.
+pub fn request_id(input: &str) -> Value {
+    serde_json::from_str::<Value>(&replace_lone_surrogates(input))
+        .ok()
+        .and_then(|v| v.get("id").cloned())
+        .filter(|id| id.is_string() || id.is_number())
+        .unwrap_or(Value::Null)
+}
+
 /// Parse a raw JSON string into a `JsonRpcRequest`.
 pub fn parse_request(input: &str) -> Result<JsonRpcRequest, JsonRpcError> {
-    let value: Value = serde_json::from_str(input).map_err(|e| JsonRpcError {
+    let input = replace_lone_surrogates(input);
+    let value: Value = serde_json::from_str(&input).map_err(|e| JsonRpcError {
         code: PARSE_ERROR,
         message: format!("Parse error: {e}"),
         data: None,
@@ -423,5 +505,32 @@ mod tests {
         assert!(value.get("serverInfo").is_some());
         assert!(value["serverInfo"].get("name").is_some());
         assert!(value["capabilities"]["tools"].get("listChanged").is_some());
+    }
+
+    #[test]
+    fn lone_surrogates_are_replaced_and_pairs_kept() {
+        let bs = '\\';
+        let esc = |hex: &str| format!("{bs}u{hex}");
+        assert_eq!(
+            replace_lone_surrogates(&format!("\"a{}b\"", esc("d800"))),
+            format!("\"a{}b\"", esc("FFFD"))
+        );
+        assert_eq!(
+            replace_lone_surrogates(&format!("\"{}\"", esc("dc00"))),
+            format!("\"{}\"", esc("FFFD"))
+        );
+        // A real pair (U+1F600) and an escaped backslash are left alone.
+        let pair = format!("\"{}{} and {bs}{}\"", esc("d83d"), esc("de00"), esc("d800"));
+        let pair = pair.as_str();
+        assert_eq!(replace_lone_surrogates(pair), pair);
+        assert!(parse_request(r#"{"jsonrpc":"2.0","id":1,"method":"x\ud800"}"#).is_ok());
+    }
+
+    #[test]
+    fn request_id_recovers_the_id_of_an_invalid_request() {
+        assert_eq!(request_id(r#"{"jsonrpc":"1.0","id":7,"method":"x"}"#), 7);
+        assert_eq!(request_id(r#"{"id":"abc"}"#), "abc");
+        assert_eq!(request_id("not json"), Value::Null);
+        assert_eq!(request_id(r#"{"id":{"x":1}}"#), Value::Null);
     }
 }

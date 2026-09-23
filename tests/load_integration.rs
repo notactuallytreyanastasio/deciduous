@@ -952,3 +952,63 @@ fn api_add_node_without_branch_gets_no_branch_from_the_daemon() {
     let (_, shown) = daemon.tool("attr", "show_node", json!({"node_id": id}));
     assert_eq!(shown["data"]["result"]["branch"], "client-branch");
 }
+
+// ============================================================================
+// R9 / R10: every request gets an answer carrying its id; bad bytes are an
+// error reply, not a crash
+// ============================================================================
+
+impl Mcp {
+    fn raw_reply(&mut self, line: &[u8]) -> Value {
+        self.send_raw(line);
+        let l = self
+            .read_line(Duration::from_secs(10))
+            .unwrap_or_else(|| panic!("no reply to {:?}", String::from_utf8_lossy(line)));
+        serde_json::from_str(&l).unwrap()
+    }
+}
+
+#[test]
+fn malformed_requests_are_answered_with_their_id() {
+    let p = Project::new();
+    let mut m = p.mcp();
+
+    let r = m.raw_reply(b"{\"jsonrpc\":\"2.0\",\"id\":41,\"method\":\"tools/call\"}\n");
+    assert_eq!(r["id"], 41, "missing params: {r}");
+    assert!(r["error"].is_object(), "{r}");
+
+    let r = m.raw_reply(b"{\"jsonrpc\":\"2.0\",\"id\":42,\"method\":\"tools/call\",\"params\":{\"arguments\":{}}}\n");
+    assert_eq!(r["id"], 42, "invalid params: {r}");
+
+    let r = m.raw_reply(b"{\"jsonrpc\":\"1.0\",\"id\":43,\"method\":\"ping\"}\n");
+    assert_eq!(r["id"], 43, "wrong version: {r}");
+
+    // A lone surrogate is legal JSON syntax; strict parsers reject it. The
+    // request still deserves an answer to its own id.
+    let r = m.raw_reply(
+        b"{\"jsonrpc\":\"2.0\",\"id\":44,\"method\":\"tools/call\",\"params\":{\"name\":\"add_node\",\"arguments\":{\"node_type\":\"goal\",\"title\":\"x\\ud800y\",\"branch\":\"b\"}}}\n",
+    );
+    assert_eq!(r["id"], 44, "lone surrogate: {r}");
+
+    // id: null is present, so it is a request, not a notification.
+    let r = m.raw_reply(b"{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"ping\"}\n");
+    assert!(r.get("error").is_some() || r.get("result").is_some(), "{r}");
+
+    // Invalid UTF-8 on the wire: answered, and the server lives on.
+    let r =
+        m.raw_reply(b"{\"jsonrpc\":\"2.0\",\"id\":45,\"method\":\"ping\",\"x\":\"\xff\xfe\"}\n");
+    assert_eq!(r["id"], 45, "invalid utf-8: {r}");
+    assert!(
+        r["error"]["message"].as_str().unwrap().contains("UTF-8"),
+        "{r}"
+    );
+    let r = m.raw_reply(b"\xff\xfe\n");
+    assert_eq!(r["error"]["code"], -32700, "{r}");
+
+    let ok = m
+        .call("list_nodes", json!({}))
+        .expect("server still serving");
+    assert!(ok["count"].is_number());
+    let (code, stderr) = m.close();
+    assert_eq!(code, Some(0), "{stderr}");
+}
