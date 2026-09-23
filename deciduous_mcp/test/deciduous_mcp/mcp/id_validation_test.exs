@@ -43,7 +43,10 @@ defmodule DeciduousMcp.MCP.IdValidationTest do
       {GetDescendants, %{"node_id" => "nope"}, "node_id"},
       {LogObservation, %{"workspace" => "ids", "title" => "t", "took_from" => "zzz"},
        "took_from"},
-      {LogObservation, %{"workspace" => "ids", "title" => "t", "related_to" => 42}, "related_to"}
+      {LogObservation, %{"workspace" => "ids", "title" => "t", "related_to" => 42}, "related_to"},
+      # 16 bytes: Ecto.UUID.cast/1 takes this as a raw binary UUID.
+      {AddEdge, %{"workspace" => "ids", "from_node_id" => n.id, "to_node_id" => "PLACEHOLDER_SKIP"},
+       "to_node_id"}
     ]
 
     for {tool, args, key} <- cases do

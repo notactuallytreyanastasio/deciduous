@@ -132,12 +132,19 @@ defmodule DeciduousMcp.MCP.Component do
           nil
 
         value when is_binary(value) ->
-          if match?({:ok, _}, Ecto.UUID.cast(value)), do: nil, else: {key, value}
+          if uuid_text?(value), do: nil, else: {key, value}
 
         value ->
           {key, value}
       end
     end)
+  end
+
+  # Only the 36-character text form. Ecto.UUID.cast/1 also accepts any
+  # 16-byte binary as a raw UUID, so "PLACEHOLDER_SKIP" passed this guard and
+  # crashed in the query (production, 2026-09-23 02:37).
+  defp uuid_text?(value) do
+    byte_size(value) == 36 and match?({:ok, _}, Ecto.UUID.cast(value))
   end
 
   defp dispatch_valid_tool(module, params, frame) do
