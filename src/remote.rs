@@ -849,7 +849,7 @@ pub struct ReplayOnExit;
 
 impl Drop for ReplayOnExit {
     fn drop(&mut self) {
-        if let Some(log) = crate::oplog::appended_this_process() {
+        if let Some(log) = crate::oplog::take_appended() {
             replay_after_write(&log);
         }
     }

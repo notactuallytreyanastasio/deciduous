@@ -213,12 +213,16 @@ pub struct LogState {
 /// without re-reading the file after every command.
 static APPENDED: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
 
-/// The log this process appended to, if any.
-pub fn appended_this_process() -> Option<OpLog> {
+/// The log this process appended to since the last call, and forgets it.
+///
+/// For a process that does not exit after one write: `deciduous mcp` serves
+/// an agent's whole session, and replaying only on exit meant its writes sat
+/// in the log for hours and were sent by whichever CLI write came next.
+pub fn take_appended() -> Option<OpLog> {
     APPENDED
         .lock()
         .ok()
-        .and_then(|g| g.clone())
+        .and_then(|mut g| g.take())
         .map(|path| OpLog { path })
 }
 

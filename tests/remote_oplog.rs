@@ -1003,6 +1003,78 @@ fn a_pull_that_changes_no_content_reports_no_updates() {
     assert!(out.contains("updated 1,"), "{out}");
 }
 
+// `deciduous mcp`, the stdio server agents use, returned before the replay
+// guard existed: its writes were logged and never sent, and nothing said so.
+#[test]
+#[ignore = "needs a real server: set DECIDUOUS_TEST_SERVER and DECIDUOUS_TEST_TOKEN"]
+fn writes_through_the_local_mcp_server_reach_the_server_while_it_runs() {
+    use std::io::{BufRead, BufReader, Write};
+    let (url, token) = server();
+    let sb = Sandbox::new(&token);
+    let ws = unique("wal-localmcp");
+    let dir = sb.remote_repo("localmcp", &url, &ws);
+
+    let mut child = Command::new(env!("CARGO_BIN_EXE_deciduous"))
+        .arg("mcp")
+        .current_dir(&dir)
+        .env("HOME", sb.path().join("home"))
+        .env("XDG_CONFIG_HOME", sb.path().join("home").join(".config"))
+        .env("DECIDUOUS_MCP_TOKEN", &token)
+        .env("DECIDUOUS_NO_SERVER", "1")
+        .env_remove("DECIDUOUS_DB_PATH")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let mut call = |id: u64, method: &str, params: Value| {
+        let msg = serde_json::json!({"jsonrpc":"2.0","id":id,"method":method,"params":params});
+        writeln!(stdin, "{msg}").unwrap();
+        stdin.flush().unwrap();
+        let mut line = String::new();
+        stdout.read_line(&mut line).unwrap();
+        line
+    };
+    call(
+        1,
+        "initialize",
+        serde_json::json!({"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}),
+    );
+    call(
+        2,
+        "tools/call",
+        serde_json::json!({"name":"add_node","arguments":{"node_type":"goal","title":"via local mcp"}}),
+    );
+    call(
+        3,
+        "tools/call",
+        serde_json::json!({"name":"update_status","arguments":{"node_id":1,"status":"completed"}}),
+    );
+
+    // The process is still running: nothing has exited to trigger a replay.
+    // The replay follows each answer, so it is waited for, briefly.
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let status = loop {
+        let g = export(&url, &token, &ws);
+        let status = g["nodes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["title"] == "via local mcp")
+            .map(|n| n["status"].clone());
+        if status.as_ref().is_some_and(|s| s == "completed") || std::time::Instant::now() > deadline
+        {
+            break status;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    };
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(status, Some(Value::String("completed".into())));
+}
+
 // Two ops merging different metadata keys into one node at the same moment:
 // ops.ex read the map, merged, and wrote it back without a row lock.
 #[test]

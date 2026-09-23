@@ -1042,6 +1042,17 @@ enum TagAction {
     },
 }
 
+/// `std::process::exit`, after sending what this process queued for the
+/// server. `exit` skips destructors, so every command that wrote and then
+/// failed (a pivot whose third step errors, say) left its first writes in the
+/// log unsent, while the same command succeeding sent them.
+fn exit(code: i32) -> ! {
+    if let Some(log) = deciduous::oplog::take_appended() {
+        deciduous::remote::replay_after_write(&log);
+    }
+    std::process::exit(code)
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -1075,7 +1086,7 @@ fn main() {
                 .and_then(|_| deciduous::server::ensure(&cwd, deciduous::server::Caller::Init))
         {
             eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
+            exit(1);
         }
         return;
     }
@@ -1096,7 +1107,7 @@ fn main() {
         };
         if let Err(e) = deciduous::server::setup_wizard(&cwd, choice) {
             eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
+            exit(1);
         }
         return;
     }
@@ -1111,13 +1122,13 @@ fn main() {
                     deciduous::server::ensure(&cwd, deciduous::server::Caller::Update)
                 }) {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
             Some(root) => {
                 let failed = deciduous::init::update_all(root);
                 if failed > 0 {
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1137,13 +1148,13 @@ fn main() {
                 }
                 if let Err(e) = std::fs::write(ours, merged) {
                     eprintln!("deciduous merge-record: {}", e);
-                    std::process::exit(1);
+                    exit(1);
                 }
                 return;
             }
             Err(e) => {
                 eprintln!("deciduous merge-record: {}", e);
-                std::process::exit(1);
+                exit(1);
             }
         }
     }
@@ -1158,7 +1169,7 @@ fn main() {
                 "{} No version file found. Run 'deciduous update' to sync integration files.",
                 "Update needed:".yellow()
             );
-            std::process::exit(1);
+            exit(1);
         }
 
         let installed_version = match std::fs::read_to_string(version_file) {
@@ -1168,7 +1179,7 @@ fn main() {
                     "{} Could not read version file. Run 'deciduous update'.",
                     "Update needed:".yellow()
                 );
-                std::process::exit(1);
+                exit(1);
             }
         };
 
@@ -1214,7 +1225,7 @@ fn main() {
                 "deciduous update".cyan().bold()
             );
             println!();
-            std::process::exit(1);
+            exit(1);
         }
 
         println!(
@@ -1242,7 +1253,7 @@ fn main() {
     if let Command::Mcp {} = args.command {
         if let Err(e) = deciduous::mcp::run_server() {
             eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
+            exit(1);
         }
         return;
     }
@@ -1256,7 +1267,7 @@ fn main() {
 
     // Needs no database or project: it builds its own repository elsewhere.
     if let Command::DemoSwarm { args: swarm_args } = &args.command {
-        std::process::exit(deciduous::demo_swarm::run(swarm_args));
+        exit(deciduous::demo_swarm::run(swarm_args));
     }
 
     // Handle completion separately - doesn't need database
@@ -1274,7 +1285,7 @@ fn main() {
         Ok(db) => db,
         Err(e) => {
             eprintln!("{} Failed to open database: {}", "Error:".red(), e);
-            std::process::exit(1);
+            exit(1);
         }
     };
 
@@ -1435,7 +1446,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1461,7 +1472,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1475,7 +1486,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1504,7 +1515,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1517,7 +1528,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1537,7 +1548,7 @@ fn main() {
 
             if effective_prompt.is_empty() {
                 eprintln!("{} No prompt provided", "Error:".red());
-                std::process::exit(1);
+                exit(1);
             }
 
             // Warn if prompt looks like a summary
@@ -1564,7 +1575,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1676,7 +1687,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1705,7 +1716,7 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
+                exit(1);
             }
         },
 
@@ -1719,7 +1730,7 @@ fn main() {
                             Ok(json_str) => println!("{}", json_str),
                             Err(e) => {
                                 eprintln!("{} Serializing node: {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     } else {
@@ -1864,11 +1875,11 @@ fn main() {
                 }
                 Ok(None) => {
                     eprintln!("{} Node #{} not found", "Error:".red(), id);
-                    std::process::exit(1);
+                    exit(1);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1878,12 +1889,12 @@ fn main() {
                 Ok(json) => println!("{}", json),
                 Err(e) => {
                     eprintln!("{} Serializing graph: {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
+                exit(1);
             }
         },
 
@@ -1903,7 +1914,7 @@ fn main() {
                         "{} API mode needs a bearer token: pass --token or set DECIDUOUS_API_TOKEN",
                         "Error:".red()
                     );
-                    std::process::exit(1);
+                    exit(1);
                 };
                 let data_dir = data_dir
                     .or_else(|| {
@@ -1931,7 +1942,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} API server error: {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             } else {
@@ -1942,7 +1953,7 @@ fn main() {
                 );
                 if let Err(e) = deciduous::serve::start_graph_server(port) {
                     eprintln!("{} Server error: {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -1963,7 +1974,7 @@ fn main() {
                     let mut token = String::new();
                     if std::io::stdin().read_line(&mut token).is_err() {
                         eprintln!("{} could not read the token", "Error:".red());
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     if let Some(url) = url {
@@ -1977,7 +1988,7 @@ fn main() {
                             Err(e) => {
                                 eprintln!("{} {}", "Error:".red(), e);
                                 eprintln!("\nNothing was stored.");
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     }
@@ -1989,7 +2000,7 @@ fn main() {
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -1999,7 +2010,7 @@ fn main() {
                     Ok(false) => println!("No stored token to remove."),
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 },
 
@@ -2118,7 +2129,7 @@ fn main() {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -2133,7 +2144,7 @@ fn main() {
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
                             eprintln!("\nNothing was written; the project is unchanged.");
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -2141,7 +2152,7 @@ fn main() {
                         Ok(counts) => {
                             if let Err(e) = cfg.save_remote() {
                                 eprintln!("{} could not write config: {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                             println!("{} {}", "Remote:".green(), url);
                             println!("  workspace: {}", ws.cyan());
@@ -2194,7 +2205,7 @@ fn main() {
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
                             eprintln!("\nNothing was written; the project is unchanged.");
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -2214,7 +2225,7 @@ fn main() {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -2228,7 +2239,7 @@ fn main() {
                             Ok(st) => Some((log, st)),
                             Err(e) => {
                                 eprintln!("{} {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         },
                         None => None,
@@ -2265,7 +2276,7 @@ fn main() {
                         (Ok(n), Ok(e)) => (n, e),
                         (Err(e), _) | (_, Err(e)) => {
                             eprintln!("{} reading the local graph: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
                     // Health first, so a down server and a wrong token
@@ -2278,12 +2289,12 @@ fn main() {
                         Ok(g) => g,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
                     if let Err(e) = remote.claim(false) {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                     let d = deciduous::remote::content_diff(&nodes, &edges, &server);
 
@@ -2391,7 +2402,7 @@ fn main() {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
                     let Some(log) = db.oplog() else {
@@ -2400,7 +2411,7 @@ fn main() {
                              (DECIDUOUS_DB_PATH may point at another project's database).",
                             "Error:".red()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     };
 
                     if drop_rejected {
@@ -2413,7 +2424,7 @@ fn main() {
                             ),
                             Err(e) => {
                                 eprintln!("{} {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                         return;
@@ -2444,7 +2455,7 @@ fn main() {
                                 "{waiting} write(s) still waiting in {}.",
                                 log.path().display()
                             );
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
 
@@ -2457,12 +2468,12 @@ fn main() {
                             Ok(v) => v,
                             Err(e) => {
                                 eprintln!("{} serializing the local graph: {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         },
                         Err(e) => {
                             eprintln!("{} could not read the local graph: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -2523,7 +2534,7 @@ fn main() {
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -2534,7 +2545,7 @@ fn main() {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -2543,7 +2554,7 @@ fn main() {
                             "{} The database path has no directory of its own, so there is nowhere to keep the graph file.",
                             "Error:".red()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     };
                     let store = match RecordStore::open(&store_path) {
                         Some(s) => s,
@@ -2555,7 +2566,7 @@ fn main() {
                                     "Error:".red(),
                                     e
                                 );
-                                std::process::exit(1);
+                                exit(1);
                             }
                         },
                     };
@@ -2565,7 +2576,7 @@ fn main() {
                     // project's committed graph.json.
                     if let Err(e) = remote.claim(false) {
                         eprintln!("{} {}\n\nNothing was pulled.", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     // Unsent local writes go up first. Otherwise the pull
@@ -2580,7 +2591,7 @@ fn main() {
                                     "Error:".red(),
                                     log.path().display()
                                 );
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     }
@@ -2617,7 +2628,7 @@ fn main() {
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -2635,7 +2646,7 @@ fn main() {
                         Ok(r) => r,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -2646,7 +2657,7 @@ fn main() {
                     // this one.
                     if let Err(e) = remote.check() {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     let url = remote.events_url();
@@ -2692,12 +2703,12 @@ fn main() {
                             unknown.join(", "),
                             deciduous::watch::NODE_TYPES.join(", ")
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
                     let mut stdout = std::io::stdout();
                     if let Err(e) = deciduous::watch::run(&url, &filter, &mut stdout) {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -2709,7 +2720,7 @@ fn main() {
                     "{} The database path has no directory of its own, so there is nowhere to keep the graph file. Set DECIDUOUS_DB_PATH to a path inside a directory.",
                     "Error:".red()
                 );
-                std::process::exit(1);
+                exit(1);
             };
             let store = match RecordStore::open(&store_path) {
                 Some(store) => store,
@@ -2719,7 +2730,7 @@ fn main() {
                         "Error:".red(),
                         store_path.display()
                     );
-                    std::process::exit(1);
+                    exit(1);
                 }
                 None => match RecordStore::create(&store_path) {
                     Ok(store) => {
@@ -2734,7 +2745,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} Creating the graph file: {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 },
             };
@@ -2763,7 +2774,7 @@ fn main() {
                         Ok(report) => print_record_dir_import(&report),
                         Err(e) => {
                             eprintln!("{} Importing .deciduous/sync/: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -2780,7 +2791,7 @@ fn main() {
                         Ok(report) => print_legacy_import(&report),
                         Err(e) => {
                             eprintln!("{} Importing legacy events: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -2790,7 +2801,7 @@ fn main() {
                 Ok(r) => r,
                 Err(e) => {
                     eprintln!("{} Sync: {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             };
             print_sync_report(&report, &store);
@@ -2801,12 +2812,12 @@ fn main() {
                     "Error:".red(),
                     store_path.display()
                 );
-                std::process::exit(1);
+                exit(1);
             }
 
             if check {
                 if report.is_settled() {
-                    std::process::exit(0);
+                    exit(0);
                 }
                 if !report.is_clean() || !report.conflicts.is_empty() {
                     println!(
@@ -2829,7 +2840,7 @@ fn main() {
                         report.read_errors.len()
                     );
                 }
-                std::process::exit(1);
+                exit(1);
             }
         }
 
@@ -2841,7 +2852,7 @@ fn main() {
                     "Error:".red(),
                     db_path.display()
                 );
-                std::process::exit(1);
+                exit(1);
             }
 
             let backup_path = output.unwrap_or_else(|| {
@@ -2860,7 +2871,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} Creating backup: {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -2884,7 +2895,7 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
+                exit(1);
             }
         },
 
@@ -2959,7 +2970,7 @@ fn main() {
                         // Write DOT file
                         if let Err(e) = std::fs::write(&dot_path, &dot) {
                             eprintln!("{} Writing DOT file: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
 
                         // Run graphviz
@@ -2985,20 +2996,20 @@ fn main() {
                                     eprintln!(
                                         "Make sure graphviz is installed: brew install graphviz"
                                     );
-                                    std::process::exit(1);
+                                    exit(1);
                                 }
                             }
                             Err(e) => {
                                 eprintln!("{} Running graphviz: {}", "Error:".red(), e);
                                 eprintln!("Make sure graphviz is installed: brew install graphviz");
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     } else if let Some(path) = output {
                         // Write to file
                         if let Err(e) = std::fs::write(&path, &dot) {
                             eprintln!("{} Writing file: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                         println!("{} DOT graph to {}", "Exported".green(), path.display());
                         println!(
@@ -3013,7 +3024,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -3100,7 +3111,7 @@ fn main() {
                     if let Some(path) = output {
                         if let Err(e) = std::fs::write(&path, &writeup) {
                             eprintln!("{} Writing file: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                         println!("{} PR writeup to {}", "Generated".green(), path.display());
                     } else {
@@ -3109,7 +3120,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
         }
@@ -3129,7 +3140,7 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("{} Migration failed: {}", "Error:".red(), e);
-                std::process::exit(1);
+                exit(1);
             }
         },
 
@@ -3143,7 +3154,7 @@ fn main() {
                     "{} The database path has no directory of its own.",
                     "Error:".red()
                 );
-                std::process::exit(1);
+                exit(1);
             };
             match action {
                 EventsAction::Init => match RecordStore::create(&store_path) {
@@ -3154,7 +3165,7 @@ fn main() {
                     ),
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 },
                 EventsAction::Checkpoint { .. } => {
@@ -3169,7 +3180,7 @@ fn main() {
                             "Error:".red(),
                             store_path.display()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     };
                     let dry_run = match &action {
                         EventsAction::Status => true,
@@ -3181,7 +3192,7 @@ fn main() {
                             Ok(report) => print_record_dir_import(&report),
                             Err(e) => {
                                 eprintln!("{} Importing .deciduous/sync/: {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     }
@@ -3190,7 +3201,7 @@ fn main() {
                             Ok(report) => print_legacy_import(&report),
                             Err(e) => {
                                 eprintln!("{} Importing legacy events: {}", "Error:".red(), e);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     }
@@ -3199,13 +3210,13 @@ fn main() {
                             Ok(Some(node)) => {
                                 if let Err(e) = store.publish_node(&node) {
                                     eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
+                                    exit(1);
                                 }
                                 println!("{} record for node {}", "Wrote".green(), node_id);
                             }
                             _ => {
                                 eprintln!("{} Node {} not found", "Error:".red(), node_id);
-                                std::process::exit(1);
+                                exit(1);
                             }
                         }
                     }
@@ -3213,7 +3224,7 @@ fn main() {
                         Ok(report) => print_sync_report(&report, &store),
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -3230,7 +3241,7 @@ fn main() {
                 let node_id = resolve_node_or_exit(&db, &node_id);
                 if !file.exists() {
                     eprintln!("{} File not found: {}", "Error:".red(), file.display());
-                    std::process::exit(1);
+                    exit(1);
                 }
 
                 let original_filename = file
@@ -3244,7 +3255,7 @@ fn main() {
                     Ok(b) => b,
                     Err(e) => {
                         eprintln!("{} Failed to read file: {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 };
                 let hash = format!("{:x}", Sha256::digest(&file_bytes));
@@ -3262,14 +3273,14 @@ fn main() {
                 let docs_dir = PathBuf::from(".deciduous/documents");
                 if let Err(e) = std::fs::create_dir_all(&docs_dir) {
                     eprintln!("{} Failed to create documents dir: {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
 
                 let dest_path = docs_dir.join(&storage_filename);
                 if !dest_path.exists() {
                     if let Err(e) = std::fs::copy(&file, &dest_path) {
                         eprintln!("{} Failed to copy file: {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
 
@@ -3321,7 +3332,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -3367,7 +3378,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
 
@@ -3383,11 +3394,11 @@ fn main() {
                         Ok(Some(d)) => d,
                         Ok(None) => {
                             eprintln!("{} Document {} not found", "Error:".red(), doc_id);
-                            std::process::exit(1);
+                            exit(1);
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
                     let file_path =
@@ -3396,7 +3407,7 @@ fn main() {
                         Some(d) => (d, "ai"),
                         None => {
                             eprintln!("{} Could not generate AI description", "Error:".red());
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 } else {
@@ -3411,7 +3422,7 @@ fn main() {
                     Ok(()) => println!("{} description for document {}", "Updated".green(), doc_id),
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -3420,7 +3431,7 @@ fn main() {
                 Ok(()) => println!("{} document {}", "Detached".red(), doc_id),
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
 
@@ -3454,11 +3465,11 @@ fn main() {
                 }
                 Ok(None) => {
                     eprintln!("{} Document {} not found", "Error:".red(), doc_id);
-                    std::process::exit(1);
+                    exit(1);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
 
@@ -3472,7 +3483,7 @@ fn main() {
                             "Error:".red(),
                             file_path.display()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     // Copy to temp with original filename for better OS handling
@@ -3481,7 +3492,7 @@ fn main() {
                     let temp_path = temp_dir.join(&doc.original_filename);
                     if let Err(e) = std::fs::copy(&file_path, &temp_path) {
                         eprintln!("{} Failed to copy file: {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     #[cfg(target_os = "macos")]
@@ -3493,17 +3504,17 @@ fn main() {
                         Ok(_) => println!("{} {}", "Opened".green(), doc.original_filename),
                         Err(e) => {
                             eprintln!("{} Failed to open file: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
                 Ok(None) => {
                     eprintln!("{} Document {} not found", "Error:".red(), doc_id);
-                    std::process::exit(1);
+                    exit(1);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
 
@@ -3579,7 +3590,7 @@ fn main() {
                 ),
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
 
@@ -3605,7 +3616,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
 
@@ -3613,11 +3624,11 @@ fn main() {
                 Ok(true) => println!("{} theme '{}'", "Deleted".red(), name),
                 Ok(false) => {
                     eprintln!("{} Theme '{}' not found", "Error:".red(), name);
-                    std::process::exit(1);
+                    exit(1);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
         },
@@ -3633,7 +3644,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -3653,11 +3664,11 @@ fn main() {
                             theme,
                             node_id
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -3676,7 +3687,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -3688,11 +3699,11 @@ fn main() {
                         Ok(Some(n)) => vec![n],
                         Ok(None) => {
                             eprintln!("{} Node {} not found", "Error:".red(), id);
-                            std::process::exit(1);
+                            exit(1);
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 } else {
@@ -3788,11 +3799,11 @@ fn main() {
                             theme,
                             node_id
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -3814,7 +3825,7 @@ fn main() {
                     "{} No audit action specified. Use --associate-commits",
                     "Error:".red()
                 );
-                std::process::exit(1);
+                exit(1);
             }
 
             // Get all nodes
@@ -3822,7 +3833,7 @@ fn main() {
                 Ok(n) => n,
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             };
 
@@ -3830,7 +3841,7 @@ fn main() {
             let commits = get_git_commits_for_audit();
             if commits.is_empty() {
                 eprintln!("{} No git commits found", "Error:".red());
-                std::process::exit(1);
+                exit(1);
             }
 
             println!(
@@ -4007,7 +4018,7 @@ fn main() {
                         Ok(j) => println!("{}", j),
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 } else {
@@ -4016,7 +4027,7 @@ fn main() {
             }
             Err(e) => {
                 eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
+                exit(1);
             }
         },
 
@@ -4025,7 +4036,7 @@ fn main() {
                 let path = output.unwrap_or_else(|| PathBuf::from(".deciduous/narratives.md"));
                 if let Err(e) = deciduous::narratives::init_narratives(&db, &path, force) {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
             NarrativesAction::Show { path } => {
@@ -4034,7 +4045,7 @@ fn main() {
                     Ok(content) => print!("{}", content),
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -4046,7 +4057,7 @@ fn main() {
                                 Ok(j) => println!("{}", j),
                                 Err(e) => {
                                     eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
+                                    exit(1);
                                 }
                             }
                         } else {
@@ -4055,7 +4066,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -4085,7 +4096,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -4107,7 +4118,7 @@ fn main() {
                                 Ok(j) => println!("{}", j),
                                 Err(e) => {
                                     eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
+                                    exit(1);
                                 }
                             }
                         } else {
@@ -4116,7 +4127,7 @@ fn main() {
                     }
                     Err(e) => {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
             }
@@ -4135,7 +4146,7 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             },
         },
@@ -4151,7 +4162,7 @@ fn main() {
                             "Error:".red(),
                             roadmap_path.display()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     // Parse the roadmap
@@ -4159,7 +4170,7 @@ fn main() {
                         Ok(p) => p,
                         Err(e) => {
                             eprintln!("{} Parsing roadmap: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4175,7 +4186,7 @@ fn main() {
                         Ok(c) => c,
                         Err(e) => {
                             eprintln!("{} Reading file: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4188,12 +4199,12 @@ fn main() {
                         Ok(u) => u,
                         Err(e) => {
                             eprintln!("{} Writing metadata: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
                     if let Err(e) = std::fs::write(&roadmap_path, &updated) {
                         eprintln!("{} Writing file: {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     // Track current level-2 parent section for grouping
@@ -4259,7 +4270,7 @@ fn main() {
                             "Error:".red(),
                             roadmap_path.display()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     // Clear existing roadmap items
@@ -4267,7 +4278,7 @@ fn main() {
                         Ok(n) => n,
                         Err(e) => {
                             eprintln!("{} Clearing roadmap items: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
                     println!(
@@ -4281,7 +4292,7 @@ fn main() {
                         Ok(p) => p,
                         Err(e) => {
                             eprintln!("{} Parsing roadmap: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4344,7 +4355,7 @@ fn main() {
                             roadmap_path.display()
                         );
                         eprintln!("Run 'deciduous roadmap init' first");
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     // Initialize GitHub client
@@ -4355,7 +4366,7 @@ fn main() {
                             Err(e) => {
                                 eprintln!("{} Auto-detecting repo: {}", "Error:".red(), e);
                                 eprintln!("Specify repo with --repo owner/repo");
-                                std::process::exit(1);
+                                exit(1);
                             }
                         },
                     };
@@ -4366,7 +4377,7 @@ fn main() {
                         Ok(false) | Err(_) => {
                             eprintln!("{} Not authenticated with GitHub", "Error:".red());
                             eprintln!("Run 'gh auth login' first");
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
 
@@ -4375,7 +4386,7 @@ fn main() {
                         Ok(p) => p,
                         Err(e) => {
                             eprintln!("{} Parsing roadmap: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4565,14 +4576,14 @@ fn main() {
                             "Error:".red(),
                             roadmap_path.display()
                         );
-                        std::process::exit(1);
+                        exit(1);
                     }
 
                     let parsed = match parse_roadmap(&roadmap_path) {
                         Ok(p) => p,
                         Err(e) => {
                             eprintln!("{} Parsing roadmap: {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4648,7 +4659,7 @@ fn main() {
                         Ok(i) => i,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4681,7 +4692,7 @@ fn main() {
                                                 }
                                                 Err(e) => {
                                                     eprintln!("{} {}", "Error:".red(), e);
-                                                    std::process::exit(1);
+                                                    exit(1);
                                                 }
                                             }
                                         }
@@ -4692,7 +4703,7 @@ fn main() {
                                                 outcome_id,
                                                 n.node_type
                                             );
-                                            std::process::exit(1);
+                                            exit(1);
                                         }
                                         None => {
                                             eprintln!(
@@ -4700,20 +4711,20 @@ fn main() {
                                                 "Error:".red(),
                                                 outcome_id
                                             );
-                                            std::process::exit(1);
+                                            exit(1);
                                         }
                                     }
                                 }
                                 Err(e) => {
                                     eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
+                                    exit(1);
                                 }
                             }
                         }
                         None => {
                             eprintln!("{} Roadmap item '{}' not found", "Error:".red(), item);
                             eprintln!("Run 'deciduous roadmap list' to see available items");
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -4723,7 +4734,7 @@ fn main() {
                         Ok(i) => i,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4743,13 +4754,13 @@ fn main() {
                                 }
                                 Err(e) => {
                                     eprintln!("{} {}", "Error:".red(), e);
-                                    std::process::exit(1);
+                                    exit(1);
                                 }
                             }
                         }
                         None => {
                             eprintln!("{} Roadmap item '{}' not found", "Error:".red(), item);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
                 }
@@ -4759,7 +4770,7 @@ fn main() {
                         Ok(c) => c,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4833,7 +4844,7 @@ fn main() {
                         }
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     }
 
@@ -4873,7 +4884,7 @@ fn main() {
                         Ok(i) => i,
                         Err(e) => {
                             eprintln!("{} {}", "Error:".red(), e);
-                            std::process::exit(1);
+                            exit(1);
                         }
                     };
 
@@ -4999,7 +5010,7 @@ fn main() {
                     println!("\n{}", "Installing Claude Code hooks...".cyan().bold());
                     if let Err(e) = deciduous::hooks::install_hooks(&project_root) {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                     println!(
                         "\n{}",
@@ -5012,7 +5023,7 @@ fn main() {
                 HooksAction::Status {} => {
                     if let Err(e) = deciduous::hooks::hooks_status() {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                 }
                 HooksAction::Uninstall {} => {
@@ -5023,7 +5034,7 @@ fn main() {
                     println!("\n{}", "Uninstalling Claude Code hooks...".cyan().bold());
                     if let Err(e) = deciduous::hooks::uninstall_hooks(&project_root) {
                         eprintln!("{} {}", "Error:".red(), e);
-                        std::process::exit(1);
+                        exit(1);
                     }
                     println!("\n{}", "Hooks uninstalled.".green().bold());
                     println!();
@@ -5034,7 +5045,7 @@ fn main() {
         Command::Integration {} => {
             if let Err(e) = deciduous::hooks::integration_status() {
                 eprintln!("{} {}", "Error:".red(), e);
-                std::process::exit(1);
+                exit(1);
             }
         }
 
@@ -5046,13 +5057,13 @@ fn main() {
 
                 if let Err(e) = deciduous::opencode::install_opencode(&project_root) {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
             OpencodeAction::Status {} => {
                 if let Err(e) = deciduous::opencode::opencode_status() {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
             }
             OpencodeAction::Uninstall {} => {
@@ -5063,7 +5074,7 @@ fn main() {
                 println!("\n{}", "Uninstalling OpenCode integration...".cyan().bold());
                 if let Err(e) = deciduous::opencode::uninstall_opencode(&project_root) {
                     eprintln!("{} {}", "Error:".red(), e);
-                    std::process::exit(1);
+                    exit(1);
                 }
                 println!("\n{}", "OpenCode integration uninstalled.".green().bold());
                 println!();
@@ -5255,7 +5266,7 @@ fn resolve_node_or_exit(db: &Database, reference: &str) -> i32 {
         Ok(id) => id,
         Err(e) => {
             eprintln!("{} {}", "Error:".red(), e);
-            std::process::exit(1);
+            exit(1);
         }
     }
 }
