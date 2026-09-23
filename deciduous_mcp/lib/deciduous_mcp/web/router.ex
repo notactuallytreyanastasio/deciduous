@@ -88,6 +88,7 @@ defmodule DeciduousMcp.Web.Router do
 
   post "/ops" do
     conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
 
     if conn.halted do
       conn
@@ -107,6 +108,7 @@ defmodule DeciduousMcp.Web.Router do
 
   post "/claim" do
     conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
 
     if conn.halted do
       conn
@@ -129,6 +131,7 @@ defmodule DeciduousMcp.Web.Router do
   # after a rename the name it wrote under is known only to the server.
   post "/locate" do
     conn = Auth.call(conn, [])
+    conn = if conn.halted, do: conn, else: WorkspacePlug.call(conn, [])
 
     if conn.halted do
       conn
@@ -137,7 +140,17 @@ defmodule DeciduousMcp.Web.Router do
         {:ok, body, conn} ->
           case Jason.decode(body) do
             {:ok, %{"change_ids" => ids}} when is_list(ids) and length(ids) <= 1000 ->
-              json(conn, 200, %{workspaces: Workspaces.holding(Enum.filter(ids, &is_binary/1))})
+              held = Workspaces.holding(Enum.filter(ids, &is_binary/1))
+
+              # A pinned client learns nothing about the other workspaces,
+              # as with list_workspaces.
+              held =
+                case conn.assigns[:pinned_workspace_name] do
+                  nil -> held
+                  pinned -> Enum.filter(held, &(&1.name == pinned))
+                end
+
+              json(conn, 200, %{workspaces: held})
 
             _ ->
               json(conn, 422, %{error: "body must be {\"change_ids\": [...]}, at most 1000"})
@@ -385,11 +398,15 @@ defmodule DeciduousMcp.Web.Router do
 
   defp handle_ops(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
+         {:ok, payload} <- held_to_pin(conn, payload),
          {:ok, report} <- Ops.run(payload) do
       json(conn, 200, report)
     else
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
+
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
 
       {:error, {refusal, _} = claim}
       when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
@@ -402,6 +419,7 @@ defmodule DeciduousMcp.Web.Router do
 
   defp handle_claim(conn, body) do
     with {:ok, payload} <- Jason.decode(body),
+         {:ok, payload} <- held_to_pin(conn, payload),
          {:ok, name} <- Workspaces.normalize_name(payload["workspace"] || ""),
          {:ok, workspace} <- Workspaces.find_or_create(name),
          {:ok, outcome} <-
@@ -411,6 +429,9 @@ defmodule DeciduousMcp.Web.Router do
       {:error, %Jason.DecodeError{} = err} ->
         json(conn, 400, %{error: "invalid json", detail: Exception.message(err)})
 
+      {:error, {:pinned, message}} ->
+        json(conn, 403, %{error: message})
+
       {:error, {refusal, _} = claim}
       when refusal in [:claimed_by_other_repository, :no_commit_yet] ->
         claim_refused(conn, claim)
@@ -419,6 +440,36 @@ defmodule DeciduousMcp.Web.Router do
         json(conn, 422, %{error: to_string_reason(reason)})
     end
   end
+
+  # /ops and /claim name their workspace in the body, as /import does, and
+  # are held to an X-Deciduous-Workspace pin the same way: a body naming
+  # another workspace is refused, and one naming none goes to the pin.
+  defp held_to_pin(conn, payload) when is_map(payload) do
+    case {conn.assigns[:pinned_workspace_name], payload["workspace"]} do
+      {nil, _} ->
+        {:ok, payload}
+
+      {pinned, nil} ->
+        {:ok, Map.put(payload, "workspace", pinned)}
+
+      {pinned, name} ->
+        case Workspaces.normalize_name(name) do
+          {:ok, ^pinned} ->
+            {:ok, Map.put(payload, "workspace", pinned)}
+
+          {:ok, other} ->
+            {:error,
+             {:pinned,
+              "this client is pinned to workspace \"#{pinned}\" by " <>
+                "X-Deciduous-Workspace; the request names \"#{other}\". Nothing was written."}}
+
+          {:error, reason} ->
+            {:error, Workspaces.describe_name_error(name, reason)}
+        end
+    end
+  end
+
+  defp held_to_pin(_conn, payload), do: {:ok, payload}
 
   defp claim_refused(conn, {:no_commit_yet, held}) do
     json(conn, 409, %{
