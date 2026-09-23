@@ -654,3 +654,93 @@ fn bridge_n4_attach_describe_and_detach_go_through_the_log() {
     let st = p.dx(&["remote", "status"]);
     assert!(status_says_clean(&st), "{}", st.all());
 }
+
+// ---------------------------------------------------------------- BRIDGE-N7 / N8
+
+/// A git repository with `deciduous init` run in it and no commit.
+fn unborn<'a>(sb: &'a Sandbox, name: &str) -> Project<'a> {
+    let dir = sb.base().join(name);
+    std::fs::create_dir_all(&dir).unwrap();
+    sb.git_ok(&dir, &["init", "-q"]);
+    let p = Project { dir, sb };
+    p.ok(&["init"]);
+    p
+}
+
+/// BRIDGE-N7: `git init && deciduous init` (no commit yet) wrote into a
+/// workspace nobody had claimed; an unrelated repository of the same name
+/// then claimed it, with the first one's nodes in it, and pulled them into
+/// its committable graph.json.
+#[test]
+fn bridge_n7_a_repository_with_no_commit_writes_nothing_to_the_server() {
+    let Some(server) = remote("bridge_n7") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let ws = unique("n7");
+    let a = unborn(&sb, "a/same");
+    let init = a.ok(&["remote", "init", &server.url, "--workspace", &ws]);
+    assert!(init.contains("no commit yet"), "{init}");
+    let out = a.dx(&["add", "goal", "A secret plan"]);
+    assert!(out.ok(), "the local write still happens: {}", out.all());
+    assert!(
+        out.all().contains("no commit yet"),
+        "it must say why nothing was sent: {}",
+        out.all()
+    );
+    let v = server.view(&ws);
+    assert!(
+        v.nodes.values().all(|n| n.title != "A secret plan"),
+        "a repository with no commit wrote into an unclaimed workspace"
+    );
+
+    // An unrelated repository takes the name, and finds nothing of a's.
+    let b = sb.project("b/same", None);
+    b.ok(&["remote", "init", &server.url, "--workspace", &ws]);
+    let pull = b.ok(&["remote", "pull"]);
+    assert!(
+        !b.graph_file().exists()
+            || !std::fs::read_to_string(b.graph_file())
+                .unwrap()
+                .contains("A secret plan"),
+        "{pull}"
+    );
+
+    // a's write waits, and a status says so.
+    let st = a.dx(&["remote", "status"]);
+    assert!(st.all().contains("1 write(s) waiting"), "{}", st.all());
+}
+
+/// BRIDGE-N8: a shallow clone was told it "has no commit yet" and that its
+/// write would be "refused if another repository has" claimed the
+/// workspace; it had commits, and its write was accepted. A shallow clone
+/// cannot show the server which repository it is (that is what lets a CI
+/// clone write to its own workspace; see remote_oplog's
+/// a_shallow_clone_writes_to_its_repositorys_workspace), so the note now
+/// says what happens: its writes go in unchecked.
+#[test]
+fn bridge_n8_a_shallow_clone_is_told_its_writes_are_unchecked() {
+    let Some(server) = remote("bridge_n8") else {
+        return;
+    };
+    let sb = Sandbox::with_server(server.clone());
+    let ws = unique("n8");
+    let other = sb.project("other", None);
+    other.git_ok(&["commit", "-q", "--allow-empty", "-m", "second"]);
+    let url = format!("file://{}", other.dir.display());
+    let dir = sb.base().join("shallow/same");
+    std::fs::create_dir_all(dir.parent().unwrap()).unwrap();
+    sb.git_ok(
+        &sb.base(),
+        &["clone", "-q", "--depth", "1", &url, dir.to_str().unwrap()],
+    );
+    let shallow = Project { dir, sb: &sb };
+    shallow.ok(&["sync"]);
+    let init = shallow.ok(&["remote", "init", &server.url, "--workspace", &ws]);
+    assert!(!init.contains("no commit yet"), "{init}");
+    assert!(
+        init.contains("shallow clone") && init.contains("unchecked"),
+        "{init}"
+    );
+    assert!(!init.contains("is refused"), "{init}");
+}

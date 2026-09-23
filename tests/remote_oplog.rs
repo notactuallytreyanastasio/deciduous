@@ -1229,8 +1229,10 @@ fn a_claimed_workspace_refuses_unborn_and_unrelated_repositories_on_every_path()
         format!("[remote]\nurl = \"{url}\"\nworkspace = \"{name}\"\n"),
     )
     .unwrap();
+    // Nothing is sent from a repository with no commit (round-2
+    // BRIDGE-N7): the write waits, and says why.
     let out = sb.dx_ok(&b, &["add", "goal", "B goal before first commit"]);
-    assert!(out.contains("refused"), "{out}");
+    assert!(out.contains("no commit yet"), "{out}");
     assert!(
         !out.contains("once the server is reachable"),
         "a refusal is not an outage: {out}"

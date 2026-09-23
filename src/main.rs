@@ -2283,11 +2283,11 @@ fn main() {
                             }
                             println!("{} {}", "Remote:".green(), url);
                             println!("  workspace: {}", ws.cyan());
-                            if claim == "unchecked" {
+                            if let Some(why) = remote.unchecked_note() {
+                                println!("  {} {why}", "note:".yellow());
+                            } else if claim == "unchecked" {
                                 println!(
-                                    "  {} this repository has no commit yet, so the server cannot tell it \
-                                     from another project called {ws}. The first write after the first \
-                                     commit claims the workspace, or is refused if another repository has.",
+                                    "  {} the server did not check this repository's claim to {ws}",
                                     "note:".yellow()
                                 );
                             } else {
@@ -3238,8 +3238,12 @@ fn main() {
 
                     // Unsent local writes go up first. Otherwise the pull
                     // reads a server that lacks them and reports a
-                    // difference that is only this machine's queue.
-                    if let Some(log) = db.oplog() {
+                    // difference that is only this machine's queue. A
+                    // repository that may not write yet (no commit, a
+                    // shallow clone) still reads.
+                    if let Some(why) = remote.write_blocker() {
+                        eprintln!("{} {why}", "Note:".yellow());
+                    } else if let Some(log) = db.oplog() {
                         match deciduous::remote::replay(&remote, &log) {
                             Ok(r) => deciduous::remote::print_rejected(&r.rejected, &log),
                             Err(e) => {

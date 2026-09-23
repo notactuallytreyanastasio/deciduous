@@ -244,6 +244,18 @@ pub fn repo_roots(dir: &Path) -> Option<Vec<String>> {
     Some(roots)
 }
 
+/// Whether `dir` is in a shallow clone.
+pub fn is_shallow(dir: &Path) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["rev-parse", "--is-shallow-repository"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .is_some_and(|o| String::from_utf8_lossy(&o.stdout).trim() == "true")
+}
+
 /// The nearest `.deciduous/config.toml` at or above `dir`.
 fn project_config(dir: &Path) -> Option<std::path::PathBuf> {
     dir.ancestors()
@@ -388,6 +400,8 @@ pub struct Remote {
     /// This repository's root commit ids, sent so the server can tell two
     /// repositories with the same directory name apart. See [`repo_roots`].
     pub repo_roots: Option<Vec<String>>,
+    /// A shallow clone: its root commit is not here (see [`repo_roots`]).
+    pub shallow: bool,
     /// The longest one `POST /ops` request may take, connecting included.
     ops_timeout: std::time::Duration,
     /// When everything this remote sends has to be done by: the replay after
@@ -497,6 +511,7 @@ impl Remote {
             workspace,
             token,
             repo_roots: repo_roots(dir),
+            shallow: is_shallow(dir),
             ops_timeout: OPS_TIMEOUT,
             deadline: None,
         })
@@ -584,6 +599,9 @@ impl Remote {
     /// Sends the local graph up. Used to seed a workspace and to carry local
     /// history that predates the remote; it is not the normal write path.
     pub fn import(&self, graph: Value) -> Result<ImportReport, String> {
+        if let Some(why) = self.write_blocker() {
+            return Err(format!("nothing was sent: {why}"));
+        }
         let payload = serde_json::json!({
             "workspace": self.workspace,
             "repo_roots": self.repo_roots,
@@ -1074,6 +1092,52 @@ impl Remote {
         )
     }
 
+    /// Why this repository may not write to the workspace yet, if it may
+    /// not.
+    ///
+    /// The server ties a workspace to the root commits of the repository
+    /// that first writes to it. A repository with no commit has none to
+    /// send, and used to write "unchecked": a `git init && deciduous init`
+    /// project put its nodes into a workspace no one had claimed, and an
+    /// unrelated repository with the same directory name then claimed it,
+    /// those nodes included, with no warning (round-2 BRIDGE-N7). Its writes
+    /// now wait in the log until the first commit. Reading (status, pull)
+    /// is not held back.
+    pub fn write_blocker(&self) -> Option<String> {
+        if self.repo_roots.as_ref().is_some_and(|r| r.is_empty()) {
+            return Some(format!(
+                "this repository has no commit yet, so the server cannot tie workspace \"{ws}\" to \
+                 it, and an unrelated repository also called {ws} could later claim the workspace \
+                 with these writes in it. Nothing is sent until the first commit; the writes wait \
+                 in the log, and the first command after that commit sends them.",
+                ws = self.workspace
+            ));
+        }
+        None
+    }
+
+    /// What `remote init` should say about the claim it could not check.
+    ///
+    /// A shallow clone has no root commit to send (it sees a boundary in the
+    /// middle of the history), so the server takes its writes unchecked:
+    /// that is what lets a CI clone (`--depth 1`) write to its own
+    /// repository's workspace, and it is also what lets one write into an
+    /// unrelated repository's workspace of the same name. The note used to
+    /// say "this repository has no commit yet ... or is refused if another
+    /// repository has", both false for a shallow clone (round-2 BRIDGE-N8).
+    pub fn unchecked_note(&self) -> Option<String> {
+        if self.shallow {
+            return Some(format!(
+                "this is a shallow clone: its root commit is not here, so the server cannot check \
+                 that workspace \"{ws}\" belongs to this repository, and takes its writes \
+                 unchecked, into whichever graph that name holds. `git fetch --unshallow` lets it \
+                 check.",
+                ws = self.workspace
+            ));
+        }
+        self.write_blocker()
+    }
+
     /// Ties the workspace to this repository on the server, or finds out it
     /// belongs to another one. `adopt` is for a workspace the user named
     /// explicitly: sharing it is then a choice, not an accident.
@@ -1312,6 +1376,14 @@ fn short_id(op: &crate::oplog::Op) -> String {
 /// aside with it, unsent (see [`Held`]).
 pub fn replay(remote: &Remote, log: &crate::oplog::OpLog) -> Result<ReplayReport, ReplayError> {
     let state = log.read().map_err(ReplayError::Log)?;
+    if !state.pending.is_empty() {
+        if let Some(why) = remote.write_blocker() {
+            return Err(ReplayError::Config(format!(
+                "{} write(s) not sent: {why}",
+                state.pending.len()
+            )));
+        }
+    }
     let mut report = ReplayReport {
         unreadable: state.unreadable.clone(),
         ..Default::default()
@@ -3229,6 +3301,7 @@ mod tests {
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
             repo_roots: None,
+            shallow: false,
             ops_timeout: OPS_TIMEOUT,
             deadline: None,
         };
@@ -3245,6 +3318,7 @@ mod tests {
             workspace: "blog".to_string(),
             token: "abc123".to_string(),
             repo_roots: None,
+            shallow: false,
             ops_timeout: OPS_TIMEOUT,
             deadline: None,
         };
@@ -3265,6 +3339,7 @@ mod tests {
             workspace: "a b".to_string(),
             token: "tok".to_string(),
             repo_roots: None,
+            shallow: false,
             ops_timeout: OPS_TIMEOUT,
             deadline: None,
         };
