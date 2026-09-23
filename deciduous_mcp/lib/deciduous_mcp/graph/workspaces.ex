@@ -54,8 +54,15 @@ defmodule DeciduousMcp.Graph.Workspaces do
         group_by: n.workspace_id,
         select: %{workspace_id: n.workspace_id, count: count(n.id)}
 
+    # An edge counts when both its ends are live, the rule /export and
+    # get_graph already apply; counting every row put edges through a
+    # deleted node into edge_count beside a live-only node_count.
     edge_counts =
       from e in Edge,
+        join: f in Node,
+        on: f.id == e.from_node_id and is_nil(f.deleted_at),
+        join: t in Node,
+        on: t.id == e.to_node_id and is_nil(t.deleted_at),
         group_by: e.workspace_id,
         select: %{workspace_id: e.workspace_id, count: count(e.id)}
 

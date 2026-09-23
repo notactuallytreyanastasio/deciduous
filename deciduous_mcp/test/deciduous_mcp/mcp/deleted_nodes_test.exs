@@ -119,6 +119,18 @@ defmodule DeciduousMcp.MCP.DeletedNodesTest do
     assert [_] = Edges.edges_to(b.id)
   end
 
+  # node_count was live-only and edge_count was not: the two edges through
+  # B were counted, while /export and get_graph leave both out.
+  test "list_workspaces counts only edges between live nodes", %{client: client} do
+    %{"workspaces" => ws} = McpClient.call!(client, "list_workspaces", %{})
+    assert %{"node_count" => 2, "edge_count" => 0} = Enum.find(ws, &(&1["name"] == "dn-ws"))
+
+    %{"workspaces" => [pinned]} =
+      McpClient.call!(McpClient.connect(pin: "dn-ws"), "list_workspaces", %{})
+
+    assert %{"node_count" => 2, "edge_count" => 0} = pinned
+  end
+
   test "add_edge to a deleted node is refused", %{client: client, a: a, b: b} do
     assert {:error, _} =
              McpClient.call(client, "add_edge", %{
