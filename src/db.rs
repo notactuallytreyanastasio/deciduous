@@ -1635,6 +1635,19 @@ impl Database {
         Ok(id)
     }
 
+    /// Take an edge's rationale and weight from its record, without
+    /// publishing (sync is applying the file, not changing it).
+    pub(crate) fn update_edge_record(&self, edge_id: i32, rec: &EdgeRecord) -> Result<()> {
+        let mut conn = self.get_conn()?;
+        diesel::update(decision_edges::table.filter(decision_edges::id.eq(edge_id)))
+            .set((
+                decision_edges::rationale.eq(rec.rationale.as_deref()),
+                decision_edges::weight.eq(rec.weight.or(Some(1.0))),
+            ))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
     /// Delete one edge row by primary key without writing a tombstone.
     pub(crate) fn delete_edge_local(&self, edge_id: i32) -> Result<()> {
         let mut conn = self.get_conn()?;

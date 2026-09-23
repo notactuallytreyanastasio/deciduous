@@ -5108,6 +5108,7 @@ fn print_sync_report(report: &SyncReport, store: &RecordStore) {
     push(report.nodes_deleted, "nodes deleted (tombstones)");
     push(report.nodes_exported, "nodes exported");
     push(report.edges_imported, "edges imported");
+    push(report.edges_updated, "edges updated from records");
     push(report.edges_deleted, "edges deleted (tombstones)");
     push(report.edges_exported, "edges exported");
     push(report.themes_imported, "themes imported");

@@ -1454,6 +1454,9 @@ pub struct SyncReport {
     pub nodes_deleted: usize,
     pub nodes_exported: usize,
     pub edges_imported: usize,
+    /// Edges both sides have whose rationale or weight changed in the file
+    /// (unlink + relink elsewhere).
+    pub edges_updated: usize,
     pub edges_deleted: usize,
     pub edges_exported: usize,
     /// Edges whose endpoint is not in the store or the database yet. They
@@ -1489,6 +1492,7 @@ impl SyncReport {
             + self.nodes_updated
             + self.nodes_deleted
             + self.edges_imported
+            + self.edges_updated
             + self.edges_deleted
             + self.themes_imported
             + self.themes_updated
@@ -1912,6 +1916,21 @@ fn reconcile_inner(
                         }
                         report.edges_exported += 1;
                     }
+                } else if rec.rationale != row.rationale
+                    || rec.weight.or(Some(1.0)) != row.weight.or(Some(1.0))
+                {
+                    // Both have the edge, saying different things: someone
+                    // unlinked and relinked it with a new rationale. The file
+                    // wins. Local writes reach the file as they happen, so a
+                    // row that differs from it is stale, not newer; and the
+                    // timestamps cannot say otherwise, because edges carry no
+                    // updated_at and a merge keeps the earliest created_at.
+                    // Letting a later row created_at win would export a
+                    // stale local relink over a teammate's newer one.
+                    if !dry_run {
+                        db.update_edge_record(row.id, rec).map_err(db_err)?;
+                    }
+                    report.edges_updated += 1;
                 }
             }
         }

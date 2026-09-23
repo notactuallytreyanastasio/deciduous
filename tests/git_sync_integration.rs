@@ -711,3 +711,85 @@ fn sync_check_fails_while_edges_wait_or_records_are_unreadable() {
     let out = alice.ok(&["sync", "--check"]);
     assert!(out.contains("already agree"), "{out}");
 }
+
+// ============================================================================
+// G8: an edge's rationale changes after others have the edge
+// ============================================================================
+
+fn edges(dev: &Dev) -> Vec<Value> {
+    let graph: Value = serde_json::from_str(&dev.ok(&["graph"])).unwrap();
+    graph["edges"].as_array().cloned().unwrap_or_default()
+}
+
+#[test]
+fn a_relinked_edge_carries_its_new_rationale_to_clones_that_had_the_edge() {
+    let team = Team::new();
+    let alice = team.founder("alice");
+    let goal = alice.add("goal", "Pick a store", &[]);
+    let option = alice.add("option", "Postgres", &[]);
+    alice.ok(&[
+        "link",
+        &goal.to_string(),
+        &option.to_string(),
+        "-r",
+        "option",
+    ]);
+    alice.commit_graph("option");
+    alice.git(&["push", "-q"]);
+
+    let carol = team.join("carol");
+    assert_eq!(edges(&carol)[0]["rationale"], "option");
+
+    // Alice rewrites the rationale the only way the CLI offers.
+    alice.ok(&["unlink", &goal.to_string(), &option.to_string()]);
+    alice.ok(&[
+        "link",
+        &goal.to_string(),
+        &option.to_string(),
+        "-r",
+        "chosen",
+    ]);
+    alice.commit_graph("chosen");
+    alice.git(&["push", "-q"]);
+
+    carol.git(&["pull", "-q", "--no-edit"]);
+    let out = carol.ok(&["sync"]);
+    let e = edges(&carol);
+    assert_eq!(e.len(), 1, "{out}");
+    assert_eq!(e[0]["rationale"], "chosen", "{out}");
+    let out = carol.ok(&["sync", "--check"]);
+    assert!(out.contains("already agree"), "{out}");
+
+    // And back: Carol relinks again. Alice's row was re-created later than
+    // the file's record (a merge keeps the earliest created_at), which must
+    // not make her stale "chosen" win over Carol's newer "final".
+    carol.ok(&[
+        "unlink",
+        &alice_cid(&alice, goal),
+        &alice_cid(&alice, option),
+    ]);
+    carol.ok(&[
+        "link",
+        &alice_cid(&alice, goal),
+        &alice_cid(&alice, option),
+        "-r",
+        "final",
+    ]);
+    carol.commit_graph("final");
+    carol.git(&["push", "-q"]);
+    alice.git(&["pull", "-q", "--no-edit"]);
+    let out = alice.ok(&["sync"]);
+    assert_eq!(edges(&alice)[0]["rationale"], "final", "{out}");
+    let rec = alice.doc()["edges"]
+        .as_object()
+        .unwrap()
+        .values()
+        .next()
+        .unwrap()
+        .clone();
+    assert_eq!(rec["rationale"], "final", "{rec:#}");
+}
+
+fn alice_cid(alice: &Dev, id: i32) -> String {
+    alice.change_id(id)[..8].to_string()
+}
