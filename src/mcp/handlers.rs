@@ -46,11 +46,27 @@ impl From<&str> for HandlerError {
 
 pub type HandlerResult = std::result::Result<ToolCallResult, HandlerError>;
 
-/// Dispatch a tool call to the appropriate handler.
+/// Where a tool call came from, as far as the handlers need to know.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Caller {
+    /// A stdio MCP server started inside the project: its working directory
+    /// is the caller's checkout, so the current git branch is the caller's.
+    Local,
+    /// The API daemon. Its working directory is the daemon's, not the
+    /// caller's, so nothing may be read from it on the caller's behalf.
+    Remote,
+}
+
+/// Dispatch a tool call from a local (stdio MCP) caller.
 pub fn dispatch(db: &Database, tool_name: &str, args: Value) -> ToolCallResult {
+    dispatch_as(db, tool_name, args, Caller::Local)
+}
+
+/// Dispatch a tool call on behalf of `caller`.
+pub fn dispatch_as(db: &Database, tool_name: &str, args: Value, caller: Caller) -> ToolCallResult {
     let result = match tool_name {
         // CRUD
-        "add_node" => handle_add_node(db, &args),
+        "add_node" => handle_add_node(db, &args, caller),
         "link_nodes" => handle_link_nodes(db, &args),
         "unlink_nodes" => handle_unlink_nodes(db, &args),
         "delete_node" => handle_delete_node(db, &args),
@@ -250,7 +266,7 @@ fn edge_to_json(edge: &crate::db::DecisionEdge) -> Value {
 // CRUD handlers
 // ---------------------------------------------------------------------------
 
-fn handle_add_node(db: &Database, args: &Value) -> HandlerResult {
+fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult {
     let node_type = require_str(args, "node_type")?;
     let title = require_str(args, "title")?;
     let description = get_str(args, "description");
@@ -260,17 +276,22 @@ fn handle_add_node(db: &Database, args: &Value) -> HandlerResult {
     let branch = get_str(args, "branch");
     let commit = get_str(args, "commit");
 
-    // Resolve HEAD to actual commit hash
-    let resolved_commit = match commit {
-        Some("HEAD") => db::get_current_git_commit(),
-        Some(c) => Some(c.to_string()),
-        None => None,
-    };
+    // HEAD and the default branch come from the working directory's git
+    // checkout, which is only the caller's when the caller is local.
+    let resolved_commit =
+        match (commit, caller) {
+            (Some("HEAD"), Caller::Local) => db::get_current_git_commit(),
+            (Some("HEAD"), Caller::Remote) => return Err(HandlerError::from(
+                "commit \"HEAD\" would name the server's checkout, not yours; pass the commit hash",
+            )),
+            (Some(c), _) => Some(c.to_string()),
+            (None, _) => None,
+        };
 
-    // Auto-detect branch if not specified
-    let resolved_branch = match branch {
-        Some(b) => Some(b.to_string()),
-        None => db::get_current_git_branch(),
+    let resolved_branch = match (branch, caller) {
+        (Some(b), _) => Some(b.to_string()),
+        (None, Caller::Local) => db::get_current_git_branch(),
+        (None, Caller::Remote) => None,
     };
 
     let node_id = db.create_node_full(

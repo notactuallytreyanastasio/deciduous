@@ -33,6 +33,10 @@ use crate::mcp::handlers;
 use crate::mcp::protocol::ToolCallResult;
 
 const MAX_BODY_BYTES: usize = 1_048_576;
+
+/// Author on graph-file records written through the API. The daemon has no
+/// idea who its caller is, and its own git identity is not the caller's.
+pub const API_AUTHOR: &str = "deciduous-api";
 const DEFAULT_QUERY_ROWS: usize = 500;
 const MAX_QUERY_ROWS: usize = 5_000;
 
@@ -171,6 +175,11 @@ impl Registry {
             .map_err(|e| ApiError::internal(&format!("create graph dir: {e}")))?;
         let db = Database::open_at(self.db_path(graph_id))
             .map_err(|e| ApiError::internal(&format!("open graph db: {e}")))?;
+        // Records written through the API are attributed to the API, never
+        // to whoever `git config user.name` names in the daemon's cwd.
+        if let Some(store) = db.store() {
+            db.set_store(Some(store.with_author(API_AUTHOR)));
+        }
         let db = Arc::new(db);
         open.insert(graph_id.to_string(), Arc::clone(&db));
         Ok(db)
@@ -305,7 +314,7 @@ fn route(
             }
             let db = registry.database(graph_id, false)?;
             let args = read_json_body(request)?;
-            let result = handlers::dispatch(&db, tool_name, args);
+            let result = handlers::dispatch_as(&db, tool_name, args, handlers::Caller::Remote);
             Ok((200, tool_result_to_json(result)))
         }
 

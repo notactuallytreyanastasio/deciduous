@@ -883,3 +883,72 @@ fn api_query_is_bounded_and_confined_to_its_graph() {
     );
     assert_eq!(s, 200, "{b}");
 }
+
+// ============================================================================
+// R8: the API daemon never attributes a node to its own git checkout
+// ============================================================================
+
+fn git(dir: &Path, args: &[&str]) {
+    let out = Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_AUTHOR_NAME", "t")
+        .env("GIT_AUTHOR_EMAIL", "t@t")
+        .env("GIT_COMMITTER_NAME", "t")
+        .env("GIT_COMMITTER_EMAIL", "t@t")
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "git {args:?}: {}", text(&out.stderr));
+}
+
+#[test]
+fn api_add_node_without_branch_gets_no_branch_from_the_daemon() {
+    let p = Project::api_shared("attr");
+    git(p.root(), &["init", "-q", "-b", "daemon-branch"]);
+    git(p.root(), &["config", "user.name", "Daemon Owner"]);
+    std::fs::write(p.root().join("f"), "x").unwrap();
+    git(p.root(), &["add", "f"]);
+    git(p.root(), &["commit", "-q", "-m", "c"]);
+    let daemon = Daemon::start(&p, 4828, &p.root().join("data"));
+
+    let (s, b) = daemon.tool(
+        "attr",
+        "add_node",
+        json!({"node_type":"goal","title":"remote"}),
+    );
+    assert_eq!(s, 200, "{b}");
+    let id = b["data"]["result"]["node_id"].clone();
+    let (_, shown) = daemon.tool("attr", "show_node", json!({"node_id": id}));
+    let node = &shown["data"]["result"];
+    assert!(
+        node.get("branch").is_none(),
+        "daemon injected a branch: {node}"
+    );
+    assert!(
+        node.get("commit").is_none(),
+        "daemon injected a commit: {node}"
+    );
+    let change_id = node["change_id"].as_str().unwrap();
+    let rec = &p.graph_doc()["nodes"][change_id];
+    assert_eq!(rec["author"], "deciduous-api", "graph.json author: {rec}");
+
+    let (_, b) = daemon.tool(
+        "attr",
+        "add_node",
+        json!({"node_type":"goal","title":"h","commit":"HEAD"}),
+    );
+    assert_eq!(
+        b["data"]["is_error"], true,
+        "HEAD resolved against the daemon's checkout: {b}"
+    );
+
+    let (_, b) = daemon.tool(
+        "attr",
+        "add_node",
+        json!({"node_type":"goal","title":"x","branch":"client-branch"}),
+    );
+    let id = b["data"]["result"]["node_id"].clone();
+    let (_, shown) = daemon.tool("attr", "show_node", json!({"node_id": id}));
+    assert_eq!(shown["data"]["result"]["branch"], "client-branch");
+}
