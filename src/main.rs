@@ -105,7 +105,9 @@ enum Command {
         #[arg(short, long, value_parser = clap::value_parser!(u8).range(0..=100))]
         confidence: Option<u8>,
 
-        /// Git commit hash to link this node to. Use "HEAD" to auto-detect current commit.
+        /// Git commit to link this node to: HEAD, a branch, a tag, origin/main,
+        /// a hash or a prefix of one. Stored as the full hash; a rev git
+        /// cannot resolve here is refused.
         #[arg(long)]
         commit: Option<String>,
 
@@ -1569,14 +1571,17 @@ fn main() {
                 branch.or_else(deciduous::get_current_git_branch)
             };
 
-            // Expand "HEAD" to actual commit hash
-            let effective_commit = commit.as_ref().and_then(|c| {
-                if c.eq_ignore_ascii_case("HEAD") {
-                    deciduous::get_current_git_commit()
-                } else {
-                    Some(c.clone())
+            // Any rev git can resolve (HEAD, a branch, origin/main, a hash
+            // prefix) is stored as the full hash of its commit; anything
+            // else is refused before the node is written.
+            let effective_commit = match commit.as_deref().map(deciduous::resolve_git_commit) {
+                None => None,
+                Some(Ok(hash)) => Some(hash),
+                Some(Err(e)) => {
+                    eprintln!("{} --commit: {}. Nothing was written.", "Error:".red(), e);
+                    exit(1);
                 }
-            });
+            };
 
             // Parse date parameter into RFC3339 format
             let effective_date = date.as_ref().map(|d| {
@@ -1625,7 +1630,7 @@ fn main() {
                         .unwrap_or_default();
                     let commit_str = effective_commit
                         .as_ref()
-                        .map(|c| format!(" [commit: {}]", &c[..7.min(c.len())]))
+                        .map(|c| format!(" [commit: {c}]"))
                         .unwrap_or_default();
                     let prompt_str = effective_prompt
                         .as_ref()

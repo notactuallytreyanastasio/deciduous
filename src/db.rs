@@ -91,6 +91,36 @@ pub fn get_current_git_commit() -> Option<String> {
         })
 }
 
+/// The full hash of the commit `rev` names in the current directory's
+/// repository: `HEAD`, a branch, a tag, `origin/main`, `HEAD~2`, a hash or a
+/// prefix of one. Anything git cannot resolve to a commit is an error naming
+/// `rev`, never the string stored as if it were a commit: `--commit
+/// origin/main` used to store the literal "origin/main".
+pub fn resolve_git_commit(rev: &str) -> std::result::Result<String, String> {
+    let rev = rev.trim();
+    if rev.is_empty() || rev.starts_with('-') {
+        return Err(format!("{rev:?} is not a git revision"));
+    }
+    let out = std::process::Command::new("git")
+        .args(["rev-parse", "--verify", "--quiet", "--end-of-options"])
+        .arg(format!("{rev}^{{commit}}"))
+        .output()
+        .map_err(|e| format!("could not run git to resolve {rev:?}: {e}"))?;
+    let hash = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if out.status.success() && !hash.is_empty() {
+        return Ok(hash);
+    }
+    let in_repo = std::process::Command::new("git")
+        .args(["rev-parse", "--git-dir"])
+        .output()
+        .is_ok_and(|o| o.status.success());
+    Err(if in_repo {
+        format!("{rev:?} is not a commit in this repository (git rev-parse could not resolve it)")
+    } else {
+        format!("{rev:?} cannot be resolved: this directory is not in a git repository")
+    })
+}
+
 /// Walk up directory tree to find .deciduous folder (like git finds .git)
 /// Can be overridden with DECIDUOUS_DB_PATH env var
 fn get_db_path() -> std::path::PathBuf {

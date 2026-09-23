@@ -288,15 +288,18 @@ fn handle_add_node(db: &Database, args: &Value, caller: Caller) -> HandlerResult
 
     // HEAD and the default branch come from the working directory's git
     // checkout, which is only the caller's when the caller is local.
-    let resolved_commit =
-        match (commit, caller) {
-            (Some("HEAD"), Caller::Local) => db::get_current_git_commit(),
-            (Some("HEAD"), Caller::Remote) => return Err(HandlerError::from(
+    let resolved_commit = match (commit, caller) {
+        // Any rev, resolved in the caller's own checkout, as the CLI's
+        // --commit does; one git cannot resolve is refused by name.
+        (Some(c), Caller::Local) => Some(db::resolve_git_commit(c).map_err(HandlerError::from)?),
+        (Some("HEAD"), Caller::Remote) => {
+            return Err(HandlerError::from(
                 "commit \"HEAD\" would name the server's checkout, not yours; pass the commit hash",
-            )),
-            (Some(c), _) => Some(c.to_string()),
-            (None, _) => None,
-        };
+            ))
+        }
+        (Some(c), _) => Some(c.to_string()),
+        (None, _) => None,
+    };
 
     let resolved_branch = match (branch, caller) {
         (Some(b), _) => Some(b.to_string()),

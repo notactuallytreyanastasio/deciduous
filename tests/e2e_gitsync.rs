@@ -646,3 +646,60 @@ fn new7_linking_an_existing_edge_says_so() {
     assert_eq!(edges.len(), 1, "{edges:?}");
     assert_eq!(edges[0]["rationale"], json!("first"));
 }
+
+/// T8: `dx add --commit origin/main` stored the literal "origin/main" (only
+/// HEAD was resolved) and the confirmation printed "[commit: origin/]".
+#[test]
+fn t8_commit_resolves_any_rev_and_is_shown_whole() {
+    let Some(()) = local("t8_commit_resolves_any_rev_and_is_shown_whole") else {
+        return;
+    };
+    let sb = Sandbox::new();
+    let origin = sb.origin("origin");
+    let p = sb.project("revs", Some(&origin));
+    p.git_ok(&["fetch", "-q", "origin"]);
+    let want = p.git_ok(&["rev-parse", "origin/main"]).trim().to_string();
+    assert_eq!(want.len(), 40);
+    let out = p.ok(&["add", "action", "pinned", "--commit", "origin/main"]);
+    let id = created_id(&out);
+    assert!(
+        out.contains(&want),
+        "the confirmation does not show the whole commit {want}:\n{out}"
+    );
+    let g = p.graph();
+    let node = g["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["id"].as_i64() == Some(id))
+        .unwrap()
+        .clone();
+    let meta: Value = serde_json::from_str(node["metadata_json"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        meta["commit"],
+        json!(want),
+        "--commit origin/main was stored as {}",
+        meta["commit"]
+    );
+
+    // HEAD and a branch name resolve the same way.
+    let head = p.git_ok(&["rev-parse", "HEAD"]).trim().to_string();
+    let out = p.ok(&["add", "action", "at head", "--commit", "HEAD"]);
+    assert!(out.contains(&head), "{out}");
+
+    // A rev this repository does not have is refused, by name, and nothing
+    // is written.
+    let before = p.graph()["nodes"].as_array().unwrap().len();
+    let bad = p.dx(&["add", "action", "bogus", "--commit", "no-such-branch"]);
+    assert!(
+        !bad.ok(),
+        "--commit no-such-branch exited 0:\n{}",
+        bad.all()
+    );
+    assert!(
+        bad.all().contains("no-such-branch"),
+        "the refusal does not name the rev:\n{}",
+        bad.all()
+    );
+    assert_eq!(p.graph()["nodes"].as_array().unwrap().len(), before);
+}

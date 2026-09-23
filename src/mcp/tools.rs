@@ -54,7 +54,7 @@ pub fn all_tool_definitions() -> Vec<ToolDefinition> {
                     },
                     "commit": {
                         "type": "string",
-                        "description": "Git commit hash to link. Use 'HEAD' to auto-detect current commit."
+                        "description": "Git commit to link: HEAD, a branch, a tag, origin/main or a hash (prefix); stored as the full hash. A rev this checkout cannot resolve is refused."
                     }
                 },
                 "required": ["node_type", "title"]
