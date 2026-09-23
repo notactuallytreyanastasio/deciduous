@@ -29,6 +29,17 @@ if grep -q '0000000000000000' "$test_dir/first.log"; then
   exit 1
 fi
 
+# The port is chosen, not fixed: nothing in the tree may pin it to a default a
+# second installation would collide with.
+port=$(sed -n 's/^DECIDUOUS_PORT=//p' "$test_dir/installation.env")
+case "$port" in
+  ''|*[!0-9]*) printf 'FAIL: no numeric DECIDUOUS_PORT, got %s\n' "$port" >&2; exit 1 ;;
+esac
+if [ "$port" -lt 20000 ] || [ "$port" -gt 32767 ]; then
+  printf 'FAIL: chosen port %s is outside 20000-32767.\n' "$port" >&2
+  exit 1
+fi
+
 run_setup > "$test_dir/second.log"
 cmp "$test_dir/original.env" "$test_dir/installation.env"
 test "$(grep -c '^run ' "$test_dir/calls")" = 1
@@ -46,6 +57,20 @@ fi
 if grep -q '^Deciduous is ready:' "$test_dir/unhealthy.log"; then
   exit 1
 fi
+
+# A caller's port is honoured on a fresh installation, and a nonsense one stops
+# setup instead of reaching Compose.
+env -i PATH="$test_dir/bin:/usr/bin:/bin" SETUP_TEST_CALLS="$test_dir/chosen.calls" \
+  DECIDUOUS_ENV_FILE="$test_dir/chosen.env" DECIDUOUS_PORT=4010 \
+  "$script_dir/setup.sh" > "$test_dir/chosen.log"
+grep -q '^DECIDUOUS_PORT=4010$' "$test_dir/chosen.env"
+if env -i PATH="$test_dir/bin:/usr/bin:/bin" SETUP_TEST_CALLS="$test_dir/bad.calls" \
+  DECIDUOUS_ENV_FILE="$test_dir/bad.env" DECIDUOUS_PORT=eighty \
+  "$script_dir/setup.sh" > "$test_dir/bad.log" 2>&1; then
+  printf '%s\n' 'FAIL: setup accepted a non-numeric DECIDUOUS_PORT.' >&2
+  exit 1
+fi
+test ! -e "$test_dir/bad.env"
 
 # External setup requires an explicit database and does not add a local DB.
 if env -i PATH="$test_dir/bin:/usr/bin:/bin" SETUP_TEST_CALLS="$test_dir/external.calls" \

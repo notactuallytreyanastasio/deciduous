@@ -13,7 +13,14 @@
 //!   once with Docker from the release's `deciduous-mcp-docker.tar.gz` (the
 //!   same version as this binary, verified against the release's
 //!   `checksums.txt`) and its `scripts/setup.sh`: PostgreSQL 17 and the server
-//!   on `127.0.0.1:4000`, credentials in `~/.config/deciduous/server/.env`.
+//!   on a port of the user's choosing, credentials in
+//!   `~/.config/deciduous/server/.env`.
+//!
+//! The port is asked, never assumed. A fixed default squats a port the machine
+//! may already want — 4000 is Phoenix's, and a server sitting on it breaks the
+//! dev server of the very project being logged. So first setup suggests a
+//! random free port (`suggested_port`) and the user can accept or replace it;
+//! `--port` and `DECIDUOUS_PORT` answer for scripts.
 //!
 //! No Docker is an error, not a skip. `DECIDUOUS_NO_SERVER=1` skips the step
 //! for tests and CI, which run `init` in throwaway directories.
@@ -58,9 +65,41 @@ fn env_value(text: &str, key: &str) -> Option<String> {
     })
 }
 
-fn local_url(env_text: &str) -> String {
-    let port = env_value(env_text, "DECIDUOUS_PORT").unwrap_or_else(|| "4000".into());
-    format!("http://127.0.0.1:{port}")
+/// The range a suggested port is drawn from: above the registered-services
+/// range, and below the ephemeral range macOS (49152+) and Linux (32768+) hand
+/// out for outgoing connections, so a suggestion cannot collide with a client
+/// socket the machine opens later.
+const PORT_FLOOR: u16 = 20000;
+const PORT_CEILING: u16 = 32767;
+
+/// A random free port to suggest for this machine's server. Four draws, each
+/// checked by binding it; the last draw is returned unchecked, since a port
+/// that is free now can be taken before Docker publishes it anyway — setup
+/// fails loudly in that case rather than silently picking something else.
+fn suggested_port() -> u16 {
+    let span = u32::from(PORT_CEILING - PORT_FLOOR) + 1;
+    let draw = || {
+        let bytes = *uuid::Uuid::new_v4().as_bytes();
+        let n = u32::from_be_bytes([0, 0, bytes[0], bytes[1]]);
+        PORT_FLOOR + (n % span) as u16
+    };
+    let free = |port: u16| std::net::TcpListener::bind(("127.0.0.1", port)).is_ok();
+    (0..3)
+        .map(|_| draw())
+        .find(|&p| free(p))
+        .unwrap_or_else(draw)
+}
+
+/// The URL of the server described by a settings file. A settings file always
+/// carries `DECIDUOUS_PORT` (setup.sh writes it when it creates the file), so a
+/// missing one means a hand-edited file: say so rather than guess a port and
+/// report a healthy server that is really someone else's.
+fn local_url(env_text: &str) -> Result<String, String> {
+    let port = env_value(env_text, "DECIDUOUS_PORT").ok_or(
+        "the server settings file has no DECIDUOUS_PORT, so the server's port is unknown. \
+         Add the line the server was started on, or delete the file and set the server up again.",
+    )?;
+    Ok(format!("http://127.0.0.1:{port}"))
 }
 
 fn answers(url: &str) -> bool {
@@ -107,8 +146,8 @@ pub fn ensure(project: &Path, caller: Caller) -> Result<(), String> {
 }
 
 /// Points the project at this machine's server, setting it up if needed.
-fn connect_local(project: &Path) -> Result<(), String> {
-    let (url, token) = local_server()?;
+fn connect_local(project: &Path, port: Option<u16>) -> Result<(), String> {
+    let (url, token) = local_server(port)?;
     connect(project, &url, &token)
 }
 
@@ -129,9 +168,11 @@ fn connect(project: &Path, url: &str, token: &str) -> Result<(), String> {
 }
 
 /// What `deciduous remote setup` was told on the command line, if anything.
+/// `Local` carries the port to publish this machine's server on: `None` means
+/// nobody has said yet, so first setup asks (see `resolve_port`).
 pub enum SetupChoice {
     Ask,
-    Local,
+    Local(Option<u16>),
     Url(String),
 }
 
@@ -166,10 +207,10 @@ pub fn setup_wizard(project: &Path, choice: SetupChoice) -> Result<(), String> {
                 }
             }
             println!("Where should this project's graph live?\n");
-            println!("  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1:4000");
+            println!("  1) This machine: PostgreSQL and the server in Docker, on 127.0.0.1");
             println!("  2) A server someone else runs: you need its URL and token\n");
             match ask("Choose 1 or 2", Some("1"))?.as_str() {
-                "1" => SetupChoice::Local,
+                "1" => SetupChoice::Local(None),
                 "2" => SetupChoice::Url(ask("Server URL (e.g. https://example.com/deciduous-mcp)", None)?),
                 other => return Err(format!("expected 1 or 2, got {other:?}")),
             }
@@ -178,9 +219,9 @@ pub fn setup_wizard(project: &Path, choice: SetupChoice) -> Result<(), String> {
     };
 
     match choice {
-        SetupChoice::Local => {
+        SetupChoice::Local(port) => {
             println!();
-            connect_local(project)?;
+            connect_local(project, port)?;
             let url = remote::read_remote_url(project).unwrap_or_default();
             done(&url)
         }
@@ -307,31 +348,81 @@ fn check_configured(project: &Path, url: &str, caller: Caller) -> Result<(), Str
 
 /// This machine's local server: the running one, or a new one from the
 /// release bundle. Returns its URL and token.
-fn local_server() -> Result<(String, String), String> {
+fn local_server(port: Option<u16>) -> Result<(String, String), String> {
     let env_path = env_file().ok_or("cannot determine a config directory (is HOME set?)")?;
-    if let Ok(text) = std::fs::read_to_string(&env_path) {
-        let url = local_url(&text);
-        let token = env_value(&text, "DECIDUOUS_MCP_TOKEN")
+    let existing = std::fs::read_to_string(&env_path).ok();
+    if let Some(text) = &existing {
+        let url = local_url(text)?;
+        let token = env_value(text, "DECIDUOUS_MCP_TOKEN")
             .ok_or_else(|| format!("{} has no DECIDUOUS_MCP_TOKEN", env_path.display()))?;
         if answers(&url) {
             println!("   {} local server at {url}", "Found".green());
             return Ok((url, token));
         }
     }
-    run_setup(&env_path)?;
+    // The port belongs to the settings file, which setup.sh writes once and
+    // treats as authoritative after that. So it is only asked when there is no
+    // settings file: with one, the answer could not be honoured.
+    let port = match existing {
+        Some(_) => None,
+        None => Some(resolve_port(port)?),
+    };
+    run_setup(&env_path, port)?;
     let text = std::fs::read_to_string(&env_path).map_err(|e| {
         format!(
             "setup finished but {} is unreadable: {e}",
             env_path.display()
         )
     })?;
-    let url = local_url(&text);
+    let url = local_url(&text)?;
     let token = env_value(&text, "DECIDUOUS_MCP_TOKEN")
         .ok_or_else(|| format!("{} has no DECIDUOUS_MCP_TOKEN", env_path.display()))?;
     if !answers(&url) {
         return Err(format!("setup finished but {url}/health does not answer"));
     }
     Ok((url, token))
+}
+
+/// The port for a server being set up for the first time: what the caller was
+/// told (`--port`), else `DECIDUOUS_PORT`, else asked in a terminal with a
+/// random free port suggested, else that suggestion unasked.
+fn resolve_port(requested: Option<u16>) -> Result<u16, String> {
+    use std::io::IsTerminal;
+    if let Some(port) = requested {
+        return Ok(port);
+    }
+    if let Ok(text) = std::env::var("DECIDUOUS_PORT") {
+        return parse_port(&text).map_err(|e| format!("DECIDUOUS_PORT: {e}"));
+    }
+    let suggested = suggested_port();
+    if !std::io::stdin().is_terminal() {
+        println!("   {} port {suggested}", "Chose".green());
+        return Ok(suggested);
+    }
+    println!(
+        "\nThe server needs a port on this machine. {} is free right now; anything\n\
+         already using the port you pick (a dev server on 4000, say) would stop this\n\
+         server from starting.\n",
+        suggested.to_string().cyan()
+    );
+    let answer = ask("Port", Some(&suggested.to_string()))?;
+    parse_port(&answer)
+}
+
+/// A port number an answer or the environment supplied. Port 0 is refused
+/// rather than passed through: the kernel would choose, and the URL written to
+/// the project's config would point at nothing after a restart.
+fn parse_port(text: &str) -> Result<u16, String> {
+    let text = text.trim();
+    match text.parse::<u16>() {
+        Ok(0) => Err(
+            "port 0 lets the kernel choose a port, and the URL written to the \
+                      project's config would not survive a restart. Pick a fixed port."
+                .into(),
+        ),
+        Ok(port) => Ok(port),
+        Err(_) => Err(format!("{text:?} is not a port number (1-65535)")),
+    }
 }
 
 fn docker_ready() -> Result<(), String> {
@@ -362,7 +453,7 @@ fn docker_ready() -> Result<(), String> {
 
 /// Downloads (or takes from `DECIDUOUS_SERVER_BUNDLE`) this version's bundle,
 /// verifies it, and runs its setup script against the machine's settings file.
-fn run_setup(env_path: &Path) -> Result<(), String> {
+fn run_setup(env_path: &Path, port: Option<u16>) -> Result<(), String> {
     docker_ready()?;
     let home = env_path.parent().ok_or("settings path has no parent")?;
     let version = env!("CARGO_PKG_VERSION");
@@ -406,6 +497,16 @@ fn run_setup(env_path: &Path) -> Result<(), String> {
             std::env::var("COMPOSE_PROJECT_NAME").unwrap_or_else(|_| "deciduous".into()),
         )
         .env_remove("DATABASE_URL");
+    // Only on first setup: setup.sh ignores the environment once its settings
+    // file exists, and `local_server` passes None in that case.
+    match port {
+        Some(p) => {
+            cmd.env("DECIDUOUS_PORT", p.to_string());
+        }
+        None => {
+            cmd.env_remove("DECIDUOUS_PORT");
+        }
+    }
     // A token this machine already uses becomes the local server's token, so
     // one machine never has two. setup.sh reads it on first setup only.
     match remote::token() {
@@ -534,8 +635,55 @@ mod tests {
             env_value(env, "DECIDUOUS_MCP_TOKEN").as_deref(),
             Some("abc$(rm -rf /)")
         );
-        assert_eq!(local_url(env), "http://127.0.0.1:4010");
-        assert_eq!(local_url(""), "http://127.0.0.1:4000");
+        assert_eq!(local_url(env).unwrap(), "http://127.0.0.1:4010");
+    }
+
+    #[test]
+    fn a_settings_file_without_a_port_is_an_error_not_a_guessed_port() {
+        let e = local_url("DECIDUOUS_MCP_TOKEN='x'\n").unwrap_err();
+        assert!(e.contains("DECIDUOUS_PORT"), "{e}");
+    }
+
+    #[test]
+    fn a_suggested_port_is_free_and_outside_the_ephemeral_range() {
+        for _ in 0..20 {
+            let port = suggested_port();
+            assert!(
+                (PORT_FLOOR..=PORT_CEILING).contains(&port),
+                "{port} is outside {PORT_FLOOR}-{PORT_CEILING}"
+            );
+        }
+    }
+
+    #[test]
+    fn two_suggestions_are_not_the_same_port_every_time() {
+        let first = suggested_port();
+        assert!(
+            (0..20).any(|_| suggested_port() != first),
+            "suggested_port returned {first} twenty times, so it is not random"
+        );
+    }
+
+    #[test]
+    fn an_explicit_port_is_taken_over_asking() {
+        assert_eq!(resolve_port(Some(4010)).unwrap(), 4010);
+    }
+
+    #[test]
+    fn a_port_that_is_not_a_number_is_refused() {
+        assert!(parse_port("eighty").unwrap_err().contains("not a port"));
+        assert!(parse_port("70000").unwrap_err().contains("not a port"));
+        assert!(parse_port("").unwrap_err().contains("not a port"));
+    }
+
+    #[test]
+    fn port_zero_is_refused_so_the_written_url_keeps_working() {
+        assert!(parse_port("0").unwrap_err().contains("survive a restart"));
+    }
+
+    #[test]
+    fn surrounding_whitespace_in_an_answer_is_ignored() {
+        assert_eq!(parse_port(" 4010\n").unwrap(), 4010);
     }
 
     #[test]

@@ -515,6 +515,12 @@ enum RemoteAction {
         /// Use the server at this URL (token from DECIDUOUS_MCP_TOKEN or the stored one)
         #[arg(long)]
         url: Option<String>,
+
+        /// Port to publish this machine's server on (default: asked, a free one
+        /// suggested). Only used the first time it is set up; after that the
+        /// port in ~/.config/deciduous/server/.env stands.
+        #[arg(long, conflicts_with = "url")]
+        port: Option<u16>,
     },
 
     /// Store the API token outside every repository (mode 0600)
@@ -1064,13 +1070,16 @@ fn main() {
 
     // `remote setup` may run in a project with no .deciduous yet.
     if let Command::Remote {
-        action: RemoteAction::Setup { local, url },
+        action: RemoteAction::Setup { local, url, port },
     } = &args.command
     {
         let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
         let choice = match (local, url) {
-            (true, _) => deciduous::server::SetupChoice::Local,
+            (true, _) => deciduous::server::SetupChoice::Local(*port),
             (false, Some(u)) => deciduous::server::SetupChoice::Url(u.clone()),
+            // A port without --local still means this machine: nothing else
+            // has a port to choose.
+            (false, None) if port.is_some() => deciduous::server::SetupChoice::Local(*port),
             (false, None) => deciduous::server::SetupChoice::Ask,
         };
         if let Err(e) = deciduous::server::setup_wizard(&cwd, choice) {
@@ -1400,6 +1409,7 @@ fn main() {
                         branch_str,
                         date_str
                     );
+                    deciduous::remote::push_after_write(&db, &[id]);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1426,6 +1436,7 @@ fn main() {
                         to_id,
                         edge_type
                     );
+                    deciduous::remote::push_after_write(&db, &[from_id, to_id]);
                 }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
@@ -1438,7 +1449,10 @@ fn main() {
             let from_id = resolve_node_or_exit(&db, &from);
             let to_id = resolve_node_or_exit(&db, &to);
             match db.delete_edge(from_id, to_id) {
-                Ok(()) => println!("{} edge ({} -> {})", "Removed".red(), from_id, to_id),
+                Ok(()) => {
+                    println!("{} edge ({} -> {})", "Removed".red(), from_id, to_id);
+                    deciduous::remote::warn_removal_is_local_only("edge");
+                }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
                     std::process::exit(1);
@@ -1466,6 +1480,7 @@ fn main() {
                             summary.node_title,
                             summary.edges_deleted
                         );
+                        deciduous::remote::warn_removal_is_local_only("node");
                     }
                 }
                 Err(e) => {
@@ -1478,7 +1493,10 @@ fn main() {
         Command::Status { id, status } => {
             let id = resolve_node_or_exit(&db, &id);
             match db.update_node_status(id, &status) {
-                Ok(()) => println!("{} node {} status to '{}'", "Updated".green(), id, status),
+                Ok(()) => {
+                    println!("{} node {} status to '{}'", "Updated".green(), id, status);
+                    deciduous::remote::push_after_write(&db, &[id]);
+                }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
                     std::process::exit(1);
@@ -1518,12 +1536,15 @@ fn main() {
             }
 
             match db.update_node_prompt(id, &effective_prompt) {
-                Ok(()) => println!(
-                    "{} node {} prompt ({} chars)",
-                    "Updated".green(),
-                    id,
-                    effective_prompt.len()
-                ),
+                Ok(()) => {
+                    println!(
+                        "{} node {} prompt ({} chars)",
+                        "Updated".green(),
+                        id,
+                        effective_prompt.len()
+                    );
+                    deciduous::remote::push_after_write(&db, &[id]);
+                }
                 Err(e) => {
                     eprintln!("{} {}", "Error:".red(), e);
                     std::process::exit(1);
@@ -2190,31 +2211,21 @@ fn main() {
                         }
                     };
 
-                    let graph = if overwrite {
-                        graph
+                    let sent = if overwrite {
+                        remote.import(graph).map(Some)
                     } else {
-                        let server = match remote.export() {
-                            Ok(s) => s,
-                            Err(e) => {
-                                eprintln!("{} reading the server's copy: {}", "Error:".red(), e);
-                                std::process::exit(1);
-                            }
-                        };
-                        let (missing, n, m) = deciduous::remote::missing_on_server(&graph, &server);
-                        if n == 0 && m == 0 {
+                        deciduous::remote::push_missing(&remote, &graph)
+                    };
+
+                    match sent {
+                        Ok(None) => {
                             println!(
                                 "{} the server already has every node and edge in the local graph ({})",
                                 "Nothing to push:".green(),
                                 remote.workspace.cyan()
                             );
-                            return;
                         }
-                        println!("  sending {} node(s) and {} edge(s) the server lacks", n, m);
-                        missing
-                    };
-
-                    match remote.import(graph) {
-                        Ok(r) => {
+                        Ok(Some(r)) => {
                             println!(
                                 "{} {} -> {}",
                                 "Pushed:".green(),
