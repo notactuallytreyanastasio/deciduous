@@ -7,9 +7,10 @@ How several people (and several machines) share one decision graph through git.
 Every machine has a private SQLite database, `.deciduous/deciduous.db`, which is
 gitignored. The shared source of truth is `.deciduous/graph.json`, one file holding
 the whole graph, committed with the code. Every graph write goes to the database and
-to that file at the same time. `deciduous sync` makes the file and the database
-agree, in both directions. That is the whole mechanism. There is no event log, no
-checkpoint, no patch export, no directory of records, and nothing to compact.
+to that file at the same time. When git changes the file (a pull, a checkout, a
+reset, a stash), the database follows it before the next command runs. That is
+the whole mechanism. There is no event log, no checkpoint, no patch export, no
+directory of records, and nothing to compact.
 
 ```text
 .deciduous/
@@ -125,15 +126,18 @@ the file by default in pull request diffs. It is still there to expand and revie
 
 ```bash
 git pull
-deciduous sync              # 1. import their records  2. export anything missing  3. refresh docs/graph-data.json
+deciduous sync              # optional since 1.0.9: any command follows graph.json first
 # ... work; every add/link/status/delete writes the file immediately ...
 git add .deciduous/graph.json docs/graph-data.json
 git commit -m "graph: chose token bucket over leaky bucket"
 git push
 ```
 
-`deciduous sync --check` reports what is pending and exits 1 if anything is, which
-makes it a usable pre-push hook. `--no-pages` skips the GitHub Pages export.
+`deciduous sync --check` reports what is pending and exits 1 if sync would write
+to `graph.json` or something is unresolved (an edge waiting for a node, a record
+that will not read, a conflict), which makes it a usable pre-push hook. A local
+database that is merely behind the file is not pending: the next command
+catches it up.
 
 The AI assistant templates (`/sync`, `/recover`, `/decision`) tell the assistant to
 run `deciduous sync` at session start and after any pull, and to use change_id
@@ -142,42 +146,45 @@ prefixes when linking to another person's nodes.
 ## Branches, old commits and resets
 
 The database is one per clone and is shared by every branch and commit you
-check out; `graph.json` is versioned like any other file. `sync` treats a row
-the database has and the file lacks as a local write not yet exported, and
-exports it. It cannot tell that apart from a row git took out of the file by
-switching branch or resetting, because the database keeps no record of which
-rows have reached a file. What that means in practice:
+check out; `graph.json` is versioned like any other file. Since 1.0.9 the
+database **follows the file**: before any command (or, in a running `deciduous
+mcp` server, before any tool call), if `graph.json` is not the file the
+database last mirrored, the database is brought to it. The graph you see is
+the graph of the commit that is checked out, like every other file in the tree.
 
+- **A branch's nodes stay on that branch.** A node added on `spike` leaves the
+  local graph on `git checkout main` and comes back on `git checkout spike`,
+  under the same local id, with the documents attached to it. It is never
+  written into `main`'s file.
+- **Git can take things out.** `git reset --hard`, `git stash` and
+  `git checkout -- .deciduous/graph.json` discard graph changes exactly as they
+  discard code changes; `git stash pop` brings them back.
 - **A detached commit is read, not written.** On `git checkout <old commit>`,
-  a bisect step or a CI checkout, `sync` imports what the commit's file adds
-  and leaves the file exactly as the commit has it, so `git checkout main`
-  still works afterwards. It says what it held back:
-  `Note: HEAD is detached at 2848ae0, so the graph file was left as this
-  commit has it: 1 node(s) not exported.` `sync --check` and the MCP `sync`
-  and `sync_status` tools agree with it, and a commit that has no graph file
-  is not given one. A
+  a bisect step or a CI checkout, the local graph shows that commit's graph and
+  the file is left exactly as the commit has it, so `git checkout main` still
+  works afterwards. Adds and edits made there stay in the database, recorded as
+  unpublished, and are published into the next branch you check out. Deletions
+  there are refused by name: a deletion has to land in some branch's file. A
   stopped rebase, merge, cherry-pick or revert is detached too, but there the
-  file is being rewritten, so `sync` writes it as usual.
-- **Branches share nodes (not fixed).** A node added on `spike` is exported
-  into `main`'s `graph.json` by the next `sync` on `main`. If that is not what
-  you want on `main`, do not commit it there: after switching branch, run
-  `deciduous sync --check`; if it reports exports you did not make on this
-  branch, run `sync`, then `git checkout -- .deciduous/graph.json` before
-  committing anything else, or stage the file with `git add -p`. The nodes
-  stay in the database and in `spike`'s commits either way.
-- **A reset brings rows back (not fixed).** `git reset --hard` to an earlier
-  commit on a branch removes records from the file but not from the database,
-  and the next `sync` exports them again. To remove a node for good, use
-  `deciduous delete`, which writes a tombstone every clone applies.
-- **A server does not see branches.** With a `[remote]`, every write reaches
-  the workspace as it is made, whatever the branch.
+  file is being rewritten, so writes go into it as usual.
+- **Following is local.** With a `[remote]`, a node that leaves the local graph
+  on a checkout is not deleted on the server, and an older version a reset
+  brings back is not sent as an edit. Only records that are newer in the file
+  than in the database (a teammate's, arriving by `git pull`) are queued for
+  the server, as before.
 
-Why the last three are not fixed: the fix that is safe is a local log of
-writes not yet published, exporting only what it holds and letting the file
-decide every other difference. Dropping rows missing from the file instead
-would delete local data for anyone whose rows never reached a file (rows from
-before the record store, rows written while `graph.json` was missing). That
-log is a change to what `sync` means, with its own migration, not a patch.
+How it tells a local write the file never got from a row git took out: every
+graph write is in `graph.json` before it is acknowledged, except a write made
+while HEAD is detached (or whose file write failed), and those are recorded in
+a local `unpublished` table. The database also records the digest of the file
+it mirrors; git never updates it, so a checkout shows up as a digest that
+differs. A lock held from each write's database commit to its line in the file,
+and for the whole of a follow, keeps a follow in one process from mistaking
+another process's write in flight for a row git removed.
+
+A database from before 1.0.9 has neither record. Its first sync takes out only
+rows some local branch's `graph.json` has (git keeps them), and treats rows no
+branch has as unpublished writes, publishing them rather than losing them.
 
 ## How reconcile decides
 
