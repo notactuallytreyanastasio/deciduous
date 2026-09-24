@@ -1103,7 +1103,6 @@ INSERT INTO public.schema_migrations (version, inserted_at) VALUES
 -- Database defaults from the migrated database -------------------------------
 DO $$
 BEGIN
-  EXECUTE format('ALTER DATABASE %I SET %I = %L', current_database(), 'TimeZone', 'Etc/UTC');
   EXECUTE format('ALTER DATABASE %I SET %I = %L', current_database(), 'random_page_cost', '1.1');
   EXECUTE format('ALTER DATABASE %I SET %I = %L', current_database(), 'work_mem', '16MB');
 END
