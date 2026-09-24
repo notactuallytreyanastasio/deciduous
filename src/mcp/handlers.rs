@@ -64,6 +64,21 @@ pub fn dispatch(db: &Database, tool_name: &str, args: Value) -> ToolCallResult {
 
 /// Dispatch a tool call on behalf of `caller`.
 pub fn dispatch_as(db: &Database, tool_name: &str, args: Value, caller: Caller) -> ToolCallResult {
+    // A local server lives across `git checkout`s: before each call, the
+    // database follows graph.json if git changed it (see
+    // records::follow_graph_file). stderr, never stdout: stdout is the
+    // protocol. The API daemon's graphs have no git and no checkout.
+    if caller == Caller::Local && tool_name != "sync" && tool_name != "sync_status" {
+        match crate::records::follow_graph_file(db) {
+            Ok(Some(report)) if report.followed() > 0 || !report.is_clean() => {
+                eprintln!("deciduous-mcp: {}", report.follow_note());
+            }
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("deciduous-mcp: could not bring the local graph up to graph.json: {e}")
+            }
+        }
+    }
     let result = match tool_name {
         // CRUD
         "add_node" => handle_add_node(db, &args, caller),
